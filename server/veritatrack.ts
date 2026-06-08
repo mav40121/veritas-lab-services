@@ -390,18 +390,35 @@ export function registerVeritaTrackRoutes(
     try {
       sqlite.prepare("UPDATE veritatrack_signoffs SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?").run(userId, r.lastInsertRowid);
     } catch {}
-    // If linked to a VeritaMap field, update it there too
+    // If linked to a VeritaMap field, update it there too.
+    //
+    // Shape A class sweep (2026-06-08): prior code picked ONE map per user
+    // (LIMIT 1, ORDER BY updated_at DESC) which meant a multi-map lab's
+    // signoff writeback landed on whichever map happened to be most recently
+    // updated rather than every map whose test rows reference this analyte.
+    // Now we walk every map in the owner's lab and UPDATE every matching row.
+    // Compound Shape B fix on the same lines: lab-scope the map lookup via
+    // users.lab_id with a fallback to user_id when lab_id is null (legacy).
     if (task.map_analyte && task.map_field) {
       try {
-        const map = sqlite.prepare(
-          "SELECT id FROM veritamap_maps WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1"
-        ).get(userId) as any;
-        if (map) {
+        const ownerLabRow = sqlite.prepare(
+          "SELECT lab_id FROM users WHERE id = ?"
+        ).get(userId) as { lab_id: number | null } | undefined;
+        const ownerLabId = ownerLabRow?.lab_id ?? null;
+        const maps = ownerLabId != null
+          ? sqlite.prepare(
+              "SELECT id FROM veritamap_maps WHERE lab_id = ?"
+            ).all(ownerLabId) as Array<{ id: number }>
+          : sqlite.prepare(
+              "SELECT id FROM veritamap_maps WHERE user_id = ?"
+            ).all(userId) as Array<{ id: number }>;
+        if (maps.length > 0) {
           const allowed = ["last_cal_ver","last_method_comp","last_precision","last_sop_review"];
           if (allowed.includes(task.map_field)) {
+            const placeholders = maps.map(() => "?").join(",");
             sqlite.prepare(
-              `UPDATE veritamap_tests SET ${task.map_field} = ?, updated_at = datetime('now') WHERE map_id = ? AND analyte = ?`
-            ).run(completed_date, map.id, task.map_analyte);
+              `UPDATE veritamap_tests SET ${task.map_field} = ?, updated_at = datetime('now') WHERE map_id IN (${placeholders}) AND analyte = ?`
+            ).run(completed_date, ...maps.map(m => m.id), task.map_analyte);
           }
         }
       } catch {}
@@ -418,16 +435,62 @@ export function registerVeritaTrackRoutes(
   });
 
   // POST import tasks from VeritaMap
+  //
+  // Shape A class sweep (2026-06-08): walks EVERY map in the owner's lab,
+  // not just the most-recently-updated one. Prior code used LIMIT 1 ORDER BY
+  // updated_at DESC, which meant a multi-map lab (Lisa's Milford per-dept
+  // layout, San Carlos CW Bylas + SCAHC) only got tasks for one map's
+  // analytes and silently dropped the rest. Compound Shape B fix on the same
+  // edit: lab-scope the map lookup via users.lab_id with a fallback to
+  // user_id when lab_id is null (legacy account before Phase 1 backfill).
+  //
+  // Per-analyte dedupe is keyed on the task name (`${label} - ${analyte}`),
+  // so an analyte that lives in two maps (Glucose on CW Bylas AND on SCAHC)
+  // only produces one task per field-definition.
   app.post("/api/veritatrack/import-from-map", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
     if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
-    const map = sqlite.prepare(
-      "SELECT * FROM veritamap_maps WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1"
-    ).get(userId) as any;
-    if (!map) return res.status(404).json({ error: "No VeritaMap\u2122 found. Build your test menu first." });
-    const tests = sqlite.prepare(
-      "SELECT * FROM veritamap_tests WHERE map_id = ? AND active = 1"
-    ).all(map.id) as any[];
+    const ownerLabRow = sqlite.prepare(
+      "SELECT lab_id FROM users WHERE id = ?"
+    ).get(userId) as { lab_id: number | null } | undefined;
+    const ownerLabId = ownerLabRow?.lab_id ?? null;
+    const maps = ownerLabId != null
+      ? sqlite.prepare(
+          "SELECT id, name FROM veritamap_maps WHERE lab_id = ? ORDER BY updated_at DESC"
+        ).all(ownerLabId) as Array<{ id: number; name: string }>
+      : sqlite.prepare(
+          "SELECT id, name FROM veritamap_maps WHERE user_id = ? ORDER BY updated_at DESC"
+        ).all(userId) as Array<{ id: number; name: string }>;
+    if (maps.length === 0) return res.status(404).json({ error: "No VeritaMap\u2122 found. Build your test menu first." });
+    const mapIdPlaceholders = maps.map(() => "?").join(",");
+    const allTests = sqlite.prepare(
+      `SELECT * FROM veritamap_tests WHERE map_id IN (${mapIdPlaceholders}) AND active = 1 ORDER BY analyte`
+    ).all(...maps.map(m => m.id)) as any[];
+    // Dedupe across maps on lowercase analyte. Keep the most recent
+    // last_cal_ver / last_method_comp / last_precision / last_sop_review
+    // values across all the analyte's appearances so the seeded sign-off is
+    // the latest the lab has on record.
+    const dedupedByAnalyte = new Map<string, any>();
+    for (const row of allTests) {
+      const key = String(row.analyte || "").trim().toLowerCase();
+      if (!key) continue;
+      const prior = dedupedByAnalyte.get(key);
+      if (!prior) { dedupedByAnalyte.set(key, { ...row }); continue; }
+      // Field-by-field: keep the later date when both are populated.
+      const dateFields = ["last_cal_ver", "last_method_comp", "last_precision", "last_sop_review"];
+      const merged = { ...prior };
+      for (const f of dateFields) {
+        if (row[f] && (!prior[f] || String(row[f]) > String(prior[f]))) merged[f] = row[f];
+      }
+      // If prior is WAIVED but row is not, prefer the non-WAIVED so the task
+      // gets created (waived analytes skip task creation below).
+      if (prior.complexity === "WAIVED" && row.complexity !== "WAIVED") {
+        merged.complexity = row.complexity;
+        merged.instrument_source = row.instrument_source || prior.instrument_source;
+      }
+      dedupedByAnalyte.set(key, merged);
+    }
+    const tests = Array.from(dedupedByAnalyte.values());
     const now = new Date().toISOString();
     let created = 0; let skipped = 0;
     const fieldDefs = [
@@ -461,7 +524,7 @@ export function registerVeritaTrackRoutes(
         created++;
       }
     }
-    res.json({ ok: true, created, skipped, total: tests.length });
+    res.json({ ok: true, created, skipped, total: tests.length, mapsScanned: maps.length });
   });
 
   // GET dashboard summary

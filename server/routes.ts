@@ -12820,27 +12820,46 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Helper: compute PT coverage for a given userId
   function computePTCoverage(userId: number, labId?: number | null) {
     // cliaAnalytes and ptCategoryLinks imported at top of file
-    // Multi-lab-bleed root-cause fix (partial): the VeritaMap lookup below now
-    // prefers labId when callers pass it (lab-scoped /api/labs/:labId/pt/...
-    // route) or falls back to user_id for the legacy callers that have not been
-    // converted yet. The downstream pt_enrollments_v2 and aa_records reads
-    // below still key on user_id; those bleed risks belong to a separate
-    // root-cause sweep (see PR description follow-up notes).
+    //
+    // Shape A class sweep (2026-06-08): the VeritaMap lookup below now walks
+    // EVERY map in the lab (or every map owned by the user, for the legacy
+    // fallback) and aggregates the union of analytes across them. Prior code
+    // picked a single map with LIMIT 1, which silently truncated the test menu
+    // for any lab that builds maps per department (Lisa's Milford pattern) or
+    // per site (San Carlos: CW Bylas + SCAHC). PT coverage gaps were
+    // undercounted on every multi-map lab. The downstream pt_enrollments_v2
+    // and aa_records reads still key on user_id; those bleed risks belong to
+    // the separate Shape B sweep (task #122).
 
-    // Get the lab's test menu (unique analytes from VeritaMap)
-    const mapRow = labId
+    // Get the lab's test menu (unique analytes across ALL the lab's maps).
+    const maps = labId
       ? (db as any).$client.prepare(
-          "SELECT id FROM veritamap_maps WHERE lab_id = ? LIMIT 1"
-        ).get(labId) as any
+          "SELECT id FROM veritamap_maps WHERE lab_id = ?"
+        ).all(labId) as Array<{ id: number }>
       : (db as any).$client.prepare(
-          "SELECT id FROM veritamap_maps WHERE user_id = ? LIMIT 1"
-        ).get(userId) as any;
+          "SELECT id FROM veritamap_maps WHERE user_id = ?"
+        ).all(userId) as Array<{ id: number }>;
 
-    if (!mapRow) return { coverage: [], summary: { totalAnalytes: 0, regulatedGaps: 0, regulatedCovered: 0, recommendedGaps: 0, recommendedCovered: 0, aaaCovered: 0, waived: 0 } };
+    if (maps.length === 0) return { coverage: [], summary: { totalAnalytes: 0, regulatedGaps: 0, regulatedCovered: 0, recommendedGaps: 0, recommendedCovered: 0, aaaCovered: 0, waived: 0 } };
 
-    const testMenu = (db as any).$client.prepare(
-      "SELECT DISTINCT analyte, specialty, complexity FROM veritamap_tests WHERE map_id = ? AND active = 1"
-    ).all(mapRow.id) as any[];
+    const mapIdPlaceholders = maps.map(() => "?").join(",");
+    const testMenuRows = (db as any).$client.prepare(
+      `SELECT analyte, specialty, complexity FROM veritamap_tests WHERE map_id IN (${mapIdPlaceholders}) AND active = 1`
+    ).all(...maps.map(m => m.id)) as any[];
+    // Dedupe across maps on (lower(analyte)). Prefer a row with a known
+    // complexity over UNKNOWN/blank so the coverage summary picks the most
+    // informative copy. Keep the first specialty seen for a given analyte.
+    const seenByAnalyte = new Map<string, any>();
+    for (const row of testMenuRows) {
+      const key = String(row.analyte || "").trim().toLowerCase();
+      if (!key) continue;
+      const prior = seenByAnalyte.get(key);
+      if (!prior) { seenByAnalyte.set(key, row); continue; }
+      const priorKnown = prior.complexity && prior.complexity !== "UNKNOWN" && prior.complexity !== "";
+      const rowKnown = row.complexity && row.complexity !== "UNKNOWN" && row.complexity !== "";
+      if (!priorKnown && rowKnown) seenByAnalyte.set(key, row);
+    }
+    const testMenu = Array.from(seenByAnalyte.values());
 
     // Get lab's current pt_enrollments_v2 - seed demo defaults if needed
     const enrollments = (db as any).$client.prepare(
@@ -14208,6 +14227,112 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       req.scope.labId,
       res,
     );
+  });
+
+  // POST /api/labs/:labId/competency/programs/:id/rebuild-method-groups
+  //
+  // Shape A class sweep (2026-06-08). Rebuilds a competency program's method
+  // groups from EVERY VeritaMap in the lab, not just the single map the
+  // program was originally created against. Closes the smoking-gun bug
+  // Michael reported: program 14 on labId 2 had `map_id` pointing at CW
+  // Bylas (58 tests) and was missing every instrument from SCAHC (181 tests).
+  //
+  // Behavior:
+  //   - Reads every veritamap_instruments row across every veritamap_maps
+  //     row WHERE lab_id = req.scope.labId.
+  //   - Groups by category + instrument_name (same key the create-wizard
+  //     uses on the client) and aggregates analytes from
+  //     veritamap_instrument_tests.
+  //   - Existing method_groups whose `name` matches an aggregated group are
+  //     LEFT ALONE so director hand-edits (renamed groups, custom notes,
+  //     edited analyte lists) are preserved.
+  //   - Any aggregated group whose `name` does NOT already exist gets
+  //     INSERTed.
+  //
+  // Returns {created, kept, skipped, mapsScanned} so the UI can show a
+  // useful toast ("Added 7 method groups from 2 VeritaMaps").
+  app.post("/api/labs/:labId/competency/programs/:id/rebuild-method-groups", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
+    const client = (db as any).$client;
+    const labId = req.scope.labId;
+    const program = client.prepare(
+      "SELECT id, type FROM competency_programs WHERE id = ? AND lab_id = ?"
+    ).get(req.params.id, labId) as { id: number; type: string } | undefined;
+    if (!program) return res.status(404).json({ error: "Program not found" });
+    if (program.type !== "technical") {
+      return res.status(400).json({ error: "Rebuild is only supported for technical programs (method groups apply to technical competency)." });
+    }
+    const maps = client.prepare(
+      "SELECT id, name FROM veritamap_maps WHERE lab_id = ? ORDER BY updated_at DESC"
+    ).all(labId) as Array<{ id: number; name: string }>;
+    if (maps.length === 0) {
+      return res.json({ created: 0, kept: 0, skipped: 0, mapsScanned: 0, message: "No VeritaMaps found in this lab. Build a map first." });
+    }
+    const mapIdPlaceholders = maps.map(() => "?").join(",");
+    const instruments = client.prepare(
+      `SELECT id, category, instrument_name FROM veritamap_instruments WHERE map_id IN (${mapIdPlaceholders})`
+    ).all(...maps.map(m => m.id)) as Array<{ id: number; category: string | null; instrument_name: string }>;
+    if (instruments.length === 0) {
+      return res.json({ created: 0, kept: 0, skipped: 0, mapsScanned: maps.length, message: "No instruments in the lab's VeritaMaps yet." });
+    }
+    const instIdPlaceholders = instruments.map(() => "?").join(",");
+    const tests = client.prepare(
+      `SELECT instrument_id, analyte FROM veritamap_instrument_tests WHERE instrument_id IN (${instIdPlaceholders}) AND active = 1`
+    ).all(...instruments.map(i => i.id)) as Array<{ instrument_id: number; analyte: string }>;
+    const analytesByInstrument = new Map<number, Set<string>>();
+    for (const t of tests) {
+      if (!t.analyte) continue;
+      if (!analytesByInstrument.has(t.instrument_id)) analytesByInstrument.set(t.instrument_id, new Set());
+      analytesByInstrument.get(t.instrument_id)!.add(String(t.analyte));
+    }
+    // Group across all maps on (category, instrument_name). Same key the
+    // client wizard uses when seeding a new program from a single map.
+    const grouped = new Map<string, { name: string; instruments: Set<string>; analytes: Set<string> }>();
+    for (const inst of instruments) {
+      const cat = (inst.category || "").trim() || "Uncategorized";
+      const name = (inst.instrument_name || "").trim();
+      if (!name) continue;
+      const key = `${cat} - ${name}`;
+      if (!grouped.has(key)) grouped.set(key, { name: key, instruments: new Set(), analytes: new Set() });
+      const g = grouped.get(key)!;
+      g.instruments.add(name);
+      const analytes = analytesByInstrument.get(inst.id);
+      if (analytes) for (const a of analytes) g.analytes.add(a);
+    }
+    // Existing names in this program. We DO NOT modify them; new ones get
+    // inserted. Hand-edits (renamed groups, edited analyte lists, custom
+    // notes) are preserved across rebuilds.
+    const existing = client.prepare(
+      "SELECT name FROM competency_method_groups WHERE program_id = ?"
+    ).all(program.id) as Array<{ name: string }>;
+    const existingNames = new Set(existing.map(r => r.name));
+    const insertStmt = client.prepare(
+      "INSERT INTO competency_method_groups (program_id, name, instruments, analytes, notes) VALUES (?, ?, ?, ?, ?)"
+    );
+    let created = 0, kept = 0;
+    for (const [key, g] of grouped) {
+      if (existingNames.has(g.name)) { kept++; continue; }
+      insertStmt.run(
+        program.id,
+        g.name,
+        JSON.stringify(Array.from(g.instruments)),
+        JSON.stringify(Array.from(g.analytes).sort()),
+        null,
+      );
+      created++;
+    }
+    // Bump program.updated_at so the row sorts to the top of the list and
+    // the cache invalidates on the client.
+    client.prepare("UPDATE competency_programs SET updated_at = ? WHERE id = ?").run(new Date().toISOString(), program.id);
+    res.json({
+      created,
+      kept,
+      skipped: 0,
+      mapsScanned: maps.length,
+      message: created === 0
+        ? `No new method groups: all ${kept} aggregated groups already exist on this program.`
+        : `Added ${created} method group${created === 1 ? "" : "s"} from ${maps.length} VeritaMap${maps.length === 1 ? "" : "s"}. Kept ${kept} existing.`,
+    });
   });
 
   // Delete program
@@ -20439,16 +20564,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // userId, which is correct (preference is per-user, not per-lab).
       const labId = resolveLegacyLabId(req);
 
-      // 1. Get the lab's most recent VeritaMap
-      const map = labId ? (db as any).$client.prepare(
-        "SELECT id, name FROM veritamap_maps WHERE lab_id = ? ORDER BY updated_at DESC LIMIT 1"
-      ).get(labId) as any : null;
+      // 1. Get ALL the lab's VeritaMaps (Shape A class sweep, 2026-06-08).
+      // Prior code used LIMIT 1 ORDER BY updated_at DESC, so a multi-map lab
+      // (Lisa's Milford per-department pattern, San Carlos CW Bylas + SCAHC)
+      // got recommendations for only one map's analytes and silently dropped
+      // the rest. Now the recommendation pool is the union of analytes across
+      // every map in the lab.
+      const maps = labId ? (db as any).$client.prepare(
+        "SELECT id, name FROM veritamap_maps WHERE lab_id = ? ORDER BY updated_at DESC"
+      ).all(labId) as Array<{ id: number; name: string }> : [];
 
       // Fetch preferred PT vendor
       const prefRow = (db as any).$client.prepare("SELECT preferred_pt_vendor FROM users WHERE id = ?").get(userId) as any;
       const preferredVendor = prefRow?.preferred_pt_vendor || 'none';
 
-      if (!map) {
+      if (maps.length === 0) {
         return res.json({
           hasMap: false,
           mapName: null,
@@ -20461,10 +20591,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         });
       }
 
-      // 2. Get all active analytes from the map
+      // Display label: a single map name when exactly one map exists,
+      // otherwise the aggregate "N maps" label so the UI doesn't claim one
+      // map's name covers the whole lab's recommendations.
+      const map = maps.length === 1
+        ? maps[0]
+        : { id: 0, name: `All lab maps (${maps.length})` };
+
+      // 2. Get all active analytes across EVERY map in the lab.
+      const mapIdPlaceholders = maps.map(() => "?").join(",");
       const tests = (db as any).$client.prepare(
-        "SELECT analyte, specialty, complexity FROM veritamap_instrument_tests WHERE map_id = ? AND active = 1"
-      ).all(map.id) as { analyte: string; specialty: string; complexity: string }[];
+        `SELECT analyte, specialty, complexity FROM veritamap_instrument_tests WHERE map_id IN (${mapIdPlaceholders}) AND active = 1`
+      ).all(...maps.map(m => m.id)) as { analyte: string; specialty: string; complexity: string }[];
 
       // 3. Separate waived vs non-waived
       const waived: { analyte: string; specialty: string }[] = [];

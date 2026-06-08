@@ -1256,6 +1256,43 @@ function OverviewTab({ program }: { program: Program & { employees: Employee[]; 
   const employees = program.employees || [];
   const assessments = program.assessments || [];
   const activeEmployees = employees.filter(e => e.status === "active");
+  const activeLabId = useActiveLabId();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [rebuilding, setRebuilding] = useState(false);
+
+  // Shape A class sweep (2026-06-08). Walks every VeritaMap in the lab and
+  // adds any method groups that are missing on this program (existing groups
+  // are kept verbatim so director hand-edits survive). Surfaces the count
+  // in a toast so the director knows what happened.
+  async function rebuildMethodGroups() {
+    if (!activeLabId) {
+      toast({ title: "Lab not selected", description: "Switch into a specific lab before rebuilding.", variant: "destructive" });
+      return;
+    }
+    const confirmed = window.confirm(
+      "Rebuild Method Groups from every VeritaMap in this lab?\n\nExisting method groups will be kept exactly as-is (your hand-edits are preserved). Any method groups that exist in your lab's VeritaMaps but are missing from this program will be added."
+    );
+    if (!confirmed) return;
+    setRebuilding(true);
+    try {
+      const r = await fetch(
+        `${API_BASE}/api/labs/${activeLabId}/competency/programs/${program.id}/rebuild-method-groups`,
+        { method: "POST", headers: authHeaders() }
+      );
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({ error: "Rebuild failed" }));
+        throw new Error(err.error || "Rebuild failed");
+      }
+      const data = await r.json() as { created: number; kept: number; mapsScanned: number; message: string };
+      toast({ title: "Method groups rebuilt", description: data.message });
+      qc.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/competency/programs/${program.id}`] });
+    } catch (e: any) {
+      toast({ title: "Rebuild failed", description: e.message || "Try again in a moment.", variant: "destructive" });
+    } finally {
+      setRebuilding(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -1329,27 +1366,49 @@ function OverviewTab({ program }: { program: Program & { employees: Employee[]; 
         )}
       </div>
 
-      {/* Method groups (technical only) */}
-      {program.type === "technical" && program.methodGroups && program.methodGroups.length > 0 && (
+      {/* Method groups (technical only). Always rendered for technical programs
+          so the rebuild button is reachable even when the program currently has
+          zero method groups (e.g. a program created before the lab built its
+          VeritaMaps). */}
+      {program.type === "technical" && (
         <div className="border border-border rounded-lg p-4 bg-card">
-          <div className="text-sm font-semibold mb-3">Method Groups</div>
-          <div className="space-y-2">
-            {program.methodGroups.map(g => {
-              const instruments = JSON.parse(g.instruments || "[]");
-              const analytes = JSON.parse(g.analytes || "[]");
-              return (
-                <div key={g.id} className="border border-border rounded-lg p-3">
-                  <div className="font-medium text-sm">{g.name}</div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    <strong>Instruments:</strong> {instruments.join(", ") || "None"}
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    <strong>Analytes:</strong> {analytes.slice(0, 10).join(", ")}{analytes.length > 10 ? ` +${analytes.length - 10} more` : ""}
-                  </div>
-                </div>
-              );
-            })}
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="text-sm font-semibold">Method Groups</div>
+            {activeLabId && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={rebuildMethodGroups}
+                disabled={rebuilding}
+                title="Walk every VeritaMap in this lab and add any method groups missing from this program. Your existing groups are kept as-is."
+              >
+                {rebuilding ? "Rebuilding..." : "Rebuild from VeritaMap (lab-wide)"}
+              </Button>
+            )}
           </div>
+          {program.methodGroups && program.methodGroups.length > 0 ? (
+            <div className="space-y-2">
+              {program.methodGroups.map(g => {
+                const instruments = JSON.parse(g.instruments || "[]");
+                const analytes = JSON.parse(g.analytes || "[]");
+                return (
+                  <div key={g.id} className="border border-border rounded-lg p-3">
+                    <div className="font-medium text-sm">{g.name}</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      <strong>Instruments:</strong> {instruments.join(", ") || "None"}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      <strong>Analytes:</strong> {analytes.slice(0, 10).join(", ")}{analytes.length > 10 ? ` +${analytes.length - 10} more` : ""}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              No method groups yet. Click <strong>Rebuild from VeritaMap (lab-wide)</strong> to seed them from every map in this lab.
+            </p>
+          )}
         </div>
       )}
     </div>
