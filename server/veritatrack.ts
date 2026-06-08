@@ -206,6 +206,45 @@ export function registerVeritaTrackRoutes(
          LIMIT 20
       `).all(labId) as any[];
 
+      // Wave F1 (VeritaComp move-3, 2026-06-07): staff competency
+      // milestones whose due date is in the next 30 days AND have not
+      // been completed yet. CLIA §493.1235 chain: initial, 6-month,
+      // 1st annual, annual. Surveyor reads this as the lab director's
+      // active competency-management record. Three milestones tracked
+      // separately so the worklist labels them ("6-month", "1st annual",
+      // "annual") without forcing the director to remember which one
+      // is due for which employee.
+      const compEmployees = sqlite.prepare(`
+        SELECT cs.id, cs.six_month_due_at, cs.six_month_completed_at,
+               cs.first_annual_due_at, cs.first_annual_completed_at,
+               cs.annual_due_at, cs.last_annual_completed_at,
+               e.first_name, e.last_name
+          FROM staff_competency_schedules cs
+          JOIN staff_employees e ON e.id = cs.employee_id
+         WHERE e.tier2_lab_id = ?
+           AND e.status = 'active'
+      `).all(labId) as any[];
+
+      const compMilestonesDue: Array<{ csId: number; employeeName: string; milestone: string; dueAt: string }> = [];
+      for (const r of compEmployees) {
+        const empName = `${r.last_name}, ${r.first_name}`;
+        const candidates: Array<{ milestone: string; dueAt: string | null; doneAt: string | null }> = [
+          { milestone: "6-month", dueAt: r.six_month_due_at, doneAt: r.six_month_completed_at },
+          { milestone: "1st annual", dueAt: r.first_annual_due_at, doneAt: r.first_annual_completed_at },
+          { milestone: "annual", dueAt: r.annual_due_at, doneAt: r.last_annual_completed_at },
+        ];
+        for (const c of candidates) {
+          if (!c.dueAt || c.doneAt) continue;
+          const dueDt = new Date(c.dueAt);
+          const horizon = new Date();
+          horizon.setDate(horizon.getDate() + 30);
+          if (dueDt <= horizon) {
+            compMilestonesDue.push({ csId: r.id, employeeName: empName, milestone: c.milestone, dueAt: c.dueAt });
+          }
+        }
+      }
+      compMilestonesDue.sort((a, b) => a.dueAt.localeCompare(b.dueAt));
+
       const crossModule = [
         ...certs.map(c => ({
           source: "veritalab",
@@ -241,6 +280,13 @@ export function registerVeritaTrackRoutes(
           label: `Document review due: ${d.display_label || d.title}`,
           due_date: d.review_due_date,
           link: `/labs/${labId}/veritascan`,
+        })),
+        ...compMilestonesDue.slice(0, 20).map((m) => ({
+          source: "veritacomp",
+          source_id: m.csId,
+          label: `Competency ${m.milestone} due: ${m.employeeName}`,
+          due_date: m.dueAt,
+          link: `/labs/${labId}/veritacomp-app`,
         })),
       ];
 
