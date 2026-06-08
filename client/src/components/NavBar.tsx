@@ -6,7 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, TestTube, User, LogOut, LayoutDashboard, Play, ListChecks, ShieldCheck, BarChart3 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { LabSwitcher, cliaCertDisplay } from "@/components/LabSwitcher";
+import { LabSwitcher } from "@/components/LabSwitcher";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -236,41 +236,16 @@ export function NavBar() {
 
         {/* Right side */}
         <div className="flex items-center gap-2">
-          {isLoggedIn && (() => {
-            // Wave A6: CLIA cert active-through chip. Surfaces the active
-            // lab's CLIA cert expiration date next to the lab switcher so
-            // directors see renewal lead-time at every page load. Visible
-            // even for single-lab users (LabSwitcher returns null when
-            // memberships.length === 1). Informational only — never
-            // gates module access (Q5 design lock 2026-06-07; cert
-            // renewals take months, freezing the app on an expired CLIA
-            // punishes the lab for a CMS lag).
-            const cert = cliaCertDisplay(activeMembership?.cliaCertExpirationDate);
-            if (!cert || !activeMembership) return null;
-            // Wave A6 polish (2026-06-07): wrap the chip in a Link to the
-            // active lab's VeritaLab page so a director clicking the chip
-            // lands on the cert detail (where they can edit or upload
-            // the renewal). Informational chip stays informational; the
-            // click is a navigation shortcut, not a gating action.
-            return (
-              <Link
-                href={`/labs/${activeMembership.labId}/veritalab`}
-                className={cn(
-                  "hidden lg:inline-flex items-center px-2 py-1 rounded text-[11px] font-medium border transition-colors",
-                  cert.warn
-                    ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 hover:bg-amber-500/20"
-                    : "bg-secondary text-foreground border-border hover:bg-secondary/80"
-                )}
-                title={
-                  cert.expired
-                    ? `CLIA cert expiration date on file is ${cert.ymd} (${Math.abs(cert.daysRemaining)} day${Math.abs(cert.daysRemaining) === 1 ? "" : "s"} ago). Click to open VeritaLab.`
-                    : `CLIA cert active through ${cert.ymd} (${cert.daysRemaining} day${cert.daysRemaining === 1 ? "" : "s"} remaining). Click to open VeritaLab.`
-                }
-              >
-                {cert.expired ? `CLIA expired ${cert.ymd}` : `CLIA through ${cert.ymd}`}
-              </Link>
-            );
-          })()}
+          {/* The CLIA cert active-through chip from Wave A6 (PR #627 +
+              polish #643) was removed 2026-06-08 per director feedback
+              on the vendor management Gate 3 walk: the chip pushed the
+              lab switcher and right-cluster buttons off-screen on
+              standard viewports, and the expiration date is not a
+              top-line concern. The per-row CLIA active-through display
+              inside the LabSwitcher dropdown (LabSwitcher.tsx) stays;
+              it's on-demand and useful when picking a lab. The
+              cliaCertExpirationDate field still flows on /api/labs/me
+              for any future consumer. */}
           {isLoggedIn && <LabSwitcher />}
           <Button variant="ghost" size="icon" onClick={toggleTheme} className="w-8 h-8" aria-label="Toggle theme">
             {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
