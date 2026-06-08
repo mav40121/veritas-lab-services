@@ -4754,7 +4754,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   );
 
   // GET /api/labs/:labId/veritastock/vendors/:id
-  // Single vendor + its contacts. 404 when the row belongs to another lab.
+  // Single vendor + its contacts + any linked VeritaLab vendor_agreement
+  // records (PR 6 cross-link). 404 when the row belongs to another lab.
   app.get(
     "/api/labs/:labId/veritastock/vendors/:id",
     authMiddleware,
@@ -4769,7 +4770,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const contacts = sqlite.prepare(
         "SELECT * FROM stock_vendor_contacts WHERE vendor_id = ? ORDER BY sort_order ASC, id ASC"
       ).all(Number(req.params.id));
-      res.json({ ...v as object, contacts });
+      // Linked vendor_agreement rows from VeritaLab. Filter by both
+      // vendor_id and lab_id to enforce lab-scoped reads even if a
+      // cert somehow has a wrong lab_id (defense in depth).
+      const agreements = sqlite.prepare(`
+        SELECT id, cert_name, cert_number, issuing_body, issued_date, expiration_date, notes
+          FROM lab_certificates
+         WHERE vendor_id = ? AND lab_id = ? AND cert_type = 'vendor_agreement' AND is_active = 1
+         ORDER BY expiration_date DESC
+      `).all(Number(req.params.id), labId);
+      res.json({ ...v as object, contacts, agreements });
     },
   );
 

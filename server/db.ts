@@ -2631,6 +2631,20 @@ for (const t of ["staff_employees", "staff_roles"]) {
   }
 }
 
+// PR 6 of vendor management (2026-06-07): cross-link lab_certificates
+// to stock_vendors. A cert with cert_type='vendor_agreement' may point
+// at the vendor record it documents, so the VeritaStock vendor detail
+// page can render a "Contract" panel pulled from this lab_certificates
+// row. Nullable: agreements without a linked vendor (e.g. a free-text
+// agreement before the directory was populated) still work fine.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(lab_certificates)").all() as any[]).map((c) => c.name);
+  if (cols.length > 0 && !cols.includes("vendor_id")) {
+    try { sqlite.exec("ALTER TABLE lab_certificates ADD COLUMN vendor_id INTEGER REFERENCES stock_vendors(id)"); } catch {}
+  }
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_lab_certificates_vendor ON lab_certificates(vendor_id)"); } catch {}
+}
+
 // Multi-Lab Tier 2 — Phase 3.7 (VeritaTrack module):
 // Two user_id tables: veritatrack_tasks (parent), veritatrack_signoffs
 // (child but also carries user_id for audit). Both get lab_id directly.

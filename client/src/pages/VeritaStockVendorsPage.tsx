@@ -41,6 +41,16 @@ interface Vendor {
   contact_count?: number;
 }
 
+interface VendorAgreement {
+  id: number;
+  cert_name: string;
+  cert_number: string | null;
+  issuing_body: string | null;
+  issued_date: string | null;
+  expiration_date: string | null;
+  notes: string | null;
+}
+
 interface VendorContact {
   id: number;
   vendor_id: number;
@@ -361,7 +371,7 @@ function VendorRow({
   const qc = useQueryClient();
   const detailUrl = activeLabId ? `/api/labs/${activeLabId}/veritastock/vendors/${vendor.id}` : null;
 
-  const { data: detail } = useQuery<Vendor & { contacts: VendorContact[] }>({
+  const { data: detail } = useQuery<Vendor & { contacts: VendorContact[]; agreements: VendorAgreement[] }>({
     queryKey: [detailUrl ?? "no-vendor-detail"],
     queryFn: async () => {
       if (!detailUrl) throw new Error("no lab");
@@ -432,6 +442,45 @@ function VendorRow({
                 qc.invalidateQueries({ queryKey: [listUrl] });
               }}
             />
+            {/* PR 6 cross-link: any VeritaLab vendor_agreement records that
+                point at this vendor render here as a Contract panel with
+                expiration + renewal awareness. Click-through to VeritaLab
+                opens the cert detail for edit/upload. */}
+            {detail?.agreements && detail.agreements.length > 0 && (
+              <div className="mt-4">
+                <div className="text-xs font-semibold text-muted-foreground mb-2">
+                  Linked Agreements (VeritaLab)
+                </div>
+                <div className="space-y-1.5">
+                  {detail.agreements.map((a) => (
+                    <div key={a.id} className="flex items-center gap-3 text-xs rounded border border-emerald-500/30 bg-emerald-500/5 px-3 py-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium">{a.cert_name}</div>
+                        <div className="text-muted-foreground flex gap-3 flex-wrap">
+                          {a.cert_number && <span>#{a.cert_number}</span>}
+                          {a.expiration_date && (
+                            <span>
+                              expires {a.expiration_date}
+                              {(() => {
+                                const days = Math.floor((new Date(a.expiration_date!).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                                if (days < 0) return <span className="text-red-700 ml-1">(expired {-days}d ago)</span>;
+                                if (days <= 30) return <span className="text-amber-700 ml-1">({days}d left)</span>;
+                                return <span className="text-muted-foreground ml-1">({days}d left)</span>;
+                              })()}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <Link href={activeLabId ? `/labs/${activeLabId}/veritalab` : "/veritalab"}>
+                        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs">
+                          Open in VeritaLab
+                        </Button>
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {vendor.notes && (
               <div className="mt-3">
                 <div className="text-xs font-semibold text-muted-foreground mb-1">Notes</div>
