@@ -4283,6 +4283,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ordered by is_primary_lab DESC, then membership id ASC, so the user's
   // primary lab is always first.
   app.get("/api/labs/me", authMiddleware, (req: any, res) => {
+    // Wave A6: surface CLIA cert active-through date per lab so the
+    // NavBar / LabSwitcher can render "CLIA active through YYYY-MM-DD"
+    // and a soft 30-day warning chip. Informational only — never gates
+    // any module (cert renewal can take months; freezing the app on an
+    // expired CLIA would punish the lab for a CMS lag). Pulls the
+    // latest still-active CLIA cert on the lab by expiration_date.
     const memberships = (db as any).$client.prepare(`
       SELECT
         lm.id AS membership_id,
@@ -4299,7 +4305,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         l.accreditation_cap,
         l.accreditation_tjc,
         l.accreditation_cola,
-        l.accreditation_aabb
+        l.accreditation_aabb,
+        (SELECT lc.expiration_date
+           FROM lab_certificates lc
+          WHERE lc.lab_id = l.id
+            AND lc.cert_type = 'clia'
+            AND lc.is_active = 1
+            AND lc.expiration_date IS NOT NULL
+            AND lc.expiration_date != ''
+          ORDER BY lc.expiration_date DESC
+          LIMIT 1) AS clia_cert_expiration_date
       FROM lab_members lm
       JOIN labs l ON lm.lab_id = l.id
       WHERE lm.user_id = ? AND lm.status = 'active'
@@ -4322,6 +4337,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       plan: m.plan,
       subscriptionStatus: m.subscription_status,
       subscriptionExpiresAt: m.subscription_expires_at,
+      cliaCertExpirationDate: m.clia_cert_expiration_date || null,
     })));
   });
 

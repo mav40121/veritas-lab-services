@@ -21,6 +21,12 @@ export interface Membership {
   accreditationTjc: boolean;
   accreditationCola: boolean;
   accreditationAabb: boolean;
+  // CLIA certificate active-through date for this lab (latest active
+  // cert by expiration_date). ISO YYYY-MM-DD when set, null when the
+  // lab hasn't entered one. Informational only — never gates module
+  // access (cert renewals can take months and freezing the app on an
+  // expired CLIA would punish the lab for a CMS lag).
+  cliaCertExpirationDate: string | null;
 }
 
 // Resolve the set of accreditors a lab is allowed to file findings under.
