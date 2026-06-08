@@ -4964,6 +4964,140 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     },
   );
 
+  // ── Vendor xlsx import (PR 3 of the 6-PR build) ─────────────────────────
+  //
+  // Two endpoints mirroring the staff bulk-import pattern: preview
+  // (dry-run, returns the parsed shape so the director can review) and
+  // commit (write to DB, idempotent on (lab_id, name)).
+  //
+  // Accepts the San Carlos format directly (VENDOR / PO / pattern /
+  // account / POINT OF CONTACT columns). Other labs can adapt their
+  // own xlsx into the same shape; PR 3 doesn't ship a column-mapper.
+  app.post(
+    "/api/labs/:labId/veritastock/vendors/import/preview",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    (() => {
+      const m = require("multer");
+      return m({ storage: m.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } }).single("file");
+    })(),
+    async (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const labId = req.scope.labId;
+      if (!req.file?.buffer) return res.status(400).json({ error: "No file uploaded" });
+      try {
+        const { parseVendorWorkbook } = await import("./veritastock_vendor_import");
+        const parsed = await parseVendorWorkbook(req.file.buffer);
+        // Annotate each parsed vendor with whether it would be created
+        // or skipped (already exists) so the director can preview.
+        const existing = sqlite.prepare(
+          "SELECT name FROM stock_vendors WHERE lab_id = ?"
+        ).all(labId) as Array<{ name: string }>;
+        const existingNames = new Set(existing.map((e) => e.name.toLowerCase()));
+        const annotated = parsed.vendors.map((v) => ({
+          ...v,
+          action: existingNames.has(v.name.toLowerCase()) ? "skip_duplicate" : "create",
+        }));
+        const summary = {
+          total_parsed: parsed.vendors.length,
+          would_create: annotated.filter((v) => v.action === "create").length,
+          would_skip_duplicate: annotated.filter((v) => v.action === "skip_duplicate").length,
+          parse_errors: parsed.parse_errors.length,
+        };
+        res.json({ vendors: annotated, parse_errors: parsed.parse_errors, summary });
+      } catch (err: any) {
+        console.error("[veritastock/vendors/import/preview] error:", err);
+        res.status(500).json({ error: err.message || "preview_failed" });
+      }
+    },
+  );
+
+  // Commit endpoint. Re-parses the file (clients are not trusted to send
+  // back the preview shape verbatim) and writes new rows. Returns the
+  // same summary shape so the UI can show created/skipped counts.
+  app.post(
+    "/api/labs/:labId/veritastock/vendors/import/commit",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    (() => {
+      const m = require("multer");
+      return m({ storage: m.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } }).single("file");
+    })(),
+    async (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const labId = req.scope.labId;
+      if (!req.file?.buffer) return res.status(400).json({ error: "No file uploaded" });
+      try {
+        const { parseVendorWorkbook } = await import("./veritastock_vendor_import");
+        const parsed = await parseVendorWorkbook(req.file.buffer);
+
+        const existing = sqlite.prepare(
+          "SELECT id, name FROM stock_vendors WHERE lab_id = ?"
+        ).all(labId) as Array<{ id: number; name: string }>;
+        const existingByName = new Map(existing.map((e) => [e.name.toLowerCase(), e.id]));
+
+        const createVendor = sqlite.prepare(`
+          INSERT INTO stock_vendors
+            (lab_id, name, account_number, po_number, ordering_pattern,
+             ordering_email, ordering_phone, ordering_portal_url, notes, status,
+             created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', datetime('now'), datetime('now'))
+        `);
+        const createContact = sqlite.prepare(`
+          INSERT INTO stock_vendor_contacts
+            (vendor_id, lab_id, contact_name, contact_role, title, phone, email,
+             notes, sort_order, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+        `);
+
+        let created = 0;
+        let skippedDuplicate = 0;
+        let contactsCreated = 0;
+        const errors: Array<{ row: number; message: string }> = [...parsed.parse_errors];
+
+        for (const v of parsed.vendors) {
+          if (existingByName.has(v.name.toLowerCase())) {
+            skippedDuplicate += 1;
+            continue;
+          }
+          try {
+            const r = createVendor.run(
+              labId, v.name, v.account_number, v.po_number, v.ordering_pattern,
+              v.ordering_email, v.ordering_phone, v.ordering_portal_url, v.notes,
+            );
+            created += 1;
+            for (let i = 0; i < v.contacts.length; i++) {
+              const c = v.contacts[i];
+              createContact.run(
+                Number(r.lastInsertRowid), labId, c.contact_name, c.contact_role,
+                c.title, c.phone, c.email, c.notes, i,
+              );
+              contactsCreated += 1;
+            }
+          } catch (err: any) {
+            errors.push({ row: v.source_row, message: err.message || String(err) });
+          }
+        }
+
+        res.json({
+          summary: {
+            total_parsed: parsed.vendors.length,
+            created,
+            skipped_duplicate: skippedDuplicate,
+            contacts_created: contactsCreated,
+            errors: errors.length,
+          },
+          errors,
+        });
+      } catch (err: any) {
+        console.error("[veritastock/vendors/import/commit] error:", err);
+        res.status(500).json({ error: err.message || "commit_failed" });
+      }
+    },
+  );
+
   // ── Wave K2 (2026-06-07): Inventory login + scoped JWT middleware ─────────
   //
   // POST /api/inventory-login body { clia, pin } → returns a JWT scoped
