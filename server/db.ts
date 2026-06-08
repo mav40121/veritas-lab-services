@@ -3181,6 +3181,110 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inventory_items_expiration ON 
 // rejects duplicate barcode inserts via a per-account uniqueness check.
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inventory_barcode ON inventory_items(account_id, barcode_value)`); } catch {}
 
+// VeritaStock vendor management (2026-06-07): the lab's vendor directory.
+// One row per (lab, vendor) — each lab has its own account numbers,
+// PO numbers, sales reps, and contracted ordering pattern, so the table
+// is lab-scoped from the start (not user-scoped). The lab manager sees
+// this in the new VeritaStock Vendors page; the Order PDF generator
+// auto-fills its cover page from these rows when a vendor record exists.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS stock_vendors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    account_number TEXT,
+    po_number TEXT,
+    ordering_pattern TEXT,
+    ordering_email TEXT,
+    ordering_phone TEXT,
+    ordering_fax TEXT,
+    ordering_portal_url TEXT,
+    order_tracking_url TEXT,
+    notes TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (lab_id) REFERENCES labs(id),
+    UNIQUE (lab_id, name)
+  );
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_stock_vendors_lab ON stock_vendors(lab_id)`); } catch {}
+
+// Migration block per NEW DB TABLE RULE (Section 8). Adds any column
+// that may be missing from an older boot. Idempotent.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(stock_vendors)").all() as { name: string }[]).map((c) => c.name);
+  if (cols.length > 0) {
+    const required: Array<[string, string]> = [
+      ["account_number", "TEXT"],
+      ["po_number", "TEXT"],
+      ["ordering_pattern", "TEXT"],
+      ["ordering_email", "TEXT"],
+      ["ordering_phone", "TEXT"],
+      ["ordering_fax", "TEXT"],
+      ["ordering_portal_url", "TEXT"],
+      ["order_tracking_url", "TEXT"],
+      ["notes", "TEXT"],
+      ["status", "TEXT NOT NULL DEFAULT 'active'"],
+    ];
+    for (const [c, t] of required) {
+      if (!cols.includes(c)) {
+        try { sqlite.exec(`ALTER TABLE stock_vendors ADD COLUMN ${c} ${t}`); } catch {}
+      }
+    }
+  }
+}
+
+// VeritaStock vendor contacts (2026-06-07): one vendor typically has
+// multiple contact paths (sales rep + customer service + tech support +
+// dedicated orders inbox), as documented in the San Carlos directory
+// (e.g. Werfen has 3 distinct contact tracks). Modeled as a child of
+// stock_vendors so the lab manager can capture all of them without
+// flattening the relationship.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS stock_vendor_contacts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vendor_id INTEGER NOT NULL,
+    lab_id INTEGER NOT NULL,
+    contact_name TEXT NOT NULL,
+    contact_role TEXT,
+    title TEXT,
+    phone TEXT,
+    mobile TEXT,
+    email TEXT,
+    region TEXT,
+    notes TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (vendor_id) REFERENCES stock_vendors(id),
+    FOREIGN KEY (lab_id) REFERENCES labs(id)
+  );
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_stock_vendor_contacts_vendor ON stock_vendor_contacts(vendor_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_stock_vendor_contacts_lab ON stock_vendor_contacts(lab_id)`); } catch {}
+
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(stock_vendor_contacts)").all() as { name: string }[]).map((c) => c.name);
+  if (cols.length > 0) {
+    const required: Array<[string, string]> = [
+      ["contact_role", "TEXT"],
+      ["title", "TEXT"],
+      ["phone", "TEXT"],
+      ["mobile", "TEXT"],
+      ["email", "TEXT"],
+      ["region", "TEXT"],
+      ["notes", "TEXT"],
+      ["sort_order", "INTEGER NOT NULL DEFAULT 0"],
+    ];
+    for (const [c, t] of required) {
+      if (!cols.includes(c)) {
+        try { sqlite.exec(`ALTER TABLE stock_vendor_contacts ADD COLUMN ${c} ${t}`); } catch {}
+      }
+    }
+  }
+}
+
 // parking-lot #29 Phase 0: scan_events audit table. Every barcode scan
 // (whether it changes quantity or not) writes one row so the lab has a
 // complete who/what/when timeline. account_id matches inventory_items.

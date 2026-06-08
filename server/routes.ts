@@ -4695,6 +4695,275 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // ── VeritaStock vendor directory (2026-06-07) ─────────────────────────────
+  //
+  // Lab-scoped vendor records. Each row carries the lab's account number,
+  // PO number, ordering channel (email/phone/fax/portal), and the
+  // pattern (as-needed, standing order, threshold obligation, etc.) for
+  // that vendor. The Order PDF generator pulls from these to auto-fill
+  // the cover page so a generated order is actionable on receipt. Child
+  // table stock_vendor_contacts holds 1-to-many contact people (sales
+  // rep, customer service, tech support, dedicated orders inbox).
+  //
+  // Plan gate: VeritaStock is on every paid tier today, so this reuses
+  // the same hasStockAccess shape used elsewhere. Lab scope enforced via
+  // labScopeMiddleware on every route.
+  function vendorBody(req: any) {
+    const b = req.body || {};
+    const toNull = (v: any) => (v === undefined || v === null || v === "" ? null : String(v));
+    return {
+      name: typeof b.name === "string" ? b.name.trim() : "",
+      account_number: toNull(b.account_number),
+      po_number: toNull(b.po_number),
+      ordering_pattern: toNull(b.ordering_pattern),
+      ordering_email: toNull(b.ordering_email),
+      ordering_phone: toNull(b.ordering_phone),
+      ordering_fax: toNull(b.ordering_fax),
+      ordering_portal_url: toNull(b.ordering_portal_url),
+      order_tracking_url: toNull(b.order_tracking_url),
+      notes: toNull(b.notes),
+      status: typeof b.status === "string" && ["active", "archived"].includes(b.status) ? b.status : "active",
+    };
+  }
+
+  // GET /api/labs/:labId/veritastock/vendors
+  // Returns all vendors for the active lab. Optional ?status=active
+  // (default) or 'archived' or 'all'. Each vendor row has its contact
+  // count denormalized so the list view can render badges without
+  // fan-out queries.
+  app.get(
+    "/api/labs/:labId/veritastock/vendors",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const labId = req.scope.labId;
+      const statusFilter = req.query.status === "archived" ? "archived" : req.query.status === "all" ? null : "active";
+      const sql = statusFilter
+        ? "SELECT * FROM stock_vendors WHERE lab_id = ? AND status = ? ORDER BY name COLLATE NOCASE ASC"
+        : "SELECT * FROM stock_vendors WHERE lab_id = ? ORDER BY name COLLATE NOCASE ASC";
+      const rows = statusFilter
+        ? sqlite.prepare(sql).all(labId, statusFilter) as any[]
+        : sqlite.prepare(sql).all(labId) as any[];
+      const counts = sqlite.prepare(
+        "SELECT vendor_id, COUNT(*) AS n FROM stock_vendor_contacts WHERE lab_id = ? GROUP BY vendor_id"
+      ).all(labId) as Array<{ vendor_id: number; n: number }>;
+      const countMap = new Map(counts.map((c) => [c.vendor_id, c.n]));
+      res.json(rows.map((r) => ({ ...r, contact_count: countMap.get(r.id) || 0 })));
+    },
+  );
+
+  // GET /api/labs/:labId/veritastock/vendors/:id
+  // Single vendor + its contacts. 404 when the row belongs to another lab.
+  app.get(
+    "/api/labs/:labId/veritastock/vendors/:id",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const labId = req.scope.labId;
+      const v = sqlite.prepare(
+        "SELECT * FROM stock_vendors WHERE id = ? AND lab_id = ?"
+      ).get(Number(req.params.id), labId);
+      if (!v) return res.status(404).json({ error: "Vendor not found in this lab" });
+      const contacts = sqlite.prepare(
+        "SELECT * FROM stock_vendor_contacts WHERE vendor_id = ? ORDER BY sort_order ASC, id ASC"
+      ).all(Number(req.params.id));
+      res.json({ ...v as object, contacts });
+    },
+  );
+
+  // POST /api/labs/:labId/veritastock/vendors
+  // Create vendor. UNIQUE(lab_id, name) prevents accidental duplicates
+  // from the import path; the upsert path in PR 3 will catch them
+  // explicitly. 409 on conflict so the client knows to fall back to
+  // a PUT.
+  app.post(
+    "/api/labs/:labId/veritastock/vendors",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const labId = req.scope.labId;
+      const body = vendorBody(req);
+      if (!body.name) return res.status(400).json({ error: "name is required" });
+      try {
+        const r = sqlite.prepare(`
+          INSERT INTO stock_vendors
+            (lab_id, name, account_number, po_number, ordering_pattern,
+             ordering_email, ordering_phone, ordering_fax, ordering_portal_url,
+             order_tracking_url, notes, status, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+        `).run(
+          labId, body.name, body.account_number, body.po_number, body.ordering_pattern,
+          body.ordering_email, body.ordering_phone, body.ordering_fax, body.ordering_portal_url,
+          body.order_tracking_url, body.notes, body.status,
+        );
+        const created = sqlite.prepare("SELECT * FROM stock_vendors WHERE id = ?").get(r.lastInsertRowid);
+        res.json(created);
+      } catch (err: any) {
+        if (String(err?.message || "").includes("UNIQUE")) {
+          return res.status(409).json({ error: "A vendor with this name already exists for this lab" });
+        }
+        throw err;
+      }
+    },
+  );
+
+  // PUT /api/labs/:labId/veritastock/vendors/:id
+  // Update vendor. Lab-scope check rejects cross-lab writes even if the
+  // labId in the URL matches but the row's lab_id doesn't.
+  app.put(
+    "/api/labs/:labId/veritastock/vendors/:id",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const labId = req.scope.labId;
+      const existing = sqlite.prepare(
+        "SELECT id FROM stock_vendors WHERE id = ? AND lab_id = ?"
+      ).get(Number(req.params.id), labId);
+      if (!existing) return res.status(404).json({ error: "Vendor not found in this lab" });
+      const body = vendorBody(req);
+      if (!body.name) return res.status(400).json({ error: "name is required" });
+      sqlite.prepare(`
+        UPDATE stock_vendors
+           SET name = ?, account_number = ?, po_number = ?, ordering_pattern = ?,
+               ordering_email = ?, ordering_phone = ?, ordering_fax = ?,
+               ordering_portal_url = ?, order_tracking_url = ?, notes = ?, status = ?,
+               updated_at = datetime('now')
+         WHERE id = ? AND lab_id = ?
+      `).run(
+        body.name, body.account_number, body.po_number, body.ordering_pattern,
+        body.ordering_email, body.ordering_phone, body.ordering_fax,
+        body.ordering_portal_url, body.order_tracking_url, body.notes, body.status,
+        Number(req.params.id), labId,
+      );
+      const updated = sqlite.prepare("SELECT * FROM stock_vendors WHERE id = ?").get(Number(req.params.id));
+      res.json(updated);
+    },
+  );
+
+  // DELETE /api/labs/:labId/veritastock/vendors/:id
+  // Hard-delete the vendor + its contacts. Lab-scope check rejects
+  // cross-lab deletes. Contacts cascade in code (sqlite FKs aren't
+  // enforced by default in this codebase).
+  app.delete(
+    "/api/labs/:labId/veritastock/vendors/:id",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const labId = req.scope.labId;
+      const existing = sqlite.prepare(
+        "SELECT id FROM stock_vendors WHERE id = ? AND lab_id = ?"
+      ).get(Number(req.params.id), labId);
+      if (!existing) return res.status(404).json({ error: "Vendor not found in this lab" });
+      sqlite.prepare("DELETE FROM stock_vendor_contacts WHERE vendor_id = ? AND lab_id = ?").run(Number(req.params.id), labId);
+      sqlite.prepare("DELETE FROM stock_vendors WHERE id = ? AND lab_id = ?").run(Number(req.params.id), labId);
+      res.json({ ok: true });
+    },
+  );
+
+  // ── Vendor contacts (child of stock_vendors) ──────────────────────────────
+
+  function contactBody(req: any) {
+    const b = req.body || {};
+    const toNull = (v: any) => (v === undefined || v === null || v === "" ? null : String(v));
+    return {
+      contact_name: typeof b.contact_name === "string" ? b.contact_name.trim() : "",
+      contact_role: toNull(b.contact_role),
+      title: toNull(b.title),
+      phone: toNull(b.phone),
+      mobile: toNull(b.mobile),
+      email: toNull(b.email),
+      region: toNull(b.region),
+      notes: toNull(b.notes),
+      sort_order: Number.isFinite(Number(b.sort_order)) ? Number(b.sort_order) : 0,
+    };
+  }
+
+  // POST /api/labs/:labId/veritastock/vendors/:vendorId/contacts
+  app.post(
+    "/api/labs/:labId/veritastock/vendors/:vendorId/contacts",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const labId = req.scope.labId;
+      const vendorId = Number(req.params.vendorId);
+      const vendor = sqlite.prepare(
+        "SELECT id FROM stock_vendors WHERE id = ? AND lab_id = ?"
+      ).get(vendorId, labId);
+      if (!vendor) return res.status(404).json({ error: "Vendor not found in this lab" });
+      const body = contactBody(req);
+      if (!body.contact_name) return res.status(400).json({ error: "contact_name is required" });
+      const r = sqlite.prepare(`
+        INSERT INTO stock_vendor_contacts
+          (vendor_id, lab_id, contact_name, contact_role, title, phone, mobile,
+           email, region, notes, sort_order, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      `).run(
+        vendorId, labId, body.contact_name, body.contact_role, body.title,
+        body.phone, body.mobile, body.email, body.region, body.notes, body.sort_order,
+      );
+      const created = sqlite.prepare("SELECT * FROM stock_vendor_contacts WHERE id = ?").get(r.lastInsertRowid);
+      res.json(created);
+    },
+  );
+
+  // PUT /api/labs/:labId/veritastock/vendors/:vendorId/contacts/:id
+  app.put(
+    "/api/labs/:labId/veritastock/vendors/:vendorId/contacts/:id",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const labId = req.scope.labId;
+      const existing = sqlite.prepare(
+        "SELECT id FROM stock_vendor_contacts WHERE id = ? AND vendor_id = ? AND lab_id = ?"
+      ).get(Number(req.params.id), Number(req.params.vendorId), labId);
+      if (!existing) return res.status(404).json({ error: "Contact not found in this lab" });
+      const body = contactBody(req);
+      if (!body.contact_name) return res.status(400).json({ error: "contact_name is required" });
+      sqlite.prepare(`
+        UPDATE stock_vendor_contacts
+           SET contact_name = ?, contact_role = ?, title = ?, phone = ?, mobile = ?,
+               email = ?, region = ?, notes = ?, sort_order = ?, updated_at = datetime('now')
+         WHERE id = ? AND lab_id = ?
+      `).run(
+        body.contact_name, body.contact_role, body.title, body.phone, body.mobile,
+        body.email, body.region, body.notes, body.sort_order,
+        Number(req.params.id), labId,
+      );
+      const updated = sqlite.prepare("SELECT * FROM stock_vendor_contacts WHERE id = ?").get(Number(req.params.id));
+      res.json(updated);
+    },
+  );
+
+  // DELETE /api/labs/:labId/veritastock/vendors/:vendorId/contacts/:id
+  app.delete(
+    "/api/labs/:labId/veritastock/vendors/:vendorId/contacts/:id",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const labId = req.scope.labId;
+      const existing = sqlite.prepare(
+        "SELECT id FROM stock_vendor_contacts WHERE id = ? AND vendor_id = ? AND lab_id = ?"
+      ).get(Number(req.params.id), Number(req.params.vendorId), labId);
+      if (!existing) return res.status(404).json({ error: "Contact not found in this lab" });
+      sqlite.prepare("DELETE FROM stock_vendor_contacts WHERE id = ? AND lab_id = ?").run(Number(req.params.id), labId);
+      res.json({ ok: true });
+    },
+  );
+
   // ── Wave K2 (2026-06-07): Inventory login + scoped JWT middleware ─────────
   //
   // POST /api/inventory-login body { clia, pin } → returns a JWT scoped
