@@ -549,9 +549,16 @@ function NewVerificationForm({ onCreated, onCancel }: { onCreated: (id: number) 
 // ── Detail view ───────────────────────────────────────────────────────────────
 function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) {
   const qc = useQueryClient();
+  const activeLabId = useActiveLabId();
   const [activeTab, setActiveTab] = useState<"elements" | "units" | "director">("elements");
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState("");
+  // Wave A3.2-UI: count of verifications on the parent instrument so the
+  // Survey Bundle button can tell the user how many filings will land in
+  // the combined PDF before they click. Stays null until the preview
+  // probe resolves; null disables the button + shows "loading…" affordance.
+  const [bundleCount, setBundleCount] = useState<number | null>(null);
+  const [bundleDownloading, setBundleDownloading] = useState(false);
 
   const { data: verification, isLoading, refetch } = useQuery<Verification>({
     queryKey: [`/api/veritacheck/verifications/${id}`],
@@ -571,6 +578,38 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
   });
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
+
+  // Wave A3.2-UI (2026-06-07): probe the survey-bundle preview to populate
+  // bundleCount. Only runs when both activeLabId and the verification's
+  // map_instrument_id are known. Server falls back to instrument_name
+  // matching when map_instrument_id is null on older verifications, so
+  // the button stays useful even there: we only short-circuit on the UI
+  // side when map_instrument_id is missing because the click handler
+  // needs an id in the URL path. Failed probes leave bundleCount at 0
+  // so the button shows the "no other verifications" tooltip rather than
+  // silently disabling.
+  const verificationMapInstrumentId = verification?.map_instrument_id ?? null;
+  useEffect(() => {
+    if (!activeLabId || !verificationMapInstrumentId) {
+      setBundleCount(verificationMapInstrumentId === null ? null : 0);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(
+          `${API_BASE}/api/labs/${activeLabId}/veritacheck/map-instruments/${verificationMapInstrumentId}/survey-bundle`,
+          { headers: authHeaders() }
+        );
+        if (!r.ok) { if (!cancelled) setBundleCount(0); return; }
+        const body = await r.json();
+        if (!cancelled) setBundleCount(Array.isArray(body?.verifications) ? body.verifications.length : 0);
+      } catch {
+        if (!cancelled) setBundleCount(0);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeLabId, verificationMapInstrumentId]);
 
   const patchStudy = async (studySlotId: number, payload: object) => {
     setSaving(true);
@@ -656,6 +695,52 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
               >
                 <Download size={12} /> Download PDF
               </Button>
+              {/* Wave A3.2-UI: Survey Bundle button. Surveyor-facing combined
+                  PDF with every verification ever filed against this analyzer
+                  in chronological order. Disabled when the verification has
+                  no map_instrument_id link (legacy rows pre the link column)
+                  or when only one verification is on file (no point in
+                  bundling a single entry). Tooltip explains the disable. */}
+              {activeLabId && verificationMapInstrumentId && (
+                <Button
+                  size="sm" variant="outline"
+                  className="h-7 text-xs gap-1"
+                  disabled={bundleDownloading || bundleCount === null || bundleCount < 2}
+                  title={
+                    bundleCount === null
+                      ? "Checking how many verifications are on file for this analyzer..."
+                      : bundleCount < 2
+                        ? "This is the only verification on file for this analyzer. Survey Bundle activates once you file a second verification (lot change, repair, second unit, etc.)."
+                        : `Download a combined PDF with all ${bundleCount} verifications on file for ${verification.instrument_name}, sorted chronologically. Surveyor-ready.`
+                  }
+                  onClick={async () => {
+                    if (!activeLabId || !verificationMapInstrumentId) return;
+                    setBundleDownloading(true);
+                    try {
+                      const r = await fetch(
+                        `${API_BASE}/api/labs/${activeLabId}/veritacheck/map-instruments/${verificationMapInstrumentId}/survey-bundle-pdf`,
+                        { method: "POST", headers: authHeaders() }
+                      );
+                      if (!r.ok) {
+                        showToast("Bundle download failed");
+                        return;
+                      }
+                      const blob = await r.blob();
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      const safeName = verification.instrument_name.replace(/[^a-zA-Z0-9]/g, "_");
+                      a.download = `VeritaCheck_SurveyBundle_${safeName}.pdf`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    } finally {
+                      setBundleDownloading(false);
+                    }
+                  }}
+                >
+                  <Download size={12} /> Survey Bundle{bundleCount && bundleCount >= 2 ? ` (${bundleCount})` : ""}
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>
