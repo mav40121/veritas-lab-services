@@ -462,7 +462,7 @@ function hasCrosswalk(cw?: AccreditorCrosswalk | null): boolean {
 
 // ─── Document assembly ───────────────────────────────────────────────────────
 
-function buildDocument(tmpl: PolicyTemplate, lab: LabContext, crosswalk?: AccreditorCrosswalk | null): Document {
+function buildDocument(tmpl: PolicyTemplate, lab: LabContext, crosswalk?: AccreditorCrosswalk | null, opts?: PolicyDocxOptions): Document {
   const children: (Paragraph | Table)[] = [];
 
   children.push(brandBar());
@@ -566,15 +566,39 @@ function buildDocument(tmpl: PolicyTemplate, lab: LabContext, crosswalk?: Accred
       },
       footers: {
         default: new Footer({
-          children: [new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [
-              new TextRun({ text: "VeritaAssure™  |  VeritaPolicy™  |  Confidential — For Internal Lab Use Only  |  Page ", color: TEXT_DARK, size: 16, font: "Calibri" }),
-              new TextRun({ children: [PageNumber.CURRENT], color: TEXT_DARK, size: 16, font: "Calibri" }),
-              new TextRun({ text: " of ", color: TEXT_DARK, size: 16, font: "Calibri" }),
-              new TextRun({ children: [PageNumber.TOTAL_PAGES], color: TEXT_DARK, size: 16, font: "Calibri" }),
-            ],
-          })],
+          children: [
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new TextRun({ text: "VeritaAssure™  |  VeritaPolicy™  |  Confidential — For Internal Lab Use Only  |  Page ", color: TEXT_DARK, size: 16, font: "Calibri" }),
+                new TextRun({ children: [PageNumber.CURRENT], color: TEXT_DARK, size: 16, font: "Calibri" }),
+                new TextRun({ text: " of ", color: TEXT_DARK, size: 16, font: "Calibri" }),
+                new TextRun({ children: [PageNumber.TOTAL_PAGES], color: TEXT_DARK, size: 16, font: "Calibri" }),
+              ],
+            }),
+            // MediaLab parity #39 item 1 (2026-06-07): per-download
+            // watermark line. Burns who pulled the copy + when into the
+            // footer so a forwarded DOCX still carries provenance. Soft
+            // deterrent against the "I'll just email it to Smith" leak
+            // path. Renders below the page-number line so it survives
+            // print previews and PDF conversions without breaking layout.
+            ...(opts?.downloadedBy
+              ? [
+                  new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    children: [
+                      new TextRun({
+                        text: `Downloaded by ${opts.downloadedBy} on ${opts.downloadedAt ?? new Date().toISOString().slice(0, 10)}`,
+                        color: TEXT_DARK,
+                        size: 14,
+                        font: "Calibri",
+                        italics: true,
+                      }),
+                    ],
+                  }),
+                ]
+              : []),
+          ],
         }),
       },
       children,
@@ -582,14 +606,20 @@ function buildDocument(tmpl: PolicyTemplate, lab: LabContext, crosswalk?: Accred
   });
 }
 
+export interface PolicyDocxOptions {
+  downloadedBy?: string;
+  downloadedAt?: string;
+}
+
 export async function generatePolicyDocxBuffer(
   policyId: string,
   lab: LabContext,
   crosswalk?: AccreditorCrosswalk | null,
+  opts?: PolicyDocxOptions,
 ): Promise<Buffer | null> {
   const tmpl = loadTemplate(policyId);
   if (!tmpl) return null;
-  const doc = buildDocument(tmpl, lab, crosswalk ?? null);
+  const doc = buildDocument(tmpl, lab, crosswalk ?? null, opts);
   const buf = await Packer.toBuffer(doc);
   return buf;
 }

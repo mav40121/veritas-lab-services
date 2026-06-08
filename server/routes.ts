@@ -22263,10 +22263,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (lab.accreditation_cola && masterRow?.cola_citations) crosswalk.cola = masterRow.cola_citations;
       if (lab.accreditation_aabb && masterRow?.aabb_citations) crosswalk.aabb = masterRow.aabb_citations;
 
+      // MediaLab parity #39 item 1 (2026-06-07): capture downloader
+      // identity + timestamp for the footer watermark. Soft deterrent
+      // against forwarding; if a copy escapes the lab, the footer
+      // still names who pulled the original.
+      const downloader = sqlite.prepare('SELECT name, email FROM users WHERE id = ?').get(req.userId) as any;
+      const downloadedBy = downloader?.name || downloader?.email || `user #${req.userId}`;
+      const downloadedAt = new Date().toISOString().slice(0, 10);
+
       const buf = await generatePolicyDocxBuffer(policyId, {
         lab_name: lab.lab_name || 'Your Laboratory',
         clia_number: lab.clia_number || 'CLIA pending',
-      }, crosswalk);
+      }, crosswalk, { downloadedBy, downloadedAt });
       if (!buf) return res.status(500).json({ error: 'DOCX generation failed' });
 
       const safeSlug = (tmpl.slug || tmpl.policy_name.toLowerCase().replace(/[^a-z0-9]+/g, '_')).slice(0, 60);
@@ -22395,6 +22403,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         clia_number: lab.clia_number || 'CLIA pending',
       };
 
+      // MediaLab parity #39 item 1 (2026-06-07): same per-download
+      // watermark on the bundle.zip variant. Every DOCX in the zip
+      // carries the same downloader name + timestamp so a forwarded
+      // bundle still names provenance.
+      const bundleDownloader = sqlite.prepare('SELECT name, email FROM users WHERE id = ?').get(req.userId) as any;
+      const bundleDownloadedBy = bundleDownloader?.name || bundleDownloader?.email || `user #${req.userId}`;
+      const bundleDownloadedAt = new Date().toISOString().slice(0, 10);
+
       // Pre-fetch any custom artifacts for this lab in one query so the loop
       // below does a map lookup instead of N round-trips.
       const artifactRows = sqlite.prepare(
@@ -22424,7 +22440,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         if (lab.accreditation_cola && row.cola_citations) crosswalk.cola = row.cola_citations;
         if (lab.accreditation_aabb && row.aabb_citations) crosswalk.aabb = row.aabb_citations;
 
-        const buf = await generatePolicyDocxBuffer(pid, labCtx, crosswalk);
+        const buf = await generatePolicyDocxBuffer(pid, labCtx, crosswalk, { downloadedBy: bundleDownloadedBy, downloadedAt: bundleDownloadedAt });
         if (!buf) { skipped += 1; continue; }
         const safeSlug = (tmpl.slug || tmpl.policy_name.toLowerCase().replace(/[^a-z0-9]+/g, '_')).slice(0, 60);
         const filename = `VeritaPolicy_${pid.padStart(3, '0')}_${safeSlug}.docx`;
