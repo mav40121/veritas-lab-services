@@ -19733,6 +19733,89 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Summary stats
+  // Wave A5 (2026-06-07): PT trend surface anchored to the CLIA 2-of-3
+  // threshold defined in 42 CFR §493.803 ("Successful participation")
+  // and the Oct 2024 CMS CLIA PT brochure. For each analyte the lab
+  // has participated in, returns a state:
+  //
+  //   OK         - last 3 graded events all pass, OR fewer than 1 fail
+  //   WATCH      - one of the last 3 events failed; one more failure
+  //                in the next event becomes unsuccessful participation
+  //   AT-RISK    - 2 of 3 most recent consecutive events failed
+  //                (this IS unsuccessful participation per CLIA;
+  //                triggers CMS enforcement consideration)
+  //
+  // CEASE-TESTING is NOT detectable from pt_events alone — it requires
+  // an explicit signal (lab self-declares voluntary stop, or imports a
+  // CMS letter). That ships in a follow-up PR once we add a
+  // pt_analyte_status table.
+  //
+  // Engine is pure (no side effects); auto-open of corrective-action
+  // records on AT-RISK is intentionally NOT in this PR. That ships
+  // once the engine has been verified against real lab data.
+  app.get("/api/veritapt/trends", authMiddleware, (req: any, res) => {
+    if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
+    const dataUserId = req.ownerUserId ?? req.user.userId;
+    // Only graded events count. Pending events are skipped — they don't
+    // affect state until the PT program sends the result.
+    const events = (db as any).$client.prepare(
+      `SELECT analyte, event_date, pass_fail
+         FROM pt_events
+        WHERE user_id = ?
+          AND pass_fail IN ('pass', 'fail')
+        ORDER BY analyte ASC, event_date DESC`
+    ).all(dataUserId) as Array<{ analyte: string; event_date: string; pass_fail: string }>;
+
+    // Group by analyte (already sorted within analyte by event_date DESC)
+    const byAnalyte: Record<string, Array<{ event_date: string; pass_fail: string }>> = {};
+    for (const e of events) {
+      if (!byAnalyte[e.analyte]) byAnalyte[e.analyte] = [];
+      byAnalyte[e.analyte].push({ event_date: e.event_date, pass_fail: e.pass_fail });
+    }
+
+    type TrendState = "OK" | "WATCH" | "AT-RISK";
+    type AnalyteTrend = {
+      analyte: string;
+      state: TrendState;
+      last3: Array<{ event_date: string; pass_fail: string }>;
+      fails_in_last_3: number;
+    };
+
+    const trends: AnalyteTrend[] = Object.keys(byAnalyte).map((analyte) => {
+      const last3 = byAnalyte[analyte].slice(0, 3);
+      const failsInLast3 = last3.filter((e) => e.pass_fail === "fail").length;
+      let state: TrendState = "OK";
+      if (failsInLast3 >= 2) state = "AT-RISK";
+      else if (failsInLast3 === 1) state = "WATCH";
+      return { analyte, state, last3, fails_in_last_3: failsInLast3 };
+    });
+
+    // Sort: AT-RISK first, then WATCH, then OK; within each state by analyte name.
+    const stateRank: Record<TrendState, number> = { "AT-RISK": 0, "WATCH": 1, "OK": 2 };
+    trends.sort((a, b) => {
+      const r = stateRank[a.state] - stateRank[b.state];
+      return r !== 0 ? r : a.analyte.localeCompare(b.analyte);
+    });
+
+    const counts = {
+      OK: trends.filter((t) => t.state === "OK").length,
+      WATCH: trends.filter((t) => t.state === "WATCH").length,
+      AT_RISK: trends.filter((t) => t.state === "AT-RISK").length,
+    };
+
+    res.json({
+      counts,
+      trends,
+      // Surveyor-defensibility framing in the API response so the UI
+      // can show the same wording without re-authoring it.
+      framing: {
+        OK: "All recent PT events passed for this analyte.",
+        WATCH: "One of the last three PT events failed for this analyte. One more failure in the next event would trigger unsuccessful participation under 42 CFR §493.803.",
+        "AT-RISK": "Two of the three most recent PT events failed for this analyte. Per 42 CFR §493.803, this is unsuccessful participation. CMS may consider enforcement; document a corrective action and consider voluntarily stopping testing for this analyte until two consecutive successful events are recorded.",
+      },
+    });
+  });
+
   app.get("/api/veritapt/summary", authMiddleware, (req: any, res) => {
     if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
