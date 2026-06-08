@@ -634,13 +634,14 @@ export default function VeritaTrackAppPage() {
   // boots before the lab switcher resolves.
   const { data: worklist } = useQuery<{
     today: string;
-    counts: { overdue: number; due_today: number; due_this_week: number; due_next_30: number };
+    counts: { overdue: number; due_today: number; due_this_week: number; due_next_30: number; cross_module?: number };
     buckets: {
       overdue: Task[];
       due_today: Task[];
       due_this_week: Task[];
       due_next_30: Task[];
     };
+    cross_module?: Array<{ source: string; source_id: number; label: string; due_date: string; link: string }>;
   }>({
     queryKey: activeLabId ? [`/api/labs/${activeLabId}/veritatrack/worklist`] : ["no-worklist"],
     queryFn: async () => {
@@ -816,7 +817,7 @@ export default function VeritaTrackAppPage() {
           overdue + due-today + due-this-week + due-next-30 counts so
           the director sees what needs action without scrolling the
           full task list. Self-hides when no activeLabId. */}
-      {worklist && (worklist.counts.overdue + worklist.counts.due_today + worklist.counts.due_this_week + worklist.counts.due_next_30) > 0 && (
+      {worklist && (worklist.counts.overdue + worklist.counts.due_today + worklist.counts.due_this_week + worklist.counts.due_next_30 + (worklist.counts.cross_module ?? 0)) > 0 && (
         <div className="mb-6 rounded-xl border border-border bg-card p-4">
           <div className="flex items-center gap-2 mb-3">
             <CalendarDays size={16} className="text-primary" />
@@ -841,6 +842,31 @@ export default function VeritaTrackAppPage() {
               <div className="text-2xl font-bold">{worklist.counts.due_next_30}</div>
             </div>
           </div>
+
+          {/* Wave B2 (move-3): cross-module seam list. Surfaces VeritaLab
+              cert renewals (90-day horizon) + VeritaPolicy overdue
+              reviews (30-day horizon) so they appear next to formal
+              VeritaTrack tasks. Read-only links; conversion to a real
+              task happens in the source module. */}
+          {worklist.cross_module && worklist.cross_module.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-border/50">
+              <div className="text-xs uppercase text-muted-foreground mb-2">From other modules</div>
+              <ul className="space-y-1.5">
+                {worklist.cross_module.slice(0, 8).map((item, idx) => (
+                  <li key={`${item.source}-${item.source_id}-${idx}`} className="flex items-center gap-2 text-xs">
+                    <span className="px-1.5 py-0.5 rounded bg-muted text-[10px] uppercase font-medium">{item.source.replace("verita", "")}</span>
+                    <a href={item.link} className="text-foreground hover:text-primary truncate flex-1">{item.label}</a>
+                    <span className="text-muted-foreground shrink-0">{item.due_date}</span>
+                  </li>
+                ))}
+              </ul>
+              {worklist.cross_module.length > 8 && (
+                <div className="text-[11px] text-muted-foreground mt-2">
+                  Showing 8 of {worklist.cross_module.length}.
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

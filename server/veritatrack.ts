@@ -109,13 +109,67 @@ export function registerVeritaTrackRoutes(
         else if (daysUntil <= 7) buckets.due_this_week.push(enriched);
         else if (daysUntil <= 30) buckets.due_next_30.push(enriched);
       }
+      // VeritaTrack 3-element framework, move-3 (close the seams)
+      // Wave B2 (2026-06-07): cross-module items that need action but
+      // aren't formal VeritaTrack tasks today. Two seam sources:
+      // 1) VeritaLab certificates with expiration_date in the next
+      //    90 days. CLIA cert renewal is the canonical example.
+      // 2) VeritaPolicy approved documents past their next_review_date.
+      //
+      // Surfaced as a `cross_module` array on the worklist response so
+      // the dashboard tile can show "renewal due" / "policy overdue"
+      // alongside formal VeritaTrack tasks. Read-only here; the lab
+      // converts a cross-module item into a real task by creating one
+      // in the respective module.
+      const certs = sqlite.prepare(`
+        SELECT lc.id, lc.cert_type, lc.cert_name, lc.cert_number,
+               lc.expiration_date, lc.lab_director
+          FROM lab_certificates lc
+         WHERE lc.lab_id = ?
+           AND lc.is_active = 1
+           AND lc.expiration_date IS NOT NULL
+           AND lc.expiration_date != ''
+           AND date(lc.expiration_date) <= date('now', '+90 days')
+         ORDER BY lc.expiration_date ASC
+      `).all(labId) as any[];
+
+      const policies = sqlite.prepare(`
+        SELECT d.id, d.title, d.next_review_date, m.name AS manual_name
+          FROM policy_documents d
+          LEFT JOIN policy_manuals m ON m.id = d.manual_id
+         WHERE d.lab_id = ?
+           AND d.archived_at IS NULL
+           AND d.status = 'approved'
+           AND d.next_review_date IS NOT NULL
+           AND date(d.next_review_date) <= date('now', '+30 days')
+         ORDER BY d.next_review_date ASC
+      `).all(labId) as any[];
+
+      const crossModule = [
+        ...certs.map(c => ({
+          source: "veritalab",
+          source_id: c.id,
+          label: `${c.cert_name}${c.cert_number ? " (" + c.cert_number + ")" : ""} expiration`,
+          due_date: c.expiration_date,
+          link: `/labs/${labId}/veritalab`,
+        })),
+        ...policies.map(p => ({
+          source: "veritapolicy",
+          source_id: p.id,
+          label: `Review policy: ${p.title}`,
+          due_date: p.next_review_date,
+          link: `/labs/${labId}/veritapolicy-app/my-policies`,
+        })),
+      ];
+
       const counts = {
         overdue: buckets.overdue.length,
         due_today: buckets.due_today.length,
         due_this_week: buckets.due_this_week.length,
         due_next_30: buckets.due_next_30.length,
+        cross_module: crossModule.length,
       };
-      res.json({ today: todayStr, counts, buckets });
+      res.json({ today: todayStr, counts, buckets, cross_module: crossModule });
     },
   );
 
