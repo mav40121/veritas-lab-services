@@ -93,6 +93,7 @@ import ProductivityCalculatorPage from "@/pages/ProductivityCalculatorPage";
 import VeritaBenchPage from "@/pages/VeritaBenchPage";
 import VeritaBenchStaffingPage from "@/pages/VeritaBenchStaffingPage";
 import VeritaStockPage from "@/pages/VeritaStockPage";
+import VeritaStockVendorsPage from "@/pages/VeritaStockVendorsPage";
 import VeritaStockSnapOrderPage from "@/pages/VeritaStockSnapOrderPage";
 import VeritaOpsAppPage from "@/pages/VeritaOpsAppPage";
 import LabMembersPage from "@/pages/LabMembersPage";
@@ -413,6 +414,7 @@ function AppContent() {
           <Route path="/labs/:labId/veritacheck/cumsum" component={CumsumPage} />
           <Route path="/labs/:labId/veritastock" component={VeritaStockPage} />
           <Route path="/labs/:labId/veritastock/snap-order" component={VeritaStockSnapOrderPage} />
+          <Route path="/labs/:labId/veritastock/vendors" component={VeritaStockVendorsPage} />
           <Route path="/labs/:labId/veritaops-app" component={VeritaOpsAppPage} />
           <Route path="/labs/:labId/account/settings" component={AccountSettingsPage} />
           <Route path="/labs/:labId/members" component={LabMembersPage} />
