@@ -264,11 +264,51 @@ function VerificationList({ verifications, isLoading, onOpen, onDeleted, onNew }
   onNew: () => void;
 }) {
   const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [bundleDownloadingId, setBundleDownloadingId] = useState<number | null>(null);
+  const activeLabId = useActiveLabId();
+
+  // Wave A3.2-UI-LIST (2026-06-07): pre-compute per-instrument bundle
+  // counts by grouping in-memory on map_instrument_id. Lets us label the
+  // per-row "Bundle (N)" button with the actual count without firing N
+  // /survey-bundle preview probes (one per row). Bundle button is
+  // disabled when count < 2 because the bundle for a single entry is
+  // identical to the per-verification PDF already shipped.
+  const bundleCountByMapInstrument: Record<number, number> = (() => {
+    const acc: Record<number, number> = {};
+    for (const v of verifications) {
+      if (v.map_instrument_id != null) {
+        acc[v.map_instrument_id] = (acc[v.map_instrument_id] || 0) + 1;
+      }
+    }
+    return acc;
+  })();
 
   const handleDelete = async (id: number) => {
     await fetch(`${API_BASE}/api/veritacheck/verifications/${id}`, { method: "DELETE", headers: authHeaders() });
     setConfirmId(null);
     onDeleted();
+  };
+
+  const handleBundleDownload = async (v: Verification) => {
+    if (!activeLabId || !v.map_instrument_id) return;
+    setBundleDownloadingId(v.id);
+    try {
+      const r = await fetch(
+        `${API_BASE}/api/labs/${activeLabId}/veritacheck/map-instruments/${v.map_instrument_id}/survey-bundle-pdf`,
+        { method: "POST", headers: authHeaders() }
+      );
+      if (!r.ok) return;
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const safeName = v.instrument_name.replace(/[^a-zA-Z0-9]/g, "_");
+      a.download = `VeritaCheck_SurveyBundle_${safeName}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setBundleDownloadingId(null);
+    }
   };
 
   if (isLoading) return <div className="text-sm text-muted-foreground">Loading...</div>;
@@ -318,6 +358,21 @@ function VerificationList({ verifications, isLoading, onOpen, onDeleted, onNew }
               )}
             </div>
             <div className="flex items-center gap-2 opacity-60 group-hover:opacity-100 shrink-0" onClick={e => e.stopPropagation()}>
+              {/* Wave A3.2-UI-LIST: per-instrument Survey Bundle button.
+                  Visible only when the verification has a map_instrument_id
+                  link AND the instrument has 2+ verifications on file
+                  (single-entry "bundle" duplicates the per-verification PDF). */}
+              {v.map_instrument_id != null && (bundleCountByMapInstrument[v.map_instrument_id] ?? 0) >= 2 && (
+                <Button
+                  variant="ghost" size="sm"
+                  className="h-8 text-xs gap-1 text-muted-foreground hover:text-primary"
+                  disabled={bundleDownloadingId === v.id}
+                  title={`Download the chronological survey bundle for ${v.instrument_name} (${bundleCountByMapInstrument[v.map_instrument_id]} verifications on file). Surveyor-ready.`}
+                  onClick={e => { e.stopPropagation(); handleBundleDownload(v); }}
+                >
+                  <Download size={13} /> Bundle ({bundleCountByMapInstrument[v.map_instrument_id]})
+                </Button>
+              )}
               <Button
                 variant="ghost" size="icon"
                 className="h-8 w-8 text-muted-foreground hover:text-destructive"
