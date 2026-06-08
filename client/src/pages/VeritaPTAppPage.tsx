@@ -77,6 +77,17 @@ export default function VeritaPTAppPage() {
   const [aaRecords, setAaRecords] = useState<any[]>([]);
   const [filter, setFilter] = useState<FilterType>("all");
   const [loading, setLoading] = useState(true);
+  // Wave C1 (VeritaPT move-1, 2026-06-07): wire the existing /trends
+  // endpoint shipped in PR #626 onto the VeritaPT app page as a
+  // surfaced banner. AT-RISK count is the 911 number per §493.803
+  // (2-of-3 consecutive trend); WATCH is the early-warning. Banner
+  // self-hides if the endpoint returns 403 (plan doesn't include PT
+  // trends) or if every analyte is OK.
+  const [trends, setTrends] = useState<{
+    counts: { OK: number; WATCH: number; AT_RISK: number };
+    trends: Array<{ analyte: string; state: string; fails_in_last_3: number }>;
+    framing?: Record<string, string>;
+  } | null>(null);
   const [showEnrollModal, setShowEnrollModal] = useState(false);
   const [showAaaModal, setShowAaaModal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -112,6 +123,19 @@ export default function VeritaPTAppPage() {
       setSummary(covData.summary ?? null);
       setEnrollments(Array.isArray(enrollData) ? enrollData : []);
       setAaRecords(Array.isArray(aaaData) ? aaaData : []);
+      // Wave C1: fetch the per-analyte trend states. Lab-scoped via
+      // PR #626 endpoint. 403 (no PT plan access) silently hides the
+      // banner; the rest of the page renders identically.
+      try {
+        const trendRes = await fetch(`${API_BASE}/api/veritapt/trends`, { headers: authHeaders() });
+        if (trendRes.ok) {
+          setTrends(await trendRes.json());
+        } else {
+          setTrends(null);
+        }
+      } catch {
+        setTrends(null);
+      }
     } catch {
       // silent fail
     } finally {
@@ -298,6 +322,43 @@ export default function VeritaPTAppPage() {
           </Button>
         </div>
       </div>
+
+      {/* Wave C1 (VeritaPT move-1): PT trend banner. Surfaces the
+          AT-RISK / WATCH counts from PR #626 /trends endpoint as the
+          first thing the director sees. Self-hides when zero. */}
+      {trends && (trends.counts.AT_RISK + trends.counts.WATCH) > 0 && (
+        <div className={`rounded-xl border p-4 ${trends.counts.AT_RISK > 0 ? "border-red-300/60 bg-red-50 dark:bg-red-950/30 dark:border-red-900/40" : "border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900/40"}`}>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <div className={`text-sm font-semibold ${trends.counts.AT_RISK > 0 ? "text-red-700 dark:text-red-300" : "text-amber-700 dark:text-amber-300"}`}>
+                PT Trend Status: {trends.counts.AT_RISK > 0 ? "AT-RISK analyte(s) detected" : "WATCH analyte(s) detected"}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Per 42 CFR §493.803, two failures out of three consecutive PT events triggers unsuccessful participation. Banner pre-warns at one fail (WATCH) and at two (AT-RISK).
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {trends.counts.AT_RISK > 0 && (
+                <span className="px-2 py-1 rounded text-xs font-semibold bg-red-600 text-white">{trends.counts.AT_RISK} AT-RISK</span>
+              )}
+              {trends.counts.WATCH > 0 && (
+                <span className="px-2 py-1 rounded text-xs font-semibold bg-amber-600 text-white">{trends.counts.WATCH} WATCH</span>
+              )}
+            </div>
+          </div>
+          {trends.trends && trends.trends.length > 0 && (
+            <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
+              {trends.trends.filter(t => t.state !== "OK").slice(0, 8).map((t, i) => (
+                <li key={`${t.analyte}-${i}`} className="flex items-center gap-2">
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${t.state === "AT-RISK" ? "bg-red-500" : "bg-amber-500"}`} />
+                  <span className="font-medium">{t.analyte}</span>
+                  <span className="text-muted-foreground">— {t.fails_in_last_3} fail(s) in last 3</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
