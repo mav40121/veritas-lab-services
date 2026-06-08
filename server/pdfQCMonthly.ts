@@ -149,6 +149,50 @@ export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
     if (r.violations.some(v => v.severity === "rejection") && r.corrective_actions.length === 0) missingCA++;
   }
 
+  // Wave A7 (2026-06-07): Westgard rule glossary block.
+  // Surveyors do not all read "1-3s" and "R-4s" fluently. Listing the
+  // plain-English description for every rule that fired in this period
+  // removes the jargon barrier without changing evaluator logic. Rule
+  // descriptions match the conditions in routes.ts evaluator (lines
+  // ~2086-2128). Source: Westgard JO, Barry PL, Hunt MR, Groth T (1981)
+  // "A multi-rule Shewhart chart for quality control in clinical chemistry."
+  // Clin Chem 27(3):493-501; CLSI EP23-A.
+  function ruleDescription(code: string): string {
+    if (code === "1-3s") return "One control result outside +/- 3 SD from the baseline mean. Rejection rule.";
+    if (code === "1-2s") return "One control result outside +/- 2 SD from the baseline mean. Warning only; investigate before reporting.";
+    if (code === "2-2s") return "Two consecutive results outside the same +2 SD or -2 SD limit. Rejection rule.";
+    if (code === "R-4s") return "Range between two consecutive results exceeds 4 SD. Rejection rule.";
+    if (code === "4-1s") return "Four consecutive results outside the same +1 SD or -1 SD limit on the same side of the mean. Rejection rule.";
+    const biasMatch = code.match(/^(\d+)-x$/);
+    if (biasMatch) return `${biasMatch[1]} consecutive results on the same side of the baseline mean (bias). Rejection rule.`;
+    const trendMatch = code.match(/^(\d+)-T$/);
+    if (trendMatch) return `${trendMatch[1]} consecutive results all trending in the same direction. Rejection rule.`;
+    return "";
+  }
+  const seenRules = new Set<string>();
+  for (const r of p.results) {
+    for (const v of r.violations) {
+      if (!seenRules.has(v.rule_code)) seenRules.add(v.rule_code);
+    }
+  }
+  const glossaryRows = Array.from(seenRules)
+    .sort()
+    .map(code => {
+      const desc = ruleDescription(code);
+      if (!desc) return "";
+      return `<tr><td style="white-space:nowrap;font-weight:600">${escapeHtml(code)}</td><td>${escapeHtml(desc)}</td></tr>`;
+    })
+    .filter(Boolean)
+    .join("");
+  const ruleGlossaryHtml = glossaryRows.length === 0
+    ? ""
+    : `<h2>Westgard Rule Reference</h2>
+       <div style="font-size:7.5pt;color:#555;margin-bottom:4pt">Plain-English description of every rule that fired in this period. Reference: Westgard JO et al. (1981), Clin Chem 27(3):493-501; CLSI EP23-A.</div>
+       <table>
+         <thead><tr><th style="width:18%">Rule</th><th>Description</th></tr></thead>
+         <tbody>${glossaryRows}</tbody>
+       </table>`;
+
   const rowsHtml = p.results.length === 0
     ? `<tr><td colspan="6" style="text-align:center;color:#888;padding:8pt">No results logged for this period.</td></tr>`
     : p.results.map(r => {
@@ -228,6 +272,8 @@ export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
       <thead><tr><th>Date</th><th>Value</th><th>SDI</th><th>Instrument</th><th>Rules</th><th>Reporting</th></tr></thead>
       <tbody>${rowsHtml}</tbody>
     </table>
+
+    ${ruleGlossaryHtml}
 
     <h2>Corrective Actions Log</h2>
     ${caTableHtml}
