@@ -165,7 +165,7 @@ export function LabSwitcher() {
                         )}
                         title={
                           cert.expired
-                            ? `CLIA cert expiration date on file is ${cert.ymd} (${Math.abs(cert.daysRemaining)} day${Math.abs(cert.daysRemaining) === 1 ? "" : "s"} ago). Informational only — modules are not gated on cert renewal.`
+                            ? `CLIA cert expiration date on file is ${cert.ymd} (${Math.abs(cert.daysRemaining)} day${Math.abs(cert.daysRemaining) === 1 ? "" : "s"} ago). Informational only: modules are not gated on cert renewal.`
                             : `CLIA cert active through ${cert.ymd} (${cert.daysRemaining} day${cert.daysRemaining === 1 ? "" : "s"} remaining). Informational only.`
                         }
                       >
