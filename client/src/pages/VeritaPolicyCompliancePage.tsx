@@ -10,7 +10,8 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
-import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
+import { apiRequest, queryClient, getQueryFn, API_BASE } from "@/lib/queryClient";
+import { authHeaders } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ import {
   FileText,
   Link as LinkIcon,
   Copy,
+  Download,
   Trash2,
 } from "lucide-react";
 
@@ -228,11 +230,37 @@ export default function VeritaPolicyCompliancePage() {
             reminders and auto-expire.
           </p>
         </div>
-        <Link href={`/labs/${activeLabId}/veritapolicy-app/my-policies`}>
-          <Button variant="outline" size="sm">
-            <ArrowLeft size={14} className="mr-1" /> My Policies
+        <div className="flex items-center gap-2">
+          {/* MediaLab parity #39 item 3: xlsx export. Hands the surveyor a
+              workbook of the same numbers shown on this page so they can
+              filter/sort it themselves. */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              if (!activeLabId) return;
+              const r = await fetch(
+                `${API_BASE}/api/labs/${activeLabId}/veritapolicy/compliance/xlsx`,
+                { headers: authHeaders() }
+              );
+              if (!r.ok) return;
+              const blob = await r.blob();
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `VeritaPolicy_Compliance_${new Date().toISOString().split("T")[0]}.xlsx`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            <Download size={14} className="mr-1" /> Export xlsx
           </Button>
-        </Link>
+          <Link href={`/labs/${activeLabId}/veritapolicy-app/my-policies`}>
+            <Button variant="outline" size="sm">
+              <ArrowLeft size={14} className="mr-1" /> My Policies
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Headline tiles */}
