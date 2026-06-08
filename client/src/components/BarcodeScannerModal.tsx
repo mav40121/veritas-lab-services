@@ -34,9 +34,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Camera, Check, AlertCircle, X, Tag } from "lucide-react";
+import { Camera, Check, AlertCircle, X, Tag, ImagePlus } from "lucide-react";
 
 const SCANNER_ELEMENT_ID = "vls-barcode-scanner";
+const FILE_SCAN_ELEMENT_ID = "vls-file-scan-container";
 const DUPLICATE_SCAN_COOLDOWN_MS = 1500;
 
 export type ScanAction = "decrement" | "increment" | "lookup_only" | "correction";
@@ -101,6 +102,16 @@ export default function BarcodeScannerModal({
   // same handleScan() pipeline as a camera decode, so the action picker,
   // bind panel, and result cards all behave identically.
   const [typedBarcode, setTypedBarcode] = useState("");
+  // 2026-06-08: native-camera capture fallback. iPhone barcode scanner
+  // apps work because they use AVFoundation directly. We can get close
+  // by delegating to the iOS native camera via <input capture> — the
+  // user taps a button, iOS opens the native camera app, snaps a
+  // photo, and we decode the still image. html5-qrcode's scanFile()
+  // decodes a single image off the main video stream, so we stop the
+  // live scanner first to avoid getUserMedia conflicts, decode the
+  // capture, then restart the live scanner if it was running.
+  const captureInputRef = useRef<HTMLInputElement | null>(null);
+  const [isDecodingCapture, setIsDecodingCapture] = useState(false);
 
   // Pause the camera scan callback while the bind panel is open so the
   // tech can search the inventory list without the next frame firing
@@ -294,6 +305,81 @@ export default function BarcodeScannerModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Decode a still image captured via the native iOS camera input.
+  // Stops the live scanner first to release getUserMedia, runs
+  // Html5Qrcode.scanFile on a hidden DOM container, then restarts
+  // the live scanner. Result goes through the same handleScan()
+  // pipeline as a live decode.
+  const handleCapturedFile = useCallback(async (file: File) => {
+    setIsDecodingCapture(true);
+    const now = Date.now();
+    // Stop the live scanner BEFORE scanFile to free the camera and
+    // avoid getUserMedia contention on iOS.
+    const live = scannerRef.current;
+    let wasRunning = false;
+    if (live && typeof live.stop === "function") {
+      try {
+        await live.stop();
+        wasRunning = true;
+      } catch { /* may already be stopped */ }
+    }
+    try {
+      const { Html5Qrcode } = await import("html5-qrcode");
+      // scanFile needs its own DOM container to render the decoded
+      // image (the showImage flag controls visibility; pass false so
+      // we don't paint it on top of the live viewport).
+      const fileScanner = new Html5Qrcode(FILE_SCAN_ELEMENT_ID);
+      const decoded = await fileScanner.scanFile(file, false);
+      await handleScan(decoded);
+    } catch (e: any) {
+      // scanFile rejects with a string error on no-decode. Surface
+      // it as a result card so the tech sees what happened.
+      setResults((prev) => [
+        {
+          id: `capture-err-${now}`,
+          status: "error",
+          itemName: null,
+          barcodeValue: "",
+          qtyBefore: null,
+          qtyAfter: null,
+          needsReorder: false,
+          message: typeof e === "string"
+            ? `Could not decode the photo: ${e}. Try again with better lighting or use the typed input above.`
+            : `Could not decode the photo. Try again with better lighting or use the typed input above.`,
+          scanEventId: null,
+          at: now,
+        },
+        ...prev,
+      ]);
+    } finally {
+      setIsDecodingCapture(false);
+      // Restart the live scanner so the camera preview comes back
+      // for the next attempt. Mirrors the init() effect's config.
+      if (wasRunning && scannerRef.current) {
+        try {
+          const { Html5QrcodeSupportedFormats } = await import("html5-qrcode");
+          await scannerRef.current.start(
+            { facingMode: "environment" },
+            {
+              fps: 25,
+              qrbox: { width: 280, height: 140 },
+              aspectRatio: 4 / 3,
+              videoConstraints: {
+                facingMode: "environment",
+                focusMode: "continuous",
+                width: { ideal: 1920 },
+                height: { ideal: 1080 },
+              },
+              formatsToSupport: [Html5QrcodeSupportedFormats.CODE_128],
+            } as any,
+            (decoded: string) => { void handleScan(decoded); },
+            () => {}
+          );
+        } catch { /* swallow; user can close + reopen if camera doesn't come back */ }
+      }
+    }
+  }, [handleScan]);
+
   // Pick an item to bind the unknown barcode to.
   const bindToItem = async (item: InventoryLite) => {
     if (!unknownBarcode) return;
@@ -422,6 +508,9 @@ export default function BarcodeScannerModal({
         {/* Camera viewport: fixed 4:3 box */}
         <div className="relative bg-black flex-shrink-0">
           <div id={SCANNER_ELEMENT_ID} className="w-full" style={{ aspectRatio: "4 / 3" }} />
+          {/* Hidden DOM container used by html5-qrcode's scanFile() for
+              the native-camera-capture path. Never visually rendered. */}
+          <div id={FILE_SCAN_ELEMENT_ID} className="hidden" />
           {isStarting && !cameraError && (
             <div className="absolute inset-0 flex items-center justify-center text-white text-sm">
               Starting camera...
@@ -434,6 +523,45 @@ export default function BarcodeScannerModal({
               <div className="text-xs opacity-70 mt-1">Check the site has camera permission for this browser.</div>
             </div>
           )}
+        </div>
+
+        {/* 2026-06-08: "Tap to capture" native-camera fallback. On iOS,
+            html5-qrcode's continuous decode loop on the live video
+            stream is unreliable because Safari runs the slow ZXing JS
+            decoder. The native iPhone camera app uses AVFoundation
+            with hardware-accelerated barcode detection; we can get
+            close by delegating capture to that app via
+            <input capture="environment">. ZXing decodes a sharp still
+            image reliably; the failure mode was only the streaming
+            loop. Same handleScan() pipeline as a live decode. */}
+        <div className="px-4 py-2 border-b">
+          <input
+            ref={captureInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            data-testid="scan-capture-input"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              await handleCapturedFile(file);
+              // Reset so the same image can be re-picked if needed
+              if (captureInputRef.current) captureInputRef.current.value = "";
+            }}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="w-full"
+            disabled={isDecodingCapture}
+            onClick={() => captureInputRef.current?.click()}
+            data-testid="scan-capture-button"
+          >
+            <ImagePlus size={14} className="mr-1.5" />
+            {isDecodingCapture ? "Decoding photo..." : "Tap to capture (use iPhone camera)"}
+          </Button>
         </div>
 
         {/* Unknown barcode bind panel takes over the result stack area when active. */}
