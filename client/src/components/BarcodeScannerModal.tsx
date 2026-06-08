@@ -96,6 +96,11 @@ export default function BarcodeScannerModal({
   const [bindQuery, setBindQuery] = useState("");
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
+  // 2026-06-08: typed fallback for iOS Safari where the camera decoder
+  // is unreliable. The tech types the VLS code on the label and submits;
+  // same handleScan() pipeline as a camera decode, so the action picker,
+  // bind panel, and result cards all behave identically.
+  const [typedBarcode, setTypedBarcode] = useState("");
 
   // Pause the camera scan callback while the bind panel is open so the
   // tech can search the inventory list without the next frame firing
@@ -369,10 +374,50 @@ export default function BarcodeScannerModal({
               </SelectContent>
             </Select>
             <div className="ml-auto text-xs text-muted-foreground">
-              {results.length === 0 ? "Aim at a Code 128 label" : `${results.length} scan${results.length === 1 ? "" : "s"} this session`}
+              {results.length === 0 ? "Aim at a Code 128 label or type below" : `${results.length} scan${results.length === 1 ? "" : "s"} this session`}
             </div>
           </div>
         )}
+
+        {/* 2026-06-08: typed-fallback input. iOS Safari runs the slower
+            ZXing JS decoder (no native BarcodeDetector) so the camera
+            sometimes refuses to decode a clearly-aimed label. Typing
+            the VLS code routes through the same handleScan() flow so
+            the action picker, bind panel, and result cards stay in
+            sync regardless of input source. */}
+        <form
+          className="px-4 py-2 border-b flex items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const v = typedBarcode.trim();
+            if (!v) return;
+            void handleScan(v);
+            setTypedBarcode("");
+          }}
+        >
+          <Input
+            type="text"
+            inputMode="text"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
+            placeholder="Type barcode (e.g. VLS-90008332) and press enter"
+            value={typedBarcode}
+            onChange={(e) => setTypedBarcode(e.target.value)}
+            className="h-9 flex-1 font-mono text-sm"
+            data-testid="scan-typed-input"
+          />
+          <Button
+            type="submit"
+            size="sm"
+            disabled={!typedBarcode.trim()}
+            style={{ backgroundColor: "#01696F" }}
+            className="text-white shrink-0"
+            data-testid="scan-typed-submit"
+          >
+            Submit
+          </Button>
+        </form>
 
         {/* Camera viewport: fixed 4:3 box */}
         <div className="relative bg-black flex-shrink-0">
