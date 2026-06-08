@@ -8551,7 +8551,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "Analyte", "Instruments", "Serial Number", "Department", "Specialty", "Complexity",
         "Number of Instruments", "CFR Section", "Correlation Required",
         "Units of Measure", "Reference Range Low", "Reference Range High",
-        "Critical Low", "Critical High",
+        "Critical Low (Mayo Clinic Laboratories starting point)", "Critical High (Mayo Clinic Laboratories starting point)",
         "AMR Low", "AMR High (per instrument)",
         "Last Calibration Verification Date", "Calibration Verification Status",
         "Last Correlation / Method Comparison Date", "Correlation / Method Comparison Status",
