@@ -24875,6 +24875,266 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   );
 
+  // ── MediaLab parity #39 item 3 (2026-06-07): xlsx export of the
+  // compliance dashboard. Surveyor request per parking-lot framing: a
+  // workbook with VeritaAssure brand colors + proper headers that
+  // the lab director can hand to a surveyor instead of screenshots
+  // of a web dashboard. Re-runs the same queries the JSON dashboard
+  // uses so the numbers can't drift between web and xlsx.
+  app.get(
+    "/api/labs/:labId/veritapolicy/compliance/xlsx",
+    authMiddleware,
+    labScopeMiddleware,
+    async (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const labId = req.scope.labId;
+
+      const perManual = sqlite.prepare(`
+        SELECT m.id AS manual_id, m.name AS manual_name,
+               COUNT(d.id) AS total,
+               SUM(CASE WHEN d.status = 'approved' THEN 1 ELSE 0 END) AS approved,
+               SUM(CASE WHEN d.status = 'in_review' THEN 1 ELSE 0 END) AS in_review,
+               SUM(CASE WHEN d.status = 'draft' THEN 1 ELSE 0 END) AS draft,
+               SUM(CASE WHEN d.status = 'expired' THEN 1 ELSE 0 END) AS expired,
+               SUM(CASE WHEN d.status = 'approved'
+                         AND d.next_review_date IS NOT NULL
+                         AND date(d.next_review_date) < date('now')
+                        THEN 1 ELSE 0 END) AS overdue,
+               SUM(CASE WHEN d.status = 'approved'
+                         AND d.next_review_date IS NOT NULL
+                         AND date(d.next_review_date) >= date('now')
+                         AND date(d.next_review_date) <= date('now', '+30 days')
+                        THEN 1 ELSE 0 END) AS due_soon
+          FROM policy_manuals m
+          LEFT JOIN policy_documents d ON d.manual_id = m.id AND d.archived_at IS NULL
+         WHERE m.lab_id = ? AND m.archived_at IS NULL
+         GROUP BY m.id
+         ORDER BY m.display_order ASC, m.name ASC
+      `).all(labId) as any[];
+
+      const overdueList = sqlite.prepare(`
+        SELECT d.id, d.title, d.next_review_date, m.name AS manual_name
+          FROM policy_documents d
+          LEFT JOIN policy_manuals m ON m.id = d.manual_id
+         WHERE d.lab_id = ? AND d.archived_at IS NULL
+           AND d.status = 'approved'
+           AND d.next_review_date IS NOT NULL
+           AND date(d.next_review_date) < date('now')
+         ORDER BY d.next_review_date ASC
+      `).all(labId) as any[];
+
+      const dueSoonList = sqlite.prepare(`
+        SELECT d.id, d.title, d.next_review_date, m.name AS manual_name
+          FROM policy_documents d
+          LEFT JOIN policy_manuals m ON m.id = d.manual_id
+         WHERE d.lab_id = ? AND d.archived_at IS NULL
+           AND d.status = 'approved'
+           AND d.next_review_date IS NOT NULL
+           AND date(d.next_review_date) >= date('now')
+           AND date(d.next_review_date) <= date('now', '+30 days')
+         ORDER BY d.next_review_date ASC
+      `).all(labId) as any[];
+
+      const perUserAttest = sqlite.prepare(`
+        SELECT u.name AS user_name, u.email,
+               SUM(CASE WHEN a.completed_at IS NULL THEN 1 ELSE 0 END) AS pending,
+               SUM(CASE WHEN a.completed_at IS NOT NULL THEN 1 ELSE 0 END) AS completed,
+               COUNT(a.id) AS total
+          FROM lab_members lm
+          JOIN users u ON u.id = lm.user_id
+          LEFT JOIN policy_attestations a ON a.assigned_to_user_id = lm.user_id
+          LEFT JOIN policy_documents d ON d.id = a.document_id AND d.lab_id = lm.lab_id
+         WHERE lm.lab_id = ? AND lm.status = 'active'
+         GROUP BY u.id
+         ORDER BY pending DESC, u.name ASC
+      `).all(labId) as any[];
+
+      const headline = sqlite.prepare(`
+        SELECT
+           SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) AS approved_total,
+           SUM(CASE WHEN status = 'in_review' THEN 1 ELSE 0 END) AS in_review_total,
+           SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) AS draft_total,
+           SUM(CASE WHEN status = 'expired' THEN 1 ELSE 0 END) AS expired_total,
+           COUNT(id) AS doc_total
+          FROM policy_documents
+         WHERE lab_id = ? AND archived_at IS NULL
+      `).get(labId) as any;
+
+      const ExcelJS = (await import("exceljs")).default;
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "Veritas Lab Services";
+      wb.created = new Date();
+
+      const labRow = sqlite.prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(labId) as any;
+      const labName = labRow?.lab_name || "Laboratory";
+      const cliaNumber = labRow?.clia_number || "Not on file";
+      const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || "veritaassure-export";
+
+      const teal = "FF01696F";
+      const tealLight = "FFE6F2F2";
+      const accent = "FF0A3A3D";
+      const ink = "FF28251D";
+
+      // About sheet
+      const about = wb.addWorksheet("About");
+      about.getColumn(1).width = 110;
+      const aboutTitle = about.getCell("A1");
+      aboutTitle.value = "VeritaPolicy Compliance Dashboard";
+      aboutTitle.font = { name: "Calibri", bold: true, size: 14, color: { argb: "FFFFFFFF" } };
+      aboutTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: teal } };
+      aboutTitle.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+      about.getRow(1).height = 30;
+      const aboutIdentity = about.getCell("A2");
+      aboutIdentity.value = `Prepared for: ${labName}    CLIA: ${cliaNumber}`;
+      aboutIdentity.font = { name: "Calibri", bold: true, size: 11, color: { argb: accent } };
+      aboutIdentity.fill = { type: "pattern", pattern: "solid", fgColor: { argb: tealLight } };
+      aboutIdentity.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+      about.getRow(2).height = 24;
+      let aboutRow = 3;
+      const aboutSection = (text: string) => {
+        const c = about.getCell(`A${aboutRow}`);
+        c.value = text;
+        c.font = { name: "Calibri", bold: true, size: 12, color: { argb: accent } };
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: tealLight } };
+        c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+        about.getRow(aboutRow).height = 22;
+        aboutRow += 1;
+      };
+      const aboutBody = (text: string) => {
+        const c = about.getCell(`A${aboutRow}`);
+        c.value = text;
+        c.font = { name: "Calibri", size: 11, color: { argb: ink } };
+        c.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+        const segs = String(text || "").split(/\r?\n/);
+        let estLines = 0;
+        for (const seg of segs) estLines += Math.max(1, Math.ceil(seg.length / 88));
+        about.getRow(aboutRow).height = Math.max(2, estLines) * 16 + 4;
+        aboutRow += 1;
+      };
+      const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
+      aboutSection("About this workbook");
+      aboutBody("This workbook is a point-in-time snapshot of the lab's VeritaPolicy compliance dashboard as of the date the export was generated. Each tab mirrors a panel of the live web dashboard so the same numbers can be shared with surveyors, the medical director, or the Quality Committee without screenshots.");
+      aboutBlank();
+      aboutSection("How to use this workbook");
+      aboutBody("The Headline tab shows total document counts by status. The Per Manual tab breaks those numbers down by policy manual (Chemistry, Hematology, etc). Overdue Documents lists every approved policy past its next-review date. Due Soon lists approved policies with next-review dates in the next 30 days. Per User Attestations shows pending vs completed attestation counts per active lab member.");
+      aboutBlank();
+      aboutSection("Disclaimer");
+      aboutBody("This workbook is a snapshot, not an authoritative record. The live VeritaPolicy module is the audit-grade record. Status (Approved / In Review / Draft / Expired / Overdue / Due Soon) is calculated from the document's status field and the next_review_date entered by the lab. The lab director is responsible for keeping the underlying VeritaPolicy data current and for the disposition of any overdue policy.");
+      aboutBlank();
+      aboutSection("Coverage gaps");
+      aboutBody("If your laboratory needs a column or tab not represented here, please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.");
+      about.headerFooter.oddHeader = `&L&\"Calibri,Regular\"&10VeritaPolicy Compliance Dashboard&R&\"Calibri,Regular\"&10${labName}    CLIA: ${cliaNumber}`;
+      about.headerFooter.oddFooter = `&L&\"Calibri,Regular\"&9${labName}    CLIA: ${cliaNumber}&C&\"Calibri,Regular\"&9&P of &N&R&\"Calibri,Regular\"&9VeritaAssure`;
+      await about.protect(exportPwd, {
+        selectLockedCells: false, selectUnlockedCells: false,
+        formatCells: false, formatColumns: false, formatRows: false,
+        insertRows: false, insertColumns: false, insertHyperlinks: false,
+        deleteRows: false, deleteColumns: false,
+        sort: false, autoFilter: false, pivotTables: false,
+      });
+
+      // Shared helpers for data sheets
+      const styleHeaderRow = (sheet: any, headers: string[]) => {
+        sheet.addRow(headers);
+        const headerRow = sheet.getRow(1);
+        headerRow.font = { name: "Calibri", bold: true, color: { argb: "FFFFFFFF" } };
+        headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: teal } };
+        headerRow.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+        headerRow.height = 22;
+      };
+
+      // Headline
+      const headlineSheet = wb.addWorksheet("Headline");
+      styleHeaderRow(headlineSheet, ["Metric", "Count"]);
+      headlineSheet.addRow(["Approved", Number(headline?.approved_total || 0)]);
+      headlineSheet.addRow(["In Review", Number(headline?.in_review_total || 0)]);
+      headlineSheet.addRow(["Draft", Number(headline?.draft_total || 0)]);
+      headlineSheet.addRow(["Expired", Number(headline?.expired_total || 0)]);
+      headlineSheet.addRow(["Total Documents", Number(headline?.doc_total || 0)]);
+      headlineSheet.getColumn(1).width = 26;
+      headlineSheet.getColumn(2).width = 14;
+
+      // Per Manual
+      const perManualSheet = wb.addWorksheet("Per Manual");
+      styleHeaderRow(perManualSheet, ["Manual", "Total", "Approved", "In Review", "Draft", "Expired", "Overdue", "Due Soon"]);
+      for (const m of perManual) {
+        perManualSheet.addRow([
+          m.manual_name || "Unassigned",
+          Number(m.total || 0),
+          Number(m.approved || 0),
+          Number(m.in_review || 0),
+          Number(m.draft || 0),
+          Number(m.expired || 0),
+          Number(m.overdue || 0),
+          Number(m.due_soon || 0),
+        ]);
+      }
+      perManualSheet.getColumn(1).width = 32;
+      for (let c = 2; c <= 8; c++) perManualSheet.getColumn(c).width = 12;
+
+      // Overdue Documents
+      const overdueSheet = wb.addWorksheet("Overdue Documents");
+      styleHeaderRow(overdueSheet, ["Title", "Manual", "Next Review Date", "Days Overdue"]);
+      const today = new Date();
+      const fmtDays = (dateStr: string | null) => {
+        if (!dateStr) return "";
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return "";
+        return Math.floor((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+      };
+      for (const d of overdueList) {
+        overdueSheet.addRow([d.title || "", d.manual_name || "Unassigned", d.next_review_date || "", fmtDays(d.next_review_date)]);
+      }
+      overdueSheet.getColumn(1).width = 40;
+      overdueSheet.getColumn(2).width = 26;
+      overdueSheet.getColumn(3).width = 18;
+      overdueSheet.getColumn(4).width = 14;
+
+      // Due Soon
+      const dueSoonSheet = wb.addWorksheet("Due Soon");
+      styleHeaderRow(dueSoonSheet, ["Title", "Manual", "Next Review Date", "Days Remaining"]);
+      const fmtDaysRem = (dateStr: string | null) => {
+        if (!dateStr) return "";
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return "";
+        return Math.floor((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      };
+      for (const d of dueSoonList) {
+        dueSoonSheet.addRow([d.title || "", d.manual_name || "Unassigned", d.next_review_date || "", fmtDaysRem(d.next_review_date)]);
+      }
+      dueSoonSheet.getColumn(1).width = 40;
+      dueSoonSheet.getColumn(2).width = 26;
+      dueSoonSheet.getColumn(3).width = 18;
+      dueSoonSheet.getColumn(4).width = 16;
+
+      // Per User Attestations
+      const attestSheet = wb.addWorksheet("Per User Attestations");
+      styleHeaderRow(attestSheet, ["User", "Email", "Pending", "Completed", "Total"]);
+      for (const u of perUserAttest) {
+        attestSheet.addRow([
+          u.user_name || "",
+          u.email || "",
+          Number(u.pending || 0),
+          Number(u.completed || 0),
+          Number(u.total || 0),
+        ]);
+      }
+      attestSheet.getColumn(1).width = 28;
+      attestSheet.getColumn(2).width = 32;
+      attestSheet.getColumn(3).width = 12;
+      attestSheet.getColumn(4).width = 12;
+      attestSheet.getColumn(5).width = 10;
+
+      const buf = await wb.xlsx.writeBuffer();
+      const filename = `VeritaPolicy_Compliance_${new Date().toISOString().split("T")[0]}.xlsx`;
+      res.set({
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+      });
+      res.send(Buffer.from(buf));
+    },
+  );
+
   // ── Phase 5: periodic review re-certification ──────────────────────────
   //
   // Owner-or-member confirms a policy is still current at its annual /
