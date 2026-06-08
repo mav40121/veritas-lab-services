@@ -6,7 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, TestTube, User, LogOut, LayoutDashboard, Play, ListChecks, ShieldCheck, BarChart3 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { LabSwitcher } from "@/components/LabSwitcher";
+import { LabSwitcher, cliaCertDisplay } from "@/components/LabSwitcher";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -236,6 +236,35 @@ export function NavBar() {
 
         {/* Right side */}
         <div className="flex items-center gap-2">
+          {isLoggedIn && (() => {
+            // Wave A6: CLIA cert active-through chip. Surfaces the active
+            // lab's CLIA cert expiration date next to the lab switcher so
+            // directors see renewal lead-time at every page load. Visible
+            // even for single-lab users (LabSwitcher returns null when
+            // memberships.length === 1). Informational only — never
+            // gates module access (Q5 design lock 2026-06-07; cert
+            // renewals take months, freezing the app on an expired CLIA
+            // punishes the lab for a CMS lag).
+            const cert = cliaCertDisplay(activeMembership?.cliaCertExpirationDate);
+            if (!cert) return null;
+            return (
+              <span
+                className={cn(
+                  "hidden lg:inline-flex items-center px-2 py-1 rounded text-[11px] font-medium border",
+                  cert.warn
+                    ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
+                    : "bg-secondary text-foreground border-border"
+                )}
+                title={
+                  cert.expired
+                    ? `CLIA cert expiration date on file is ${cert.ymd} (${Math.abs(cert.daysRemaining)} day${Math.abs(cert.daysRemaining) === 1 ? "" : "s"} ago). Informational only: modules are not gated on cert renewal.`
+                    : `CLIA cert active through ${cert.ymd} (${cert.daysRemaining} day${cert.daysRemaining === 1 ? "" : "s"} remaining). Informational only.`
+                }
+              >
+                {cert.expired ? `CLIA expired ${cert.ymd}` : `CLIA through ${cert.ymd}`}
+              </span>
+            );
+          })()}
           {isLoggedIn && <LabSwitcher />}
           <Button variant="ghost" size="icon" onClick={toggleTheme} className="w-8 h-8" aria-label="Toggle theme">
             {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}

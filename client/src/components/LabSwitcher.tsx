@@ -11,6 +11,34 @@ function labLabel(m: Membership): string {
   return m.labName || m.cliaNumber || `Lab #${m.labId}`;
 }
 
+// Wave A6: parse the CLIA cert active-through date into a display label
+// + days-remaining (informational, never gates). Treats anything within
+// 30 days (or already past) as "warn" for a soft amber chip. Returns
+// null when the lab has no cert on file or the value is unparseable so
+// the dropdown row falls back to the plain "CLIA {number}" line.
+export function cliaCertDisplay(dateStr: string | null | undefined): {
+  ymd: string;
+  daysRemaining: number;
+  warn: boolean;
+  expired: boolean;
+} | null {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  // Date-only diff so a cert with a 23:59 timestamp doesn't read as
+  // "expires today" when local clock is 00:01 the next morning.
+  const target = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  return {
+    ymd: target.toISOString().slice(0, 10),
+    daysRemaining: days,
+    warn: days <= 30,
+    expired: days < 0,
+  };
+}
+
 // When two labs share a long shared prefix (e.g. both start with
 // "UMass Memorial Health - Milford Regional Medical Center"), the
 // truncated chip + dropdown row visually collapse to the same string.
@@ -124,6 +152,27 @@ export function LabSwitcher() {
                 </div>
                 <div className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
                   <span>{m.cliaNumber ? `CLIA ${m.cliaNumber}` : "CLIA not set"}</span>
+                  {(() => {
+                    const cert = cliaCertDisplay(m.cliaCertExpirationDate);
+                    if (!cert) return null;
+                    return (
+                      <span
+                        className={cn(
+                          "inline-flex items-center px-1 py-0.5 rounded text-[10px] font-medium",
+                          cert.warn
+                            ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                            : "bg-muted text-foreground"
+                        )}
+                        title={
+                          cert.expired
+                            ? `CLIA cert expiration date on file is ${cert.ymd} (${Math.abs(cert.daysRemaining)} day${Math.abs(cert.daysRemaining) === 1 ? "" : "s"} ago). Informational only: modules are not gated on cert renewal.`
+                            : `CLIA cert active through ${cert.ymd} (${cert.daysRemaining} day${cert.daysRemaining === 1 ? "" : "s"} remaining). Informational only.`
+                        }
+                      >
+                        {cert.expired ? `CLIA expired ${cert.ymd}` : `active through ${cert.ymd}`}
+                      </span>
+                    );
+                  })()}
                   {m.role && m.role !== "owner" && (
                     <span className="inline-flex items-center px-1 py-0.5 rounded bg-muted text-[10px] font-medium text-foreground">{m.role}</span>
                   )}
