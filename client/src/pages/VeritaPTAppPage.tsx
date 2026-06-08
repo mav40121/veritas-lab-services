@@ -90,6 +90,21 @@ export default function VeritaPTAppPage() {
   } | null>(null);
   const [showEnrollModal, setShowEnrollModal] = useState(false);
   const [showAaaModal, setShowAaaModal] = useState(false);
+  // A5-ext (per Q1.a): PT event entry dialog state. The per-tech dropdown
+  // is populated from the lab's staff_employees roster so the director
+  // attributes each PT event to the tech who ran it. tested_by_employee_id
+  // writes to pt_events for downstream competency reporting.
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [newEventEnrollmentId, setNewEventEnrollmentId] = useState<string>("");
+  const [newEventDate, setNewEventDate] = useState(new Date().toISOString().slice(0, 10));
+  const [newEventAnalyte, setNewEventAnalyte] = useState("");
+  const [newEventYourResult, setNewEventYourResult] = useState("");
+  const [newEventPeerMean, setNewEventPeerMean] = useState("");
+  const [newEventPeerSd, setNewEventPeerSd] = useState("");
+  const [newEventPassFail, setNewEventPassFail] = useState<"pending" | "pass" | "fail">("pending");
+  const [newEventTestedBy, setNewEventTestedBy] = useState<string>("");
+  const [newEventNotes, setNewEventNotes] = useState("");
+  const [staffRoster, setStaffRoster] = useState<Array<{ id: number; first_name: string; last_name: string; middle_initial: string | null; title: string | null }>>([]);
   const [saving, setSaving] = useState(false);
 
   // New enrollment form state
@@ -135,6 +150,20 @@ export default function VeritaPTAppPage() {
         }
       } catch {
         setTrends(null);
+      }
+      // A5-ext: prefetch staff roster for the per-tech dropdown. 403 (no
+      // VeritaStaff plan) silently hides the field; the event entry
+      // form still works, just without analyst attribution.
+      if (activeLabId) {
+        try {
+          const staffRes = await fetch(`${API_BASE}/api/labs/${activeLabId}/staff/employees`, { headers: authHeaders() });
+          if (staffRes.ok) {
+            const sd = await staffRes.json();
+            setStaffRoster(Array.isArray(sd) ? sd : []);
+          }
+        } catch {
+          // staff plan not available, leave empty
+        }
       }
     } catch {
       // silent fail
@@ -319,6 +348,16 @@ export default function VeritaPTAppPage() {
           >
             <Plus size={14} className="mr-1.5" />
             Manage Enrollments
+          </Button>
+          {/* A5-ext (per Q1.a): Record PT Event button. Surfaces the
+              new entry form with per-tech attribution dropdown. */}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowEventModal(true)}
+          >
+            <Plus size={14} className="mr-1.5" />
+            Record PT Event
           </Button>
         </div>
       </div>
@@ -824,6 +863,182 @@ export default function VeritaPTAppPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAaaModal(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* A5-ext (per Q1.a): Record PT Event dialog. Captures the event
+          details + analyte attribution to a specific tech via
+          tested_by_employee_id. Auto-calculated SDI happens server-side
+          when result + peer_mean + peer_sd are provided. */}
+      <Dialog open={showEventModal} onOpenChange={setShowEventModal}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Record PT Event</DialogTitle>
+          </DialogHeader>
+
+          <div className="flex items-start gap-3 rounded-lg border border-teal-200 bg-teal-50 dark:bg-teal-900/10 dark:border-teal-800 p-3 text-sm text-teal-900 dark:text-teal-200">
+            <Info size={16} className="mt-0.5 shrink-0" />
+            <div>
+              Record the per-event result for the lab. Per 42 CFR §493.1236(c)(2), the analyst who runs the PT sample must rotate through testing personnel; capturing tested_by here builds the surveyor-defensible record.
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium mb-1">Enrollment</label>
+              <select
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={newEventEnrollmentId}
+                onChange={e => setNewEventEnrollmentId(e.target.value)}
+              >
+                <option value="">Select enrollment...</option>
+                {enrollments.map((en: any) => (
+                  <option key={en.id} value={en.id}>
+                    {en.vendor} {en.program_name} {en.year}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium mb-1">Event date</label>
+                <input
+                  type="date"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={newEventDate}
+                  onChange={e => setNewEventDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1">Analyte</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Glucose"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={newEventAnalyte}
+                  onChange={e => setNewEventAnalyte(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium mb-1">Your result</label>
+                <input
+                  type="number"
+                  step="any"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={newEventYourResult}
+                  onChange={e => setNewEventYourResult(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1">Peer mean</label>
+                <input
+                  type="number"
+                  step="any"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={newEventPeerMean}
+                  onChange={e => setNewEventPeerMean(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1">Peer SD</label>
+                <input
+                  type="number"
+                  step="any"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={newEventPeerSd}
+                  onChange={e => setNewEventPeerSd(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium mb-1">Pass / Fail</label>
+                <select
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={newEventPassFail}
+                  onChange={e => setNewEventPassFail(e.target.value as any)}
+                >
+                  <option value="pending">Pending</option>
+                  <option value="pass">Pass</option>
+                  <option value="fail">Fail</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1">
+                  Tested by {staffRoster.length === 0 && <span className="text-muted-foreground">(no staff roster)</span>}
+                </label>
+                <select
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={newEventTestedBy}
+                  onChange={e => setNewEventTestedBy(e.target.value)}
+                  disabled={staffRoster.length === 0}
+                >
+                  <option value="">Not specified</option>
+                  {staffRoster.map(emp => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.last_name}, {emp.first_name}{emp.middle_initial ? ` ${emp.middle_initial}.` : ""}
+                      {emp.title ? ` (${emp.title})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">Notes</label>
+              <textarea
+                rows={2}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={newEventNotes}
+                onChange={e => setNewEventNotes(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEventModal(false)}>Cancel</Button>
+            <Button
+              className="bg-[#006064] hover:bg-[#004d50] text-white"
+              disabled={saving || !newEventEnrollmentId || !newEventDate || !newEventAnalyte.trim()}
+              onClick={async () => {
+                setSaving(true);
+                try {
+                  const r = await fetch(`${API_BASE}/api/veritapt/events`, {
+                    method: "POST",
+                    headers: { ...authHeaders(), "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      enrollment_id: Number(newEventEnrollmentId),
+                      event_date: newEventDate,
+                      analyte: newEventAnalyte.trim(),
+                      your_result: newEventYourResult ? Number(newEventYourResult) : null,
+                      peer_mean: newEventPeerMean ? Number(newEventPeerMean) : null,
+                      peer_sd: newEventPeerSd ? Number(newEventPeerSd) : null,
+                      pass_fail: newEventPassFail,
+                      tested_by_employee_id: newEventTestedBy ? Number(newEventTestedBy) : null,
+                      notes: newEventNotes || null,
+                    }),
+                  });
+                  if (r.ok) {
+                    setShowEventModal(false);
+                    setNewEventEnrollmentId("");
+                    setNewEventAnalyte("");
+                    setNewEventYourResult("");
+                    setNewEventPeerMean("");
+                    setNewEventPeerSd("");
+                    setNewEventPassFail("pending");
+                    setNewEventTestedBy("");
+                    setNewEventNotes("");
+                    fetchData();
+                  }
+                } finally {
+                  setSaving(false);
+                }
+              }}
+            >
+              {saving ? "Saving..." : "Save Event"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

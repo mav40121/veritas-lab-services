@@ -2681,6 +2681,18 @@ for (const t of ["staff_employees", "staff_roles"]) {
   }
 }
 
+// A5-ext (2026-06-07, per Q1.a): tested_by_employee_id on pt_events
+// so the new PT event entry UI can attribute each event to the tech
+// who ran it. Nullable FK to staff_employees so importer-loaded rows
+// (which today have no analyst attribution) don't break.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(pt_events)").all() as any[]).map(c => c.name);
+  if (!cols.includes("tested_by_employee_id")) {
+    try { sqlite.exec("ALTER TABLE pt_events ADD COLUMN tested_by_employee_id INTEGER REFERENCES staff_employees(id)"); } catch {}
+  }
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_pt_events_tested_by ON pt_events(tested_by_employee_id)"); } catch {}
+}
+
 // Multi-Lab Tier 2 — Phase 3.5 (VeritaComp module):
 // Three top-level user_id tables: competency_programs, competency_employees,
 // competency_quizzes. All other competency_* tables scope through one of
