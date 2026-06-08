@@ -66,7 +66,11 @@ function distinguishingSuffix(target: Membership, all: Membership[]): string {
   return targetName.slice(maxShared).replace(/^[\s\-—|·:,]+/, "").trim();
 }
 
-export function LabSwitcher() {
+// Shared switch hook. Returns the user's memberships, the current active
+// lab, and a switchTo(m) function. Used by both LabSwitcher (desktop
+// dropdown) and LabSwitcherMobile (drawer list section). Returns null
+// when the switcher should not render (no memberships, or only one).
+function useLabSwitcherState() {
   const { data: memberships } = useMemberships();
   const activeLabId = useActiveLabId();
   const [location, setLocation] = useLocation();
@@ -98,6 +102,14 @@ export function LabSwitcher() {
     queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
     setLocation(withLabPrefix(location, m.labId));
   };
+
+  return { memberships, current, switchTo };
+}
+
+export function LabSwitcher() {
+  const state = useLabSwitcherState();
+  if (!state) return null;
+  const { memberships, current, switchTo } = state;
 
   const currentSuffix = distinguishingSuffix(current, memberships);
 
@@ -197,5 +209,82 @@ export function LabSwitcher() {
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+// Mobile variant: inline list section meant to live inside the NavBar
+// hamburger drawer. Same switchTo logic as the desktop dropdown, but
+// rendered as full-width tappable rows because the mobile drawer
+// already has its own scroll container. Calls onAfterSwitch() after
+// switchTo() so the parent NavBar can close the drawer.
+//
+// Renders null when the user has fewer than 2 memberships, identical
+// to the desktop variant.
+export function LabSwitcherMobile({ onAfterSwitch }: { onAfterSwitch?: () => void }) {
+  const state = useLabSwitcherState();
+  if (!state) return null;
+  const { memberships, current, switchTo } = state;
+
+  return (
+    <div className="px-1 py-2 border-t border-border mt-2">
+      <div className="px-2 pb-1.5 flex items-center gap-1.5">
+        <Building2 size={13} className="text-primary shrink-0" />
+        <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Switch lab</span>
+      </div>
+      <div className="flex flex-col">
+        {memberships.map(m => {
+          const isCurrent = m.labId === current.labId;
+          const suffix = distinguishingSuffix(m, memberships);
+          const cert = cliaCertDisplay(m.cliaCertExpirationDate);
+          return (
+            <button
+              key={m.membershipId}
+              type="button"
+              onClick={async () => {
+                await switchTo(m);
+                onAfterSwitch?.();
+              }}
+              className={cn(
+                "flex items-start gap-2 px-3 py-2 rounded-md text-left hover:bg-secondary transition-colors",
+                isCurrent && "bg-secondary"
+              )}
+            >
+              <Check size={14} className={cn("mt-1 shrink-0", isCurrent ? "text-primary" : "text-transparent")} />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium truncate">
+                  {labLabel(m)}
+                  {suffix && (
+                    <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-primary/10 text-primary align-middle">
+                      {suffix}
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap mt-0.5">
+                  <span>{m.cliaNumber ? `CLIA ${m.cliaNumber}` : "CLIA not set"}</span>
+                  {cert && (
+                    <span
+                      className={cn(
+                        "inline-flex items-center px-1 py-0.5 rounded text-[10px] font-medium",
+                        cert.warn
+                          ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                          : "bg-muted text-foreground"
+                      )}
+                    >
+                      {cert.expired ? `CLIA expired ${cert.ymd}` : `active through ${cert.ymd}`}
+                    </span>
+                  )}
+                  {m.role && m.role !== "owner" && (
+                    <span className="inline-flex items-center px-1 py-0.5 rounded bg-muted text-[10px] font-medium text-foreground">{m.role}</span>
+                  )}
+                  {m.isPrimaryLab && (
+                    <span className="inline-flex items-center px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[10px] font-medium">primary</span>
+                  )}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }

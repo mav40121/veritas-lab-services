@@ -6,7 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, TestTube, User, LogOut, LayoutDashboard, Play, ListChecks, ShieldCheck, BarChart3 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { LabSwitcher } from "@/components/LabSwitcher";
+import { LabSwitcher, LabSwitcherMobile } from "@/components/LabSwitcher";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -309,6 +309,14 @@ export function NavBar() {
                 {label}
               </Link>
             ))}
+
+            {/* 2026-06-08: mobile lab switcher. The desktop dropdown
+                (LabSwitcher above) is "hidden lg:flex" so iPhone Safari
+                users had no way to switch labs. This inline list mirrors
+                the dropdown's content and closes the drawer after a
+                successful switch. Renders null when the user has fewer
+                than 2 memberships. */}
+            {isLoggedIn && <LabSwitcherMobile onAfterSwitch={closeMobile} />}
 
             <MobileGroup
               label="VeritaAssure™"
