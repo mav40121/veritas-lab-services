@@ -190,6 +190,22 @@ export function registerVeritaTrackRoutes(
          LIMIT 20
       `).all(labId) as any[];
 
+      // Wave E1 (VeritaScan move-3, 2026-06-07): VeritaScan documents
+      // past their review_due_date surface in the worklist. Pre-A1.1
+      // documents (no review_due_date) are exempt from the seam
+      // because they don't carry the review-cycle anchor.
+      const scanNeedsReview = sqlite.prepare(`
+        SELECT id, title, display_label, document_type, review_due_date
+          FROM lab_documents
+         WHERE lab_id = ?
+           AND status = 'active'
+           AND review_due_date IS NOT NULL
+           AND review_due_date != ''
+           AND date(review_due_date) <= date('now', '+30 days')
+         ORDER BY review_due_date ASC
+         LIMIT 20
+      `).all(labId) as any[];
+
       const crossModule = [
         ...certs.map(c => ({
           source: "veritalab",
@@ -218,6 +234,13 @@ export function registerVeritaTrackRoutes(
           label: `QC corrective action open: ${ca.analyte} ${ca.qc_level || ""} lot ${ca.lot_number || ""}`.trim(),
           due_date: ca.taken_at?.slice(0, 10) || "",
           link: `/labs/${labId}/veritaqc-app`,
+        })),
+        ...scanNeedsReview.map((d: any) => ({
+          source: "veritascan",
+          source_id: d.id,
+          label: `Document review due: ${d.display_label || d.title}`,
+          due_date: d.review_due_date,
+          link: `/labs/${labId}/veritascan`,
         })),
       ];
 
