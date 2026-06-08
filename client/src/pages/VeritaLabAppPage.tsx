@@ -64,6 +64,10 @@ const CERT_TYPES = [
   { value: "tjc", label: "TJC Accreditation", issuing_body: "The Joint Commission" },
   { value: "state_license", label: "State Laboratory License", issuing_body: "" },
   { value: "lab_director_license", label: "Lab Director License", issuing_body: "" },
+  // PR 5 (2026-06-07): vendor agreement type. Commercial agreements
+  // with reagent/instrument/service vendors. Same expiration-tracking
+  // plumbing as the regulatory certs; the issuing_body is the vendor.
+  { value: "vendor_agreement", label: "Vendor Agreement", issuing_body: "" },
   { value: "other", label: "Other", issuing_body: "" },
 ];
 
@@ -73,6 +77,7 @@ const TYPE_COLORS: Record<string, string> = {
   tjc: "bg-purple-500/10 text-purple-700 border-purple-500/20",
   state_license: "bg-orange-500/10 text-orange-700 border-orange-500/20",
   lab_director_license: "bg-orange-500/10 text-orange-700 border-orange-500/20",
+  vendor_agreement: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20",
   other: "bg-muted text-muted-foreground border-border",
 };
 
