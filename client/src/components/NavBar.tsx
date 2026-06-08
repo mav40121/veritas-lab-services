@@ -246,23 +246,29 @@ export function NavBar() {
             // renewals take months, freezing the app on an expired CLIA
             // punishes the lab for a CMS lag).
             const cert = cliaCertDisplay(activeMembership?.cliaCertExpirationDate);
-            if (!cert) return null;
+            if (!cert || !activeMembership) return null;
+            // Wave A6 polish (2026-06-07): wrap the chip in a Link to the
+            // active lab's VeritaLab page so a director clicking the chip
+            // lands on the cert detail (where they can edit or upload
+            // the renewal). Informational chip stays informational; the
+            // click is a navigation shortcut, not a gating action.
             return (
-              <span
+              <Link
+                href={`/labs/${activeMembership.labId}/veritalab`}
                 className={cn(
-                  "hidden lg:inline-flex items-center px-2 py-1 rounded text-[11px] font-medium border",
+                  "hidden lg:inline-flex items-center px-2 py-1 rounded text-[11px] font-medium border transition-colors",
                   cert.warn
-                    ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
-                    : "bg-secondary text-foreground border-border"
+                    ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 hover:bg-amber-500/20"
+                    : "bg-secondary text-foreground border-border hover:bg-secondary/80"
                 )}
                 title={
                   cert.expired
-                    ? `CLIA cert expiration date on file is ${cert.ymd} (${Math.abs(cert.daysRemaining)} day${Math.abs(cert.daysRemaining) === 1 ? "" : "s"} ago). Informational only: modules are not gated on cert renewal.`
-                    : `CLIA cert active through ${cert.ymd} (${cert.daysRemaining} day${cert.daysRemaining === 1 ? "" : "s"} remaining). Informational only.`
+                    ? `CLIA cert expiration date on file is ${cert.ymd} (${Math.abs(cert.daysRemaining)} day${Math.abs(cert.daysRemaining) === 1 ? "" : "s"} ago). Click to open VeritaLab.`
+                    : `CLIA cert active through ${cert.ymd} (${cert.daysRemaining} day${cert.daysRemaining === 1 ? "" : "s"} remaining). Click to open VeritaLab.`
                 }
               >
                 {cert.expired ? `CLIA expired ${cert.ymd}` : `CLIA through ${cert.ymd}`}
-              </span>
+              </Link>
             );
           })()}
           {isLoggedIn && <LabSwitcher />}
