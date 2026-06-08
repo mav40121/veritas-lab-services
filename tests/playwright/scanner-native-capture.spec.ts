@@ -6,6 +6,12 @@
 // spec asserts the button + hidden input render so a layout regression
 // surfaces before deploy.
 //
+// 2026-06-08 hotfix 15:10 AZ: bind panel was scrolling off the top of
+// iPhone viewport because the camera viewport + Tap to capture button
+// kept rendering during bind mode. Both are now hidden when
+// unknownBarcode is set so the bind panel header + item list fit on
+// screen.
+//
 // Env:
 //   PW_BASE    — base URL (default prod)
 //   PW_TOKEN   — owner JWT
