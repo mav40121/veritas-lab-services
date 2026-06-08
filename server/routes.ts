@@ -21434,6 +21434,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ count: rows.length, rows });
   });
 
+  // ── ADMIN: List VeritaMaps for a given lab (read-only helper) ───────────
+  //
+  // Helper to discover map_id values before calling move-map-to-lab.
+  // Returns each map's id, name, user_id, and child counts so the operator
+  // can identify the right map by name without downloading the whole DB.
+  app.get("/api/admin/labs/:labId/maps", (req, res) => {
+    const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const labId = Number(req.params.labId);
+    if (!Number.isFinite(labId)) return res.status(400).json({ error: "labId required" });
+    const sqlite = (db as any).$client;
+    const maps = sqlite.prepare(
+      "SELECT id, name, lab_id, user_id, created_at, updated_at FROM veritamap_maps WHERE lab_id = ? ORDER BY id"
+    ).all(labId) as Array<{ id: number; name: string; lab_id: number; user_id: number; created_at: string; updated_at: string }>;
+    const enriched = maps.map(m => ({
+      ...m,
+      instrument_count: (sqlite.prepare("SELECT COUNT(*) AS n FROM veritamap_instruments WHERE map_id = ?").get(m.id) as { n: number }).n,
+      test_count: (sqlite.prepare("SELECT COUNT(*) AS n FROM veritamap_tests WHERE map_id = ?").get(m.id) as { n: number }).n,
+    }));
+    res.json({ labId, count: enriched.length, maps: enriched });
+  });
+
   // ── ADMIN: Move a VeritaMap from one lab to a sibling lab ───────────────
   //
   // 2026-06-08: built to migrate San Carlos's CW Bylas map from
