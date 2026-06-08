@@ -269,8 +269,16 @@ function AppContent() {
   // single-lab / no-lab cases pass through untouched, while logged-in users
   // with at least one membership get client-side redirected to the
   // lab-scoped form. See client/src/components/LegacyWorkspaceRedirect.tsx.
-  const wrapLegacy = (Component: any) => () => (
-    <LegacyWorkspaceRedirect><Component /></LegacyWorkspaceRedirect>
+  //
+  // 2026-06-08: appPath override. Compliance modules whose marketing
+  // route shape differs from their app route shape (e.g. /veritascan
+  // marketing vs. /labs/:id/veritascan-app app) pass appPath so the
+  // redirect lands on the actual app route, not a 404. Routes whose
+  // marketing and app paths share the same trailing segment (veritacheck,
+  // veritastock, veritaresponse) omit appPath and use the verbatim
+  // prepend behavior.
+  const wrapLegacy = (Component: any, appPath?: string) => () => (
+    <LegacyWorkspaceRedirect appPath={appPath}><Component /></LegacyWorkspaceRedirect>
   );
 
   return (
@@ -306,8 +314,8 @@ function AppContent() {
           <Route path="/reset-password" component={ResetPasswordPage} />
           <Route path="/study-guide" component={StudyGuidePage} />
           <Route path="/book" component={BookPage} />
-          <Route path="/veritascan" component={VeritaScanPage} />
-          <Route path="/veritamap" component={VeritaMapPage} />
+          <Route path="/veritascan">{wrapLegacy(VeritaScanPage, "/veritascan-app")}</Route>
+          <Route path="/veritamap">{wrapLegacy(VeritaMapPage, "/veritamap-app")}</Route>
           <Route path="/demo" component={DemoSelectorPage} />
           <Route path="/demo/operations" component={DemoPage} />
           <Route path="/demo/compliance" component={DemoLabPage} />
@@ -335,26 +343,26 @@ function AppContent() {
           <Route path="/veritamap-app">{wrapLegacy(VeritaMapAppPage)}</Route>
           <Route path="/veritamap-app/resources">{wrapLegacy(VeritaMapResourcesPage)}</Route>
           <Route path="/veritamap-app/labwide">{wrapLegacy(VeritaMapLabwidePage)}</Route>
-          <Route path="/veritatrack" component={VeritaTrackPage} />
+          <Route path="/veritatrack">{wrapLegacy(VeritaTrackPage, "/veritatrack-app")}</Route>
           <Route path="/veritatrack-app">{wrapLegacy(VeritaTrackAppPage)}</Route>
           <Route path="/veritamap-app/:id/build">{wrapLegacy(VeritaMapBuildPage)}</Route>
           <Route path="/veritamap-app/:id">{wrapLegacy(VeritaMapMapPage)}</Route>
-          <Route path="/veritacomp" component={VeritaCompPage} />
+          <Route path="/veritacomp">{wrapLegacy(VeritaCompPage, "/veritacomp-app")}</Route>
           <Route path="/veritacomp-app">{wrapLegacy(VeritaCompAppPage)}</Route>
           <Route path="/veritacomp-app/:programId">{wrapLegacy(VeritaCompAppPage)}</Route>
-          <Route path="/veritapt" component={VeritaPTPage} />
+          <Route path="/veritapt">{wrapLegacy(VeritaPTPage, "/veritapt/app")}</Route>
           <Route path="/veritapt/app">{wrapLegacy(VeritaPTAppPage)}</Route>
           <Route path="/veritaresponse">{wrapLegacy(VeritaResponseAppPage)}</Route>
           <Route path="/veritaresponse/:id">{wrapLegacy(VeritaResponseFindingPage)}</Route>
-          <Route path="/veritastaff" component={VeritaStaffPage} />
+          <Route path="/veritastaff">{wrapLegacy(VeritaStaffPage, "/veritastaff-app")}</Route>
           <Route path="/veritastaff-app">{wrapLegacy(VeritaStaffAppPage)}</Route>
           <Route path="/veritastaff-app/:employeeId">{wrapLegacy(VeritaStaffAppPage)}</Route>
-          <Route path="/veritalab" component={VeritaLabPage} />
+          <Route path="/veritalab">{wrapLegacy(VeritaLabPage, "/veritalab-app")}</Route>
           <Route path="/veritalab-app">{wrapLegacy(VeritaLabAppPage)}</Route>
           <Route path="/veritaqc-app">{wrapLegacy(VeritaQCAppPage)}</Route>
           <Route path="/veritaqc-app/review">{wrapLegacy(VeritaQCDailyReviewPage)}</Route>
           <Route path="/veritapolicy-app">{wrapLegacy(VeritaPolicyAppPage)}</Route>
-          <Route path="/veritapolicy" component={VeritaPolicyPage} />
+          <Route path="/veritapolicy">{wrapLegacy(VeritaPolicyPage, "/veritapolicy-app/my-policies")}</Route>
           <Route path="/veritacheck/cumsum">{wrapLegacy(CumsumPage)}</Route>
           <Route path="/calculator" component={ProductivityCalculatorPage} />
           <Route path="/veritabench" component={VeritaBenchPage} />
