@@ -21434,6 +21434,140 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ count: rows.length, rows });
   });
 
+  // ── ADMIN: Move a VeritaMap from one lab to a sibling lab ───────────────
+  //
+  // 2026-06-08: built to migrate San Carlos's CW Bylas map from
+  // lab_id=2 (San Carlos Apache Healthcare Corporation main) to lab_id=6
+  // (SCAHC - Clarence Wesley). The map was created on the wrong lab
+  // shell, and the lab director wants it under the right shell so
+  // VeritaPT coverage, VeritaTrack tasks, VeritaComp programs, etc.
+  // attribute to the correct site. Built as a reusable endpoint
+  // because Lisa Veri (MRMC main lab 4 vs MRMC-CCL lab 5) has the
+  // same future need.
+  //
+  // What moves with the map:
+  //   - veritamap_maps row (lab_id changes; user_id reset to dest
+  //     lab's owner_user_id so the legacy user-scoped reads land
+  //     on the new owner)
+  //   - veritamap_instruments, veritamap_instrument_tests,
+  //     veritamap_tests, veritamap_analyte_values,
+  //     veritamap_amr_values: FK on map_id, follow naturally with
+  //     no UPDATE needed
+  //
+  // What gets CLEANED UP (set to NULL) to prevent cross-lab leaks:
+  //   - competency_programs.map_id where (map_id = source map AND
+  //     lab_id != destination lab) — those programs live on the
+  //     source lab and would otherwise reference a map in a
+  //     different lab. With the Shape A class sweep, map_id is no
+  //     longer authoritative for VeritaComp method-group reads;
+  //     the director just clicks "Rebuild from VeritaMap (lab-
+  //     wide)" to repopulate.
+  //
+  // Dry-run is mandatory before apply. Caller must pass
+  // confirm: true in a separate request after reviewing the
+  // dry-run preview.
+  //
+  // Audit: emits an admin audit_log entry on apply with
+  // before_json / after_json describing the change.
+  app.post("/api/admin/move-map-to-lab", (req, res) => {
+    const { secret, sourceMapId, destLabId, confirm } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    if (!Number.isFinite(Number(sourceMapId)) || !Number.isFinite(Number(destLabId))) {
+      return res.status(400).json({ error: "sourceMapId and destLabId required" });
+    }
+    const sqlite = (db as any).$client;
+    const map = sqlite.prepare(
+      "SELECT id, name, lab_id, user_id FROM veritamap_maps WHERE id = ?"
+    ).get(Number(sourceMapId)) as { id: number; name: string; lab_id: number | null; user_id: number } | undefined;
+    if (!map) return res.status(404).json({ error: `map ${sourceMapId} not found` });
+
+    const destLab = sqlite.prepare(
+      "SELECT id, lab_name, clia_number, owner_user_id FROM labs WHERE id = ?"
+    ).get(Number(destLabId)) as { id: number; lab_name: string; clia_number: string | null; owner_user_id: number } | undefined;
+    if (!destLab) return res.status(404).json({ error: `lab ${destLabId} not found` });
+
+    const sourceLab = map.lab_id != null
+      ? sqlite.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?")
+          .get(map.lab_id) as { id: number; lab_name: string; clia_number: string | null } | undefined
+      : null;
+
+    if (map.lab_id === destLab.id) {
+      return res.status(400).json({ error: `map ${map.id} is already on lab ${destLab.id}` });
+    }
+
+    // Cross-lab cleanup target: programs on the SOURCE lab that
+    // still point at this map. Programs on the DESTINATION lab
+    // (none today, but a defensive guard for re-runs) keep the
+    // pointer.
+    const orphanPrograms = sqlite.prepare(
+      "SELECT id, name, lab_id FROM competency_programs WHERE map_id = ? AND (lab_id != ? OR lab_id IS NULL)"
+    ).all(map.id, destLab.id) as Array<{ id: number; name: string; lab_id: number | null }>;
+
+    // Inventory of children that follow naturally with the map_id FK.
+    const instrumentCount = (sqlite.prepare(
+      "SELECT COUNT(*) AS n FROM veritamap_instruments WHERE map_id = ?"
+    ).get(map.id) as { n: number }).n;
+    const testCount = (sqlite.prepare(
+      "SELECT COUNT(*) AS n FROM veritamap_tests WHERE map_id = ?"
+    ).get(map.id) as { n: number }).n;
+    const instTestCount = (sqlite.prepare(
+      "SELECT COUNT(*) AS n FROM veritamap_instrument_tests WHERE map_id = ?"
+    ).get(map.id) as { n: number }).n;
+
+    const preview = {
+      map: { id: map.id, name: map.name, current_lab_id: map.lab_id, current_user_id: map.user_id },
+      sourceLab: sourceLab ? { id: sourceLab.id, name: sourceLab.lab_name, clia: sourceLab.clia_number } : null,
+      destLab: { id: destLab.id, name: destLab.lab_name, clia: destLab.clia_number, owner_user_id: destLab.owner_user_id },
+      willChange: {
+        veritamap_maps_row: { lab_id: `${map.lab_id} -> ${destLab.id}`, user_id: `${map.user_id} -> ${destLab.owner_user_id}` },
+        children_follow_naturally: {
+          veritamap_instruments: instrumentCount,
+          veritamap_tests: testCount,
+          veritamap_instrument_tests: instTestCount,
+        },
+        competency_programs_map_id_cleared: orphanPrograms,
+      },
+    };
+
+    if (!confirm) {
+      return res.json({ dryRun: true, preview });
+    }
+
+    // Apply, transactional.
+    const now = new Date().toISOString();
+    const before = { map_id: map.id, prev_lab_id: map.lab_id, prev_user_id: map.user_id };
+    const after = { map_id: map.id, new_lab_id: destLab.id, new_user_id: destLab.owner_user_id, programs_cleared: orphanPrograms.map(p => p.id) };
+
+    const tx = sqlite.transaction(() => {
+      sqlite.prepare(
+        "UPDATE veritamap_maps SET lab_id = ?, user_id = ?, updated_at = ? WHERE id = ?"
+      ).run(destLab.id, destLab.owner_user_id, now, map.id);
+      if (orphanPrograms.length > 0) {
+        const clear = sqlite.prepare(
+          "UPDATE competency_programs SET map_id = NULL, updated_at = ? WHERE id = ?"
+        );
+        for (const p of orphanPrograms) clear.run(now, p.id);
+      }
+    });
+    tx();
+
+    try {
+      logAudit({
+        userId: 0,
+        module: "account",
+        action: "update",
+        entityType: "admin.move_map_to_lab",
+        entityId: String(map.id),
+        entityLabel: `${map.name} -> lab ${destLab.id} (${destLab.lab_name})`,
+        before,
+        after,
+        ipAddress: req.ip,
+      });
+    } catch (e) { /* audit failure is not fatal */ }
+
+    return res.json({ dryRun: false, applied: true, preview });
+  });
+
   // ── ADMIN: Download raw SQLite database file (REAL external backup) ──────
   app.get("/api/admin/backup-db", (req, res) => {
     const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
