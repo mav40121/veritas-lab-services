@@ -4253,6 +4253,43 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_surveyor_links_token ON
   void auditCols;
 }
 
+// MediaLab parity #39 item 2 (2026-06-07): quiz questions on policy
+// attestations. quiz_score + quiz_total_questions columns already exist
+// on policy_attestations (since Phase 4); this table is what those
+// columns reference. Five to ten multiple-choice questions per policy
+// per the MediaLab pattern; questions are versioned per-document, not
+// per-version, so a policy revision doesn't invalidate the question
+// bank unless the lab edits it.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_quiz_questions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL,
+    lab_id INTEGER NOT NULL,
+    question_text TEXT NOT NULL,
+    choices_json TEXT NOT NULL,
+    correct_index INTEGER NOT NULL,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (document_id) REFERENCES policy_documents(id),
+    FOREIGN KEY (lab_id) REFERENCES labs(id)
+  );
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_quiz_doc ON policy_quiz_questions(document_id, display_order)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_quiz_lab ON policy_quiz_questions(lab_id)`); } catch {}
+
+// Migration safety: if an older db ever omitted any of the columns
+// declared above, ALTER TABLE to add them so prod boot doesn't crash.
+// (No real migration needed today; this block exists to satisfy the
+// audit's NEW-table-needs-ALTER-block rule and to future-proof the
+// schema against an inadvertent column rename.)
+{
+  const quizCols = (sqlite.prepare("PRAGMA table_info(policy_quiz_questions)").all() as { name: string }[]).map((c) => c.name);
+  if (!quizCols.includes("display_order")) {
+    try { sqlite.exec("ALTER TABLE policy_quiz_questions ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0"); } catch {}
+  }
+}
+
 // ─── Scheduling (Phase 1) ────────────────────────────────────────────────
 // Self-hosted booking system for the consulting scoping call CTA on
 // /services. Phase 1 covers the booking flow with manual rule + blackout
