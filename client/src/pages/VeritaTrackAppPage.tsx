@@ -627,6 +627,31 @@ export default function VeritaTrackAppPage() {
     enabled: hasPlanAccess,
   });
 
+  // VeritaTrack 3-element framework Wave B1 (move-1, 2026-06-07):
+  // pre-bucketed worklist so the dashboard tile renders without
+  // client-side date math. Lab-scoped endpoint; falls back to nothing
+  // when no activeLabId so the tile self-hides on legacy single-lab
+  // boots before the lab switcher resolves.
+  const { data: worklist } = useQuery<{
+    today: string;
+    counts: { overdue: number; due_today: number; due_this_week: number; due_next_30: number };
+    buckets: {
+      overdue: Task[];
+      due_today: Task[];
+      due_this_week: Task[];
+      due_next_30: Task[];
+    };
+  }>({
+    queryKey: activeLabId ? [`/api/labs/${activeLabId}/veritatrack/worklist`] : ["no-worklist"],
+    queryFn: async () => {
+      if (!activeLabId) throw new Error("no lab");
+      const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/veritatrack/worklist`, { headers: authHeaders() });
+      if (!r.ok) throw new Error("worklist failed");
+      return r.json();
+    },
+    enabled: hasPlanAccess && !!activeLabId,
+  });
+
   const filtered = useMemo(() => tasks.filter(t =>
     (filterCategory === "all" || t.category === filterCategory) &&
     (filterStatus === "all" || t.status === filterStatus)
@@ -786,6 +811,38 @@ export default function VeritaTrackAppPage() {
           />
         </div>
       </div>
+
+      {/* VeritaTrack Wave B1 (move-1): today's worklist tile. Shows
+          overdue + due-today + due-this-week + due-next-30 counts so
+          the director sees what needs action without scrolling the
+          full task list. Self-hides when no activeLabId. */}
+      {worklist && (worklist.counts.overdue + worklist.counts.due_today + worklist.counts.due_this_week + worklist.counts.due_next_30) > 0 && (
+        <div className="mb-6 rounded-xl border border-border bg-card p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <CalendarDays size={16} className="text-primary" />
+            <h3 className="font-semibold text-sm">Today's Worklist</h3>
+            <span className="text-xs text-muted-foreground">as of {worklist.today}</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className={`rounded-lg p-3 ${worklist.counts.overdue > 0 ? "bg-red-50 dark:bg-red-950/30 border border-red-200/50 dark:border-red-900/40" : "bg-muted/40"}`}>
+              <div className={`text-xs uppercase ${worklist.counts.overdue > 0 ? "text-red-700 dark:text-red-300" : "text-muted-foreground"}`}>Overdue</div>
+              <div className={`text-2xl font-bold ${worklist.counts.overdue > 0 ? "text-red-700 dark:text-red-300" : "text-foreground"}`}>{worklist.counts.overdue}</div>
+            </div>
+            <div className={`rounded-lg p-3 ${worklist.counts.due_today > 0 ? "bg-amber-50 dark:bg-amber-950/30 border border-amber-200/50 dark:border-amber-900/40" : "bg-muted/40"}`}>
+              <div className={`text-xs uppercase ${worklist.counts.due_today > 0 ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground"}`}>Due Today</div>
+              <div className={`text-2xl font-bold ${worklist.counts.due_today > 0 ? "text-amber-700 dark:text-amber-300" : "text-foreground"}`}>{worklist.counts.due_today}</div>
+            </div>
+            <div className="rounded-lg p-3 bg-muted/40">
+              <div className="text-xs uppercase text-muted-foreground">This Week</div>
+              <div className="text-2xl font-bold">{worklist.counts.due_this_week}</div>
+            </div>
+            <div className="rounded-lg p-3 bg-muted/40">
+              <div className="text-xs uppercase text-muted-foreground">Next 30 Days</div>
+              <div className="text-2xl font-bold">{worklist.counts.due_next_30}</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Quick Setup panel */}
       {setupOpen && (

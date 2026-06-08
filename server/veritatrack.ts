@@ -68,6 +68,57 @@ export function registerVeritaTrackRoutes(
     ].includes(plan);
   }
 
+  // ── VeritaTrack 3-element framework, move-1 (2026-06-07): today's
+  // worklist. Move-1 is "reduce time-to-action": the director shouldn't
+  // have to mentally compute which tasks are due now. This endpoint
+  // pre-buckets every active task into overdue / due_today /
+  // due_this_week / due_next_30 so the dashboard tile can render
+  // immediate-action lists without recomputing on the client.
+  //
+  // Lab-scoped via the Phase 3.7 dual-write lab_id column.
+  app.get(
+    "/api/labs/:labId/veritatrack/worklist",
+    authMiddleware,
+    (req: any, res) => {
+      if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+      const labId = Number(req.params.labId);
+      if (!Number.isFinite(labId)) return res.status(400).json({ error: "Bad labId" });
+      const tasks = sqlite.prepare(
+        "SELECT * FROM veritatrack_tasks WHERE lab_id = ? AND active = 1 ORDER BY category, name"
+      ).all(labId) as any[];
+      const today = new Date();
+      const todayStr = today.toISOString().split("T")[0];
+      const buckets: any = { overdue: [], due_today: [], due_this_week: [], due_next_30: [] };
+      for (const t of tasks) {
+        const last = sqlite.prepare(
+          "SELECT * FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC LIMIT 1"
+        ).get(t.id) as any;
+        const nextDueDate = last ? nextDue(last.completed_date, t.frequency_months) : null;
+        // Not-started tasks (no signoff yet) appear as overdue so the
+        // director sees them immediately rather than having them sit
+        // invisible until their first signoff.
+        if (!last) {
+          buckets.overdue.push({ ...t, last_signoff: null, next_due: null, status: "not_started" });
+          continue;
+        }
+        const due = new Date(nextDueDate!);
+        const daysUntil = Math.floor((due.getTime() - today.getTime()) / 86400000);
+        const enriched = { ...t, last_signoff: last, next_due: nextDueDate, status: taskStatus(nextDueDate!) };
+        if (daysUntil < 0) buckets.overdue.push(enriched);
+        else if (nextDueDate === todayStr) buckets.due_today.push(enriched);
+        else if (daysUntil <= 7) buckets.due_this_week.push(enriched);
+        else if (daysUntil <= 30) buckets.due_next_30.push(enriched);
+      }
+      const counts = {
+        overdue: buckets.overdue.length,
+        due_today: buckets.due_today.length,
+        due_this_week: buckets.due_this_week.length,
+        due_next_30: buckets.due_next_30.length,
+      };
+      res.json({ today: todayStr, counts, buckets });
+    },
+  );
+
   // GET all tasks with latest sign-off and computed status
   app.get("/api/veritatrack/tasks", authMiddleware, (req: any, res) => {
     if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
