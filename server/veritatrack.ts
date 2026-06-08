@@ -145,6 +145,33 @@ export function registerVeritaTrackRoutes(
          ORDER BY d.next_review_date ASC
       `).all(labId) as any[];
 
+      // Wave C2 (VeritaPT move-3, 2026-06-07): AT-RISK PT analytes
+      // surface as cross-module seam items. Computes the same 2-of-3
+      // consecutive logic from /api/veritapt/trends but lab-scoped via
+      // the Phase 3.6 lab_id column on pt_events. WATCH analytes are
+      // omitted from the seam list (the per-page VeritaPT banner
+      // handles the WATCH/AT-RISK early warning at the source); only
+      // AT-RISK breaches that put the lab past the §493.803 line make
+      // it into the worklist.
+      const ptEvents = sqlite.prepare(`
+        SELECT analyte, event_date, pass_fail
+          FROM pt_events
+         WHERE lab_id = ?
+           AND pass_fail IN ('pass', 'fail')
+         ORDER BY analyte ASC, event_date DESC
+      `).all(labId) as Array<{ analyte: string; event_date: string; pass_fail: string }>;
+      const ptByAnalyte: Record<string, Array<{ event_date: string; pass_fail: string }>> = {};
+      for (const e of ptEvents) {
+        if (!ptByAnalyte[e.analyte]) ptByAnalyte[e.analyte] = [];
+        if (ptByAnalyte[e.analyte].length < 3) ptByAnalyte[e.analyte].push({ event_date: e.event_date, pass_fail: e.pass_fail });
+      }
+      const ptAtRisk = Object.entries(ptByAnalyte)
+        .filter(([_, last3]) => last3.filter(e => e.pass_fail === "fail").length >= 2)
+        .map(([analyte, last3]) => ({
+          analyte,
+          last_event_date: last3[0]?.event_date || "",
+        }));
+
       const crossModule = [
         ...certs.map(c => ({
           source: "veritalab",
@@ -159,6 +186,13 @@ export function registerVeritaTrackRoutes(
           label: `Review policy: ${p.title}`,
           due_date: p.next_review_date,
           link: `/labs/${labId}/veritapolicy-app/my-policies`,
+        })),
+        ...ptAtRisk.map((r, idx) => ({
+          source: "veritapt",
+          source_id: idx,
+          label: `PT AT-RISK: ${r.analyte} (§493.803)`,
+          due_date: r.last_event_date,
+          link: `/labs/${labId}/veritapt`,
         })),
       ];
 
