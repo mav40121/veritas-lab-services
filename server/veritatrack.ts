@@ -172,6 +172,24 @@ export function registerVeritaTrackRoutes(
           last_event_date: last3[0]?.event_date || "",
         }));
 
+      // Wave D1 (VeritaQC move-3, 2026-06-07): open VeritaQC corrective
+      // actions surface in the worklist. Once a Westgard violation gets
+      // a corrective-action ticket opened, the lab director has a
+      // CMS §493.1282 record to close. Surfacing them on the
+      // single-pane worklist tightens the loop: open today, close
+      // tomorrow, surveyor can see the chain.
+      const qcOpenCAs = sqlite.prepare(`
+        SELECT ca.id, ca.action_taken, ca.taken_at,
+               cl.analyte, cl.level AS qc_level, cl.lot_number
+          FROM qc_corrective_actions ca
+          JOIN qc_results qr ON qr.id = ca.qc_result_id
+          JOIN qc_control_lots cl ON cl.id = qr.control_lot_id
+         WHERE ca.lab_id = ?
+           AND ca.status = 'open'
+         ORDER BY ca.taken_at ASC
+         LIMIT 20
+      `).all(labId) as any[];
+
       const crossModule = [
         ...certs.map(c => ({
           source: "veritalab",
@@ -193,6 +211,13 @@ export function registerVeritaTrackRoutes(
           label: `PT AT-RISK: ${r.analyte} (§493.803)`,
           due_date: r.last_event_date,
           link: `/labs/${labId}/veritapt`,
+        })),
+        ...qcOpenCAs.map((ca: any) => ({
+          source: "veritaqc",
+          source_id: ca.id,
+          label: `QC corrective action open: ${ca.analyte} ${ca.qc_level || ""} lot ${ca.lot_number || ""}`.trim(),
+          due_date: ca.taken_at?.slice(0, 10) || "",
+          link: `/labs/${labId}/veritaqc-app`,
         })),
       ];
 
