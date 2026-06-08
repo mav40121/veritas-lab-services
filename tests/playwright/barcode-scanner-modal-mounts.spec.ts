@@ -10,6 +10,13 @@
 // A typo in the experimentalFeatures key or a missing import would
 // surface here before it ever shipped.
 //
+// Hotfix 2026-06-08 13:54 AZ: html5-qrcode's first start() arg
+// (cameraIdOrConfig) only accepts a single-key MediaTrackConstraints
+// object. PR #653 stuffed 4 keys in there and the library threw
+// "object should have exactly 1 key, found 4 keys" on every camera
+// boot. PR #656 puts the multi-key constraints into the second
+// argument's videoConstraints field where the library expects them.
+//
 // Strategy: load the VeritaStock page, click "Scan Mode", confirm the
 // modal dialog renders the camera viewport element (#vls-barcode-scanner)
 // or a clear "Camera unavailable" message. Either outcome proves the
