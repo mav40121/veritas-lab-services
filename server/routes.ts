@@ -25151,6 +25151,201 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     },
   );
 
+  // ── MediaLab parity #39 item 2 (2026-06-07): quiz authoring ─────────────
+  //
+  // Owner / admin authors 5-10 multiple-choice questions per policy.
+  // Member's attestation flow shows the questions and writes quiz_score
+  // + quiz_total_questions onto the attestation row. Phase A ships
+  // authoring + scoring endpoints; presentation UI lands as a follow-on.
+  app.get(
+    "/api/labs/:labId/veritapolicy/documents/:id/quiz",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const docId = Number(req.params.id);
+      if (!Number.isFinite(docId)) return res.status(400).json({ error: "Bad doc id" });
+      const doc = sqlite.prepare("SELECT id, lab_id FROM policy_documents WHERE id = ?").get(docId) as any;
+      if (!doc || doc.lab_id !== req.scope.labId) return res.status(404).json({ error: "Doc not in this lab" });
+      const rows = sqlite.prepare(
+        `SELECT id, question_text, choices_json, correct_index, display_order
+           FROM policy_quiz_questions
+          WHERE document_id = ?
+          ORDER BY display_order ASC, id ASC`
+      ).all(docId) as any[];
+      // Strip correct_index when the requester is NOT an owner/admin so a
+      // non-author member can not see the answer key by reading the
+      // authoring endpoint. Compare against lab_members.role for this user.
+      const membership = sqlite.prepare(
+        "SELECT role FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1"
+      ).get(req.userId, req.scope.labId) as any;
+      const isAuthor = membership && (membership.role === "owner" || membership.role === "admin");
+      res.json(rows.map(r => ({
+        id: r.id,
+        question_text: r.question_text,
+        choices: (() => { try { return JSON.parse(r.choices_json || "[]"); } catch { return []; } })(),
+        correct_index: isAuthor ? r.correct_index : undefined,
+        display_order: r.display_order,
+      })));
+    },
+  );
+
+  app.post(
+    "/api/labs/:labId/veritapolicy/documents/:id/quiz",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const docId = Number(req.params.id);
+      if (!Number.isFinite(docId)) return res.status(400).json({ error: "Bad doc id" });
+      const doc = sqlite.prepare("SELECT id, lab_id FROM policy_documents WHERE id = ?").get(docId) as any;
+      if (!doc || doc.lab_id !== req.scope.labId) return res.status(404).json({ error: "Doc not in this lab" });
+      const { question_text, choices, correct_index, display_order } = req.body || {};
+      if (typeof question_text !== "string" || !question_text.trim()) {
+        return res.status(400).json({ error: "question_text required" });
+      }
+      if (!Array.isArray(choices) || choices.length < 2 || choices.length > 6) {
+        return res.status(400).json({ error: "choices must be array of 2-6 strings" });
+      }
+      if (typeof correct_index !== "number" || correct_index < 0 || correct_index >= choices.length) {
+        return res.status(400).json({ error: "correct_index out of range" });
+      }
+      const choicesClean = choices.map((c: any) => String(c)).filter((c: string) => c.length > 0);
+      if (choicesClean.length !== choices.length) {
+        return res.status(400).json({ error: "choices contain empty entries" });
+      }
+      const result = sqlite.prepare(
+        `INSERT INTO policy_quiz_questions
+           (document_id, lab_id, question_text, choices_json, correct_index, display_order, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+      ).run(
+        docId, req.scope.labId,
+        question_text.trim(),
+        JSON.stringify(choicesClean),
+        correct_index,
+        Number.isFinite(display_order) ? Number(display_order) : 0,
+      );
+      const created = sqlite.prepare("SELECT * FROM policy_quiz_questions WHERE id = ?").get(result.lastInsertRowid) as any;
+      res.json({
+        id: created.id,
+        question_text: created.question_text,
+        choices: JSON.parse(created.choices_json || "[]"),
+        correct_index: created.correct_index,
+        display_order: created.display_order,
+      });
+    },
+  );
+
+  app.put(
+    "/api/labs/:labId/veritapolicy/documents/:id/quiz/:qid",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const docId = Number(req.params.id);
+      const qid = Number(req.params.qid);
+      const existing = sqlite.prepare(
+        "SELECT * FROM policy_quiz_questions WHERE id = ? AND document_id = ? AND lab_id = ?"
+      ).get(qid, docId, req.scope.labId) as any;
+      if (!existing) return res.status(404).json({ error: "Question not found" });
+      const { question_text, choices, correct_index, display_order } = req.body || {};
+      const newQuestion = typeof question_text === "string" && question_text.trim() ? question_text.trim() : existing.question_text;
+      let newChoicesJson = existing.choices_json;
+      let newCorrect = existing.correct_index;
+      if (Array.isArray(choices)) {
+        if (choices.length < 2 || choices.length > 6) return res.status(400).json({ error: "choices must be 2-6 strings" });
+        const cleaned = choices.map((c: any) => String(c)).filter((c: string) => c.length > 0);
+        if (cleaned.length !== choices.length) return res.status(400).json({ error: "choices contain empty entries" });
+        newChoicesJson = JSON.stringify(cleaned);
+        const ci = typeof correct_index === "number" ? correct_index : existing.correct_index;
+        if (ci < 0 || ci >= cleaned.length) return res.status(400).json({ error: "correct_index out of range" });
+        newCorrect = ci;
+      } else if (typeof correct_index === "number") {
+        const currentChoices = (() => { try { return JSON.parse(existing.choices_json || "[]"); } catch { return []; } })();
+        if (correct_index < 0 || correct_index >= currentChoices.length) return res.status(400).json({ error: "correct_index out of range" });
+        newCorrect = correct_index;
+      }
+      const newOrder = Number.isFinite(display_order) ? Number(display_order) : existing.display_order;
+      sqlite.prepare(
+        `UPDATE policy_quiz_questions
+            SET question_text = ?, choices_json = ?, correct_index = ?, display_order = ?, updated_at = datetime('now')
+          WHERE id = ?`
+      ).run(newQuestion, newChoicesJson, newCorrect, newOrder, qid);
+      const after = sqlite.prepare("SELECT * FROM policy_quiz_questions WHERE id = ?").get(qid) as any;
+      res.json({
+        id: after.id,
+        question_text: after.question_text,
+        choices: JSON.parse(after.choices_json || "[]"),
+        correct_index: after.correct_index,
+        display_order: after.display_order,
+      });
+    },
+  );
+
+  app.delete(
+    "/api/labs/:labId/veritapolicy/documents/:id/quiz/:qid",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const docId = Number(req.params.id);
+      const qid = Number(req.params.qid);
+      const existing = sqlite.prepare(
+        "SELECT id FROM policy_quiz_questions WHERE id = ? AND document_id = ? AND lab_id = ?"
+      ).get(qid, docId, req.scope.labId);
+      if (!existing) return res.status(404).json({ error: "Question not found" });
+      sqlite.prepare("DELETE FROM policy_quiz_questions WHERE id = ?").run(qid);
+      res.json({ ok: true });
+    },
+  );
+
+  // POST /attestations/:id/score-quiz — server-side scoring path. The
+  // client submits { answers: [{question_id, choice_index}] }; the
+  // server compares against the correct_index it owns (never sent to
+  // the member), writes quiz_score + quiz_total_questions onto the
+  // attestation row, and returns the score. Conservative pass threshold
+  // is enforced client-side (MediaLab convention is 80%); the server
+  // records the raw score and lets the lab director set the policy.
+  app.post(
+    "/api/labs/:labId/veritapolicy/attestations/:id/score-quiz",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const attId = Number(req.params.id);
+      const att = sqlite.prepare(
+        `SELECT a.id, a.document_id, a.assigned_to_user_id, d.lab_id
+           FROM policy_attestations a
+           JOIN policy_documents d ON d.id = a.document_id
+          WHERE a.id = ?`
+      ).get(attId) as any;
+      if (!att || att.lab_id !== req.scope.labId) return res.status(404).json({ error: "Attestation not in this lab" });
+      if (att.assigned_to_user_id !== req.userId) {
+        return res.status(403).json({ error: "Can only score your own attestation" });
+      }
+      const answers: Array<{ question_id: number; choice_index: number }> = Array.isArray(req.body?.answers) ? req.body.answers : [];
+      const questions = sqlite.prepare(
+        "SELECT id, correct_index FROM policy_quiz_questions WHERE document_id = ? ORDER BY display_order ASC, id ASC"
+      ).all(att.document_id) as Array<{ id: number; correct_index: number }>;
+      if (questions.length === 0) return res.status(400).json({ error: "No quiz on this policy" });
+      const correctById = new Map(questions.map(q => [q.id, q.correct_index]));
+      let correct = 0;
+      for (const a of answers) {
+        const ci = correctById.get(Number(a.question_id));
+        if (ci !== undefined && Number(a.choice_index) === ci) correct += 1;
+      }
+      const total = questions.length;
+      const score = total > 0 ? Math.round((correct / total) * 100) : 0;
+      sqlite.prepare(
+        "UPDATE policy_attestations SET quiz_score = ?, quiz_total_questions = ? WHERE id = ?"
+      ).run(score, total, attId);
+      res.json({ score, correct, total });
+    },
+  );
+
   // ── Phase 5: periodic review re-certification ──────────────────────────
   //
   // Owner-or-member confirms a policy is still current at its annual /
