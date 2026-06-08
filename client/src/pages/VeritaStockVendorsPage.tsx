@@ -21,7 +21,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  ArrowLeft, Plus, Trash2, Pencil, ChevronDown, ChevronRight, Users,
+  ArrowLeft, Plus, Trash2, Pencil, ChevronDown, ChevronRight, Users, Upload,
 } from "lucide-react";
 
 interface Vendor {
@@ -62,6 +62,7 @@ export default function VeritaStockVendorsPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Vendor | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const listUrl = activeLabId ? `/api/labs/${activeLabId}/veritastock/vendors` : null;
   const { data: vendors = [], refetch } = useQuery<Vendor[]>({
@@ -116,9 +117,14 @@ export default function VeritaStockVendorsPage() {
             Per-vendor account numbers, ordering channels, and contact tracks. The Order PDF auto-fills its cover page from these records so a generated order is actionable on receipt.
           </p>
         </div>
-        <Button onClick={onAddClick} disabled={!activeLabId}>
-          <Plus size={14} className="mr-1.5" /> Add Vendor
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)} disabled={!activeLabId}>
+            <Upload size={14} className="mr-1.5" /> Import xlsx
+          </Button>
+          <Button onClick={onAddClick} disabled={!activeLabId}>
+            <Plus size={14} className="mr-1.5" /> Add Vendor
+          </Button>
+        </div>
       </div>
 
       <div className="mb-4 flex items-center gap-3">
@@ -167,7 +173,177 @@ export default function VeritaStockVendorsPage() {
           refetch();
         }}
       />
+
+      <ImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        labId={activeLabId}
+        onCommitted={() => {
+          setImportOpen(false);
+          refetch();
+        }}
+      />
     </div>
+  );
+}
+
+// Two-step xlsx import: file picker -> preview (dry-run) -> commit.
+// The preview lets the director see what will be created vs. skipped
+// before the write actually happens, so a wrong file selection
+// doesn't pollute their directory.
+function ImportDialog({
+  open, onClose, labId, onCommitted,
+}: {
+  open: boolean;
+  onClose: () => void;
+  labId: number | null;
+  onCommitted: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<any | null>(null);
+  const [committing, setCommitting] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setFile(null);
+      setPreview(null);
+      setErr("");
+    }
+  }, [open]);
+
+  const runPreview = async () => {
+    if (!labId || !file) return;
+    setPreviewing(true);
+    setErr("");
+    setPreview(null);
+    const fd = new FormData();
+    fd.append("file", file);
+    const r = await fetch(`${API_BASE}/api/labs/${labId}/veritastock/vendors/import/preview`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: fd,
+    });
+    setPreviewing(false);
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      setErr(j.error || `HTTP ${r.status}`);
+      return;
+    }
+    setPreview(await r.json());
+  };
+
+  const runCommit = async () => {
+    if (!labId || !file) return;
+    setCommitting(true);
+    setErr("");
+    const fd = new FormData();
+    fd.append("file", file);
+    const r = await fetch(`${API_BASE}/api/labs/${labId}/veritastock/vendors/import/commit`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: fd,
+    });
+    setCommitting(false);
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      setErr(j.error || `HTTP ${r.status}`);
+      return;
+    }
+    onCommitted();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Import Vendors from xlsx</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="text-xs text-muted-foreground">
+            Expected columns (case-insensitive header row): VENDOR, PO, ordering pattern, account, POINT OF CONTACT. Idempotent on commit: any vendor whose name already exists in this lab is skipped. Maximum file size 2 MB.
+          </div>
+          <div>
+            <input
+              type="file"
+              accept=".xlsx"
+              onChange={(e) => {
+                setFile(e.target.files?.[0] ?? null);
+                setPreview(null);
+              }}
+              className="block text-sm"
+            />
+          </div>
+          {file && !preview && (
+            <Button onClick={runPreview} disabled={previewing || !labId}>
+              {previewing ? "Parsing..." : "Run preview (dry run)"}
+            </Button>
+          )}
+          {preview && (
+            <div className="rounded border border-border p-3 space-y-2 text-sm">
+              <div className="font-semibold">Preview</div>
+              <div className="grid grid-cols-3 gap-3 text-xs">
+                <div>
+                  <div className="text-muted-foreground">Parsed</div>
+                  <div className="text-lg font-bold">{preview.summary.total_parsed}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Would create</div>
+                  <div className="text-lg font-bold text-emerald-700">{preview.summary.would_create}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Would skip (duplicate)</div>
+                  <div className="text-lg font-bold text-amber-700">{preview.summary.would_skip_duplicate}</div>
+                </div>
+              </div>
+              {preview.parse_errors?.length > 0 && (
+                <div className="text-xs text-red-700">
+                  {preview.parse_errors.length} parse error(s). The bad rows will be skipped on commit.
+                </div>
+              )}
+              <div className="max-h-60 overflow-y-auto rounded border border-border/40 text-xs">
+                <table className="w-full">
+                  <thead className="bg-secondary sticky top-0">
+                    <tr>
+                      <th className="text-left px-2 py-1">Vendor</th>
+                      <th className="text-left px-2 py-1">Account</th>
+                      <th className="text-left px-2 py-1">Contacts</th>
+                      <th className="text-left px-2 py-1">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.vendors.slice(0, 50).map((v: any, i: number) => (
+                      <tr key={`${v.name}-${i}`} className="border-t border-border/30">
+                        <td className="px-2 py-1">{v.name}</td>
+                        <td className="px-2 py-1 text-muted-foreground">{v.account_number || ""}</td>
+                        <td className="px-2 py-1 text-muted-foreground">{v.contacts?.length ?? 0}</td>
+                        <td className="px-2 py-1">
+                          {v.action === "create" ? (
+                            <span className="text-emerald-700">create</span>
+                          ) : (
+                            <span className="text-amber-700">skip (duplicate)</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {err && <div className="text-xs text-red-600">{err}</div>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          {preview && (
+            <Button onClick={runCommit} disabled={committing || !file}>
+              {committing ? "Committing..." : `Commit ${preview.summary.would_create} new vendor(s)`}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
