@@ -505,8 +505,16 @@ export default function BarcodeScannerModal({
           </Button>
         </form>
 
-        {/* Camera viewport: fixed 4:3 box */}
-        <div className="relative bg-black flex-shrink-0">
+        {/* Camera viewport: fixed 4:3 box.
+            2026-06-08 (hotfix 15:10 AZ): hidden during bind mode so
+            the bind panel header + item list fit on iPhone viewport.
+            The camera is paused anyway when unknownBarcode is set
+            (pausedRef.current=true gates handleScan); rendering its
+            empty gray box was just wasting ~290px of vertical space
+            and pushing the modal past 100dvh. The SCANNER_ELEMENT_ID
+            div stays mounted but display:none so html5-qrcode's
+            attached video/canvas elements don't get torn down. */}
+        <div className={"relative bg-black flex-shrink-0 " + (unknownBarcode ? "hidden" : "")}>
           <div id={SCANNER_ELEMENT_ID} className="w-full" style={{ aspectRatio: "4 / 3" }} />
           {/* Hidden DOM container used by html5-qrcode's scanFile() for
               the native-camera-capture path. Never visually rendered. */}
@@ -533,36 +541,40 @@ export default function BarcodeScannerModal({
             close by delegating capture to that app via
             <input capture="environment">. ZXing decodes a sharp still
             image reliably; the failure mode was only the streaming
-            loop. Same handleScan() pipeline as a live decode. */}
-        <div className="px-4 py-2 border-b">
-          <input
-            ref={captureInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            data-testid="scan-capture-input"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              await handleCapturedFile(file);
-              // Reset so the same image can be re-picked if needed
-              if (captureInputRef.current) captureInputRef.current.value = "";
-            }}
-          />
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="w-full"
-            disabled={isDecodingCapture}
-            onClick={() => captureInputRef.current?.click()}
-            data-testid="scan-capture-button"
-          >
-            <ImagePlus size={14} className="mr-1.5" />
-            {isDecodingCapture ? "Decoding photo..." : "Tap to capture (use iPhone camera)"}
-          </Button>
-        </div>
+            loop. Same handleScan() pipeline as a live decode.
+            2026-06-08 (hotfix 15:10 AZ): hidden during bind mode for
+            the same viewport-height reason as the camera viewport. */}
+        {!unknownBarcode && (
+          <div className="px-4 py-2 border-b">
+            <input
+              ref={captureInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              data-testid="scan-capture-input"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                await handleCapturedFile(file);
+                // Reset so the same image can be re-picked if needed
+                if (captureInputRef.current) captureInputRef.current.value = "";
+              }}
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="w-full"
+              disabled={isDecodingCapture}
+              onClick={() => captureInputRef.current?.click()}
+              data-testid="scan-capture-button"
+            >
+              <ImagePlus size={14} className="mr-1.5" />
+              {isDecodingCapture ? "Decoding photo..." : "Tap to capture (use iPhone camera)"}
+            </Button>
+          </div>
+        )}
 
         {/* Unknown barcode bind panel takes over the result stack area when active. */}
         {unknownBarcode ? (
