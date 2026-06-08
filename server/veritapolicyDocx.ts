@@ -18,6 +18,7 @@ import {
   Header, Footer, AlignmentType, LevelFormat, TabStopType, TabStopPosition,
   BorderStyle, WidthType, ShadingType, PageNumber,
 } from "docx";
+import { CFR_TOPICS_IN_OUR_WORDS } from "./cfrTopicsInOurWords";
 
 // Brand palette per CLAUDE.md §6.
 const TEAL = "01696F";
@@ -323,6 +324,91 @@ function gap(after = 120) {
   return new Paragraph({ spacing: { after }, children: [new TextRun({ text: "", size: 2 })] });
 }
 
+// ─── Wave A2.3 reissue (2026-06-07): plain-language synthesis ──────────────
+//
+// For each CFR citation in the policy template, look up master's
+// topic_in_our_words from server/cfrTopicsInOurWords.ts (generated from
+// the master citation index) and render a "What this means in plain
+// English" callout box between the signature block and the Purpose
+// section. Surveyors and bench techs both read the plain-English
+// framing before the formal regulatory text.
+//
+// Per the 2026-06-07 discipline lesson: this surfaces master's
+// existing plain-English column as the canonical source, instead of
+// inventing a parallel free-text field on each policy template.
+
+// Normalize a cfr_text_block.citation (e.g. "42 CFR 493.1291(g)") to the
+// form used in CFR_TOPICS_IN_OUR_WORDS keys (e.g. "42 CFR §493.1291").
+function normalizeCfrCite(raw: string): string {
+  // Strip trailing sub-paragraph like "(g)" or "(b)(13)".
+  const noSubpara = raw.replace(/\s*\([a-z0-9]+\)(\([a-z0-9]+\))*\s*$/i, "").trim();
+  // Insert § if missing.
+  return noSubpara.replace(/^(\d+ CFR)\s+(\d)/, "$1 §$2");
+}
+
+function buildPlainLanguageBullets(tmpl: PolicyTemplate): string[] {
+  const blocks = tmpl.cfr_text_blocks || [];
+  const seen = new Set<string>();
+  const bullets: string[] = [];
+  for (const b of blocks) {
+    const key = normalizeCfrCite(b.citation || "");
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const topic = CFR_TOPICS_IN_OUR_WORDS[key];
+    if (topic && topic.trim()) bullets.push(topic.trim());
+  }
+  return bullets;
+}
+
+function plainLanguageCallout(bullets: string[]): Table {
+  return new Table({
+    width: { size: 9360, type: WidthType.DXA },
+    columnWidths: [9360],
+    borders: {
+      top: { style: BorderStyle.SINGLE, size: 8, color: TEAL },
+      bottom: { style: BorderStyle.SINGLE, size: 8, color: TEAL },
+      left: { style: BorderStyle.SINGLE, size: 8, color: TEAL },
+      right: { style: BorderStyle.SINGLE, size: 8, color: TEAL },
+      insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+      insideVertical: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+    },
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 9360, type: WidthType.DXA },
+            shading: { fill: TINT, type: ShadingType.CLEAR },
+            margins: { top: 200, bottom: 200, left: 300, right: 300 },
+            children: [
+              new Paragraph({
+                spacing: { after: 120 },
+                children: [
+                  new TextRun({
+                    text: "What this means in plain English",
+                    bold: true, color: TEAL_DARK, size: 22, font: "Calibri",
+                  }),
+                ],
+              }),
+              ...bullets.map(
+                (b) =>
+                  new Paragraph({
+                    spacing: { after: 80 },
+                    bullet: { level: 0 },
+                    children: [
+                      new TextRun({
+                        text: b, color: TEXT_DARK, size: 22, font: "Calibri",
+                      }),
+                    ],
+                  })
+              ),
+            ],
+          }),
+        ],
+      }),
+    ],
+  });
+}
+
 // Crosswalk row: accreditor label in bold teal in the left cell, citation
 // string in the right cell. Skips rows where citation is empty.
 function crosswalkRow(label: string, citation: string): TableRow {
@@ -384,6 +470,17 @@ function buildDocument(tmpl: PolicyTemplate, lab: LabContext, crosswalk?: Accred
   children.push(identityRow(lab));
   children.push(dateLines());
   children.push(signatureBlock());
+
+  // Wave A2.3 reissue: plain-language synthesis pulled from master's
+  // topic_in_our_words column for each CFR cite the policy references.
+  // Rendered between the signature block and Purpose so surveyors and
+  // bench techs read the plain-English framing first.
+  const plBullets = buildPlainLanguageBullets(tmpl);
+  if (plBullets.length > 0) {
+    children.push(gap(120));
+    children.push(plainLanguageCallout(plBullets));
+    children.push(gap(160));
+  }
 
   if (tmpl.purpose) {
     children.push(sectionHeading("Purpose"));
