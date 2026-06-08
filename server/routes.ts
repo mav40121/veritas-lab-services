@@ -16217,6 +16217,117 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(rows);
   });
 
+  // ── Wave A3.3 (2026-06-07): VeritaCheck pass/fail attribution ─────────
+  //
+  // Surveyor signal: which VeritaCheck verification studies has this
+  // analyst run, and how did they do? Used to flesh out the surveyor-
+  // defensible competency picture on the employee detail page. Match
+  // is by case-insensitive equality on `studies.analyst` against the
+  // standard name variants we'd expect a director to type when
+  // entering a study:
+  //   - "Last, First"
+  //   - "Last, First M"
+  //   - "Last, First M."
+  //   - "First Last"
+  //   - "First M Last"
+  //   - "First M. Last"
+  // Conservative on purpose. Surveyors care more about the no-false-
+  // positives guarantee than about pulling in every freeform variant
+  // the lab may have typed. The card on the client side names this
+  // limitation in plain English so the director knows why a study
+  // they remember might be missing.
+  //
+  // Returns at most 100 most-recent matched studies + the linked
+  // verification slot's pass/fail (LEFT JOIN through
+  // veritacheck_verification_studies). Studies that aren't linked to
+  // a verification yet (analyst ran them, but director hasn't built
+  // the EP15/EP09 bundle around them) appear with passed=null.
+  app.get(
+    "/api/labs/:labId/staff/employees/:id/veritacheck-studies",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+      const labId = req.scope.labId;
+      const emp = (db as any).$client.prepare(
+        "SELECT id, first_name, last_name, middle_initial FROM staff_employees WHERE id = ? AND tier2_lab_id = ?"
+      ).get(req.params.id, labId) as any;
+      if (!emp) return res.status(404).json({ error: "Employee not found" });
+
+      // Build the analyst-name variant set. Trims and lowers everything
+      // so the SQL comparison can use LOWER() on the column side and
+      // stay sargable on a simple index.
+      const firstRaw = String(emp.first_name || "").trim();
+      const lastRaw = String(emp.last_name || "").trim();
+      const miRaw = String(emp.middle_initial || "").trim();
+      const variants = new Set<string>();
+      if (firstRaw && lastRaw) {
+        variants.add(`${lastRaw}, ${firstRaw}`);
+        variants.add(`${firstRaw} ${lastRaw}`);
+        if (miRaw) {
+          variants.add(`${lastRaw}, ${firstRaw} ${miRaw}`);
+          variants.add(`${lastRaw}, ${firstRaw} ${miRaw}.`);
+          variants.add(`${firstRaw} ${miRaw} ${lastRaw}`);
+          variants.add(`${firstRaw} ${miRaw}. ${lastRaw}`);
+        }
+      }
+      const variantsLower = Array.from(variants).map(v => v.toLowerCase());
+
+      // Empty employee name (corrupt seed?) -> empty result, not 500.
+      if (variantsLower.length === 0) {
+        return res.json({
+          employee: { id: emp.id, first_name: firstRaw, last_name: lastRaw, middle_initial: miRaw || null },
+          match_variants: [],
+          studies: [],
+          counts: { total: 0, passed: 0, failed: 0, unlinked: 0 },
+        });
+      }
+
+      // Inline placeholders for variable-length IN. better-sqlite3 binds
+      // each ? safely, no string concat of user data.
+      const placeholders = variantsLower.map(() => "?").join(",");
+      const studies = (db as any).$client.prepare(`
+        SELECT
+          s.id AS study_id,
+          s.test_name,
+          s.instrument,
+          s.analyst,
+          s.date,
+          s.study_type,
+          s.status AS study_status,
+          v.id AS verification_id,
+          v.instrument_name AS verification_instrument_name,
+          v.trigger_type AS verification_trigger_type,
+          vs.element AS verification_element,
+          vs.passed AS verification_passed
+        FROM studies s
+        LEFT JOIN veritacheck_verification_studies vs ON vs.study_id = s.id
+        LEFT JOIN veritacheck_verifications v ON v.id = vs.verification_id
+        WHERE LOWER(s.analyst) IN (${placeholders})
+        ORDER BY s.date DESC, s.id DESC
+        LIMIT 100
+      `).all(...variantsLower) as any[];
+
+      const counts = studies.reduce(
+        (acc: any, r: any) => {
+          if (r.verification_passed === 1) acc.passed++;
+          else if (r.verification_passed === 0) acc.failed++;
+          else acc.unlinked++;
+          acc.total++;
+          return acc;
+        },
+        { total: 0, passed: 0, failed: 0, unlinked: 0 },
+      );
+
+      res.json({
+        employee: { id: emp.id, first_name: firstRaw, last_name: lastRaw, middle_initial: miRaw || null },
+        match_variants: Array.from(variants),
+        studies,
+        counts,
+      });
+    },
+  );
+
   // PUT sync — accepts {instrumentIds: number[]} and rewrites the join in a
   // single transaction so a partial failure can not leave drift behind.
   // Instrument ids are validated against the active lab's maps before insert.

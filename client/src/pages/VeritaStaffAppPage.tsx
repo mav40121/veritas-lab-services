@@ -1484,6 +1484,13 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
 
         {/* PR D: Assigned Instruments card. Many-to-many to VeritaMap instruments. */}
         <AssignedInstrumentsCard employeeId={employee.id} />
+
+        {/* Wave A3.3 (2026-06-07): VeritaCheck attribution card. Lists
+            verification studies attributed to this analyst by case-
+            insensitive name match against studies.analyst, with the
+            linked verification slot's pass/fail. Surveyor-defensibility
+            signal for the competency story. */}
+        <VeritaCheckAttributionCard employeeId={employee.id} />
       </div>
 
       {showCompetency && (
@@ -2217,6 +2224,151 @@ function PositionDescriptionsCard({ className = "" }: { className?: string }) {
             );
           })}
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// VeritaCheckAttributionCard
+//
+// Wave A3.3 (2026-06-07). Lists VeritaCheck verification studies the
+// system has attributed to this employee by matching `studies.analyst`
+// against the standard name variants on the server side
+// ("Last, First" / "First Last" / "Last, First M" / "First M Last" /
+// "First M. Last"). Surveyor-defensibility signal for the competency
+// story: "Smith has run 12 verification studies in the last year, 11
+// passed" is concrete evidence that beats a vague "she's been here a
+// while" reply on the survey floor.
+//
+// Conservative on purpose: NO fuzzy match. If a study uses an analyst
+// name format that doesn't match one of the variants, the row won't
+// surface. The card names that limitation in the empty state so the
+// director knows why a study they remember might be missing.
+function VeritaCheckAttributionCard({ employeeId }: { employeeId: number }) {
+  const activeLabId = useActiveLabId();
+  const url = activeLabId
+    ? `/api/labs/${activeLabId}/staff/employees/${employeeId}/veritacheck-studies`
+    : null;
+
+  const { data, isLoading } = useQuery<{
+    employee: { id: number; first_name: string; last_name: string; middle_initial: string | null };
+    match_variants: string[];
+    studies: Array<{
+      study_id: number;
+      test_name: string;
+      instrument: string;
+      analyst: string;
+      date: string;
+      study_type: string;
+      study_status: string;
+      verification_id: number | null;
+      verification_instrument_name: string | null;
+      verification_trigger_type: string | null;
+      verification_element: string | null;
+      verification_passed: 0 | 1 | null;
+    }>;
+    counts: { total: number; passed: number; failed: number; unlinked: number };
+  }>({
+    queryKey: [url ?? "no-attribution-url"],
+    queryFn: async () => {
+      if (!url) throw new Error("no lab");
+      const r = await fetch(`${API_BASE}${url}`, { headers: authHeaders() });
+      if (!r.ok) throw new Error("attribution fetch failed");
+      return r.json();
+    },
+    enabled: !!url,
+  });
+
+  return (
+    <Card className="lg:col-span-2">
+      <CardContent className="p-5">
+        <div className="flex justify-between items-center mb-3">
+          <div className="flex items-center gap-2">
+            <FileSpreadsheet size={16} className="text-primary" />
+            <h3 className="font-semibold">VeritaCheck Studies</h3>
+          </div>
+          {data && data.counts.total > 0 && (
+            <div className="flex items-center gap-2 text-xs">
+              <Badge variant="outline" className="text-emerald-700 border-emerald-500/30">
+                {data.counts.passed} passed
+              </Badge>
+              {data.counts.failed > 0 && (
+                <Badge variant="outline" className="text-red-700 border-red-500/30">
+                  {data.counts.failed} failed
+                </Badge>
+              )}
+              {data.counts.unlinked > 0 && (
+                <Badge variant="outline" className="text-muted-foreground">
+                  {data.counts.unlinked} unlinked
+                </Badge>
+              )}
+            </div>
+          )}
+        </div>
+
+        {isLoading || !data ? (
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        ) : data.studies.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No VeritaCheck verification studies match this employee yet. The system
+            looks for case-insensitive matches on the study's analyst name field
+            against {data.match_variants.length} standard variants
+            ({data.match_variants.slice(0, 2).join(", ")}
+            {data.match_variants.length > 2 ? ", ..." : ""}). If the lab types analyst names in a different format, the
+            attribution will be missing.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2 pr-3 font-medium text-muted-foreground">Test</th>
+                    <th className="text-left py-2 pr-3 font-medium text-muted-foreground">Instrument</th>
+                    <th className="text-left py-2 pr-3 font-medium text-muted-foreground">Date</th>
+                    <th className="text-left py-2 pr-3 font-medium text-muted-foreground">Type</th>
+                    <th className="text-left py-2 pr-3 font-medium text-muted-foreground">Verification</th>
+                    <th className="text-left py-2 font-medium text-muted-foreground">Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.studies.slice(0, 25).map(s => (
+                    <tr key={s.study_id} className="border-b last:border-b-0">
+                      <td className="py-2 pr-3">{s.test_name}</td>
+                      <td className="py-2 pr-3">{s.instrument}</td>
+                      <td className="py-2 pr-3">{s.date}</td>
+                      <td className="py-2 pr-3 text-muted-foreground">{s.study_type}</td>
+                      <td className="py-2 pr-3 text-muted-foreground">
+                        {s.verification_element || (s.verification_id ? "linked" : "not linked")}
+                      </td>
+                      <td className="py-2">
+                        {s.verification_passed === 1 ? (
+                          <Badge variant="outline" className="text-emerald-700 border-emerald-500/30 text-[10px]">PASS</Badge>
+                        ) : s.verification_passed === 0 ? (
+                          <Badge variant="outline" className="text-red-700 border-red-500/30 text-[10px]">FAIL</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">unlinked</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {data.studies.length > 25 && (
+              <p className="text-xs text-muted-foreground">
+                Showing 25 of {data.studies.length} studies. Full list available via the
+                /api/labs/:labId/staff/employees/:id/veritacheck-studies endpoint.
+              </p>
+            )}
+            <p className="text-[11px] text-muted-foreground">
+              Attribution matches by case-insensitive equality on the study's
+              analyst name field against {data.match_variants.length} standard variants
+              for this employee. Conservative match prevents false positives but
+              can miss studies where the analyst was typed in a non-standard format.
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
