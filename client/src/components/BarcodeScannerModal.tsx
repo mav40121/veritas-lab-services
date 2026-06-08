@@ -487,7 +487,7 @@ export default function BarcodeScannerModal({
             autoCapitalize="characters"
             autoCorrect="off"
             spellCheck={false}
-            placeholder="Type barcode (e.g. VLS-90008332) and press enter"
+            placeholder="Type barcode (e.g. VLS-00012345) and press enter"
             value={typedBarcode}
             onChange={(e) => setTypedBarcode(e.target.value)}
             className="h-9 flex-1 font-mono text-sm"
