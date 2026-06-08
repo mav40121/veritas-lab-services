@@ -26,7 +26,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Lock, Plus, Edit2, Trash2, AlertTriangle, Package, Clock, AlertCircle, RefreshCw,
-  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode,
+  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users,
 } from "lucide-react";
 import BarcodeScannerModal from "@/components/BarcodeScannerModal";
 import { useToast } from "@/hooks/use-toast";
@@ -1058,6 +1058,21 @@ export default function VeritaStockInventoryPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          {/* Vendor Directory entry point (PR 2 of vendor management).
+              Director clicks here to manage vendor accounts, ordering
+              channels, and contact tracks. The Order PDF auto-fills
+              from these records starting in PR 4. */}
+          <Link href={activeLabId ? `/labs/${activeLabId}/veritastock/vendors` : "/veritastock"}>
+            <Button
+              size="sm"
+              variant="outline"
+              title="Manage vendor accounts, ordering channels, and contacts"
+              data-testid="vendor-directory-button"
+            >
+              <Users size={14} className="mr-1.5" />
+              Vendor Directory
+            </Button>
+          </Link>
           {/* Snap Order: emergency manual-order PDF (additive to calculated
               reorder). Use cases per John, San Carlos, 2026-05-21: respiratory
               outbreak surge, supply-chain shock, one-off correction.
