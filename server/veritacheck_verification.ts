@@ -288,6 +288,250 @@ function renderStudyAppendix(slot: any, teal: string): string {
   return "";
 }
 
+// ── Shared HTML block builder for one verification ───────────────────────────
+// Wave A3.2 (2026-06-07): extracted from /api/veritacheck/verifications/:id/pdf
+// so the per-verification PDF and the new per-analyzer survey bundle PDF can
+// reuse the exact same rendering. Returns just the inner block (cover →
+// summary → signature → units → details → exclusions → remediation). The
+// caller wraps the array of blocks in one <html>…<body> page and adds
+// `page-break-before:always` between blocks for the bundle path.
+//
+// `teal` is the canonical VeritaCheck deliverable color (#01696F).
+export function buildVerificationBlockHtml(v: any, instruments: any[], studies: any[]): string {
+  const teal = "#01696F";
+  const elements: string[] = (() => { try { return JSON.parse(v.elements || "[]"); } catch { return []; } })();
+  const elementReasons: Record<string, string> = (() => { try { return JSON.parse(v.element_reasons || "{}"); } catch { return {}; } })();
+
+  const allElements = [
+    { key: "accuracy",           label: "Accuracy / Bias",    protocol: "CLSI EP15-A3" },
+    { key: "precision",          label: "Precision",          protocol: "CLSI EP15-A3" },
+    { key: "reportable_range",   label: "Reportable Range",   protocol: "CLSI EP06" },
+    { key: "reference_interval", label: "Reference Range",    protocol: "CLSI EP28-A3c" },
+    { key: "method_comparison",  label: "Method Comparison",  protocol: "CLSI EP09-A3" },
+    { key: "carryover",          label: "Carryover",          protocol: "CLSI EP10-A3" },
+  ];
+
+  const triggerLabels: Record<string, string> = {
+    new_instrument: "New instrument (first of this type in lab)",
+    new_analyte:    "New analyte added to existing instrument",
+    second_unit:    "Second unit of same make/model",
+    replacement:    "Replacement instrument (same make/model)",
+  };
+
+  const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+
+  const elementRows = allElements.map(el => {
+    const slot = studies.find((s: any) => s.element === el.key);
+    const included = elements.includes(el.key);
+    if (!included) {
+      return `<tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:600">${el.label}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-style:italic">Excluded - see justification below</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center">N/A</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${el.protocol}</td>
+      </tr>`;
+    }
+    const passLabel = slot?.passed === 1 ? "<span style='color:#059669;font-weight:600'>PASS</span>" : slot?.passed === 0 ? "<span style='color:#dc2626;font-weight:600'>FAIL</span>" : "<span style='color:#d97706'>Pending</span>";
+    return `<tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:600">${el.label}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${slot?.analyte || ""} ${slot?.sample_count ? `(n=${slot.sample_count})` : ""}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center">${passLabel}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${el.protocol}</td>
+    </tr>`;
+  }).join("");
+
+  const unitBlocks = instruments.length > 0 ? instruments.map((u: any) => `
+    <div style="margin-top:24px;padding:16px;border:1px solid #e5e7eb;border-radius:6px;background:#fafafa">
+      <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:${teal}">Unit: S/N ${u.serial_number}${u.model ? " - " + u.model : ""}${u.location ? " (" + u.location + ")" : ""}</div>
+      <table style="width:100%;font-size:12px">
+        <tr>
+          <td style="width:40%;padding:6px 0"><strong>I approve this instrument/test for patient testing.</strong></td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0">
+            Signature: <span style="display:inline-block;width:200px;border-bottom:1px solid #000;">&nbsp;</span>
+          </td>
+          <td style="padding:6px 0">
+            Date: <span style="display:inline-block;width:120px;border-bottom:1px solid #000;">${u.approved_date || "&nbsp;"}</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0">Printed Name: <strong>${u.director_name || "_________________________"}</strong></td>
+          <td style="padding:6px 0">Title: ${u.director_title || "_________________________"}</td>
+        </tr>
+      </table>
+    </div>`).join("") : "";
+
+  const elementDetails = allElements.map(el => {
+    const slot = studies.find((s: any) => s.element === el.key);
+    const included = elements.includes(el.key);
+    if (!included) {
+      return `<div style="margin-bottom:20px;padding:16px;border-left:3px solid #d1d5db;background:#f9fafb">
+        <div style="font-weight:600;font-size:13px;color:#374151">${el.label} - EXCLUDED</div>
+        <div style="font-size:12px;color:#6b7280;margin-top:6px">Justification: ${elementReasons[el.key] || "Not documented"}</div>
+      </div>`;
+    }
+    const appendix = slot ? renderStudyAppendix(slot, teal) : "";
+    return `<div style="margin-bottom:28px">
+      <div style="font-weight:700;font-size:14px;color:${teal};border-bottom:2px solid ${teal};padding-bottom:4px;margin-bottom:12px">${el.label} (${el.protocol})</div>
+      ${slot?.analyte ? `<div style="font-size:12px;margin-bottom:6px"><strong>Analyte:</strong> ${slot.analyte}</div>` : ""}
+      ${slot?.sample_count ? `<div style="font-size:12px;margin-bottom:6px"><strong>Samples Run:</strong> ${slot.sample_count}</div>` : ""}
+      ${slot?.clsi_protocol ? `<div style="font-size:12px;margin-bottom:6px"><strong>CLSI Protocol:</strong> ${slot.clsi_protocol}</div>` : ""}
+      ${slot?.design_rationale ? `<div style="font-size:12px;margin-bottom:6px"><strong>Study Design Rationale:</strong><br><span style="color:#374151">${slot.design_rationale}</span></div>` : ""}
+      ${slot?.testName ? `<div style="font-size:12px;margin-bottom:6px"><strong>Linked Study:</strong> ${slot.testName}</div>` : ""}
+      <div style="font-size:12px;margin-top:8px">
+        <strong>Result:</strong>
+        ${slot?.passed === 1 ? "<span style='color:#059669;font-weight:700'>PASS</span>" : slot?.passed === 0 ? "<span style='color:#dc2626;font-weight:700'>FAIL</span>" : "<span style='color:#d97706'>Pending evaluation</span>"}
+      </div>
+      ${appendix}
+    </div>`;
+  }).join("");
+
+  const remediationSection = v.remediation_notes ? `
+    <div style="margin-top:32px;padding:16px;border:1px solid #fca5a5;border-radius:6px;background:#fff5f5">
+      <div style="font-weight:700;font-size:14px;color:#dc2626;margin-bottom:10px">Remediation Log</div>
+      <div style="font-size:12px;white-space:pre-wrap;color:#374151">${v.remediation_notes}</div>
+    </div>` : "";
+
+  const excludedJustifications = allElements
+    .filter(el => !elements.includes(el.key))
+    .map(el => `<div style="margin-bottom:12px">
+      <div style="font-weight:600;font-size:13px">${el.label}</div>
+      <div style="font-size:12px;color:#374151">${elementReasons[el.key] || "Not documented"}</div>
+    </div>`).join("");
+
+  return `
+  <!-- COVER PAGE -->
+  <div style="background:${teal};color:white;padding:20px 24px;border-radius:6px;margin-bottom:24px">
+    <div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;opacity:0.8;margin-bottom:4px">Veritas Lab Services - VeritaCheck&trade; Verification Package</div>
+    <div style="font-size:20px;font-weight:700">Instrument/Test Performance Verification</div>
+    <div style="font-size:13px;opacity:0.9;margin-top:4px">${v.instrument_name}${v.manufacturer ? " - " + v.manufacturer : ""}</div>
+  </div>
+
+  <table style="margin-bottom:24px;font-size:12px">
+    <tr>
+      <td style="width:50%;padding:4px 0;color:#6b7280">Verification Trigger</td>
+      <td style="padding:4px 0;font-weight:500">${triggerLabels[v.trigger_type] || v.trigger_type}</td>
+    </tr>
+    <tr>
+      <td style="padding:4px 0;color:#6b7280">Package Created</td>
+      <td style="padding:4px 0">${new Date(v.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</td>
+    </tr>
+    <tr>
+      <td style="padding:4px 0;color:#6b7280">Package Status</td>
+      <td style="padding:4px 0">${v.status === "complete" ? "<strong style='color:#059669'>Complete</strong>" : "In Progress"}</td>
+    </tr>
+    <tr>
+      <td style="padding:4px 0;color:#6b7280">Units / Serial Numbers</td>
+      <td style="padding:4px 0">${instruments.length > 0 ? instruments.map((u: any) => u.serial_number).join(", ") : "Not specified"}</td>
+    </tr>
+    <tr>
+      <td style="padding:4px 0;color:#6b7280">Report Generated</td>
+      <td style="padding:4px 0">${today}</td>
+    </tr>
+  </table>
+
+  <div style="font-weight:700;font-size:14px;color:${teal};margin-bottom:10px">Performance Summary</div>
+  <table style="font-size:12px;margin-bottom:28px;border:1px solid #e5e7eb;border-radius:4px;overflow:hidden">
+    <thead>
+      <tr style="background:${teal};color:white">
+        <th style="padding:10px 12px;text-align:left">Element</th>
+        <th style="padding:10px 12px;text-align:left">Analyte / Samples</th>
+        <th style="padding:10px 12px;text-align:center">Result</th>
+        <th style="padding:10px 12px;text-align:left">CLSI Standard</th>
+      </tr>
+    </thead>
+    <tbody>${elementRows}</tbody>
+  </table>
+
+  <div style="border:2px solid ${teal};border-radius:6px;padding:20px;margin-bottom:28px">
+    <div style="font-weight:700;font-size:13px;color:${teal};margin-bottom:8px;letter-spacing:0.3px">LABORATORY DIRECTOR OR DESIGNEE REVIEW</div>
+    <div style="font-size:12px;color:#374151;margin-bottom:12px;line-height:1.6">
+      I have reviewed the verification study results for the instrument/test identified above and find that the performance specifications have been adequately verified.
+    </div>
+    <div style="font-size:13px;font-weight:700;color:#1a1a2e;margin-bottom:20px">
+      I approve this instrument/test for patient testing.
+    </div>
+    <table style="font-size:12px;width:100%">
+      <tr>
+        <td style="width:50%;padding-bottom:16px">
+          Signature: <span style="display:inline-block;width:200px;border-bottom:1px solid #000">&nbsp;</span>
+        </td>
+        <td style="padding-bottom:16px">
+          Date: <span style="display:inline-block;width:120px;border-bottom:1px solid #000">${v.approved_date || "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"}</span>
+        </td>
+      </tr>
+      <tr>
+        <td>Printed Name: <strong>${v.director_name || "_________________________"}</strong></td>
+        <td>Title: ${v.director_title || "_________________________"}</td>
+      </tr>
+    </table>
+  </div>
+
+  ${unitBlocks}
+
+  <div style="page-break-before:always"></div>
+
+  <div style="font-weight:700;font-size:16px;color:${teal};border-bottom:2px solid ${teal};padding-bottom:6px;margin-bottom:24px">Performance Study Details</div>
+  ${elementDetails}
+
+  ${excludedJustifications ? `
+  <div style="margin-top:28px;padding:16px;border:1px solid #e5e7eb;border-radius:6px;background:#f9fafb">
+    <div style="font-weight:700;font-size:14px;margin-bottom:12px">Element Exclusion Justifications</div>
+    ${excludedJustifications}
+  </div>` : ""}
+
+  ${remediationSection}
+`;
+}
+
+// Wraps one or more verification blocks in the shared HTML/CSS page chrome.
+// Used by both the per-verification PDF endpoint and the per-analyzer survey
+// bundle PDF endpoint. `bundleHeader` is rendered once at the top of the
+// page (e.g. the survey-bundle cover) and is omitted for the single-block
+// per-verification path.
+export function wrapVerificationPageHtml(
+  blocks: string[],
+  verifLabName: string | undefined,
+  verifCliaNumber: string | undefined,
+  bundleHeader?: string,
+): string {
+  const teal = "#01696F";
+  const blockSep = `<div style="page-break-before:always"></div>`;
+  const body = blocks.join(blockSep);
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #1a1a2e; background: white; }
+    .page { padding: 48px 56px; max-width: 900px; margin: 0 auto; }
+    table { border-collapse: collapse; width: 100%; }
+    @page { margin: 0.5in; }
+    @media print { .page { padding: 0; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+    <div>
+      <div style="font-size:14px;font-weight:700;color:${teal};letter-spacing:0.3px">VeritaAssure&trade;</div>
+      <div style="font-size:8px;color:#6b7280">by Veritas Lab Services - veritaslabservices.com</div>
+      ${verifLabName ? `<div style="font-size:9px;font-weight:600;color:#28251D;margin-top:2px">${verifLabName}</div>` : ""}
+      <div style="font-size:8px;color:${verifCliaNumber ? '#555' : '#999'};margin-top:1px">CLIA: ${verifCliaNumber || 'Not on file - enter your CLIA number in account settings'}</div>
+    </div>
+  </div>
+  ${bundleHeader || ""}
+  ${body}
+  <div style="margin-top:40px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:10px;color:#9ca3af;text-align:center">
+    Generated by VeritaCheck&trade; - Veritas Lab Services, LLC | For internal laboratory use | Medical director or designee review required before patient testing
+  </div>
+</div>
+</body>
+</html>`;
+}
+
 // ── Auth middleware reference (imported from routes context) ──────────────────
 export function registerVeritaCheckVerificationRoutes(
   app: Express,
@@ -549,244 +793,19 @@ export function registerVeritaCheckVerificationRoutes(
       ORDER BY vs.element
     `).all(req.params.id) as any[];
 
-    const elements: string[] = JSON.parse(v.elements || "[]");
-    const elementReasons: Record<string, string> = JSON.parse(v.element_reasons || "{}");
-
-    const allElements = [
-      { key: "accuracy",           label: "Accuracy / Bias",    protocol: "CLSI EP15-A3" },
-      { key: "precision",          label: "Precision",          protocol: "CLSI EP15-A3" },
-      { key: "reportable_range",   label: "Reportable Range",   protocol: "CLSI EP06" },
-      { key: "reference_interval", label: "Reference Range",    protocol: "CLSI EP28-A3c" },
-      { key: "method_comparison",  label: "Method Comparison",  protocol: "CLSI EP09-A3" },
-      { key: "carryover",          label: "Carryover",          protocol: "CLSI EP10-A3" },
-    ];
-
-    const triggerLabels: Record<string, string> = {
-      new_instrument: "New instrument (first of this type in lab)",
-      new_analyte:    "New analyte added to existing instrument",
-      second_unit:    "Second unit of same make/model",
-      replacement:    "Replacement instrument (same make/model)",
-    };
-
-    // Fetch CLIA number and lab name from user record
+    // Wave A3.2 (2026-06-07): per-verification rendering extracted into
+    // buildVerificationBlockHtml + wrapVerificationPageHtml helpers so the
+    // new per-analyzer survey-bundle endpoint can reuse identical layout.
+    // Fetch CLIA number and lab name from user record.
     const verifUserRow = sqlite.prepare("SELECT clia_number, clia_lab_name FROM users WHERE id = ?").get(userId) as any;
     const verifCliaNumber: string | undefined = verifUserRow?.clia_number || undefined;
     const verifLabName: string | undefined = verifUserRow?.clia_lab_name || undefined;
 
-    const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-    const teal = "#01696F";
-
-    // ── Element rows for the summary table ──────────────────────────────────
-    const elementRows = allElements.map(el => {
-      const slot = studies.find((s: any) => s.element === el.key);
-      const included = elements.includes(el.key);
-      if (!included) {
-        return `<tr>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:600">${el.label}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-style:italic">Excluded - see justification below</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center">N/A</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${el.protocol}</td>
-        </tr>`;
-      }
-      const passLabel = slot?.passed === 1 ? "<span style='color:#059669;font-weight:600'>PASS</span>" : slot?.passed === 0 ? "<span style='color:#dc2626;font-weight:600'>FAIL</span>" : "<span style='color:#d97706'>Pending</span>";
-      return `<tr>
-        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:600">${el.label}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${slot?.analyte || ""} ${slot?.sample_count ? `(n=${slot.sample_count})` : ""}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center">${passLabel}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${el.protocol}</td>
-      </tr>`;
-    }).join("");
-
-    // ── Instrument units sign-off blocks ────────────────────────────────────
-    const unitBlocks = instruments.length > 0 ? instruments.map((u: any) => `
-      <div style="margin-top:24px;padding:16px;border:1px solid #e5e7eb;border-radius:6px;background:#fafafa">
-        <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:${teal}">Unit: S/N ${u.serial_number}${u.model ? " - " + u.model : ""}${u.location ? " (" + u.location + ")" : ""}</div>
-        <table style="width:100%;font-size:12px">
-          <tr>
-            <td style="width:40%;padding:6px 0"><strong>I approve this instrument/test for patient testing.</strong></td>
-          </tr>
-          <tr>
-            <td style="padding:6px 0">
-              Signature: <span style="display:inline-block;width:200px;border-bottom:1px solid #000;">&nbsp;</span>
-            </td>
-            <td style="padding:6px 0">
-              Date: <span style="display:inline-block;width:120px;border-bottom:1px solid #000;">${u.approved_date || "&nbsp;"}</span>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:6px 0">Printed Name: <strong>${u.director_name || "_________________________"}</strong></td>
-            <td style="padding:6px 0">Title: ${u.director_title || "_________________________"}</td>
-          </tr>
-        </table>
-      </div>`).join("") : "";
-
-    // ── Element detail sections ─────────────────────────────────────────────
-    const elementDetails = allElements.map(el => {
-      const slot = studies.find((s: any) => s.element === el.key);
-      const included = elements.includes(el.key);
-      if (!included) {
-        return `<div style="margin-bottom:20px;padding:16px;border-left:3px solid #d1d5db;background:#f9fafb">
-          <div style="font-weight:600;font-size:13px;color:#374151">${el.label} - EXCLUDED</div>
-          <div style="font-size:12px;color:#6b7280;margin-top:6px">Justification: ${elementReasons[el.key] || "Not documented"}</div>
-        </div>`;
-      }
-      const appendix = slot ? renderStudyAppendix(slot, teal) : "";
-      return `<div style="margin-bottom:28px">
-        <div style="font-weight:700;font-size:14px;color:${teal};border-bottom:2px solid ${teal};padding-bottom:4px;margin-bottom:12px">${el.label} (${el.protocol})</div>
-        ${slot?.analyte ? `<div style="font-size:12px;margin-bottom:6px"><strong>Analyte:</strong> ${slot.analyte}</div>` : ""}
-        ${slot?.sample_count ? `<div style="font-size:12px;margin-bottom:6px"><strong>Samples Run:</strong> ${slot.sample_count}</div>` : ""}
-        ${slot?.clsi_protocol ? `<div style="font-size:12px;margin-bottom:6px"><strong>CLSI Protocol:</strong> ${slot.clsi_protocol}</div>` : ""}
-        ${slot?.design_rationale ? `<div style="font-size:12px;margin-bottom:6px"><strong>Study Design Rationale:</strong><br><span style="color:#374151">${slot.design_rationale}</span></div>` : ""}
-        ${slot?.testName ? `<div style="font-size:12px;margin-bottom:6px"><strong>Linked Study:</strong> ${slot.testName}</div>` : ""}
-        <div style="font-size:12px;margin-top:8px">
-          <strong>Result:</strong>
-          ${slot?.passed === 1 ? "<span style='color:#059669;font-weight:700'>PASS</span>" : slot?.passed === 0 ? "<span style='color:#dc2626;font-weight:700'>FAIL</span>" : "<span style='color:#d97706'>Pending evaluation</span>"}
-        </div>
-        ${appendix}
-      </div>`;
-    }).join("");
-
-    // ── Remediation section ─────────────────────────────────────────────────
-    const remediationSection = v.remediation_notes ? `
-      <div style="margin-top:32px;padding:16px;border:1px solid #fca5a5;border-radius:6px;background:#fff5f5">
-        <div style="font-weight:700;font-size:14px;color:#dc2626;margin-bottom:10px">Remediation Log</div>
-        <div style="font-size:12px;white-space:pre-wrap;color:#374151">${v.remediation_notes}</div>
-      </div>` : "";
-
-    // ── Excluded element justifications ─────────────────────────────────────
-    const excludedJustifications = allElements
-      .filter(el => !elements.includes(el.key))
-      .map(el => `<div style="margin-bottom:12px">
-        <div style="font-weight:600;font-size:13px">${el.label}</div>
-        <div style="font-size:12px;color:#374151">${elementReasons[el.key] || "Not documented"}</div>
-      </div>`).join("");
-
-    // ── Full HTML ───────────────────────────────────────────────────────────
-    const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #1a1a2e; background: white; }
-    .page { padding: 48px 56px; max-width: 900px; margin: 0 auto; }
-    table { border-collapse: collapse; width: 100%; }
-    @page { margin: 0.5in; }
-    @media print { .page { padding: 0; } }
-  </style>
-</head>
-<body>
-<div class="page">
-
-  <!-- Lab identity header -->
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
-    <div>
-      <div style="font-size:14px;font-weight:700;color:${teal};letter-spacing:0.3px">VeritaAssure&trade;</div>
-      <div style="font-size:8px;color:#6b7280">by Veritas Lab Services - veritaslabservices.com</div>
-      ${verifLabName ? `<div style="font-size:9px;font-weight:600;color:#28251D;margin-top:2px">${verifLabName}</div>` : ""}
-      <div style="font-size:8px;color:${verifCliaNumber ? '#555' : '#999'};margin-top:1px">CLIA: ${verifCliaNumber || 'Not on file - enter your CLIA number in account settings'}</div>
-    </div>
-  </div>
-
-  <!-- COVER PAGE -->
-  <!-- Header bar -->
-  <div style="background:${teal};color:white;padding:20px 24px;border-radius:6px;margin-bottom:24px">
-    <div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;opacity:0.8;margin-bottom:4px">Veritas Lab Services - VeritaCheck&trade; Verification Package</div>
-    <div style="font-size:20px;font-weight:700">Instrument/Test Performance Verification</div>
-    <div style="font-size:13px;opacity:0.9;margin-top:4px">${v.instrument_name}${v.manufacturer ? " - " + v.manufacturer : ""}</div>
-  </div>
-
-  <!-- Package info -->
-  <table style="margin-bottom:24px;font-size:12px">
-    <tr>
-      <td style="width:50%;padding:4px 0;color:#6b7280">Verification Trigger</td>
-      <td style="padding:4px 0;font-weight:500">${triggerLabels[v.trigger_type] || v.trigger_type}</td>
-    </tr>
-    <tr>
-      <td style="padding:4px 0;color:#6b7280">Package Created</td>
-      <td style="padding:4px 0">${new Date(v.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</td>
-    </tr>
-    <tr>
-      <td style="padding:4px 0;color:#6b7280">Package Status</td>
-      <td style="padding:4px 0">${v.status === "complete" ? "<strong style='color:#059669'>Complete</strong>" : "In Progress"}</td>
-    </tr>
-    <tr>
-      <td style="padding:4px 0;color:#6b7280">Units / Serial Numbers</td>
-      <td style="padding:4px 0">${instruments.length > 0 ? instruments.map((u: any) => u.serial_number).join(", ") : "Not specified"}</td>
-    </tr>
-    <tr>
-      <td style="padding:4px 0;color:#6b7280">Report Generated</td>
-      <td style="padding:4px 0">${today}</td>
-    </tr>
-  </table>
-
-  <!-- Results summary table -->
-  <div style="font-weight:700;font-size:14px;color:${teal};margin-bottom:10px">Performance Summary</div>
-  <table style="font-size:12px;margin-bottom:28px;border:1px solid #e5e7eb;border-radius:4px;overflow:hidden">
-    <thead>
-      <tr style="background:${teal};color:white">
-        <th style="padding:10px 12px;text-align:left">Element</th>
-        <th style="padding:10px 12px;text-align:left">Analyte / Samples</th>
-        <th style="padding:10px 12px;text-align:center">Result</th>
-        <th style="padding:10px 12px;text-align:left">CLSI Standard</th>
-      </tr>
-    </thead>
-    <tbody>${elementRows}</tbody>
-  </table>
-
-  <!-- Director approval signature block - PAGE 1 -->
-  <div style="border:2px solid ${teal};border-radius:6px;padding:20px;margin-bottom:28px">
-    <div style="font-weight:700;font-size:13px;color:${teal};margin-bottom:8px;letter-spacing:0.3px">LABORATORY DIRECTOR OR DESIGNEE REVIEW</div>
-    <div style="font-size:12px;color:#374151;margin-bottom:12px;line-height:1.6">
-      I have reviewed the verification study results for the instrument/test identified above and find that the performance specifications have been adequately verified.
-    </div>
-    <div style="font-size:13px;font-weight:700;color:#1a1a2e;margin-bottom:20px">
-      I approve this instrument/test for patient testing.
-    </div>
-    <table style="font-size:12px;width:100%">
-      <tr>
-        <td style="width:50%;padding-bottom:16px">
-          Signature: <span style="display:inline-block;width:200px;border-bottom:1px solid #000">&nbsp;</span>
-        </td>
-        <td style="padding-bottom:16px">
-          Date: <span style="display:inline-block;width:120px;border-bottom:1px solid #000">${v.approved_date || "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"}</span>
-        </td>
-      </tr>
-      <tr>
-        <td>Printed Name: <strong>${v.director_name || "_________________________"}</strong></td>
-        <td>Title: ${v.director_title || "_________________________"}</td>
-      </tr>
-    </table>
-  </div>
-
-  <!-- Per-unit sign-off blocks (multi-instrument) -->
-  ${unitBlocks}
-
-  <!-- Page break before details -->
-  <div style="page-break-before:always"></div>
-
-  <!-- ELEMENT DETAIL SECTIONS -->
-  <div style="font-weight:700;font-size:16px;color:${teal};border-bottom:2px solid ${teal};padding-bottom:6px;margin-bottom:24px">Performance Study Details</div>
-  ${elementDetails}
-
-  <!-- Excluded element justifications -->
-  ${excludedJustifications ? `
-  <div style="margin-top:28px;padding:16px;border:1px solid #e5e7eb;border-radius:6px;background:#f9fafb">
-    <div style="font-weight:700;font-size:14px;margin-bottom:12px">Element Exclusion Justifications</div>
-    ${excludedJustifications}
-  </div>` : ""}
-
-  <!-- Remediation log -->
-  ${remediationSection}
-
-  <!-- Footer -->
-  <div style="margin-top:40px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:10px;color:#9ca3af;text-align:center">
-    Generated by VeritaCheck&trade; - Veritas Lab Services, LLC | For internal laboratory use | Medical director or designee review required before patient testing
-  </div>
-
-</div>
-</body>
-</html>`;
+    const html = wrapVerificationPageHtml(
+      [buildVerificationBlockHtml(v, instruments, studies)],
+      verifLabName,
+      verifCliaNumber,
+    );
 
     try {
       const puppeteer = await import("puppeteer");
@@ -802,4 +821,206 @@ export function registerVeritaCheckVerificationRoutes(
       res.status(500).json({ error: "PDF generation failed", detail: err.message });
     }
   });
+
+  // ── Wave A3.2 (2026-06-07): per-analyzer survey bundle ──────────────────
+  //
+  // Surveyor asks "show me everything you've done on this analyzer." The
+  // director picks a VeritaMap instrument and gets ONE combined PDF with
+  // every verification ever filed against that map_instrument_id, sorted
+  // oldest-first so the timeline reads like a chronological dossier
+  // (initial install → each subsequent trigger → most recent).
+  //
+  // Lab-scoped only (no legacy user-scoped variant). The legacy
+  // /api/veritacheck/verifications/* path keeps existing single-verif
+  // workflows working unchanged; the survey bundle requires the active
+  // lab to be known anyway because map_instrument_id is lab-scoped via
+  // veritamap_maps.lab_id.
+  //
+  // GET preview: returns the list of verifications that would land in the
+  // bundle (so the UI can render a "3 verifications, oldest 2024-08-10,
+  // newest 2026-04-15" confirmation chip before the user clicks generate).
+  app.get(
+    "/api/labs/:labId/veritacheck/map-instruments/:mapInstrumentId/survey-bundle",
+    authMiddleware,
+    verifLabScopeMW,
+    (req: any, res) => {
+      if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
+      const labId = req.scope.labId;
+      const mapInstrumentId = Number(req.params.mapInstrumentId);
+      if (!Number.isFinite(mapInstrumentId)) return res.status(400).json({ error: "mapInstrumentId required" });
+
+      // Confirm the instrument actually belongs to this lab (defense in
+      // depth: verifLabScopeMW already validates membership, but the
+      // veritamap_instruments row could belong to a different lab's map).
+      const instRow = sqlite.prepare(`
+        SELECT i.id, i.instrument_name, i.serial_number, i.nickname, i.role, i.category, m.lab_id, m.name AS map_name
+        FROM veritamap_instruments i
+        JOIN veritamap_maps m ON m.id = i.map_id
+        WHERE i.id = ? AND m.lab_id = ?
+      `).get(mapInstrumentId, labId) as any;
+      if (!instRow) return res.status(404).json({ error: "Instrument not found in this lab" });
+
+      // List verifications by map_instrument_id (the explicit link) OR by
+      // matching instrument_name within the lab. The instrument_name
+      // fallback catches verifications filed BEFORE map_instrument_id was
+      // wired (pre-2026 rows) so directors with a long history don't miss
+      // older verifications just because the link was a later schema add.
+      const verifications = sqlite.prepare(`
+        SELECT v.id, v.instrument_name, v.manufacturer, v.trigger_type, v.status,
+               v.approved_date, v.created_at, v.updated_at,
+               (SELECT COUNT(*) FROM veritacheck_verification_studies WHERE verification_id = v.id AND passed = 1) as passed_count,
+               (SELECT COUNT(*) FROM veritacheck_verification_studies WHERE verification_id = v.id AND passed = 0) as failed_count
+        FROM veritacheck_verifications v
+        WHERE v.lab_id = ?
+          AND (v.map_instrument_id = ? OR (v.map_instrument_id IS NULL AND v.instrument_name = ?))
+        ORDER BY COALESCE(v.approved_date, v.created_at) ASC
+      `).all(labId, mapInstrumentId, instRow.instrument_name) as any[];
+
+      res.json({
+        instrument: {
+          id: instRow.id,
+          instrument_name: instRow.instrument_name,
+          serial_number: instRow.serial_number || null,
+          nickname: instRow.nickname || null,
+          category: instRow.category || null,
+          map_name: instRow.map_name || null,
+        },
+        verifications: verifications.map(v => ({
+          id: v.id,
+          instrument_name: v.instrument_name,
+          manufacturer: v.manufacturer,
+          trigger_type: v.trigger_type,
+          status: v.status,
+          approved_date: v.approved_date,
+          created_at: v.created_at,
+          passed_count: v.passed_count,
+          failed_count: v.failed_count,
+        })),
+      });
+    },
+  );
+
+  // POST: render the bundle as one PDF. Returns 404 if no verifications
+  // are linked to the instrument (rather than producing an empty PDF that
+  // would mislead the user about what they have on file).
+  app.post(
+    "/api/labs/:labId/veritacheck/map-instruments/:mapInstrumentId/survey-bundle-pdf",
+    authMiddleware,
+    verifLabScopeMW,
+    async (req: any, res) => {
+      if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
+      const labId = req.scope.labId;
+      const userId = req.ownerUserId ?? req.user.userId;
+      const mapInstrumentId = Number(req.params.mapInstrumentId);
+      if (!Number.isFinite(mapInstrumentId)) return res.status(400).json({ error: "mapInstrumentId required" });
+
+      const instRow = sqlite.prepare(`
+        SELECT i.id, i.instrument_name, i.category, m.lab_id, m.name AS map_name
+        FROM veritamap_instruments i
+        JOIN veritamap_maps m ON m.id = i.map_id
+        WHERE i.id = ? AND m.lab_id = ?
+      `).get(mapInstrumentId, labId) as any;
+      if (!instRow) return res.status(404).json({ error: "Instrument not found in this lab" });
+
+      const verifications = sqlite.prepare(`
+        SELECT * FROM veritacheck_verifications
+        WHERE lab_id = ?
+          AND (map_instrument_id = ? OR (map_instrument_id IS NULL AND instrument_name = ?))
+        ORDER BY COALESCE(approved_date, created_at) ASC
+      `).all(labId, mapInstrumentId, instRow.instrument_name) as any[];
+
+      if (verifications.length === 0) {
+        return res.status(404).json({
+          error: "No verifications on file for this instrument",
+          detail: "File a verification under VeritaCheck before generating a survey bundle.",
+        });
+      }
+
+      // Lab identity header from the active user (matches the single-
+      // verification endpoint). For multi-lab owners this resolves to
+      // the active lab's CLIA via the user row, which already mirrors
+      // the active lab on switch (Phase 2b NavBar default).
+      const verifUserRow = sqlite.prepare("SELECT clia_number, clia_lab_name FROM users WHERE id = ?").get(userId) as any;
+      const verifCliaNumber: string | undefined = verifUserRow?.clia_number || undefined;
+      const verifLabName: string | undefined = verifUserRow?.clia_lab_name || undefined;
+
+      const blocks: string[] = [];
+      for (const v of verifications) {
+        const instruments = sqlite.prepare(
+          "SELECT * FROM veritacheck_verification_instruments WHERE verification_id = ? ORDER BY id"
+        ).all(v.id) as any[];
+        const studies = sqlite.prepare(`
+          SELECT vs.*,
+            s.test_name AS testName, s.study_type AS studyType,
+            s.instrument AS studyInstrument, s.analyst AS studyAnalyst, s.date AS studyDate,
+            s.data_points AS studyDataPoints, s.instruments AS studyInstrumentsJson,
+            s.clia_allowable_error AS studyTea,
+            s.tea_is_percentage AS studyTeaIsPct, s.tea_unit AS studyTeaUnit,
+            s.clia_absolute_floor AS studyAbsFloor
+          FROM veritacheck_verification_studies vs
+          LEFT JOIN studies s ON s.id = vs.study_id
+          WHERE vs.verification_id = ?
+          ORDER BY vs.element
+        `).all(v.id) as any[];
+        blocks.push(buildVerificationBlockHtml(v, instruments, studies));
+      }
+
+      // Bundle cover: surveyor-facing summary of what's inside.
+      const teal = "#01696F";
+      const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+      const oldest = verifications[0];
+      const newest = verifications[verifications.length - 1];
+      const fmtDate = (s: string | null | undefined) =>
+        s ? new Date(s).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "n/a";
+      const bundleHeader = `
+        <div style="background:${teal};color:white;padding:20px 24px;border-radius:6px;margin-bottom:24px">
+          <div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;opacity:0.8;margin-bottom:4px">Veritas Lab Services - VeritaCheck&trade; Survey Bundle</div>
+          <div style="font-size:20px;font-weight:700">Survey Bundle: ${instRow.instrument_name}</div>
+          <div style="font-size:13px;opacity:0.9;margin-top:4px">${instRow.map_name || ""}${instRow.category ? " · " + instRow.category : ""}</div>
+        </div>
+        <table style="margin-bottom:24px;font-size:12px">
+          <tr>
+            <td style="width:40%;padding:4px 0;color:#6b7280">Verifications in this bundle</td>
+            <td style="padding:4px 0;font-weight:600">${verifications.length}</td>
+          </tr>
+          <tr>
+            <td style="padding:4px 0;color:#6b7280">Oldest verification</td>
+            <td style="padding:4px 0">${fmtDate(oldest.approved_date || oldest.created_at)}</td>
+          </tr>
+          <tr>
+            <td style="padding:4px 0;color:#6b7280">Most recent verification</td>
+            <td style="padding:4px 0">${fmtDate(newest.approved_date || newest.created_at)}</td>
+          </tr>
+          <tr>
+            <td style="padding:4px 0;color:#6b7280">Bundle generated</td>
+            <td style="padding:4px 0">${today}</td>
+          </tr>
+        </table>
+        <div style="font-size:11px;color:#6b7280;padding:12px;background:#f9fafb;border-radius:4px;margin-bottom:20px">
+          This bundle was generated for survey-defensibility purposes. Each verification
+          below is a separate VeritaCheck&trade; deliverable filed against this instrument
+          and is reproduced here in chronological order. The director-or-designee
+          approval signature on each verification carries the original approval date.
+        </div>
+        <div style="page-break-before:always"></div>
+      `;
+
+      const html = wrapVerificationPageHtml(blocks, verifLabName, verifCliaNumber, bundleHeader);
+
+      try {
+        const puppeteer = await import("puppeteer");
+        const browser = await puppeteer.default.launch({ args: ["--no-sandbox", "--disable-setuid-sandbox"] });
+        const page = await browser.newPage();
+        await page.setContent(html, { waitUntil: "networkidle0" });
+        const pdf = await page.pdf({ format: "Letter", printBackground: true, margin: { top: "0.5in", bottom: "0.5in", left: "0.5in", right: "0.5in" } });
+        await browser.close();
+        const safeName = instRow.instrument_name.replace(/[^a-zA-Z0-9]/g, "_");
+        const filename = `VeritaCheck_SurveyBundle_${safeName}_${new Date().toISOString().split("T")[0]}.pdf`;
+        res.set({ "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${filename}"` });
+        res.send(Buffer.from(pdf));
+      } catch (err: any) {
+        res.status(500).json({ error: "PDF generation failed", detail: err.message });
+      }
+    },
+  );
 }
