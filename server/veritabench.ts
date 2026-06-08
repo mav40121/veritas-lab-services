@@ -7,10 +7,50 @@ import { db } from "./db";
 import { DEMO_USER_EMAIL } from "./constants";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
-import { generateReorderListPDF, generateReorderListExcel, generateSnapOrderPDF, type ReorderItem, type SnapOrderItem } from "./orderDocument";
+import { generateReorderListPDF, generateReorderListExcel, generateSnapOrderPDF, type ReorderItem, type SnapOrderItem, type VendorRecordForPdf } from "./orderDocument";
 import { generateBarcodeLabelSheetPdf, type BarcodeLabelInput } from "./barcodeLabelPdf";
 import { generateInventoryCountExcel, type InventoryCountItem } from "./inventoryCountExcel";
 import { storePdfToken } from "./pdfTokens";
+
+// PR 4 helper: builds a lower-cased-name keyed map of VendorRecordForPdf
+// from the lab's stock_vendors directory. The PDF renderer uses this to
+// auto-fill the per-vendor "Send to" panel on the Order PDF cover. Empty
+// map (or null labId) is the conditional fallback path: PDF renders
+// today's behavior without any panel, no regression for labs that
+// haven't populated their vendor directory.
+function buildVendorRecordMap(labId: number | null): Map<string, VendorRecordForPdf> | undefined {
+  if (!labId) return undefined;
+  const sqlite = (db as any).$client;
+  const vendors = sqlite.prepare(
+    "SELECT id, name, account_number, ordering_email, ordering_phone, ordering_fax, ordering_portal_url, po_number FROM stock_vendors WHERE lab_id = ? AND status = 'active'"
+  ).all(labId) as any[];
+  if (vendors.length === 0) return undefined;
+  const primaryContact = new Map<number, { contact_name: string; contact_role: string | null }>();
+  const contacts = sqlite.prepare(
+    "SELECT vendor_id, contact_name, contact_role FROM stock_vendor_contacts WHERE lab_id = ? ORDER BY sort_order ASC, id ASC"
+  ).all(labId) as Array<{ vendor_id: number; contact_name: string; contact_role: string | null }>;
+  for (const c of contacts) {
+    if (!primaryContact.has(c.vendor_id)) {
+      primaryContact.set(c.vendor_id, { contact_name: c.contact_name, contact_role: c.contact_role });
+    }
+  }
+  const map = new Map<string, VendorRecordForPdf>();
+  for (const v of vendors) {
+    const pc = primaryContact.get(v.id) || null;
+    map.set(String(v.name).toLowerCase().trim(), {
+      name: v.name,
+      account_number: v.account_number,
+      ordering_email: v.ordering_email,
+      ordering_phone: v.ordering_phone,
+      ordering_fax: v.ordering_fax,
+      ordering_portal_url: v.ordering_portal_url,
+      po_number: v.po_number,
+      primary_contact_name: pc?.contact_name || null,
+      primary_contact_role: pc?.contact_role || null,
+    });
+  }
+  return map;
+}
 
 function bencheLicenseCtx(req: any): LicenseContext {
   const u = req?.user || null;
@@ -579,12 +619,24 @@ export function registerVeritaBenchRoutes(
       const labRow = sqlite.prepare(
         "SELECT lab_name, clia_number FROM labs WHERE owner_user_id = ? LIMIT 1"
       ).get(accountId) as any;
+      let labIdForVendors: number | null = null;
       if (labRow) {
         labName = labRow.lab_name || labName;
         cliaNumber = labRow.clia_number || cliaNumber;
       }
+      // PR 4 auto-fill: pull stock_vendors records for this lab and pass
+      // them into the PDF generator. The renderer looks each vendor
+      // section up by name (case-insensitive, single-match substring
+      // fallback) and renders a "Send to" panel under the vendor header
+      // when a record exists. Labs that haven't populated their vendor
+      // directory get the prior behavior (no panel, no regression).
+      const userLabRow = sqlite.prepare(
+        "SELECT lab_id FROM users WHERE id = ?"
+      ).get(accountId) as any;
+      labIdForVendors = userLabRow?.lab_id || null;
+      const vendorRecords = buildVendorRecordMap(labIdForVendors);
 
-      const pdfBuffer = await generateReorderListPDF(items, { labName, cliaNumber, preparedBy, ...reorderFilterContext(req.query) });
+      const pdfBuffer = await generateReorderListPDF(items, { labName, cliaNumber, preparedBy, vendorRecords, ...reorderFilterContext(req.query) });
       const datestamp = new Date().toISOString().slice(0, 10);
       const filename = `VeritaStock_Reorder${reorderFilenameSuffix(req.query)}_${datestamp}.pdf`;
       const token = storePdfToken(pdfBuffer, filename);
@@ -716,7 +768,8 @@ export function registerVeritaBenchRoutes(
         cliaNumber = labRow.clia_number || cliaNumber;
       }
 
-      const pdfBuffer = await generateSnapOrderPDF(items, { labName, cliaNumber, preparedBy });
+      const snapLabRow = sqlite.prepare("SELECT lab_id FROM users WHERE id = ?").get(accountId) as any;
+      const pdfBuffer = await generateSnapOrderPDF(items, { labName, cliaNumber, preparedBy, vendorRecords: buildVendorRecordMap(snapLabRow?.lab_id || null) });
       const datestamp = new Date().toISOString().slice(0, 10);
       const filename = `VeritaStock_SnapOrder_${datestamp}.pdf`;
       const token = storePdfToken(pdfBuffer, filename);
@@ -1565,6 +1618,7 @@ export function registerVeritaBenchRoutes(
           labName: labRow?.lab_name || null,
           cliaNumber: labRow?.clia_number || null,
           preparedBy: userRow?.name || userRow?.email || null,
+          vendorRecords: buildVendorRecordMap(req.scope.labId),
           ...reorderFilterContext(req.query),
         });
         const datestamp = new Date().toISOString().slice(0, 10);
@@ -1792,6 +1846,7 @@ export function registerVeritaBenchRoutes(
           labName: labRow?.lab_name || null,
           cliaNumber: labRow?.clia_number || null,
           preparedBy: userRow?.name || userRow?.email || null,
+          vendorRecords: buildVendorRecordMap(req.scope.labId),
         });
         const datestamp = new Date().toISOString().slice(0, 10);
         const safeLab = (labRow?.lab_name || "Lab").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);

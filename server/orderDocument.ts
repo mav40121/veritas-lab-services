@@ -54,6 +54,55 @@ export interface ReorderLabContext {
   filterDepartment?: string | null;
   filterCategory?: string | null;
   filterVendor?: string | null;
+  // Vendor records from VeritaStock vendor directory (PR 4 auto-fill).
+  // Keyed by lower-cased vendor name. The vendor-section renderer looks
+  // each section's vendor name up and renders a "Send to" panel when a
+  // record is found. Optional: when omitted, the PDF renders identically
+  // to today's behavior (no panel, no regression for labs that haven't
+  // populated their vendor directory).
+  vendorRecords?: Map<string, VendorRecordForPdf>;
+}
+
+// Shape of a vendor record passed into the PDF generator. Minimal: only
+// the fields the PDF actually renders. Keeps the contract loose so future
+// columns on stock_vendors don't require touching this file.
+export interface VendorRecordForPdf {
+  name: string;
+  account_number: string | null;
+  ordering_email: string | null;
+  ordering_phone: string | null;
+  ordering_fax: string | null;
+  ordering_portal_url: string | null;
+  po_number: string | null;
+  primary_contact_name: string | null;
+  primary_contact_role: string | null;
+}
+
+// Case-insensitive lookup with two-stage fallback:
+//   1. exact match on lower-cased full name
+//   2. substring scan: if exactly one record's name contains the section
+//      name (or vice versa), use it. Multiple matches are ambiguous so
+//      no auto-fill happens (better empty than wrong).
+//
+// Inventory's vendor field is free-text; the vendor record name is the
+// canonical version. "Sysmex" in inventory should still resolve to
+// "Sysmex Corporation of America" in the directory.
+function resolveVendorRecord(
+  sectionVendor: string,
+  records: Map<string, VendorRecordForPdf> | undefined,
+): VendorRecordForPdf | null {
+  if (!records || records.size === 0) return null;
+  const key = sectionVendor.toLowerCase().trim();
+  const exact = records.get(key);
+  if (exact) return exact;
+  const candidates: VendorRecordForPdf[] = [];
+  for (const rec of records.values()) {
+    const recLower = rec.name.toLowerCase();
+    if (recLower.includes(key) || key.includes(recLower)) {
+      candidates.push(rec);
+    }
+  }
+  return candidates.length === 1 ? candidates[0] : null;
 }
 
 // Compose a single human-readable filter label string for the header
@@ -197,7 +246,33 @@ function signatureBlockHTML(ctx: ReorderLabContext): string {
   </div>`;
 }
 
-function vendorSectionHTML(vendor: string, items: ReorderItem[]): string {
+// Renders the auto-fill "Send to" panel that sits under the vendor name
+// when the lab has populated a stock_vendors record for this vendor.
+// Returns empty string when no record found, so the existing vendor
+// header layout is unchanged for labs that haven't filled the directory.
+function vendorAutofillPanelHTML(rec: VendorRecordForPdf | null): string {
+  if (!rec) return "";
+  const fields: Array<[string, string | null]> = [
+    ["Send to", rec.ordering_email],
+    ["Phone", rec.ordering_phone],
+    ["Fax", rec.ordering_fax],
+    ["Portal", rec.ordering_portal_url],
+    ["Account", rec.account_number],
+    ["PO", rec.po_number],
+    ["Contact", rec.primary_contact_name ? `${rec.primary_contact_name}${rec.primary_contact_role ? ` (${rec.primary_contact_role})` : ""}` : null],
+  ];
+  const rendered = fields
+    .filter(([, v]) => v !== null && v !== undefined && v !== "")
+    .map(([k, v]) => `<span style="margin-right:14px;"><strong style="color:${DARK};">${escapeHtml(k)}:</strong> <span style="color:${MUTED};">${escapeHtml(v!)}</span></span>`)
+    .join("");
+  if (!rendered) return "";
+  return `
+    <div style="font-size:7.5pt;padding:4px 8px;background:#F2F7F7;border:1px solid #D4E0E1;border-radius:3px;margin-top:2px;margin-bottom:4px;line-height:1.6;">
+      ${rendered}
+    </div>`;
+}
+
+function vendorSectionHTML(vendor: string, items: ReorderItem[], ctx?: ReorderLabContext): string {
   const rows = items.map((it, idx) => {
     const stripe = idx % 2 === 1 ? "background:#FAFBFD;" : "";
     const standing = it.standing_order
@@ -225,12 +300,17 @@ function vendorSectionHTML(vendor: string, items: ReorderItem[]): string {
       <td style="text-align:center;width:60px;border:1px solid #D4D1CA;background:white;">&nbsp;</td>
     </tr>`;
   }).join("");
+  // PR 4 auto-fill: render the "Send to" panel under the vendor name when
+  // the lab has a stock_vendors record for this vendor. resolveVendorRecord
+  // does case-insensitive lookup with single-match substring fallback.
+  const vendorRecord = resolveVendorRecord(vendor, ctx?.vendorRecords);
   return `
   <div class="vendor-section">
     <div class="vendor-header">
       <span class="vendor-name">${escapeHtml(vendor)}</span>
       <span class="vendor-count">${items.length} item${items.length === 1 ? "" : "s"}</span>
     </div>
+    ${vendorAutofillPanelHTML(vendorRecord)}
     <table class="reorder-table">
       <thead>
         <tr>
@@ -268,7 +348,7 @@ export function buildReorderListHTML(items: ReorderItem[], ctx: ReorderLabContex
   const totalVendors = groups.length;
   const body = totalItems === 0
     ? emptyStateHTML()
-    : groups.map(g => vendorSectionHTML(g.vendor, g.items)).join("\n");
+    : groups.map(g => vendorSectionHTML(g.vendor, g.items, ctx)).join("\n");
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaStock Reorder Document</title><style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -565,7 +645,7 @@ export interface SnapOrderItem {
   snap_unit: string;          // Unit the order is expressed in (defaults to order_unit, falls back to unit, then "each")
 }
 
-function snapVendorSectionHTML(vendor: string, items: SnapOrderItem[]): string {
+function snapVendorSectionHTML(vendor: string, items: SnapOrderItem[], ctx?: ReorderLabContext): string {
   const rows = items.map((it, idx) => {
     const stripe = idx % 2 === 1 ? "background:#FAFBFD;" : "";
     return `<tr style="${stripe}">
@@ -578,12 +658,14 @@ function snapVendorSectionHTML(vendor: string, items: SnapOrderItem[]): string {
       <td style="text-align:center;width:60px;border:1px solid #D4D1CA;background:white;">&nbsp;</td>
     </tr>`;
   }).join("");
+  const vendorRecord = resolveVendorRecord(vendor, ctx?.vendorRecords);
   return `
   <div class="vendor-section">
     <div class="vendor-header">
       <span class="vendor-name">${escapeHtml(vendor)}</span>
       <span class="vendor-count">${items.length} item${items.length === 1 ? "" : "s"}</span>
     </div>
+    ${vendorAutofillPanelHTML(vendorRecord)}
     <table class="reorder-table">
       <thead>
         <tr>
@@ -688,7 +770,7 @@ export function buildSnapOrderHTML(items: SnapOrderItem[], ctx: ReorderLabContex
   const totalVendors = groups.length;
   const body = totalItems === 0
     ? `<div style="border:2px dashed #C7D2DE;border-radius:6px;padding:32px;text-align:center;margin-top:16px;"><div style="font-size:13pt;font-weight:700;color:${DARK};">No items selected for snap order</div></div>`
-    : groups.map(g => snapVendorSectionHTML(g.vendor, g.items)).join("\n");
+    : groups.map(g => snapVendorSectionHTML(g.vendor, g.items, ctx)).join("\n");
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaStock Snap Order</title><style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
