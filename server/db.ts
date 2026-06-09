@@ -1433,6 +1433,69 @@ sqlite.exec(`
   );
 `);
 
+// 2026-06-09 PR2: source-tracking columns on competency_quiz_results.
+// 'source' distinguishes Staff Portal attempts (CLIA+PIN self-administered)
+// from supervisor-driven inline-assessment attempts. 'staff_employee_id'
+// captures the universal-roster id (staff_employees.id) so the result
+// can be linked back to a Staff Portal assignment even when the bridge
+// to competency_employees was auto-created at submit time. Both nullable
+// so existing rows keep validating.
+const compQuizResultsCols = sqlite.prepare("PRAGMA table_info(competency_quiz_results)").all() as { name: string }[];
+const compQuizResultsColNames = compQuizResultsCols.map((c) => c.name);
+const compQuizResultsNewCols: [string, string][] = [
+  ["source", "TEXT DEFAULT 'inline_assessment'"],
+  ["staff_employee_id", "INTEGER"],
+  ["typed_signature", "TEXT"],
+];
+for (const [col, colType] of compQuizResultsNewCols) {
+  if (!compQuizResultsColNames.includes(col)) {
+    try { sqlite.exec(`ALTER TABLE competency_quiz_results ADD COLUMN ${col} ${colType}`); } catch {}
+  }
+}
+
+// 2026-06-09 PR2: per-tech quiz assignments. Created by the director
+// from the Assign dialog on a quiz card; consumed by Staff Portal to
+// show the tech "Your assigned quizzes" on their tile. One assignment
+// per (quiz, staff_employee); status flips from 'assigned' to
+// 'completed' when the attempt POSTs. Retakes after completion create
+// a new attempt row but don't reset the assignment (the assignment is
+// "done"). Director can DELETE only while status='assigned'.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS competency_quiz_assignments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    quiz_id INTEGER NOT NULL,
+    staff_employee_id INTEGER NOT NULL,
+    lab_id INTEGER NOT NULL,
+    assigned_by_user_id INTEGER NOT NULL,
+    assigned_at TEXT NOT NULL,
+    due_date TEXT,
+    status TEXT NOT NULL DEFAULT 'assigned',
+    completed_result_id INTEGER,
+    completed_at TEXT,
+    FOREIGN KEY (quiz_id) REFERENCES competency_quizzes(id),
+    FOREIGN KEY (staff_employee_id) REFERENCES staff_employees(id)
+  );
+`);
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_quiz_assign_quiz ON competency_quiz_assignments(quiz_id)"); } catch {}
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_quiz_assign_staff_emp ON competency_quiz_assignments(staff_employee_id)"); } catch {}
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_quiz_assign_lab ON competency_quiz_assignments(lab_id)"); } catch {}
+try { sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_quiz_assign_unique ON competency_quiz_assignments(quiz_id, staff_employee_id)"); } catch {}
+
+// 2026-06-09 PR2: defensive ALTER block for competency_quiz_assignments.
+// Per CLAUDE.md §8 NEW DB TABLE RULE every CREATE TABLE must ship with a
+// PRAGMA table_info migration block in the same commit so future column
+// additions don't strand on tables that already exist live. Empty for
+// now; the pattern is set up for when v2 adds columns (e.g. reminder
+// cadence, retake_policy_override).
+const compQuizAssignCols = sqlite.prepare("PRAGMA table_info(competency_quiz_assignments)").all() as { name: string }[];
+const compQuizAssignColNames = compQuizAssignCols.map((c) => c.name);
+const compQuizAssignNewCols: [string, string][] = [];
+for (const [col, colType] of compQuizAssignNewCols) {
+  if (!compQuizAssignColNames.includes(col)) {
+    try { sqlite.exec(`ALTER TABLE competency_quiz_assignments ADD COLUMN ${col} ${colType}`); } catch {}
+  }
+}
+
 // Seed default VITROS 5600 quiz if not present
 {
   const existingQuiz = sqlite.prepare(

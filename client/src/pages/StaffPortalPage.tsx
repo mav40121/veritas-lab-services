@@ -6,13 +6,12 @@
 //
 // Modules visible to the staff member depend on the two toggles on
 // staff_employees:
-//   - Policies + Competencies: universal (always shown)
+//   - Policies + Competencies + Quizzes: universal (always shown)
 //   - Inventory: shown only if can_adjust_inventory = 1
 //   - Audit view: shown only if can_view_audit = 1
 //
-// The actual module screens (policy signing, competency sign-off,
-// inventory adjust, audit grids) ship in subsequent PRs. This PR
-// lands the entrance.
+// 2026-06-09 PR2: added "Take a Quiz" tile. Director assigns quizzes
+// from VeritaComp; tech takes assigned quizzes here, self-administered.
 //
 // Same operational guards as the inventory kiosk:
 // - sessionStorage (not localStorage) so a shared tablet doesn't
@@ -21,7 +20,28 @@
 // - No NavBar, no chrome, no links out. Kiosk surface.
 
 import { useEffect, useRef, useState } from "react";
+import DOMPurify from "dompurify";
 import InventoryCountWorkflow, { type CountItem } from "@/components/InventoryCountWorkflow";
+
+// 2026-06-09 PR2: shared DOMPurify config (mirrors VeritaCompAppPage).
+// Lets quiz prompts marked question_format='html' render inline tables,
+// strips script/iframe/img/on*= handlers.
+const QUIZ_PROMPT_SANITIZER_CONFIG = {
+  ALLOWED_TAGS: [
+    "p", "br", "strong", "em", "b", "i", "u", "span",
+    "table", "thead", "tbody", "tfoot", "tr", "th", "td",
+    "ul", "ol", "li", "code", "pre",
+  ],
+  ALLOWED_ATTR: ["class", "colspan", "rowspan", "scope"],
+  ALLOW_DATA_ATTR: false,
+};
+function renderPrompt(text: string, format: string | null | undefined) {
+  if (format === "html") {
+    const clean = DOMPurify.sanitize(text || "", QUIZ_PROMPT_SANITIZER_CONFIG);
+    return <span dangerouslySetInnerHTML={{ __html: clean }} />;
+  }
+  return <>{text}</>;
+}
 
 interface StaffPortalSession {
   token: string;
@@ -72,7 +92,7 @@ export default function StaffPortalPage() {
   const [employees, setEmployees] = useState<PortalEmployee[] | null>(null);
   const [pickerError, setPickerError] = useState<string | null>(null);
   const [activeEmployee, setActiveEmployee] = useState<PortalEmployee | null>(null);
-  const [activeModule, setActiveModule] = useState<"policies" | "inventory" | "audit" | "competency" | null>(null);
+  const [activeModule, setActiveModule] = useState<"policies" | "inventory" | "audit" | "competency" | "quizzes" | null>(null);
 
   const idleTimerRef = useRef<number | null>(null);
 
@@ -315,6 +335,17 @@ export default function StaffPortalPage() {
       />
     );
   }
+  if (activeModule === "quizzes") {
+    return (
+      <StaffPortalQuizzesView
+        token={session.token}
+        employee={activeEmployee}
+        labName={session.lab.name}
+        onBack={() => setActiveModule(null)}
+        onSignOut={signOut}
+      />
+    );
+  }
 
   // ── Module tiles for the picked employee ─────────────────────────────
   // All four tiles are wired up. Inventory + audit gate on the
@@ -322,6 +353,7 @@ export default function StaffPortalPage() {
   const tiles = [
     { key: "policies",    label: "Sign Policies",       available: true,                                ready: true  },
     { key: "competency",  label: "Sign Competencies",   available: true,                                ready: true  },
+    { key: "quizzes",     label: "Take a Quiz",          available: true,                                ready: true  },
     { key: "inventory",   label: "Adjust Inventory",    available: activeEmployee.can_adjust_inventory, ready: true  },
     { key: "audit",       label: "View Audit Trail",    available: activeEmployee.can_view_audit,       ready: true  },
   ];
@@ -356,6 +388,7 @@ export default function StaffPortalPage() {
               if (t.key === "inventory") setActiveModule("inventory");
               if (t.key === "audit") setActiveModule("audit");
               if (t.key === "competency") setActiveModule("competency");
+              if (t.key === "quizzes") setActiveModule("quizzes");
             };
             return (
               <button
@@ -1582,6 +1615,399 @@ function StaffPortalCompetenciesView({
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── StaffPortalQuizzesView (2026-06-09 PR2) ───────────────────────────
+// Inline screen behind sp-tile-quizzes. Three states:
+//   1. List: assigned quizzes for the active employee, with status
+//      chips (assigned / completed). Completed rows show the score.
+//   2. Take: one question at a time, radio per option, Next/Previous,
+//      Submit. If the quiz has question_format='html', prompts render
+//      through DOMPurify so reaction tables display inline.
+//   3. Result: score + pass/fail + per-question review (selected vs
+//      correct + explanation), with a Done button back to the list.
+//
+// Lifecycle: tech logs in via CLIA+PIN -> picks their name -> "Take a
+// Quiz" tile -> sees only quizzes the director assigned to them. Submit
+// flips the assignment to status='completed' and posts a result row.
+interface PortalQuiz {
+  assignment_id: number;
+  quiz_id: number;
+  title: string;
+  due_date: string | null;
+  status: "assigned" | "completed";
+  assigned_at: string;
+  completed_at: string | null;
+  score: number | null;
+  passed: number | null;
+}
+interface PortalQuizTakePayload {
+  assignment_id: number;
+  quiz_id: number;
+  title: string;
+  question_format: string;
+  randomize_questions: number;
+  status: "assigned" | "completed";
+  questions: Array<{ id: string; question: string; type?: string; options: string[] }>;
+}
+interface PortalQuizResultPayload {
+  id: number;
+  score: number;
+  passed: boolean;
+  date_taken: string;
+  question_format: string;
+  already_completed: boolean;
+  questions: Array<{
+    id: string;
+    question: string;
+    options: string[];
+    correct_answer: string;
+    explanation?: string;
+    selected_answer?: string;
+    was_correct?: boolean;
+  }>;
+}
+
+function StaffPortalQuizzesView({
+  token, employee, labName, onBack, onSignOut,
+}: {
+  token: string;
+  employee: PortalEmployee;
+  labName: string;
+  onBack: () => void;
+  onSignOut: () => void;
+}) {
+  const [quizzes, setQuizzes] = useState<PortalQuiz[] | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
+  const [taking, setTaking] = useState<PortalQuizTakePayload | null>(null);
+  const [currentQ, setCurrentQ] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [signature, setSignature] = useState<string>("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [result, setResult] = useState<PortalQuizResultPayload | null>(null);
+
+  function fetchList() {
+    setQuizzes(null);
+    setListError(null);
+    fetch(`/api/staff-portal-session/quizzes?employee_id=${employee.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((d) => setQuizzes(d.quizzes || []))
+      .catch((e: any) => setListError(e.message || "Could not load quizzes"));
+  }
+  useEffect(() => { fetchList(); }, [employee.id]);
+
+  function openQuiz(q: PortalQuiz) {
+    setTaking(null);
+    setResult(null);
+    setCurrentQ(0);
+    setAnswers({});
+    setSignature(`${employee.first_name}${employee.middle_initial ? ` ${employee.middle_initial}.` : ""} ${employee.last_name}`.trim());
+    setSubmitError(null);
+    fetch(`/api/staff-portal-session/quizzes/${q.assignment_id}?employee_id=${employee.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((payload: PortalQuizTakePayload) => setTaking(payload))
+      .catch((e: any) => setListError(e.message || "Could not load quiz"));
+  }
+
+  async function submitAttempt() {
+    if (!taking) return;
+    if (!signature.trim()) { setSubmitError("Type your name to sign before submitting."); return; }
+    if (taking.questions.some(q => !answers[q.id])) {
+      setSubmitError("Answer every question before submitting.");
+      return;
+    }
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const r = await fetch(`/api/staff-portal-session/quizzes/${taking.assignment_id}/attempt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          employee_id: employee.id,
+          answers: taking.questions.map(q => ({ question_id: q.id, selected_answer: answers[q.id] })),
+          typed_signature: signature.trim(),
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      setResult(data);
+      setTaking(null);
+    } catch (e: any) {
+      setSubmitError(e.message || "Submit failed");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function backToList() {
+    setTaking(null);
+    setResult(null);
+    setAnswers({});
+    setCurrentQ(0);
+    fetchList();
+  }
+
+  // ── Result screen ──────────────────────────────────────────────────
+  if (result) {
+    return (
+      <div className="min-h-screen bg-background p-6">
+        <div className="max-w-2xl mx-auto">
+          <div className="flex items-center justify-between mb-4">
+            <button onClick={backToList} className="text-xs text-muted-foreground hover:underline" data-testid="sp-quizzes-back-from-result">
+              {"<- Back to quizzes"}
+            </button>
+            <button onClick={onSignOut} className="text-xs text-muted-foreground hover:underline">
+              Sign out
+            </button>
+          </div>
+          <div className={`rounded-lg border p-4 mb-4 ${result.passed ? "border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20" : "border-red-300 bg-red-50 dark:bg-red-950/20"}`}>
+            <div className="text-sm font-semibold">
+              Score: {result.score}%, {result.passed ? "PASS" : "Not passed"}
+            </div>
+            {result.already_completed && (
+              <div className="text-xs text-muted-foreground mt-1 italic">
+                This quiz was already on record; the prior attempt is shown.
+              </div>
+            )}
+          </div>
+          <div className="space-y-3">
+            {result.questions.map((q, qi) => (
+              <div key={q.id} className="border border-border rounded p-3 bg-card">
+                <div className="text-xs font-semibold mb-1">Q{qi + 1}: {renderPrompt(q.question, result.question_format)}</div>
+                <div className="space-y-0.5 text-xs">
+                  {q.options.map((opt) => {
+                    const letter = opt.charAt(0);
+                    const isSel = q.selected_answer === letter;
+                    const isCorrect = q.correct_answer === letter;
+                    return (
+                      <div key={opt} className={`px-1 py-0.5 rounded ${isSel && isCorrect ? "bg-emerald-100 dark:bg-emerald-900/30" : isSel ? "bg-red-100 dark:bg-red-900/30" : isCorrect ? "bg-emerald-50 dark:bg-emerald-950/20" : ""}`}>
+                        {isSel ? "●" : "○"} {opt}
+                        {isCorrect && <span className="text-emerald-600 font-semibold ml-1">{"✓"}</span>}
+                        {isSel && !isCorrect && <span className="text-red-600 font-semibold ml-1">{"✗"}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+                {q.explanation && (
+                  <div className="text-[10px] text-muted-foreground italic mt-2">{q.explanation}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Take-quiz screen ───────────────────────────────────────────────
+  if (taking) {
+    const q = taking.questions[currentQ];
+    const allAnswered = taking.questions.every(qq => !!answers[qq.id]);
+    return (
+      <div className="min-h-screen bg-background p-6">
+        <div className="max-w-2xl mx-auto">
+          <div className="flex items-center justify-between mb-4">
+            <button onClick={() => setTaking(null)} className="text-xs text-muted-foreground hover:underline" data-testid="sp-quizzes-back-from-take">
+              {"<- Cancel"}
+            </button>
+            <button onClick={onSignOut} className="text-xs text-muted-foreground hover:underline">
+              Sign out
+            </button>
+          </div>
+          <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Take a Quiz</div>
+          <h2 className="font-serif text-lg font-bold mb-4">{taking.title}</h2>
+
+          <div className="border border-border rounded-lg bg-card p-4 mb-3" data-testid="sp-quiz-question">
+            <div className="text-xs text-muted-foreground mb-2">Question {currentQ + 1} of {taking.questions.length}</div>
+            <div className="text-sm font-medium mb-3">{renderPrompt(q.question, taking.question_format)}</div>
+            <div className="space-y-2">
+              {q.options.map((opt) => {
+                const letter = opt.charAt(0);
+                const checked = answers[q.id] === letter;
+                return (
+                  <label key={opt} className={`flex items-center gap-2 text-sm cursor-pointer p-2 rounded border ${checked ? "border-primary bg-primary/5" : "border-border hover:bg-muted/40"}`}>
+                    <input
+                      type="radio"
+                      name={`quiz-${q.id}`}
+                      checked={checked}
+                      onChange={() => setAnswers(prev => ({ ...prev, [q.id]: letter }))}
+                      data-testid={`sp-quiz-option-${letter}`}
+                    />
+                    {opt}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between mb-4">
+            <button
+              type="button"
+              disabled={currentQ === 0}
+              onClick={() => setCurrentQ(p => p - 1)}
+              className="text-xs px-3 py-1.5 border border-border rounded disabled:opacity-40"
+              data-testid="sp-quiz-prev"
+            >
+              {"<- Previous"}
+            </button>
+            {currentQ < taking.questions.length - 1 ? (
+              <button
+                type="button"
+                disabled={!answers[q.id]}
+                onClick={() => setCurrentQ(p => p + 1)}
+                className="text-xs px-3 py-1.5 text-white rounded disabled:opacity-40"
+                style={{ backgroundColor: "#01696F" }}
+                data-testid="sp-quiz-next"
+              >
+                {"Next ->"}
+              </button>
+            ) : (
+              <span className="text-[11px] text-muted-foreground">
+                {allAnswered ? "All answered. Sign and submit below." : "Answer every question to enable Submit."}
+              </span>
+            )}
+          </div>
+
+          {currentQ === taking.questions.length - 1 && (
+            <div className="border border-border rounded-lg bg-card p-4 space-y-3">
+              <div className="text-xs font-semibold">Sign and submit</div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1" htmlFor="sp-quiz-signature">
+                  Type your name to certify you completed this quiz yourself
+                </label>
+                <input
+                  id="sp-quiz-signature"
+                  type="text"
+                  value={signature}
+                  onChange={(e) => setSignature(e.target.value)}
+                  className="w-full border border-border rounded-md p-2 text-sm bg-background"
+                  data-testid="sp-quiz-signature"
+                />
+              </div>
+              {submitError && (
+                <div className="text-xs text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 rounded p-2">
+                  {submitError}
+                </div>
+              )}
+              <button
+                type="button"
+                disabled={submitting || !allAnswered || !signature.trim()}
+                onClick={submitAttempt}
+                className="w-full text-white font-semibold py-2 rounded-md disabled:opacity-50"
+                style={{ backgroundColor: "#01696F" }}
+                data-testid="sp-quiz-submit"
+              >
+                {submitting ? "Scoring..." : "Submit quiz"}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── List screen ────────────────────────────────────────────────────
+  const pending = (quizzes || []).filter(q => q.status === "assigned");
+  const completed = (quizzes || []).filter(q => q.status === "completed");
+  const today = new Date().toISOString().slice(0, 10);
+
+  return (
+    <div className="min-h-screen bg-background p-6">
+      <div className="max-w-2xl mx-auto">
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={onBack} className="text-xs text-muted-foreground hover:underline" data-testid="sp-quizzes-back">
+            {"<- Back to tiles"}
+          </button>
+          <button onClick={onSignOut} className="text-xs text-muted-foreground hover:underline">
+            Sign out
+          </button>
+        </div>
+        <div className="mb-4">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">Take a Quiz</div>
+          <div className="font-serif text-xl font-bold">{employee.first_name} {employee.last_name}</div>
+          <div className="text-xs text-muted-foreground">{labName}</div>
+        </div>
+        {listError && (
+          <div className="text-xs text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 rounded p-2 mb-3">
+            {listError}
+          </div>
+        )}
+        {quizzes === null ? (
+          <div className="text-sm text-muted-foreground py-8 text-center">Loading quizzes...</div>
+        ) : quizzes.length === 0 ? (
+          <div className="border border-border rounded-lg bg-card p-6 text-center text-sm text-muted-foreground" data-testid="sp-quizzes-empty">
+            No quizzes assigned to you yet. The lab director assigns quizzes from VeritaComp.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {pending.length > 0 && (
+              <div>
+                <div className="text-xs font-semibold text-muted-foreground mb-2">Pending ({pending.length})</div>
+                <div className="space-y-2" data-testid="sp-quizzes-pending">
+                  {pending.map((q) => {
+                    const overdue = q.due_date && q.due_date < today;
+                    return (
+                      <button
+                        key={q.assignment_id}
+                        type="button"
+                        onClick={() => openQuiz(q)}
+                        className="w-full text-left border border-border rounded-lg bg-card hover:bg-muted/40 p-3 flex items-center justify-between gap-3"
+                        data-testid={`sp-quiz-card-${q.assignment_id}`}
+                      >
+                        <div>
+                          <div className="text-sm font-medium">{q.title}</div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {q.due_date ? `Due ${q.due_date}` : "No due date"}
+                            {overdue ? <span className="ml-2 text-red-600 font-semibold">Overdue</span> : null}
+                          </div>
+                        </div>
+                        <span className="text-xs text-teal-700 font-medium">{"Start ->"}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {completed.length > 0 && (
+              <div>
+                <div className="text-xs font-semibold text-muted-foreground mb-2">Completed ({completed.length})</div>
+                <div className="space-y-1.5" data-testid="sp-quizzes-completed">
+                  {completed.map((q) => (
+                    <div
+                      key={q.assignment_id}
+                      className="border border-border rounded-lg bg-muted/30 p-3 flex items-center justify-between gap-3"
+                    >
+                      <div>
+                        <div className="text-sm font-medium">{q.title}</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {q.completed_at ? `Completed ${q.completed_at.split("T")[0]}` : ""}
+                          {q.score != null ? <span className="ml-2">Score: <span className="font-semibold">{q.score}%</span></span> : null}
+                        </div>
+                      </div>
+                      <span className={`text-xs font-semibold ${q.passed ? "text-emerald-700" : "text-amber-700"}`}>
+                        {q.passed ? "Passed" : "Recorded"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

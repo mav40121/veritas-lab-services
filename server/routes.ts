@@ -6327,6 +6327,238 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── 2026-06-09 PR2: Staff Portal quiz surface ─────────────────────
+  // GET /api/staff-portal-session/quizzes?employee_id=N
+  //   Returns this employee's assigned quizzes (assigned + completed).
+  //   The director Assign dialog feeds this list.
+  app.get("/api/staff-portal-session/quizzes", staffPortalAuthMiddleware, (req: any, res) => {
+    try {
+      const labId = req.staffPortalLabId;
+      const employeeId = parseInt(String(req.query.employee_id || ""), 10);
+      if (!Number.isFinite(employeeId) || employeeId <= 0) {
+        return res.status(400).json({ error: "employee_id required" });
+      }
+      const sqlite = (db as any).$client;
+      const staffEmployee = sqlite.prepare(
+        `SELECT se.id, se.first_name, se.last_name
+         FROM staff_employees se
+         JOIN staff_labs sl ON sl.id = se.lab_id
+         JOIN labs l ON l.owner_user_id = sl.user_id
+         WHERE se.id = ? AND l.id = ? AND se.status = 'active'`
+      ).get(employeeId, labId) as any;
+      if (!staffEmployee) return res.status(404).json({ error: "Employee not found on this lab's roster" });
+
+      // Pull assigned quizzes + their results (if any). Quiz title +
+      // due_date + status + score (when completed) for the tech's list.
+      const rows = sqlite.prepare(
+        `SELECT qa.id AS assignment_id, qa.quiz_id, qa.due_date, qa.status,
+                qa.assigned_at, qa.completed_at, qa.completed_result_id,
+                q.title, q.method_group_name, q.question_format,
+                cqr.score, cqr.passed
+         FROM competency_quiz_assignments qa
+         JOIN competency_quizzes q ON q.id = qa.quiz_id
+         LEFT JOIN competency_quiz_results cqr ON cqr.id = qa.completed_result_id
+         WHERE qa.staff_employee_id = ? AND qa.lab_id = ?
+         ORDER BY qa.status ASC, qa.due_date ASC, qa.assigned_at DESC`
+      ).all(staffEmployee.id, labId) as any[];
+
+      res.json({
+        employee: { id: staffEmployee.id, name: `${staffEmployee.first_name} ${staffEmployee.last_name}` },
+        quizzes: rows.map((r) => ({
+          assignment_id: r.assignment_id,
+          quiz_id: r.quiz_id,
+          title: r.title || r.method_group_name || `Quiz ${r.quiz_id}`,
+          due_date: r.due_date,
+          status: r.status,
+          assigned_at: r.assigned_at,
+          completed_at: r.completed_at,
+          score: r.score,
+          passed: r.passed,
+        })),
+      });
+    } catch (err: any) {
+      console.error("[staff-portal-session/quizzes GET] error:", err);
+      return res.status(500).json({ error: err.message || "quizzes_fetch_failed" });
+    }
+  });
+
+  // GET /api/staff-portal-session/quizzes/:assignment_id?employee_id=N
+  //   Returns the quiz payload for the assigned tech to take. Question
+  //   order is shuffled (Fisher-Yates) when the quiz has
+  //   randomize_questions=1; answer key is always stripped. Same
+  //   tech-take shape as GET /api/veritacomp/quizzes/:id.
+  app.get("/api/staff-portal-session/quizzes/:assignment_id", staffPortalAuthMiddleware, (req: any, res) => {
+    try {
+      const labId = req.staffPortalLabId;
+      const assignmentId = parseInt(req.params.assignment_id, 10);
+      const employeeId = parseInt(String(req.query.employee_id || ""), 10);
+      if (!Number.isFinite(assignmentId) || assignmentId <= 0) return res.status(400).json({ error: "Bad assignment_id" });
+      if (!Number.isFinite(employeeId) || employeeId <= 0) return res.status(400).json({ error: "employee_id required" });
+      const sqlite = (db as any).$client;
+      // Lab-scope check: assignment must belong to this lab + this staff employee.
+      const assn = sqlite.prepare(
+        `SELECT qa.id, qa.quiz_id, qa.status
+         FROM competency_quiz_assignments qa
+         WHERE qa.id = ? AND qa.staff_employee_id = ? AND qa.lab_id = ?`
+      ).get(assignmentId, employeeId, labId) as any;
+      if (!assn) return res.status(404).json({ error: "Assignment not found" });
+
+      const quiz = sqlite.prepare("SELECT * FROM competency_quizzes WHERE id = ?").get(assn.quiz_id) as any;
+      if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+
+      const parsed = JSON.parse(quiz.questions || "[]");
+      let display = parsed.map((q: any) => ({
+        id: q.id, question: q.question, type: q.type, options: q.options,
+      }));
+      if (quiz.randomize_questions === 1 || quiz.randomize_questions === true) {
+        const arr = [...display];
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = (require("crypto") as typeof import("crypto")).randomInt(0, i + 1);
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        display = arr;
+      }
+      res.json({
+        assignment_id: assn.id,
+        quiz_id: quiz.id,
+        title: quiz.title || quiz.method_group_name,
+        question_format: quiz.question_format || "plain",
+        randomize_questions: quiz.randomize_questions || 0,
+        status: assn.status,
+        questions: display,
+      });
+    } catch (err: any) {
+      console.error("[staff-portal-session/quizzes GET detail] error:", err);
+      return res.status(500).json({ error: err.message || "quiz_fetch_failed" });
+    }
+  });
+
+  // POST /api/staff-portal-session/quizzes/:assignment_id/attempt
+  //   Body: { employee_id, answers, typed_signature }
+  //   Scores the attempt server-side (keyed by question.id, NOT display
+  //   index), inserts into competency_quiz_results with source='staff_portal',
+  //   marks the assignment status='completed'. Idempotent: if the
+  //   assignment already has a completed_result_id, return the prior
+  //   result rather than double-counting.
+  app.post("/api/staff-portal-session/quizzes/:assignment_id/attempt", staffPortalAuthMiddleware, (req: any, res) => {
+    try {
+      const labId = req.staffPortalLabId;
+      const assignmentId = parseInt(req.params.assignment_id, 10);
+      const { employee_id, answers, typed_signature } = req.body || {};
+      const employeeId = parseInt(String(employee_id ?? ""), 10);
+      if (!Number.isFinite(assignmentId) || assignmentId <= 0) return res.status(400).json({ error: "Bad assignment_id" });
+      if (!Number.isFinite(employeeId) || employeeId <= 0) return res.status(400).json({ error: "employee_id required" });
+      if (!Array.isArray(answers)) return res.status(400).json({ error: "answers array required" });
+      const typed = typeof typed_signature === "string" ? typed_signature.trim() : "";
+      if (!typed) return res.status(400).json({ error: "typed_signature required" });
+      if (typed.length > 200) return res.status(400).json({ error: "typed_signature too long" });
+      const sqlite = (db as any).$client;
+
+      const assn = sqlite.prepare(
+        `SELECT id, quiz_id, status, completed_result_id
+         FROM competency_quiz_assignments
+         WHERE id = ? AND staff_employee_id = ? AND lab_id = ?`
+      ).get(assignmentId, employeeId, labId) as any;
+      if (!assn) return res.status(404).json({ error: "Assignment not found" });
+
+      // Idempotent: assignment already completed -> return its prior result.
+      if (assn.status === 'completed' && assn.completed_result_id) {
+        const prior = sqlite.prepare("SELECT * FROM competency_quiz_results WHERE id = ?").get(assn.completed_result_id) as any;
+        if (prior) {
+          return res.json({
+            id: prior.id,
+            score: prior.score,
+            passed: prior.passed,
+            date_taken: prior.date_taken,
+            already_completed: true,
+          });
+        }
+      }
+
+      const quiz = sqlite.prepare("SELECT * FROM competency_quizzes WHERE id = ?").get(assn.quiz_id) as any;
+      if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+      const questions = JSON.parse(quiz.questions || "[]");
+
+      // Score by question.id (display order may have been shuffled).
+      let correct = 0;
+      const graded = answers.map((a: any) => {
+        const q = questions.find((qq: any) => qq.id === a.question_id);
+        const isCorrect = q && a.selected_answer === q.correct_answer;
+        if (isCorrect) correct++;
+        return { question_id: a.question_id, selected_answer: a.selected_answer, correct: !!isCorrect };
+      });
+      const score = questions.length > 0 ? Math.round((correct / questions.length) * 100) : 0;
+      const passed = score === 100;
+      const now = new Date().toISOString();
+      const dateTaken = now.split("T")[0];
+
+      // Resolve / auto-bridge competency_employees for this staff member
+      // so the legacy employee_id NOT NULL constraint can be satisfied.
+      // If the bridge doesn't exist yet, create a stub row from the staff
+      // employee's identity columns. This matches the pattern other
+      // Staff Portal modules use.
+      let compEmp = sqlite.prepare(
+        "SELECT id FROM competency_employees WHERE staff_employee_id = ? AND lab_id = ?"
+      ).get(employeeId, labId) as any;
+      if (!compEmp) {
+        const se = sqlite.prepare(
+          "SELECT first_name, last_name, title FROM staff_employees WHERE id = ?"
+        ).get(employeeId) as any;
+        if (se) {
+          const fullName = `${se.first_name || ''} ${se.last_name || ''}`.trim() || `Employee ${employeeId}`;
+          try {
+            const r = sqlite.prepare(
+              `INSERT INTO competency_employees (name, role, lab_id, staff_employee_id, created_at)
+               VALUES (?, ?, ?, ?, ?)`
+            ).run(fullName, se.title || null, labId, employeeId, now);
+            compEmp = { id: Number(r.lastInsertRowid) };
+          } catch (e: any) {
+            console.warn("[staff-portal quiz attempt] bridge stub insert failed:", e.message);
+          }
+        }
+      }
+      const compEmpId = compEmp?.id || 0;
+
+      const tx = sqlite.transaction(() => {
+        const result = sqlite.prepare(
+          `INSERT INTO competency_quiz_results
+             (assessment_id, quiz_id, employee_id, answers, score, passed, date_taken, created_at, source, staff_employee_id, typed_signature)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'staff_portal', ?, ?)`
+        ).run(null, quiz.id, compEmpId, JSON.stringify(graded), score, passed ? 1 : 0, dateTaken, now, employeeId, typed);
+        sqlite.prepare(
+          `UPDATE competency_quiz_assignments
+           SET status = 'completed', completed_result_id = ?, completed_at = ?
+           WHERE id = ?`
+        ).run(Number(result.lastInsertRowid), now, assn.id);
+        return result.lastInsertRowid;
+      });
+      const newId = tx();
+
+      // Return the scored result with question explanations so the tech
+      // can see what they got right/wrong.
+      const fullQs = questions.map((q: any) => {
+        const ga = graded.find((a: any) => a.question_id === q.id);
+        return {
+          id: q.id, question: q.question, options: q.options,
+          correct_answer: q.correct_answer, explanation: q.explanation,
+          selected_answer: ga?.selected_answer, was_correct: ga?.correct,
+        };
+      });
+      res.json({
+        id: Number(newId),
+        score,
+        passed,
+        date_taken: dateTaken,
+        question_format: quiz.question_format || "plain",
+        questions: fullQs,
+        already_completed: false,
+      });
+    } catch (err: any) {
+      console.error("[staff-portal-session/quizzes POST attempt] error:", err);
+      return res.status(500).json({ error: err.message || "attempt_submit_failed" });
+    }
+  });
+
   // GET /api/labs/:labId/members — list all active members of the lab.
   // Any active member can read. Returns user identity + role + status.
   app.get("/api/labs/:labId/members", authMiddleware, labScopeMiddleware, (req: any, res) => {
@@ -16436,6 +16668,141 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       question_format: qFormat,
       question_count: questions.length,
     });
+  });
+
+  // ─── 2026-06-09 PR2: per-tech quiz assignments + Staff Portal surface ───
+  // POST /api/veritacomp/quizzes/:id/assignments
+  //   Body: { staff_employee_ids: number[], due_date?: string }
+  //   Director assigns the quiz to N staff employees in one call.
+  //   Idempotent on (quiz_id, staff_employee_id) via UNIQUE index — if the
+  //   tech is already assigned, the row is left untouched and reported as
+  //   `skipped`. Returns { created: [ids], skipped: [staff_employee_ids] }.
+  app.post("/api/veritacomp/quizzes/:id/assignments", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const quiz = (db as any).$client.prepare("SELECT id, user_id, lab_id FROM competency_quizzes WHERE id = ?").get(req.params.id) as any;
+    if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+    if (quiz.user_id === 0) return res.status(403).json({ error: "Cannot assign a system-default quiz" });
+    const owned = userCanAccessLabRow('competency_quizzes', req.params.id, req);
+    if (!owned) return res.status(404).json({ error: "Quiz not found" });
+    const { staff_employee_ids, due_date } = req.body || {};
+    if (!Array.isArray(staff_employee_ids) || staff_employee_ids.length === 0) {
+      return res.status(400).json({ error: "staff_employee_ids array required" });
+    }
+    if (staff_employee_ids.some((id: any) => !Number.isFinite(id))) {
+      return res.status(400).json({ error: "staff_employee_ids must be numbers" });
+    }
+    if (due_date != null && typeof due_date !== "string") {
+      return res.status(400).json({ error: "due_date must be an ISO date string" });
+    }
+    const sqlite = (db as any).$client;
+
+    // Resolve the quiz's lab. Required for the new assignment rows.
+    let assignmentLabId: number | null = quiz.lab_id;
+    if (!assignmentLabId) {
+      // Legacy quiz with no lab_id set. Fall back to the owner's default
+      // lab so we don't strand the assign flow.
+      const owner = sqlite.prepare("SELECT default_lab_id FROM users WHERE id = ?").get(quiz.user_id) as any;
+      assignmentLabId = owner?.default_lab_id || null;
+    }
+    if (!assignmentLabId) return res.status(409).json({ error: "Quiz has no lab association; cannot assign" });
+
+    // Validate each staff_employee_id belongs to this lab + is active.
+    const staffEmpRows = sqlite.prepare(
+      `SELECT id FROM staff_employees WHERE lab_id = ? AND status = 'active' AND id IN (${staff_employee_ids.map(() => "?").join(",")})`
+    ).all(assignmentLabId, ...staff_employee_ids) as any[];
+    const validIds = new Set(staffEmpRows.map((r) => r.id));
+    const invalid = staff_employee_ids.filter((id: number) => !validIds.has(id));
+    if (invalid.length > 0) {
+      return res.status(400).json({ error: "Some staff_employee_ids are not on this lab's active roster", invalid });
+    }
+
+    const now = new Date().toISOString();
+    const dueDate = due_date ? String(due_date).slice(0, 10) : null;
+    const created: number[] = [];
+    const skipped: number[] = [];
+    const insert = sqlite.prepare(
+      `INSERT INTO competency_quiz_assignments (
+         quiz_id, staff_employee_id, lab_id, assigned_by_user_id, assigned_at, due_date, status
+       ) VALUES (?, ?, ?, ?, ?, ?, 'assigned')`
+    );
+    for (const sid of staff_employee_ids) {
+      try {
+        const r = insert.run(quiz.id, sid, assignmentLabId, req.user.userId, now, dueDate);
+        created.push(Number(r.lastInsertRowid));
+      } catch (err: any) {
+        // UNIQUE(quiz_id, staff_employee_id) violation = already assigned
+        if (String(err.message || "").includes("UNIQUE")) {
+          skipped.push(sid);
+        } else {
+          console.error("[quiz-assignments POST] insert failed:", err);
+          return res.status(500).json({ error: "Assignment insert failed" });
+        }
+      }
+    }
+    res.json({ created, skipped, due_date: dueDate });
+  });
+
+  // GET /api/veritacomp/quizzes/:id/assignments
+  //   Returns the assignment roster with employee name + status + score
+  //   (when completed) for the director's status display.
+  app.get("/api/veritacomp/quizzes/:id/assignments", authMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const quiz = (db as any).$client.prepare("SELECT id, user_id FROM competency_quizzes WHERE id = ?").get(req.params.id) as any;
+    if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+    if (quiz.user_id !== 0) {
+      const owned = userCanAccessLabRow('competency_quizzes', req.params.id, req);
+      if (!owned) return res.status(404).json({ error: "Quiz not found" });
+    }
+    const rows = (db as any).$client.prepare(
+      `SELECT qa.id, qa.staff_employee_id, qa.due_date, qa.status, qa.assigned_at,
+              qa.completed_at, qa.completed_result_id,
+              se.first_name, se.last_name, se.title,
+              cqr.score, cqr.passed
+       FROM competency_quiz_assignments qa
+       JOIN staff_employees se ON se.id = qa.staff_employee_id
+       LEFT JOIN competency_quiz_results cqr ON cqr.id = qa.completed_result_id
+       WHERE qa.quiz_id = ?
+       ORDER BY se.last_name, se.first_name`
+    ).all(req.params.id) as any[];
+    res.json({
+      assignments: rows.map((r) => ({
+        id: r.id,
+        staff_employee_id: r.staff_employee_id,
+        employee_name: `${r.first_name} ${r.last_name}`.trim(),
+        employee_title: r.title,
+        due_date: r.due_date,
+        status: r.status,
+        assigned_at: r.assigned_at,
+        completed_at: r.completed_at,
+        completed_result_id: r.completed_result_id,
+        score: r.score,
+        passed: r.passed,
+      })),
+    });
+  });
+
+  // DELETE /api/veritacomp/quiz-assignments/:id
+  //   Director un-assigns a quiz. Only allowed while status='assigned' —
+  //   a completed assignment is immutable (the tech's attempt is on
+  //   record and surveyor evidence).
+  app.delete("/api/veritacomp/quiz-assignments/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const sqlite = (db as any).$client;
+    const assn = sqlite.prepare(
+      `SELECT qa.id, qa.status, qa.quiz_id, qa.lab_id, q.user_id AS quiz_user_id
+       FROM competency_quiz_assignments qa
+       JOIN competency_quizzes q ON q.id = qa.quiz_id
+       WHERE qa.id = ?`
+    ).get(req.params.id) as any;
+    if (!assn) return res.status(404).json({ error: "Assignment not found" });
+    // Lab-scope: reuse the quiz row check.
+    const quizOwned = userCanAccessLabRow('competency_quizzes', assn.quiz_id, req);
+    if (!quizOwned) return res.status(404).json({ error: "Assignment not found" });
+    if (assn.status !== 'assigned') {
+      return res.status(409).json({ error: "Cannot unassign a completed assignment; the attempt is on record" });
+    }
+    sqlite.prepare("DELETE FROM competency_quiz_assignments WHERE id = ?").run(req.params.id);
+    res.json({ ok: true, id: Number(req.params.id) });
   });
 
   // POST /api/veritacomp/quiz-results - submit quiz, auto-score
