@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
+import DOMPurify from "dompurify";
 import { Link, useLocation, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
@@ -113,6 +114,32 @@ interface Employee {
   created_at: string;
 }
 
+// 2026-06-09 PR1: shared sanitizer + renderer for quiz question prompts.
+// Lets a quiz mark its prompts as HTML (question_format='html') so the
+// player shows inline tables, bold, etc. instead of a flat string.
+// DOMPurify's default config strips <script>, on*= handlers, javascript:
+// URLs, and any tag/attribute not on the safe list. We narrow further to
+// the small whitelist needed for blood-bank reaction tables and basic
+// emphasis. No external resource loading — img is explicitly excluded so
+// a paste-bombed prompt can't trigger a network fetch.
+const QUIZ_PROMPT_SANITIZER_CONFIG = {
+  ALLOWED_TAGS: [
+    "p", "br", "strong", "em", "b", "i", "u", "span",
+    "table", "thead", "tbody", "tfoot", "tr", "th", "td",
+    "ul", "ol", "li", "code", "pre",
+  ],
+  ALLOWED_ATTR: ["class", "colspan", "rowspan", "scope"],
+  ALLOW_DATA_ATTR: false,
+};
+
+function renderQuizPrompt(text: string, format: "plain" | "html" | string | null | undefined): ReactNode {
+  if (format === "html") {
+    const clean = DOMPurify.sanitize(text || "", QUIZ_PROMPT_SANITIZER_CONFIG);
+    return <span className="quiz-html-prompt" dangerouslySetInnerHTML={{ __html: clean }} />;
+  }
+  return <>{text}</>;
+}
+
 interface QuizQuestion {
   id: string;
   question: string;
@@ -137,6 +164,15 @@ interface QuizListItem {
   method_group_name: string | null;
   title: string | null;
   method_group_ids: string | null;
+  // 2026-06-09 PR1: per-quiz randomization toggle. When set, the
+  // /api/veritacomp/quizzes/:id GET (employee-take view) shuffles the
+  // questions array on the server per request.
+  randomize_questions?: number | null;
+  // 2026-06-09 PR1: 'html' tells the player to render question.question
+  // through DOMPurify with table support, so docx-derived quizzes can show
+  // forward/reverse reaction grids inline. 'plain' (default) renders as
+  // plain text — what every pre-PR1 quiz uses.
+  question_format?: string | null;
   created_at: string;
 }
 
@@ -2259,6 +2295,10 @@ function NewAssessmentDialog({
   // Quiz state
   const [quizActive, setQuizActive] = useState<{ mgId: number; quizId: number } | null>(null);
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
+  // 2026-06-09 PR1: per-quiz question_format. Drives whether the player
+  // renders question.question as plain text or sanitized HTML (DOMPurify).
+  // Set from the GET /api/veritacomp/quizzes/:id response in startQuiz.
+  const [quizFormat, setQuizFormat] = useState<"plain" | "html">("plain");
   const [quizCurrentQ, setQuizCurrentQ] = useState(0);
   const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>({});
   const [quizResult, setQuizResult] = useState<any>(null);
@@ -2359,6 +2399,10 @@ function NewAssessmentDialog({
       if (!res.ok) return;
       const data = await res.json();
       setQuizQuestions(data.questions || []);
+      // 2026-06-09 PR1: capture the quiz-level question_format so the
+      // render helpers know whether to sanitize-and-render or treat as
+      // plain text. Server hands this back on every GET.
+      setQuizFormat(data.question_format === "html" ? "html" : "plain");
       setQuizCurrentQ(0);
       setQuizAnswers({});
       setQuizResult(null);
@@ -3006,7 +3050,7 @@ function NewAssessmentDialog({
                               </div>
                               {quizResult.questions?.map((q: any, qi: number) => (
                                 <div key={qi} className="text-[10px] mb-2 border-t border-border pt-1">
-                                  <div className="font-medium mb-1">Q{qi + 1}: {q.question}</div>
+                                  <div className="font-medium mb-1">Q{qi + 1}: {renderQuizPrompt(q.question, quizFormat)}</div>
                                   {q.options?.map((opt: string) => {
                                     const letter = opt.charAt(0);
                                     const isSelected = q.selected_answer === letter;
@@ -3037,7 +3081,7 @@ function NewAssessmentDialog({
                         return (
                           <div className="bg-muted/30 border border-border rounded-lg p-3">
                             <div className="text-xs text-muted-foreground mb-1">Question {quizCurrentQ + 1} of {quizQuestions.length}</div>
-                            <div className="text-xs font-medium mb-2">{q.question}</div>
+                            <div className="text-xs font-medium mb-2">{renderQuizPrompt(q.question, quizFormat)}</div>
                             <div className="space-y-1.5">
                               {q.options?.map((opt: string) => {
                                 const letter = opt.charAt(0);
@@ -3496,6 +3540,14 @@ function NewQuizDialog({
   const [questions, setQuestions] = useState<QuizQuestion[]>([emptyQuestion(1)]);
   const [uploadedFileName, setUploadedFileName] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
+  // 2026-06-09 PR1: per-quiz randomization toggle. Server shuffles the
+  // questions array on every tech-take fetch when this is true.
+  const [randomizeQuestions, setRandomizeQuestions] = useState(false);
+  // 2026-06-09 PR1: question_format. 'html' renders prompts via DOMPurify
+  // so reaction tables / formatted clinical scenarios render inline.
+  // Auto-inferred from meta block when uploading JSON; user can toggle
+  // manually otherwise.
+  const [questionFormat, setQuestionFormat] = useState<"plain" | "html">("plain");
 
   function toggleGroup(id: number) {
     setSelectedGroupIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -3543,6 +3595,12 @@ function NewQuizDialog({
       if (!title && parsed.meta && typeof parsed.meta.title === "string") {
         setTitle(parsed.meta.title);
       }
+      // 2026-06-09 PR1: auto-detect question_format from meta block. The
+      // ABO/Rh conversion script emits meta.question_format = "html" so the
+      // forward/reverse reaction tables render as proper <table> elements.
+      if (parsed.meta && parsed.meta.question_format === "html") {
+        setQuestionFormat("html");
+      }
       setQuestions(normalized);
       setUploadedFileName(file.name);
       toast({ title: `Loaded ${normalized.length} questions`, description: file.name });
@@ -3583,6 +3641,12 @@ function NewQuizDialog({
             : null,
           methodGroupId: selectedGroupIds.length === 1 ? selectedGroupIds[0] : null,
           questions,
+          // 2026-06-09 PR1: server persists both flags. randomizeQuestions
+          // makes the tech-take fetch shuffle the questions array per
+          // request; questionFormat='html' tells the player to render
+          // question.question through DOMPurify with table support.
+          randomizeQuestions,
+          questionFormat,
         }),
       });
       if (!res.ok) {
@@ -3758,6 +3822,33 @@ function NewQuizDialog({
             </div>
           )}
 
+          {/* 2026-06-09 PR1: per-quiz toggles for randomization + HTML question
+              prompts. Both default off so existing quizzes keep their stored
+              order + plain-text rendering. */}
+          <div className="space-y-2 pt-2 border-t border-border">
+            <Label className="text-xs">Quiz Options</Label>
+            <label className="flex items-start gap-2 text-xs cursor-pointer">
+              <Checkbox
+                checked={randomizeQuestions}
+                onCheckedChange={(v) => setRandomizeQuestions(v === true)}
+              />
+              <span>
+                <span className="font-medium">Randomize question order</span>
+                <span className="block text-[10px] text-muted-foreground">Every tech sees the same questions in a different sequence per attempt.</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-xs cursor-pointer">
+              <Checkbox
+                checked={questionFormat === "html"}
+                onCheckedChange={(v) => setQuestionFormat(v === true ? "html" : "plain")}
+              />
+              <span>
+                <span className="font-medium">Question prompts contain HTML</span>
+                <span className="block text-[10px] text-muted-foreground">Enable for prompts that include tables (e.g., forward/reverse reaction grids). HTML is sanitized on render; only safe tags and attributes survive.</span>
+              </span>
+            </label>
+          </div>
+
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-2 border-t border-border">
             <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
@@ -3832,6 +3923,13 @@ function QuizPreviewDialog({
            <div>Score: _____ / ${quiz.questions.length}</div>
          </div>`
       : "";
+    // 2026-06-09 PR1: HTML-format quizzes get their prompts sanitized via
+    // DOMPurify and injected as raw HTML (so reaction tables render). Plain
+    // quizzes still HTML-escape the prompt as before.
+    const qFmt = (quiz as any).question_format === "html" ? "html" : "plain";
+    const renderPrompt = (text: string) => qFmt === "html"
+      ? DOMPurify.sanitize(text || "", QUIZ_PROMPT_SANITIZER_CONFIG)
+      : esc(text);
     const items = quiz.questions.map((q, qIdx) => {
       const options = q.options.map((opt, oIdx) => {
         const letter = String.fromCharCode(65 + oIdx);
@@ -3845,7 +3943,7 @@ function QuizPreviewDialog({
       const tag = q.method_group_name
         ? `<span class="tag">(${esc(q.method_group_name)}) </span>` : "";
       return `<li class="q">
-                <div class="qtext">${tag}${esc(q.question)}</div>
+                <div class="qtext">${tag}${renderPrompt(q.question)}</div>
                 <ul class="opts">${options}</ul>
                 ${explanation}
               </li>`;
@@ -3865,6 +3963,11 @@ function QuizPreviewDialog({
         ul.opts li.correct { font-weight: 700; color: #15803d; }
         .mark { display: inline-block; width: 1em; }
         .exp { margin: 0.05in 0 0 1.2em; font-size: 10.5pt; color: #444; font-style: italic; }
+        /* 2026-06-09 PR1: tables inside HTML question prompts (e.g. ABO/Rh
+           forward/reverse reaction grids) print as compact bordered tables. */
+        .qtext table { border-collapse: collapse; margin: 0.05in 0; font-weight: normal; font-size: 10.5pt; }
+        .qtext table th, .qtext table td { border: 1px solid #999; padding: 2px 8px; text-align: center; }
+        .qtext table th { background: #f0f0f0; font-weight: 600; }
         .footer { margin-top: 0.4in; padding-top: 0.1in; border-top: 1px solid #ccc; font-size: 9pt; color: #666; }
         @media print { body { margin: 0.4in; } }
       </style></head><body>
@@ -3938,7 +4041,10 @@ function QuizPreviewDialog({
                       {q.method_group_name && (
                         <span className="font-normal text-muted-foreground">({q.method_group_name}) </span>
                       )}
-                      {q.question}
+                      {/* 2026-06-09 PR1: render question_format='html' prompts
+                          through DOMPurify so docx-derived quizzes (e.g.
+                          ABO/Rh) display reaction tables inline. */}
+                      {renderQuizPrompt(q.question, (quiz as any).question_format)}
                     </span>
                     <ul className="mt-1 ml-6 space-y-0.5 list-none">
                       {q.options.map((opt, oIdx) => {
