@@ -71,7 +71,7 @@ export default function StaffPortalPage() {
   const [employees, setEmployees] = useState<PortalEmployee[] | null>(null);
   const [pickerError, setPickerError] = useState<string | null>(null);
   const [activeEmployee, setActiveEmployee] = useState<PortalEmployee | null>(null);
-  const [activeModule, setActiveModule] = useState<"policies" | "inventory" | null>(null);
+  const [activeModule, setActiveModule] = useState<"policies" | "inventory" | "audit" | null>(null);
 
   const idleTimerRef = useRef<number | null>(null);
 
@@ -292,16 +292,28 @@ export default function StaffPortalPage() {
       />
     );
   }
+  if (activeModule === "audit") {
+    return (
+      <StaffPortalActivityView
+        token={session.token}
+        employee={activeEmployee}
+        labName={session.lab.name}
+        onBack={() => setActiveModule(null)}
+        onSignOut={signOut}
+      />
+    );
+  }
 
   // ── Module tiles for the picked employee ─────────────────────────────
-  // Policies + inventory are wired up; competency / audit show "Ready
-  // soon" until their PRs land. Inventory + audit gate on the
-  // staff_employees toggle flags so the access model is visible end-to-end.
+  // Policies + inventory + audit are wired up; competency stays placeholder
+  // until the VeritaStaff <-> VeritaComp bridge decision is made.
+  // Inventory + audit gate on the staff_employees toggle flags so the
+  // access model is visible end-to-end.
   const tiles = [
     { key: "policies",    label: "Sign Policies",       available: true,                                ready: true  },
     { key: "competency",  label: "Sign Competencies",   available: true,                                ready: false },
     { key: "inventory",   label: "Adjust Inventory",    available: activeEmployee.can_adjust_inventory, ready: true  },
-    { key: "audit",       label: "View Audit Trail",    available: activeEmployee.can_view_audit,       ready: false },
+    { key: "audit",       label: "View Audit Trail",    available: activeEmployee.can_view_audit,       ready: true  },
   ];
 
   return (
@@ -332,6 +344,7 @@ export default function StaffPortalPage() {
               if (!clickable) return;
               if (t.key === "policies") setActiveModule("policies");
               if (t.key === "inventory") setActiveModule("inventory");
+              if (t.key === "audit") setActiveModule("audit");
             };
             return (
               <button
@@ -977,6 +990,153 @@ function StaffPortalInventoryView({
                     {it.unit && <div className="text-xs text-muted-foreground">{it.unit}</div>}
                   </div>
                 </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── StaffPortalActivityView (Wave K7, 2026-06-08) ─────────────────────
+// Self-scoped audit trail behind sp-tile-audit. Shows the active staff
+// member their own history: policy signatures + inventory adjustments,
+// time-ordered (newest first). Read-only. Server gates on
+// can_view_audit = 1, so the toggle is enforced even if the client UI
+// is bypassed.
+//
+// Surveyor utility: a tech can show this screen to a surveyor as
+// evidence of their personal compliance footprint with timestamps,
+// document titles, and before/after qty deltas. Same audit data the
+// director sees in VeritaTrack, scoped to the active employee.
+interface PortalActivityEvent {
+  kind: "policy_signature" | "inventory_adjustment";
+  at: string;
+  label: string;
+  detail: string;
+  document_id?: number;
+  item_id?: string;
+}
+
+function StaffPortalActivityView({
+  token, employee, labName, onBack, onSignOut,
+}: {
+  token: string;
+  employee: PortalEmployee;
+  labName: string;
+  onBack: () => void;
+  onSignOut: () => void;
+}) {
+  const [events, setEvents] = useState<PortalActivityEvent[] | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
+  const [kindFilter, setKindFilter] = useState<"all" | "policy_signature" | "inventory_adjustment">("all");
+
+  useEffect(() => {
+    setEvents(null);
+    setListError(null);
+    fetch(`/api/staff-portal-session/my-activity?employee_id=${employee.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((d) => setEvents(d.events || []))
+      .catch((e: any) => setListError(e.message || "Could not load activity"));
+  }, [employee.id]);
+
+  const visible = events
+    ? (kindFilter === "all" ? events : events.filter((e) => e.kind === kindFilter))
+    : null;
+
+  return (
+    <div className="min-h-screen bg-background p-6" data-testid="sp-activity-list">
+      <div className="max-w-2xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">View Audit Trail</div>
+            <div className="font-serif text-xl font-bold">My Activity</div>
+            <div className="text-xs text-muted-foreground">{employee.first_name} {employee.last_name} &middot; {labName}</div>
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            <button onClick={onBack} className="text-xs text-muted-foreground hover:underline" data-testid="sp-activity-back">
+              &larr; Back to modules
+            </button>
+            <button onClick={onSignOut} className="text-xs text-muted-foreground hover:underline">
+              Sign out
+            </button>
+          </div>
+        </div>
+
+        <div className="mb-3 flex gap-2" data-testid="sp-activity-filter">
+          <button
+            type="button"
+            onClick={() => setKindFilter("all")}
+            className={"text-xs px-3 py-1 rounded border " + (kindFilter === "all" ? "bg-primary text-white border-primary" : "border-border bg-card")}
+            data-testid="sp-activity-filter-all"
+          >
+            All
+          </button>
+          <button
+            type="button"
+            onClick={() => setKindFilter("policy_signature")}
+            className={"text-xs px-3 py-1 rounded border " + (kindFilter === "policy_signature" ? "bg-primary text-white border-primary" : "border-border bg-card")}
+            data-testid="sp-activity-filter-policies"
+          >
+            Policy signatures
+          </button>
+          <button
+            type="button"
+            onClick={() => setKindFilter("inventory_adjustment")}
+            className={"text-xs px-3 py-1 rounded border " + (kindFilter === "inventory_adjustment" ? "bg-primary text-white border-primary" : "border-border bg-card")}
+            data-testid="sp-activity-filter-inventory"
+          >
+            Inventory adjustments
+          </button>
+        </div>
+
+        <div className="border border-border rounded-lg bg-card p-4">
+          {listError && (
+            <div className="text-xs text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 rounded p-2 mb-3">
+              {listError}
+            </div>
+          )}
+          {visible === null ? (
+            <div className="text-sm text-muted-foreground py-6 text-center">Loading activity...</div>
+          ) : visible.length === 0 ? (
+            <div className="text-sm text-muted-foreground py-6 text-center" data-testid="sp-activity-empty">
+              {events && events.length === 0
+                ? "No recorded activity yet. Sign a policy or make an inventory adjustment to start building your history."
+                : "No events match the current filter."}
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {visible.map((e, idx) => (
+                <div key={`${e.kind}-${e.at}-${idx}`} className="py-3 px-2" data-testid="sp-activity-row">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <div className="text-sm font-medium">{e.label}</div>
+                      {e.detail && <div className="text-xs text-muted-foreground mt-0.5">{e.detail}</div>}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span
+                        className={
+                          "text-xs px-2 py-1 rounded " +
+                          (e.kind === "policy_signature"
+                            ? "bg-blue-100 text-blue-900"
+                            : "bg-amber-100 text-amber-900")
+                        }
+                        data-testid={`sp-activity-kind-${e.kind}`}
+                      >
+                        {e.kind === "policy_signature" ? "Policy" : "Inventory"}
+                      </span>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {new Date(e.at).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
           )}

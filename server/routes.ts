@@ -5839,6 +5839,116 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Wave K7 (2026-06-08): Staff Portal "My Activity" view ────────────────
+  //
+  // GET /api/staff-portal-session/my-activity?employee_id=N
+  //
+  // Self-scoped audit view for the active staff member. Returns a
+  // merged time-ordered list of:
+  //   - policy_signatures: their entries in staff_portal_policy_signatures
+  //   - inventory_adjustments: audit_log rows where
+  //       module='veritastock' AND JSON_EXTRACT(after_json,'$.staff_employee_id')=N
+  // Gated server-side on employee.can_view_audit = 1. Other staff
+  // members on the same lab can't see this person's history (and
+  // vice versa) — surveyor-defensible, no shared-tablet leak.
+  //
+  // This view exists so a tech can self-document their compliance
+  // footprint ("here's everything I've signed and adjusted this year")
+  // without going through the lab director. Same data shape lives in
+  // VeritaTrack on the director side; this is the read-only kiosk
+  // surface.
+  app.get("/api/staff-portal-session/my-activity", staffPortalAuthMiddleware, (req: any, res) => {
+    try {
+      const labId = req.staffPortalLabId;
+      const employeeId = parseInt(String(req.query.employee_id || ""), 10);
+      if (!Number.isFinite(employeeId) || employeeId <= 0) {
+        return res.status(400).json({ error: "employee_id required" });
+      }
+      const sqlite = (db as any).$client;
+
+      // Validate employee belongs to lab + has can_view_audit on
+      const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+      if (!ownerRow) return res.status(404).json({ error: "Lab not found" });
+      const staffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(ownerRow.owner_user_id) as any;
+      if (!staffLab) return res.status(404).json({ error: "Staff roster not found" });
+      const employee = sqlite.prepare(
+        `SELECT id, first_name, last_name, can_view_audit
+         FROM staff_employees WHERE id = ? AND lab_id = ? AND status = 'active'`
+      ).get(employeeId, staffLab.id) as any;
+      if (!employee) return res.status(404).json({ error: "Employee not found on this lab's roster" });
+      if (employee.can_view_audit !== 1) {
+        return res.status(403).json({ error: "This employee is not authorized to view the audit trail. Ask the lab director to enable the toggle." });
+      }
+
+      const policySigs = sqlite.prepare(
+        `SELECT sps.id, sps.signed_at AS at, sps.typed_signature,
+                pd.title AS policy_title, pd.id AS document_id,
+                sps.version_id, pv.version_number
+         FROM staff_portal_policy_signatures sps
+         JOIN policy_documents pd ON pd.id = sps.document_id
+         LEFT JOIN policy_versions pv ON pv.id = sps.version_id
+         WHERE sps.lab_id = ? AND sps.staff_employee_id = ?
+         ORDER BY sps.signed_at DESC
+         LIMIT 200`
+      ).all(labId, employeeId) as any[];
+
+      // Inventory adjustments by this staff member. The after_json
+      // payload carries staff_employee_id (set by the K6 adjust
+      // endpoint). JSON_EXTRACT is sqlite-native.
+      const inventoryAdjustments = sqlite.prepare(
+        `SELECT id, entity_id, entity_label, before_json, after_json, created_at AS at
+         FROM audit_log
+         WHERE owner_user_id = ?
+           AND module = 'veritastock'
+           AND action = 'update'
+           AND entity_type = 'inventory_item'
+           AND JSON_EXTRACT(after_json, '$.staff_employee_id') = ?
+         ORDER BY created_at DESC
+         LIMIT 200`
+      ).all(ownerRow.owner_user_id, employeeId) as any[];
+
+      const events = [
+        ...policySigs.map((s: any) => ({
+          kind: "policy_signature" as const,
+          at: s.at,
+          label: s.policy_title,
+          detail: `Signed as "${s.typed_signature || ""}"${s.version_number != null ? ` (v${s.version_number})` : ""}`,
+          document_id: s.document_id,
+        })),
+        ...inventoryAdjustments.map((a: any) => {
+          let beforeQty: number | null = null;
+          let afterQty: number | null = null;
+          let reason: string | null = null;
+          try { beforeQty = JSON.parse(a.before_json || "{}").quantity_on_hand ?? null; } catch { /* noop */ }
+          try {
+            const after = JSON.parse(a.after_json || "{}");
+            afterQty = after.quantity_on_hand ?? null;
+            reason = after.reason ?? null;
+          } catch { /* noop */ }
+          const delta = beforeQty != null && afterQty != null ? afterQty - beforeQty : null;
+          return {
+            kind: "inventory_adjustment" as const,
+            at: a.at,
+            label: a.entity_label || "Inventory adjustment",
+            detail: delta != null
+              ? `${beforeQty} -> ${afterQty} (${delta >= 0 ? "+" : ""}${delta})${reason ? ` - ${reason}` : ""}`
+              : (reason || ""),
+            item_id: a.entity_id,
+          };
+        }),
+      ].sort((a, b) => String(b.at).localeCompare(String(a.at)));
+
+      res.json({
+        employee: { id: employee.id, name: `${employee.first_name} ${employee.last_name}` },
+        events,
+        total: events.length,
+      });
+    } catch (err: any) {
+      console.error("[staff-portal-session/my-activity] error:", err);
+      res.status(500).json({ error: err.message || "activity_fetch_failed" });
+    }
+  });
+
   // GET /api/labs/:labId/members — list all active members of the lab.
   // Any active member can read. Returns user identity + role + status.
   app.get("/api/labs/:labId/members", authMiddleware, labScopeMiddleware, (req: any, res) => {
