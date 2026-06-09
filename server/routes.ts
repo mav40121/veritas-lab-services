@@ -16707,8 +16707,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!assignmentLabId) return res.status(409).json({ error: "Quiz has no lab association; cannot assign" });
 
     // Validate each staff_employee_id belongs to this lab + is active.
+    // 2026-06-09 PR3 fix: filter by tier2_lab_id (the labs.id column on
+    // staff_employees), not lab_id (the staff_labs.id column). The roster
+    // surface the dialog reads from is GET /api/labs/:labId/staff/employees
+    // which scopes by tier2_lab_id. The legacy lab_id column references
+    // the staff_labs aggregate, NOT the active multi-lab. Using the wrong
+    // column rejected every employee with "not on this lab's active
+    // roster" even when the dialog had just rendered them.
     const staffEmpRows = sqlite.prepare(
-      `SELECT id FROM staff_employees WHERE lab_id = ? AND status = 'active' AND id IN (${staff_employee_ids.map(() => "?").join(",")})`
+      `SELECT id FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active' AND id IN (${staff_employee_ids.map(() => "?").join(",")})`
     ).all(assignmentLabId, ...staff_employee_ids) as any[];
     const validIds = new Set(staffEmpRows.map((r) => r.id));
     const invalid = staff_employee_ids.filter((id: number) => !validIds.has(id));
