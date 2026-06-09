@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { db } from "./db";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
+import { resolveRowForMutation } from "./labAccessGuard";
 
 function trackLicenseCtx(req: any): LicenseContext {
   const u = req?.user || null;
@@ -319,14 +320,14 @@ export function registerVeritaTrackRoutes(
     res.json(result);
   });
 
-  // GET single task with all sign-offs
+  // GET single task with all sign-offs \u2014 Shape A guard via resolveRowForMutation.
   app.get("/api/veritatrack/tasks/:id", authMiddleware, (req: any, res) => {
     if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
-    const userId = req.ownerUserId ?? req.user.userId;
-    const task = sqlite.prepare(
-      "SELECT * FROM veritatrack_tasks WHERE id = ? AND user_id = ?"
-    ).get(Number(req.params.id), userId) as any;
-    if (!task) return res.status(404).json({ error: "Task not found" });
+    const { row: task, status } = resolveRowForMutation<any>((db as any).$client, "veritatrack_tasks", Number(req.params.id), req);
+    if (!task) {
+      if (status === 403) return res.status(403).json({ error: "You don't have access to this task's lab" });
+      return res.status(404).json({ error: "Task not found" });
+    }
     const signoffs = sqlite.prepare(
       "SELECT * FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC"
     ).all(task.id);
@@ -354,33 +355,49 @@ export function registerVeritaTrackRoutes(
   });
 
   // PUT update task
+  // 2026-06-09 Shape A class sweep: resolveRowForMutation accepts ownership
+  // either via the task's user_id OR via active lab_members membership of
+  // the task's lab_id. Previously a co-owner / lab admin / seeded-task user
+  // got 404 on edit even though the list endpoint showed the row.
   app.put("/api/veritatrack/tasks/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
     if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
-    const userId = req.ownerUserId ?? req.user.userId;
+    const taskId = Number(req.params.id);
+    const { row: existing, status } = resolveRowForMutation((db as any).$client, "veritatrack_tasks", taskId, req);
+    if (!existing) {
+      if (status === 403) return res.status(403).json({ error: "You don't have access to this task's lab" });
+      return res.status(404).json({ error: "Task not found" });
+    }
     const { name, category, instrument, owner, frequency, frequency_months, map_analyte, map_field, notes, active } = req.body;
     const freqMonths = frequency_months || frequencyToMonths(frequency || "Monthly");
     sqlite.prepare(
-      "UPDATE veritatrack_tasks SET name=?,category=?,instrument=?,owner=?,frequency=?,frequency_months=?,map_analyte=?,map_field=?,notes=?,active=?,updated_at=datetime('now') WHERE id=? AND user_id=?"
-    ).run(name, category || "Other", instrument || null, owner || null, frequency || "Monthly", freqMonths, map_analyte || null, map_field || null, notes || null, active !== false ? 1 : 0, Number(req.params.id), userId);
-    res.json(sqlite.prepare("SELECT * FROM veritatrack_tasks WHERE id = ?").get(Number(req.params.id)));
+      "UPDATE veritatrack_tasks SET name=?,category=?,instrument=?,owner=?,frequency=?,frequency_months=?,map_analyte=?,map_field=?,notes=?,active=?,updated_at=datetime('now') WHERE id=?"
+    ).run(name, category || "Other", instrument || null, owner || null, frequency || "Monthly", freqMonths, map_analyte || null, map_field || null, notes || null, active !== false ? 1 : 0, taskId);
+    res.json(sqlite.prepare("SELECT * FROM veritatrack_tasks WHERE id = ?").get(taskId));
   });
 
-  // DELETE (soft) task
+  // DELETE (soft) task \u2014 Shape A guard via resolveRowForMutation.
   app.delete("/api/veritatrack/tasks/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
     if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
-    const userId = req.ownerUserId ?? req.user.userId;
-    sqlite.prepare("UPDATE veritatrack_tasks SET active=0 WHERE id=? AND user_id=?").run(Number(req.params.id), userId);
+    const taskId = Number(req.params.id);
+    const { row: existing, status } = resolveRowForMutation((db as any).$client, "veritatrack_tasks", taskId, req);
+    if (!existing) {
+      if (status === 403) return res.status(403).json({ error: "You don't have access to this task's lab" });
+      return res.status(404).json({ error: "Task not found" });
+    }
+    sqlite.prepare("UPDATE veritatrack_tasks SET active=0 WHERE id=?").run(taskId);
     res.json({ ok: true });
   });
 
-  // POST sign off a task
+  // POST sign off a task \u2014 Shape A guard via resolveRowForMutation.
   app.post("/api/veritatrack/tasks/:id/signoff", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
     if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
-    const task = sqlite.prepare(
-      "SELECT * FROM veritatrack_tasks WHERE id = ? AND user_id = ?"
-    ).get(Number(req.params.id), userId) as any;
-    if (!task) return res.status(404).json({ error: "Task not found" });
+    const taskId = Number(req.params.id);
+    const { row: task, status } = resolveRowForMutation<any>((db as any).$client, "veritatrack_tasks", taskId, req);
+    if (!task) {
+      if (status === 403) return res.status(403).json({ error: "You don't have access to this task's lab" });
+      return res.status(404).json({ error: "Task not found" });
+    }
     const { completed_date, initials, performed_by, notes } = req.body;
     if (!completed_date) return res.status(400).json({ error: "completed_date required" });
     const r = sqlite.prepare(
@@ -426,11 +443,16 @@ export function registerVeritaTrackRoutes(
     res.json(sqlite.prepare("SELECT * FROM veritatrack_signoffs WHERE id = ?").get(r.lastInsertRowid));
   });
 
-  // DELETE a sign-off
+  // DELETE a sign-off \u2014 Shape A guard via resolveRowForMutation.
   app.delete("/api/veritatrack/signoffs/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
     if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
-    const userId = req.ownerUserId ?? req.user.userId;
-    sqlite.prepare("DELETE FROM veritatrack_signoffs WHERE id = ? AND user_id = ?").run(Number(req.params.id), userId);
+    const signoffId = Number(req.params.id);
+    const { row: existing, status } = resolveRowForMutation((db as any).$client, "veritatrack_signoffs", signoffId, req);
+    if (!existing) {
+      if (status === 403) return res.status(403).json({ error: "You don't have access to this signoff's lab" });
+      return res.status(404).json({ error: "Signoff not found" });
+    }
+    sqlite.prepare("DELETE FROM veritatrack_signoffs WHERE id = ?").run(signoffId);
     res.json({ ok: true });
   });
 

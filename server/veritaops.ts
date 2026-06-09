@@ -7,6 +7,7 @@ import type { Express } from "express";
 import { db } from "./db";
 import { storePdfToken } from "./pdfTokens";
 import { generateCprtPdf } from "./veritaopsPdf";
+import { resolveRowForMutation } from "./labAccessGuard";
 
 // Plain-language tier labels. Used by the client to show what is in the
 // final CPRT number for a given study.
@@ -136,16 +137,19 @@ export function registerVeritaOpsRoutes(
     res.json(rows);
   });
 
-  // GET by id, account-scoped
+  // GET by id — Shape A guard: accept ownership or lab membership.
   app.get("/api/veritaops/studies/:id", authMiddleware, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) {
       return res.status(403).json({ error: "VeritaOps subscription required" });
     }
-    const ownerId = req.ownerUserId ?? req.userId;
-    const row = sqlite.prepare(
-      "SELECT * FROM veritaops_test_cost_studies WHERE id = ? AND account_id = ?"
-    ).get(Number(req.params.id), ownerId);
-    if (!row) return res.status(404).json({ error: "Study not found" });
+    const { row, status } = resolveRowForMutation(
+      sqlite, "veritaops_test_cost_studies", Number(req.params.id), req,
+      { ownerColumn: "account_id" }
+    );
+    if (!row) {
+      if (status === 403) return res.status(403).json({ error: "You don't have access to this study's lab" });
+      return res.status(404).json({ error: "Study not found" });
+    }
     res.json(row);
   });
 
@@ -201,11 +205,15 @@ export function registerVeritaOpsRoutes(
     if (!hasOpsAccess(req.user, req.scope?.lab)) {
       return res.status(403).json({ error: "VeritaOps subscription required" });
     }
-    const ownerId = req.ownerUserId ?? req.userId;
-    const existing = sqlite.prepare(
-      "SELECT * FROM veritaops_test_cost_studies WHERE id = ? AND account_id = ?"
-    ).get(Number(req.params.id), ownerId) as any;
-    if (!existing) return res.status(404).json({ error: "Study not found" });
+    // Shape A guard: accept ownership or lab membership.
+    const { row: existing, status } = resolveRowForMutation<any>(
+      sqlite, "veritaops_test_cost_studies", Number(req.params.id), req,
+      { ownerColumn: "account_id" }
+    );
+    if (!existing) {
+      if (status === 403) return res.status(403).json({ error: "You don't have access to this study's lab" });
+      return res.status(404).json({ error: "Study not found" });
+    }
     const merged = { ...existing, ...pickInputs(req.body) };
     const outputs = computeCprt(merged);
     const now = new Date().toISOString();
@@ -220,7 +228,7 @@ export function registerVeritaOpsRoutes(
         include_overhead = ?, overhead_method = ?, overhead_value = ?,
         cprt_l1 = ?, cprt_l2 = ?, cprt_l3 = ?, cprt_l4 = ?,
         notes = ?, updated_at = ?
-      WHERE id = ? AND account_id = ?
+      WHERE id = ?
     `).run(
       merged.test_name, merged.loinc, merged.department, merged.annual_volume,
       merged.reagent_cost_per_test, merged.calibrator_kit_cost, merged.cals_per_year,
@@ -231,7 +239,7 @@ export function registerVeritaOpsRoutes(
       merged.include_overhead, merged.overhead_method, merged.overhead_value,
       outputs.cprt_l1, outputs.cprt_l2, outputs.cprt_l3, outputs.cprt_l4,
       merged.notes, now,
-      Number(req.params.id), ownerId,
+      Number(req.params.id),
     );
     const row = sqlite.prepare("SELECT * FROM veritaops_test_cost_studies WHERE id = ?").get(Number(req.params.id));
     res.json(row);
@@ -242,11 +250,16 @@ export function registerVeritaOpsRoutes(
     if (!hasOpsAccess(req.user, req.scope?.lab)) {
       return res.status(403).json({ error: "VeritaOps subscription required" });
     }
-    const ownerId = req.ownerUserId ?? req.userId;
-    const result = sqlite.prepare(
-      "DELETE FROM veritaops_test_cost_studies WHERE id = ? AND account_id = ?"
-    ).run(Number(req.params.id), ownerId);
-    if (result.changes === 0) return res.status(404).json({ error: "Study not found" });
+    // Shape A guard: accept ownership or lab membership.
+    const { row, status } = resolveRowForMutation(
+      sqlite, "veritaops_test_cost_studies", Number(req.params.id), req,
+      { ownerColumn: "account_id" }
+    );
+    if (!row) {
+      if (status === 403) return res.status(403).json({ error: "You don't have access to this study's lab" });
+      return res.status(404).json({ error: "Study not found" });
+    }
+    sqlite.prepare("DELETE FROM veritaops_test_cost_studies WHERE id = ?").run(Number(req.params.id));
     res.json({ ok: true });
   });
 
@@ -257,10 +270,15 @@ export function registerVeritaOpsRoutes(
       return res.status(403).json({ error: "VeritaOps subscription required" });
     }
     const ownerId = req.ownerUserId ?? req.userId;
-    const study = sqlite.prepare(
-      "SELECT * FROM veritaops_test_cost_studies WHERE id = ? AND account_id = ?"
-    ).get(Number(req.params.id), ownerId) as any;
-    if (!study) return res.status(404).json({ error: "Study not found" });
+    // Shape A guard: accept ownership or lab membership.
+    const { row: study, status } = resolveRowForMutation<any>(
+      sqlite, "veritaops_test_cost_studies", Number(req.params.id), req,
+      { ownerColumn: "account_id" }
+    );
+    if (!study) {
+      if (status === 403) return res.status(403).json({ error: "You don't have access to this study's lab" });
+      return res.status(404).json({ error: "Study not found" });
+    }
     const ownerRow = sqlite.prepare(
       "SELECT clia_lab_name, clia_number, name, email FROM users WHERE id = ?"
     ).get(ownerId) as any;
