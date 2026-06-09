@@ -3327,6 +3327,9 @@ function QuizzesTab({ program }: { program: Program }) {
   const [newQuizOpen, setNewQuizOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<QuizListItem | null>(null);
   const [previewQuizId, setPreviewQuizId] = useState<number | null>(null);
+  // 2026-06-09 PR2: Assign-to-employees dialog. Opens the bulk-assign
+  // multi-select that creates competency_quiz_assignments rows.
+  const [assignQuizId, setAssignQuizId] = useState<number | null>(null);
 
   const { data: quizzes, isLoading } = useQuery<QuizListItem[]>({
     queryKey: ["/api/veritacomp/programs", program.id, "quizzes"],
@@ -3410,30 +3413,15 @@ function QuizzesTab({ program }: { program: Program }) {
             ) : (
               <div className="space-y-2">
                 {programQuizzes.map(q => (
-                  <Card
+                  <QuizCardWithAssignStatus
                     key={q.id}
-                    className="cursor-pointer hover:bg-muted/40 transition-colors"
-                    onClick={() => setPreviewQuizId(q.id)}
-                  >
-                    <CardContent className="py-3 flex items-center justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium truncate">{q.title || q.method_group_name || `Quiz #${q.id}`}</div>
-                        <div className="text-[11px] text-muted-foreground truncate">
-                          {methodGroupNames(q)} &middot; created {q.created_at.split("T")[0]}
-                        </div>
-                      </div>
-                      {!isReadOnly && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive"
-                          onClick={(e) => { e.stopPropagation(); setConfirmDelete(q); }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </CardContent>
-                  </Card>
+                    quiz={q}
+                    methodGroupLabel={methodGroupNames(q)}
+                    isReadOnly={isReadOnly}
+                    onPreview={() => setPreviewQuizId(q.id)}
+                    onAssign={() => setAssignQuizId(q.id)}
+                    onDelete={() => setConfirmDelete(q)}
+                  />
                 ))}
               </div>
             )}
@@ -3483,6 +3471,16 @@ function QuizzesTab({ program }: { program: Program }) {
         />
       )}
 
+      {assignQuizId !== null && (
+        <AssignQuizDialog
+          quizId={assignQuizId}
+          onClose={() => setAssignQuizId(null)}
+          onAssigned={() => {
+            qc.invalidateQueries({ queryKey: ["/api/veritacomp/quizzes", assignQuizId, "assignments"] });
+          }}
+        />
+      )}
+
       {confirmDelete && (
         <Dialog open onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}>
           <DialogContent className="max-w-md">
@@ -3507,6 +3505,290 @@ function QuizzesTab({ program }: { program: Program }) {
         </Dialog>
       )}
     </div>
+  );
+}
+
+// ── 2026-06-09 PR2: QuizCardWithAssignStatus ───────────────────────────
+// Each row in the Quizzes tab. Surfaces the assign roster (assigned /
+// completed / overdue counts) so the director sees status at a glance,
+// and exposes an "Assign" action that opens AssignQuizDialog.
+interface QuizAssignmentSummary {
+  id: number;
+  staff_employee_id: number;
+  employee_name: string;
+  employee_title: string | null;
+  due_date: string | null;
+  status: "assigned" | "completed";
+  assigned_at: string;
+  completed_at: string | null;
+  completed_result_id: number | null;
+  score: number | null;
+  passed: number | null;
+}
+
+function QuizCardWithAssignStatus({
+  quiz, methodGroupLabel, isReadOnly, onPreview, onAssign, onDelete,
+}: {
+  quiz: QuizListItem;
+  methodGroupLabel: string;
+  isReadOnly: boolean;
+  onPreview: () => void;
+  onAssign: () => void;
+  onDelete: () => void;
+}) {
+  const { data: assignmentData } = useQuery<{ assignments: QuizAssignmentSummary[] }>({
+    queryKey: ["/api/veritacomp/quizzes", quiz.id, "assignments"],
+    queryFn: async () => {
+      const r = await fetch(`${API_BASE}/api/veritacomp/quizzes/${quiz.id}/assignments`, { headers: authHeaders() });
+      if (!r.ok) return { assignments: [] };
+      return r.json();
+    },
+  });
+  const assignments = assignmentData?.assignments ?? [];
+  const total = assignments.length;
+  const completed = assignments.filter(a => a.status === "completed").length;
+  const pending = total - completed;
+  const today = new Date().toISOString().slice(0, 10);
+  const overdue = assignments.filter(a => a.status === "assigned" && a.due_date && a.due_date < today).length;
+
+  return (
+    <Card
+      className="cursor-pointer hover:bg-muted/40 transition-colors"
+      onClick={onPreview}
+    >
+      <CardContent className="py-3 space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium truncate">{quiz.title || quiz.method_group_name || `Quiz #${quiz.id}`}</div>
+            <div className="text-[11px] text-muted-foreground truncate">
+              {methodGroupLabel} &middot; created {quiz.created_at.split("T")[0]}
+              {quiz.randomize_questions ? " · randomized" : ""}
+            </div>
+          </div>
+          {!isReadOnly && (
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs h-7"
+                onClick={(e) => { e.stopPropagation(); onAssign(); }}
+                data-testid={`quiz-assign-btn-${quiz.id}`}
+              >
+                <Users className="h-3.5 w-3.5 mr-1" /> Assign
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </div>
+        {total > 0 && (
+          <div className="text-[11px] flex items-center gap-3 pt-1 border-t border-border">
+            <span className="text-muted-foreground">Status:</span>
+            <span className="font-medium text-emerald-700 dark:text-emerald-400">{completed} completed</span>
+            <span className="font-medium text-amber-700 dark:text-amber-400">{pending} pending</span>
+            {overdue > 0 && (
+              <span className="font-semibold text-red-700 dark:text-red-400">{overdue} overdue</span>
+            )}
+            <span className="text-muted-foreground">of {total} assigned</span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── 2026-06-09 PR2: AssignQuizDialog ────────────────────────────────────
+// Bulk-assign the quiz to N staff employees from the current lab's
+// universal VeritaStaff roster. Reuses /api/labs/:labId/veritastaff
+// (the roster endpoint already powering the employee picker elsewhere).
+interface StaffEmpForAssign {
+  id: number;
+  first_name: string;
+  last_name: string;
+  title: string | null;
+  status: string;
+}
+
+function AssignQuizDialog({
+  quizId, onClose, onAssigned,
+}: {
+  quizId: number;
+  onClose: () => void;
+  onAssigned: () => void;
+}) {
+  const { toast } = useToast();
+  const activeLabId = useActiveLabId();
+  const [picked, setPicked] = useState<Set<number>>(new Set());
+  const [dueDate, setDueDate] = useState<string>("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const { data: roster } = useQuery<StaffEmpForAssign[]>({
+    queryKey: ["/api/labs", activeLabId, "staff/employees", "for-quiz-assign"],
+    queryFn: async () => {
+      if (!activeLabId) return [];
+      const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/staff/employees`, { headers: authHeaders() });
+      if (!r.ok) return [];
+      const data = await r.json();
+      const list = Array.isArray(data) ? data : (data.employees || []);
+      return list.filter((e: any) => (e.status || "active") === "active");
+    },
+    enabled: !!activeLabId,
+  });
+
+  const { data: existing } = useQuery<{ assignments: QuizAssignmentSummary[] }>({
+    queryKey: ["/api/veritacomp/quizzes", quizId, "assignments"],
+    queryFn: async () => {
+      const r = await fetch(`${API_BASE}/api/veritacomp/quizzes/${quizId}/assignments`, { headers: authHeaders() });
+      if (!r.ok) return { assignments: [] };
+      return r.json();
+    },
+  });
+  const alreadyAssignedIds = new Set((existing?.assignments || []).map(a => a.staff_employee_id));
+
+  function togglePick(id: number) {
+    setPicked(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function selectAllUnassigned() {
+    if (!roster) return;
+    const next = new Set<number>();
+    for (const e of roster) {
+      if (!alreadyAssignedIds.has(e.id)) next.add(e.id);
+    }
+    setPicked(next);
+  }
+  function clearAll() { setPicked(new Set()); }
+
+  async function submit() {
+    if (picked.size === 0) {
+      toast({ title: "Pick at least one employee", variant: "destructive" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/veritacomp/quizzes/${quizId}/assignments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({
+          staff_employee_ids: Array.from(picked),
+          due_date: dueDate || null,
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || "Assign failed");
+      toast({
+        title: `Assigned to ${data.created?.length || 0} employee${data.created?.length === 1 ? "" : "s"}`,
+        description: data.skipped?.length
+          ? `${data.skipped.length} were already assigned and were skipped.`
+          : undefined,
+      });
+      onAssigned();
+      onClose();
+    } catch (e: any) {
+      toast({ title: "Assign failed", description: e.message, variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto" data-testid="assign-quiz-dialog">
+        <DialogHeader>
+          <DialogTitle>Assign quiz to employees</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Each picked employee will see this quiz in their Staff Portal under "Take a Quiz". Employees already
+            assigned to this quiz are shown but cannot be re-assigned.
+          </p>
+
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" className="text-xs h-7" onClick={selectAllUnassigned}>
+                Select all unassigned
+              </Button>
+              <Button size="sm" variant="outline" className="text-xs h-7" onClick={clearAll}>
+                Clear
+              </Button>
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              {picked.size} selected
+            </div>
+          </div>
+
+          {!roster ? (
+            <div className="text-xs text-muted-foreground">Loading roster...</div>
+          ) : roster.length === 0 ? (
+            <div className="text-xs text-muted-foreground">
+              No active employees on this lab's VeritaStaff roster.
+            </div>
+          ) : (
+            <div className="space-y-1 max-h-72 overflow-y-auto border border-border rounded-md p-2" data-testid="assign-quiz-roster">
+              {roster.map((e) => {
+                const already = alreadyAssignedIds.has(e.id);
+                const checked = picked.has(e.id);
+                return (
+                  <label
+                    key={e.id}
+                    className={`flex items-center gap-2 text-xs cursor-pointer rounded px-1.5 py-1 ${
+                      already ? "opacity-50 cursor-not-allowed" : "hover:bg-muted/40"
+                    }`}
+                  >
+                    <Checkbox
+                      checked={checked}
+                      disabled={already}
+                      onCheckedChange={() => !already && togglePick(e.id)}
+                      data-testid={`assign-quiz-pick-${e.id}`}
+                    />
+                    <span className="flex-1 truncate">
+                      {e.first_name} {e.last_name}
+                      {e.title ? <span className="text-muted-foreground"> · {e.title}</span> : null}
+                    </span>
+                    {already && (
+                      <span className="text-[10px] text-muted-foreground italic">already assigned</span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="space-y-1">
+            <Label htmlFor="assign-due-date" className="text-xs">Due date (optional)</Label>
+            <Input
+              id="assign-due-date"
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="w-48"
+              data-testid="assign-quiz-due-date"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
+            <Button
+              size="sm"
+              onClick={submit}
+              disabled={submitting || picked.size === 0}
+              data-testid="assign-quiz-submit"
+            >
+              {submitting ? "Assigning..." : `Assign to ${picked.size}`}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
