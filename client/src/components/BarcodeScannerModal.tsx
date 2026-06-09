@@ -83,6 +83,7 @@ export default function BarcodeScannerModal({
   apiBase,
   authHeaders,
   inventory,
+  activeLabId,
   onScanComplete,
   onBindComplete,
 }: Props) {
@@ -139,9 +140,15 @@ export default function BarcodeScannerModal({
         return;
       }
 
-      // Scan mode: POST /api/inventory/scan with the current action.
+      // Scan mode: POST /api/labs/:labId/inventory/scan when activeLabId
+      // is set (Tier 2 multi-lab path) so the server reads by lab_id, not
+      // the legacy account_id. Falls back to /api/inventory/scan when no
+      // active lab is resolved (unauthed kiosk uses a different path).
       try {
-        const res = await fetch(`${apiBase}/api/inventory/scan`, {
+        const scanUrl = activeLabId
+          ? `${apiBase}/api/labs/${activeLabId}/inventory/scan`
+          : `${apiBase}/api/inventory/scan`;
+        const res = await fetch(scanUrl, {
           method: "POST",
           headers: { ...authHeaders(), "Content-Type": "application/json" },
           body: JSON.stringify({ barcode_value: decoded, action }),

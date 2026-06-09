@@ -1,5 +1,10 @@
 // tests/playwright/scanner-typed-fallback.spec.ts
 //
+// 2026-06-08 later: also the test-file anchor for the lab-scoping fix
+// (/api/inventory/scan -> /api/labs/:labId/inventory/scan). The modal
+// now branches on activeLabId; the typed flow exercises whichever
+// path is wired without the spec needing to know which URL fires.
+//
 // Gate 3 step 8 for the typed-fallback PR (2026-06-08).
 // iOS Safari's html5-qrcode runs the slower ZXing JS decoder (no native
 // BarcodeDetector) so a real-camera scan is unreliable. The typed
