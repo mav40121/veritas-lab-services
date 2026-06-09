@@ -301,14 +301,20 @@ Apply to every task, not just large ones.
 
 **Per-seat additional-seat model:** each tier's $/seat rate applies to ACTIVE seats above the tier-included count. No more total-seat-count bands. To get a lower per-seat rate, the customer upgrades tiers. The function `getSeatPriceForTier(plan)` in `server/stripe.ts` returns the tier-indexed add-on rate.
 
-**View-only seats (medical director / designee, technical consultant, technical supervisor, general supervisor, reviewers):** capped per tier, with a low-rate add-on. Included counts:
+**Staff Portal (read-and-sign access for non-writer staff)** — retires the prior $99/seat view-only model as of 2026-06-08 (locked at 0 paying labs, no grandfathering risk). One shared lab kiosk login (CLIA + PIN, synthetic JWT, per-event signature capture cross-referenced to VeritaStaff™ employee dropdown). Surveyor-defensible audit trail. Used for policy read-and-sign, competency self-attestation, inventory adjustments, credential viewing, corrective-action acknowledgements.
 
-- Clinic: **1 view-only seat included**
-- Community: **2 view-only seats included**
-- Hospital: **3 view-only seats included**
-- System: negotiated per quote
+Pricing is a flat band by staff count, not per user. Pitch line: **"You pay for who edits, plus a small flat band for who reads."**
 
-Additional view-only seats at any tier: **$99/yr per seat**. Add-on Stripe price ID lands in `server/stripe.ts` when the SKU is created; until then, view-only add-ons are billed manually via invoice. The "unlimited view-only" framing from earlier MEDIUM-pricing memos is RETIRED as of 2026-05-29; the included counts above replace it.
+- **Small band:** up to 25 staff — **$149/yr**
+- **Medium band:** up to 100 staff — **$399/yr**
+- **Large band:** up to 250 staff — **$799/yr**
+- **Above 250 staff:** System tier custom quote, Staff Portal included in negotiation
+
+Bands map to base tier archetypes: Small ≈ Clinic, Medium ≈ Community, Large ≈ Hospital. Each band is 14-19% of the base tier it maps to, and 7-15% of MediaLab's per-user equivalent at the same staff count. Honor system on staff count at the current scale; automated enforcement deferred until revenue justifies the build.
+
+Stripe price IDs land in `server/stripe.ts` once the SKUs are created in the Stripe dashboard. Until then, Staff Portal add-ons are billed manually via invoice. Constants in `server/stripe.ts` reference env vars (`STRIPE_STAFF_PORTAL_SMALL_PRICE`, `STRIPE_STAFF_PORTAL_MEDIUM_PRICE`, `STRIPE_STAFF_PORTAL_LARGE_PRICE`) so the SKU creation can be done in the dashboard without a code deploy.
+
+**Retired (preserve legacy IDs, never reference for NEW checkouts):** the $99/yr view-only seat add-on model (Clinic 1 / Community 2 / Hospital 3 included counts, $99/seat extras). The constants `VIEW_ONLY_ADDON_RATE_PER_YEAR`, `VIEW_ONLY_ADDON_UNIT_AMOUNT_CENTS`, and `getViewOnlyAddOnPriceId()` stay defined in `server/stripe.ts` per the no-delete rule. No customer is on this structure (0 paying labs at time of retirement).
 
 **Coupons:**
 
@@ -331,7 +337,7 @@ Additional view-only seats at any tier: **$99/yr per seat**. Add-on Stripe price
 
 **COLA grandfather policy:** see `project_cola_pricing_grandfather_policy.md` memory. Three layers: COLA2026 code through 2026-12-31, named-contact honored pricing OR Founder terms through 2026-09-30, new pricing for everyone else.
 
-- Pricing tier is selected by the customer based on the number of active (writer) seats they need. View-only seats follow the per-tier included counts above (1 / 2 / 3) with a $99/yr add-on for extras. No "auto-assignment from specialty count" — that was an earlier pricing concept that was retired.
+- Pricing tier is selected by the customer based on the number of active (writer) seats they need. Read-and-sign staff access is handled by the Staff Portal flat-band add-on described above (Small/Medium/Large by staff count), NOT per-seat. No "auto-assignment from specialty count" — that was an earlier pricing concept that was retired.
 
 ---
 

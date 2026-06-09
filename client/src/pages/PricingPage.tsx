@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle2, ChevronRight, Building2, CreditCard, FileText, ShieldCheck, Lock, Quote, Minus, Check, ArrowRight, X } from "lucide-react";
+import { CheckCircle2, ChevronRight, Building2, CreditCard, FileText, ShieldCheck, Lock, Quote, Minus, Check, ArrowRight, X, Users } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
 
 // COLA Nashville banner: auto-hides on May 9, 2026 onward
@@ -480,8 +480,57 @@ return (
 
         {/* Seat note */}
         <p className="text-xs text-center text-muted-foreground">
-          Active seats include the account owner. Additional active seats above the tier-included count are priced at the tier's per-seat rate. View-only access for medical directors, technical consultants, technical supervisors, and reviewers is included at 1 seat on Clinic, 2 on Community, 3 on Hospital; additional view-only seats are $99 per year.
+          Active seats include the account owner. Additional active seats above the tier-included count are priced at the tier's per-seat rate. Read-and-sign access for staff who only acknowledge policies, sign competency, or run inventory scans is handled by the Staff Portal add-on below, not per seat.
         </p>
+
+        {/* Staff Portal add-on. Locked 2026-06-08. Replaces the retired
+            $99/yr view-only seat model. Pitch: "you pay for who edits,
+            plus a small flat band for who reads." Bands map to base tier
+            archetypes (Small ~ Clinic, Medium ~ Community, Large ~
+            Hospital). Above 250 staff routes to System tier custom quote
+            where the portal is bundled. */}
+        <div className="border-2 border-primary/30 bg-gradient-to-br from-primary/5 to-transparent rounded-xl p-6 sm:p-8">
+          <div className="text-center mb-6">
+            <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary mb-2">
+              <Users size={14} /> Staff Portal Add-On
+            </div>
+            <h3 className="font-serif text-xl sm:text-2xl font-bold tracking-tight mb-2">
+              You pay for who edits, plus a small flat band for who reads.
+            </h3>
+            <p className="text-sm text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+              One shared lab kiosk login for staff who only need read-and-sign access:
+              policy acknowledgements, competency self-attestation, inventory adjustments,
+              credential view. Per-event signature capture cross-referenced to your VeritaStaff&trade; roster.
+              Surveyor-defensible audit trail. Flat band by lab size, not per user.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
+            <div className="border border-border rounded-lg bg-background p-5 text-center">
+              <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Small</div>
+              <div className="font-serif text-2xl font-bold mb-1">$149<span className="text-sm font-normal text-muted-foreground">/yr</span></div>
+              <div className="text-xs text-muted-foreground">Up to 25 staff</div>
+            </div>
+            <div className="border-2 border-primary rounded-lg bg-background p-5 text-center relative">
+              <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded">
+                Most labs
+              </div>
+              <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Medium</div>
+              <div className="font-serif text-2xl font-bold mb-1">$399<span className="text-sm font-normal text-muted-foreground">/yr</span></div>
+              <div className="text-xs text-muted-foreground">Up to 100 staff</div>
+            </div>
+            <div className="border border-border rounded-lg bg-background p-5 text-center">
+              <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Large</div>
+              <div className="font-serif text-2xl font-bold mb-1">$799<span className="text-sm font-normal text-muted-foreground">/yr</span></div>
+              <div className="text-xs text-muted-foreground">Up to 250 staff</div>
+            </div>
+          </div>
+
+          <p className="text-xs text-center text-muted-foreground mt-5 max-w-2xl mx-auto">
+            Above 250 staff? You're already a System-tier customer, and Staff Portal is included in your custom quote.
+            Compare to per-user document-control products charging $30 to $45 per staff per year.
+          </p>
+        </div>
 
         {/* Money-Back Guarantee */}
         <div className="border border-primary/20 bg-primary/5 rounded-lg p-6 text-center">
