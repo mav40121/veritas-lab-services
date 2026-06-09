@@ -16346,11 +16346,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const emp = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ? AND lab_id = ?").get(req.params.id, lab.id) as any;
     if (!emp) return res.status(404).json({ error: "Employee not found" });
 
-    const { lastName, firstName, middleInitial, title, titleCode, hireDate, qualificationsText, qualificationsVerifiedAt, qualificationsVerifiedBy, highestComplexity, performsTesting, roles } = req.body;
+    const { lastName, firstName, middleInitial, title, titleCode, hireDate, qualificationsText, qualificationsVerifiedAt, qualificationsVerifiedBy, highestComplexity, performsTesting, roles, canAdjustInventory, canViewAudit } = req.body;
     const now = new Date().toISOString();
 
     (db as any).$client.prepare(
-      "UPDATE staff_employees SET last_name=?, first_name=?, middle_initial=?, title=?, title_code=?, hire_date=?, qualifications_text=?, qualifications_verified_at=?, qualifications_verified_by=?, highest_complexity=?, performs_testing=?, updated_at=? WHERE id=?"
+      "UPDATE staff_employees SET last_name=?, first_name=?, middle_initial=?, title=?, title_code=?, hire_date=?, qualifications_text=?, qualifications_verified_at=?, qualifications_verified_by=?, highest_complexity=?, performs_testing=?, can_adjust_inventory=?, can_view_audit=?, updated_at=? WHERE id=?"
     ).run(
       lastName?.trim() || emp.last_name, firstName?.trim() || emp.first_name,
       middleInitial !== undefined ? middleInitial : emp.middle_initial,
@@ -16362,6 +16362,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       qualificationsVerifiedBy !== undefined ? qualificationsVerifiedBy : emp.qualifications_verified_by,
       highestComplexity || emp.highest_complexity,
       performsTesting !== undefined ? (performsTesting ? 1 : 0) : emp.performs_testing,
+      // 2026-06-08 Staff Portal toggles. Only accept the input when
+      // explicitly provided; otherwise preserve existing values. The
+      // route is already gated on requireWriteAccess + requireModuleEdit
+      // so non-seat users cannot reach this code path.
+      canAdjustInventory !== undefined ? (canAdjustInventory ? 1 : 0) : (emp.can_adjust_inventory ?? 0),
+      canViewAudit !== undefined ? (canViewAudit ? 1 : 0) : (emp.can_view_audit ?? 0),
       now, req.params.id
     );
 

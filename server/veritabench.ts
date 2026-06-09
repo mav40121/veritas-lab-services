@@ -1063,16 +1063,26 @@ export function registerVeritaBenchRoutes(
       const rawBarcode = req.body?.barcode_value;
       const requestedAction = req.body?.action ?? "decrement";
       const correctionDelta = Number(req.body?.quantity_delta);
+      // 2026-06-08: set_qty is the primary action for the count-workflow
+      // UI (task #129). The client sends the new absolute qty in
+      // quantity_new; the server computes delta = new - current_qty and
+      // applies it as a correction. Validated separately from
+      // correction so the client can stay simple and not have to know
+      // the current qty before submitting.
+      const quantityNew = Number(req.body?.quantity_new);
       const notes = typeof req.body?.notes === "string" ? req.body.notes : null;
       if (typeof rawBarcode !== "string" || rawBarcode.trim() === "") {
         return res.status(400).json({ error: "barcode_value is required and must be a non-empty string." });
       }
-      const ALLOWED_ACTIONS = ["decrement", "increment", "lookup_only", "correction"] as const;
+      const ALLOWED_ACTIONS = ["decrement", "increment", "lookup_only", "correction", "set_qty"] as const;
       if (!(ALLOWED_ACTIONS as readonly string[]).includes(requestedAction)) {
         return res.status(400).json({ error: `action must be one of ${ALLOWED_ACTIONS.join(", ")}` });
       }
       if (requestedAction === "correction" && !Number.isFinite(correctionDelta)) {
         return res.status(400).json({ error: "action=correction requires a finite quantity_delta number." });
+      }
+      if (requestedAction === "set_qty" && (!Number.isFinite(quantityNew) || quantityNew < 0)) {
+        return res.status(400).json({ error: "action=set_qty requires a finite non-negative quantity_new number." });
       }
       const barcode = rawBarcode.trim();
       const ipRaw = (req?.ip || req?.headers?.["x-forwarded-for"] || "").toString();
@@ -1101,6 +1111,7 @@ export function registerVeritaBenchRoutes(
           else if (requestedAction === "increment") delta = 1;
           else if (requestedAction === "lookup_only") delta = 0;
           else if (requestedAction === "correction") delta = Math.trunc(correctionDelta);
+          else if (requestedAction === "set_qty") delta = Math.trunc(quantityNew) - qtyBefore;
           const qtyAfter = Math.max(0, qtyBefore + delta);
           const actualDelta = qtyAfter - qtyBefore;
           if (requestedAction !== "lookup_only" && actualDelta !== 0) {
