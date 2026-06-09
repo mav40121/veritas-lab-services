@@ -50,6 +50,8 @@
     "@types/cookie-parser": "^1.4.10",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.1.0",
+    "@zxing/browser": "^0.2.0",
+    "@zxing/library": "^0.22.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^11.10.0",
     "bwip-js": "^4.11.1",

@@ -80,9 +80,19 @@ export default function InventoryCountWorkflow({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedDelta, setSavedDelta] = useState<number | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [scannerEngine, setScannerEngine] = useState<"native" | "zxing" | null>(null);
 
-  const scannerDivId = "inventory-count-scanner";
-  const scannerRef = useRef<any>(null);
+  // 2026-06-09 PR #682: ripped out html5-qrcode (was failing on iPhone
+  // Safari + Chrome desktop — a dedicated barcode app on the same phone
+  // reads the same label fine, so the broken piece was the library, not
+  // the camera or the label). New pipeline uses the native BarcodeDetector
+  // API directly when present (Safari iOS 17+, Chrome/Edge desktop, Android
+  // Chrome) and falls back to @zxing/browser for older browsers. Same
+  // path the working scanner apps use under the hood (Apple Vision /
+  // ZXing).
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const stopScannerRef = useRef<(() => void) | null>(null);
 
   // Reset modal state every time it opens.
   useEffect(() => {
@@ -98,79 +108,188 @@ export default function InventoryCountWorkflow({
     setCameraOpen(false);
   }, [open]);
 
+  // Centralized scanner teardown. Stops the per-frame loop / zxing
+  // controls, then stops every track on the MediaStream and clears the
+  // <video>.srcObject. Idempotent — safe to call from cleanup, the close
+  // button, and the success path.
+  function teardownScanner() {
+    if (stopScannerRef.current) {
+      try { stopScannerRef.current(); } catch { /* noop */ }
+      stopScannerRef.current = null;
+    }
+    if (streamRef.current) {
+      try { streamRef.current.getTracks().forEach((t) => t.stop()); } catch { /* noop */ }
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      try { videoRef.current.srcObject = null; } catch { /* noop */ }
+    }
+    setScannerEngine(null);
+  }
+
   // Teardown the scanner when the camera closes or the modal closes.
   useEffect(() => {
     if (cameraOpen) return;
-    const r = scannerRef.current;
-    if (r) {
-      try { r.stop().catch(() => {}); } catch { /* noop */ }
-      scannerRef.current = null;
-    }
+    teardownScanner();
   }, [cameraOpen]);
 
+  // Final teardown on unmount.
   useEffect(() => {
-    return () => {
-      const r = scannerRef.current;
-      if (r) {
-        try { r.stop().catch(() => {}); } catch { /* noop */ }
-      }
-    };
+    return () => { teardownScanner(); };
   }, []);
 
   // Start the camera scanner when cameraOpen flips on.
-  // 2026-06-09 PR #681 tuning for iPhone Safari + Code 128:
-  //   - request 1920x1080 (or as close as possible) so each Code 128 bar
-  //     spans enough pixels to decode
-  //   - qrbox is wide + short (Code 128 is a 1D horizontal barcode, not
-  //     a square QR code). Computed from viewport so it scales with the
-  //     mobile-fullscreen mode.
-  //   - keep the experimental BarcodeDetector enabled (helps on
-  //     iOS 17+; falls back to ZXing-JS on older devices).
+  // Pipeline (in order of preference):
+  //   1. Native BarcodeDetector (Safari iOS 17+, Chrome/Edge desktop,
+  //      Android Chrome). Backed by Apple Vision on iOS / Google ML Kit
+  //      on Android — the same engines the working barcode apps use.
+  //   2. @zxing/browser fallback for older browsers without
+  //      window.BarcodeDetector.
+  // Both run against the same <video> element fed by a single
+  // getUserMedia call requesting 1920x1080 environment-facing.
   useEffect(() => {
     if (!open || !cameraOpen) return;
     let cancelled = false;
     setScannerError(null);
+
     (async () => {
+      let stream: MediaStream | null = null;
       try {
-        const mod = await import("html5-qrcode");
-        if (cancelled) return;
-        const Html5Qrcode = (mod as any).Html5Qrcode;
-        const Html5QrcodeSupportedFormats = (mod as any).Html5QrcodeSupportedFormats;
-        const scanner = new Html5Qrcode(scannerDivId, {
-          formatsToSupport: [Html5QrcodeSupportedFormats.CODE_128],
-          experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-        } as any);
-        scannerRef.current = scanner;
-        await scanner.start(
-          { facingMode: "environment" },
-          {
-            fps: 30,
-            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
-              width: Math.floor(Math.min(viewfinderWidth * 0.92, 600)),
-              height: Math.floor(Math.min(viewfinderHeight * 0.30, 200)),
-            }),
-            videoConstraints: {
-              facingMode: { ideal: "environment" },
-              width: { ideal: 1920 },
-              height: { ideal: 1080 },
-              aspectRatio: { ideal: 16 / 9 },
-            } as any,
-            aspectRatio: 16 / 9,
-          } as any,
-          (decodedText: string) => {
-            // First successful read wins; stop the camera and trigger lookup
-            try { scanner.stop().catch(() => {}); } catch { /* noop */ }
-            scannerRef.current = null;
-            setCameraOpen(false);
-            triggerLookup(decodedText.trim());
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
           },
-          () => { /* scan errors per frame — ignore */ }
+          audio: false,
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        const video = videoRef.current;
+        if (!video) {
+          stream.getTracks().forEach((t) => t.stop());
+          streamRef.current = null;
+          return;
+        }
+        video.srcObject = stream;
+        video.setAttribute("playsinline", "true");
+        video.muted = true;
+        try { await video.play(); } catch { /* iOS sometimes throws here; the stream is still live */ }
+
+        const onHit = (text: string) => {
+          if (cancelled) return;
+          const trimmed = text.trim();
+          if (!trimmed) return;
+          cancelled = true;
+          // Defer teardown so React state updates fire in order.
+          setTimeout(() => {
+            teardownScanner();
+            setCameraOpen(false);
+            triggerLookup(trimmed);
+          }, 0);
+        };
+
+        // ---- Path 1: native BarcodeDetector
+        const BDCtor: any = (window as any).BarcodeDetector;
+        if (BDCtor) {
+          try {
+            let supported: string[] = [];
+            if (typeof BDCtor.getSupportedFormats === "function") {
+              supported = await BDCtor.getSupportedFormats();
+            }
+            if (supported.length === 0 || supported.includes("code_128")) {
+              const detector = new BDCtor({ formats: ["code_128"] });
+              setScannerEngine("native");
+              let stopped = false;
+              const useVfc = typeof (video as any).requestVideoFrameCallback === "function";
+              let rafId = 0;
+              const tick = async () => {
+                if (stopped || cancelled) return;
+                try {
+                  const codes = await detector.detect(video);
+                  if (codes && codes.length > 0) {
+                    const t = codes[0].rawValue || codes[0].rawText || "";
+                    if (t) {
+                      stopped = true;
+                      onHit(String(t));
+                      return;
+                    }
+                  }
+                } catch { /* per-frame errors are noisy and benign; swallow */ }
+                if (useVfc) {
+                  rafId = (video as any).requestVideoFrameCallback(tick);
+                } else {
+                  rafId = window.requestAnimationFrame(tick);
+                }
+              };
+              if (useVfc) {
+                rafId = (video as any).requestVideoFrameCallback(tick);
+              } else {
+                rafId = window.requestAnimationFrame(tick);
+              }
+              stopScannerRef.current = () => {
+                stopped = true;
+                try {
+                  if (useVfc && typeof (video as any).cancelVideoFrameCallback === "function") {
+                    (video as any).cancelVideoFrameCallback(rafId);
+                  } else {
+                    window.cancelAnimationFrame(rafId);
+                  }
+                } catch { /* noop */ }
+              };
+              return;
+            }
+          } catch { /* fall through to zxing */ }
+        }
+
+        // ---- Path 2: @zxing/browser
+        const [browserMod, libMod] = await Promise.all([
+          import("@zxing/browser"),
+          import("@zxing/library"),
+        ]);
+        if (cancelled) return;
+        const { BrowserMultiFormatReader } = browserMod as any;
+        const { BarcodeFormat, DecodeHintType } = libMod as any;
+        const hints = new Map<any, any>();
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128]);
+        hints.set(DecodeHintType.TRY_HARDER, true);
+        const reader = new BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 100 });
+        setScannerEngine("zxing");
+        const controls: any = await reader.decodeFromStream(
+          stream,
+          video,
+          (result: any, _err: any, ctl: any) => {
+            if (cancelled) return;
+            if (result) {
+              try { ctl?.stop?.(); } catch { /* noop */ }
+              const text = typeof result.getText === "function" ? result.getText() : String(result);
+              onHit(text);
+            }
+          }
         );
+        stopScannerRef.current = () => {
+          try { controls?.stop?.(); } catch { /* noop */ }
+        };
       } catch (err: any) {
-        if (!cancelled) setScannerError(err?.message || "Camera unavailable");
+        if (!cancelled) {
+          setScannerError(err?.message || "Camera unavailable");
+          if (stream) {
+            try { stream.getTracks().forEach((t) => t.stop()); } catch { /* noop */ }
+            streamRef.current = null;
+          }
+        }
       }
     })();
-    return () => { cancelled = true; };
+
+    return () => {
+      cancelled = true;
+      teardownScanner();
+    };
+    // teardownScanner is stable (uses refs); intentionally omitted from deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraOpen, open]);
 
   // 2026-06-09: photo-capture fallback for iPhone Safari when the live
@@ -312,7 +431,26 @@ export default function InventoryCountWorkflow({
           <div className="space-y-4">
             {cameraOpen ? (
               <div className="space-y-3">
-                <div id={scannerDivId} className="w-full h-[55vh] sm:h-auto sm:aspect-video bg-black rounded-md overflow-hidden" data-testid="count-workflow-scanner" />
+                <div className="relative w-full h-[55vh] sm:h-auto sm:aspect-video bg-black rounded-md overflow-hidden">
+                  <video
+                    ref={videoRef}
+                    className="w-full h-full object-cover"
+                    data-testid="count-workflow-scanner"
+                    playsInline
+                    muted
+                    autoPlay
+                  />
+                  {/* Wide-short reticle for 1D Code 128 (purely visual; the
+                      decoder scans the full frame). */}
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <div className="border-2 border-teal-400/80 rounded-md" style={{ width: "92%", maxWidth: 600, height: 110 }} />
+                  </div>
+                  {scannerEngine && (
+                    <div className="absolute top-2 right-2 text-[10px] uppercase tracking-wide bg-black/60 text-white px-2 py-0.5 rounded">
+                      {scannerEngine === "native" ? "Native" : "ZXing"}
+                    </div>
+                  )}
+                </div>
                 {scannerError && (
                   <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-2">{scannerError}</div>
                 )}
