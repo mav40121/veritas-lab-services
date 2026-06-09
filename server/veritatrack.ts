@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { db } from "./db";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
-import { resolveRowForMutation } from "./labAccessGuard";
+import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
 
 function trackLicenseCtx(req: any): LicenseContext {
   const u = req?.user || null;
@@ -303,12 +303,17 @@ export function registerVeritaTrackRoutes(
   );
 
   // GET all tasks with latest sign-off and computed status
+  // Shape A broader sweep (2026-06-09): scope by the active lab via
+  // resolveLegacyLabId, not the user's user_id. Multi-lab owners
+  // viewing /veritatrack on a secondary lab were seeing primary-lab
+  // tasks bleed in.
   app.get("/api/veritatrack/tasks", authMiddleware, (req: any, res) => {
     if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
-    const userId = req.ownerUserId ?? req.user.userId;
+    const labId = resolveLegacyLabId((db as any).$client, req);
+    if (!labId) return res.json([]);
     const tasks = sqlite.prepare(
-      "SELECT * FROM veritatrack_tasks WHERE user_id = ? AND active = 1 ORDER BY category, name"
-    ).all(userId) as any[];
+      "SELECT * FROM veritatrack_tasks WHERE lab_id = ? AND active = 1 ORDER BY category, name"
+    ).all(labId) as any[];
     const result = tasks.map((t: any) => {
       const last = sqlite.prepare(
         "SELECT * FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC LIMIT 1"

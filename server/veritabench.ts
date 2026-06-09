@@ -4,6 +4,7 @@
 import type { Express } from "express";
 import crypto from "crypto";
 import { db } from "./db";
+import { resolveLegacyLabId } from "./labAccessGuard";
 import { DEMO_USER_EMAIL } from "./constants";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
@@ -561,13 +562,16 @@ export function registerVeritaBenchRoutes(
     return joined ? `_${joined}` : "";
   }
 
-  // GET /api/inventory - list all inventory items for account
+  // GET /api/inventory - list inventory items for the user's active lab.
+  // Shape A broader sweep (2026-06-09): account_id scope leaked across labs
+  // for multi-lab owners. Lab-scope via resolveLegacyLabId.
   app.get("/api/inventory", authMiddleware, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
-    const accountId = req.ownerUserId ?? req.userId;
+    const labId = resolveLegacyLabId((db as any).$client, req);
+    if (!labId) return res.json([]);
     const rows = sqlite.prepare(
-      "SELECT * FROM inventory_items WHERE account_id = ? ORDER BY item_name ASC"
-    ).all(accountId);
+      "SELECT * FROM inventory_items WHERE lab_id = ? ORDER BY item_name ASC"
+    ).all(labId);
     const items = (rows as any[]).map(decorateInventoryItem);
     res.json(items);
   });
@@ -579,10 +583,11 @@ export function registerVeritaBenchRoutes(
   // here rather than recomputing.
   app.get("/api/inventory/reorder-list", authMiddleware, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
-    const accountId = req.ownerUserId ?? req.userId;
+    const labId = resolveLegacyLabId((db as any).$client, req);
+    if (!labId) return res.json({ items: [], totalCount: 0, generatedAt: new Date().toISOString() });
     const rows = sqlite.prepare(
-      "SELECT * FROM inventory_items WHERE account_id = ? ORDER BY item_name ASC"
-    ).all(accountId);
+      "SELECT * FROM inventory_items WHERE lab_id = ? ORDER BY item_name ASC"
+    ).all(labId);
     const decorated = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder);
     const items = applyReorderFilters(decorated, req.query);
     res.json({ items, totalCount: items.length, generatedAt: new Date().toISOString() });
