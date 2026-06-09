@@ -18,6 +18,7 @@
 //   convenience) but reset on sign-out / idle.
 
 import { useEffect, useRef, useState } from "react";
+import InventoryCountWorkflow, { type CountItem } from "@/components/InventoryCountWorkflow";
 
 interface KioskItem {
   id: number;
@@ -72,6 +73,8 @@ export default function InventoryKioskPage() {
 
   const [initials, setInitials] = useState("");
   const [search, setSearch] = useState("");
+  const [showList, setShowList] = useState(false);
+  const [countWorkflowOpen, setCountWorkflowOpen] = useState(false);
 
   // Per-row save status: { [itemId]: "idle" | "saving" | "saved" | "error" }
   const [rowStatus, setRowStatus] = useState<Record<number, { state: string; msg?: string }>>({});
@@ -306,27 +309,59 @@ export default function InventoryKioskPage() {
             </button>
           </div>
         </div>
-        <div className="max-w-5xl mx-auto px-4 pb-3">
-          <input
-            type="search" value={search} onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-10 px-3 border border-slate-300 rounded-md text-base"
-            placeholder="Search item, catalog, lot, location"
-            data-testid="kiosk-search-input"
-          />
+        <div className="max-w-5xl mx-auto px-4 pb-3 flex items-center gap-2">
+          {showList ? (
+            <input
+              type="search" value={search} onChange={(e) => setSearch(e.target.value)}
+              className="flex-1 h-10 px-3 border border-slate-300 rounded-md text-base"
+              placeholder="Search item, catalog, lot, location"
+              data-testid="kiosk-search-input"
+            />
+          ) : (
+            <div className="flex-1 text-xs text-slate-500">
+              Tap <span className="font-medium text-slate-700">Scan to count</span> to scan a barcode and update its on-hand quantity.
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowList(s => !s)}
+            className="h-10 px-3 border border-slate-300 rounded-md text-sm font-medium hover:bg-slate-100"
+            data-testid="kiosk-toggle-list"
+          >
+            {showList ? "Hide list" : "Show list"}
+          </button>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto p-4 space-y-3">
-        {loadErr && (
+        {/* Task #129: scan-first count workflow. The button sits above the list
+            (when showList=true) or replaces it (when showList=false). */}
+        <button
+          type="button"
+          onClick={() => setCountWorkflowOpen(true)}
+          disabled={!initials || initials.length < 2}
+          className="w-full h-20 bg-teal-700 text-white text-lg font-semibold rounded-md disabled:opacity-50"
+          data-testid="kiosk-open-count-workflow"
+        >
+          {initials && initials.length >= 2 ? "Scan to count" : "Type your initials (above) to start"}
+        </button>
+
+        {!showList && (
+          <div className="text-xs text-slate-500 text-center pt-2">
+            Don't have the barcode handy? Tap <span className="font-medium text-slate-700">Show list</span> above to browse items by name.
+          </div>
+        )}
+
+        {loadErr && showList && (
           <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2">{loadErr}</div>
         )}
-        {!items && !loadErr && (
+        {showList && !items && !loadErr && (
           <div className="text-sm text-slate-500">Loading items...</div>
         )}
-        {items && items.length === 0 && (
+        {showList && items && items.length === 0 && (
           <div className="text-sm text-slate-500 text-center py-12">No inventory items in this lab yet.</div>
         )}
-        {filtered.map(item => {
+        {showList && filtered.map(item => {
           const status = rowStatus[item.id];
           const pendingVal = pending[item.id] ?? "";
           return (
@@ -378,6 +413,30 @@ export default function InventoryKioskPage() {
       <footer className="max-w-5xl mx-auto p-4 text-xs text-slate-400 text-center">
         Session auto-signs-out after 15 minutes of inactivity. Hard expiration in 8 hours.
       </footer>
+
+      <InventoryCountWorkflow
+        open={countWorkflowOpen}
+        onClose={() => {
+          setCountWorkflowOpen(false);
+          // Refresh the list when the workflow closes so any adjustments are reflected
+          if (showList) {
+            // re-fetch in background
+            fetch("/api/inventory-session/items", { headers: { Authorization: `Bearer ${session.token}` } })
+              .then(r => r.ok ? r.json() : null)
+              .then(d => { if (d?.items) setItems(d.items); })
+              .catch(() => {});
+          }
+        }}
+        authHeaders={() => ({ Authorization: `Bearer ${session.token}` })}
+        lookupPath={"/api/inventory-session/items/by-barcode"}
+        adjustItemBasePath={"/api/inventory-session/items"}
+        extraAdjustBody={{ initials }}
+        signerWarning={initials && initials.length >= 2 ? null : "Type your 2-4 character initials in the header before saving."}
+        onAdjustComplete={(updated: CountItem) => {
+          // Reflect the new qty in the list immediately so the user sees consistency
+          setItems(prev => prev?.map(it => it.id === updated.id ? { ...it, quantity_on_hand: updated.quantity_on_hand } : it) || null);
+        }}
+      />
     </div>
   );
 }
