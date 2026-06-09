@@ -6381,12 +6381,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ error: "employee_id required" });
       }
       const sqlite = (db as any).$client;
+      // 2026-06-09 PR3 bug-class continuation: validate staff_employees
+      // membership by tier2_lab_id (the labs.id column), NOT by the
+      // staff_labs JOIN. The roster surface the dialog renders, the
+      // assignment POST (after the tier2 fix), and now the quiz GET
+      // all need to agree on which column resolves "is this tech on
+      // this lab's roster." Joining through staff_labs returned 404
+      // silently for Chineme because her staff_employees.lab_id points
+      // at a staff_labs row whose user_id doesn't equal lab 2's
+      // owner_user_id chain cleanly. tier2_lab_id is the labs.id
+      // column on staff_employees — direct match, no JOIN gymnastics.
       const staffEmployee = sqlite.prepare(
-        `SELECT se.id, se.first_name, se.last_name
-         FROM staff_employees se
-         JOIN staff_labs sl ON sl.id = se.lab_id
-         JOIN labs l ON l.owner_user_id = sl.user_id
-         WHERE se.id = ? AND l.id = ? AND se.status = 'active'`
+        "SELECT id, first_name, last_name FROM staff_employees WHERE id = ? AND tier2_lab_id = ? AND status = 'active'"
       ).get(employeeId, labId) as any;
       if (!staffEmployee) return res.status(404).json({ error: "Employee not found on this lab's roster" });
 
