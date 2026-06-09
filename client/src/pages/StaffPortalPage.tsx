@@ -748,11 +748,16 @@ interface PortalInventoryItem {
   lot_number: string | null;
   department: string | null;
   category: string | null;
-  quantity_on_hand: number;
+  quantity_on_hand: number; // usage_unit total stored server-side
   unit: string | null;
   storage_location: string | null;
   barcode_value: string | null;
   expiration_date: string | null;
+  // 2026-06-09 count-unit view (set by decorateKioskItem server-side)
+  count_unit?: string;
+  usage_unit?: string;
+  units_per_count_unit?: number;
+  count_on_hand?: number;
 }
 
 function StaffPortalInventoryView({
@@ -792,7 +797,10 @@ function StaffPortalInventoryView({
 
   function openItem(it: PortalInventoryItem) {
     setActive(it);
-    setNewQty(String(it.quantity_on_hand));
+    // Prefill with the count-unit view so the staff member is editing
+    // "how many boxes" not "how many tests" by default. Falls back to
+    // raw qty when the item is at the each level (pack_size = 1).
+    setNewQty(String(it.count_on_hand ?? it.quantity_on_hand));
     setReason("");
     setAdjustError(null);
   }
@@ -814,14 +822,21 @@ function StaffPortalInventoryView({
     setAdjusting(true);
     setAdjustError(null);
     try {
+      // Send new_count (in count_unit) so the server multiplies by
+      // pack_size to derive the usage_unit total. Falls back to
+      // new_quantity for items at the each level (pack_size = 1) so the
+      // legacy direct path keeps working.
+      const isCountUnit = (active.units_per_count_unit ?? 1) > 1 && active.count_unit && active.count_unit !== active.usage_unit;
+      const payload: any = {
+        employee_id: employee.id,
+        reason: reason.trim() || null,
+      };
+      if (isCountUnit) payload.new_count = parsed;
+      else payload.new_quantity = parsed;
       const r = await fetch(`/api/staff-portal-session/inventory/items/${active.id}/adjust`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          employee_id: employee.id,
-          new_quantity: parsed,
-          reason: reason.trim() || null,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
@@ -868,27 +883,53 @@ function StaffPortalInventoryView({
               {active.lot_number && <> &middot; Lot {active.lot_number}</>}
               {active.storage_location && <> &middot; {active.storage_location}</>}
             </div>
-            <div className="text-xs text-muted-foreground mt-1">
-              On hand: <span className="font-mono font-semibold">{active.quantity_on_hand}</span>
-              {active.unit && <> {active.unit}</>}
-            </div>
+            {(() => {
+              const pack = active.units_per_count_unit ?? 1;
+              const countUnit = active.count_unit || active.usage_unit || active.unit || "each";
+              const usageUnit = active.usage_unit || active.unit || "each";
+              const hasPack = pack > 1 && countUnit !== usageUnit;
+              return (
+                <div className="text-xs text-muted-foreground mt-1">
+                  On hand: <span className="font-mono font-semibold">{active.count_on_hand ?? active.quantity_on_hand}</span>
+                  {" "}{countUnit}{(active.count_on_hand ?? active.quantity_on_hand) === 1 ? "" : "s"}
+                  {hasPack && <span className="ml-1">({active.quantity_on_hand} {usageUnit}s)</span>}
+                </div>
+              );
+            })()}
           </div>
 
           <div className="border border-border rounded-lg bg-card p-4">
-            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1" htmlFor="sp-inventory-new-qty">
-              New quantity
-            </label>
-            <input
-              id="sp-inventory-new-qty"
-              type="number"
-              inputMode="numeric"
-              min={0}
-              step={1}
-              value={newQty}
-              onChange={(e) => setNewQty(e.target.value)}
-              className="w-full border border-border rounded-md p-2 text-lg font-mono text-center bg-background mb-3"
-              data-testid="sp-inventory-new-qty"
-            />
+            {(() => {
+              const pack = active.units_per_count_unit ?? 1;
+              const countUnit = active.count_unit || active.usage_unit || active.unit || "each";
+              const usageUnit = active.usage_unit || active.unit || "each";
+              const hasPack = pack > 1 && countUnit !== usageUnit;
+              const previewQty = Number(newQty);
+              const showPreview = hasPack && Number.isFinite(previewQty) && previewQty >= 0 && Number.isInteger(previewQty);
+              return (
+                <>
+                  <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1" htmlFor="sp-inventory-new-qty">
+                    New count ({countUnit}s)
+                  </label>
+                  <input
+                    id="sp-inventory-new-qty"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    step={1}
+                    value={newQty}
+                    onChange={(e) => setNewQty(e.target.value)}
+                    className="w-full border border-border rounded-md p-2 text-lg font-mono text-center bg-background mb-1"
+                    data-testid="sp-inventory-new-qty"
+                  />
+                  {showPreview ? (
+                    <div className="text-xs text-muted-foreground mb-3 text-center" data-testid="sp-inventory-new-qty-preview">
+                      = {previewQty * pack} {usageUnit}s (pack of {pack})
+                    </div>
+                  ) : <div className="mb-2" />}
+                </>
+              );
+            })()}
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1" htmlFor="sp-inventory-reason">
               Reason (optional)
             </label>
@@ -994,10 +1035,28 @@ function StaffPortalInventoryView({
                     )}
                   </div>
                   <div className="text-right">
-                    <div className="text-base font-mono font-semibold" data-testid="sp-inventory-row-qty">
-                      {it.quantity_on_hand}
-                    </div>
-                    {it.unit && <div className="text-xs text-muted-foreground">{it.unit}</div>}
+                    {(() => {
+                      const pack = it.units_per_count_unit ?? 1;
+                      const countUnit = it.count_unit || it.usage_unit || it.unit || "each";
+                      const usageUnit = it.usage_unit || it.unit || "each";
+                      const hasPack = pack > 1 && countUnit !== usageUnit;
+                      const displayQty = it.count_on_hand ?? it.quantity_on_hand;
+                      return (
+                        <>
+                          <div className="text-base font-mono font-semibold" data-testid="sp-inventory-row-qty">
+                            {displayQty}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {countUnit}{displayQty === 1 ? "" : "s"}
+                          </div>
+                          {hasPack && (
+                            <div className="text-[10px] text-muted-foreground">
+                              ({it.quantity_on_hand} {usageUnit}s)
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </button>
               ))}

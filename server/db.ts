@@ -3115,6 +3115,8 @@ sqlite.exec(`
     order_unit TEXT DEFAULT 'each',
     usage_unit TEXT DEFAULT 'each',
     units_per_order_unit INTEGER DEFAULT 1,
+    count_unit TEXT DEFAULT 'each',
+    units_per_count_unit INTEGER DEFAULT 1,
     lead_time_days INTEGER DEFAULT 5,
     safety_stock_days INTEGER DEFAULT 3,
     desired_days_of_stock INTEGER DEFAULT 30,
@@ -3198,6 +3200,20 @@ sqlite.exec(`
     // idx_inventory_barcode below.
     if (!iiColNames.includes("barcode_value")) {
       try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN barcode_value TEXT"); } catch {}
+    }
+    // 2026-06-09 count_unit + units_per_count_unit. Decouples "what you
+    // physically count" from "what you buy" (order_unit) and "what you
+    // consume per test" (usage_unit). For most labs all three are the
+    // same ("each"). For reagent-kit shops, the lab can count by box
+    // while internal storage stays in usage_unit so burn_rate /
+    // days_left math doesn't change semantics. Stored qty stays in
+    // usage_unit; the kiosk multiplies entered count * units_per_count_unit
+    // before write. Defaults preserve current "count by each" behavior.
+    if (!iiColNames.includes("count_unit")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN count_unit TEXT DEFAULT 'each'"); } catch {}
+    }
+    if (!iiColNames.includes("units_per_count_unit")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN units_per_count_unit INTEGER DEFAULT 1"); } catch {}
     }
   }
 }

@@ -5612,6 +5612,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   function decorateKioskItem(row: any) {
     if (!row) return null;
+    const packSize = Number.isFinite(row.units_per_count_unit) && row.units_per_count_unit > 0
+      ? row.units_per_count_unit
+      : 1;
+    const countUnit = row.count_unit || row.unit || "each";
+    const usageUnit = row.usage_unit || row.unit || "each";
+    // quantity_on_hand is stored in usage_unit. Derive the count-unit
+    // view by dividing by pack size. We use Math.round so a partial
+    // pack reads as the nearest count-unit value; the usage_unit total
+    // is still returned for math consumers (burn rate, days left).
+    const countOnHand = packSize > 1 ? Math.round(row.quantity_on_hand / packSize) : row.quantity_on_hand;
     return {
       id: row.id,
       item_name: row.item_name,
@@ -5619,11 +5629,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       lot_number: row.lot_number,
       department: row.department,
       category: row.category,
-      quantity_on_hand: row.quantity_on_hand,
-      unit: row.unit,
+      quantity_on_hand: row.quantity_on_hand, // usage_unit total (legacy field; unchanged)
+      unit: row.unit, // legacy display unit; preserved
       storage_location: row.storage_location,
       barcode_value: row.barcode_value,
       expiration_date: row.expiration_date,
+      // New 2026-06-09 count-unit view
+      count_unit: countUnit,
+      usage_unit: usageUnit,
+      units_per_count_unit: packSize,
+      count_on_hand: countOnHand, // display value in count_unit
     };
   }
 
@@ -5645,22 +5660,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // POST /api/inventory-session/items/:id/adjust
-  //   body: { new_quantity, initials, reason? }
-  // Validates: item belongs to JWT's lab, new_quantity is a non-negative
-  // integer, initials are 2-4 alphanumeric. Captures before/after qty.
-  // Writes an audit_log row with module="veritastock", action="update",
-  // entityType="inventory_item", entityLabel="{name} qty by {initials}".
-  // userId on the audit row is 0 (kiosk sentinel) but ownerUserId is the
-  // lab's owner so the trail still ties to the billing account.
+  //   body: { new_count?, new_quantity?, initials, reason? }
+  // The kiosk accepts the count in EITHER:
+  //   - new_count (in the item's count_unit; multiplied by units_per_count_unit
+  //     to derive the usage-unit total before write). Preferred new shape.
+  //   - new_quantity (in usage_unit, the legacy direct value). Kept so older
+  //     clients still work; server warns in audit_log.after.via_legacy.
+  // Exactly one must be provided. Validates: item belongs to JWT's lab,
+  // value is a non-negative integer, initials are 2-4 alphanumeric.
+  // Writes audit_log row that records BOTH the count-unit entry (when
+  // applicable) and the resulting usage-unit total.
   app.post("/api/inventory-session/items/:id/adjust", inventoryAuthMiddleware, (req: any, res) => {
     try {
       const id = Number(req.params.id);
       if (!Number.isFinite(id) || id <= 0) {
         return res.status(400).json({ error: "Invalid item id" });
       }
-      const { new_quantity, initials, reason } = req.body || {};
-      if (typeof new_quantity !== "number" || !Number.isFinite(new_quantity) || new_quantity < 0 || !Number.isInteger(new_quantity)) {
-        return res.status(400).json({ error: "new_quantity must be a non-negative integer" });
+      const { new_count, new_quantity, initials, reason } = req.body || {};
+      const hasCount = typeof new_count === "number" && Number.isFinite(new_count);
+      const hasQty = typeof new_quantity === "number" && Number.isFinite(new_quantity);
+      if (!hasCount && !hasQty) {
+        return res.status(400).json({ error: "new_count (in count_unit) or new_quantity (in usage_unit) required" });
       }
       if (typeof initials !== "string" || !/^[A-Za-z0-9]{2,4}$/.test(initials)) {
         return res.status(400).json({ error: "initials must be 2-4 alphanumeric characters" });
@@ -5674,11 +5694,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // labs, so leaking "exists but you can't see it" would be wrong.
         return res.status(404).json({ error: "Item not found in this lab" });
       }
+
+      // Convert new_count -> usage_unit total. Pack size > 0 enforced
+      // server-side so a misconfigured item can never cause div-by-zero.
+      const packSize = Number.isFinite(item.units_per_count_unit) && item.units_per_count_unit > 0
+        ? item.units_per_count_unit
+        : 1;
+      let usageQty: number;
+      let countEntered: number | null = null;
+      if (hasCount) {
+        if (!Number.isInteger(new_count) || new_count < 0) {
+          return res.status(400).json({ error: "new_count must be a non-negative integer" });
+        }
+        countEntered = new_count;
+        usageQty = new_count * packSize;
+      } else {
+        if (!Number.isInteger(new_quantity) || new_quantity < 0) {
+          return res.status(400).json({ error: "new_quantity must be a non-negative integer" });
+        }
+        usageQty = new_quantity;
+      }
+
       const beforeQty = item.quantity_on_hand;
       const nowIso = new Date().toISOString();
       sqlite.prepare(
         "UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?"
-      ).run(new_quantity, nowIso, id);
+      ).run(usageQty, nowIso, id);
 
       // Look up the lab's owner so the audit row ties to the billing
       // account, not to userId=0 alone.
@@ -5693,7 +5734,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         entityLabel: `${item.item_name} qty by ${initials.toUpperCase()}`,
         before: { quantity_on_hand: beforeQty },
         after: {
-          quantity_on_hand: new_quantity,
+          quantity_on_hand: usageQty,
+          count_entered: countEntered, // null if legacy new_quantity path
+          count_unit: item.count_unit || "each",
+          units_per_count_unit: packSize,
           initials: initials.toUpperCase(),
           reason: reason || null,
           via: "kiosk",
@@ -5706,8 +5750,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         item: decorateKioskItem(updated),
         adjustment: {
           before_qty: beforeQty,
-          after_qty: new_quantity,
-          delta: new_quantity - beforeQty,
+          after_qty: usageQty,
+          delta: usageQty - beforeQty,
+          count_entered: countEntered,
+          count_unit: item.count_unit || "each",
+          units_per_count_unit: packSize,
           initials: initials.toUpperCase(),
           at: nowIso,
         },
@@ -5752,24 +5799,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // POST /api/staff-portal-session/inventory/items/:id/adjust
-  //   Body: { employee_id, new_quantity, reason? }
-  // Validates: item belongs to JWT's lab, employee belongs to lab and is
-  // active, employee.can_adjust_inventory = 1, new_quantity is a finite
-  // non-negative integer. Captures before/after qty and writes audit log
-  // with module="veritastock", action="update", entityLabel naming the
-  // staff member.
+  //   Body: { employee_id, new_count?, new_quantity?, reason? }
+  //   Accepts EITHER new_count (in the item's count_unit; multiplied by
+  //   units_per_count_unit before write) OR new_quantity (in usage_unit,
+  //   legacy direct value). Exactly one required.
+  //   Validates: item belongs to JWT's lab, employee belongs to lab and
+  //   is active, employee.can_adjust_inventory = 1. Writes audit log
+  //   capturing BOTH the count-unit entry and the resulting usage-unit
+  //   total so the director can reconstruct what the staff member typed.
   app.post("/api/staff-portal-session/inventory/items/:id/adjust", staffPortalAuthMiddleware, (req: any, res) => {
     try {
       const labId = req.staffPortalLabId;
       const id = Number(req.params.id);
       if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: "Invalid item id" });
-      const { employee_id, new_quantity, reason } = req.body || {};
+      const { employee_id, new_count, new_quantity, reason } = req.body || {};
       const employeeId = parseInt(String(employee_id ?? ""), 10);
       if (!Number.isFinite(employeeId) || employeeId <= 0) {
         return res.status(400).json({ error: "employee_id required" });
       }
-      if (typeof new_quantity !== "number" || !Number.isFinite(new_quantity) || new_quantity < 0 || !Number.isInteger(new_quantity)) {
-        return res.status(400).json({ error: "new_quantity must be a non-negative integer" });
+      const hasCount = typeof new_count === "number" && Number.isFinite(new_count);
+      const hasQty = typeof new_quantity === "number" && Number.isFinite(new_quantity);
+      if (!hasCount && !hasQty) {
+        return res.status(400).json({ error: "new_count (in count_unit) or new_quantity (in usage_unit) required" });
       }
 
       const sqlite = (db as any).$client;
@@ -5793,11 +5844,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).get(id, labId) as any;
       if (!item) return res.status(404).json({ error: "Item not found in this lab" });
 
+      // Convert new_count -> usage_unit total. Pack size > 0 enforced
+      // server-side so a misconfigured item can never cause div-by-zero
+      // on the display side.
+      const packSize = Number.isFinite(item.units_per_count_unit) && item.units_per_count_unit > 0
+        ? item.units_per_count_unit
+        : 1;
+      let usageQty: number;
+      let countEntered: number | null = null;
+      if (hasCount) {
+        if (!Number.isInteger(new_count) || new_count < 0) {
+          return res.status(400).json({ error: "new_count must be a non-negative integer" });
+        }
+        countEntered = new_count;
+        usageQty = new_count * packSize;
+      } else {
+        if (!Number.isInteger(new_quantity) || new_quantity < 0) {
+          return res.status(400).json({ error: "new_quantity must be a non-negative integer" });
+        }
+        usageQty = new_quantity;
+      }
+
       const beforeQty = item.quantity_on_hand;
       const nowIso = new Date().toISOString();
       sqlite.prepare(
         "UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?"
-      ).run(new_quantity, nowIso, id);
+      ).run(usageQty, nowIso, id);
 
       const mi = employee.middle_initial ? ` ${employee.middle_initial}.` : "";
       const employeeFullName = `${employee.first_name}${mi} ${employee.last_name}`.trim();
@@ -5812,7 +5884,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         entityLabel: `${item.item_name} qty by ${employeeFullName}`,
         before: { quantity_on_hand: beforeQty },
         after: {
-          quantity_on_hand: new_quantity,
+          quantity_on_hand: usageQty,
+          count_entered: countEntered, // null if legacy new_quantity path
+          count_unit: item.count_unit || "each",
+          units_per_count_unit: packSize,
           staff_employee_id: employee.id,
           staff_employee_name: employeeFullName,
           reason: reason || null,
@@ -5826,8 +5901,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         item: decorateKioskItem(updated),
         adjustment: {
           before_qty: beforeQty,
-          after_qty: new_quantity,
-          delta: new_quantity - beforeQty,
+          after_qty: usageQty,
+          delta: usageQty - beforeQty,
+          count_entered: countEntered,
+          count_unit: item.count_unit || "each",
+          units_per_count_unit: packSize,
           staff_employee_id: employee.id,
           staff_employee_name: employeeFullName,
           at: nowIso,

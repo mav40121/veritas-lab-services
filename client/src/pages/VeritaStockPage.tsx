@@ -50,6 +50,11 @@ interface InventoryItem {
   order_unit: string;
   usage_unit: string;
   units_per_order_unit: number;
+  // 2026-06-09 count-unit fields. count_unit is the unit the lab
+  // physically counts in (each / box / case / pack / kit / vial / tube);
+  // pack size converts count_unit -> usage_unit on adjust write.
+  count_unit?: string;
+  units_per_count_unit?: number;
   lead_time_days: number;
   safety_stock_days: number;
   desired_days_of_stock: number;
@@ -208,6 +213,8 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory }: {
         order_unit: "each",
         usage_unit: "each",
         units_per_order_unit: 1,
+        count_unit: "each",
+        units_per_count_unit: 1,
         burn_rate: 0,
         lead_time_days: 5,
         safety_stock_days: 3,
@@ -352,6 +359,30 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory }: {
               <div className="space-y-1.5">
                 <Label>Units per Order Unit</Label>
                 <Input type="number" min={1} value={form.units_per_order_unit ?? 1} onChange={(e) => setForm({ ...form, units_per_order_unit: parseInt(e.target.value) || 1 })} />
+              </div>
+            </div>
+            {/* 2026-06-09: Count unit + pack size. What you physically count
+                when doing inventory. Defaults to order_unit when the lab
+                hasn't picked anything specific. */}
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <div className="space-y-1.5">
+                <Label>Count Unit</Label>
+                <Select value={form.count_unit ?? form.order_unit ?? "each"} onValueChange={(v) => setForm({ ...form, count_unit: v })}>
+                  <SelectTrigger data-testid="count-unit-select"><SelectValue /></SelectTrigger>
+                  <SelectContent>{ORDER_UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">What you physically count on the shelf (each / box / case / pack / kit).</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Pack Size ({form.usage_unit ?? "each"}s per {form.count_unit ?? form.order_unit ?? "each"})</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={form.units_per_count_unit ?? 1}
+                  onChange={(e) => setForm({ ...form, units_per_count_unit: parseInt(e.target.value) || 1 })}
+                  data-testid="pack-size-input"
+                />
+                <p className="text-xs text-muted-foreground">e.g. 100 tests in a box. Set to 1 if you count by the each.</p>
               </div>
             </div>
           </div>
@@ -1382,7 +1413,24 @@ export default function VeritaStockInventoryPage() {
                   )}
                   {isColumnVisible("quantity_on_hand") && (
                     <td className="px-3 py-2 font-mono text-sm">
-                      {item.quantity_on_hand.toLocaleString()} <span className="text-xs text-muted-foreground">{item.usage_unit}s</span>
+                      {(() => {
+                        // 2026-06-09: show in count_unit when pack_size > 1,
+                        // with parenthetical usage_unit total. Falls back to
+                        // legacy "N usage_units" display when count_unit is
+                        // unset or equal to usage_unit.
+                        const pack = item.units_per_count_unit && item.units_per_count_unit > 0 ? item.units_per_count_unit : 1;
+                        const countUnit = item.count_unit || item.usage_unit || "each";
+                        if (pack > 1 && countUnit !== item.usage_unit) {
+                          const countQty = Math.round(item.quantity_on_hand / pack);
+                          return (
+                            <>
+                              {countQty.toLocaleString()} <span className="text-xs text-muted-foreground">{countUnit}{countQty === 1 ? "" : "s"}</span>
+                              <div className="text-[10px] text-muted-foreground">({item.quantity_on_hand.toLocaleString()} {item.usage_unit}s)</div>
+                            </>
+                          );
+                        }
+                        return <>{item.quantity_on_hand.toLocaleString()} <span className="text-xs text-muted-foreground">{item.usage_unit}s</span></>;
+                      })()}
                     </td>
                   )}
                   {isColumnVisible("burn_rate") && (
