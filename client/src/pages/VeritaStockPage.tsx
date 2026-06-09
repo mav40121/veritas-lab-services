@@ -29,6 +29,7 @@ import {
   ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users,
 } from "lucide-react";
 import BarcodeScannerModal from "@/components/BarcodeScannerModal";
+import InventoryCountWorkflow, { type CountItem } from "@/components/InventoryCountWorkflow";
 import { useToast } from "@/hooks/use-toast";
 import { toCsv, downloadCsv, type CsvColumn } from "@/lib/csvExport";
 
@@ -481,6 +482,7 @@ export default function VeritaStockInventoryPage() {
   const [showForm, setShowForm] = useState(false);
   // parking-lot #29 Phase 3B: camera scanner modal state.
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [countWorkflowOpen, setCountWorkflowOpen] = useState(false);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null);
 
@@ -1218,6 +1220,17 @@ export default function VeritaStockInventoryPage() {
             <QrCode size={14} className="mr-1.5" />
             Scan Mode
           </Button>
+          <Button
+            size="sm"
+            onClick={() => setCountWorkflowOpen(true)}
+            disabled={readOnly}
+            title="Scan a barcode (or type it) and set the new on-hand count for that item"
+            data-testid="open-count-workflow-button"
+            style={{ backgroundColor: "#01696F" }}
+          >
+            <QrCode size={14} className="mr-1.5" />
+            Scan to count
+          </Button>
           <Button size="sm" onClick={() => { setEditItem(null); setShowForm(true); }} disabled={readOnly} style={{ backgroundColor: "#01696F" }}>
             <Plus size={14} className="mr-1.5" />Add Item
           </Button>
@@ -1507,6 +1520,23 @@ export default function VeritaStockInventoryPage() {
         activeLabId={activeLabId}
         onScanComplete={loadItems}
       />
+
+      <InventoryCountWorkflow
+        open={countWorkflowOpen}
+        onClose={() => {
+          setCountWorkflowOpen(false);
+          loadItems();
+        }}
+        authHeaders={authHeaders}
+        lookupPath={`${API_BASE}/api/inventory/items/by-barcode`}
+        adjustItemBasePath={`${API_BASE}/api/inventory`}
+        extraAdjustBody={{}}
+        signerWarning={null}
+        onAdjustComplete={(_updated: CountItem) => {
+          // Refresh on close handles the list update
+        }}
+      />
+
 
       {/* Delete Confirmation */}
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>

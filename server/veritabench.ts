@@ -1291,6 +1291,81 @@ export function registerVeritaBenchRoutes(
     }
   });
 
+  // GET /api/inventory/items/by-barcode?barcode=XYZ
+  // Director-side counterpart of the kiosk + staff portal lookup endpoints
+  // (task #129 ext, 2026-06-09). Lab-scoped via the user's active lab so
+  // VeritaStockPage's new "Scan to count" workflow returns the right item.
+  app.get("/api/inventory/items/by-barcode", authMiddleware, (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const barcode = String(req.query.barcode || "").trim();
+    if (!barcode) return res.status(400).json({ error: "barcode required" });
+    const labId = resolveLegacyLabId(sqlite, req);
+    if (!labId) return res.status(404).json({ error: "unknown_barcode", barcode });
+    const row = sqlite.prepare(
+      "SELECT * FROM inventory_items WHERE lab_id = ? AND barcode_value = ? LIMIT 1"
+    ).get(labId, barcode) as any;
+    if (!row) return res.status(404).json({ error: "unknown_barcode", barcode });
+    res.json({ item: decorateInventoryItem(row) });
+  });
+
+  // POST /api/inventory/:id/adjust
+  //   body: { new_count?, new_quantity?, reason? }
+  // Director-side counterpart of the kiosk + staff portal adjust endpoints.
+  // Same count_unit -> usage_unit conversion. Access via Shape A guard.
+  app.post("/api/inventory/:id/adjust", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const { id } = req.params;
+    const itemId = Number(id);
+    if (!Number.isFinite(itemId) || itemId <= 0) return res.status(400).json({ error: "Invalid item id" });
+    const { new_count, new_quantity, reason } = req.body || {};
+    const hasCount = typeof new_count === "number" && Number.isFinite(new_count);
+    const hasQty = typeof new_quantity === "number" && Number.isFinite(new_quantity);
+    if (!hasCount && !hasQty) {
+      return res.status(400).json({ error: "new_count (in count_unit) or new_quantity (in usage_unit) required" });
+    }
+
+    const { item: existing, status: resolveStatus } = resolveInventoryItemForMutation(itemId, req);
+    if (!existing) {
+      if (resolveStatus === 403) return res.status(403).json({ error: "You don't have access to this item's lab" });
+      return res.status(404).json({ error: "Item not found" });
+    }
+
+    const packSize = Number.isFinite((existing as any).units_per_count_unit) && (existing as any).units_per_count_unit > 0
+      ? (existing as any).units_per_count_unit
+      : 1;
+    let usageQty: number;
+    let countEntered: number | null = null;
+    if (hasCount) {
+      if (!Number.isInteger(new_count) || new_count < 0) return res.status(400).json({ error: "new_count must be a non-negative integer" });
+      countEntered = new_count;
+      usageQty = new_count * packSize;
+    } else {
+      if (!Number.isInteger(new_quantity) || new_quantity < 0) return res.status(400).json({ error: "new_quantity must be a non-negative integer" });
+      usageQty = new_quantity;
+    }
+
+    const beforeQty = (existing as any).quantity_on_hand;
+    const nowIso = new Date().toISOString();
+    sqlite.prepare(
+      "UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?"
+    ).run(usageQty, nowIso, itemId);
+
+    const fresh = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(itemId);
+    res.json({
+      item: decorateInventoryItem(fresh),
+      adjustment: {
+        before_qty: beforeQty,
+        after_qty: usageQty,
+        delta: usageQty - beforeQty,
+        count_entered: countEntered,
+        count_unit: (existing as any).count_unit || "each",
+        units_per_count_unit: packSize,
+        reason: reason || null,
+        at: nowIso,
+      },
+    });
+  });
+
   // DELETE /api/inventory/:id - delete an inventory item
   app.delete("/api/inventory/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
