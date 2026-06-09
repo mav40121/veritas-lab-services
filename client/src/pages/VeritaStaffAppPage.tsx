@@ -805,6 +805,41 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
   const [roles, setRoles] = useState<{ role: string; specialtyNumber: number | null }[]>([]);
   const [saving, setSaving] = useState(false);
 
+  // 2026-06-09 Auth unification: Staff Portal invite state. Only used
+  // in edit mode; new employees are saved first, then can be invited
+  // on the next dialog open.
+  const [inviteEmail, setInviteEmail] = useState<string>("");
+  const [inviting, setInviting] = useState(false);
+  async function sendStaffPortalInvite() {
+    if (!employee || !activeLabId) return;
+    const e = inviteEmail.trim();
+    if (!e || !e.includes("@")) {
+      toast({ title: "Email required", description: "Enter the tech's personal email to send the invite.", variant: "destructive" });
+      return;
+    }
+    setInviting(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/staff-portal-invites`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ staff_employee_id: employee.id, email: e }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      toast({
+        title: data.emailSent ? "Invite sent" : "Invite created",
+        description: data.emailSent
+          ? `Sent to ${e}. They have 30 days to set up their account.`
+          : `Email delivery failed; share this link manually: ${data.inviteUrl}`,
+      });
+      setInviteEmail("");
+    } catch (err: any) {
+      toast({ title: "Invite failed", description: err.message, variant: "destructive" });
+    } finally {
+      setInviting(false);
+    }
+  }
+
   useEffect(() => {
     if (employee) {
       setForm({
@@ -1163,6 +1198,40 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
 
             <p className="text-xs text-muted-foreground">Use a separate line on the CMS 209 for each specialty. VeritaStaff{"™"} handles this automatically.</p>
           </div>
+
+          {/* 2026-06-09 Auth unification: Staff Portal invite affordance.
+              Only on edit (need a saved employee id to link). Sends a
+              real account-setup invite to the tech's personal email so
+              they log in with their own email + password, not a shared
+              PIN. */}
+          {isEdit && employee && (
+            <div className="border border-border rounded-md p-3 space-y-2 bg-muted/20">
+              <div className="text-xs font-semibold">Staff Portal Access</div>
+              <p className="text-[11px] text-muted-foreground">
+                Send {employee.first_name} {employee.last_name} an invite to set up their own Staff Portal account.
+                They log in with their personal email and password (not a shared PIN), take quizzes, sign policies,
+                and view their records on their phone.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  placeholder="tech@example.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  className="flex-1 border border-border rounded-md p-1.5 text-xs bg-background"
+                  data-testid="staff-portal-invite-email"
+                />
+                <Button
+                  size="sm"
+                  onClick={sendStaffPortalInvite}
+                  disabled={inviting || !inviteEmail.trim()}
+                  data-testid="staff-portal-invite-send"
+                >
+                  {inviting ? "Sending..." : "Send Invite"}
+                </Button>
+              </div>
+            </div>
+          )}
 
           <div className="flex gap-2 pt-2">
             <Button onClick={handleSave} disabled={saving} className="flex-1">{saving ? "Saving..." : isEdit ? "Update Employee" : "Add Employee"}</Button>
