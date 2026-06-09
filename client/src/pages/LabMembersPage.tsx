@@ -259,6 +259,10 @@ export default function LabMembersPage() {
       )}
 
       {canManage && (
+        <StaffPortalPinCard labId={activeLabId} />
+      )}
+
+      {canManage && (
         <Card>
           <CardHeader><CardTitle className="text-base flex items-center gap-2"><UserPlus size={16} /> Invite a new member</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -614,6 +618,154 @@ function InventoryPinCard({ labId }: { labId: number }) {
           </div>
           <DialogFooter>
             <Button size="sm" onClick={closeReveal} data-testid="inventory-pin-dismiss-button">I've recorded it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
+// ── 2026-06-08 task #131: Staff Portal PIN management card ────────────────
+// Mirror of InventoryPinCard above but for the Staff Portal kiosk at
+// /staff-access. Same shape, different endpoint. Same one-time PIN reveal,
+// same five-failure lockout. Surface lives on the Members page next to the
+// inventory PIN card so a director can manage both without context-switching.
+function StaffPortalPinCard({ labId }: { labId: number }) {
+  const { toast } = useToast();
+  const { data: status, isLoading } = useQuery<PinStatus>({
+    queryKey: ["/api/labs", labId, "staff-portal-pin/status"],
+    queryFn: getQueryFn({ on401: "throw" }),
+  });
+  const [revealOpen, setRevealOpen] = useState(false);
+  const [revealedPin, setRevealedPin] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const rotateMutation = useMutation({
+    mutationFn: async () => {
+      const r = await apiRequest("POST", `/api/labs/${labId}/staff-portal-pin/regenerate`, {});
+      return r as unknown as { pin: string; rotated_at: string };
+    },
+    onSuccess: (data) => {
+      setRevealedPin(data.pin);
+      setRevealOpen(true);
+      setConfirmOpen(false);
+      setCopied(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/labs", labId, "staff-portal-pin/status"] });
+    },
+    onError: (err: any) => {
+      toast({ title: "PIN rotation failed", description: err.message || "Try again.", variant: "destructive" });
+    },
+  });
+
+  function copyPin() {
+    if (!revealedPin) return;
+    navigator.clipboard.writeText(revealedPin).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      toast({ title: "Copy failed", description: "Highlight the PIN manually.", variant: "destructive" });
+    });
+  }
+
+  function closeReveal() {
+    setRevealOpen(false);
+    setRevealedPin(null);
+    setCopied(false);
+  }
+
+  return (
+    <Card data-testid="staff-portal-pin-card">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <KeyRound size={16} /> Staff Portal PIN
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          Lab staff sign into the Staff Portal at <code className="font-mono text-xs bg-slate-100 px-1 rounded">/staff-access</code> with the lab's CLIA and this 6-digit PIN. Policies and competencies are available to every employee on your VeritaStaff&trade; roster; inventory adjustments and audit-trail viewing are per-employee toggles. Rotate the PIN if it leaks or someone leaves.
+        </p>
+
+        {isLoading ? (
+          <div className="text-xs text-muted-foreground">Loading status...</div>
+        ) : !status?.has_pin ? (
+          <div className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded px-2 py-2" data-testid="staff-portal-pin-status">
+            No PIN set. Generate one to enable Staff Portal access.
+          </div>
+        ) : (
+          <div className="text-xs text-slate-700 space-y-1" data-testid="staff-portal-pin-status">
+            <div>
+              <span className="font-medium">Status:</span>{" "}
+              {status.is_locked
+                ? <span className="text-rose-700">Locked out after 5 failed attempts until {status.locked_until ? new Date(status.locked_until).toLocaleTimeString() : "soon"}. Rotate to clear.</span>
+                : <span className="text-emerald-700">Active</span>}
+            </div>
+            <div>
+              <span className="font-medium">Last rotated:</span>{" "}
+              {status.last_rotated_at ? new Date(status.last_rotated_at).toLocaleString() : "never"}
+            </div>
+            {status.failed_attempts > 0 && !status.is_locked && (
+              <div className="text-amber-900">
+                {status.failed_attempts} failed attempt{status.failed_attempts === 1 ? "" : "s"} since last rotation.
+              </div>
+            )}
+          </div>
+        )}
+
+        <div>
+          <Button
+            size="sm"
+            onClick={() => setConfirmOpen(true)}
+            disabled={rotateMutation.isPending}
+            data-testid="staff-portal-pin-rotate-button"
+          >
+            {rotateMutation.isPending && <Loader2 className="animate-spin mr-1" size={14} />}
+            {status?.has_pin ? "Rotate PIN" : "Generate PIN"}
+          </Button>
+        </div>
+      </CardContent>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{status?.has_pin ? "Rotate Staff Portal PIN?" : "Generate Staff Portal PIN?"}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-700">
+            {status?.has_pin
+              ? "The current PIN will stop working immediately. Anyone signed into the Staff Portal will need the new PIN on their next sign-in."
+              : "A new 6-digit PIN will be generated and shown once. Share it with the lab staff who use the Staff Portal."}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setConfirmOpen(false)}>Cancel</Button>
+            <Button size="sm" onClick={() => rotateMutation.mutate()} disabled={rotateMutation.isPending} data-testid="staff-portal-pin-confirm-button">
+              {rotateMutation.isPending && <Loader2 className="animate-spin mr-1" size={14} />}
+              {status?.has_pin ? "Rotate now" : "Generate now"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={revealOpen} onOpenChange={(o) => { if (!o) closeReveal(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>New Staff Portal PIN</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-slate-700">
+              Write this down or copy it now. It will not be shown again. Closing this dialog erases it from this screen.
+            </p>
+            <div className="bg-slate-100 border border-slate-300 rounded p-4 flex items-center justify-between" data-testid="staff-portal-pin-reveal">
+              <div className="text-3xl font-mono font-bold tracking-widest">{revealedPin}</div>
+              <Button size="sm" variant="outline" onClick={copyPin} data-testid="staff-portal-pin-copy-button">
+                {copied ? <><Check size={14} className="mr-1" /> Copied</> : <><Copy size={14} className="mr-1" /> Copy</>}
+              </Button>
+            </div>
+            <div className="text-xs text-slate-500">
+              Lab staff sign in at <code className="font-mono text-xs bg-slate-100 px-1 rounded">/staff-access</code> using the lab's CLIA + this PIN.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button size="sm" onClick={closeReveal} data-testid="staff-portal-pin-dismiss-button">I've recorded it</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
