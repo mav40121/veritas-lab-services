@@ -17,7 +17,7 @@
 // paths for their JWT shape. The shared adjust payload is built from
 // extraAdjustBody (initials for kiosk, employee_id for staff portal).
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 
 export interface CountItem {
   id: number;
@@ -118,6 +118,14 @@ export default function InventoryCountWorkflow({
   }, []);
 
   // Start the camera scanner when cameraOpen flips on.
+  // 2026-06-09 PR #681 tuning for iPhone Safari + Code 128:
+  //   - request 1920x1080 (or as close as possible) so each Code 128 bar
+  //     spans enough pixels to decode
+  //   - qrbox is wide + short (Code 128 is a 1D horizontal barcode, not
+  //     a square QR code). Computed from viewport so it scales with the
+  //     mobile-fullscreen mode.
+  //   - keep the experimental BarcodeDetector enabled (helps on
+  //     iOS 17+; falls back to ZXing-JS on older devices).
   useEffect(() => {
     if (!open || !cameraOpen) return;
     let cancelled = false;
@@ -131,11 +139,24 @@ export default function InventoryCountWorkflow({
         const scanner = new Html5Qrcode(scannerDivId, {
           formatsToSupport: [Html5QrcodeSupportedFormats.CODE_128],
           experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-        });
+        } as any);
         scannerRef.current = scanner;
         await scanner.start(
           { facingMode: "environment" },
-          { fps: 25, qrbox: { width: 280, height: 140 }, videoConstraints: { facingMode: { ideal: "environment" } } },
+          {
+            fps: 30,
+            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
+              width: Math.floor(Math.min(viewfinderWidth * 0.92, 600)),
+              height: Math.floor(Math.min(viewfinderHeight * 0.30, 200)),
+            }),
+            videoConstraints: {
+              facingMode: { ideal: "environment" },
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+              aspectRatio: { ideal: 16 / 9 },
+            } as any,
+            aspectRatio: 16 / 9,
+          } as any,
           (decodedText: string) => {
             // First successful read wins; stop the camera and trigger lookup
             try { scanner.stop().catch(() => {}); } catch { /* noop */ }
@@ -151,6 +172,26 @@ export default function InventoryCountWorkflow({
     })();
     return () => { cancelled = true; };
   }, [cameraOpen, open]);
+
+  // 2026-06-09: photo-capture fallback for iPhone Safari when the live
+  // scanner can't decode (poor lighting, reflective label, old iOS).
+  // Triggers iOS's native camera which has Live Text built in; once the
+  // user takes a photo, iOS often highlights the barcode and offers to
+  // copy it. Even without auto-detection, the photo path gives the user
+  // a clear way out (look at the printed VLS- code, type it).
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  function openPhotoCapture() {
+    photoInputRef.current?.click();
+  }
+  function handlePhotoSelected(_e: ChangeEvent<HTMLInputElement>) {
+    // We intentionally do NOT decode the photo here (html5-qrcode's still-
+    // image decoder is also flaky on iPhone). The photo capture is a
+    // "look at your label" affordance — iOS's Live Text will highlight
+    // the barcode for the user. After they read it they type into the
+    // manual barcode input below.
+    // The form field stays empty after selection so they can re-tap.
+    if (photoInputRef.current) photoInputRef.current.value = "";
+  }
 
   async function triggerLookup(value: string) {
     if (!value) return;
@@ -294,6 +335,25 @@ export default function InventoryCountWorkflow({
                 >
                   Open scanner
                 </button>
+                {/* Photo-capture fallback: opens iOS native camera. Live Text
+                    highlights the barcode for the user to read out. */}
+                <button
+                  type="button"
+                  onClick={openPhotoCapture}
+                  className="w-full h-14 sm:h-12 bg-white border border-slate-300 text-slate-700 text-base sm:text-sm font-medium rounded-md hover:bg-slate-50"
+                  data-testid="count-workflow-photo-capture"
+                >
+                  Take a photo of the label
+                </button>
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handlePhotoSelected}
+                  className="hidden"
+                  aria-hidden="true"
+                />
                 <div className="text-sm sm:text-xs text-slate-500 text-center">or type a barcode</div>
                 <form
                   onSubmit={(e) => { e.preventDefault(); startManual(); }}
