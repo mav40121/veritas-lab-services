@@ -71,7 +71,7 @@ export default function StaffPortalPage() {
   const [employees, setEmployees] = useState<PortalEmployee[] | null>(null);
   const [pickerError, setPickerError] = useState<string | null>(null);
   const [activeEmployee, setActiveEmployee] = useState<PortalEmployee | null>(null);
-  const [activeModule, setActiveModule] = useState<"policies" | null>(null);
+  const [activeModule, setActiveModule] = useState<"policies" | "inventory" | null>(null);
 
   const idleTimerRef = useRef<number | null>(null);
 
@@ -281,15 +281,26 @@ export default function StaffPortalPage() {
       />
     );
   }
+  if (activeModule === "inventory") {
+    return (
+      <StaffPortalInventoryView
+        token={session.token}
+        employee={activeEmployee}
+        labName={session.lab.name}
+        onBack={() => setActiveModule(null)}
+        onSignOut={signOut}
+      />
+    );
+  }
 
   // ── Module tiles for the picked employee ─────────────────────────────
-  // Policies is wired up; competency / inventory / audit show "Ready soon"
-  // until their PRs land. Inventory + audit gate on the staff_employees
-  // toggle flags so the access model is visible end-to-end.
+  // Policies + inventory are wired up; competency / audit show "Ready
+  // soon" until their PRs land. Inventory + audit gate on the
+  // staff_employees toggle flags so the access model is visible end-to-end.
   const tiles = [
     { key: "policies",    label: "Sign Policies",       available: true,                                ready: true  },
     { key: "competency",  label: "Sign Competencies",   available: true,                                ready: false },
-    { key: "inventory",   label: "Adjust Inventory",    available: activeEmployee.can_adjust_inventory, ready: false },
+    { key: "inventory",   label: "Adjust Inventory",    available: activeEmployee.can_adjust_inventory, ready: true  },
     { key: "audit",       label: "View Audit Trail",    available: activeEmployee.can_view_audit,       ready: false },
   ];
 
@@ -320,6 +331,7 @@ export default function StaffPortalPage() {
             const onClick = () => {
               if (!clickable) return;
               if (t.key === "policies") setActiveModule("policies");
+              if (t.key === "inventory") setActiveModule("inventory");
             };
             return (
               <button
@@ -691,3 +703,286 @@ function StaffPortalPoliciesView({
     </div>
   );
 }
+
+// ── StaffPortalInventoryView (Wave K6, 2026-06-08) ────────────────────
+// Inline screen behind sp-tile-inventory. Two states:
+//   1. List: all inventory items for the lab, with search box. Tapping
+//      a row opens the adjust panel.
+//   2. Adjust: shows current qty, lets the staff member enter a new
+//      qty + optional reason, posts to
+//      /api/staff-portal-session/inventory/items/:id/adjust with the
+//      active employee_id. Server records the staff_employee_id and
+//      employee name in the audit log — better surveyor trail than
+//      typed initials.
+//
+// can_adjust_inventory toggle gates this entire view: the tile won't
+// even appear unless the director enabled it. Server double-checks
+// (returns 403 if the flag is off).
+interface PortalInventoryItem {
+  id: number;
+  item_name: string;
+  catalog_number: string | null;
+  lot_number: string | null;
+  department: string | null;
+  category: string | null;
+  quantity_on_hand: number;
+  unit: string | null;
+  storage_location: string | null;
+  barcode_value: string | null;
+  expiration_date: string | null;
+}
+
+function StaffPortalInventoryView({
+  token, employee, labName, onBack, onSignOut,
+}: {
+  token: string;
+  employee: PortalEmployee;
+  labName: string;
+  onBack: () => void;
+  onSignOut: () => void;
+}) {
+  const [items, setItems] = useState<PortalInventoryItem[] | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
+  const [active, setActive] = useState<PortalInventoryItem | null>(null);
+  const [search, setSearch] = useState("");
+  const [newQty, setNewQty] = useState<string>("");
+  const [reason, setReason] = useState<string>("");
+  const [adjusting, setAdjusting] = useState(false);
+  const [adjustError, setAdjustError] = useState<string | null>(null);
+  const [savedFlash, setSavedFlash] = useState<{ itemId: number; delta: number } | null>(null);
+
+  function fetchList() {
+    setItems(null);
+    setListError(null);
+    fetch(`/api/staff-portal-session/inventory/items`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((d) => setItems(d.items || []))
+      .catch((e: any) => setListError(e.message || "Could not load inventory"));
+  }
+
+  useEffect(() => { fetchList(); }, [employee.id]);
+
+  function openItem(it: PortalInventoryItem) {
+    setActive(it);
+    setNewQty(String(it.quantity_on_hand));
+    setReason("");
+    setAdjustError(null);
+  }
+
+  function closeItem() {
+    setActive(null);
+    setNewQty("");
+    setReason("");
+    setAdjustError(null);
+  }
+
+  async function submitAdjust() {
+    if (!active) return;
+    const parsed = Number(newQty);
+    if (!Number.isFinite(parsed) || parsed < 0 || !Number.isInteger(parsed)) {
+      setAdjustError("Enter a whole number, 0 or greater.");
+      return;
+    }
+    setAdjusting(true);
+    setAdjustError(null);
+    try {
+      const r = await fetch(`/api/staff-portal-session/inventory/items/${active.id}/adjust`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          employee_id: employee.id,
+          new_quantity: parsed,
+          reason: reason.trim() || null,
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      const updated: PortalInventoryItem = data.item;
+      setItems((prev) => prev?.map((row) => row.id === updated.id ? updated : row) ?? prev);
+      setSavedFlash({ itemId: updated.id, delta: data.adjustment?.delta ?? 0 });
+      window.setTimeout(() => setSavedFlash((cur) => (cur?.itemId === updated.id ? null : cur)), 4000);
+      closeItem();
+    } catch (e: any) {
+      setAdjustError(e.message || "Adjustment failed");
+    } finally {
+      setAdjusting(false);
+    }
+  }
+
+  const visible = items
+    ? items.filter((it) => {
+        const q = search.trim().toLowerCase();
+        if (!q) return true;
+        return [it.item_name, it.catalog_number, it.lot_number, it.barcode_value, it.storage_location]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q));
+      })
+    : null;
+
+  // ── Adjust panel ─────────────────────────────────────────────────
+  if (active) {
+    return (
+      <div className="min-h-screen bg-background p-6" data-testid="sp-inventory-adjust">
+        <div className="max-w-md mx-auto">
+          <div className="flex items-center justify-between mb-4">
+            <button onClick={closeItem} className="text-xs text-muted-foreground hover:underline" data-testid="sp-inventory-back-to-list">
+              &larr; Back to inventory
+            </button>
+            <button onClick={onSignOut} className="text-xs text-muted-foreground hover:underline">
+              Sign out
+            </button>
+          </div>
+          <div className="border border-border rounded-lg bg-card p-4 mb-4">
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">{labName} &middot; Item</div>
+            <div className="font-serif text-xl font-bold" data-testid="sp-inventory-detail-name">{active.item_name}</div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {active.catalog_number && <>Catalog {active.catalog_number}</>}
+              {active.lot_number && <> &middot; Lot {active.lot_number}</>}
+              {active.storage_location && <> &middot; {active.storage_location}</>}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              On hand: <span className="font-mono font-semibold">{active.quantity_on_hand}</span>
+              {active.unit && <> {active.unit}</>}
+            </div>
+          </div>
+
+          <div className="border border-border rounded-lg bg-card p-4">
+            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1" htmlFor="sp-inventory-new-qty">
+              New quantity
+            </label>
+            <input
+              id="sp-inventory-new-qty"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              step={1}
+              value={newQty}
+              onChange={(e) => setNewQty(e.target.value)}
+              className="w-full border border-border rounded-md p-2 text-lg font-mono text-center bg-background mb-3"
+              data-testid="sp-inventory-new-qty"
+            />
+            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1" htmlFor="sp-inventory-reason">
+              Reason (optional)
+            </label>
+            <input
+              id="sp-inventory-reason"
+              type="text"
+              placeholder="Received shipment / used in run / damaged / ..."
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              className="w-full border border-border rounded-md p-2 text-sm bg-background mb-3"
+              data-testid="sp-inventory-reason"
+            />
+            {adjustError && (
+              <div className="text-xs text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 rounded p-2 mb-3">
+                {adjustError}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={submitAdjust}
+              disabled={adjusting}
+              className="w-full text-white font-semibold py-2 rounded-md disabled:opacity-50"
+              style={{ backgroundColor: "#01696F" }}
+              data-testid="sp-inventory-save"
+            >
+              {adjusting ? "Saving..." : "Save adjustment"}
+            </button>
+            <p className="text-xs text-muted-foreground mt-2">
+              Your name, the before / after quantities, and the reason are recorded in the audit trail.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── List screen ───────────────────────────────────────────────────
+  return (
+    <div className="min-h-screen bg-background p-6" data-testid="sp-inventory-list">
+      <div className="max-w-2xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">Adjust Inventory</div>
+            <div className="font-serif text-xl font-bold">{labName}</div>
+            <div className="text-xs text-muted-foreground">Acting as {employee.first_name} {employee.last_name}</div>
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            <button onClick={onBack} className="text-xs text-muted-foreground hover:underline" data-testid="sp-inventory-back">
+              &larr; Back to modules
+            </button>
+            <button onClick={onSignOut} className="text-xs text-muted-foreground hover:underline">
+              Sign out
+            </button>
+          </div>
+        </div>
+
+        <div className="mb-3">
+          <input
+            type="text"
+            placeholder="Search item name, catalog, lot, location..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full border border-border rounded-md p-2 text-sm bg-background"
+            data-testid="sp-inventory-search"
+          />
+        </div>
+
+        <div className="border border-border rounded-lg bg-card p-4">
+          {listError && (
+            <div className="text-xs text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 rounded p-2 mb-3">
+              {listError}
+            </div>
+          )}
+          {visible === null ? (
+            <div className="text-sm text-muted-foreground py-6 text-center">Loading inventory...</div>
+          ) : visible.length === 0 ? (
+            <div className="text-sm text-muted-foreground py-6 text-center">
+              {items && items.length === 0
+                ? <>No inventory items on this lab yet. Ask the lab director.</>
+                : <>No items match "{search}".</>}
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {visible.map((it) => (
+                <button
+                  key={it.id}
+                  type="button"
+                  onClick={() => openItem(it)}
+                  className="w-full text-left py-3 px-2 hover:bg-muted flex items-center justify-between gap-3"
+                  data-testid="sp-inventory-row"
+                >
+                  <div className="flex-1">
+                    <div className="text-sm font-medium" data-testid="sp-inventory-row-name">{it.item_name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {it.catalog_number && <>Catalog {it.catalog_number}{" "}</>}
+                      {it.lot_number && <>&middot; Lot {it.lot_number}{" "}</>}
+                      {it.storage_location && <>&middot; {it.storage_location}</>}
+                    </div>
+                    {savedFlash?.itemId === it.id && (
+                      <div className="text-xs text-emerald-700 mt-1" data-testid="sp-inventory-row-saved">
+                        Saved {savedFlash.delta >= 0 ? "+" : ""}{savedFlash.delta} {it.unit || ""}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <div className="text-base font-mono font-semibold" data-testid="sp-inventory-row-qty">
+                      {it.quantity_on_hand}
+                    </div>
+                    {it.unit && <div className="text-xs text-muted-foreground">{it.unit}</div>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
