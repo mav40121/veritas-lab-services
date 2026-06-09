@@ -50,23 +50,92 @@ export const SEAT_PRICES_BY_TIER: Record<string, { pricePerSeat: number; priceId
 // Y1 = $299 (Y2+ = $499 list). $200 off, duration: once.
 export const VC_UNLIMITED_FIRST_YEAR_COUPON = "VCFIRSTYEAR";
 
-// parking-lot #33 PR 6: view-only seat add-on (medical director or designee,
-// technical consultant, technical supervisor; capped per tier 1/2/3 with this
-// add-on for extras). Price is $99/yr/seat per CLAUDE.md sec 10. The Stripe
-// price ID is read from env so Michael can create the product in the dashboard
-// without a code change. Until STRIPE_VIEW_ONLY_ADDON_PRICE is set, view-only
-// add-ons are billed manually via invoice and getViewOnlyAddOnPriceId returns
-// null.
+// RETIRED 2026-06-08: $99/yr view-only seat add-on (parking-lot #33 PR 6
+// origin, replaced by Staff Portal flat-band model below). Per the
+// "preserve legacy IDs, never reference for NEW checkouts" rule the
+// constants and helper stay defined so any straggler code path that still
+// references them compiles. Zero customers were on this structure at the
+// time of retirement (0 paying labs). Do NOT add new references.
 export const VIEW_ONLY_ADDON_UNIT_AMOUNT_CENTS = 9900;
 export const VIEW_ONLY_ADDON_RATE_PER_YEAR = 99;
+/** @deprecated 2026-06-08, replaced by Staff Portal. See getStaffPortalConfig(). */
 export function getViewOnlyAddOnPriceId(): string | null {
   return process.env.STRIPE_VIEW_ONLY_ADDON_PRICE || null;
 }
+/** @deprecated 2026-06-08, replaced by Staff Portal. See getStaffPortalConfig(). */
 export function getViewOnlyAddOnConfig(): { priceId: string | null; ratePerYear: number; unitAmountCents: number } {
   return {
     priceId: getViewOnlyAddOnPriceId(),
     ratePerYear: VIEW_ONLY_ADDON_RATE_PER_YEAR,
     unitAmountCents: VIEW_ONLY_ADDON_UNIT_AMOUNT_CENTS,
+  };
+}
+
+// 2026-06-08: Staff Portal pricing locked at $149/$399/$799 across 25/100/
+// 250 staff bands. Above 250 staff routes to System tier custom quoting.
+// Replaces the retired $99/seat view-only model. Pricing rationale:
+// 14-19% of base tier per band, 7-15% of MediaLab's per-user equivalent
+// at the same staff count.
+//
+// Stripe price IDs are read from env so the SKUs can be created in the
+// Stripe dashboard without a code deploy. Until STRIPE_STAFF_PORTAL_*_PRICE
+// env vars are set, getStaffPortalConfig returns priceId: null and the
+// caller falls back to manual invoicing.
+export const STAFF_PORTAL_BANDS = {
+  small:  { maxStaff: 25,  ratePerYear: 149, unitAmountCents: 14900, label: "Staff Portal (up to 25 staff)" },
+  medium: { maxStaff: 100, ratePerYear: 399, unitAmountCents: 39900, label: "Staff Portal (up to 100 staff)" },
+  large:  { maxStaff: 250, ratePerYear: 799, unitAmountCents: 79900, label: "Staff Portal (up to 250 staff)" },
+} as const;
+export type StaffPortalBand = keyof typeof STAFF_PORTAL_BANDS;
+
+/**
+ * Returns the right Staff Portal band for a given staff count. Above 250
+ * returns null (caller routes to System tier custom quote).
+ */
+export function getStaffPortalBand(staffCount: number): StaffPortalBand | null {
+  if (!Number.isFinite(staffCount) || staffCount <= 0) return "small";
+  if (staffCount <= STAFF_PORTAL_BANDS.small.maxStaff)  return "small";
+  if (staffCount <= STAFF_PORTAL_BANDS.medium.maxStaff) return "medium";
+  if (staffCount <= STAFF_PORTAL_BANDS.large.maxStaff)  return "large";
+  return null; // above 250 → System tier custom quote
+}
+
+/**
+ * Returns the Stripe price id for a Staff Portal band, sourced from env.
+ * Null while the SKUs have not been created in the Stripe dashboard yet.
+ */
+export function getStaffPortalPriceId(band: StaffPortalBand): string | null {
+  switch (band) {
+    case "small":  return process.env.STRIPE_STAFF_PORTAL_SMALL_PRICE  || null;
+    case "medium": return process.env.STRIPE_STAFF_PORTAL_MEDIUM_PRICE || null;
+    case "large":  return process.env.STRIPE_STAFF_PORTAL_LARGE_PRICE  || null;
+  }
+}
+
+/**
+ * Bundle the resolved Staff Portal band, its config, and the live Stripe
+ * price id (or null when the SKU has not been created in the dashboard yet).
+ */
+export function getStaffPortalConfig(staffCount: number): {
+  band: StaffPortalBand | null;
+  ratePerYear: number | null;
+  unitAmountCents: number | null;
+  label: string | null;
+  priceId: string | null;
+  requiresSystemTier: boolean;
+} {
+  const band = getStaffPortalBand(staffCount);
+  if (band === null) {
+    return { band: null, ratePerYear: null, unitAmountCents: null, label: null, priceId: null, requiresSystemTier: true };
+  }
+  const cfg = STAFF_PORTAL_BANDS[band];
+  return {
+    band,
+    ratePerYear: cfg.ratePerYear,
+    unitAmountCents: cfg.unitAmountCents,
+    label: cfg.label,
+    priceId: getStaffPortalPriceId(band),
+    requiresSystemTier: false,
   };
 }
 
