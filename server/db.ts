@@ -424,6 +424,8 @@ sqlite.exec(`
     highest_complexity TEXT NOT NULL DEFAULT 'H',
     performs_testing INTEGER NOT NULL DEFAULT 1,
     status TEXT NOT NULL DEFAULT 'active',
+    can_adjust_inventory INTEGER NOT NULL DEFAULT 0,
+    can_view_audit INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (lab_id) REFERENCES staff_labs(id)
@@ -4639,5 +4641,21 @@ try {
   }
   if (!cols.includes("qualifications_verified_by")) {
     try { sqlite.exec("ALTER TABLE staff_employees ADD COLUMN qualifications_verified_by TEXT"); } catch {}
+  }
+}
+
+// 2026-06-08 — Staff Portal access toggles. Defaults: every employee can sign
+// policies and competencies (no flag needed for those, universal). Toggles:
+// can_adjust_inventory (default off) gates VeritaStock kiosk decrement /
+// increment / set-qty actions; can_view_audit (default off) gates the audit
+// trail / status grids. Only paid active writer seats can flip these.
+// Per Michael 2026-06-08 locked design.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(staff_employees)").all() as any[]).map(c => c.name);
+  if (!cols.includes("can_adjust_inventory")) {
+    try { sqlite.exec("ALTER TABLE staff_employees ADD COLUMN can_adjust_inventory INTEGER NOT NULL DEFAULT 0"); } catch {}
+  }
+  if (!cols.includes("can_view_audit")) {
+    try { sqlite.exec("ALTER TABLE staff_employees ADD COLUMN can_view_audit INTEGER NOT NULL DEFAULT 0"); } catch {}
   }
 }
