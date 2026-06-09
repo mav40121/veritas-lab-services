@@ -95,6 +95,9 @@ interface Employee {
   qualifications_verified_by: string | null;
   highest_complexity: string;
   performs_testing: number;
+  /** 2026-06-08 Staff Portal access toggles. 0 = off, 1 = on. Defaults 0/0. */
+  can_adjust_inventory: number;
+  can_view_audit: number;
   status: string;
   roles: Role[];
   competencySchedule: CompetencySchedule | null;
@@ -792,6 +795,12 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
     qualificationsVerifiedAt: "", qualificationsVerifiedBy: "",
     highestComplexity: "H",
     performsTesting: true,
+    // 2026-06-08 Staff Portal access toggles. Default off; lab director
+    // turns these on per-employee for staff who actually adjust inventory
+    // or need to view the audit trail. Policy and competency signing are
+    // universal and have no toggle.
+    canAdjustInventory: false,
+    canViewAudit: false,
   });
   const [roles, setRoles] = useState<{ role: string; specialtyNumber: number | null }[]>([]);
   const [saving, setSaving] = useState(false);
@@ -806,10 +815,12 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
         qualificationsVerifiedAt: employee.qualifications_verified_at || "",
         qualificationsVerifiedBy: employee.qualifications_verified_by || "",
         highestComplexity: employee.highest_complexity, performsTesting: employee.performs_testing === 1,
+        canAdjustInventory: employee.can_adjust_inventory === 1,
+        canViewAudit: employee.can_view_audit === 1,
       });
       setRoles(employee.roles.map((r) => ({ role: r.role, specialtyNumber: r.specialty_number })));
     } else {
-      setForm({ lastName: "", firstName: "", middleInitial: "", title: "", titleCode: "", hireDate: "", qualificationsText: "", qualificationsVerifiedAt: "", qualificationsVerifiedBy: "", highestComplexity: "H", performsTesting: true });
+      setForm({ lastName: "", firstName: "", middleInitial: "", title: "", titleCode: "", hireDate: "", qualificationsText: "", qualificationsVerifiedAt: "", qualificationsVerifiedBy: "", highestComplexity: "H", performsTesting: true, canAdjustInventory: false, canViewAudit: false });
       setRoles([]);
     }
   }, [employee, open]);
@@ -1026,6 +1037,45 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
                 <input type="checkbox" checked={form.performsTesting} onChange={(e) => setForm({ ...form, performsTesting: e.target.checked })} id="performs-testing" />
                 <label htmlFor="performs-testing" className="text-sm">Performs patient testing</label>
               </div>
+            </div>
+          </div>
+
+          {/* 2026-06-08 Staff Portal access toggles.
+              Defaults: every VeritaStaff employee signs policies +
+              competencies through the Staff Portal (no toggle needed,
+              universal). The two toggles below are the explicit-grant
+              gates: inventory adjustments and audit-trail viewing.
+              Default off; lab director enables per-employee. */}
+          <div className="border border-border rounded-lg p-3 bg-muted/30 space-y-2">
+            <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+              Staff Portal access
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Policies and competency sign-offs are always available to every employee. Toggle the operational surfaces below per employee.
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={form.canAdjustInventory}
+                onChange={(e) => setForm({ ...form, canAdjustInventory: e.target.checked })}
+                id="can-adjust-inventory"
+                data-testid="staff-toggle-inventory"
+              />
+              <label htmlFor="can-adjust-inventory" className="text-sm">
+                Can adjust inventory (decrement, increment, set qty)
+              </label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={form.canViewAudit}
+                onChange={(e) => setForm({ ...form, canViewAudit: e.target.checked })}
+                id="can-view-audit"
+                data-testid="staff-toggle-audit"
+              />
+              <label htmlFor="can-view-audit" className="text-sm">
+                Can view audit trail (who signed what status grids)
+              </label>
             </div>
           </div>
 

@@ -18371,10 +18371,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         };
 
         const insertEmpStmt = sqlite.prepare(
-          "INSERT INTO staff_employees (lab_id, user_id, last_name, first_name, middle_initial, title, hire_date, qualifications_text, highest_complexity, performs_testing, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
+          "INSERT INTO staff_employees (lab_id, user_id, last_name, first_name, middle_initial, title, hire_date, qualifications_text, highest_complexity, performs_testing, can_adjust_inventory, can_view_audit, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         );
         const updateEmpStmt = sqlite.prepare(
-          "UPDATE staff_employees SET last_name=?, first_name=?, middle_initial=?, title=?, hire_date=?, qualifications_text=?, highest_complexity=?, performs_testing=?, updated_at=? WHERE id=? AND lab_id=?"
+          "UPDATE staff_employees SET last_name=?, first_name=?, middle_initial=?, title=?, hire_date=?, qualifications_text=?, highest_complexity=?, performs_testing=?, can_adjust_inventory=?, can_view_audit=?, updated_at=? WHERE id=? AND lab_id=?"
         );
         const deleteRolesStmt = sqlite.prepare("DELETE FROM staff_roles WHERE employee_id = ?");
         const insertRoleStmt = sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number) VALUES (?,?,?,?)");
@@ -18394,6 +18394,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
                 lab.id, dataUserId, p.lastName, p.firstName,
                 p.middleInitial ? p.middleInitial.charAt(0) : null,
                 p.title, p.hireDate, p.qualificationsText, p.highestComplexity, p.performsTesting,
+                p.canAdjustInventory, p.canViewAudit,
                 "active", now, now
               );
               const empId = Number(result.lastInsertRowid);
@@ -18413,6 +18414,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
                 p.lastName, p.firstName,
                 p.middleInitial ? p.middleInitial.charAt(0) : null,
                 p.title, p.hireDate, p.qualificationsText, p.highestComplexity, p.performsTesting,
+                p.canAdjustInventory, p.canViewAudit,
                 now, p.employeeId, lab.id
               );
               deleteRolesStmt.run(p.employeeId);
