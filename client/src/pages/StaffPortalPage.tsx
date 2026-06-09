@@ -392,16 +392,66 @@ export default function StaffPortalPage() {
     );
   }
 
-  // ── Module tiles for the picked employee ─────────────────────────────
-  // All four tiles are wired up. Inventory + audit gate on the
-  // staff_employees toggle flags. Policies + competency are universal.
+  // 2026-06-09 Bugfix: techs land on the tile screen with no signal
+  // that one tile has pending work. Fetch the three list endpoints once
+  // when the tile screen renders and surface "N pending" badges +
+  // a banner so a tech who logs in IMMEDIATELY sees the quiz / policy /
+  // competency waiting for them. Inventory + Audit are read/write
+  // surfaces with no "pending" concept and stay unbadged.
+  return (
+    <TileScreenWithPendingCounts
+      session={session}
+      employee={activeEmployee}
+      onPick={(m) => setActiveModule(m)}
+      onSwitchEmployee={() => setActiveEmployee(null)}
+      onSignOut={signOut}
+    />
+  );
+}
+
+// ── 2026-06-09 Tile screen w/ pending-count badges ────────────────────
+function TileScreenWithPendingCounts({
+  session, employee, onPick, onSwitchEmployee, onSignOut,
+}: {
+  session: StaffPortalSession;
+  employee: PortalEmployee;
+  onPick: (m: "policies" | "competency" | "quizzes" | "inventory" | "audit") => void;
+  onSwitchEmployee: () => void;
+  onSignOut: () => void;
+}) {
+  const [pending, setPending] = useState<{ quizzes: number; policies: number; competencies: number } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const h = { Authorization: `Bearer ${session.token}` };
+    Promise.all([
+      fetch(`/api/staff-portal-session/quizzes?employee_id=${employee.id}`, { headers: h })
+        .then(async (r) => r.ok ? r.json() : { quizzes: [] }).catch(() => ({ quizzes: [] })),
+      fetch(`/api/staff-portal-session/policies?employee_id=${employee.id}`, { headers: h })
+        .then(async (r) => r.ok ? r.json() : { policies: [] }).catch(() => ({ policies: [] })),
+      fetch(`/api/staff-portal-session/competencies?employee_id=${employee.id}`, { headers: h })
+        .then(async (r) => r.ok ? r.json() : { competencies: [] }).catch(() => ({ competencies: [] })),
+    ]).then(([q, p, c]) => {
+      if (cancelled) return;
+      const quizzes = (q.quizzes || []).filter((x: any) => x.status === "assigned").length;
+      const policies = (p.policies || []).filter((x: any) => !x.signed).length;
+      const competencies = (c.competencies || []).filter((x: any) => !x.signed).length;
+      setPending({ quizzes, policies, competencies });
+    }).catch(() => {
+      if (cancelled) return;
+      setPending({ quizzes: 0, policies: 0, competencies: 0 });
+    });
+    return () => { cancelled = true; };
+  }, [employee.id, session.token]);
+
   const tiles = [
-    { key: "policies",    label: "Sign Policies",       available: true,                                ready: true  },
-    { key: "competency",  label: "Sign Competencies",   available: true,                                ready: true  },
-    { key: "quizzes",     label: "Take a Quiz",          available: true,                                ready: true  },
-    { key: "inventory",   label: "Adjust Inventory",    available: activeEmployee.can_adjust_inventory, ready: true  },
-    { key: "audit",       label: "View Audit Trail",    available: activeEmployee.can_view_audit,       ready: true  },
+    { key: "policies" as const,    label: "Sign Policies",     available: true,                          pending: pending?.policies ?? null },
+    { key: "competency" as const,  label: "Sign Competencies", available: true,                          pending: pending?.competencies ?? null },
+    { key: "quizzes" as const,     label: "Take a Quiz",        available: true,                          pending: pending?.quizzes ?? null },
+    { key: "inventory" as const,   label: "Adjust Inventory",   available: !!employee.can_adjust_inventory, pending: null },
+    { key: "audit" as const,       label: "View Audit Trail",   available: !!employee.can_view_audit,       pending: null },
   ];
+  const totalPending = (pending?.quizzes ?? 0) + (pending?.policies ?? 0) + (pending?.competencies ?? 0);
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -409,32 +459,42 @@ export default function StaffPortalPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <div className="text-xs uppercase tracking-wider text-muted-foreground">Staff Portal</div>
-            <div className="font-serif text-xl font-bold">{fullName(activeEmployee)}</div>
+            <div className="font-serif text-xl font-bold">{`${employee.first_name}${employee.middle_initial ? ` ${employee.middle_initial}.` : ""} ${employee.last_name}`}</div>
             <div className="text-xs text-muted-foreground">
-              {activeEmployee.title || "(no title)"} · {session.lab.name}
+              {employee.title || "(no title)"} · {session.lab.name}
             </div>
           </div>
           <div className="flex flex-col items-end gap-1">
-            <button onClick={() => setActiveEmployee(null)} className="text-xs text-muted-foreground hover:underline" data-testid="sp-switch-employee">
+            <button onClick={onSwitchEmployee} className="text-xs text-muted-foreground hover:underline" data-testid="sp-switch-employee">
               Not me / switch
             </button>
-            <button onClick={signOut} className="text-xs text-muted-foreground hover:underline">
+            <button onClick={onSignOut} className="text-xs text-muted-foreground hover:underline">
               Sign out
             </button>
           </div>
         </div>
 
+        {/* 2026-06-09 Bugfix: pending banner. Surfaces total open
+            items at a glance so a tech can't miss an assigned quiz on
+            login. Disappears when caught up. */}
+        {totalPending > 0 && (
+          <div
+            className="mb-4 rounded-lg border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/20 p-3 flex items-center justify-between gap-3"
+            data-testid="sp-pending-banner"
+          >
+            <div className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+              You have {totalPending} item{totalPending === 1 ? "" : "s"} waiting for you
+            </div>
+            <div className="text-[11px] text-amber-800 dark:text-amber-300">Tap a tile below to start.</div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="sp-tiles">
           {tiles.map((t) => {
-            const clickable = t.available && t.ready;
-            const onClick = () => {
-              if (!clickable) return;
-              if (t.key === "policies") setActiveModule("policies");
-              if (t.key === "inventory") setActiveModule("inventory");
-              if (t.key === "audit") setActiveModule("audit");
-              if (t.key === "competency") setActiveModule("competency");
-              if (t.key === "quizzes") setActiveModule("quizzes");
-            };
+            const clickable = t.available;
+            const onClick = () => { if (clickable) onPick(t.key); };
+            const pendingCount = t.pending;
+            const hasPending = pendingCount != null && pendingCount > 0;
             return (
               <button
                 key={t.key}
@@ -442,22 +502,32 @@ export default function StaffPortalPage() {
                 disabled={!clickable}
                 onClick={onClick}
                 className={
-                  "border rounded-lg p-4 text-left " +
-                  (clickable
-                    ? "border-primary/40 bg-card hover:bg-muted cursor-pointer"
-                    : t.available
-                      ? "border-border bg-muted/30 cursor-default"
+                  "border rounded-lg p-4 text-left relative " +
+                  (hasPending
+                    ? "border-amber-400 border-2 bg-amber-50 dark:bg-amber-950/20 hover:bg-amber-100 cursor-pointer"
+                    : clickable
+                      ? "border-primary/40 bg-card hover:bg-muted cursor-pointer"
                       : "border-border bg-muted/30 opacity-60 cursor-not-allowed")
                 }
                 data-testid={`sp-tile-${t.key}`}
               >
-                <div className="font-semibold">{t.label}</div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-semibold">{t.label}</div>
+                  {hasPending && (
+                    <span
+                      className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 rounded-full text-xs font-bold bg-amber-500 text-white"
+                      data-testid={`sp-tile-${t.key}-badge`}
+                    >
+                      {pendingCount}
+                    </span>
+                  )}
+                </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   {!t.available
                     ? "Not enabled for this staff member."
-                    : t.ready
-                      ? "Tap to begin."
-                      : "Ready soon. Lab director has granted access."}
+                    : hasPending
+                      ? `${pendingCount} pending. Tap to start.`
+                      : "Tap to begin."}
                 </div>
               </button>
             );
