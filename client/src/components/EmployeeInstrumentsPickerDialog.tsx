@@ -80,6 +80,27 @@ export function EmployeeInstrumentsPickerDialog({
     });
   }
 
+  // Currently-visible instrument ids (respects the active filter). Used by
+  // Select all / Clear so a labe-wide pick on a SCAHC-style facility with
+  // 30+ instruments is one click instead of thirty.
+  const visibleIds = useMemo(() => byMap.flatMap(g => g.items.map(i => i.id)), [byMap]);
+  const allVisibleChecked = visibleIds.length > 0 && visibleIds.every(id => selected.has(id));
+
+  function selectAllVisible() {
+    setSelected(prev => {
+      const next = new Set(prev);
+      for (const id of visibleIds) next.add(id);
+      return next;
+    });
+  }
+  function clearAllVisible() {
+    setSelected(prev => {
+      const next = new Set(prev);
+      for (const id of visibleIds) next.delete(id);
+      return next;
+    });
+  }
+
   async function handleSubmit() {
     setError(null);
     setSaving(true);
@@ -104,6 +125,29 @@ export function EmployeeInstrumentsPickerDialog({
             Pick the instruments this employee actually runs. The supervisor sees this context when authoring a competency assessment.
           </p>
           <Input placeholder="Filter by name, nickname, S/N, category, map..." value={filter} onChange={e => setFilter(e.target.value)} />
+          {visibleIds.length > 0 && (
+            <div className="flex items-center gap-2 text-xs">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={selectAllVisible}
+                disabled={allVisibleChecked}
+                data-testid="instruments-picker-select-all"
+              >
+                Select all{filter.trim() ? " filtered" : ""} ({visibleIds.length})
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={clearAllVisible}
+                data-testid="instruments-picker-clear-all"
+              >
+                Clear{filter.trim() ? " filtered" : ""}
+              </Button>
+            </div>
+          )}
           {byMap.length === 0 ? (
             <p className="text-xs text-muted-foreground italic">No instruments match.</p>
           ) : (
