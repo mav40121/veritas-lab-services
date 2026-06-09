@@ -7,7 +7,7 @@ import type { Express } from "express";
 import { db } from "./db";
 import { storePdfToken } from "./pdfTokens";
 import { generateCprtPdf } from "./veritaopsPdf";
-import { resolveRowForMutation } from "./labAccessGuard";
+import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
 
 // Plain-language tier labels. Used by the client to show what is in the
 // final CPRT number for a given study.
@@ -125,15 +125,18 @@ export function registerVeritaOpsRoutes(
 
   // ── ACCOUNT-SCOPED ROUTES (legacy / single-lab users) ──────────────
 
-  // LIST account-scoped
+  // LIST scoped to the user's active lab.
+  // Shape A broader sweep (2026-06-09): legacy account_id scope leaked across
+  // labs for multi-lab owners.
   app.get("/api/veritaops/studies", authMiddleware, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) {
       return res.status(403).json({ error: "VeritaOps subscription required" });
     }
-    const ownerId = req.ownerUserId ?? req.userId;
+    const labId = resolveLegacyLabId((db as any).$client, req);
+    if (!labId) return res.json([]);
     const rows = sqlite.prepare(
-      "SELECT * FROM veritaops_test_cost_studies WHERE account_id = ? ORDER BY updated_at DESC"
-    ).all(ownerId);
+      "SELECT * FROM veritaops_test_cost_studies WHERE lab_id = ? ORDER BY updated_at DESC"
+    ).all(labId);
     res.json(rows);
   });
 

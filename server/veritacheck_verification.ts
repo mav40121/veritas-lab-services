@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { db } from "./db";
-import { resolveRowForMutation } from "./labAccessGuard";
+import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
 
 const sqlite = db.$client;
 
@@ -545,20 +545,22 @@ export function registerVeritaCheckVerificationRoutes(
     res.json(CLSI_GUIDANCE);
   });
 
-  // GET all verifications for the user (legacy, user-scoped — leaks across
-  // labs for multi-lab owners; preserved for legacy unprefixed callers).
+  // GET all verifications — Shape A broader sweep (2026-06-09): legacy
+  // user-scoped list leaked across labs for multi-lab owners. Now scopes
+  // to the active lab via resolveLegacyLabId so it matches the NavBar.
   app.get("/api/veritacheck/verifications", authMiddleware, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
-    const userId = req.ownerUserId ?? req.user.userId;
+    const labId = resolveLegacyLabId((db as any).$client, req);
+    if (!labId) return res.json([]);
     const verifications = sqlite.prepare(`
       SELECT v.*,
         (SELECT COUNT(*) FROM veritacheck_verification_instruments WHERE verification_id = v.id) as unit_count,
         (SELECT COUNT(*) FROM veritacheck_verification_studies WHERE verification_id = v.id AND passed = 1) as passed_count,
         (SELECT COUNT(*) FROM veritacheck_verification_studies WHERE verification_id = v.id AND passed = 0) as failed_count
       FROM veritacheck_verifications v
-      WHERE v.user_id = ?
+      WHERE v.lab_id = ?
       ORDER BY v.created_at DESC
-    `).all(userId);
+    `).all(labId);
     res.json(verifications);
   });
 

@@ -103,3 +103,31 @@ export function resolveRowForMutation<T = any>(
 
   return { row: null, status: 403 };
 }
+
+/**
+ * resolveLegacyLabId — for legacy unscoped GET endpoints that need to filter
+ * by the user's active lab. Returns the user's default_lab_id (set by the
+ * LabSwitcher on every NavBar switch), falling back to the oldest active
+ * lab_members row. Returns null only when the user has no membership at all.
+ *
+ * Use case: a list endpoint like `GET /api/veritascan/scans` historically
+ * filtered by user_id and bled cross-lab rows for multi-lab users. Threading
+ * through resolveLegacyLabId + scoping by lab_id matches what the user sees
+ * in the NavBar without requiring the client to migrate to `/api/labs/:labId/...`.
+ *
+ * Documented in detail in routes.ts comment block (added 2026-06-05). This
+ * exported copy lives in labAccessGuard so non-routes modules can share it.
+ */
+export function resolveLegacyLabId(
+  sqlite: SqliteLike,
+  req: RequestLike
+): number | null {
+  const userId = req.user?.userId ?? req.userId;
+  if (userId == null) return null;
+  const u = sqlite.prepare("SELECT default_lab_id FROM users WHERE id = ?").get(userId) as any;
+  if (u?.default_lab_id) return Number(u.default_lab_id);
+  const m = sqlite.prepare(
+    "SELECT lab_id FROM lab_members WHERE user_id = ? AND status = 'active' ORDER BY id ASC LIMIT 1"
+  ).get(userId) as any;
+  return m?.lab_id ? Number(m.lab_id) : null;
+}

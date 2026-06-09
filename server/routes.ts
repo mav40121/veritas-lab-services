@@ -10300,13 +10300,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return ["annual", "professional", "lab", "complete", "veritascan", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }
 
-  // List scans for current user
+  // List scans for the user's ACTIVE lab.
+  // Shape A broader sweep (2026-06-09): legacy WHERE user_id = ? leaked
+  // cross-lab rows. resolveLegacyLabId threads the LabSwitcher's active lab
+  // so the displayed list matches the NavBar.
   app.get("/api/veritascan/scans", authMiddleware, (req: any, res) => {
     if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
-    const dataUserId = req.ownerUserId ?? req.user.userId;
+    const labId = resolveLegacyLabId(req);
+    if (!labId) return res.json([]);
     const scans = (db as any).$client.prepare(
-      "SELECT id, name, created_at, updated_at FROM veritascan_scans WHERE user_id = ? ORDER BY updated_at DESC"
-    ).all(dataUserId);
+      "SELECT id, name, created_at, updated_at FROM veritascan_scans WHERE lab_id = ? ORDER BY updated_at DESC"
+    ).all(labId);
     // For each scan, add completion stats
     const result = scans.map((s: any) => {
       const items = (db as any).$client.prepare(
@@ -12251,11 +12255,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(buildCumsumTrackersList(trackers));
   });
 
+  // Shape A broader sweep (2026-06-09): legacy user_id scope leaked cross-lab
+  // trackers. Resolve to the active lab and filter by lab_id.
   app.get("/api/veritacheck/cumsum/trackers", authMiddleware, (req: any, res) => {
     if (!hasCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Subscription required" });
+    const labId = resolveLegacyLabId(req);
+    if (!labId) return res.json([]);
     const trackers = (db as any).$client.prepare(
-      "SELECT * FROM cumsum_trackers WHERE user_id = ? ORDER BY created_at DESC"
-    ).all(req.user.userId);
+      "SELECT * FROM cumsum_trackers WHERE lab_id = ? ORDER BY created_at DESC"
+    ).all(labId);
     res.json(buildCumsumTrackersList(trackers));
   });
 
@@ -14395,12 +14403,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return d.toISOString().slice(0, 10);
   }
 
-  // GET all findings for the active data user
+  // GET all findings for the active lab.
+  // Shape A broader sweep (2026-06-09): findings has lab_id; user_id scope
+  // leaked across labs for multi-lab owners.
   app.get("/api/findings", authMiddleware, (req: any, res) => {
-    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const labId = resolveLegacyLabId(req);
+    if (!labId) return res.json([]);
     const rows = (db as any).$client.prepare(
-      "SELECT * FROM findings WHERE user_id = ? ORDER BY due_date IS NULL, due_date ASC, id DESC"
-    ).all(dataUserId);
+      "SELECT * FROM findings WHERE lab_id = ? ORDER BY due_date IS NULL, due_date ASC, id DESC"
+    ).all(labId);
     res.json(rows);
   });
 
@@ -21243,17 +21254,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // List events for user (optional enrollmentId filter)
   app.get("/api/veritapt/events", authMiddleware, (req: any, res) => {
     if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
-    const dataUserId = req.ownerUserId ?? req.user.userId;
+    // Shape A broader sweep (2026-06-09): scope to the active lab.
+    const labId = resolveLegacyLabId(req);
+    if (!labId) return res.json([]);
     const enrollmentId = req.query.enrollmentId;
     let rows;
     if (enrollmentId) {
       rows = (db as any).$client.prepare(
-        "SELECT * FROM pt_events WHERE user_id = ? AND enrollment_id = ? ORDER BY event_date DESC"
-      ).all(dataUserId, enrollmentId);
+        "SELECT * FROM pt_events WHERE lab_id = ? AND enrollment_id = ? ORDER BY event_date DESC"
+      ).all(labId, enrollmentId);
     } else {
       rows = (db as any).$client.prepare(
-        "SELECT * FROM pt_events WHERE user_id = ? ORDER BY event_date DESC"
-      ).all(dataUserId);
+        "SELECT * FROM pt_events WHERE lab_id = ? ORDER BY event_date DESC"
+      ).all(labId);
     }
     res.json(rows);
   });
@@ -21326,13 +21339,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
-  // List corrective actions for user
+  // List corrective actions for the active lab.
+  // Shape A broader sweep (2026-06-09): scope by lab_id, not user_id.
   app.get("/api/veritapt/corrective-actions", authMiddleware, (req: any, res) => {
     if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
-    const dataUserId = req.ownerUserId ?? req.user.userId;
+    const labId = resolveLegacyLabId(req);
+    if (!labId) return res.json([]);
     const rows = (db as any).$client.prepare(
-      "SELECT * FROM pt_corrective_actions WHERE user_id = ? ORDER BY date_initiated DESC"
-    ).all(dataUserId);
+      "SELECT * FROM pt_corrective_actions WHERE lab_id = ? ORDER BY date_initiated DESC"
+    ).all(labId);
     res.json(rows);
   });
 
@@ -21481,30 +21496,33 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // Shape A broader sweep (2026-06-09): summary tile scopes by active lab,
+  // not user_id, so multi-lab owners get per-lab numbers.
   app.get("/api/veritapt/summary", authMiddleware, (req: any, res) => {
     if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
-    const dataUserId = req.ownerUserId ?? req.user.userId;
+    const labId = resolveLegacyLabId(req);
+    if (!labId) return res.json({ totalEnrollments: 0, eventsThisYear: 0, passRate: 0, openCorrectiveActions: 0 });
     const totalEnrollments = ((db as any).$client.prepare(
-      "SELECT COUNT(*) as cnt FROM pt_enrollments WHERE user_id = ? AND status = 'active'"
-    ).get(dataUserId) as any).cnt;
+      "SELECT COUNT(*) as cnt FROM pt_enrollments WHERE lab_id = ? AND status = 'active'"
+    ).get(labId) as any).cnt;
 
     const currentYear = new Date().getFullYear().toString();
     const eventsThisYear = ((db as any).$client.prepare(
-      "SELECT COUNT(*) as cnt FROM pt_events WHERE user_id = ? AND strftime('%Y', event_date) = ?"
-    ).get(dataUserId, currentYear) as any).cnt;
+      "SELECT COUNT(*) as cnt FROM pt_events WHERE lab_id = ? AND strftime('%Y', event_date) = ?"
+    ).get(labId, currentYear) as any).cnt;
 
     const passCount = ((db as any).$client.prepare(
-      "SELECT COUNT(*) as cnt FROM pt_events WHERE user_id = ? AND pass_fail = 'pass'"
-    ).get(dataUserId) as any).cnt;
+      "SELECT COUNT(*) as cnt FROM pt_events WHERE lab_id = ? AND pass_fail = 'pass'"
+    ).get(labId) as any).cnt;
     const failCount = ((db as any).$client.prepare(
-      "SELECT COUNT(*) as cnt FROM pt_events WHERE user_id = ? AND pass_fail = 'fail'"
-    ).get(dataUserId) as any).cnt;
+      "SELECT COUNT(*) as cnt FROM pt_events WHERE lab_id = ? AND pass_fail = 'fail'"
+    ).get(labId) as any).cnt;
     const gradedTotal = passCount + failCount;
     const passRate = gradedTotal > 0 ? Math.round((passCount / gradedTotal) * 1000) / 10 : 0;
 
     const openCorrectiveActions = ((db as any).$client.prepare(
-      "SELECT COUNT(*) as cnt FROM pt_corrective_actions WHERE user_id = ? AND status = 'open'"
-    ).get(dataUserId) as any).cnt;
+      "SELECT COUNT(*) as cnt FROM pt_corrective_actions WHERE lab_id = ? AND status = 'open'"
+    ).get(labId) as any).cnt;
 
     res.json({ totalEnrollments, eventsThisYear, passRate, openCorrectiveActions });
   });
@@ -23295,11 +23313,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // GET lab policies
+  // Shape A broader sweep (2026-06-09): legacy user_id scope returned every
+  // user-owned policy across all their labs. Scope by lab_id so a multi-lab
+  // owner viewing /policy on lab B sees only lab B's rows.
   app.get('/api/veritapolicy/policies', authMiddleware, (req: any, res) => {
     const sqlite = db.$client;
-    const policies = sqlite.prepare('SELECT * FROM veritapolicy_lab_policies WHERE user_id = ? ORDER BY policy_name').all(req.ownerUserId) as any[];
-    // For each policy, count how many requirements it covers
-    const counts = sqlite.prepare('SELECT lab_policy_id, COUNT(*) as count FROM veritapolicy_requirement_status WHERE user_id = ? AND lab_policy_id IS NOT NULL GROUP BY lab_policy_id').all(req.ownerUserId) as any[];
+    const labId = resolveLegacyLabId(req);
+    if (!labId) return res.json([]);
+    const policies = sqlite.prepare('SELECT * FROM veritapolicy_lab_policies WHERE lab_id = ? ORDER BY policy_name').all(labId) as any[];
+    const counts = sqlite.prepare('SELECT lab_policy_id, COUNT(*) as count FROM veritapolicy_requirement_status WHERE lab_id = ? AND lab_policy_id IS NOT NULL GROUP BY lab_policy_id').all(labId) as any[];
     const countMap: Record<number, number> = {};
     for (const c of counts) countMap[c.lab_policy_id] = c.count;
     res.json(policies.map((p: any) => ({ ...p, requirements_covered: countMap[p.id] || 0 })));
