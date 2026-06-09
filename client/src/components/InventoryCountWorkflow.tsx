@@ -245,10 +245,13 @@ export default function InventoryCountWorkflow({
   const previewValid = Number.isFinite(previewQty) && previewQty >= 0 && Number.isInteger(previewQty);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/80 flex items-center justify-center p-4 overflow-auto" data-testid="count-workflow-modal">
-      <div className="w-full max-w-md bg-white rounded-lg shadow-lg border border-slate-200 p-5 space-y-4">
+    // Fullscreen on mobile (no sm: prefix on sizing classes), centered modal
+    // on tablet/desktop. The desktop-zoomed VeritaStock page underneath
+    // doesn't matter on mobile because the modal IS the screen.
+    <div className="fixed inset-0 z-50 bg-slate-900/80 overflow-auto sm:flex sm:items-center sm:justify-center sm:p-4" data-testid="count-workflow-modal">
+      <div className="w-full h-full min-h-screen bg-white p-5 space-y-4 flex flex-col sm:max-w-md sm:h-auto sm:min-h-0 sm:rounded-lg sm:shadow-lg sm:border sm:border-slate-200">
         <div className="flex items-center justify-between">
-          <div className="text-base font-semibold text-slate-900">
+          <div className="text-lg sm:text-base font-semibold text-slate-900">
             {mode === "scan" && "Scan to count"}
             {mode === "count" && "Update count"}
             {mode === "saved" && "Saved"}
@@ -256,7 +259,7 @@ export default function InventoryCountWorkflow({
           <button
             type="button"
             onClick={onClose}
-            className="text-xs text-slate-500 hover:underline"
+            className="h-11 sm:h-auto px-4 sm:px-0 text-base sm:text-xs font-medium sm:font-normal text-slate-700 sm:text-slate-500 border sm:border-0 border-slate-300 rounded-md sm:rounded-none hover:bg-slate-50 sm:hover:bg-transparent sm:hover:underline"
             data-testid="count-workflow-close"
           >
             Done
@@ -268,14 +271,14 @@ export default function InventoryCountWorkflow({
           <div className="space-y-4">
             {cameraOpen ? (
               <div className="space-y-3">
-                <div id={scannerDivId} className="w-full aspect-video bg-black rounded-md overflow-hidden" data-testid="count-workflow-scanner" />
+                <div id={scannerDivId} className="w-full h-[55vh] sm:h-auto sm:aspect-video bg-black rounded-md overflow-hidden" data-testid="count-workflow-scanner" />
                 {scannerError && (
                   <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-2">{scannerError}</div>
                 )}
                 <button
                   type="button"
                   onClick={() => setCameraOpen(false)}
-                  className="w-full h-10 border border-slate-300 rounded-md text-sm font-medium hover:bg-slate-100"
+                  className="w-full h-12 sm:h-10 border border-slate-300 rounded-md text-base sm:text-sm font-medium hover:bg-slate-100"
                   data-testid="count-workflow-cancel-scan"
                 >
                   Cancel scan
@@ -286,12 +289,12 @@ export default function InventoryCountWorkflow({
                 <button
                   type="button"
                   onClick={() => setCameraOpen(true)}
-                  className="w-full h-16 bg-teal-700 text-white text-base font-semibold rounded-md"
+                  className="w-full h-20 sm:h-16 bg-teal-700 text-white text-lg sm:text-base font-semibold rounded-md"
                   data-testid="count-workflow-open-scanner"
                 >
                   Open scanner
                 </button>
-                <div className="text-xs text-slate-500 text-center">or type a barcode</div>
+                <div className="text-sm sm:text-xs text-slate-500 text-center">or type a barcode</div>
                 <form
                   onSubmit={(e) => { e.preventDefault(); startManual(); }}
                   className="flex items-center gap-2"
@@ -303,13 +306,13 @@ export default function InventoryCountWorkflow({
                     value={manualBarcode}
                     onChange={(e) => setManualBarcode(e.target.value)}
                     placeholder="VLS-00008332"
-                    className="flex-1 h-10 px-3 border border-slate-300 rounded-md text-base font-mono"
+                    className="flex-1 h-12 sm:h-10 px-3 border border-slate-300 rounded-md text-lg sm:text-base font-mono"
                     data-testid="count-workflow-manual-input"
                   />
                   <button
                     type="submit"
                     disabled={!manualBarcode.trim()}
-                    className="h-10 px-3 bg-slate-900 text-white rounded-md text-sm font-medium disabled:opacity-50"
+                    className="h-12 sm:h-10 px-4 sm:px-3 bg-slate-900 text-white rounded-md text-base sm:text-sm font-medium disabled:opacity-50"
                     data-testid="count-workflow-manual-submit"
                   >
                     Lookup
@@ -347,7 +350,7 @@ export default function InventoryCountWorkflow({
               </div>
             </div>
 
-            <label className="block text-xs font-medium text-slate-700">
+            <label className="block text-sm sm:text-xs font-medium text-slate-700">
               New count ({countUnit}s)
             </label>
             <input
@@ -357,7 +360,7 @@ export default function InventoryCountWorkflow({
               step={1}
               value={newCount}
               onChange={(e) => setNewCount(e.target.value)}
-              className="w-full h-12 px-3 border border-slate-300 rounded-md text-lg font-mono text-center"
+              className="w-full h-16 sm:h-12 px-3 border border-slate-300 rounded-md text-3xl sm:text-lg font-mono text-center"
               data-testid="count-workflow-new-count"
               autoFocus
             />
@@ -376,11 +379,11 @@ export default function InventoryCountWorkflow({
               </div>
             )}
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 pt-2">
               <button
                 type="button"
                 onClick={reset}
-                className="h-11 px-4 border border-slate-300 rounded-md text-sm font-medium hover:bg-slate-100"
+                className="h-14 sm:h-11 px-4 border border-slate-300 rounded-md text-base sm:text-sm font-medium hover:bg-slate-100"
                 data-testid="count-workflow-back"
               >
                 Scan again
@@ -389,7 +392,7 @@ export default function InventoryCountWorkflow({
                 type="button"
                 onClick={submitAdjust}
                 disabled={saving || !!signerWarning}
-                className="flex-1 h-11 bg-teal-700 text-white rounded-md text-base font-semibold disabled:opacity-50"
+                className="flex-1 h-14 sm:h-11 bg-teal-700 text-white rounded-md text-lg sm:text-base font-semibold disabled:opacity-50"
                 data-testid="count-workflow-save"
               >
                 {saving ? "Saving..." : "Save count"}
@@ -401,9 +404,9 @@ export default function InventoryCountWorkflow({
         {/* SAVED STATE */}
         {mode === "saved" && item && (
           <div className="space-y-3" data-testid="count-workflow-saved">
-            <div className="border border-emerald-200 bg-emerald-50 rounded-md p-3">
-              <div className="text-sm font-semibold text-emerald-900">{item.item_name}</div>
-              <div className="text-xs text-emerald-800 mt-1">
+            <div className="border border-emerald-200 bg-emerald-50 rounded-md p-4 sm:p-3">
+              <div className="text-base sm:text-sm font-semibold text-emerald-900">{item.item_name}</div>
+              <div className="text-sm sm:text-xs text-emerald-800 mt-1">
                 Saved.{" "}
                 {savedDelta != null && savedDelta !== 0 && (
                   <>Delta {savedDelta >= 0 ? "+" : ""}{savedDelta} {usageUnit}s.</>
@@ -412,11 +415,11 @@ export default function InventoryCountWorkflow({
                 {hasPack && <> ({item.quantity_on_hand} {usageUnit}s)</>}.
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 pt-2">
               <button
                 type="button"
                 onClick={onClose}
-                className="h-11 px-4 border border-slate-300 rounded-md text-sm font-medium hover:bg-slate-100"
+                className="h-14 sm:h-11 px-4 border border-slate-300 rounded-md text-base sm:text-sm font-medium hover:bg-slate-100"
                 data-testid="count-workflow-done"
               >
                 Done
@@ -424,7 +427,7 @@ export default function InventoryCountWorkflow({
               <button
                 type="button"
                 onClick={reset}
-                className="flex-1 h-11 bg-teal-700 text-white rounded-md text-base font-semibold"
+                className="flex-1 h-14 sm:h-11 bg-teal-700 text-white rounded-md text-lg sm:text-base font-semibold"
                 data-testid="count-workflow-scan-another"
               >
                 Scan another
