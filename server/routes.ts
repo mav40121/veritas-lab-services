@@ -587,11 +587,28 @@ export function staffPortalAuthMiddleware(req: any, res: any, next: any) {
   if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
   try {
     const payload = jwt.verify(auth.slice(7), JWT_SECRET) as any;
-    if (!payload || payload.kind !== "staff_portal" || typeof payload.labId !== "number") {
-      return res.status(401).json({ error: "Not a staff portal session" });
+    // 2026-06-09 Auth unification: ALSO accept a regular user JWT when
+    // the user has an active user_seats row with seat_type='staff_portal'.
+    // Resolves the lab from the seat's lab_id (single Tier 2 lab per
+    // Staff Portal account) and stashes both labId and the linked
+    // staff_employees row so downstream handlers can scope by either.
+    if (payload && payload.kind === "staff_portal" && typeof payload.labId === "number") {
+      req.staffPortalLabId = payload.labId;
+      return next();
     }
-    req.staffPortalLabId = payload.labId;
-    next();
+    if (payload && typeof payload.userId === "number") {
+      const sqlite = (db as any).$client;
+      const seat = sqlite.prepare(
+        "SELECT lab_id, staff_employee_id FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' AND status = 'active' LIMIT 1"
+      ).get(payload.userId) as any;
+      if (seat && seat.lab_id) {
+        req.staffPortalLabId = seat.lab_id;
+        req.staffPortalStaffEmployeeId = seat.staff_employee_id;
+        req.staffPortalUserId = payload.userId;
+        return next();
+      }
+    }
+    return res.status(401).json({ error: "Not a staff portal session" });
   } catch {
     return res.status(401).json({ error: "Invalid or expired token" });
   }
@@ -3883,12 +3900,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     let seatInvite: any = null;
     if (reqInviteToken) {
       seatInvite = (db as any).$client.prepare(
-        "SELECT id, owner_user_id FROM user_seats WHERE invite_token = ? AND status = 'pending'"
+        // 2026-06-09 Auth unification: pull seat_type + lab_id +
+        // staff_employee_id so the Staff Portal branch below can link
+        // staff_employees.user_id and grant lab_members against the
+        // seat's own lab_id (NOT the inviter's primary lab).
+        "SELECT id, owner_user_id, seat_type, lab_id, staff_employee_id FROM user_seats WHERE invite_token = ? AND status = 'pending'"
       ).get(reqInviteToken) as any;
     }
     if (!seatInvite) {
       seatInvite = (db as any).$client.prepare(
-        "SELECT id, owner_user_id FROM user_seats WHERE seat_email = ? AND status = 'pending'"
+        "SELECT id, owner_user_id, seat_type, lab_id, staff_employee_id FROM user_seats WHERE seat_email = ? AND status = 'pending'"
       ).get(email.toLowerCase()) as any;
     }
 
@@ -3944,26 +3965,47 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       } catch {}
       // Replaces the now-disabled boot lab_members backfill: granting lab
       // membership on accept so the new account sees the inviter's lab in
-      // the switcher and passes per-lab data gates. Target = inviter's
-      // primary lab_members (is_primary_lab=1).
+      // the switcher and passes per-lab data gates.
+      //
+      // 2026-06-09 Auth unification: target lab differs by seat_type:
+      //   - staff_portal seat: use the SEAT's lab_id (the specific Tier 2
+      //     lab the director was viewing when they invited).
+      //   - regular seat: use the inviter's primary lab_members
+      //     (is_primary_lab=1).
+      // And for staff_portal, also link staff_employees.user_id so the
+      // tech's session pins to their universal-roster identity.
       try {
-        const inviterPrimary = (db as any).$client.prepare(
-          "SELECT lab_id FROM lab_members WHERE user_id = ? AND is_primary_lab = 1 AND status = 'active' LIMIT 1"
-        ).get(seatInvite.owner_user_id) as any;
-        if (inviterPrimary?.lab_id) {
+        const isStaffPortal = seatInvite.seat_type === 'staff_portal';
+        const targetLabId = isStaffPortal
+          ? seatInvite.lab_id
+          : ((db as any).$client.prepare(
+              "SELECT lab_id FROM lab_members WHERE user_id = ? AND is_primary_lab = 1 AND status = 'active' LIMIT 1"
+            ).get(seatInvite.owner_user_id) as any)?.lab_id;
+        if (targetLabId) {
           const dupMember = (db as any).$client.prepare(
             "SELECT id FROM lab_members WHERE lab_id = ? AND user_id = ?"
-          ).get(inviterPrimary.lab_id, user.id) as any;
+          ).get(targetLabId, user.id) as any;
           if (!dupMember) {
             const nowIso = new Date().toISOString();
             (db as any).$client.prepare(
               `INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
                VALUES (?, ?, 'staff', '{}', 'active', 0, ?, ?, ?)`
-            ).run(inviterPrimary.lab_id, user.id, nowIso, nowIso, nowIso);
+            ).run(targetLabId, user.id, nowIso, nowIso, nowIso);
             const newMembership = (db as any).$client.prepare(
               "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?"
-            ).get(inviterPrimary.lab_id, user.id);
-            auditLabMembership("create", newMembership, user.id, (req.headers["x-forwarded-for"] as string) || null, "auth/register:seat-accept");
+            ).get(targetLabId, user.id);
+            auditLabMembership("create", newMembership, user.id, (req.headers["x-forwarded-for"] as string) || null, isStaffPortal ? "auth/register:staff-portal-accept" : "auth/register:seat-accept");
+          }
+        }
+        // 2026-06-09 Auth unification: pin the staff_employees row to
+        // this new user account on accept.
+        if (isStaffPortal && seatInvite.staff_employee_id) {
+          try {
+            (db as any).$client.prepare(
+              "UPDATE staff_employees SET user_id = ? WHERE id = ? AND user_id IS NULL"
+            ).run(user.id, seatInvite.staff_employee_id);
+          } catch (linkErr: any) {
+            console.error("[auth/register staff-portal-accept] staff_employees.user_id link failed (non-fatal):", linkErr.message);
           }
         }
       } catch (err: any) {
@@ -6868,6 +6910,194 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     res.json({ ok: true, status: newStatus, emailSent, role, inviteToken });
+  });
+
+  // GET /api/me/staff-portal-employee
+  //   2026-06-09 Auth unification helper. Resolves the logged-in user's
+  //   Staff Portal identity: which staff_employees row they're pinned
+  //   to, which lab, and the two per-employee toggles the existing
+  //   tile UI gates on. The /staff-access page calls this on mount;
+  //   a 200 means "skip CLIA+PIN entry and the picker, render tiles
+  //   directly for this employee"; a 404 means "this account isn't a
+  //   Staff Portal user".
+  app.get("/api/me/staff-portal-employee", authMiddleware, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const seat = sqlite.prepare(
+      "SELECT lab_id, staff_employee_id FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' AND status = 'active' LIMIT 1"
+    ).get(req.userId) as any;
+    if (!seat || !seat.lab_id || !seat.staff_employee_id) {
+      return res.status(404).json({ error: "No Staff Portal seat for this account" });
+    }
+    const employee = sqlite.prepare(
+      "SELECT id, first_name, last_name, middle_initial, title, title_code, can_adjust_inventory, can_view_audit FROM staff_employees WHERE id = ?"
+    ).get(seat.staff_employee_id) as any;
+    if (!employee) return res.status(404).json({ error: "Staff employee record not found" });
+    const lab = sqlite.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?").get(seat.lab_id) as any;
+    res.json({
+      employee: {
+        id: employee.id,
+        first_name: employee.first_name,
+        last_name: employee.last_name,
+        middle_initial: employee.middle_initial,
+        title: employee.title,
+        title_code: employee.title_code,
+        can_adjust_inventory: !!employee.can_adjust_inventory,
+        can_view_audit: !!employee.can_view_audit,
+      },
+      lab: lab ? { id: lab.id, name: lab.lab_name, clia_number: lab.clia_number } : null,
+    });
+  });
+
+  // POST /api/labs/:labId/staff-portal-invites
+  //   Body: { staff_employee_id, email }
+  //   Invite a tech to Staff Portal. Mirrors the /members invite flow but
+  //   creates a user_seats row with seat_type='staff_portal' and a link
+  //   to the staff_employees row the invite is FOR. On accept (existing
+  //   POST /api/auth/register flow) the new users.id flows back into
+  //   staff_employees.user_id so the tech's Staff Portal session is
+  //   pinned to a real authenticated identity instead of CLIA + shared
+  //   PIN + picker.
+  app.post("/api/labs/:labId/staff-portal-invites", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
+    const { staff_employee_id, email } = req.body || {};
+    const staffEmpId = parseInt(String(staff_employee_id ?? ""), 10);
+    if (!Number.isFinite(staffEmpId) || staffEmpId <= 0) return res.status(400).json({ error: "staff_employee_id required" });
+    if (!email || !String(email).includes("@")) return res.status(400).json({ error: "Valid email required" });
+    const normalizedEmail = String(email).toLowerCase().trim();
+
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id, owner_user_id, lab_name FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    const labOwnerId = lab.owner_user_id;
+    const ownerRow = sqlite.prepare("SELECT id, name, email, clia_lab_name, hospital_name FROM users WHERE id = ?").get(labOwnerId) as any;
+    if (!ownerRow) return res.status(500).json({ error: "Lab owner user not found" });
+
+    // Validate the staff_employee belongs to this lab + is active.
+    const staffEmp = sqlite.prepare(
+      "SELECT id, first_name, last_name, user_id FROM staff_employees WHERE id = ? AND tier2_lab_id = ? AND status = 'active'"
+    ).get(staffEmpId, req.scope.labId) as any;
+    if (!staffEmp) return res.status(404).json({ error: "Employee not found on this lab's active roster" });
+    if (staffEmp.user_id) {
+      return res.status(409).json({ error: "This employee already has a Staff Portal account" });
+    }
+
+    // Duplicate-invite guard.
+    const dupSeat = sqlite.prepare(
+      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status != 'deactivated'"
+    ).get(labOwnerId, normalizedEmail) as any;
+    if (dupSeat) return res.status(409).json({ error: "This email already has a seat under the lab owner. Use the seat list to manage it." });
+
+    const existingUser = storage.getUserByEmail(normalizedEmail);
+    const seatUserId = existingUser ? existingUser.id : null;
+    if (seatUserId) {
+      // If the email maps to an existing main-site account, we don't
+      // auto-link here — that would silently grant Staff Portal access
+      // to an account whose owner may not know. Return 409 with a
+      // clear message; the director can advise the tech to use a
+      // different email or contact support.
+      return res.status(409).json({ error: "This email is already a VeritaAssure account. Use a different email for Staff Portal, or contact support to merge." });
+    }
+
+    const now = new Date().toISOString();
+    const inviteToken = crypto.randomUUID();
+    // Staff Portal seats get view_all permissions by default — they
+    // don't author. The seat_type='staff_portal' gate is what actually
+    // restricts them; permissions just keeps legacy permission-mode
+    // callsites from blowing up on null.
+    const permJson = JSON.stringify({ mode: "view_all" });
+    try {
+      sqlite.exec("BEGIN");
+      const deactivated = sqlite.prepare(
+        "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status = 'deactivated'"
+      ).get(labOwnerId, normalizedEmail) as any;
+      if (deactivated) {
+        sqlite.prepare(
+          "UPDATE user_seats SET seat_user_id = NULL, status = 'pending', invited_at = ?, accepted_at = NULL, permissions = ?, invite_token = ?, lab_id = ?, seat_type = 'staff_portal', staff_employee_id = ? WHERE id = ?"
+        ).run(now, permJson, inviteToken, req.scope.labId, staffEmpId, deactivated.id);
+      } else {
+        sqlite.prepare(
+          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id, seat_type, staff_employee_id) VALUES (?, ?, NULL, ?, 'pending', ?, ?, ?, 'staff_portal', ?)"
+        ).run(labOwnerId, normalizedEmail, now, permJson, inviteToken, req.scope.labId, staffEmpId);
+      }
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[labs/:labId/staff-portal-invites POST] insert failed:", err.message);
+      return res.status(500).json({ error: err.message || "Failed to create invite" });
+    }
+
+    const labName = lab.lab_name || ownerRow.clia_lab_name || ownerRow.hospital_name || "the lab";
+    const inviterName = req.scope.role === "owner"
+      ? (ownerRow.name || "the lab director")
+      : `${ownerRow.name || "the lab director"}'s team`;
+    const techName = `${staffEmp.first_name || ""} ${staffEmp.last_name || ""}`.trim() || "Team member";
+    let emailSent = false;
+    if (process.env.RESEND_API_KEY) {
+      try {
+        const resendRes = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${process.env.RESEND_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: "VeritaAssure™ <info@veritaslabservices.com>",
+            to: normalizedEmail,
+            subject: `Set up your Staff Portal access for ${labName}`,
+            html: `
+              <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+                <h2 style="color:#01696F">VeritaAssure™ Staff Portal</h2>
+                <p style="font-size:15px;color:#1B2B2B;line-height:1.6">${inviterName} at <strong>${labName}</strong> has set up Staff Portal access for ${techName}.</p>
+                <p style="font-size:15px;color:#1B2B2B;line-height:1.6">Set a password to take competency quizzes, sign policies, and view your records, all from your phone.</p>
+                <a href="${FRONTEND_URL}/join?token=${inviteToken}" style="display:inline-block;background:#01696F;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0">Set up access</a>
+                <p style="font-size:13px;color:#6B7280;margin-top:16px">This invitation expires in 30 days.</p>
+                <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
+                <p style="color:#999;font-size:12px">VeritaAssure™ | Veritas Lab Services, LLC<br/>veritaslabservices.com</p>
+              </div>
+            `,
+          }),
+        });
+        emailSent = resendRes.ok;
+        if (!resendRes.ok) {
+          const body = await resendRes.text().catch(() => "<unreadable>");
+          console.error(`[labs/:labId/staff-portal-invites POST] Resend rejected: status=${resendRes.status} body=${body}`);
+        }
+      } catch (emailErr: any) {
+        console.error("[labs/:labId/staff-portal-invites POST] Invite email failed:", emailErr?.message);
+      }
+    }
+
+    const inviteUrl = `${FRONTEND_URL || "https://www.veritaslabservices.com"}/join?token=${inviteToken}`;
+    res.json({ ok: true, emailSent, inviteToken, inviteUrl, staffEmployeeId: staffEmpId });
+  });
+
+  // GET /api/labs/:labId/staff-portal-invites
+  //   Lists all Staff Portal invites + accounts for this lab.
+  //   Director's status surface: who's invited (pending), who's set up
+  //   (active), who hasn't been invited yet.
+  app.get("/api/labs/:labId/staff-portal-invites", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const rows = sqlite.prepare(
+      `SELECT us.id, us.seat_email, us.status, us.invited_at, us.accepted_at,
+              us.staff_employee_id,
+              se.first_name, se.last_name, se.title
+       FROM user_seats us
+       LEFT JOIN staff_employees se ON se.id = us.staff_employee_id
+       WHERE us.lab_id = ? AND us.seat_type = 'staff_portal' AND us.status != 'deactivated'
+       ORDER BY se.last_name, se.first_name`
+    ).all(req.scope.labId) as any[];
+    res.json({
+      invites: rows.map((r) => ({
+        id: r.id,
+        email: r.seat_email,
+        status: r.status,
+        invited_at: r.invited_at,
+        accepted_at: r.accepted_at,
+        staff_employee_id: r.staff_employee_id,
+        employee_name: `${r.first_name || ""} ${r.last_name || ""}`.trim() || null,
+        employee_title: r.title,
+      })),
+    });
   });
 
   // PATCH /api/labs/:labId/members/:memberId — change a member's role between

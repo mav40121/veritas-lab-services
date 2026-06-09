@@ -94,6 +94,51 @@ export default function StaffPortalPage() {
   const [activeEmployee, setActiveEmployee] = useState<PortalEmployee | null>(null);
   const [activeModule, setActiveModule] = useState<"policies" | "inventory" | "audit" | "competency" | "quizzes" | null>(null);
 
+  // 2026-06-09 Auth unification: if there's a real auth token in
+  // localStorage (set by the main /login flow) AND that user has a
+  // staff_portal seat, skip the CLIA+PIN + picker entirely. We mint a
+  // synthetic-shaped session object from the real-auth identity
+  // response so the rest of the page renders unchanged.
+  const [authedBootstrapTried, setAuthedBootstrapTried] = useState(false);
+  useEffect(() => {
+    if (session) return;
+    if (authedBootstrapTried) return;
+    setAuthedBootstrapTried(true);
+    const realToken = (() => {
+      try { return localStorage.getItem("auth_token") || ""; } catch { return ""; }
+    })();
+    if (!realToken) return;
+    fetch("/api/me/staff-portal-employee", { headers: { Authorization: `Bearer ${realToken}` } })
+      .then(async (r) => {
+        if (!r.ok) return null;
+        return r.json();
+      })
+      .then((data) => {
+        if (!data || !data.employee || !data.lab) return;
+        // Synthesize a session shape from the real-auth response. Token
+        // stays the real auth token; the staff-portal endpoints now
+        // accept it (staffPortalAuthMiddleware was augmented). Picker
+        // is skipped by also seeding activeEmployee.
+        const syntheticSession: StaffPortalSession = {
+          token: realToken,
+          lab: { id: data.lab.id, name: data.lab.name, clia_number: data.lab.clia_number || "" },
+          expires_in_seconds: 8 * 60 * 60,
+        };
+        setSession(syntheticSession);
+        setActiveEmployee({
+          id: data.employee.id,
+          first_name: data.employee.first_name,
+          last_name: data.employee.last_name,
+          middle_initial: data.employee.middle_initial,
+          title: data.employee.title,
+          title_code: data.employee.title_code,
+          can_adjust_inventory: !!data.employee.can_adjust_inventory,
+          can_view_audit: !!data.employee.can_view_audit,
+        });
+      })
+      .catch(() => { /* fall back to CLIA+PIN flow */ });
+  }, [session, authedBootstrapTried]);
+
   const idleTimerRef = useRef<number | null>(null);
 
   function resetIdleTimer() {

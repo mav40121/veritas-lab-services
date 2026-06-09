@@ -4849,4 +4849,23 @@ try {
   if (!cols.includes("can_view_audit")) {
     try { sqlite.exec("ALTER TABLE staff_employees ADD COLUMN can_view_audit INTEGER NOT NULL DEFAULT 0"); } catch {}
   }
+  // 2026-06-09 Auth unification: link a staff_employees row to the user
+  // account the tech logs in with. Populated on Staff Portal invite
+  // accept; null while invite is pending or never sent. UNIQUE so a
+  // user account can't be claimed by two staff_employees rows.
+  if (!cols.includes("user_id")) {
+    try { sqlite.exec("ALTER TABLE staff_employees ADD COLUMN user_id INTEGER REFERENCES users(id)"); } catch {}
+  }
+}
+try { sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_employees_user_id_unique ON staff_employees(user_id) WHERE user_id IS NOT NULL"); } catch {}
+
+// 2026-06-09 Auth unification: link a Staff Portal seat invite to the
+// specific VeritaStaff row it was created for. On accept, the new
+// users.id is written to staff_employees.user_id (via the seat
+// invite's staff_employee_id pointer here).
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(user_seats)").all() as any[]).map((c: any) => c.name);
+  if (!cols.includes("staff_employee_id")) {
+    try { sqlite.exec("ALTER TABLE user_seats ADD COLUMN staff_employee_id INTEGER REFERENCES staff_employees(id)"); } catch {}
+  }
 }
