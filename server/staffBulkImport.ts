@@ -35,6 +35,9 @@ export interface ParsedRow {
     qualificationsText: string | null;
     highestComplexity: "W" | "M" | "H";
     performsTesting: 0 | 1;
+    /** 2026-06-08 Staff Portal access toggles. Y/N in template; 0/1 here. */
+    canAdjustInventory: 0 | 1;
+    canViewAudit: 0 | 1;
     roles: { role: "LD" | "CC" | "TC" | "TS" | "GS" | "TP"; specialtyNumber: number | null }[];
   };
 }
@@ -80,6 +83,10 @@ const HEADERS = [
   "Role: TP",
   "TC Specialties (comma-separated, e.g. 7,8)",
   "TS Specialties (comma-separated, e.g. 7,8)",
+  // 2026-06-08 Staff Portal access toggles. Y/N. Default N (off) for
+  // both. Policies and competencies are universal and have no column.
+  "Can Adjust Inventory (Y/N)",
+  "Can View Audit (Y/N)",
 ] as const;
 
 export async function buildStaffImportWorkbook(opts: { labName?: string }): Promise<Buffer> {
@@ -330,6 +337,13 @@ export async function parseStaffWorkbook(buffer: Buffer): Promise<{ rows: Parsed
     const tsSpecsRaw = cellToString(cells[16]);
     const tcSpecs = parseSpecialties(tcSpecsRaw);
     const tsSpecs = parseSpecialties(tsSpecsRaw);
+    // 2026-06-08 Staff Portal toggles. Both default OFF when blank,
+    // omitted, or unparseable, so an old template missing these columns
+    // does not flip toggles on inadvertently.
+    const canAdjustInventoryRaw = cellToString(cells[17]);
+    const canViewAuditRaw = cellToString(cells[18]);
+    const canAdjustInventory: 0 | 1 = parseYesNo(canAdjustInventoryRaw) === true ? 1 : 0;
+    const canViewAudit: 0 | 1 = parseYesNo(canViewAuditRaw) === true ? 1 : 0;
     // Expand TC and TS into per-specialty role rows (matches existing UI behavior)
     const expanded: ParsedRow["parsed"]["roles"] = [];
     for (const r of roles) {
@@ -357,6 +371,8 @@ export async function parseStaffWorkbook(buffer: Buffer): Promise<{ rows: Parsed
         qualificationsText,
         highestComplexity: (complexityRaw === "W" || complexityRaw === "M" || complexityRaw === "H") ? complexityRaw : "H",
         performsTesting: performs ? 1 : 0,
+        canAdjustInventory,
+        canViewAudit,
         roles: expanded,
       },
     });
