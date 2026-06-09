@@ -4867,6 +4867,254 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // GET /api/staff-portal-session/policies?employee_id=N
+  //   Authed via staffPortalAuthMiddleware. Returns the lab's approved
+  //   policies plus, for the given staff employee, whether they've
+  //   signed the current version. Policies are universal for every
+  //   employee on the VeritaStaff roster — no per-employee gate flag
+  //   needed here (policies are by-everyone-on-roster, by design).
+  app.get("/api/staff-portal-session/policies", staffPortalAuthMiddleware, (req: any, res) => {
+    try {
+      const labId = req.staffPortalLabId;
+      const employeeId = parseInt(String(req.query.employee_id || ""), 10);
+      if (!Number.isFinite(employeeId) || employeeId <= 0) {
+        return res.status(400).json({ error: "employee_id required" });
+      }
+      const sqlite = (db as any).$client;
+
+      // Validate the employee belongs to this lab (lab-scope guard:
+      // staff_employees.lab_id is the staff_labs.id, joined via the
+      // labs owner). Same shape the /employees endpoint uses.
+      const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+      if (!ownerRow) return res.status(404).json({ error: "Lab not found" });
+      const staffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(ownerRow.owner_user_id) as any;
+      if (!staffLab) return res.json({ policies: [] });
+      const employee = sqlite.prepare(
+        "SELECT id FROM staff_employees WHERE id = ? AND lab_id = ? AND status = 'active'"
+      ).get(employeeId, staffLab.id) as any;
+      if (!employee) return res.status(404).json({ error: "Employee not found on this lab's roster" });
+
+      // Approved policies + their current version + signature presence
+      const policies = sqlite.prepare(
+        `SELECT d.id AS document_id,
+                d.title,
+                d.description,
+                d.current_version_id,
+                d.effective_date,
+                d.next_review_date,
+                pv.version_number,
+                sps.id AS signature_id,
+                sps.signed_at,
+                sps.typed_signature
+         FROM policy_documents d
+         LEFT JOIN policy_versions pv ON pv.id = d.current_version_id
+         LEFT JOIN staff_portal_policy_signatures sps
+           ON sps.document_id = d.id
+          AND sps.version_id = d.current_version_id
+          AND sps.staff_employee_id = ?
+         WHERE d.lab_id = ?
+           AND d.status = 'approved'
+           AND d.archived_at IS NULL
+         ORDER BY d.title`
+      ).all(employeeId, labId) as any[];
+
+      res.json({
+        policies: policies.map((p: any) => ({
+          document_id: p.document_id,
+          title: p.title,
+          description: p.description,
+          version_id: p.current_version_id,
+          version_number: p.version_number,
+          effective_date: p.effective_date,
+          next_review_date: p.next_review_date,
+          signed: p.signature_id != null,
+          signed_at: p.signed_at,
+          typed_signature: p.typed_signature,
+        })),
+      });
+    } catch (err: any) {
+      console.error("[staff-portal-session/policies GET] error:", err);
+      return res.status(500).json({ error: err.message || "policies_fetch_failed" });
+    }
+  });
+
+  // GET /api/staff-portal-session/policies/:documentId
+  //   Metadata for one approved policy. Returns version_id and file_hash
+  //   so the client can:
+  //     1. open the binary at /render to display the document
+  //     2. echo file_hash back on sign so we can detect mid-read revision
+  //   File content does NOT live in policy_versions (it stores file_path
+  //   referencing /data/policies/). Rendering happens in the /render
+  //   sibling endpoint so this metadata response stays small.
+  app.get("/api/staff-portal-session/policies/:documentId", staffPortalAuthMiddleware, (req: any, res) => {
+    try {
+      const labId = req.staffPortalLabId;
+      const documentId = parseInt(req.params.documentId, 10);
+      if (!Number.isFinite(documentId) || documentId <= 0) {
+        return res.status(400).json({ error: "Bad documentId" });
+      }
+      const sqlite = (db as any).$client;
+      const doc = sqlite.prepare(
+        `SELECT id, title, description, current_version_id, effective_date, next_review_date
+         FROM policy_documents
+         WHERE id = ? AND lab_id = ? AND status = 'approved' AND archived_at IS NULL`
+      ).get(documentId, labId) as any;
+      if (!doc) return res.status(404).json({ error: "Policy not found or not approved" });
+
+      const version = sqlite.prepare(
+        `SELECT id, version_number, file_format, file_hash_sha256, uploaded_at
+         FROM policy_versions WHERE id = ?`
+      ).get(doc.current_version_id) as any;
+      if (!version) return res.status(404).json({ error: "Policy version not found" });
+
+      res.json({
+        document_id: doc.id,
+        title: doc.title,
+        description: doc.description,
+        effective_date: doc.effective_date,
+        next_review_date: doc.next_review_date,
+        version_id: version.id,
+        version_number: version.version_number,
+        file_format: version.file_format,
+        file_hash: version.file_hash_sha256,
+        version_uploaded_at: version.uploaded_at,
+      });
+    } catch (err: any) {
+      console.error("[staff-portal-session/policies GET one] error:", err);
+      return res.status(500).json({ error: err.message || "policy_fetch_failed" });
+    }
+  });
+
+  // GET /api/staff-portal-session/policies/:documentId/render
+  //   Render the approved policy's current version for the staff member.
+  //   DOCX → mammoth-rendered HTML; PDF → inline binary; HTML → utf-8
+  //   string. Mirrors the director-side render endpoint at
+  //   /api/labs/:labId/veritapolicy/documents/:id/versions/:versionId/render
+  //   but authed via the staff-portal JWT instead of a user JWT.
+  app.get("/api/staff-portal-session/policies/:documentId/render", staffPortalAuthMiddleware, async (req: any, res) => {
+    try {
+      const labId = req.staffPortalLabId;
+      const documentId = parseInt(req.params.documentId, 10);
+      if (!Number.isFinite(documentId) || documentId <= 0) {
+        return res.status(400).json({ error: "Bad documentId" });
+      }
+      const sqlite = (db as any).$client;
+      const row = sqlite.prepare(
+        `SELECT v.id AS version_id, v.file_path, v.file_format, v.file_hash_sha256 AS expected_hash
+         FROM policy_documents d
+         JOIN policy_versions v ON v.id = d.current_version_id
+         WHERE d.id = ? AND d.lab_id = ? AND d.status = 'approved' AND d.archived_at IS NULL`
+      ).get(documentId, labId) as any;
+      if (!row) return res.status(404).json({ error: "Not found" });
+
+      const { readVersionBuffer, hashBuffer, renderDocxToHtml } = require("./veritapolicyApproval");
+      let buffer: Buffer;
+      try {
+        buffer = readVersionBuffer(row.file_path);
+      } catch (err: any) {
+        console.error("[staff-portal-session/policies render]", err.message);
+        return res.status(500).json({ error: "File missing on server" });
+      }
+      const actualHash = hashBuffer(buffer);
+      const tampered = row.expected_hash && actualHash !== row.expected_hash;
+      if (row.file_format === "docx") {
+        try {
+          const rendered = await renderDocxToHtml(buffer);
+          return res.json({ format: "html", html: rendered.html, version_id: row.version_id, file_hash: actualHash, tampered: !!tampered });
+        } catch (err: any) {
+          return res.status(500).json({ error: "Render failed" });
+        }
+      }
+      if (row.file_format === "pdf") {
+        if (tampered) res.setHeader("X-VeritaPolicy-Tamper", "yes");
+        res.setHeader("Access-Control-Expose-Headers", "X-VeritaPolicy-Tamper");
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", "inline");
+        return res.send(buffer);
+      }
+      // html
+      res.json({ format: "html", html: buffer.toString("utf-8"), version_id: row.version_id, file_hash: actualHash, tampered: !!tampered });
+    } catch (err: any) {
+      console.error("[staff-portal-session/policies render] error:", err);
+      return res.status(500).json({ error: err.message || "policy_render_failed" });
+    }
+  });
+
+  // POST /api/staff-portal-session/policies/:documentId/sign
+  //   Body: { employee_id, version_id, content_hash, typed_signature }
+  //   Records a signature row keyed on (document_id, version_id,
+  //   staff_employee_id). Re-submitting the same triple is a no-op (the
+  //   unique index returns the existing row's id). If the version_id in
+  //   the request doesn't match the document's current_version_id at
+  //   write time, we 409 — the policy was revised mid-read and the
+  //   staff member needs to re-read the new version before signing.
+  app.post("/api/staff-portal-session/policies/:documentId/sign", staffPortalAuthMiddleware, (req: any, res) => {
+    try {
+      const labId = req.staffPortalLabId;
+      const documentId = parseInt(req.params.documentId, 10);
+      const { employee_id, version_id, content_hash, typed_signature } = req.body || {};
+      const employeeId = parseInt(String(employee_id ?? ""), 10);
+      const versionId = parseInt(String(version_id ?? ""), 10);
+      if (!Number.isFinite(documentId) || documentId <= 0) return res.status(400).json({ error: "Bad documentId" });
+      if (!Number.isFinite(employeeId) || employeeId <= 0) return res.status(400).json({ error: "employee_id required" });
+      if (!Number.isFinite(versionId) || versionId <= 0) return res.status(400).json({ error: "version_id required" });
+      const typed = typeof typed_signature === "string" ? typed_signature.trim() : "";
+      if (!typed) return res.status(400).json({ error: "typed_signature required" });
+      if (typed.length > 200) return res.status(400).json({ error: "typed_signature too long" });
+
+      const sqlite = (db as any).$client;
+
+      // Validate lab + employee + document scope
+      const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+      if (!ownerRow) return res.status(404).json({ error: "Lab not found" });
+      const staffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(ownerRow.owner_user_id) as any;
+      if (!staffLab) return res.status(404).json({ error: "Staff roster not found" });
+      const employee = sqlite.prepare(
+        "SELECT id, first_name, last_name FROM staff_employees WHERE id = ? AND lab_id = ? AND status = 'active'"
+      ).get(employeeId, staffLab.id) as any;
+      if (!employee) return res.status(404).json({ error: "Employee not found on this lab's roster" });
+
+      const doc = sqlite.prepare(
+        `SELECT id, current_version_id FROM policy_documents
+         WHERE id = ? AND lab_id = ? AND status = 'approved' AND archived_at IS NULL`
+      ).get(documentId, labId) as any;
+      if (!doc) return res.status(404).json({ error: "Policy not found or not approved" });
+      if (doc.current_version_id !== versionId) {
+        return res.status(409).json({ error: "Policy revised since you started reading. Please reload and re-read.", expected_version_id: doc.current_version_id });
+      }
+
+      const ip = (req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "").toString().split(",")[0].trim() || null;
+      const ua = (req.headers["user-agent"] || "").toString().slice(0, 500) || null;
+      const hashOrNull = typeof content_hash === "string" && content_hash.length <= 128 ? content_hash : null;
+
+      // Idempotent insert thanks to the unique index. On conflict, return
+      // the existing row's signed_at so the kiosk can show a calm "already
+      // signed" state without throwing.
+      const existing = sqlite.prepare(
+        `SELECT id, signed_at FROM staff_portal_policy_signatures
+         WHERE document_id = ? AND version_id = ? AND staff_employee_id = ?`
+      ).get(documentId, versionId, employeeId) as any;
+      if (existing) {
+        return res.json({ id: existing.id, signed_at: existing.signed_at, already_signed: true });
+      }
+
+      const result = sqlite.prepare(
+        `INSERT INTO staff_portal_policy_signatures
+         (lab_id, document_id, version_id, staff_employee_id, signed_document_hash, typed_signature, ip_address, user_agent)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(labId, documentId, versionId, employeeId, hashOrNull, typed, ip, ua);
+
+      const row = sqlite.prepare(
+        `SELECT id, signed_at FROM staff_portal_policy_signatures WHERE id = ?`
+      ).get(result.lastInsertRowid) as any;
+
+      res.json({ id: row.id, signed_at: row.signed_at, already_signed: false });
+    } catch (err: any) {
+      console.error("[staff-portal-session/policies POST sign] error:", err);
+      return res.status(500).json({ error: err.message || "policy_sign_failed" });
+    }
+  });
+
   // ── VeritaStock vendor directory (2026-06-07) ─────────────────────────────
   //
   // Lab-scoped vendor records. Each row carries the lab's account number,
