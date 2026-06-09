@@ -21,6 +21,7 @@
 // - No NavBar, no chrome, no links out. Kiosk surface.
 
 import { useEffect, useRef, useState } from "react";
+import InventoryCountWorkflow, { type CountItem } from "@/components/InventoryCountWorkflow";
 
 interface StaffPortalSession {
   token: string;
@@ -778,6 +779,9 @@ function StaffPortalInventoryView({
   const [adjusting, setAdjusting] = useState(false);
   const [adjustError, setAdjustError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState<{ itemId: number; delta: number } | null>(null);
+  // Task #129: scan-first count workflow
+  const [showList, setShowList] = useState(false);
+  const [countWorkflowOpen, setCountWorkflowOpen] = useState(false);
 
   function fetchList() {
     setItems(null);
@@ -986,18 +990,45 @@ function StaffPortalInventoryView({
           </div>
         </div>
 
-        <div className="mb-3">
-          <input
-            type="text"
-            placeholder="Search item name, catalog, lot, location..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full border border-border rounded-md p-2 text-sm bg-background"
-            data-testid="sp-inventory-search"
-          />
+        {/* Task #129: scan-first count workflow */}
+        <button
+          type="button"
+          onClick={() => setCountWorkflowOpen(true)}
+          className="w-full text-white font-semibold py-3 rounded-md mb-3"
+          style={{ backgroundColor: "#01696F" }}
+          data-testid="sp-inventory-open-count-workflow"
+        >
+          Scan to count
+        </button>
+
+        <div className="mb-3 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowList(s => !s)}
+            className="text-xs px-3 py-1 rounded border border-border bg-card text-muted-foreground"
+            data-testid="sp-inventory-toggle-list"
+          >
+            {showList ? "Hide list" : "Show item list"}
+          </button>
+          {showList && (
+            <input
+              type="text"
+              placeholder="Search item name, catalog, lot, location..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="flex-1 border border-border rounded-md p-2 text-sm bg-background"
+              data-testid="sp-inventory-search"
+            />
+          )}
         </div>
 
-        <div className="border border-border rounded-lg bg-card p-4">
+        {!showList && (
+          <div className="border border-border rounded-lg bg-card p-4 text-xs text-muted-foreground text-center">
+            Tap <span className="font-medium">Scan to count</span> above to scan a barcode. Don't have the barcode handy? Tap <span className="font-medium">Show item list</span> to browse.
+          </div>
+        )}
+
+        {showList && <div className="border border-border rounded-lg bg-card p-4">
           {listError && (
             <div className="text-xs text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 rounded p-2 mb-3">
               {listError}
@@ -1062,7 +1093,29 @@ function StaffPortalInventoryView({
               ))}
             </div>
           )}
-        </div>
+        </div>}
+
+        <InventoryCountWorkflow
+          open={countWorkflowOpen}
+          onClose={() => {
+            setCountWorkflowOpen(false);
+            // Refresh the list so any saved adjustments reflect
+            fetch(`/api/staff-portal-session/inventory/items`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+              .then(r => r.ok ? r.json() : null)
+              .then(d => { if (d?.items) setItems(d.items); })
+              .catch(() => {});
+          }}
+          authHeaders={() => ({ Authorization: `Bearer ${token}` })}
+          lookupPath={"/api/staff-portal-session/inventory/items/by-barcode"}
+          adjustItemBasePath={"/api/staff-portal-session/inventory/items"}
+          extraAdjustBody={{ employee_id: employee.id }}
+          signerWarning={null}
+          onAdjustComplete={(updated: CountItem) => {
+            setItems(prev => prev?.map(it => it.id === updated.id ? { ...it, ...updated } as any : it) ?? prev);
+          }}
+        />
       </div>
     </div>
   );

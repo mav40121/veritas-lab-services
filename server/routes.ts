@@ -5659,6 +5659,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // GET /api/inventory-session/items/by-barcode?barcode=XYZ
+  // Read-only lookup for the scan-first count workflow (task #129). Returns
+  // the single inventory item whose barcode_value matches, or 404 if none.
+  // No mutation — unlike POST /api/inventory/scan, this does NOT decrement.
+  app.get("/api/inventory-session/items/by-barcode", inventoryAuthMiddleware, (req: any, res) => {
+    try {
+      const barcode = String(req.query.barcode || "").trim();
+      if (!barcode) return res.status(400).json({ error: "barcode required" });
+      const sqlite = (db as any).$client;
+      const row = sqlite.prepare(
+        "SELECT * FROM inventory_items WHERE lab_id = ? AND barcode_value = ? LIMIT 1"
+      ).get(req.inventoryLabId, barcode) as any;
+      if (!row) return res.status(404).json({ error: "unknown_barcode", barcode });
+      res.json({ item: decorateKioskItem(row) });
+    } catch (err: any) {
+      console.error("[inventory-session/items/by-barcode] error:", err);
+      res.status(500).json({ error: err.message || "lookup_failed" });
+    }
+  });
+
   // POST /api/inventory-session/items/:id/adjust
   //   body: { new_count?, new_quantity?, initials, reason? }
   // The kiosk accepts the count in EITHER:
@@ -5795,6 +5815,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (err: any) {
       console.error("[staff-portal-session/inventory/items] error:", err);
       res.status(500).json({ error: err.message || "list_failed" });
+    }
+  });
+
+  // GET /api/staff-portal-session/inventory/items/by-barcode?barcode=XYZ
+  // Read-only lookup for the scan-first count workflow (task #129). Mirrors
+  // the kiosk's by-barcode endpoint shape so the client UX is identical.
+  app.get("/api/staff-portal-session/inventory/items/by-barcode", staffPortalAuthMiddleware, (req: any, res) => {
+    try {
+      const barcode = String(req.query.barcode || "").trim();
+      if (!barcode) return res.status(400).json({ error: "barcode required" });
+      const sqlite = (db as any).$client;
+      const row = sqlite.prepare(
+        "SELECT * FROM inventory_items WHERE lab_id = ? AND barcode_value = ? LIMIT 1"
+      ).get(req.staffPortalLabId, barcode) as any;
+      if (!row) return res.status(404).json({ error: "unknown_barcode", barcode });
+      res.json({ item: decorateKioskItem(row) });
+    } catch (err: any) {
+      console.error("[staff-portal-session/inventory/items/by-barcode] error:", err);
+      res.status(500).json({ error: err.message || "lookup_failed" });
     }
   });
 
