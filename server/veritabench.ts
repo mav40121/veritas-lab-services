@@ -1187,13 +1187,41 @@ export function registerVeritaBenchRoutes(
     }
   });
 
+  // resolveInventoryItemForMutation — fix for "Item not found" 2026-06-09.
+  //
+  // Items created by the seed script (or by a different user in the same lab)
+  // have account_id != the current requester's user_id. The list endpoint
+  // scopes by lab_id so the items appear, but PUT/DELETE under the legacy
+  // account_id WHERE clause 404. This helper resolves an item by id alone,
+  // then verifies the requester has lab access (owner / active lab_member).
+  // Foreign-lab items return 403 to avoid leaking existence.
+  function resolveInventoryItemForMutation(id: number | string, req: any): { item: any; status: number } {
+    const item = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(id) as any;
+    if (!item) return { item: null, status: 404 };
+    const userId = req.userId;
+    const ownerId = req.ownerUserId ?? req.userId;
+    // Legacy account_id direct match (single-tenant case)
+    if (item.account_id === ownerId) return { item, status: 200 };
+    // Multi-lab: any active member of the item's lab can mutate
+    if (item.lab_id) {
+      const membership = sqlite.prepare(
+        "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
+      ).get(item.lab_id, userId);
+      if (membership) return { item, status: 200 };
+    }
+    return { item: null, status: 403 };
+  }
+
   // PUT /api/inventory/:id - update an inventory item
   app.put("/api/inventory/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
-    const existing = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ? AND account_id = ?").get(id, accountId);
-    if (!existing) return res.status(404).json({ error: "Item not found" });
+    const { item: existing, status: resolveStatus } = resolveInventoryItemForMutation(id, req);
+    if (!existing) {
+      if (resolveStatus === 403) return res.status(403).json({ error: "You don't have access to this item's lab" });
+      return res.status(404).json({ error: "Item not found" });
+    }
     const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, barcode_value } = req.body;
     // 2026-06-09: count_unit defaults to existing value or order_unit;
     // pack_size defaults to existing or 1.
@@ -1215,18 +1243,24 @@ export function registerVeritaBenchRoutes(
       normalizedBarcode = null;
     } else {
       normalizedBarcode = String(barcode_value).trim();
+      // Barcode uniqueness scoped to the item's lab (not account_id) so a
+      // user editing a seeded item doesn't false-collide on a different
+      // account's barcode in a different lab.
       const collision = sqlite.prepare(
-        "SELECT id FROM inventory_items WHERE account_id = ? AND barcode_value = ? AND id <> ?"
-      ).get(accountId, normalizedBarcode, id) as any;
+        "SELECT id FROM inventory_items WHERE lab_id = ? AND barcode_value = ? AND id <> ?"
+      ).get((existing as any).lab_id, normalizedBarcode, id) as any;
       if (collision) {
-        return res.status(409).json({ error: `Barcode "${normalizedBarcode}" is already bound to a different item in this account.` });
+        return res.status(409).json({ error: `Barcode "${normalizedBarcode}" is already bound to a different item in this lab.` });
       }
     }
     try {
+      // UPDATE WHERE id = ? alone: the access check happened in
+      // resolveInventoryItemForMutation above, so the legacy `AND account_id = ?`
+      // clause is no longer required and would mis-target seeded items.
       sqlite.prepare(`
         UPDATE inventory_items SET item_name = ?, catalog_number = ?, lot_number = ?, department = ?, category = ?, quantity_on_hand = ?, unit = ?, expiration_date = ?, vendor = ?, storage_location = ?, notes = ?, status = ?, burn_rate = ?, order_unit = ?, usage_unit = ?, units_per_order_unit = ?, count_unit = ?, units_per_count_unit = ?, lead_time_days = ?, safety_stock_days = ?, desired_days_of_stock = ?, standing_order = ?, standing_order_review_date = ?, barcode_value = ?, updated_at = ?
-        WHERE id = ? AND account_id = ?
-      `).run(item_name ?? (existing as any).item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, notes ?? null, status ?? 'active', burn_rate ?? 0, order_unit ?? 'each', usage_unit ?? 'each', units_per_order_unit ?? 1, resolvedCountUnit, resolvedPackSize, lead_time_days ?? 5, safety_stock_days ?? 3, desired_days_of_stock ?? 30, standing_order ?? 0, standing_order_review_date ?? null, normalizedBarcode, now, id, accountId);
+        WHERE id = ?
+      `).run(item_name ?? (existing as any).item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, notes ?? null, status ?? 'active', burn_rate ?? 0, order_unit ?? 'each', usage_unit ?? 'each', units_per_order_unit ?? 1, resolvedCountUnit, resolvedPackSize, lead_time_days ?? 5, safety_stock_days ?? 3, desired_days_of_stock ?? 30, standing_order ?? 0, standing_order_review_date ?? null, normalizedBarcode, now, id);
       const row = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(id);
       res.json(row);
     } catch (err: any) {
@@ -1237,10 +1271,12 @@ export function registerVeritaBenchRoutes(
   // DELETE /api/inventory/:id - delete an inventory item
   app.delete("/api/inventory/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
-    const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
-    const row = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ? AND account_id = ?").get(id, accountId);
-    if (!row) return res.status(404).json({ error: "Item not found" });
+    const { item: row, status: resolveStatus } = resolveInventoryItemForMutation(id, req);
+    if (!row) {
+      if (resolveStatus === 403) return res.status(403).json({ error: "You don't have access to this item's lab" });
+      return res.status(404).json({ error: "Item not found" });
+    }
     sqlite.prepare("DELETE FROM inventory_items WHERE id = ?").run(id);
     res.json({ success: true });
   });
