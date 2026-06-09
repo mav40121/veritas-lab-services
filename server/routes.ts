@@ -21434,6 +21434,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ count: rows.length, rows });
   });
 
+  // ── ADMIN: List inventory items for a given lab (read-only diagnostic) ──
+  // Built 2026-06-08 to inspect items.lab_id / items.account_id / barcode
+  // alignment after the lab-scoping fix on the scan endpoint.
+  app.get("/api/admin/labs/:labId/inventory", (req, res) => {
+    const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const labId = Number(req.params.labId);
+    if (!Number.isFinite(labId)) return res.status(400).json({ error: "labId required" });
+    const sqlite = (db as any).$client;
+    const labRow = sqlite.prepare("SELECT id, lab_name, owner_user_id FROM labs WHERE id = ?").get(labId) as { id: number; lab_name: string; owner_user_id: number } | undefined;
+    if (!labRow) return res.status(404).json({ error: `lab ${labId} not found` });
+    const items = sqlite.prepare(`
+      SELECT id, item_name, account_id, lab_id, barcode_value, quantity_on_hand
+      FROM inventory_items
+      WHERE lab_id = ? OR account_id = ?
+      ORDER BY item_name ASC
+    `).all(labRow.id, labRow.owner_user_id) as any[];
+    res.json({
+      lab: labRow,
+      count: items.length,
+      hasMixedAccountIds: new Set(items.map(i => i.account_id)).size > 1,
+      hasMissingLabId: items.some(i => i.lab_id == null),
+      items,
+    });
+  });
+
   // ── ADMIN: List VeritaMaps for a given lab (read-only helper) ───────────
   //
   // Helper to discover map_id values before calling move-map-to-lab.
