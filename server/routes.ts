@@ -16205,7 +16205,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!program) return res.status(404).json({ error: "Program not found" });
     // Get user quizzes for this program + system quizzes (user_id = 0)
     const quizzes = (db as any).$client.prepare(
-      "SELECT id, user_id, program_id, method_group_id, method_group_name, title, method_group_ids, created_at FROM competency_quizzes WHERE program_id = ? OR user_id = 0 OR user_id = ?"
+      "SELECT id, user_id, program_id, method_group_id, method_group_name, title, method_group_ids, randomize_questions, question_format, created_at FROM competency_quizzes WHERE program_id = ? OR user_id = 0 OR user_id = ?"
     ).all(req.params.id, dataUserId);
     res.json(quizzes);
   });
@@ -16216,7 +16216,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const program = userCanAccessLabRow('competency_programs', req.params.id, req);
     if (!program) return res.status(404).json({ error: "Program not found" });
-    const { methodGroupId, methodGroupName, methodGroupIds, title, questions } = req.body;
+    const { methodGroupId, methodGroupName, methodGroupIds, title, questions, randomizeQuestions, questionFormat } = req.body;
     if (!questions || !Array.isArray(questions)) return res.status(400).json({ error: "questions array required" });
     // Validate question shape so we fail fast at the boundary instead of
     // exploding later in the scoring path (POST /quiz-results expects
@@ -16242,9 +16242,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const mgIdsJson = Array.isArray(methodGroupIds) && methodGroupIds.length
       ? JSON.stringify(methodGroupIds.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)))
       : null;
+    // 2026-06-09 PR1: randomize_questions toggle (defaults off so legacy
+    // quizzes keep stored order). question_format='html' tells the client
+    // to render question.question through DOMPurify; default 'plain' keeps
+    // existing quizzes rendering as plain text.
+    const randomizeFlag = randomizeQuestions === true || randomizeQuestions === 1 ? 1 : 0;
+    const qFormat = questionFormat === "html" ? "html" : "plain";
     const now = new Date().toISOString();
     const result = (db as any).$client.prepare(
-      "INSERT INTO competency_quizzes (user_id, program_id, method_group_id, method_group_name, title, method_group_ids, created_by_user_id, questions, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO competency_quizzes (user_id, program_id, method_group_id, method_group_name, title, method_group_ids, created_by_user_id, questions, randomize_questions, question_format, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(
       dataUserId,
       parseInt(req.params.id),
@@ -16254,6 +16260,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       mgIdsJson,
       req.user.userId,
       JSON.stringify(questions),
+      randomizeFlag,
+      qFormat,
       now,
     );
     // Phase 3.5 dual-write lab_id from the owning user's lab.
@@ -16269,12 +16277,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       method_group_name: methodGroupName,
       method_group_ids: mgIdsJson ? JSON.parse(mgIdsJson) : null,
       title: title || null,
+      randomize_questions: randomizeFlag,
+      question_format: qFormat,
       created_at: now,
     });
   });
 
   // GET /api/veritacomp/quizzes/:id
-  // Default: answer key stripped (employee-take view).
+  // Default: answer key stripped (employee-take view); when the quiz has
+  // randomize_questions=1, the questions array is also shuffled per request
+  // so each tech-take attempt sees a different order.
   // ?withAnswers=1: includes correct_answer + explanation. Requires write access
   // and lab-scoped row access. Used by the quiz builder / edit screen.
   app.get("/api/veritacomp/quizzes/:id", authMiddleware, (req: any, res) => {
@@ -16318,14 +16330,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       return res.json({ ...quiz, questions: parsedQuestions });
     }
-    // Employee-take view: strip answer key.
-    const questions = parsedQuestions.map((q: any) => ({
+    // Employee-take view: strip answer key. When the quiz is flagged for
+    // randomization, shuffle the question order per request (Fisher-Yates
+    // with crypto-strength entropy). The scoring path keys answers by
+    // question.id, NOT by display index, so shuffled order does not break
+    // grading. Verify script: scripts/verify-quiz-randomization.js.
+    let displayQuestions = parsedQuestions.map((q: any) => ({
       id: q.id,
       question: q.question,
       type: q.type,
       options: q.options,
     }));
-    res.json({ ...quiz, questions });
+    if (quiz.randomize_questions === 1 || quiz.randomize_questions === true) {
+      // Fisher-Yates shuffle using crypto.getRandomValues / crypto.randomInt.
+      // Math.random() would also work for display order, but crypto is the
+      // codebase convention for anything tied to attempt integrity.
+      const arr = [...displayQuestions];
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = (require("crypto") as typeof import("crypto")).randomInt(0, i + 1);
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      displayQuestions = arr;
+    }
+    res.json({ ...quiz, questions: displayQuestions });
   });
 
   // DELETE /api/veritacomp/quizzes/:id
@@ -16362,7 +16389,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (quiz.user_id === 0) return res.status(403).json({ error: "Cannot edit a system-default quiz" });
     const owned = userCanAccessLabRow('competency_quizzes', req.params.id, req);
     if (!owned) return res.status(404).json({ error: "Quiz not found" });
-    const { title, methodGroupId, methodGroupName, methodGroupIds, questions } = req.body || {};
+    const { title, methodGroupId, methodGroupName, methodGroupIds, questions, randomizeQuestions, questionFormat } = req.body || {};
     if (!questions || !Array.isArray(questions)) return res.status(400).json({ error: "questions array required" });
     for (const q of questions) {
       if (!q || typeof q.id !== "string" || typeof q.question !== "string" ||
@@ -16385,14 +16412,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const mgIdsJson = Array.isArray(methodGroupIds) && methodGroupIds.length
       ? JSON.stringify(methodGroupIds.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)))
       : null;
+    const randomizeFlag = randomizeQuestions === true || randomizeQuestions === 1 ? 1 : 0;
+    const qFormat = questionFormat === "html" ? "html" : "plain";
     (db as any).$client.prepare(
-      "UPDATE competency_quizzes SET title = ?, method_group_id = ?, method_group_name = ?, method_group_ids = ?, questions = ? WHERE id = ?"
+      "UPDATE competency_quizzes SET title = ?, method_group_id = ?, method_group_name = ?, method_group_ids = ?, questions = ?, randomize_questions = ?, question_format = ? WHERE id = ?"
     ).run(
       title || null,
       methodGroupId || null,
       methodGroupName || null,
       mgIdsJson,
       JSON.stringify(questions),
+      randomizeFlag,
+      qFormat,
       req.params.id,
     );
     res.json({
@@ -16401,6 +16432,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       method_group_id: methodGroupId || null,
       method_group_name: methodGroupName || null,
       method_group_ids: mgIdsJson ? JSON.parse(mgIdsJson) : null,
+      randomize_questions: randomizeFlag,
+      question_format: qFormat,
       question_count: questions.length,
     });
   });

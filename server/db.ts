@@ -1400,6 +1400,16 @@ const compQuizNewCols: [string, string][] = [
   ["method_group_ids", "TEXT"],
   ["lab_id", "INTEGER"],
   ["created_by_user_id", "INTEGER"],
+  // 2026-06-09: question order randomization for tech-take view. When set,
+  // GET /api/veritacomp/quizzes/:id (without ?withAnswers) returns the
+  // questions shuffled per request. Builder/preview always sees stored order.
+  ["randomize_questions", "INTEGER DEFAULT 0"],
+  // 2026-06-09: signal that the `questions[].question` field may contain
+  // HTML (sanitized client-side via DOMPurify). Lets the player render
+  // inline tables (e.g., ABO/Rh forward/reverse reaction grids) instead of
+  // a flat string description. Per-quiz flag so legacy plain-text quizzes
+  // keep rendering as plain text.
+  ["question_format", "TEXT DEFAULT 'plain'"],
 ];
 for (const [col, colType] of compQuizNewCols) {
   if (!compQuizColNames.includes(col)) {
