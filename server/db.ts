@@ -4484,6 +4484,46 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_spps_doc_version_employe
   void sppsCols;
 }
 
+// ─── Staff Portal competency sign-offs (Wave K8, 2026-06-08) ─────────────
+//
+// Mirror of staff_portal_policy_signatures but for competency assessments.
+// Bridge column competency_employees.staff_employee_id (added PR D+ on
+// 2026-06-05) is the connector — Wave K8 uses it to find the
+// competency_employee for an active staff portal employee, then lists
+// pending assessments and captures the staff member's acknowledgement
+// signature.
+//
+// Surveyor-defensibility: typed name + assessment SHA-256 + IP + UA +
+// timestamp at sign time. Same non-repudiation pattern as the policy
+// signing flow. Re-sign after an evaluator amends an assessment is a
+// new row; the (assessment_id, staff_employee_id) uniqueness keeps
+// idempotency clean.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS staff_portal_competency_signoffs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    assessment_id INTEGER NOT NULL,
+    staff_employee_id INTEGER NOT NULL,
+    signed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    -- SHA-256 of a deterministic JSON of the assessment fields the
+    -- staff member acknowledged (verdict, evaluator, date, etc.).
+    signed_document_hash TEXT,
+    typed_signature TEXT,
+    ip_address TEXT,
+    user_agent TEXT
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_spcs_lab ON staff_portal_competency_signoffs(lab_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_spcs_assessment ON staff_portal_competency_signoffs(assessment_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_spcs_employee ON staff_portal_competency_signoffs(staff_employee_id)`); } catch {}
+try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_spcs_assessment_employee ON staff_portal_competency_signoffs(assessment_id, staff_employee_id)`); } catch {}
+
+// Migration sentinel for staff_portal_competency_signoffs. Pure read.
+{
+  const spcsCols = (sqlite.prepare("PRAGMA table_info(staff_portal_competency_signoffs)").all() as { name: string }[]).map((c) => c.name);
+  void spcsCols;
+}
+
 // ─── Scheduling (Phase 1) ────────────────────────────────────────────────
 // Self-hosted booking system for the consulting scoping call CTA on
 // /services. Phase 1 covers the booking flow with manual rule + blackout

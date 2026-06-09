@@ -5949,6 +5949,267 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Wave K8 (2026-06-08): Staff Portal competencies module ───────────────
+  //
+  // Uses the existing competency_employees.staff_employee_id bridge
+  // column (added PR D+ 2026-06-05 with name-match backfill). Look up
+  // the competency_employee row for the active staff portal employee,
+  // list their pending competency_assessments (employee_acknowledged=0),
+  // let them acknowledge with a typed signature. After sign, sets
+  // employee_acknowledged=1 on the assessment AND records a row in
+  // staff_portal_competency_signoffs for surveyor-defensible non-
+  // repudiation (typed name + content hash + IP + UA).
+  //
+  // Universal access: no toggle on can_view_audit or can_adjust_inventory
+  // gates this. Every employee on the VeritaStaff roster signs the
+  // competencies their evaluator scored them on. That's the default-on
+  // behavior we locked at the model-design phase.
+
+  // Helper: hash a deterministic JSON of the assessment payload the
+  // staff member acknowledges. Mirrors the policies file-hash pattern
+  // but for a structured record. The fields chosen are everything the
+  // staff member can SEE on the detail view — verdict, evaluator,
+  // dates, remediation. If any of those change after the sign, the
+  // signature is for the OLD shape, not the new one.
+  function hashCompetencyAssessment(a: any): string {
+    const crypto = require("crypto");
+    const canonical = JSON.stringify({
+      id: a.id,
+      program_id: a.program_id,
+      employee_id: a.employee_id,
+      assessment_type: a.assessment_type,
+      assessment_date: a.assessment_date,
+      evaluator_name: a.evaluator_name,
+      evaluator_title: a.evaluator_title,
+      competency_type: a.competency_type,
+      status: a.status,
+      remediation_plan: a.remediation_plan,
+    });
+    return crypto.createHash("sha256").update(canonical, "utf8").digest("hex");
+  }
+
+  // Helper: resolve the competency_employees row for a given
+  // staff_employee_id within a given lab. Returns null if no bridge
+  // row exists (the staff member has no competencies on file).
+  function resolveCompEmployee(sqlite: any, staffEmployeeId: number, labId: number): any | null {
+    return sqlite.prepare(
+      `SELECT id, name FROM competency_employees
+       WHERE staff_employee_id = ? AND lab_id = ?
+       LIMIT 1`
+    ).get(staffEmployeeId, labId);
+  }
+
+  // GET /api/staff-portal-session/competencies?employee_id=N
+  // Returns pending + recently-signed assessments for the active
+  // staff portal employee.
+  app.get("/api/staff-portal-session/competencies", staffPortalAuthMiddleware, (req: any, res) => {
+    try {
+      const labId = req.staffPortalLabId;
+      const employeeId = parseInt(String(req.query.employee_id || ""), 10);
+      if (!Number.isFinite(employeeId) || employeeId <= 0) {
+        return res.status(400).json({ error: "employee_id required" });
+      }
+      const sqlite = (db as any).$client;
+
+      // Validate the staff employee belongs to this lab via the picker path
+      const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+      if (!ownerRow) return res.status(404).json({ error: "Lab not found" });
+      const staffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(ownerRow.owner_user_id) as any;
+      if (!staffLab) return res.status(404).json({ error: "Staff roster not found" });
+      const staffEmployee = sqlite.prepare(
+        "SELECT id, first_name, last_name FROM staff_employees WHERE id = ? AND lab_id = ? AND status = 'active'"
+      ).get(employeeId, staffLab.id) as any;
+      if (!staffEmployee) return res.status(404).json({ error: "Employee not found on this lab's roster" });
+
+      const compEmployee = resolveCompEmployee(sqlite, staffEmployee.id, labId);
+      if (!compEmployee) {
+        // No bridge row = no competencies on file for this staff member.
+        // That's a normal empty state (the lab director hasn't created any
+        // assessments for them yet).
+        return res.json({
+          competencies: [],
+          employee: { id: staffEmployee.id, name: `${staffEmployee.first_name} ${staffEmployee.last_name}` },
+          bridge_status: "no_competency_record",
+        });
+      }
+
+      // Pending + signed for the staff portal view. Order pending first,
+      // then signed newest-first. Limit 200 of each so the list stays
+      // navigable on big-volume labs.
+      const assessments = sqlite.prepare(
+        `SELECT ca.id, ca.program_id, ca.assessment_type, ca.assessment_date,
+                ca.evaluator_name, ca.evaluator_title, ca.competency_type,
+                ca.status, ca.employee_acknowledged,
+                cp.name AS program_name, cp.department,
+                spcs.id AS signoff_id, spcs.signed_at, spcs.typed_signature
+         FROM competency_assessments ca
+         JOIN competency_programs cp ON cp.id = ca.program_id
+         LEFT JOIN staff_portal_competency_signoffs spcs
+           ON spcs.assessment_id = ca.id AND spcs.staff_employee_id = ?
+         WHERE ca.employee_id = ?
+         ORDER BY ca.employee_acknowledged ASC, ca.assessment_date DESC
+         LIMIT 200`
+      ).all(staffEmployee.id, compEmployee.id) as any[];
+
+      res.json({
+        competencies: assessments.map((a: any) => ({
+          assessment_id: a.id,
+          program_id: a.program_id,
+          program_name: a.program_name,
+          department: a.department,
+          assessment_type: a.assessment_type,
+          assessment_date: a.assessment_date,
+          evaluator_name: a.evaluator_name,
+          evaluator_title: a.evaluator_title,
+          competency_type: a.competency_type,
+          status: a.status,
+          signed: a.signoff_id != null,
+          signed_at: a.signed_at,
+          typed_signature: a.typed_signature,
+        })),
+        employee: { id: staffEmployee.id, name: `${staffEmployee.first_name} ${staffEmployee.last_name}` },
+        bridge_status: "ok",
+      });
+    } catch (err: any) {
+      console.error("[staff-portal-session/competencies GET] error:", err);
+      return res.status(500).json({ error: err.message || "competencies_fetch_failed" });
+    }
+  });
+
+  // GET /api/staff-portal-session/competencies/:assessment_id
+  // Detail for one assessment: full assessment fields + content hash
+  // the client echoes back on sign. employee_id required so we can
+  // re-verify the bridge.
+  app.get("/api/staff-portal-session/competencies/:assessment_id", staffPortalAuthMiddleware, (req: any, res) => {
+    try {
+      const labId = req.staffPortalLabId;
+      const assessmentId = parseInt(req.params.assessment_id, 10);
+      const employeeId = parseInt(String(req.query.employee_id || ""), 10);
+      if (!Number.isFinite(assessmentId) || assessmentId <= 0) return res.status(400).json({ error: "Bad assessment_id" });
+      if (!Number.isFinite(employeeId) || employeeId <= 0) return res.status(400).json({ error: "employee_id required" });
+      const sqlite = (db as any).$client;
+
+      const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+      if (!ownerRow) return res.status(404).json({ error: "Lab not found" });
+      const staffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(ownerRow.owner_user_id) as any;
+      if (!staffLab) return res.status(404).json({ error: "Staff roster not found" });
+      const staffEmployee = sqlite.prepare(
+        "SELECT id FROM staff_employees WHERE id = ? AND lab_id = ? AND status = 'active'"
+      ).get(employeeId, staffLab.id) as any;
+      if (!staffEmployee) return res.status(404).json({ error: "Employee not found" });
+      const compEmployee = resolveCompEmployee(sqlite, staffEmployee.id, labId);
+      if (!compEmployee) return res.status(404).json({ error: "No competency record bridged to this staff member" });
+
+      const assessment = sqlite.prepare(
+        `SELECT ca.*, cp.name AS program_name, cp.department
+         FROM competency_assessments ca
+         JOIN competency_programs cp ON cp.id = ca.program_id
+         WHERE ca.id = ? AND ca.employee_id = ?`
+      ).get(assessmentId, compEmployee.id) as any;
+      if (!assessment) return res.status(404).json({ error: "Assessment not found for this employee" });
+
+      const hash = hashCompetencyAssessment(assessment);
+
+      res.json({
+        assessment_id: assessment.id,
+        program_id: assessment.program_id,
+        program_name: assessment.program_name,
+        department: assessment.department,
+        assessment_type: assessment.assessment_type,
+        assessment_date: assessment.assessment_date,
+        evaluator_name: assessment.evaluator_name,
+        evaluator_title: assessment.evaluator_title,
+        evaluator_initials: assessment.evaluator_initials,
+        competency_type: assessment.competency_type,
+        status: assessment.status,
+        remediation_plan: assessment.remediation_plan,
+        content_hash: hash,
+        already_acknowledged: assessment.employee_acknowledged === 1,
+      });
+    } catch (err: any) {
+      console.error("[staff-portal-session/competencies GET one] error:", err);
+      return res.status(500).json({ error: err.message || "competency_fetch_failed" });
+    }
+  });
+
+  // POST /api/staff-portal-session/competencies/:assessment_id/sign
+  // Body: { employee_id, content_hash, typed_signature }
+  // Records the sign-off row + sets employee_acknowledged=1 on the
+  // assessment. 409 if the assessment was amended between fetch and
+  // sign (content_hash mismatch).
+  app.post("/api/staff-portal-session/competencies/:assessment_id/sign", staffPortalAuthMiddleware, (req: any, res) => {
+    try {
+      const labId = req.staffPortalLabId;
+      const assessmentId = parseInt(req.params.assessment_id, 10);
+      const { employee_id, content_hash, typed_signature } = req.body || {};
+      const employeeId = parseInt(String(employee_id ?? ""), 10);
+      if (!Number.isFinite(assessmentId) || assessmentId <= 0) return res.status(400).json({ error: "Bad assessment_id" });
+      if (!Number.isFinite(employeeId) || employeeId <= 0) return res.status(400).json({ error: "employee_id required" });
+      const typed = typeof typed_signature === "string" ? typed_signature.trim() : "";
+      if (!typed) return res.status(400).json({ error: "typed_signature required" });
+      if (typed.length > 200) return res.status(400).json({ error: "typed_signature too long" });
+
+      const sqlite = (db as any).$client;
+
+      const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+      if (!ownerRow) return res.status(404).json({ error: "Lab not found" });
+      const staffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(ownerRow.owner_user_id) as any;
+      if (!staffLab) return res.status(404).json({ error: "Staff roster not found" });
+      const staffEmployee = sqlite.prepare(
+        "SELECT id FROM staff_employees WHERE id = ? AND lab_id = ? AND status = 'active'"
+      ).get(employeeId, staffLab.id) as any;
+      if (!staffEmployee) return res.status(404).json({ error: "Employee not found" });
+      const compEmployee = resolveCompEmployee(sqlite, staffEmployee.id, labId);
+      if (!compEmployee) return res.status(404).json({ error: "No competency record bridged to this staff member" });
+
+      const assessment = sqlite.prepare(
+        `SELECT * FROM competency_assessments WHERE id = ? AND employee_id = ?`
+      ).get(assessmentId, compEmployee.id) as any;
+      if (!assessment) return res.status(404).json({ error: "Assessment not found for this employee" });
+
+      // Content-hash check: detect mid-read amendment
+      const expectedHash = hashCompetencyAssessment(assessment);
+      if (content_hash && typeof content_hash === "string" && content_hash !== expectedHash) {
+        return res.status(409).json({ error: "Assessment was amended since you opened it. Please reload and re-read.", expected_hash: expectedHash });
+      }
+
+      const ip = (req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "").toString().split(",")[0].trim() || null;
+      const ua = (req.headers["user-agent"] || "").toString().slice(0, 500) || null;
+
+      // Idempotent insert: existing row -> return its id and the
+      // already-acknowledged state. New row -> insert + flip
+      // employee_acknowledged.
+      const existing = sqlite.prepare(
+        `SELECT id, signed_at FROM staff_portal_competency_signoffs
+         WHERE assessment_id = ? AND staff_employee_id = ?`
+      ).get(assessmentId, staffEmployee.id) as any;
+      if (existing) {
+        return res.json({ id: existing.id, signed_at: existing.signed_at, already_signed: true });
+      }
+
+      const tx = sqlite.transaction(() => {
+        const result = sqlite.prepare(
+          `INSERT INTO staff_portal_competency_signoffs
+           (lab_id, assessment_id, staff_employee_id, signed_document_hash, typed_signature, ip_address, user_agent)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
+        ).run(labId, assessmentId, staffEmployee.id, expectedHash, typed, ip, ua);
+        sqlite.prepare(
+          `UPDATE competency_assessments SET employee_acknowledged = 1 WHERE id = ?`
+        ).run(assessmentId);
+        return result.lastInsertRowid;
+      });
+      const newId = tx();
+
+      const row = sqlite.prepare(
+        `SELECT id, signed_at FROM staff_portal_competency_signoffs WHERE id = ?`
+      ).get(newId) as any;
+      res.json({ id: row.id, signed_at: row.signed_at, already_signed: false });
+    } catch (err: any) {
+      console.error("[staff-portal-session/competencies POST sign] error:", err);
+      return res.status(500).json({ error: err.message || "competency_sign_failed" });
+    }
+  });
+
   // GET /api/labs/:labId/members — list all active members of the lab.
   // Any active member can read. Returns user identity + role + status.
   app.get("/api/labs/:labId/members", authMiddleware, labScopeMiddleware, (req: any, res) => {

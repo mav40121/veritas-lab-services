@@ -71,7 +71,7 @@ export default function StaffPortalPage() {
   const [employees, setEmployees] = useState<PortalEmployee[] | null>(null);
   const [pickerError, setPickerError] = useState<string | null>(null);
   const [activeEmployee, setActiveEmployee] = useState<PortalEmployee | null>(null);
-  const [activeModule, setActiveModule] = useState<"policies" | "inventory" | "audit" | null>(null);
+  const [activeModule, setActiveModule] = useState<"policies" | "inventory" | "audit" | "competency" | null>(null);
 
   const idleTimerRef = useRef<number | null>(null);
 
@@ -303,15 +303,24 @@ export default function StaffPortalPage() {
       />
     );
   }
+  if (activeModule === "competency") {
+    return (
+      <StaffPortalCompetenciesView
+        token={session.token}
+        employee={activeEmployee}
+        labName={session.lab.name}
+        onBack={() => setActiveModule(null)}
+        onSignOut={signOut}
+      />
+    );
+  }
 
   // ── Module tiles for the picked employee ─────────────────────────────
-  // Policies + inventory + audit are wired up; competency stays placeholder
-  // until the VeritaStaff <-> VeritaComp bridge decision is made.
-  // Inventory + audit gate on the staff_employees toggle flags so the
-  // access model is visible end-to-end.
+  // All four tiles are wired up. Inventory + audit gate on the
+  // staff_employees toggle flags. Policies + competency are universal.
   const tiles = [
     { key: "policies",    label: "Sign Policies",       available: true,                                ready: true  },
-    { key: "competency",  label: "Sign Competencies",   available: true,                                ready: false },
+    { key: "competency",  label: "Sign Competencies",   available: true,                                ready: true  },
     { key: "inventory",   label: "Adjust Inventory",    available: activeEmployee.can_adjust_inventory, ready: true  },
     { key: "audit",       label: "View Audit Trail",    available: activeEmployee.can_view_audit,       ready: true  },
   ];
@@ -345,6 +354,7 @@ export default function StaffPortalPage() {
               if (t.key === "policies") setActiveModule("policies");
               if (t.key === "inventory") setActiveModule("inventory");
               if (t.key === "audit") setActiveModule("audit");
+              if (t.key === "competency") setActiveModule("competency");
             };
             return (
               <button
@@ -1137,6 +1147,325 @@ function StaffPortalActivityView({
                     </div>
                   </div>
                 </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── StaffPortalCompetenciesView (Wave K8, 2026-06-08) ─────────────────
+// Inline screen behind sp-tile-competency. Pending VeritaComp
+// assessments for the active staff member (resolved via the
+// competency_employees.staff_employee_id bridge column). Tapping a
+// row opens the detail with the evaluator's verdict + remediation
+// plan, then a typed signature input acknowledges the assessment.
+// On sign, employee_acknowledged flips to 1 on competency_assessments
+// AND a row lands in staff_portal_competency_signoffs for non-
+// repudiation receipts.
+interface PortalCompetency {
+  assessment_id: number;
+  program_id: number;
+  program_name: string;
+  department: string | null;
+  assessment_type: string;
+  assessment_date: string;
+  evaluator_name: string | null;
+  evaluator_title: string | null;
+  competency_type: string;
+  status: string;
+  signed: boolean;
+  signed_at: string | null;
+  typed_signature: string | null;
+}
+
+interface PortalCompetencyDetail {
+  assessment_id: number;
+  program_id: number;
+  program_name: string;
+  department: string | null;
+  assessment_type: string;
+  assessment_date: string;
+  evaluator_name: string | null;
+  evaluator_title: string | null;
+  evaluator_initials: string | null;
+  competency_type: string;
+  status: string;
+  remediation_plan: string | null;
+  content_hash: string;
+  already_acknowledged: boolean;
+}
+
+function StaffPortalCompetenciesView({
+  token, employee, labName, onBack, onSignOut,
+}: {
+  token: string;
+  employee: PortalEmployee;
+  labName: string;
+  onBack: () => void;
+  onSignOut: () => void;
+}) {
+  const [list, setList] = useState<PortalCompetency[] | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
+  const [bridgeStatus, setBridgeStatus] = useState<string>("ok");
+  const [active, setActive] = useState<PortalCompetency | null>(null);
+  const [detail, setDetail] = useState<PortalCompetencyDetail | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [typedName, setTypedName] = useState<string>(`${employee.first_name}${employee.middle_initial ? ` ${employee.middle_initial}.` : ""} ${employee.last_name}`.trim());
+  const [signing, setSigning] = useState(false);
+  const [signError, setSignError] = useState<string | null>(null);
+
+  function fetchList() {
+    setList(null);
+    setListError(null);
+    fetch(`/api/staff-portal-session/competencies?employee_id=${employee.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((d) => {
+        setList(d.competencies || []);
+        setBridgeStatus(d.bridge_status || "ok");
+      })
+      .catch((e: any) => setListError(e.message || "Could not load competencies"));
+  }
+
+  useEffect(() => { fetchList(); }, [employee.id]);
+
+  function openCompetency(c: PortalCompetency) {
+    setActive(c);
+    setDetail(null);
+    setDetailError(null);
+    setSignError(null);
+    fetch(`/api/staff-portal-session/competencies/${c.assessment_id}?employee_id=${employee.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((d: PortalCompetencyDetail) => setDetail(d))
+      .catch((e: any) => setDetailError(e.message || "Could not load assessment"));
+  }
+
+  function closeCompetency() {
+    setActive(null);
+    setDetail(null);
+    setDetailError(null);
+    setSignError(null);
+  }
+
+  async function submitSignature() {
+    if (!active || !detail) return;
+    if (typedName.trim().length < 2) {
+      setSignError("Type your full name to acknowledge.");
+      return;
+    }
+    setSigning(true);
+    setSignError(null);
+    try {
+      const r = await fetch(`/api/staff-portal-session/competencies/${active.assessment_id}/sign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          employee_id: employee.id,
+          content_hash: detail.content_hash,
+          typed_signature: typedName.trim(),
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      setList((prev) => prev?.map((row) => row.assessment_id === active.assessment_id
+        ? { ...row, signed: true, signed_at: data.signed_at, typed_signature: typedName.trim() }
+        : row
+      ) ?? prev);
+      closeCompetency();
+    } catch (e: any) {
+      setSignError(e.message || "Signature failed");
+    } finally {
+      setSigning(false);
+    }
+  }
+
+  function statusChip(s: string) {
+    const colour = s === "pass"
+      ? "bg-green-100 text-green-900"
+      : s === "fail"
+        ? "bg-rose-100 text-rose-900"
+        : "bg-amber-100 text-amber-900";
+    return <span className={`text-xs px-2 py-0.5 rounded ${colour}`}>{s.toUpperCase()}</span>;
+  }
+
+  // ── Detail screen ────────────────────────────────────────────────
+  if (active) {
+    return (
+      <div className="min-h-screen bg-background p-6" data-testid="sp-competency-detail">
+        <div className="max-w-2xl mx-auto">
+          <div className="flex items-center justify-between mb-4">
+            <button onClick={closeCompetency} className="text-xs text-muted-foreground hover:underline" data-testid="sp-competency-back-to-list">
+              &larr; Back to competencies
+            </button>
+            <button onClick={onSignOut} className="text-xs text-muted-foreground hover:underline">
+              Sign out
+            </button>
+          </div>
+          <div className="border border-border rounded-lg bg-card p-4 mb-4">
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">{labName} &middot; Competency</div>
+            <div className="font-serif text-xl font-bold" data-testid="sp-competency-detail-title">{active.program_name}</div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {active.assessment_type} &middot; {active.assessment_date}
+              {active.department && <> &middot; {active.department}</>}
+            </div>
+            <div className="mt-2">{statusChip(active.status)}</div>
+          </div>
+
+          <div className="border border-border rounded-lg bg-card p-4 mb-4">
+            {detailError && (
+              <div className="text-xs text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 rounded p-2">
+                {detailError}
+              </div>
+            )}
+            {!detailError && !detail && (
+              <div className="text-sm text-muted-foreground py-6 text-center">Loading assessment...</div>
+            )}
+            {detail && (
+              <div className="space-y-2 text-sm">
+                <div><span className="font-medium">Type:</span> {detail.competency_type}</div>
+                <div><span className="font-medium">Date:</span> {detail.assessment_date}</div>
+                {detail.evaluator_name && (
+                  <div>
+                    <span className="font-medium">Evaluator:</span> {detail.evaluator_name}
+                    {detail.evaluator_title && <> ({detail.evaluator_title})</>}
+                    {detail.evaluator_initials && <> &middot; initials: {detail.evaluator_initials}</>}
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">Verdict:</span> {statusChip(detail.status)}
+                </div>
+                {detail.remediation_plan && (
+                  <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded">
+                    <div className="text-xs font-semibold text-amber-900 mb-1">Remediation plan</div>
+                    <div className="text-sm text-amber-900 whitespace-pre-wrap">{detail.remediation_plan}</div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {active.signed || detail?.already_acknowledged ? (
+            <div className="border border-green-200 bg-green-50 rounded-lg p-4" data-testid="sp-competency-already-signed">
+              <div className="text-sm font-medium text-green-900">
+                You already acknowledged this assessment
+                {active.signed_at && <> on {new Date(active.signed_at).toLocaleString()}</>}.
+              </div>
+              {active.typed_signature && (
+                <div className="text-xs text-green-800 mt-1">Signature on file: {active.typed_signature}</div>
+              )}
+            </div>
+          ) : (
+            <div className="border border-border rounded-lg bg-card p-4" data-testid="sp-competency-sign-block">
+              <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1" htmlFor="sp-competency-typed-name">
+                Type your full name to acknowledge
+              </label>
+              <input
+                id="sp-competency-typed-name"
+                type="text"
+                value={typedName}
+                onChange={(e) => setTypedName(e.target.value)}
+                className="w-full border border-border rounded-md p-2 text-sm bg-background mb-3"
+                data-testid="sp-competency-typed-name"
+              />
+              {signError && (
+                <div className="text-xs text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 rounded p-2 mb-3">
+                  {signError}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={submitSignature}
+                disabled={signing || !detail}
+                className="w-full text-white font-semibold py-2 rounded-md disabled:opacity-50"
+                style={{ backgroundColor: "#01696F" }}
+                data-testid="sp-competency-sign-submit"
+              >
+                {signing ? "Signing..." : "I acknowledge this assessment. Sign."}
+              </button>
+              <p className="text-xs text-muted-foreground mt-2">
+                Your typed name, the assessment content hash, IP address, and timestamp are recorded for the surveyor trail per 42 CFR §493.1235.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── List screen ──────────────────────────────────────────────────
+  return (
+    <div className="min-h-screen bg-background p-6" data-testid="sp-competency-list">
+      <div className="max-w-2xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">Sign Competencies</div>
+            <div className="font-serif text-xl font-bold">{labName}</div>
+            <div className="text-xs text-muted-foreground">Acknowledging as {employee.first_name} {employee.last_name}</div>
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            <button onClick={onBack} className="text-xs text-muted-foreground hover:underline" data-testid="sp-competency-back">
+              &larr; Back to modules
+            </button>
+            <button onClick={onSignOut} className="text-xs text-muted-foreground hover:underline">
+              Sign out
+            </button>
+          </div>
+        </div>
+
+        <div className="border border-border rounded-lg bg-card p-4">
+          {listError && (
+            <div className="text-xs text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 rounded p-2 mb-3">
+              {listError}
+            </div>
+          )}
+          {list === null ? (
+            <div className="text-sm text-muted-foreground py-6 text-center">Loading assessments...</div>
+          ) : list.length === 0 ? (
+            <div className="text-sm text-muted-foreground py-6 text-center" data-testid="sp-competency-empty">
+              {bridgeStatus === "no_competency_record"
+                ? "No VeritaComp™ record bridges to this staff entry yet. Ask the lab director to add a competency assessment for you."
+                : "No competency assessments on file. New ones will appear here when your evaluator scores them."}
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {list.map((c) => (
+                <button
+                  key={c.assessment_id}
+                  type="button"
+                  onClick={() => openCompetency(c)}
+                  className="w-full text-left py-3 px-2 hover:bg-muted flex items-center justify-between gap-3"
+                  data-testid="sp-competency-row"
+                >
+                  <div className="flex-1">
+                    <div className="text-sm font-medium" data-testid="sp-competency-row-title">{c.program_name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {c.assessment_type} &middot; {c.assessment_date}
+                      {c.evaluator_name && <> &middot; {c.evaluator_name}</>}
+                    </div>
+                    <div className="mt-1">{statusChip(c.status)}</div>
+                  </div>
+                  {c.signed ? (
+                    <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-900" data-testid="sp-competency-row-signed">
+                      Signed
+                    </span>
+                  ) : (
+                    <span className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-900" data-testid="sp-competency-row-unsigned">
+                      Needs your acknowledgement
+                    </span>
+                  )}
+                </button>
               ))}
             </div>
           )}
