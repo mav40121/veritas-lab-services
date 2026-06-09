@@ -1734,6 +1734,18 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
   ensure("inventory_pin_updated_at",   "ALTER TABLE labs ADD COLUMN inventory_pin_updated_at TEXT");
   ensure("inventory_pin_locked_until", "ALTER TABLE labs ADD COLUMN inventory_pin_locked_until TEXT");
   ensure("inventory_pin_failed_attempts", "ALTER TABLE labs ADD COLUMN inventory_pin_failed_attempts INTEGER DEFAULT 0");
+
+  // 2026-06-08 — Staff Portal PIN. Same shape as the inventory PIN above
+  // but a separate hash/salt because the two surfaces have different
+  // permission scopes (Staff Portal can sign policies and competencies
+  // for every staff member; the inventory kiosk only adjusts qty).
+  // Rotated by the lab director; staff member logs in via
+  // POST /api/staff-portal-login with the CLIA + this PIN.
+  ensure("staff_portal_pin_hash",         "ALTER TABLE labs ADD COLUMN staff_portal_pin_hash TEXT");
+  ensure("staff_portal_pin_salt",         "ALTER TABLE labs ADD COLUMN staff_portal_pin_salt TEXT");
+  ensure("staff_portal_pin_updated_at",   "ALTER TABLE labs ADD COLUMN staff_portal_pin_updated_at TEXT");
+  ensure("staff_portal_pin_locked_until", "ALTER TABLE labs ADD COLUMN staff_portal_pin_locked_until TEXT");
+  ensure("staff_portal_pin_failed_attempts", "ALTER TABLE labs ADD COLUMN staff_portal_pin_failed_attempts INTEGER DEFAULT 0");
 }
 
 // users.default_lab_id — bare-route redirect target (per doc Section 4).

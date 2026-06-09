@@ -578,6 +578,25 @@ export function inventoryAuthMiddleware(req: any, res: any, next: any) {
   }
 }
 
+// 2026-06-08 Staff Portal kiosk auth. Mirror of inventoryAuthMiddleware
+// with kind="staff_portal" so a Staff Portal JWT can never reach
+// inventory routes and a user/inventory JWT can never reach Staff
+// Portal endpoints. Stashes req.staffPortalLabId.
+export function staffPortalAuthMiddleware(req: any, res: any, next: any) {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
+  try {
+    const payload = jwt.verify(auth.slice(7), JWT_SECRET) as any;
+    if (!payload || payload.kind !== "staff_portal" || typeof payload.labId !== "number") {
+      return res.status(401).json({ error: "Not a staff portal session" });
+    }
+    req.staffPortalLabId = payload.labId;
+    next();
+  } catch {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+}
+
 function authMiddleware(req: any, res: any, next: any) {
   const auth = req.headers.authorization;
   if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
@@ -4693,6 +4712,159 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       locked_until: isLocked ? row.inventory_pin_locked_until : null,
       is_locked: isLocked,
     });
+  });
+
+  // ── 2026-06-08 Staff Portal PIN management ──────────────────────────────
+  //
+  // Same shape as the inventory PIN endpoints above. Owner / admin only.
+  // The PIN is shown ONCE in the regenerate response and never persisted
+  // in plaintext.
+
+  app.post("/api/labs/:labId/staff-portal-pin/regenerate", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!canManageLabMembers(req.scope)) {
+      return res.status(403).json({ error: "Owner or admin role required to rotate the Staff Portal PIN." });
+    }
+    try {
+      const { generate6DigitPin, hashPin } = require("./inventoryPin");
+      const pin: string = generate6DigitPin();
+      const { hash, salt } = hashPin(pin);
+      const now = new Date().toISOString();
+      (db as any).$client.prepare(
+        `UPDATE labs SET staff_portal_pin_hash = ?, staff_portal_pin_salt = ?,
+                         staff_portal_pin_updated_at = ?,
+                         staff_portal_pin_failed_attempts = 0,
+                         staff_portal_pin_locked_until = NULL
+         WHERE id = ?`
+      ).run(hash, salt, now, req.scope.labId);
+      res.json({ pin, rotated_at: now });
+    } catch (err: any) {
+      console.error("[staff-portal-pin/regenerate] error:", err);
+      res.status(500).json({ error: err.message || "regenerate_failed" });
+    }
+  });
+
+  app.get("/api/labs/:labId/staff-portal-pin/status", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!canManageLabMembers(req.scope)) {
+      return res.status(403).json({ error: "Owner or admin role required to read Staff Portal PIN status." });
+    }
+    const sqlite = (db as any).$client;
+    const row = sqlite.prepare(
+      `SELECT staff_portal_pin_hash, staff_portal_pin_updated_at,
+              staff_portal_pin_locked_until, staff_portal_pin_failed_attempts
+       FROM labs WHERE id = ?`
+    ).get(req.scope.labId) as any;
+    if (!row) return res.status(404).json({ error: "Lab not found" });
+    const now = new Date();
+    const lockedUntil = row.staff_portal_pin_locked_until ? new Date(row.staff_portal_pin_locked_until) : null;
+    const isLocked = lockedUntil !== null && lockedUntil.getTime() > now.getTime();
+    res.json({
+      has_pin: row.staff_portal_pin_hash !== null && row.staff_portal_pin_hash !== "",
+      last_rotated_at: row.staff_portal_pin_updated_at,
+      failed_attempts: row.staff_portal_pin_failed_attempts ?? 0,
+      locked_until: isLocked ? row.staff_portal_pin_locked_until : null,
+      is_locked: isLocked,
+    });
+  });
+
+  // POST /api/staff-portal-login body { clia, pin } → JWT scoped to the
+  // lab's Staff Portal. Mirror of /api/inventory-login but with
+  // kind="staff_portal". 8-hour TTL (one shift). 5 failures = 15-min lockout.
+  app.post("/api/staff-portal-login", (req: any, res) => {
+    try {
+      const { clia, pin } = req.body || {};
+      if (!clia || !pin || typeof clia !== "string" || typeof pin !== "string") {
+        return res.status(400).json({ error: "clia and pin required" });
+      }
+      const sqlite = (db as any).$client;
+      const lab = sqlite.prepare(
+        `SELECT id, lab_name, clia_number,
+                staff_portal_pin_hash, staff_portal_pin_salt,
+                staff_portal_pin_locked_until, staff_portal_pin_failed_attempts
+         FROM labs WHERE clia_number = ?`
+      ).get(clia.trim()) as any;
+      if (!lab) return res.status(401).json({ error: "Invalid CLIA or PIN." });
+      if (!lab.staff_portal_pin_hash || !lab.staff_portal_pin_salt) {
+        return res.status(401).json({ error: "Staff Portal not set up for this lab. Ask the lab director to generate a PIN." });
+      }
+      const now = new Date();
+      if (lab.staff_portal_pin_locked_until && new Date(lab.staff_portal_pin_locked_until).getTime() > now.getTime()) {
+        return res.status(423).json({
+          error: "Too many failed attempts. Try again after the lockout expires.",
+          locked_until: lab.staff_portal_pin_locked_until,
+        });
+      }
+      const { verifyPin } = require("./inventoryPin");
+      const ok = verifyPin(pin, lab.staff_portal_pin_hash, lab.staff_portal_pin_salt);
+      if (!ok) {
+        const newAttempts = (lab.staff_portal_pin_failed_attempts ?? 0) + 1;
+        let lockedUntilIso: string | null = null;
+        if (newAttempts >= 5) {
+          const until = new Date(now.getTime() + 15 * 60 * 1000);
+          lockedUntilIso = until.toISOString();
+        }
+        sqlite.prepare(
+          "UPDATE labs SET staff_portal_pin_failed_attempts = ?, staff_portal_pin_locked_until = ? WHERE id = ?"
+        ).run(newAttempts, lockedUntilIso, lab.id);
+        return res.status(401).json({ error: "Invalid CLIA or PIN." });
+      }
+      sqlite.prepare(
+        "UPDATE labs SET staff_portal_pin_failed_attempts = 0, staff_portal_pin_locked_until = NULL WHERE id = ?"
+      ).run(lab.id);
+      const token = jwt.sign({ kind: "staff_portal", labId: lab.id }, JWT_SECRET, { expiresIn: "8h" });
+      return res.json({
+        token,
+        lab: { id: lab.id, name: lab.lab_name, clia_number: lab.clia_number },
+        expires_in_seconds: 8 * 60 * 60,
+      });
+    } catch (err: any) {
+      console.error("[staff-portal-login] error:", err);
+      return res.status(500).json({ error: err.message || "login_failed" });
+    }
+  });
+
+  // GET /api/staff-portal-session/employees
+  //   Authed via staffPortalAuthMiddleware. Returns the lab's active
+  //   VeritaStaff™ employees with their access toggle flags so the
+  //   staff member can pick themselves and see which modules they can
+  //   reach. Policies + competencies are universal (no flag). Inventory
+  //   + audit are gated by the toggles persisted on staff_employees.
+  app.get("/api/staff-portal-session/employees", staffPortalAuthMiddleware, (req: any, res) => {
+    try {
+      const labId = req.staffPortalLabId;
+      const sqlite = (db as any).$client;
+      // Resolve the staff_labs row for this lab. staff_employees.lab_id is the
+      // staff_labs.id (not the labs.id), so we join via staff_labs.owner_user_id
+      // to labs.owner_user_id. Multi-lab note: staff_employees is owner-scoped
+      // historically; the lab-scoped read here filters to the actively-paired
+      // staff_labs row for this labs.id via owner.
+      const ownerRow = sqlite.prepare("SELECT owner_user_id, lab_name, clia_number FROM labs WHERE id = ?").get(labId) as any;
+      if (!ownerRow) return res.status(404).json({ error: "Lab not found" });
+      const staffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(ownerRow.owner_user_id) as any;
+      if (!staffLab) return res.json({ lab: { id: labId, name: ownerRow.lab_name, clia: ownerRow.clia_number }, employees: [] });
+      const employees = sqlite.prepare(
+        `SELECT id, first_name, last_name, middle_initial, title, title_code,
+                can_adjust_inventory, can_view_audit
+         FROM staff_employees
+         WHERE lab_id = ? AND status = 'active'
+         ORDER BY last_name, first_name`
+      ).all(staffLab.id) as any[];
+      res.json({
+        lab: { id: labId, name: ownerRow.lab_name, clia: ownerRow.clia_number },
+        employees: employees.map((e: any) => ({
+          id: e.id,
+          first_name: e.first_name,
+          last_name: e.last_name,
+          middle_initial: e.middle_initial,
+          title: e.title,
+          title_code: e.title_code,
+          can_adjust_inventory: e.can_adjust_inventory === 1,
+          can_view_audit: e.can_view_audit === 1,
+        })),
+      });
+    } catch (err: any) {
+      console.error("[staff-portal-session/employees] error:", err);
+      return res.status(500).json({ error: err.message || "employees_fetch_failed" });
+    }
   });
 
   // ── VeritaStock vendor directory (2026-06-07) ─────────────────────────────

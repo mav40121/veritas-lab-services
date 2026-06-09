@@ -99,6 +99,7 @@ import VeritaOpsAppPage from "@/pages/VeritaOpsAppPage";
 import LabMembersPage from "@/pages/LabMembersPage";
 import FoundingLabApplyPage from "@/pages/FoundingLabApplyPage";
 import InventoryKioskPage from "@/pages/InventoryKioskPage";
+import StaffPortalPage from "@/pages/StaffPortalPage";
 import VeritaBenchPIPage from "@/pages/VeritaBenchPIPage";
 import RequestInvoicePage from "@/pages/RequestInvoicePage";
 import { OnboardingBanner } from "@/components/OnboardingBanner";
@@ -380,6 +381,7 @@ function AppContent() {
           <Route path="/account">{() => { window.location.replace("/account/settings"); return null; }}</Route>
           <Route path="/founding-lab/apply" component={FoundingLabApplyPage} />
           <Route path="/inventory" component={InventoryKioskPage} />
+          <Route path="/staff-access" component={StaffPortalPage} />
           <Route path="/surveyor/:token" component={SurveyorViewPage} />
 
           {/* Multi-Lab Tier 2 — Phase 2b: lab-scoped variants of every workspace page.
