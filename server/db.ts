@@ -4434,6 +4434,56 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_quiz_lab ON policy_quiz
   }
 }
 
+// ─── Staff Portal policy signatures (Wave K5, 2026-06-08) ────────────────
+//
+// Mirror of policy_attestations for the Staff Portal kiosk surface at
+// /staff-access. policy_attestations is keyed on assigned_to_user_id
+// (a real users.id), but Staff Portal sign-ins are not real user
+// accounts — they're staff_employees rows accessed via a synthetic
+// staff-portal JWT (kind="staff_portal" with the lab_id, no user_id).
+//
+// Surveyor-defensibility model: typed name + document SHA-256 +
+// IP + UA + timestamp at sign time. Same non-repudiation pattern the
+// real user-account flow uses (typed_signature + attested_document_hash
+// on policy_attestations). Lab director vouches for the typed name via
+// the VeritaStaff roster + the per-employee picker on /staff-access.
+//
+// Scope: each row represents one staff member signing one version of
+// one policy. A re-sign after a policy revision is a new row; the
+// (document_id, staff_employee_id, version_id) uniqueness gives us
+// "did this employee sign this exact version" without join chains.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS staff_portal_policy_signatures (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    document_id INTEGER NOT NULL,
+    -- The specific policy_versions.id the staff member saw at sign time
+    version_id INTEGER NOT NULL,
+    staff_employee_id INTEGER NOT NULL,
+    signed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    -- SHA-256 of the version content the staff member acknowledged.
+    -- Mirrors policy_attestations.attested_document_hash.
+    signed_document_hash TEXT,
+    -- What the staff member typed when signing. The picker provides
+    -- the default value; they can edit before submit (e.g., to add a
+    -- middle initial). Stored as typed.
+    typed_signature TEXT,
+    ip_address TEXT,
+    user_agent TEXT
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_spps_lab ON staff_portal_policy_signatures(lab_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_spps_doc ON staff_portal_policy_signatures(document_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_spps_employee ON staff_portal_policy_signatures(staff_employee_id)`); } catch {}
+try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_spps_doc_version_employee ON staff_portal_policy_signatures(document_id, version_id, staff_employee_id)`); } catch {}
+
+// Migration sentinel for staff_portal_policy_signatures. Pure read of
+// PRAGMA table_info — no cascading writes per the boot-migration rule.
+{
+  const sppsCols = (sqlite.prepare("PRAGMA table_info(staff_portal_policy_signatures)").all() as { name: string }[]).map((c) => c.name);
+  void sppsCols;
+}
+
 // ─── Scheduling (Phase 1) ────────────────────────────────────────────────
 // Self-hosted booking system for the consulting scoping call CTA on
 // /services. Phase 1 covers the booking flow with manual rule + blackout
