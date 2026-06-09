@@ -1042,6 +1042,103 @@ export function registerVeritaBenchRoutes(
     }
   });
 
+  // POST /api/labs/:labId/inventory/scan
+  //
+  // 2026-06-08 lab-scoping fix. The legacy /api/inventory/scan endpoint
+  // above keys its inventory_items lookup off account_id, which is the
+  // pre-multi-lab ownership column. The list endpoint at /api/labs/:labId/
+  // inventory has been migrated to query WHERE lab_id, so the table
+  // page renders items correctly while scans against those same items
+  // return 404 unknown_barcode because account_id != req.userId.
+  //
+  // This new endpoint mirrors the legacy handler exactly except the
+  // inventory_items lookup and UPDATE use lab_id from the URL. scan_events
+  // continues to record account_id (we resolve it from labs.owner_user_id)
+  // so existing scan-history queries keep working.
+  const scanLabScopeMW = (app as any).locals?.labScopeMiddleware;
+  if (scanLabScopeMW) {
+    app.post("/api/labs/:labId/inventory/scan", authMiddleware, scanLabScopeMW, requireWriteAccess, (req: any, res) => {
+      if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+      const labId = req.scope.labId;
+      const rawBarcode = req.body?.barcode_value;
+      const requestedAction = req.body?.action ?? "decrement";
+      const correctionDelta = Number(req.body?.quantity_delta);
+      const notes = typeof req.body?.notes === "string" ? req.body.notes : null;
+      if (typeof rawBarcode !== "string" || rawBarcode.trim() === "") {
+        return res.status(400).json({ error: "barcode_value is required and must be a non-empty string." });
+      }
+      const ALLOWED_ACTIONS = ["decrement", "increment", "lookup_only", "correction"] as const;
+      if (!(ALLOWED_ACTIONS as readonly string[]).includes(requestedAction)) {
+        return res.status(400).json({ error: `action must be one of ${ALLOWED_ACTIONS.join(", ")}` });
+      }
+      if (requestedAction === "correction" && !Number.isFinite(correctionDelta)) {
+        return res.status(400).json({ error: "action=correction requires a finite quantity_delta number." });
+      }
+      const barcode = rawBarcode.trim();
+      const ipRaw = (req?.ip || req?.headers?.["x-forwarded-for"] || "").toString();
+      const ip = ipRaw ? ipRaw.split(",")[0].trim() : null;
+      const ua = typeof req?.headers?.["user-agent"] === "string" ? (req.headers["user-agent"] as string).slice(0, 500) : null;
+      const userId = req.userId;
+      // Resolve the lab's owner so scan_events still carries an account_id
+      // for the legacy owner-rollup queries elsewhere in the codebase.
+      const labRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as { owner_user_id: number } | undefined;
+      const accountId = labRow?.owner_user_id ?? userId;
+      try {
+        const txn = sqlite.transaction(() => {
+          const row = sqlite.prepare(
+            "SELECT * FROM inventory_items WHERE lab_id = ? AND barcode_value IS NOT NULL AND barcode_value = ?"
+          ).get(labId, barcode) as any;
+          if (!row) {
+            const ins = sqlite.prepare(`
+              INSERT INTO scan_events (account_id, inventory_item_id, user_id, action, quantity_delta, quantity_before, quantity_after, barcode_value, notes, ip_address, user_agent)
+              VALUES (?, NULL, ?, 'unknown_barcode', NULL, NULL, NULL, ?, ?, ?, ?)
+            `).run(accountId, userId, barcode, notes, ip, ua);
+            return { hit: false as const, scanEventId: Number(ins.lastInsertRowid) };
+          }
+          const qtyBefore = Number(row.quantity_on_hand ?? 0);
+          let delta = 0;
+          if (requestedAction === "decrement") delta = -1;
+          else if (requestedAction === "increment") delta = 1;
+          else if (requestedAction === "lookup_only") delta = 0;
+          else if (requestedAction === "correction") delta = Math.trunc(correctionDelta);
+          const qtyAfter = Math.max(0, qtyBefore + delta);
+          const actualDelta = qtyAfter - qtyBefore;
+          if (requestedAction !== "lookup_only" && actualDelta !== 0) {
+            const now = new Date().toISOString();
+            sqlite.prepare(
+              "UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ? AND lab_id = ?"
+            ).run(qtyAfter, now, row.id, labId);
+          }
+          const ins = sqlite.prepare(`
+            INSERT INTO scan_events (account_id, inventory_item_id, user_id, action, quantity_delta, quantity_before, quantity_after, barcode_value, notes, ip_address, user_agent)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(accountId, row.id, userId, requestedAction, actualDelta, qtyBefore, qtyAfter, barcode, notes, ip, ua);
+          return { hit: true as const, scanEventId: Number(ins.lastInsertRowid), itemId: row.id, qtyBefore, qtyAfter };
+        });
+        const result = txn();
+        if (!result.hit) {
+          return res.status(404).json({ ok: false, action: "unknown_barcode", scan_event_id: result.scanEventId, barcode_value: barcode });
+        }
+        const fresh = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(result.itemId) as any;
+        const decorated = decorateInventoryItem(fresh);
+        return res.json({
+          ok: true,
+          action: requestedAction,
+          item: decorated,
+          scan_event_id: result.scanEventId,
+          quantity_before: result.qtyBefore,
+          quantity_after: result.qtyAfter,
+          needs_reorder: !!decorated.needs_reorder,
+          reorder_point: decorated.reorder_point ?? null,
+          order_to_qty: decorated.order_to_qty ?? null,
+        });
+      } catch (err: any) {
+        console.error("Lab-scoped scan endpoint error:", err.message);
+        return res.status(500).json({ error: "Scan failed", detail: err.message });
+      }
+    });
+  }
+
   // POST /api/inventory - create new inventory item
   app.post("/api/inventory", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
