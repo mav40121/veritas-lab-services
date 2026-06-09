@@ -5718,6 +5718,127 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Wave K6 (2026-06-08): Staff Portal inventory endpoints ───────────────
+  //
+  // Mirror of Wave K3's /api/inventory-session/{items,adjust} but authed
+  // via the staff-portal JWT (kind="staff_portal") instead of the
+  // inventory-kiosk JWT. Same item shape via decorateKioskItem, same
+  // audit-log write pattern. Two improvements over K3:
+  //   1. The actor is a real staff_employees row (FK validated at write
+  //      time), not just typed initials. Audit trail names the employee
+  //      explicitly.
+  //   2. can_adjust_inventory is gated server-side too, not just hidden
+  //      client-side. A staff member whose director didn't toggle the
+  //      flag will get 403 on /adjust even if they POST it directly.
+  //
+  // Read access (GET /items) is intentionally NOT gated on
+  // can_adjust_inventory — any signed-in staff member can browse the
+  // current stock list to know what to bring out of the supply room.
+  // Only the write (adjust quantity) is gated.
+
+  // GET /api/staff-portal-session/inventory/items
+  app.get("/api/staff-portal-session/inventory/items", staffPortalAuthMiddleware, (req: any, res) => {
+    try {
+      const sqlite = (db as any).$client;
+      const rows = sqlite.prepare(
+        "SELECT * FROM inventory_items WHERE lab_id = ? ORDER BY item_name ASC"
+      ).all(req.staffPortalLabId);
+      const items = (rows as any[]).map(decorateKioskItem);
+      res.json({ items, total: items.length, lab_id: req.staffPortalLabId });
+    } catch (err: any) {
+      console.error("[staff-portal-session/inventory/items] error:", err);
+      res.status(500).json({ error: err.message || "list_failed" });
+    }
+  });
+
+  // POST /api/staff-portal-session/inventory/items/:id/adjust
+  //   Body: { employee_id, new_quantity, reason? }
+  // Validates: item belongs to JWT's lab, employee belongs to lab and is
+  // active, employee.can_adjust_inventory = 1, new_quantity is a finite
+  // non-negative integer. Captures before/after qty and writes audit log
+  // with module="veritastock", action="update", entityLabel naming the
+  // staff member.
+  app.post("/api/staff-portal-session/inventory/items/:id/adjust", staffPortalAuthMiddleware, (req: any, res) => {
+    try {
+      const labId = req.staffPortalLabId;
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: "Invalid item id" });
+      const { employee_id, new_quantity, reason } = req.body || {};
+      const employeeId = parseInt(String(employee_id ?? ""), 10);
+      if (!Number.isFinite(employeeId) || employeeId <= 0) {
+        return res.status(400).json({ error: "employee_id required" });
+      }
+      if (typeof new_quantity !== "number" || !Number.isFinite(new_quantity) || new_quantity < 0 || !Number.isInteger(new_quantity)) {
+        return res.status(400).json({ error: "new_quantity must be a non-negative integer" });
+      }
+
+      const sqlite = (db as any).$client;
+
+      // Validate employee belongs to lab + has the inventory toggle on
+      const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+      if (!ownerRow) return res.status(404).json({ error: "Lab not found" });
+      const staffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(ownerRow.owner_user_id) as any;
+      if (!staffLab) return res.status(404).json({ error: "Staff roster not found" });
+      const employee = sqlite.prepare(
+        `SELECT id, first_name, last_name, middle_initial, can_adjust_inventory
+         FROM staff_employees WHERE id = ? AND lab_id = ? AND status = 'active'`
+      ).get(employeeId, staffLab.id) as any;
+      if (!employee) return res.status(404).json({ error: "Employee not found on this lab's roster" });
+      if (employee.can_adjust_inventory !== 1) {
+        return res.status(403).json({ error: "This employee is not authorized to adjust inventory. Ask the lab director to enable the toggle." });
+      }
+
+      const item = sqlite.prepare(
+        "SELECT * FROM inventory_items WHERE id = ? AND lab_id = ?"
+      ).get(id, labId) as any;
+      if (!item) return res.status(404).json({ error: "Item not found in this lab" });
+
+      const beforeQty = item.quantity_on_hand;
+      const nowIso = new Date().toISOString();
+      sqlite.prepare(
+        "UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?"
+      ).run(new_quantity, nowIso, id);
+
+      const mi = employee.middle_initial ? ` ${employee.middle_initial}.` : "";
+      const employeeFullName = `${employee.first_name}${mi} ${employee.last_name}`.trim();
+
+      logAudit({
+        userId: 0, // kiosk sentinel; the human identity is the staff_employee_id
+        ownerUserId: ownerRow.owner_user_id ?? 0,
+        module: "veritastock",
+        action: "update",
+        entityType: "inventory_item",
+        entityId: String(id),
+        entityLabel: `${item.item_name} qty by ${employeeFullName}`,
+        before: { quantity_on_hand: beforeQty },
+        after: {
+          quantity_on_hand: new_quantity,
+          staff_employee_id: employee.id,
+          staff_employee_name: employeeFullName,
+          reason: reason || null,
+          via: "staff_portal",
+        },
+        ipAddress: req.ip,
+      });
+
+      const updated = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(id);
+      res.json({
+        item: decorateKioskItem(updated),
+        adjustment: {
+          before_qty: beforeQty,
+          after_qty: new_quantity,
+          delta: new_quantity - beforeQty,
+          staff_employee_id: employee.id,
+          staff_employee_name: employeeFullName,
+          at: nowIso,
+        },
+      });
+    } catch (err: any) {
+      console.error("[staff-portal-session/inventory/adjust] error:", err);
+      res.status(500).json({ error: err.message || "adjust_failed" });
+    }
+  });
+
   // GET /api/labs/:labId/members — list all active members of the lab.
   // Any active member can read. Returns user identity + role + status.
   app.get("/api/labs/:labId/members", authMiddleware, labScopeMiddleware, (req: any, res) => {
