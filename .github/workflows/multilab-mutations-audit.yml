@@ -42,3 +42,14 @@ jobs:
 
       - name: Run multi-lab mutations audit
         run: python scripts/audit_multilab_mutations.py
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run Shape A class-sweep guard
+        # Fails CI if any new `WHERE id = ? AND user_id|account_id = ?`
+        # pattern lands on a multi-lab table. See scripts/verify-shape-a-class-clean.js
+        # for the allowlist (single-tenant tables, comments, demo routes).
+        run: node scripts/verify-shape-a-class-clean.js

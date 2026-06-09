@@ -984,11 +984,27 @@ export function registerVeritaBenchRoutes(
     const ip = ipRaw ? ipRaw.split(",")[0].trim() : null;
     const ua = typeof req?.headers?.["user-agent"] === "string" ? (req.headers["user-agent"] as string).slice(0, 500) : null;
     const userId = req.userId;
+    // Shape A class sweep (2026-06-09): the lookup needs to find items in
+    // ANY lab the user is a member of, not just rows where account_id matches
+    // the user. Pre-fix, a multi-lab user scanning a seeded item got an
+    // "unknown_barcode" 404 even though /api/labs/:labId/inventory listed
+    // the same row. We resolve via lab_members AND the user's own owned rows.
+    const labIds = sqlite.prepare(
+      "SELECT lab_id FROM lab_members WHERE user_id = ? AND status = 'active'"
+    ).all(userId).map((r: any) => r.lab_id);
     try {
       const txn = sqlite.transaction(() => {
-        const row = sqlite.prepare(
+        // Try owned rows first (fast path), then any row in a lab the user is
+        // a member of. Both paths require a non-null barcode_value match.
+        let row = sqlite.prepare(
           "SELECT * FROM inventory_items WHERE account_id = ? AND barcode_value IS NOT NULL AND barcode_value = ?"
         ).get(accountId, barcode) as any;
+        if (!row && labIds.length > 0) {
+          const placeholders = labIds.map(() => "?").join(",");
+          row = sqlite.prepare(
+            `SELECT * FROM inventory_items WHERE lab_id IN (${placeholders}) AND barcode_value IS NOT NULL AND barcode_value = ?`
+          ).get(...labIds, barcode) as any;
+        }
         if (!row) {
           const ins = sqlite.prepare(`
             INSERT INTO scan_events (account_id, inventory_item_id, user_id, action, quantity_delta, quantity_before, quantity_after, barcode_value, notes, ip_address, user_agent)
@@ -1009,9 +1025,11 @@ export function registerVeritaBenchRoutes(
         const actualDelta = qtyAfter - qtyBefore;
         if (requestedAction !== "lookup_only" && actualDelta !== 0) {
           const now = new Date().toISOString();
+          // Access already verified at the row lookup above (either account_id
+          // match or lab_members membership of row.lab_id). UPDATE by id alone.
           sqlite.prepare(
-            "UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ? AND account_id = ?"
-          ).run(qtyAfter, now, row.id, accountId);
+            "UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?"
+          ).run(qtyAfter, now, row.id);
         }
         const ins = sqlite.prepare(`
           INSERT INTO scan_events (account_id, inventory_item_id, user_id, action, quantity_delta, quantity_before, quantity_after, barcode_value, notes, ip_address, user_agent)

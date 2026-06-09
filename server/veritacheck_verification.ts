@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { db } from "./db";
+import { resolveRowForMutation } from "./labAccessGuard";
 
 const sqlite = db.$client;
 
@@ -580,11 +581,14 @@ export function registerVeritaCheckVerificationRoutes(
   });
 
   // GET single verification with full detail
+  // Shape A guard: accept ownership or lab membership.
   app.get("/api/veritacheck/verifications/:id", authMiddleware, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
-    const userId = req.ownerUserId ?? req.user.userId;
-    const v = sqlite.prepare("SELECT * FROM veritacheck_verifications WHERE id = ? AND user_id = ?").get(req.params.id, userId);
-    if (!v) return res.status(404).json({ error: "Not found" });
+    const { row: v, status: vStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
+    if (!v) {
+      if (vStatus === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
+      return res.status(404).json({ error: "Not found" });
+    }
     const instruments = sqlite.prepare("SELECT * FROM veritacheck_verification_instruments WHERE verification_id = ? ORDER BY id").all(req.params.id);
     const studies = sqlite.prepare(`
       SELECT vs.*, s.test_name AS testName, s.study_type AS studyType
@@ -648,11 +652,16 @@ export function registerVeritaCheckVerificationRoutes(
   });
 
   // PATCH update verification header (director info, status, remediation, etc.)
+  // 2026-06-09 Shape A class sweep: resolveRowForMutation accepts ownership
+  // either via the verification's user_id OR via active lab_members membership
+  // of the verification's lab_id.
   app.patch("/api/veritacheck/verifications/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
-    const userId = req.ownerUserId ?? req.user.userId;
-    const existing = sqlite.prepare("SELECT id FROM veritacheck_verifications WHERE id = ? AND user_id = ?").get(req.params.id, userId);
-    if (!existing) return res.status(404).json({ error: "Not found" });
+    const { row: existing, status } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
+    if (!existing) {
+      if (status === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
+      return res.status(404).json({ error: "Not found" });
+    }
     const allowed = ["instrument_name","manufacturer","trigger_type","status","director_name","director_title","approved_date","remediation_notes","elements","element_reasons"];
     const sets: string[] = [];
     const vals: any[] = [];
@@ -670,12 +679,14 @@ export function registerVeritaCheckVerificationRoutes(
     res.json({ ok: true });
   });
 
-  // DELETE verification
+  // DELETE verification — Shape A guard via resolveRowForMutation.
   app.delete("/api/veritacheck/verifications/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
-    const userId = req.ownerUserId ?? req.user.userId;
-    const existing = sqlite.prepare("SELECT id FROM veritacheck_verifications WHERE id = ? AND user_id = ?").get(req.params.id, userId);
-    if (!existing) return res.status(404).json({ error: "Not found" });
+    const { row: existing, status } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
+    if (!existing) {
+      if (status === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
+      return res.status(404).json({ error: "Not found" });
+    }
     sqlite.prepare("DELETE FROM veritacheck_verification_studies WHERE verification_id = ?").run(req.params.id);
     sqlite.prepare("DELETE FROM veritacheck_verification_instruments WHERE verification_id = ?").run(req.params.id);
     sqlite.prepare("DELETE FROM veritacheck_verifications WHERE id = ?").run(req.params.id);
@@ -687,9 +698,12 @@ export function registerVeritaCheckVerificationRoutes(
   // POST add serial number unit
   app.post("/api/veritacheck/verifications/:id/instruments", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
-    const userId = req.ownerUserId ?? req.user.userId;
-    const parent = sqlite.prepare("SELECT id FROM veritacheck_verifications WHERE id = ? AND user_id = ?").get(req.params.id, userId);
-    if (!parent) return res.status(404).json({ error: "Not found" });
+    // Shape A guard: accept ownership or lab membership on the parent verification.
+    const { row: parent, status: parentStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
+    if (!parent) {
+      if (parentStatus === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
+      return res.status(404).json({ error: "Not found" });
+    }
     const { serial_number, model, location, director_name, director_title, approved_date } = req.body;
     if (!serial_number) return res.status(400).json({ error: "serial_number required" });
     const r = sqlite.prepare(`
@@ -703,9 +717,12 @@ export function registerVeritaCheckVerificationRoutes(
   // PATCH update instrument unit
   app.patch("/api/veritacheck/verifications/:id/instruments/:unitId", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
-    const userId = req.ownerUserId ?? req.user.userId;
-    const parent = sqlite.prepare("SELECT id FROM veritacheck_verifications WHERE id = ? AND user_id = ?").get(req.params.id, userId);
-    if (!parent) return res.status(404).json({ error: "Not found" });
+    // Shape A guard: accept ownership or lab membership on the parent verification.
+    const { row: parent, status: parentStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
+    if (!parent) {
+      if (parentStatus === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
+      return res.status(404).json({ error: "Not found" });
+    }
     const allowed = ["serial_number","model","location","director_name","director_title","approved_date"];
     const sets: string[] = [];
     const vals: any[] = [];
@@ -721,9 +738,12 @@ export function registerVeritaCheckVerificationRoutes(
   // DELETE instrument unit
   app.delete("/api/veritacheck/verifications/:id/instruments/:unitId", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
-    const userId = req.ownerUserId ?? req.user.userId;
-    const parent = sqlite.prepare("SELECT id FROM veritacheck_verifications WHERE id = ? AND user_id = ?").get(req.params.id, userId);
-    if (!parent) return res.status(404).json({ error: "Not found" });
+    // Shape A guard: accept ownership or lab membership on the parent verification.
+    const { row: parent, status: parentStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
+    if (!parent) {
+      if (parentStatus === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
+      return res.status(404).json({ error: "Not found" });
+    }
     sqlite.prepare("DELETE FROM veritacheck_verification_instruments WHERE id = ?").run(req.params.unitId);
     res.json({ ok: true });
   });
@@ -733,9 +753,12 @@ export function registerVeritaCheckVerificationRoutes(
   // PATCH update an element study slot (link study, set rationale, mark pass/fail)
   app.patch("/api/veritacheck/verifications/:id/studies/:studySlotId", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
-    const userId = req.ownerUserId ?? req.user.userId;
-    const parent = sqlite.prepare("SELECT id FROM veritacheck_verifications WHERE id = ? AND user_id = ?").get(req.params.id, userId);
-    if (!parent) return res.status(404).json({ error: "Not found" });
+    // Shape A guard: accept ownership or lab membership on the parent verification.
+    const { row: parent, status: parentStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
+    if (!parent) {
+      if (parentStatus === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
+      return res.status(404).json({ error: "Not found" });
+    }
     const allowed = ["study_id","analyte","sample_count","clsi_protocol","design_rationale","result_summary","passed"];
     const sets: string[] = [];
     const vals: any[] = [];
@@ -754,11 +777,16 @@ export function registerVeritaCheckVerificationRoutes(
   });
 
   // GET suggested existing studies for a verification (match by instrument name)
+  // Shape A guard on the parent; suggestions list stays scoped to the user
+  // (their studies catalogue is the source of "what could be linked").
   app.get("/api/veritacheck/verifications/:id/suggest-studies", authMiddleware, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
-    const v = sqlite.prepare("SELECT * FROM veritacheck_verifications WHERE id = ? AND user_id = ?").get(req.params.id, userId) as any;
-    if (!v) return res.status(404).json({ error: "Not found" });
+    const { row: v, status: vStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
+    if (!v) {
+      if (vStatus === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
+      return res.status(404).json({ error: "Not found" });
+    }
     // Return all studies for this user so any can be linked
     const matches = sqlite.prepare(`
       SELECT id, test_name AS testName, study_type AS studyType, created_at AS createdAt
@@ -770,13 +798,16 @@ export function registerVeritaCheckVerificationRoutes(
     res.json(matches);
   });
 
-  // POST generate PDF package
+  // POST generate PDF package — Shape A guard.
   app.post("/api/veritacheck/verifications/:id/pdf", authMiddleware, async (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
 
-    const v = sqlite.prepare("SELECT * FROM veritacheck_verifications WHERE id = ? AND user_id = ?").get(req.params.id, userId) as any;
-    if (!v) return res.status(404).json({ error: "Not found" });
+    const { row: v, status: vStatus } = resolveRowForMutation<any>((db as any).$client, "veritacheck_verifications", req.params.id, req);
+    if (!v) {
+      if (vStatus === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
+      return res.status(404).json({ error: "Not found" });
+    }
 
     const instruments = sqlite.prepare("SELECT * FROM veritacheck_verification_instruments WHERE verification_id = ? ORDER BY id").all(req.params.id) as any[];
     const studies = sqlite.prepare(`
