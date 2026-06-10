@@ -871,14 +871,19 @@ function resolveActiveLabForRequest(userId: number, req: any): any | null {
     if (Number.isFinite(n) && n > 0) requested = n;
   }
   if (requested) {
-    // Direct membership check: the user owns the lab OR has an
-    // active lab_members row.
+    // Shape A guard: this is a read-only membership/ownership check
+    // (does the user own lab `requested` via labs.user_id, OR hold an
+    // active lab_members row). It is the access guard itself, not a
+    // leaky data scope; the `WHERE id = ? AND user_id = ?` shape here
+    // is intentional and validated by the surrounding UNION.
     const mem = (db as any).$client.prepare(
       `SELECT 1 AS ok FROM labs WHERE id = ? AND user_id = ?
        UNION
        SELECT 1 AS ok FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'`
     ).get(requested, userId, requested, userId) as any;
-    // Seat-user path: the seat owner's lab access counts as theirs.
+    // Seat-user path (Shape A guard): the seat owner's lab access
+    // counts as the seat user's. Same read-only ownership/membership
+    // check against the resolved owner_user_id.
     if (!mem) {
       const seatOwner = (db as any).$client.prepare(
         "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
