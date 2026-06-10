@@ -65,6 +65,11 @@ interface VerificationStudy {
   passed: number | null;
   testName: string | null;
   studyType: string | null;
+  // 2026-06-09 PR3 of multi-analyte: carryover can be flagged
+  // scope='instrument' so one EP10 study covers every analyte on the
+  // package. Default 'analyte' preserves legacy single-analyte
+  // verifications.
+  scope?: "analyte" | "instrument";
 }
 
 interface MapInstrument {
@@ -975,6 +980,37 @@ function ElementCard({ element, slot, suggested, verificationId, onPatch }: {
             <FlaskConical size={12} />
             <span>Linked: <strong>{slot.testName}</strong></span>
             <button className="ml-auto underline" onClick={() => onPatch({ study_id: null })}>Unlink</button>
+          </div>
+        )}
+
+        {/* 2026-06-09 PR3 of multi-analyte: Carryover scope toggle.
+            EP10 is sample-path-based, not analyte-specific, so a
+            single carryover study can legitimately cover every
+            analyte on the package. Default per-analyte preserves
+            legacy single-analyte verifications. Shown only when the
+            carryover element has a study linked. */}
+        {element.key === "carryover" && slot?.study_id && (
+          <div className="mt-3 flex items-center gap-2 text-xs bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-3 py-2 rounded" data-testid="carryover-scope-toggle">
+            <span className="text-amber-900 dark:text-amber-200 font-medium">Scope:</span>
+            <button
+              onClick={() => onPatch({ scope: "analyte" })}
+              className={`px-2 py-0.5 rounded text-xs transition-colors ${(slot.scope ?? "analyte") === "analyte" ? "bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100 font-semibold" : "text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40"}`}
+              data-testid="carryover-scope-analyte"
+            >
+              Per-analyte
+            </button>
+            <button
+              onClick={() => onPatch({ scope: "instrument" })}
+              className={`px-2 py-0.5 rounded text-xs transition-colors ${slot.scope === "instrument" ? "bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100 font-semibold" : "text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40"}`}
+              data-testid="carryover-scope-instrument"
+            >
+              Instrument-wide
+            </button>
+            <span className="ml-2 text-amber-800 dark:text-amber-300 text-[10px]">
+              {slot.scope === "instrument"
+                ? "One carryover study covers every analyte on this package."
+                : "This carryover study applies to this analyte only."}
+            </span>
           </div>
         )}
 
