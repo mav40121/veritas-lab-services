@@ -60,71 +60,49 @@ interface PortalEmployee {
   can_view_audit: boolean;
 }
 
-const STORAGE_KEY = "veritastaff_portal_session_v1";
-const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
-
-function readSession(): StaffPortalSession | null {
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as StaffPortalSession;
-  } catch { return null; }
-}
-function writeSession(s: StaffPortalSession | null) {
-  try {
-    if (s) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-    else sessionStorage.removeItem(STORAGE_KEY);
-  } catch { /* shared tablet; sessionStorage may be disabled */ }
-}
-
-function fullName(e: PortalEmployee): string {
-  const mi = e.middle_initial ? ` ${e.middle_initial}.` : "";
-  return `${e.first_name}${mi} ${e.last_name}`;
-}
+// 2026-06-09 PR Option 1: STORAGE_KEY, IDLE_TIMEOUT_MS, readSession,
+// writeSession, and fullName were used by the retired CLIA+PIN +
+// picker flow. The new auth-unification path goes through the regular
+// auth_token in localStorage and doesn't need a separate session
+// store or idle timer — the main app's auth lifecycle covers both.
 
 export default function StaffPortalPage() {
-  const [session, setSession] = useState<StaffPortalSession | null>(() => readSession());
-  const [clia, setClia] = useState("");
-  const [pin, setPin] = useState("");
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  const [employees, setEmployees] = useState<PortalEmployee[] | null>(null);
-  const [pickerError, setPickerError] = useState<string | null>(null);
+  // 2026-06-09 PR Option 1: CLIA + PIN + picker are gone. The page now
+  // auto-resolves the logged-in user's Staff Portal identity from their
+  // regular auth token. Unauth → /login. No staff identity → friendly
+  // "not on roster" message.
+  const [session, setSession] = useState<StaffPortalSession | null>(null);
   const [activeEmployee, setActiveEmployee] = useState<PortalEmployee | null>(null);
   const [activeModule, setActiveModule] = useState<"policies" | "inventory" | "audit" | "competency" | "quizzes" | null>(null);
+  const [bootstrapState, setBootstrapState] = useState<"loading" | "no-roster" | "no-auth" | "ready">("loading");
 
-  // 2026-06-09 Auth unification: if there's a real auth token in
-  // localStorage (set by the main /login flow) AND that user has a
-  // staff_portal seat, skip the CLIA+PIN + picker entirely. We mint a
-  // synthetic-shaped session object from the real-auth identity
-  // response so the rest of the page renders unchanged.
-  const [authedBootstrapTried, setAuthedBootstrapTried] = useState(false);
   useEffect(() => {
-    if (session) return;
-    if (authedBootstrapTried) return;
-    setAuthedBootstrapTried(true);
     const realToken = (() => {
       try { return localStorage.getItem("auth_token") || ""; } catch { return ""; }
     })();
-    if (!realToken) return;
+    if (!realToken) {
+      setBootstrapState("no-auth");
+      return;
+    }
     fetch("/api/me/staff-portal-employee", { headers: { Authorization: `Bearer ${realToken}` } })
       .then(async (r) => {
-        if (!r.ok) return null;
+        if (r.status === 401) {
+          setBootstrapState("no-auth");
+          return null;
+        }
+        if (!r.ok) {
+          setBootstrapState("no-roster");
+          return null;
+        }
         return r.json();
       })
       .then((data) => {
         if (!data || !data.employee || !data.lab) return;
-        // Synthesize a session shape from the real-auth response. Token
-        // stays the real auth token; the staff-portal endpoints now
-        // accept it (staffPortalAuthMiddleware was augmented). Picker
-        // is skipped by also seeding activeEmployee.
-        const syntheticSession: StaffPortalSession = {
+        setSession({
           token: realToken,
           lab: { id: data.lab.id, name: data.lab.name, clia_number: data.lab.clia_number || "" },
           expires_in_seconds: 8 * 60 * 60,
-        };
-        setSession(syntheticSession);
+        });
         setActiveEmployee({
           id: data.employee.id,
           first_name: data.employee.first_name,
@@ -135,199 +113,51 @@ export default function StaffPortalPage() {
           can_adjust_inventory: !!data.employee.can_adjust_inventory,
           can_view_audit: !!data.employee.can_view_audit,
         });
+        setBootstrapState("ready");
       })
-      .catch(() => { /* fall back to CLIA+PIN flow */ });
-  }, [session, authedBootstrapTried]);
-
-  const idleTimerRef = useRef<number | null>(null);
-
-  function resetIdleTimer() {
-    if (idleTimerRef.current !== null) {
-      window.clearTimeout(idleTimerRef.current);
-    }
-    idleTimerRef.current = window.setTimeout(() => {
-      writeSession(null);
-      setSession(null);
-      setEmployees(null);
-      setActiveEmployee(null);
-    }, IDLE_TIMEOUT_MS) as unknown as number;
-  }
-
-  useEffect(() => {
-    if (!session) return;
-    const onActivity = () => resetIdleTimer();
-    resetIdleTimer();
-    window.addEventListener("keydown", onActivity);
-    window.addEventListener("click", onActivity);
-    window.addEventListener("touchstart", onActivity);
-    return () => {
-      window.removeEventListener("keydown", onActivity);
-      window.removeEventListener("click", onActivity);
-      window.removeEventListener("touchstart", onActivity);
-      if (idleTimerRef.current !== null) window.clearTimeout(idleTimerRef.current);
-    };
-  }, [session]);
-
-  useEffect(() => {
-    if (!session) { setEmployees(null); return; }
-    setPickerError(null);
-    fetch("/api/staff-portal-session/employees", {
-      headers: { Authorization: `Bearer ${session.token}` },
-    })
-      .then(async (r) => {
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((d) => setEmployees(d.employees || []))
-      .catch((e: any) => setPickerError(e.message || "Could not load employees"));
-  }, [session]);
-
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setLoginError(null);
-    setSubmitting(true);
-    try {
-      const r = await fetch("/api/staff-portal-login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clia: clia.trim(), pin: pin.trim() }),
-      });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
-      const next: StaffPortalSession = data;
-      writeSession(next);
-      setSession(next);
-      setClia(""); setPin("");
-    } catch (err: any) {
-      setLoginError(err.message || "Login failed");
-    } finally {
-      setSubmitting(false);
-    }
-  }
+      .catch(() => setBootstrapState("no-roster"));
+  }, []);
 
   function signOut() {
-    writeSession(null);
-    setSession(null);
-    setEmployees(null);
-    setActiveEmployee(null);
+    try { localStorage.removeItem("auth_token"); } catch { /* noop */ }
+    window.location.href = "/login";
   }
 
-  // ── Login screen ─────────────────────────────────────────────────────
-  if (!session) {
+  // ── Loading state ────────────────────────────────────────────────────
+  if (bootstrapState === "loading") {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-6">
-        <div className="w-full max-w-sm border border-border rounded-xl bg-card p-6 shadow-sm">
-          <div className="text-center mb-6">
-            <div className="font-serif text-2xl font-bold tracking-tight" style={{ color: "#01696F" }}>
-              VeritaAssure&trade; Staff Portal
-            </div>
-            <p className="text-sm text-muted-foreground mt-2">
-              Enter your lab's CLIA number and the staff PIN provided by the lab director.
-            </p>
-          </div>
-          <form onSubmit={handleLogin} className="space-y-3">
-            <div>
-              <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1" htmlFor="sp-clia">CLIA Number</label>
-              <input
-                id="sp-clia"
-                type="text"
-                inputMode="text"
-                autoCapitalize="characters"
-                autoCorrect="off"
-                spellCheck={false}
-                placeholder="e.g. 03D0531813"
-                value={clia}
-                onChange={(e) => setClia(e.target.value)}
-                className="w-full border border-border rounded-md p-2 font-mono text-sm bg-background"
-                data-testid="sp-login-clia"
-                autoFocus
-              />
-            </div>
-            <div>
-              <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1" htmlFor="sp-pin">6-digit PIN</label>
-              <input
-                id="sp-pin"
-                type="password"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={6}
-                placeholder="••••••"
-                value={pin}
-                onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-                className="w-full border border-border rounded-md p-2 font-mono text-lg tracking-widest text-center bg-background"
-                data-testid="sp-login-pin"
-              />
-            </div>
-            {loginError && (
-              <div className="text-xs text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 rounded p-2">
-                {loginError}
-              </div>
-            )}
-            <button
-              type="submit"
-              disabled={submitting || !clia.trim() || pin.length < 6}
-              className="w-full text-white font-semibold py-2 rounded-md disabled:opacity-50"
-              style={{ backgroundColor: "#01696F" }}
-              data-testid="sp-login-submit"
-            >
-              {submitting ? "Signing in..." : "Sign in"}
-            </button>
-          </form>
-        </div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-sm text-muted-foreground">Loading...</div>
       </div>
     );
   }
 
-  // ── Employee picker ──────────────────────────────────────────────────
-  if (!activeEmployee) {
+  // ── Not signed in ────────────────────────────────────────────────────
+  if (bootstrapState === "no-auth") {
+    if (typeof window !== "undefined") {
+      window.location.href = "/login?dest=/staff-access";
+    }
+    return null;
+  }
+
+  // ── Not on the lab roster ────────────────────────────────────────────
+  if (bootstrapState === "no-roster" || !session || !activeEmployee) {
     return (
-      <div className="min-h-screen bg-background p-6">
-        <div className="max-w-2xl mx-auto">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <div className="text-xs uppercase tracking-wider text-muted-foreground">Staff Portal</div>
-              <div className="font-serif text-xl font-bold">{session.lab.name}</div>
-              <div className="text-xs text-muted-foreground">CLIA: {session.lab.clia_number}</div>
-            </div>
-            <button onClick={signOut} className="text-xs text-muted-foreground hover:underline" data-testid="sp-sign-out">
-              Sign out
-            </button>
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <div className="w-full max-w-sm border border-border rounded-xl bg-card p-6 shadow-sm text-center">
+          <div className="font-serif text-xl font-bold mb-2" style={{ color: "#01696F" }}>
+            VeritaAssure&trade; Staff Portal
           </div>
-          <div className="border border-border rounded-lg bg-card p-4">
-            <div className="text-sm font-semibold mb-3">Who is signing in?</div>
-            {pickerError && (
-              <div className="text-xs text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 rounded p-2 mb-3">
-                {pickerError}
-              </div>
-            )}
-            {employees === null ? (
-              <div className="text-sm text-muted-foreground py-6 text-center">Loading roster...</div>
-            ) : employees.length === 0 ? (
-              <div className="text-sm text-muted-foreground py-6 text-center">
-                No active employees on this lab's VeritaStaff&trade; roster. Ask the lab director to add staff first.
-              </div>
-            ) : (
-              <div className="divide-y divide-border">
-                {employees.map((e) => (
-                  <button
-                    key={e.id}
-                    type="button"
-                    onClick={() => setActiveEmployee(e)}
-                    className="w-full text-left py-3 px-2 hover:bg-muted flex items-center justify-between gap-3"
-                    data-testid="sp-employee-row"
-                  >
-                    <div>
-                      <div className="text-sm font-medium">{fullName(e)}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {e.title || "(no title)"}{e.title_code ? ` · ${e.title_code}` : ""}
-                      </div>
-                    </div>
-                    <span className="text-xs text-teal-700">Select</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <p className="text-sm text-muted-foreground mb-4">
+            Your account isn't linked to a VeritaStaff&trade; record on any of your labs. Ask the lab director to add you to VeritaStaff, then refresh this page.
+          </p>
+          <button
+            onClick={signOut}
+            className="w-full text-white font-semibold py-2 rounded-md"
+            style={{ backgroundColor: "#01696F" }}
+          >
+            Sign out
+          </button>
         </div>
       </div>
     );
