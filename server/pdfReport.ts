@@ -600,6 +600,22 @@ const CSS = `
   .supp-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 0; font-size: 8pt; margin-bottom: 6px; }
   .supp-stats .key { color: ${MUTED}; font-weight: 700; }
   .supp-stats .val { }
+
+  /* Key Stats summary card grid -- used by Linearity, Reportable Range,
+     Reference Interval, Cal Ver compact summary renderers. Authored
+     2026-06-10 (Michael L feedback on co2 Linearity PDF): the class
+     names existed in the renderers since the original cal_ver split
+     but the matching CSS was never added, so the cards collapsed to
+     a vertical list of label/value lines (one div per row, falling
+     back to display:block). The 4-column responsive grid below
+     surfaces them as the surveyor-friendly card row the original
+     authors intended. */
+  .key-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 6px 0; }
+  .stat-item { display: flex; flex-direction: column; padding: 6px 8px; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 4px; }
+  .stat-label { font-size: 6.5pt; color: ${MUTED}; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 2px; }
+  .stat-value { font-size: 10pt; font-weight: 700; color: ${DARK}; line-height: 1.2; word-break: break-word; }
+  .stat-value.pass { color: ${PASS}; }
+  .stat-value.fail { color: ${FAIL}; }
 `;
 
 // ─── Instrument display helpers ──────────────────────────────────────────────

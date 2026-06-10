@@ -61,6 +61,22 @@ export function getToken(): string | null { return _token; }
 export function getUser(): AuthUser | null { return _user; }
 export function isLoggedIn(): boolean { return !!_token; }
 
+// 2026-06-10 (Michael L feedback on co2 PDF showing UMass Milford):
+// every NavBar-aware request now carries the active lab in
+// X-Active-Lab-Id. The server (resolveActiveLabForRequest) validates
+// active membership before honoring it, so this is safe even on
+// public / cross-lab paths. Reads from window.location.pathname so
+// it never has to thread React hooks through to fetch helpers.
+function getActiveLabIdFromUrl(): number | null {
+  if (typeof window === "undefined") return null;
+  const m = window.location.pathname.match(/^\/labs\/(\d+)(?:\/|$)/);
+  return m ? Number(m[1]) : null;
+}
+
 export function authHeaders(): Record<string, string> {
-  return _token ? { Authorization: `Bearer ${_token}` } : {};
+  const h: Record<string, string> = {};
+  if (_token) h.Authorization = `Bearer ${_token}`;
+  const labId = getActiveLabIdFromUrl();
+  if (labId) h["X-Active-Lab-Id"] = String(labId);
+  return h;
 }

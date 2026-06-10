@@ -841,6 +841,66 @@ function resolveLabForUser(userId: number): any | null {
 }
 
 /**
+ * 2026-06-10 (Michael L feedback on the co2 Linearity PDF showing
+ * UMass Milford instead of Michael L's lab): the legacy
+ * resolveLabForUser path reads users.lab_id (the "default" lab the
+ * user was first joined to). For multi-lab users that picks the
+ * wrong lab on every PDF.
+ *
+ * This helper threads the active lab through from the client:
+ *   1. X-Active-Lab-Id header (preferred -- every NavBar-aware
+ *      client fetch can set it)
+ *   2. body.lab_id (secondary -- direct API callers / Playwright)
+ *   3. fallback to resolveLabForUser (legacy single-lab behavior)
+ *
+ * MUST validate the requesting user is an active member of the
+ * requested lab before honoring the input, otherwise a malicious
+ * client could read any lab's identity by guessing IDs. Non-member
+ * inputs silently fall through to the legacy resolver so the request
+ * still succeeds with the user's default lab.
+ */
+function resolveActiveLabForRequest(userId: number, req: any): any | null {
+  let requested: number | null = null;
+  const hdr = req?.headers?.["x-active-lab-id"];
+  if (hdr) {
+    const n = Number(hdr);
+    if (Number.isFinite(n) && n > 0) requested = n;
+  }
+  if (!requested && req?.body?.lab_id !== undefined) {
+    const n = Number(req.body.lab_id);
+    if (Number.isFinite(n) && n > 0) requested = n;
+  }
+  if (requested) {
+    // Direct membership check: the user owns the lab OR has an
+    // active lab_members row.
+    const mem = (db as any).$client.prepare(
+      `SELECT 1 AS ok FROM labs WHERE id = ? AND user_id = ?
+       UNION
+       SELECT 1 AS ok FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'`
+    ).get(requested, userId, requested, userId) as any;
+    // Seat-user path: the seat owner's lab access counts as theirs.
+    if (!mem) {
+      const seatOwner = (db as any).$client.prepare(
+        "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
+      ).get(userId) as any;
+      if (seatOwner) {
+        const seatMem = (db as any).$client.prepare(
+          `SELECT 1 AS ok FROM labs WHERE id = ? AND user_id = ?
+           UNION
+           SELECT 1 AS ok FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'`
+        ).get(requested, seatOwner.owner_user_id, requested, seatOwner.owner_user_id) as any;
+        if (seatMem) {
+          return (db as any).$client.prepare("SELECT * FROM labs WHERE id = ?").get(requested);
+        }
+      }
+    } else {
+      return (db as any).$client.prepare("SELECT * FROM labs WHERE id = ?").get(requested);
+    }
+  }
+  return resolveLabForUser(userId);
+}
+
+/**
  * Write an audit log entry for a lab field change.
  */
 function writeLabAuditEntry(labId: number, changedByUserId: number, fieldName: string, oldValue: string | null, newValue: string | null, changeReason?: string): void {
@@ -8690,8 +8750,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (auth?.startsWith("Bearer ")) {
         try {
           const payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number };
-          // Try labs table first (new model)
-          const lab = resolveLabForUser(payload.userId);
+          // 2026-06-10 (Michael L feedback): prefer the lab the
+          // user has currently selected in the NavBar. The client
+          // sends it as X-Active-Lab-Id header. Falls back to the
+          // legacy default_lab_id resolver if absent or invalid.
+          const lab = resolveActiveLabForRequest(payload.userId, req);
           if (lab) {
             resolvedLabId = lab.id;
             cliaNumber = lab.clia_number || undefined;
@@ -18035,7 +18098,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
        WHERE qr.assessment_id = ?`
     ).all(assessment.id);
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const compLab = resolveLabForUser(dataUserId);
+    // 2026-06-10 (Michael L feedback) Shape A class sweep: prefer the
+    // active lab from X-Active-Lab-Id header / body.lab_id with
+    // membership validation, fall back to default_lab_id resolver.
+    const compLab = resolveActiveLabForRequest(dataUserId, req);
     const compCliaNumber = compLab?.clia_number || undefined;
     const compLabName = compLab?.lab_name || undefined;
     // Fallback to user record if no lab row yet
@@ -18195,7 +18261,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!tracker) return res.status(404).json({ error: "Tracker not found" });
     const entries = (db as any).$client.prepare("SELECT * FROM cumsum_entries WHERE tracker_id = ? ORDER BY id ASC").all(req.params.id);
     const { currentSpecimens } = req.body || {};
-    const cumsumLab = resolveLabForUser(req.userId);
+    // 2026-06-10 Shape A class sweep (Michael L feedback).
+    const cumsumLab = resolveActiveLabForRequest(req.userId, req);
     let cumsumClia: string | undefined;
     let cumsumLabName: string | undefined;
     if (cumsumLab) {
@@ -22651,7 +22718,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     try {
       const userId = req.ownerUserId ?? req.user.userId;
-      const ptLab = resolveLabForUser(userId);
+      // 2026-06-10 Shape A class sweep (Michael L feedback).
+      const ptLab = resolveActiveLabForRequest(userId, req);
       let ptLabName = "";
       let ptCliaNum = "";
       if (ptLab) {
@@ -24317,7 +24385,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       sqlite.prepare(`INSERT INTO veritapolicy_settings (user_id) VALUES (?)`).run(userId);
       settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId);
     }
-    const lab = resolveLabForUser(userId);
+    // 2026-06-10 Shape A class sweep (Michael L feedback).
+    const lab = resolveActiveLabForRequest(userId, req);
     const accCount = (lab?.accreditation_cap ? 1 : 0) + (lab?.accreditation_tjc ? 1 : 0)
       + (lab?.accreditation_cola ? 1 : 0) + (lab?.accreditation_aabb ? 1 : 0);
     let accreditationChoice = 'CLIA';
@@ -24372,7 +24441,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Phase 1 (2026-05-01): source of truth for accreditation is the labs
     // table, not veritapolicy_settings.accreditation_body. The latter is
     // retained but no longer drives content selection.
-    const lab = resolveLabForUser(userId);
+    // 2026-06-10 Shape A class sweep (Michael L feedback).
+    const lab = resolveActiveLabForRequest(userId, req);
     const reqSets = veritapolicyReqSetsForLab(lab);
 
     // Build response
@@ -24530,7 +24600,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     for (const s of statuses) statusMap[s.requirement_id] = s;
     // Phase 1 (2026-05-01): source the accreditor set from labs flags via the
     // shared helper. CFR is included for every lab.
-    const lab = resolveLabForUser(userId);
+    // 2026-06-10 Shape A class sweep (Michael L feedback).
+    const lab = resolveActiveLabForRequest(userId, req);
     const summaryReqs = veritapolicyReqSetsForLab(lab);
     let total = 0, complete = 0, inProgress = 0, notStarted = 0, na = 0;
     for (const req of summaryReqs) {
@@ -24565,7 +24636,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       for (const s of statuses) statusMap[s.requirement_id] = s;
       // Phase 1 (2026-05-01): source from labs flags via shared helper.
       // CFR included for every lab regardless of accreditor selection.
-      const lab = resolveLabForUser(userId);
+      // 2026-06-10 Shape A class sweep (Michael L feedback).
+      const lab = resolveActiveLabForRequest(userId, req);
       const allReqs = veritapolicyReqSetsForLab(lab);
       const enrichedReqs = allReqs.map((reqItem: any) => {
         const us = statusMap[reqItem.id];
@@ -24613,7 +24685,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const sqlite = db.$client;
       const userId = req.ownerUserId;
-      const lab = resolveLabForUser(userId);
+      // 2026-06-10 Shape A class sweep (Michael L feedback).
+      const lab = resolveActiveLabForRequest(userId, req);
       type AoCol = { key: 'tjc_citations' | 'cap_citations' | 'cola_citations' | 'aabb_citations'; label: string };
       const aoCols: AoCol[] = [];
       if (lab?.accreditation_tjc)  aoCols.push({ key: 'tjc_citations',  label: 'TJC' });
@@ -24690,7 +24763,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const sqlite = db.$client;
       const userId = req.ownerUserId;
-      const lab = resolveLabForUser(userId);
+      // 2026-06-10 Shape A class sweep (Michael L feedback).
+      const lab = resolveActiveLabForRequest(userId, req);
       const { VERITAPOLICY_MASTER_LIST } = await import('./veritapolicyMasterList');
       const statuses = sqlite.prepare('SELECT * FROM veritapolicy_master_status WHERE user_id = ?').all(userId) as any[];
       const sm: Record<string, any> = {};
@@ -24728,7 +24802,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get('/api/veritapolicy/master-list/excel', authMiddleware, async (req: any, res) => {
     try {
       const userId = req.ownerUserId;
-      const lab = resolveLabForUser(userId);
+      // 2026-06-10 Shape A class sweep (Michael L feedback).
+      const lab = resolveActiveLabForRequest(userId, req);
       const ownerUser = storage.getUserById(userId);
       const labName = (ownerUser as any)?.cliaLabName || (ownerUser as any)?.clia_lab_name || ownerUser?.name || 'Laboratory';
       const cliaNumber = (ownerUser as any)?.cliaNumber || (ownerUser as any)?.clia_number || 'Not on file';
