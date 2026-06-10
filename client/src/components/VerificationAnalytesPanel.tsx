@@ -224,6 +224,27 @@ export function VerificationAnalytesPanel({ verificationId }: { verificationId: 
     } finally { setBusy(false); }
   }
 
+  async function doAmend(a: VerificationAnalyte) {
+    if (a.lifecycle_state !== "finalized") return;
+    if (!confirm(`Create a new draft amending "${a.analyte_name}"? The original stays finalized in the audit trail.`)) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/veritacheck/verifications/${verificationId}/analytes/${a.id}/amend`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.error || `HTTP ${r.status}`);
+      }
+      toast({ title: "Analyte amended", description: "New draft created. Original stays in the audit trail." });
+      await reload();
+    } catch (e: any) {
+      toast({ title: "Could not amend", description: e.message, variant: "destructive" });
+    } finally { setBusy(false); }
+  }
+
   async function doDelete(a: VerificationAnalyte) {
     if (a.lifecycle_state === "finalized") return;
     if (!confirm(`Delete analyte "${a.analyte_name}"? Studies linked to this analyte will need to be reassigned first.`)) return;
@@ -305,7 +326,7 @@ export function VerificationAnalytesPanel({ verificationId }: { verificationId: 
               )}
             </div>
             <div className="flex items-center gap-1">
-              {a.lifecycle_state !== "finalized" && (
+              {a.lifecycle_state !== "finalized" ? (
                 <>
                   <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => startEdit(a)} disabled={busy} data-testid={`edit-analyte-${a.id}`}>
                     <Edit2 size={12} /> Edit
@@ -317,6 +338,10 @@ export function VerificationAnalytesPanel({ verificationId }: { verificationId: 
                     <Trash2 size={12} /> Delete
                   </Button>
                 </>
+              ) : (
+                <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => doAmend(a)} disabled={busy} data-testid={`amend-analyte-${a.id}`}>
+                  <Edit2 size={12} /> Amend
+                </Button>
               )}
             </div>
           </div>

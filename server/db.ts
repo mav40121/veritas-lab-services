@@ -3154,6 +3154,9 @@ try {
   if (!vcaCols.includes("finalized_by_user_id")) sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN finalized_by_user_id INTEGER");
   if (!vcaCols.includes("finalized_signature"))  sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN finalized_signature TEXT");
   if (!vcaCols.includes("sort_order"))           sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0");
+  // 2026-06-09 (overnight session 6/11): analyte amendment workflow.
+  // Mirrors amends_study_id on studies (PR #693).
+  if (!vcaCols.includes("amends_analyte_id"))    sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN amends_analyte_id INTEGER");
 } catch (e) { console.warn("veritacheck_verification_analytes migration:", e); }
 
 // Idempotent backfill: every legacy verification gets a one-analyte
