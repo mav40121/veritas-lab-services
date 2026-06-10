@@ -240,7 +240,7 @@ export default function StudyGuidePage() {
           <h1 className="font-serif text-4xl font-bold mb-3">Which study does your lab need?</h1>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
             CLIA requires non-waived laboratories to verify and document instrument performance on a defined schedule.
-            This guide explains the nine study types supported by VeritaCheck™, what they are, when CLIA requires them, and how VeritaCheck™ automates each one.
+            This guide explains the ten study types supported by VeritaCheck™, what they are, when CLIA requires them, and how VeritaCheck™ automates each one.
           </p>
           <p className="text-xs text-muted-foreground mt-4 max-w-2xl">
             All regulatory citations are drawn directly from{" "}
@@ -350,6 +350,12 @@ export default function StudyGuidePage() {
                   <td className="py-3 px-4"><a href={REFS.cfr4931255.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.1255(b)(3)</a>; analyte criterion from §493.927, .931, .937, .941 (lab-adopted)</td>
                 </tr>
                 <tr className="border-b border-border hover:bg-muted/20 transition-colors">
+                  <td className="py-3 px-4 font-medium text-primary">Reportable Range Verification</td>
+                  <td className="py-3 px-4 text-muted-foreground">What is the highest and lowest concentration I can reliably report on this analyzer for this analyte?</td>
+                  <td className="py-3 px-4">At method introduction; when the manufacturer changes the AMR claim</td>
+                  <td className="py-3 px-4"><a href={REFS.cfr4931253.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.1253(b)(1)(iii)</a>; CLSI EP06</td>
+                </tr>
+                <tr className="border-b border-border hover:bg-muted/20 transition-colors">
                   <td className="py-3 px-4 font-medium text-primary">Correlation / Method Comparison</td>
                   <td className="py-3 px-4 text-muted-foreground">Do my two instruments (or methods) agree with each other?</td>
                   <td className="py-3 px-4">When introducing a new method; annually recommended</td>
@@ -432,6 +438,32 @@ export default function StudyGuidePage() {
               REFS.qso2025,
             ]}
             ctaStudyType="cal_ver"
+          />
+
+          <StudyCard
+            icon={<Target size={22} className="text-white" />}
+            color="bg-[#1d4ed8]"
+            badge="Reportable Range Focused"
+            title="Reportable Range Verification"
+            subtitle="Verify the upper and lower extremes of your AMR claim, with fewer levels than a full linearity"
+            what="Reportable Range Verification is the focused form of CLSI EP06 used when a lab wants to confirm just the highest and lowest measurable concentrations on the analyzer rather than the full linearity surface across the range. CLIA-recognized for confirming the manufacturer's Analytical Measurement Range (AMR) claim is appropriate for the lab's specific instrument and sample type, and surveyors accept it as a separate study from full linearity when the lab has documented why a focused verification is sufficient (e.g., the AMR claim has not changed since the last full linearity, and the lab only needs to confirm performance at the extremes)."
+            howIt="Same study type group in VeritaCheck as Calibration Verification / Linearity but with as few as 2 levels (low + high). VeritaCheck™ computes percent recovery and observed error at each level and evaluates against the adopted acceptance criterion. The optional AMR coverage analysis is particularly relevant here: the director enters the claimed AMR low and high, and the PDF reports whether your tested extremes cover at least 95% of the claimed range on each end (per CLSI EP06 commentary). Per-point exclusion is available on the same dialog as Linearity."
+            when={[
+              "At method introduction when the lab wants to verify only the AMR extremes rather than the full linearity surface",
+              "When the manufacturer updates the AMR claim and the lab needs to confirm performance at the new boundary",
+              "When a focused re-verification is appropriate after a sample-path repair that does not warrant a full linearity redo",
+              "As an interim verification between full linearity studies if the director or designee determines it is sufficient",
+            ]}
+            frequency="At method introduction; when AMR claim changes; otherwise as the director or designee determines"
+            regulation="42 CFR §493.1253(b)(1)(iii); CLSI EP06 is the methodology standard"
+            passFail="Each level must fall within the calibration verification acceptance criterion adopted by your lab (typically the §493 PT TEa for that analyte). VeritaCheck™ evaluates each level individually. The AMR coverage analysis reports separately whether the tested range exercises both edges of the claimed AMR (full coverage at 95% each end, near-edge at 90 to 94%, under-tested below 90%). Your laboratory director or designee makes the final acceptability determination."
+            refs={[
+              REFS.cliaCalVerBrochure,
+              REFS.cfr4931253,
+              REFS.clsiEP6,
+              REFS.qso2025,
+            ]}
+            ctaStudyType="reportable_range"
           />
 
           <StudyCard
@@ -663,7 +695,7 @@ export default function StudyGuidePage() {
       <section className="section-padding border-t border-border">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="font-serif text-2xl font-bold mb-3">Ready to run a study?</h2>
-          <p className="text-muted-foreground mb-6">VeritaCheck™ automates all nine study types, no desktop software, no spreadsheets. Generate a CLIA-compliant PDF report in minutes.</p>
+          <p className="text-muted-foreground mb-6">VeritaCheck™ automates all ten study types, no desktop software, no spreadsheets. Generate a CLIA-compliant PDF report in minutes.</p>
           <Link href="/veritacheck" className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 rounded-lg font-semibold text-sm transition-colors">
             <FlaskConical size={16} />
             Open VeritaCheck{"\u2122"}
