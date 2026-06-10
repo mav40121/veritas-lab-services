@@ -9,8 +9,34 @@ import {
   verdictColor as amrVerdictColor,
   verdictLabel as amrVerdictLabel,
 } from "./amrCoverage";
+// 2026-06-09 (Michael L feedback): graphs were missing from the
+// bundled verification PDF. The SVG generators live in pdfReport.ts
+// and were previously private; we re-export them so the bundle's
+// renderStudyAppendix can embed the same visuals the single-study
+// PDF shows.
+import {
+  scatterSVG,
+  precisionPlotSVG,
+  histogramSVG,
+  recoveryPlotSVG,
+  blandAltmanSVG,
+} from "./pdfReport";
 
 const sqlite = db.$client;
+
+// Two-up layout helper for the appendix graph row. Caller passes one
+// or two SVG strings; helper wraps them in a flex row so they sit
+// side-by-side and reflow on smaller print widths. Skips entirely
+// when no SVGs have actual content so blank study types do not add
+// chrome.
+function appendixGraphsRow(...svgs: string[]): string {
+  const populated = svgs.filter((s) => s && s.length > 60);
+  if (populated.length === 0) return "";
+  return `
+    <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
+      ${populated.map((s) => `<div style="flex:1 1 280px;min-width:280px">${s}</div>`).join("")}
+    </div>`;
+}
 
 // ── Plan gate ─────────────────────────────────────────────────────────────────
 const ALLOWED_PLANS = [
@@ -204,7 +230,34 @@ function renderStudyAppendix(slot: any, teal: string): string {
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>`;
-      return wrap(`Statistical Detail (CLSI EP15-A3 Precision)`, inner);
+      // 2026-06-09 (Michael L feedback): embed Precision Plot +
+      // Histogram graphs same as the single-study PDF. Aggregates
+      // values across all levels (matching the single-study layout
+      // where the precision visualization shows one combined series).
+      let precisionGraphs = "";
+      try {
+        const allValues: number[] = [];
+        for (const p of (dp as any[])) {
+          const vs: any[] = (p.days ? p.days.flat() : p.values || [])
+            .filter((v: any) => v !== null && v !== undefined && !isNaN(v));
+          allValues.push(...vs);
+        }
+        if (allValues.length >= 2) {
+          const m = allValues.reduce((a, b) => a + b, 0) / allValues.length;
+          const variance = allValues.reduce((s, v) => s + (v - m) ** 2, 0) / (allValues.length - 1);
+          const s = Math.sqrt(variance);
+          const target = Number((slot as any).target_mean ?? null);
+          const targetSD = Number((slot as any).target_sd ?? null);
+          const tMean = Number.isFinite(target) ? target : null;
+          const tSD = Number.isFinite(targetSD) ? targetSD : null;
+          const pp = precisionPlotSVG(allValues, m, s, tMean, tSD);
+          const hg = histogramSVG(allValues, m, s, tMean);
+          precisionGraphs = appendixGraphsRow(pp, hg);
+        }
+      } catch (err) {
+        console.error("[verification-pdf] precision graphs error:", err);
+      }
+      return wrap(`Statistical Detail (CLSI EP15-A3 Precision)`, inner + precisionGraphs);
     }
 
     if (slot.studyType === "cal_ver") {
@@ -241,7 +294,37 @@ function renderStudyAppendix(slot: any, teal: string): string {
           <tbody>${rows}</tbody>
         </table>`;
       const amrBlock = renderAmrCoverageBlock(slot, slot.studyType, dp, undefined, "full");
-      return wrap(`Statistical Detail (CLSI EP06 Calibration Verification / Linearity)`, inner + amrBlock);
+      // 2026-06-09 (Michael L feedback): embed Recovery Plot +
+      // Assigned-vs-Measured Scatter graphs. Per level: assignedValue,
+      // mean measured across instruments, % recovery. Mirrors the
+      // single-study cal_ver PDF math in pdfReport.ts buildCalVerHTML.
+      let calVerGraphs = "";
+      try {
+        const assignedVals: number[] = [];
+        const measuredMeans: number[] = [];
+        const recoveries: number[] = [];
+        for (const p of (dp as any[])) {
+          const assigned = Number(p.assignedValue ?? p.expectedValue ?? NaN);
+          if (!Number.isFinite(assigned) || assigned === 0) continue;
+          const vals = instNames.length > 0
+            ? instNames.map((n: string) => p.instrumentValues?.[n]).filter((v: any) => v !== null && v !== undefined && !isNaN(v))
+            : Object.values(p.instrumentValues || {}).filter((v: any) => v !== null && v !== undefined && !isNaN(v));
+          if ((vals as number[]).length === 0) continue;
+          const m = (vals as number[]).reduce((a, b) => a + b, 0) / (vals as number[]).length;
+          assignedVals.push(assigned);
+          measuredMeans.push(m);
+          recoveries.push((m / assigned) * 100);
+        }
+        if (assignedVals.length >= 2) {
+          const tea = Number(slot.studyTea ?? 0);
+          const rp = recoveryPlotSVG(assignedVals, recoveries, tea);
+          const sc = scatterSVG(assignedVals, measuredMeans, "Assigned", "Measured", "Assigned vs Measured", true);
+          calVerGraphs = appendixGraphsRow(rp, sc);
+        }
+      } catch (err) {
+        console.error("[verification-pdf] cal_ver graphs error:", err);
+      }
+      return wrap(`Statistical Detail (CLSI EP06 Calibration Verification / Linearity)`, inner + calVerGraphs + amrBlock);
     }
 
     if (slot.studyType === "method_comparison" || slot.studyType === "correlation") {
@@ -364,7 +447,34 @@ function renderStudyAppendix(slot: any, teal: string): string {
         </table>
         ${seBlock}`;
       const amrBlockMC = renderAmrCoverageBlock(slot, slot.studyType, dp, compName, "compact");
-      return wrap(`Statistical Detail (CLSI EP09-A3 Method Comparison)`, inner + amrBlockMC);
+      // 2026-06-09 (Michael L feedback): embed Method-comparison
+      // Scatter (X vs Y with identity + regression line) and
+      // Bland-Altman-style mean vs % diff. Uses the same post-
+      // exclusion xs/ys vectors the regression already computed
+      // above so the plot reflects the same N as the regression
+      // metric table.
+      let mcGraphs = "";
+      try {
+        if (n >= 2) {
+          const tea = Number(slot.studyTea ?? 0);
+          const avgs: number[] = [];
+          const pctDiffs: number[] = [];
+          for (let i = 0; i < n; i++) {
+            const avg = (xs[i] + ys[i]) / 2;
+            const diff = ys[i] - xs[i];
+            const pctDiff = avg !== 0 ? (diff / avg) * 100 : 0;
+            avgs.push(avg);
+            pctDiffs.push(pctDiff);
+          }
+          const meanBias = pctDiffs.reduce((a, b) => a + b, 0) / pctDiffs.length;
+          const sc = scatterSVG(xs, ys, "Reference", compName || "Comparison", "Method Comparison", true);
+          const ba = blandAltmanSVG(avgs, pctDiffs, tea, meanBias, compName || "");
+          mcGraphs = appendixGraphsRow(sc, ba);
+        }
+      } catch (err) {
+        console.error("[verification-pdf] method_comparison graphs error:", err);
+      }
+      return wrap(`Statistical Detail (CLSI EP09-A3 Method Comparison)`, inner + mcGraphs + amrBlockMC);
     }
 
     if (slot.studyType === "carryover") {
@@ -447,7 +557,25 @@ function renderStudyAppendix(slot: any, teal: string): string {
         </table>
         ${valid.length > 30 ? `<div style="font-size:10px;color:#6b7280;margin-top:4px">(Showing first 30 of ${valid.length} specimens; full list in the underlying study report.)</div>` : ""}`;
       const amrBlockRI = renderAmrCoverageBlock(slot, slot.studyType, dp, undefined, "compact");
-      return wrap(`Statistical Detail (CLSI EP28-A3c Reference Interval Verification)`, inner + amrBlockRI);
+      // 2026-06-09 (Michael L feedback): embed Histogram of the
+      // reference specimens. Mean / SD computed from the same valid
+      // set the verdict math uses.
+      let riGraphs = "";
+      try {
+        const values: number[] = (valid as any[]).map((s: any) => Number(s.value)).filter((v: number) => Number.isFinite(v));
+        if (values.length >= 2) {
+          const m = values.reduce((a, b) => a + b, 0) / values.length;
+          const variance = values.reduce((s, v) => s + (v - m) ** 2, 0) / (values.length - 1);
+          const s = Math.sqrt(variance);
+          if (s > 0) {
+            const hg = histogramSVG(values, m, s, null);
+            riGraphs = appendixGraphsRow(hg);
+          }
+        }
+      } catch (err) {
+        console.error("[verification-pdf] ref_interval graphs error:", err);
+      }
+      return wrap(`Statistical Detail (CLSI EP28-A3c Reference Interval Verification)`, inner + riGraphs + amrBlockRI);
     }
   } catch (err) {
     console.error("[verification-pdf] renderStudyAppendix error:", err);

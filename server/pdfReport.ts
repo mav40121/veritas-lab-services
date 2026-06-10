@@ -155,7 +155,7 @@ function olsCI(x: number[], y: number[]) {
 
 // ─── SVG Chart helpers ────────────────────────────────────────────────────────
 
-function scatterSVG(
+export function scatterSVG(
   xVals: number[], yVals: number[], xLabel: string, yLabel: string,
   title: string, showIdentity: boolean, w = 320, h = 220
 ): string {
@@ -204,7 +204,7 @@ function scatterSVG(
 // scale, where center/scale defaults to observed mean/SD but switches to
 // target mean / target SD when the caller provides both (so zero on the Y
 // axis represents the target, as EE does when a target is supplied).
-function precisionPlotSVG(
+export function precisionPlotSVG(
   values: number[], mean: number, sd: number,
   targetMean: number | null, targetSD: number | null,
   w = 320, h = 220
@@ -241,7 +241,7 @@ function precisionPlotSVG(
 // Counts each value into integer-rounded bins, overlays the Gaussian PDF
 // scaled to the bar height of the modal bin. Vertical lines mark observed
 // mean (blue) and target mean (red, when provided), matching other evaluation tools.
-function histogramSVG(
+export function histogramSVG(
   values: number[], mean: number, sd: number, targetMean: number | null,
   w = 320, h = 220
 ): string {
@@ -410,7 +410,7 @@ function vendorSDBarSVG(
 </svg>`;
 }
 
-function recoveryPlotSVG(assignedVals: number[], recoveries: number[], cliaError: number, w = 320, h = 220): string {
+export function recoveryPlotSVG(assignedVals: number[], recoveries: number[], cliaError: number, w = 320, h = 220): string {
   if (!recoveries.length) return `<svg width="${w}" height="${h}"></svg>`;
   const cliaP = cliaError * 100;
   const upper = 100 + cliaP, lower = 100 - cliaP;
@@ -444,7 +444,7 @@ function recoveryPlotSVG(assignedVals: number[], recoveries: number[], cliaError
 </svg>`;
 }
 
-function blandAltmanSVG(avgs: number[], pctDiffs: number[], cliaError: number, meanBias: number, instName: string, w = 320, h = 220): string {
+export function blandAltmanSVG(avgs: number[], pctDiffs: number[], cliaError: number, meanBias: number, instName: string, w = 320, h = 220): string {
   if (!avgs.length) return `<svg width="${w}" height="${h}"></svg>`;
   const cliaP = cliaError * 100;
   const minY = Math.min(...pctDiffs, -cliaP - 2), maxY = Math.max(...pctDiffs, cliaP + 2);
