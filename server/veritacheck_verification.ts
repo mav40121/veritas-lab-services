@@ -561,6 +561,79 @@ export function buildVerificationBlockHtml(v: any, instruments: any[], studies: 
       <div style="font-size:12px;white-space:pre-wrap;color:#374151">${v.remediation_notes}</div>
     </div>` : "";
 
+  // 2026-06-09 PR2 multi-analyte (Michael feedback). Fetch analytes
+  // attached to this verification and render a per-analyte section
+  // ONLY when there are 2 or more. Single-analyte (legacy degenerate
+  // case from PR1 backfill) preserves the old PDF byte-for-byte so
+  // surveyors who have already received PDFs see no change.
+  let analytesSection = "";
+  try {
+    const analytes = sqlite.prepare(
+      "SELECT * FROM veritacheck_verification_analytes WHERE verification_id = ? ORDER BY sort_order, id"
+    ).all(v.id) as any[];
+    if (analytes.length >= 2) {
+      const analyteRows = analytes.map((a: any) => {
+        let mdls = "";
+        if (a.mdls_json) {
+          try {
+            const arr = JSON.parse(a.mdls_json);
+            if (Array.isArray(arr) && arr.length > 0) mdls = arr.join(", ");
+          } catch {}
+        }
+        const tea = a.tea_value != null
+          ? `${a.tea_value}${a.tea_is_percentage === 1 ? "%" : (a.tea_units ? " " + a.tea_units : "")}`
+          : "&mdash;";
+        const amr = (a.amr_low != null && a.amr_high != null)
+          ? `${a.amr_low} to ${a.amr_high}${a.amr_units ? " " + a.amr_units : ""}`
+          : "&mdash;";
+        const status = a.lifecycle_state === "finalized"
+          ? `<span style="color:#059669;font-weight:600">Finalized</span> ${a.finalized_signature ? `(${a.finalized_signature})` : ""} ${a.finalized_at ? `<span style="color:#6b7280">on ${new Date(a.finalized_at).toLocaleDateString("en-US")}</span>` : ""}`
+          : `<span style="color:#d97706">Draft</span>`;
+        return `<tr>
+          <td style="padding:6px 10px;border-bottom:1px solid #f0f0f0;font-weight:600">${a.analyte_name}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #f0f0f0;text-align:right">${tea}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #f0f0f0;text-align:center">${mdls || "&mdash;"}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #f0f0f0;text-align:right">${amr}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #f0f0f0">${status}</td>
+        </tr>`;
+      }).join("");
+      // Per-analyte signature blocks when 2+ analytes. Single shared
+      // signature is still in the package-level director approval; this
+      // adds the per-analyte attestation row.
+      const signatureBlocks = analytes.filter((a: any) => a.lifecycle_state !== "finalized").map((a: any) => `
+        <div style="margin-top:10px;padding:10px 12px;border:1px dashed #d1d5db;border-radius:4px;background:#fafafa">
+          <div style="font-size:12px;font-weight:600;margin-bottom:4px">${a.analyte_name} - Director or designee approval (draft)</div>
+          <table style="width:100%;font-size:11px">
+            <tr>
+              <td style="padding:4px 0">Signature: <span style="display:inline-block;width:180px;border-bottom:1px solid #000">&nbsp;</span></td>
+              <td style="padding:4px 0">Date: <span style="display:inline-block;width:100px;border-bottom:1px solid #000">&nbsp;</span></td>
+              <td style="padding:4px 0">Print Name: <span style="display:inline-block;width:140px;border-bottom:1px solid #000">&nbsp;</span></td>
+            </tr>
+          </table>
+        </div>`).join("");
+      analytesSection = `
+        <div style="margin-top:32px;padding:16px;border:1px solid #e5e7eb;border-radius:6px">
+          <div style="font-weight:700;font-size:14px;color:${teal};margin-bottom:8px">Analytes on This Package (${analytes.length})</div>
+          <div style="font-size:11px;color:#6b7280;margin-bottom:10px">
+            This verification package covers multiple analytes on the same instrument. Each analyte carries its own TEa, medical decision levels, AMR, and lifecycle. Per-analyte signatures appear below.
+          </div>
+          <table style="width:100%;font-size:11px;border-collapse:collapse">
+            <thead><tr style="background:#f3f4f6">
+              <th style="padding:6px 10px;text-align:left">Analyte</th>
+              <th style="padding:6px 10px;text-align:right">TEa</th>
+              <th style="padding:6px 10px;text-align:center">MDLs</th>
+              <th style="padding:6px 10px;text-align:right">AMR</th>
+              <th style="padding:6px 10px;text-align:left">Lifecycle</th>
+            </tr></thead>
+            <tbody>${analyteRows}</tbody>
+          </table>
+          ${signatureBlocks}
+        </div>`;
+    }
+  } catch (err) {
+    console.error("[verification-pdf] analytes section error:", err);
+  }
+
   const excludedJustifications = allElements
     .filter(el => !elements.includes(el.key))
     .map(el => `<div style="margin-bottom:12px">
@@ -650,6 +723,8 @@ export function buildVerificationBlockHtml(v: any, instruments: any[], studies: 
   </div>` : ""}
 
   ${remediationSection}
+
+  ${analytesSection}
 `;
 }
 

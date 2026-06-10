@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { VerificationAnalytesPanel } from "@/components/VerificationAnalytesPanel";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -605,7 +606,7 @@ function NewVerificationForm({ onCreated, onCancel }: { onCreated: (id: number) 
 function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) {
   const qc = useQueryClient();
   const activeLabId = useActiveLabId();
-  const [activeTab, setActiveTab] = useState<"elements" | "units" | "director">("elements");
+  const [activeTab, setActiveTab] = useState<"elements" | "analytes" | "units" | "director">("elements");
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState("");
   // Wave A3.2-UI: count of verifications on the parent instrument so the
@@ -803,13 +804,17 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">
-        {(["elements", "units", "director"] as const).map(tab => (
+        {(["elements", "analytes", "units", "director"] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${activeTab === tab ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            data-testid={`tab-${tab}`}
           >
-            {tab === "elements" ? "Performance Elements" : tab === "units" ? `Instrument Units (${verification.instruments?.length ?? 0})` : "Director Approval"}
+            {tab === "elements" ? "Performance Elements"
+              : tab === "analytes" ? "Analytes"
+              : tab === "units" ? `Instrument Units (${verification.instruments?.length ?? 0})`
+              : "Director Approval"}
           </button>
         ))}
       </div>
@@ -850,6 +855,11 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
             <RemediationCard verification={verification} onSave={(notes) => patchVerification({ remediation_notes: notes })} />
           )}
         </div>
+      )}
+
+      {/* Analytes tab (2026-06-09 PR2 Michael feedback: multi-analyte) */}
+      {activeTab === "analytes" && (
+        <VerificationAnalytesPanel verificationId={id} />
       )}
 
       {/* Units tab */}
