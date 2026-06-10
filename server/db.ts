@@ -3087,7 +3087,117 @@ try {
   if (!vcsCols.includes("passed"))            sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN passed INTEGER");
   if (!vcsCols.includes("updated_at"))        sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN updated_at TEXT");
   if (!vcsCols.includes("study_id"))          sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN study_id INTEGER");
+  // 2026-06-09 multi-analyte verification packages (Michael feedback).
+  // analyte_id FK to veritacheck_verification_analytes; NULL on legacy
+  // rows until the backfill block below runs. scope='analyte' is the
+  // default; 'instrument' marks a carryover study that applies to
+  // every analyte on the package (EP10 is sample-path-based, not
+  // analyte-specific).
+  if (!vcsCols.includes("analyte_id"))        sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN analyte_id INTEGER");
+  if (!vcsCols.includes("scope"))             sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN scope TEXT NOT NULL DEFAULT 'analyte'");
 } catch (e) { console.warn("veritacheck_verification_studies migration:", e); }
+
+// ── 2026-06-09 Multi-analyte verification packages (Michael feedback) ──
+//
+// A Verification Package historically modeled one instrument + one
+// analyte. Real labs onboard chemistry analyzers with 25+ analytes, so
+// the per-analyte click-through was painful. This table is the
+// container for N analytes per package; veritacheck_verification_studies
+// gains analyte_id pointing here.
+//
+// Per-analyte lifecycle (draft / finalized) so the director can sign
+// off on analyte A while analyte B is still in progress. Carryover
+// scope='instrument' on the studies row means one EP10 study covers
+// every analyte (the default for new packages; existing packages keep
+// scope='analyte' so behavior does not change for surveyors who have
+// already received a PDF).
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritacheck_verification_analytes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    verification_id INTEGER NOT NULL,
+    analyte_name TEXT NOT NULL,
+    tea_value REAL,
+    tea_units TEXT,
+    tea_is_percentage INTEGER DEFAULT 1,
+    mdls_json TEXT,
+    amr_low REAL,
+    amr_high REAL,
+    amr_units TEXT,
+    lifecycle_state TEXT NOT NULL DEFAULT 'draft',
+    finalized_at TEXT,
+    finalized_by_user_id INTEGER,
+    finalized_signature TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (verification_id) REFERENCES veritacheck_verifications(id)
+  )
+`);
+sqlite.exec("CREATE INDEX IF NOT EXISTS idx_vc_verification_analytes_verification ON veritacheck_verification_analytes(verification_id)");
+
+// Migration block for veritacheck_verification_analytes (paired with
+// the CREATE above per the NEW DB TABLE RULE). The columns below are
+// all in the CREATE, so this block is a no-op today; it exists so
+// future ALTERs land in the right place.
+try {
+  const vcaCols = (sqlite.prepare("PRAGMA table_info(veritacheck_verification_analytes)").all() as any[]).map((c: any) => c.name);
+  if (!vcaCols.includes("analyte_name"))         sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN analyte_name TEXT");
+  if (!vcaCols.includes("tea_value"))            sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN tea_value REAL");
+  if (!vcaCols.includes("tea_units"))            sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN tea_units TEXT");
+  if (!vcaCols.includes("tea_is_percentage"))    sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN tea_is_percentage INTEGER DEFAULT 1");
+  if (!vcaCols.includes("mdls_json"))            sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN mdls_json TEXT");
+  if (!vcaCols.includes("amr_low"))              sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN amr_low REAL");
+  if (!vcaCols.includes("amr_high"))             sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN amr_high REAL");
+  if (!vcaCols.includes("amr_units"))            sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN amr_units TEXT");
+  if (!vcaCols.includes("lifecycle_state"))      sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN lifecycle_state TEXT NOT NULL DEFAULT 'draft'");
+  if (!vcaCols.includes("finalized_at"))         sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN finalized_at TEXT");
+  if (!vcaCols.includes("finalized_by_user_id")) sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN finalized_by_user_id INTEGER");
+  if (!vcaCols.includes("finalized_signature"))  sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN finalized_signature TEXT");
+  if (!vcaCols.includes("sort_order"))           sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0");
+} catch (e) { console.warn("veritacheck_verification_analytes migration:", e); }
+
+// Idempotent backfill: every legacy verification gets a one-analyte
+// degenerate-case row so the new renderer + endpoints can rely on
+// veritacheck_verification_analytes always being non-empty. The
+// analyte name comes from the first study's analyte field, or
+// "Analyte not specified" if there are no studies.
+//
+// Per the "no cascading writes" boot-migration rule (lab_members
+// 2026-05-24 incident): the loop only INSERTs new rows and SETs
+// analyte_id on studies that currently have NULL. No reads from
+// mutable state, no re-derive of already-set values.
+try {
+  const verifsNeedingAnalyte = sqlite.prepare(`
+    SELECT v.id, v.user_id
+    FROM veritacheck_verifications v
+    WHERE NOT EXISTS (
+      SELECT 1 FROM veritacheck_verification_analytes a WHERE a.verification_id = v.id
+    )
+  `).all() as any[];
+  let inserted = 0;
+  let linkedStudies = 0;
+  const insertAnalyte = sqlite.prepare(
+    "INSERT INTO veritacheck_verification_analytes (verification_id, analyte_name, sort_order) VALUES (?, ?, 0)"
+  );
+  const linkStudies = sqlite.prepare(
+    "UPDATE veritacheck_verification_studies SET analyte_id = ? WHERE verification_id = ? AND analyte_id IS NULL"
+  );
+  for (const v of verifsNeedingAnalyte) {
+    const firstStudyAnalyte = (sqlite.prepare(
+      "SELECT analyte FROM veritacheck_verification_studies WHERE verification_id = ? AND analyte IS NOT NULL AND analyte <> '' ORDER BY id LIMIT 1"
+    ).get(v.id) as any)?.analyte;
+    const analyteName = firstStudyAnalyte || "Analyte not specified";
+    const result = insertAnalyte.run(v.id, analyteName);
+    inserted++;
+    const linked = linkStudies.run(result.lastInsertRowid, v.id);
+    linkedStudies += linked.changes;
+  }
+  if (inserted > 0 || linkedStudies > 0) {
+    console.log(`[migration] veritacheck_verification_analytes: created ${inserted} degenerate analyte row(s); linked ${linkedStudies} study row(s)`);
+  }
+} catch (err: any) {
+  console.warn("[migration] veritacheck_verification_analytes backfill:", err.message);
+}
 
 // ── VeritaBench: Productivity Months ────────────────────────────────────────────
 sqlite.exec(`
