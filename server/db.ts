@@ -1616,6 +1616,15 @@ try { sqlite.exec("ALTER TABLE studies ADD COLUMN amr_low REAL"); } catch {}
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN amr_high REAL"); } catch {}
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN amr_units TEXT"); } catch {}
 
+// 2026-06-09 (overnight session 8/11): Q1 Censoring Level 2.
+// Per-study policy for handling censored (< or >) results in stat
+// math. One of: 'exclude' (skip from regression/SD; default),
+// 'substitute_lld' (use the censor threshold), 'substitute_lld_half'
+// (use threshold/2 per Helsel; common in clinical chem and
+// environmental work). Blank censored points behave as before;
+// legacy data with no censored=true flag is unaffected.
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN censoring_policy TEXT NOT NULL DEFAULT 'exclude'"); } catch {}
+
 // ─────────────────────────────────────────────────────────────────────────────────
 // Labs table — normalized lab identity (CLIA, name, accreditation flags)
 // Migrated from per-user columns to shared lab entity so seats inherit and

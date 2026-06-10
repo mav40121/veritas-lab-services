@@ -8393,6 +8393,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       amrLow: row.amr_low,
       amrHigh: row.amr_high,
       amrUnits: row.amr_units,
+      censoringPolicy: row.censoring_policy,
       lifecycle_state: row.lifecycle_state,
       createdAt: row.created_at,
       lab_id: row.lab_id,
@@ -8710,6 +8711,33 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT * FROM studies WHERE id = ? AND lab_id = ?"
     ).get(studyId, req.scope.labId) as any;
     return applyAmrUpdate(req, res, existing);
+  });
+
+  // ── 2026-06-09 Censoring policy (overnight item 8/11, Q1 Level 2) ────
+  function applyCensoringPolicy(req: any, res: any, studyRow: any) {
+    if (!studyRow) return res.status(404).json({ error: "Study not found" });
+    if (studyRow.lifecycle_state === 'finalized') {
+      return res.status(409).json({ error: "Study is finalized and locked. Use the amendment workflow." });
+    }
+    const policy = String(req.body?.policy || "").trim();
+    if (!["exclude", "substitute_lld", "substitute_lld_half"].includes(policy)) {
+      return res.status(400).json({ error: "policy must be one of: exclude, substitute_lld, substitute_lld_half" });
+    }
+    (db as any).$client.prepare("UPDATE studies SET censoring_policy = ? WHERE id = ?").run(policy, studyRow.id);
+    const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyRow.id);
+    res.json(updated);
+  }
+  app.post("/api/studies/:id/censoring-policy", authMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    const studyId = parseInt(req.params.id);
+    const existing = userCanAccessStudy(studyId, req) as any;
+    return applyCensoringPolicy(req, res, existing);
+  });
+  app.post("/api/labs/:labId/studies/:id/censoring-policy", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    const studyId = parseInt(req.params.id);
+    const existing = (db as any).$client.prepare(
+      "SELECT * FROM studies WHERE id = ? AND lab_id = ?"
+    ).get(studyId, req.scope.labId) as any;
+    return applyCensoringPolicy(req, res, existing);
   });
 
   // ── 2026-06-09 Study-level finalize + amendment (overnight item 5/11) ─
