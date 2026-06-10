@@ -77,8 +77,14 @@ export default function StaffPortalPage() {
   const [bootstrapState, setBootstrapState] = useState<"loading" | "no-roster" | "no-auth" | "ready">("loading");
 
   useEffect(() => {
+    // 2026-06-09 followup fix: the real localStorage key set by the
+    // main /login flow is "veritas_token", NOT "auth_token". The earlier
+    // wrong-key guess sent every authenticated visitor to /login on
+    // mount. The bell in the NavBar uses authHeaders() which reads
+    // through the in-memory _token cache populated from the right key,
+    // which is why the bell worked but /staff-access redirected.
     const realToken = (() => {
-      try { return localStorage.getItem("auth_token") || ""; } catch { return ""; }
+      try { return localStorage.getItem("veritas_token") || ""; } catch { return ""; }
     })();
     if (!realToken) {
       setBootstrapState("no-auth");

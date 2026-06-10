@@ -7175,19 +7175,46 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
     } catch { /* table shape may differ on older deploys */ }
 
-    res.json({
-      quizzes: quizRows.map((r) => ({
+    // 2026-06-09 followup: dedupe by quiz_id. Multi-lab directors can
+    // have two staff_employees rows both auto-linked to their user_id;
+    // if the same quiz is assigned to both, the bell would otherwise
+    // show the title twice. Keep the assignment with the earliest
+    // due_date (or, when tied/null, the earliest assigned_at).
+    const seenQuizIds = new Set<number>();
+    const dedupedQuizzes: any[] = [];
+    for (const r of quizRows) {
+      if (seenQuizIds.has(r.quiz_id)) continue;
+      seenQuizIds.add(r.quiz_id);
+      dedupedQuizzes.push({
         assignment_id: r.assignment_id,
         quiz_id: r.quiz_id,
         title: r.title || r.method_group_name || `Quiz ${r.quiz_id}`,
         due_date: r.due_date,
-      })),
-      policies: (policies || []).map((p: any) => ({
+      });
+    }
+    // Same dedupe pattern for policies (document_id) and competencies
+    // (assessment_id ought to be unique already, but cheap insurance).
+    const seenDocIds = new Set<number>();
+    const dedupedPolicies = (policies || []).filter((p: any) => {
+      if (seenDocIds.has(p.document_id)) return false;
+      seenDocIds.add(p.document_id);
+      return true;
+    });
+    const seenAssessIds = new Set<number>();
+    const dedupedCompetencies = (competencies || []).filter((c: any) => {
+      if (seenAssessIds.has(c.assessment_id)) return false;
+      seenAssessIds.add(c.assessment_id);
+      return true;
+    });
+
+    res.json({
+      quizzes: dedupedQuizzes,
+      policies: dedupedPolicies.map((p: any) => ({
         document_id: p.document_id,
         title: p.title,
         effective_date: p.effective_date,
       })),
-      competencies: (competencies || []).map((c: any) => ({
+      competencies: dedupedCompetencies.map((c: any) => ({
         assessment_id: c.assessment_id,
         program_name: c.program_name,
         assessment_date: c.assessment_date,
