@@ -162,12 +162,18 @@ function renderStudyAppendix(slot: any, teal: string): string {
 
     if (slot.studyType === "method_comparison" || slot.studyType === "correlation") {
       // dp = [{ expectedValue, instrumentValues: {name: value} }]
+      // 2026-06-09 (Michael L feedback): per-point exclusion. Any
+      // point with p.excluded === true is skipped from the regression
+      // / SE-at-MDL math. The excluded count surfaces in the metric
+      // table so the director sees the post-exclusion N.
       if (!Array.isArray(dp)) return "";
       const comparisonNames = instNames.slice(1).length > 0 ? instNames.slice(1) : instNames;
       const compName = comparisonNames[0] || "Comparison";
       const xs: number[] = [];
       const ys: number[] = [];
+      let excludedCount = 0;
       for (const p of dp) {
+        if (p && p.excluded === true) { excludedCount++; continue; }
         const x = p.expectedValue;
         const y = p.instrumentValues?.[compName];
         if (x !== null && x !== undefined && !isNaN(x) && y !== null && y !== undefined && !isNaN(y)) {
@@ -265,7 +271,7 @@ function renderStudyAppendix(slot: any, teal: string): string {
             <th style="padding:4px 8px;text-align:right">Value</th>
           </tr></thead>
           <tbody>
-            <tr><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0">N (paired specimens)</td><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${n}</td></tr>
+            <tr><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0">N (paired specimens)</td><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${n}${excludedCount > 0 ? ` <span style="color:#6b7280">(${excludedCount} excluded)</span>` : ""}</td></tr>
             <tr><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0">Slope</td><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${slope.toFixed(4)}</td></tr>
             <tr><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0">Intercept</td><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${intercept.toFixed(3)}</td></tr>
             <tr><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0">Correlation r</td><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${r.toFixed(4)}</td></tr>
