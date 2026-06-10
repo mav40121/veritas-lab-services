@@ -1,6 +1,7 @@
 import { useParams, Link } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { StudyPointExclusionDialog } from "@/components/StudyPointExclusionDialog";
+import { StudyAmrDialog } from "@/components/StudyAmrDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -2289,6 +2290,7 @@ export default function StudyResults() {
   // re-saves data_points -> we invalidate the study query so the
   // regression / SE-at-MDL re-renders without the excluded points.
   const [exclusionOpen, setExclusionOpen] = useState(false);
+  const [amrOpen, setAmrOpen] = useState(false);
   const queryClient = useQueryClient();
   const studyUrl = labId ? `/api/labs/${labId}/studies/${id}` : `/api/studies/${id}`;
   const { data: study, isLoading, error } = useQuery<Study>({
@@ -3193,6 +3195,52 @@ export default function StudyResults() {
               return Array.isArray(inst) ? inst : [];
             } catch { return []; }
           })(),
+        }}
+        onUpdated={() => queryClient.invalidateQueries({ queryKey: [studyUrl] })}
+      />
+
+      {/* 2026-06-09 (Michael L feedback): Set AMR affordance for
+          range-relevant study types. Linearity / Reportable Range get
+          the full coverage block on the PDF; Method Comparison and
+          Reference Interval get a compact one-line summary. AMR fields
+          are optional and additive; leaving them blank turns the
+          analysis off entirely. */}
+      {(study.studyType === "cal_ver" || study.studyType === "reportable_range" ||
+        study.studyType === "method_comparison" || study.studyType === "correlation" ||
+        study.studyType === "ref_interval") && (
+        <div className="mt-3 flex items-center gap-3 flex-wrap" data-testid="amr-panel">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAmrOpen(true)}
+            data-testid="open-amr-dialog"
+            disabled={(study as any).lifecycle_state === "finalized"}
+          >
+            {((study as any).amrLow != null && (study as any).amrHigh != null) ? "Edit AMR" : "Set AMR"}
+          </Button>
+          {((study as any).amrLow != null && (study as any).amrHigh != null) ? (
+            <span className="text-xs text-muted-foreground" data-testid="amr-summary">
+              AMR claimed: <strong>{(study as any).amrLow} to {(study as any).amrHigh}{(study as any).amrUnits ? " " + (study as any).amrUnits : ""}</strong>. Coverage block on PDF.
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              Optional. Add the claimed AMR to surface an edge-coverage block (how close lowest/highest tested points get to each edge).
+            </span>
+          )}
+        </div>
+      )}
+      <StudyAmrDialog
+        open={amrOpen}
+        onOpenChange={setAmrOpen}
+        study={{
+          id: study.id,
+          testName: study.testName,
+          studyType: study.studyType,
+          lifecycle_state: (study as any).lifecycle_state,
+          amrLow: (study as any).amrLow,
+          amrHigh: (study as any).amrHigh,
+          amrUnits: (study as any).amrUnits,
+          resultUnits: (study as any).resultUnits,
         }}
         onUpdated={() => queryClient.invalidateQueries({ queryKey: [studyUrl] })}
       />

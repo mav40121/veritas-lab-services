@@ -2,6 +2,13 @@ import type { Express } from "express";
 import { db } from "./db";
 import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
 import { getCanonicalMDLs, getCanonicalMDLProvenance, computeSystematicErrorAtMDL } from "./canonicalMDLs";
+import {
+  shouldRender as shouldRenderAmrCoverage,
+  computeAmrCoverage,
+  extractValuesForCoverage,
+  verdictColor as amrVerdictColor,
+  verdictLabel as amrVerdictLabel,
+} from "./amrCoverage";
 
 const sqlite = db.$client;
 
@@ -54,6 +61,82 @@ export const CLSI_GUIDANCE: Record<string, { protocol: string; min_samples: stri
       "CLSI EP10-A3 evaluates carryover by running Low and High specimens in a defined alternating pattern and comparing the SD of Low-after-High readings to an Error Limit derived from 3x the Low-after-Low SD. Carryover passes when Low-High SD does not exceed the Error Limit. Most modern closed-tube analyzers achieve this without intervention; many labs document Carryover as Not Performed with manufacturer carryover claim citation when the analyzer is new and unmodified.",
   },
 };
+
+// ── AMR coverage block renderer ──────────────────────────────────────────────
+// 2026-06-09 (Michael L feedback). Surfaces the result of
+// computeAmrCoverage() as an inline HTML block. Used by the per-study
+// appendix renderer below; blank AMR fields short-circuit to "".
+function renderAmrCoverageBlock(
+  slot: any,
+  studyType: string,
+  dataPoints: any,
+  comparisonInstrumentName?: string,
+  size: "full" | "compact" = "full",
+): string {
+  if (!shouldRenderAmrCoverage({ amr_low: slot.studyAmrLow, amr_high: slot.studyAmrHigh })) return "";
+  const values = extractValuesForCoverage(studyType, dataPoints, comparisonInstrumentName);
+  const result = computeAmrCoverage({
+    amrLow: Number(slot.studyAmrLow),
+    amrHigh: Number(slot.studyAmrHigh),
+    amrUnits: slot.studyAmrUnits || slot.studyTeaUnit || "",
+    values,
+  });
+  if (!result) return "";
+  const color = amrVerdictColor(result.verdict);
+  const label = amrVerdictLabel(result.verdict);
+  const u = result.amrUnits ? " " + result.amrUnits : "";
+  const pctLo = (result.lowCoveragePct * 100).toFixed(1);
+  const pctHi = (result.highCoveragePct * 100).toFixed(1);
+  if (size === "compact") {
+    return `
+      <div style="margin-top:8px;padding:6px 10px;border-left:3px solid ${color};background:#f9fafb;font-size:11px;color:#374151">
+        <strong>AMR Coverage:</strong> claimed ${result.amrLow} to ${result.amrHigh}${u};
+        tested ${result.lowestTested ?? "?"} to ${result.highestTested ?? "?"}${u}
+        (low end ${pctLo}%, high end ${pctHi}%) &mdash;
+        <span style="color:${color};font-weight:600">${label}</span>
+      </div>`;
+  }
+  return `
+    <div style="margin-top:10px;padding:10px 12px;border:1px solid #e5e7eb;border-left:4px solid ${color};border-radius:4px;background:#fafafa">
+      <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:6px">AMR Coverage Analysis</div>
+      <table style="font-size:11px;width:100%;border-collapse:collapse">
+        <tbody>
+          <tr>
+            <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;color:#6b7280">Claimed AMR</td>
+            <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right"><strong>${result.amrLow} to ${result.amrHigh}${u}</strong></td>
+          </tr>
+          <tr>
+            <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;color:#6b7280">Lowest tested point</td>
+            <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${result.lowestTested ?? "&mdash;"}${u}
+              ${result.lowEdgeDistance != null && result.lowEdgeDistance >= 0 ? `<span style="color:#6b7280"> (${result.lowEdgeDistance.toFixed(3)} above AMR low)</span>` : ""}
+              ${result.lowEdgeDistance != null && result.lowEdgeDistance < 0 ? `<span style="color:#7c3aed"> (${Math.abs(result.lowEdgeDistance).toFixed(3)} below AMR low)</span>` : ""}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;color:#6b7280">Highest tested point</td>
+            <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${result.highestTested ?? "&mdash;"}${u}
+              ${result.highEdgeDistance != null && result.highEdgeDistance >= 0 ? `<span style="color:#6b7280"> (${result.highEdgeDistance.toFixed(3)} below AMR high)</span>` : ""}
+              ${result.highEdgeDistance != null && result.highEdgeDistance < 0 ? `<span style="color:#7c3aed"> (${Math.abs(result.highEdgeDistance).toFixed(3)} above AMR high)</span>` : ""}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;color:#6b7280">Low-end coverage</td>
+            <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right"><strong>${pctLo}%</strong></td>
+          </tr>
+          <tr>
+            <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;color:#6b7280">High-end coverage</td>
+            <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right"><strong>${pctHi}%</strong></td>
+          </tr>
+          <tr>
+            <td style="padding:4px 8px;color:#6b7280">Verdict</td>
+            <td style="padding:4px 8px;text-align:right;color:${color};font-weight:700">${label}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="font-size:10px;color:#6b7280;margin-top:6px">${result.summary}</div>
+      <div style="font-size:10px;color:#6b7280;margin-top:4px">Thresholds: &ge;95% each end = fully exercised; 90&ndash;94% = near-edge (acceptable with director sign-off); &lt;90% = under-tested (consider extending the data set or narrowing the AMR claim). Per CLSI EP06 commentary.</div>
+    </div>`;
+}
 
 // ── Per-study statistical appendix renderer ──────────────────────────────────
 // Renders the actual numbers from a linked study's stored data_points blob as
@@ -157,7 +240,8 @@ function renderStudyAppendix(slot: any, teal: string): string {
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>`;
-      return wrap(`Statistical Detail (CLSI EP06 Calibration Verification / Linearity)`, inner);
+      const amrBlock = renderAmrCoverageBlock(slot, slot.studyType, dp, undefined, "full");
+      return wrap(`Statistical Detail (CLSI EP06 Calibration Verification / Linearity)`, inner + amrBlock);
     }
 
     if (slot.studyType === "method_comparison" || slot.studyType === "correlation") {
@@ -279,7 +363,8 @@ function renderStudyAppendix(slot: any, teal: string): string {
           </tbody>
         </table>
         ${seBlock}`;
-      return wrap(`Statistical Detail (CLSI EP09-A3 Method Comparison)`, inner);
+      const amrBlockMC = renderAmrCoverageBlock(slot, slot.studyType, dp, compName, "compact");
+      return wrap(`Statistical Detail (CLSI EP09-A3 Method Comparison)`, inner + amrBlockMC);
     }
 
     if (slot.studyType === "carryover") {
@@ -361,7 +446,8 @@ function renderStudyAppendix(slot: any, teal: string): string {
           }).join("")}</tbody>
         </table>
         ${valid.length > 30 ? `<div style="font-size:10px;color:#6b7280;margin-top:4px">(Showing first 30 of ${valid.length} specimens; full list in the underlying study report.)</div>` : ""}`;
-      return wrap(`Statistical Detail (CLSI EP28-A3c Reference Interval Verification)`, inner);
+      const amrBlockRI = renderAmrCoverageBlock(slot, slot.studyType, dp, undefined, "compact");
+      return wrap(`Statistical Detail (CLSI EP28-A3c Reference Interval Verification)`, inner + amrBlockRI);
     }
   } catch (err) {
     console.error("[verification-pdf] renderStudyAppendix error:", err);
@@ -900,7 +986,8 @@ export function registerVeritaCheckVerificationRoutes(
         s.data_points AS studyDataPoints, s.instruments AS studyInstrumentsJson,
         s.clia_allowable_error AS studyTea,
         s.tea_is_percentage AS studyTeaIsPct, s.tea_unit AS studyTeaUnit,
-        s.clia_absolute_floor AS studyAbsFloor
+        s.clia_absolute_floor AS studyAbsFloor,
+        s.amr_low AS studyAmrLow, s.amr_high AS studyAmrHigh, s.amr_units AS studyAmrUnits
       FROM veritacheck_verification_studies vs
       LEFT JOIN studies s ON s.id = vs.study_id
       WHERE vs.verification_id = ?
