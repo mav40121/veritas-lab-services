@@ -6998,10 +6998,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               ? "SELECT l.id FROM labs l WHERE l.id = ? AND (l.owner_user_id = ? OR EXISTS (SELECT 1 FROM lab_members lm WHERE lm.lab_id = l.id AND lm.user_id = ? AND lm.status = 'active'))"
               : "SELECT l.id FROM labs l WHERE l.owner_user_id = ? OR EXISTS (SELECT 1 FROM lab_members lm WHERE lm.lab_id = l.id AND lm.user_id = ? AND lm.status = 'active')"
           ).all(...(wantLabId ? [wantLabId, req.userId, req.userId] : [req.userId, req.userId])) as any[];
+          // 2026-06-09 robust name match: try three patterns to
+          // cover the realistic shape of users.name vs
+          // staff_employees.first_name/last_name:
+          //   1. "First Last" exact match
+          //   2. just first name (user signed up with first name only)
+          //   3. just last name (rare but possible)
+          // Single-candidate-across-all-three is what we accept; any
+          // tie or multi-candidate situation leaves user_id NULL so we
+          // never silently bind the wrong row.
+          const userName = String(user.name).trim();
           for (const lab of labs) {
             const candidates = sqlite.prepare(
-              "SELECT id FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active' AND user_id IS NULL AND lower(trim(first_name || ' ' || last_name)) = lower(trim(?))"
-            ).all(lab.id, user.name) as any[];
+              `SELECT id FROM staff_employees
+               WHERE tier2_lab_id = ? AND status = 'active' AND user_id IS NULL
+                 AND (
+                   lower(trim(first_name || ' ' || last_name)) = lower(?)
+                   OR lower(trim(first_name)) = lower(?)
+                   OR lower(trim(last_name)) = lower(?)
+                 )`
+            ).all(lab.id, userName, userName, userName) as any[];
             if (candidates.length === 1) {
               try {
                 sqlite.prepare("UPDATE staff_employees SET user_id = ? WHERE id = ? AND user_id IS NULL").run(req.userId, candidates[0].id);
@@ -7050,16 +7066,52 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const queryLabId = parseInt(String((req.query || {}).lab_id || ""), 10);
     const wantLabId = Number.isFinite(queryLabId) && queryLabId > 0 ? queryLabId : null;
 
-    // Find all staff_employees rows linked to this user. We do not
-    // auto-link here — that responsibility lives on the staff-portal-
-    // employee endpoint which the /staff-access page hits on mount.
-    const empRows = wantLabId
+    // Find all staff_employees rows linked to this user.
+    let empRows = wantLabId
       ? sqlite.prepare(
           "SELECT id, tier2_lab_id FROM staff_employees WHERE user_id = ? AND tier2_lab_id = ? AND status = 'active'"
         ).all(req.userId, wantLabId) as any[]
       : sqlite.prepare(
           "SELECT id, tier2_lab_id FROM staff_employees WHERE user_id = ? AND status = 'active'"
         ).all(req.userId) as any[];
+
+    // 2026-06-09 PR Option 1 follow-up: opportunistic auto-link on
+    // the bell endpoint too. The bell mounts on every authenticated
+    // page in the main app; auto-linking here means a director who
+    // added themselves to VeritaStaff but never visited /staff-access
+    // still gets the bell + count once any page loads. Mirrors the
+    // logic in /api/me/staff-portal-employee.
+    if (!empRows.length) {
+      const user = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
+      if (user && user.name) {
+        const userName = String(user.name).trim();
+        const labs = wantLabId
+          ? sqlite.prepare(
+              "SELECT l.id FROM labs l WHERE l.id = ? AND (l.owner_user_id = ? OR EXISTS (SELECT 1 FROM lab_members lm WHERE lm.lab_id = l.id AND lm.user_id = ? AND lm.status = 'active'))"
+            ).all(wantLabId, req.userId, req.userId) as any[]
+          : sqlite.prepare(
+              "SELECT l.id FROM labs l WHERE l.owner_user_id = ? OR EXISTS (SELECT 1 FROM lab_members lm WHERE lm.lab_id = l.id AND lm.user_id = ? AND lm.status = 'active')"
+            ).all(req.userId, req.userId) as any[];
+        for (const lab of labs) {
+          const candidates = sqlite.prepare(
+            `SELECT id FROM staff_employees
+             WHERE tier2_lab_id = ? AND status = 'active' AND user_id IS NULL
+               AND (
+                 lower(trim(first_name || ' ' || last_name)) = lower(?)
+                 OR lower(trim(first_name)) = lower(?)
+                 OR lower(trim(last_name)) = lower(?)
+               )`
+          ).all(lab.id, userName, userName, userName) as any[];
+          if (candidates.length === 1) {
+            try {
+              sqlite.prepare("UPDATE staff_employees SET user_id = ? WHERE id = ? AND user_id IS NULL").run(req.userId, candidates[0].id);
+              empRows.push({ id: candidates[0].id, tier2_lab_id: lab.id });
+            } catch { /* unique-constraint race; ignore */ }
+          }
+        }
+      }
+    }
+
     if (!empRows.length) {
       return res.json({ quizzes: [], policies: [], competencies: [] });
     }
