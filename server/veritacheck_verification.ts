@@ -917,6 +917,169 @@ export function registerVeritaCheckVerificationRoutes(
     res.json({ ok: true });
   });
 
+  // ── 2026-06-09 Multi-analyte verification packages (Michael feedback) ───
+  //
+  // A Verification Package now holds N analytes per instrument. Each
+  // analyte has its own TEa, MDLs, AMR, and lifecycle. Carryover studies
+  // can be flagged scope='instrument' so one EP10 study covers every
+  // analyte on the package (set via the studies PATCH above).
+  //
+  // Lifecycle: each analyte signs independently via POST /finalize.
+  // Editing TEa/MDLs/AMR after finalize is blocked; the analyte must
+  // be re-opened via the amendment workflow (PR2 surfaces a UI; for
+  // now /finalize is one-way).
+  //
+  // Backward compat: legacy single-analyte verifications were
+  // backfilled with one degenerate analyte row at boot (see
+  // server/db.ts). GETs always return at least one analyte.
+
+  app.get("/api/veritacheck/verifications/:id/analytes", authMiddleware, (req: any, res) => {
+    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
+    const { row: parent, status: parentStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
+    if (!parent) {
+      if (parentStatus === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
+      return res.status(404).json({ error: "Not found" });
+    }
+    const rows = sqlite.prepare(
+      "SELECT * FROM veritacheck_verification_analytes WHERE verification_id = ? ORDER BY sort_order, id"
+    ).all(req.params.id) as any[];
+    res.json(rows);
+  });
+
+  app.post("/api/veritacheck/verifications/:id/analytes", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
+    const { row: parent, status: parentStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
+    if (!parent) {
+      if (parentStatus === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
+      return res.status(404).json({ error: "Not found" });
+    }
+    const { analyte_name, tea_value, tea_units, tea_is_percentage, mdls_json, amr_low, amr_high, amr_units, sort_order } = req.body;
+    if (!analyte_name || typeof analyte_name !== "string" || !analyte_name.trim()) {
+      return res.status(400).json({ error: "analyte_name required" });
+    }
+    // amr sanity check; renderer also short-circuits but a 400 here
+    // gives a clearer surface for the UI.
+    const amrLowNum = amr_low === undefined || amr_low === null || amr_low === "" ? null : Number(amr_low);
+    const amrHighNum = amr_high === undefined || amr_high === null || amr_high === "" ? null : Number(amr_high);
+    if (amrLowNum !== null && amrHighNum !== null && amrHighNum <= amrLowNum) {
+      return res.status(400).json({ error: "amr_high must be greater than amr_low" });
+    }
+    const r = sqlite.prepare(`
+      INSERT INTO veritacheck_verification_analytes
+        (verification_id, analyte_name, tea_value, tea_units, tea_is_percentage, mdls_json, amr_low, amr_high, amr_units, sort_order, created_at, updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+    `).run(
+      req.params.id,
+      analyte_name.trim(),
+      tea_value === undefined || tea_value === null || tea_value === "" ? null : Number(tea_value),
+      tea_units || null,
+      tea_is_percentage === undefined ? 1 : (tea_is_percentage ? 1 : 0),
+      mdls_json ? (typeof mdls_json === "string" ? mdls_json : JSON.stringify(mdls_json)) : null,
+      amrLowNum,
+      amrHighNum,
+      amr_units || null,
+      sort_order === undefined ? 0 : Number(sort_order),
+      new Date().toISOString(),
+      new Date().toISOString(),
+    );
+    res.json({ id: (r as any).lastInsertRowid, ok: true });
+  });
+
+  app.patch("/api/veritacheck/verifications/:id/analytes/:analyteId", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
+    const { row: parent, status: parentStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
+    if (!parent) {
+      if (parentStatus === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
+      return res.status(404).json({ error: "Not found" });
+    }
+    const existing = sqlite.prepare(
+      "SELECT * FROM veritacheck_verification_analytes WHERE id = ? AND verification_id = ?"
+    ).get(req.params.analyteId, req.params.id) as any;
+    if (!existing) return res.status(404).json({ error: "Analyte not found on this verification" });
+    if (existing.lifecycle_state === "finalized") {
+      return res.status(409).json({
+        error: "Analyte is finalized and locked. Re-open via the amendment workflow to edit.",
+      });
+    }
+    const allowed = ["analyte_name","tea_value","tea_units","tea_is_percentage","mdls_json","amr_low","amr_high","amr_units","sort_order"];
+    const sets: string[] = [];
+    const vals: any[] = [];
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) {
+        let v: any = req.body[key];
+        if (v === "" || v === null) v = null;
+        if (key === "mdls_json" && v !== null && typeof v !== "string") v = JSON.stringify(v);
+        if ((key === "tea_value" || key === "amr_low" || key === "amr_high" || key === "sort_order") && v !== null) v = Number(v);
+        if (key === "tea_is_percentage") v = v ? 1 : 0;
+        sets.push(`${key} = ?`);
+        vals.push(v);
+      }
+    }
+    if (sets.length === 0) return res.status(400).json({ error: "No valid fields" });
+    sets.push("updated_at = ?");
+    vals.push(new Date().toISOString());
+    vals.push(req.params.analyteId);
+    sqlite.prepare(`UPDATE veritacheck_verification_analytes SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
+    res.json({ ok: true });
+  });
+
+  app.post("/api/veritacheck/verifications/:id/analytes/:analyteId/finalize", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
+    const { row: parent, status: parentStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
+    if (!parent) {
+      if (parentStatus === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
+      return res.status(404).json({ error: "Not found" });
+    }
+    const existing = sqlite.prepare(
+      "SELECT * FROM veritacheck_verification_analytes WHERE id = ? AND verification_id = ?"
+    ).get(req.params.analyteId, req.params.id) as any;
+    if (!existing) return res.status(404).json({ error: "Analyte not found on this verification" });
+    if (existing.lifecycle_state === "finalized") {
+      return res.json({ ok: true, already_finalized: true });
+    }
+    const signature = typeof req.body?.signature === "string" ? req.body.signature.trim() : "";
+    if (!signature) return res.status(400).json({ error: "signature required" });
+    sqlite.prepare(`
+      UPDATE veritacheck_verification_analytes
+      SET lifecycle_state = 'finalized', finalized_at = ?, finalized_by_user_id = ?, finalized_signature = ?, updated_at = ?
+      WHERE id = ?
+    `).run(new Date().toISOString(), req.userId, signature, new Date().toISOString(), req.params.analyteId);
+    res.json({ ok: true });
+  });
+
+  app.delete("/api/veritacheck/verifications/:id/analytes/:analyteId", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
+    const { row: parent, status: parentStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
+    if (!parent) {
+      if (parentStatus === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
+      return res.status(404).json({ error: "Not found" });
+    }
+    const existing = sqlite.prepare(
+      "SELECT * FROM veritacheck_verification_analytes WHERE id = ? AND verification_id = ?"
+    ).get(req.params.analyteId, req.params.id) as any;
+    if (!existing) return res.status(404).json({ error: "Analyte not found on this verification" });
+    if (existing.lifecycle_state === "finalized") {
+      return res.status(409).json({ error: "Analyte is finalized and cannot be deleted. Use the amendment workflow." });
+    }
+    // Block delete if any non-instrument-scoped studies still point at this analyte.
+    const linked = sqlite.prepare(
+      "SELECT COUNT(*) AS n FROM veritacheck_verification_studies WHERE analyte_id = ? AND scope <> 'instrument'"
+    ).get(req.params.analyteId) as any;
+    if (linked.n > 0) {
+      return res.status(409).json({ error: `Cannot delete: ${linked.n} study slot(s) still reference this analyte. Reassign or remove them first.` });
+    }
+    // Refuse to delete the only analyte (back-compat: legacy
+    // single-analyte verifications must always have one analyte row).
+    const cnt = sqlite.prepare(
+      "SELECT COUNT(*) AS n FROM veritacheck_verification_analytes WHERE verification_id = ?"
+    ).get(req.params.id) as any;
+    if (cnt.n <= 1) {
+      return res.status(409).json({ error: "Cannot delete the only analyte on a verification. Add another analyte first." });
+    }
+    sqlite.prepare("DELETE FROM veritacheck_verification_analytes WHERE id = ?").run(req.params.analyteId);
+    res.json({ ok: true });
+  });
+
   // ── Element studies ───────────────────────────────────────────────────────
 
   // PATCH update an element study slot (link study, set rationale, mark pass/fail)
@@ -928,7 +1091,7 @@ export function registerVeritaCheckVerificationRoutes(
       if (parentStatus === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
       return res.status(404).json({ error: "Not found" });
     }
-    const allowed = ["study_id","analyte","sample_count","clsi_protocol","design_rationale","result_summary","passed"];
+    const allowed = ["study_id","analyte","sample_count","clsi_protocol","design_rationale","result_summary","passed","analyte_id","scope"];
     const sets: string[] = [];
     const vals: any[] = [];
     for (const key of allowed) {
