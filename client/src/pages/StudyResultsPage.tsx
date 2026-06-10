@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { StudyPointExclusionDialog } from "@/components/StudyPointExclusionDialog";
 import { StudyAmrDialog } from "@/components/StudyAmrDialog";
 import { StudyFinalizeDialog } from "@/components/StudyFinalizeDialog";
+import { StudyCensoringPolicyDialog } from "@/components/StudyCensoringPolicyDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -2294,6 +2295,7 @@ export default function StudyResults() {
   const [amrOpen, setAmrOpen] = useState(false);
   const [finalizeOpen, setFinalizeOpen] = useState(false);
   const [amendBusy, setAmendBusy] = useState(false);
+  const [censoringOpen, setCensoringOpen] = useState(false);
   const queryClient = useQueryClient();
   const studyUrl = labId ? `/api/labs/${labId}/studies/${id}` : `/api/studies/${id}`;
   const { data: study, isLoading, error } = useQuery<Study>({
@@ -3304,6 +3306,39 @@ export default function StudyResults() {
         onOpenChange={setFinalizeOpen}
         studyId={study.id}
         onFinalized={() => queryClient.invalidateQueries({ queryKey: [studyUrl] })}
+      />
+
+      {/* 2026-06-09 (overnight session 8/11, Q1 Censoring Level 2):
+          censoring policy selector for studies whose data points
+          may include below-detection (<X) or above-limit (>Y)
+          results. Mostly relevant on Method Comparison, Linearity,
+          Ref Interval, Precision. */}
+      {(study.studyType === "method_comparison" || study.studyType === "correlation" ||
+        study.studyType === "cal_ver" || study.studyType === "precision" ||
+        study.studyType === "reportable_range" || study.studyType === "ref_interval") && (
+        <div className="mt-3 flex items-center gap-3 flex-wrap" data-testid="censoring-policy-panel">
+          <Button
+            variant="outline" size="sm"
+            onClick={() => setCensoringOpen(true)}
+            data-testid="open-censoring-policy"
+            disabled={(study as any).lifecycle_state === "finalized"}
+          >
+            Censoring policy
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            How censored (&lt;X / &gt;Y) results are handled in stat math.
+            Current: <strong>{(study as any).censoringPolicy === "substitute_lld_half" ? "Substitute LLD/2"
+              : (study as any).censoringPolicy === "substitute_lld" ? "Substitute LLD"
+              : "Exclude (default)"}</strong>.
+          </span>
+        </div>
+      )}
+      <StudyCensoringPolicyDialog
+        open={censoringOpen}
+        onOpenChange={setCensoringOpen}
+        studyId={study.id}
+        currentPolicy={(study as any).censoringPolicy}
+        onUpdated={() => queryClient.invalidateQueries({ queryKey: [studyUrl] })}
       />
 
       {isCalVer(results) && <CalVerReport study={study} results={results} />}
