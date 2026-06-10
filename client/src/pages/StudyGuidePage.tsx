@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, ExternalLink, ChevronRight, FlaskConical, BarChart2, Activity, Repeat, Beaker, Droplets, Sigma } from "lucide-react";
+import { BookOpen, ExternalLink, ChevronRight, FlaskConical, BarChart2, Activity, Repeat, Beaker, Droplets, Sigma, Shuffle, Lock, Filter, Target, Package, CheckSquare } from "lucide-react";
 
 // ─── External reference links ─────────────────────────────────────────────────
 const REFS = {
@@ -59,6 +59,11 @@ const REFS = {
     url: "https://clsi.org/standards/products/method-evaluation/documents/ep09/",
     source: "CLSI",
   },
+  clsiEP10: {
+    label: "CLSI EP10-A3 - Preliminary Evaluation of Quantitative Clinical Laboratory Measurement Procedures (Carryover)",
+    url: "https://clsi.org/standards/products/method-evaluation/documents/ep10/",
+    source: "CLSI",
+  },
   clsiEP15: {
     label: "CLSI EP15-A3 - User Verification of Precision and Estimation of Bias",
     url: "https://clsi.org/standards/products/method-evaluation/documents/ep15/",
@@ -77,6 +82,11 @@ const REFS = {
   clsiC24: {
     label: "CLSI C24-Ed4 - Statistical Quality Control for Quantitative Measurement Procedures: Principles and Definitions",
     url: "https://clsi.org/standards/products/quality-management/documents/c24/",
+    source: "CLSI",
+  },
+  clsiEP28: {
+    label: "CLSI EP28-A3c - Defining, Establishing, and Verifying Reference Intervals in the Clinical Laboratory",
+    url: "https://clsi.org/standards/products/method-evaluation/documents/ep28/",
     source: "CLSI",
   },
   clsiOverview: {
@@ -230,13 +240,91 @@ export default function StudyGuidePage() {
           <h1 className="font-serif text-4xl font-bold mb-3">Which study does your lab need?</h1>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
             CLIA requires non-waived laboratories to verify and document instrument performance on a defined schedule.
-            This guide explains all six study types supported by VeritaCheck™, what they are, when CLIA requires them, and how VeritaCheck™ automates each one.
+            This guide explains the nine study types supported by VeritaCheck™, what they are, when CLIA requires them, and how VeritaCheck™ automates each one.
           </p>
           <p className="text-xs text-muted-foreground mt-4 max-w-2xl">
             All regulatory citations are drawn directly from{" "}
             <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">42 CFR Part 493</a>{" "}
             and official CMS CLIA guidance. This page is an educational summary. Always consult your laboratory director or designee and the full regulation for compliance decisions.
           </p>
+        </div>
+      </section>
+
+      {/* What VeritaCheck adds beyond the spreadsheet: cross-cutting capabilities */}
+      <section className="section-padding border-b border-border bg-card">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+          <h2 className="font-serif text-2xl font-bold mb-2">What VeritaCheck™ adds beyond the spreadsheet</h2>
+          <p className="text-muted-foreground text-sm mb-6 max-w-3xl leading-relaxed">
+            Every VeritaCheck study uses the same audit-trail, exclusion, and finalization model. These capabilities apply across the study types below, so the director sees the same workflow and the surveyor sees the same defensibility regardless of which protocol the study runs.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="border border-border rounded-lg p-4 bg-background">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5"><Filter size={18} className="text-primary" /></div>
+                <div>
+                  <h3 className="text-sm font-semibold mb-1">Per-point exclusion with audit trail</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Mark an individual data point as excluded (transcription error, specimen issue, known interference) without redoing the whole study. The point stays on the record, struck through with the reason and timestamp, and the regression or SD recomputes without it. Surveyor sees the full collected-then-excluded story.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="border border-border rounded-lg p-4 bg-background">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5"><Target size={18} className="text-primary" /></div>
+                <div>
+                  <h3 className="text-sm font-semibold mb-1">AMR coverage analysis</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Optionally enter the claimed Analytical Measurement Range on any range-relevant study. The PDF reports how close the lowest and highest tested points come to each AMR edge, with a coverage percentage and verdict (fully exercised, near-edge, under-tested, or outside AMR) per CLSI EP06 commentary.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="border border-border rounded-lg p-4 bg-background">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5"><Sigma size={18} className="text-primary" /></div>
+                <div>
+                  <h3 className="text-sm font-semibold mb-1">Systematic error at medical decision levels</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Method comparison studies report systematic error at each clinically relevant decision level for the analyte, decomposed into constant bias (intercept) and proportional bias (slope minus one). |SE at MDL| is compared against TEa at that concentration, with a per-MDL verdict the director signs off on.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="border border-border rounded-lg p-4 bg-background">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5"><Lock size={18} className="text-primary" /></div>
+                <div>
+                  <h3 className="text-sm font-semibold mb-1">Draft, finalize, amend lifecycle</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Studies move from draft to finalized when the director signs. Finalized studies are locked from direct edits; any change after sign-off creates an amendment row linked to the original, preserving the audit trail. Drafts can be edited freely.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="border border-border rounded-lg p-4 bg-background">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5"><Package size={18} className="text-primary" /></div>
+                <div>
+                  <h3 className="text-sm font-semibold mb-1">Survey Bundle PDF by analyzer</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    One click produces a single bundled PDF that groups every verification and supporting study by analyzer, with a cover page, per-element pass/fail, statistical appendices, and signature blocks. Surveyor walks away with one document per instrument.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="border border-border rounded-lg p-4 bg-background">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5"><CheckSquare size={18} className="text-primary" /></div>
+                <div>
+                  <h3 className="text-sm font-semibold mb-1">Editable analyte, values, and TEa</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Director can edit the analyte name, individual entered values, TEa preset, and units on any draft study without redoing the run. Combined with per-point exclusion, this covers the everyday correction path Michael L flagged: typos and outliers do not force a redo.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -297,6 +385,12 @@ export default function StudyGuidePage() {
                   <td className="py-3 px-4">When introducing a new QC lot; optional crossover bias check vs prior lot; optional vendor SDI comparison</td>
                   <td className="py-3 px-4">42 CFR §493.1256; CLSI C24-Ed4</td>
                 </tr>
+                <tr className="border-b border-border hover:bg-muted/20 transition-colors">
+                  <td className="py-3 px-4 font-medium text-primary">Carryover (EP10)</td>
+                  <td className="py-3 px-4 text-muted-foreground">Does a high-concentration sample leave residue that contaminates the next low sample?</td>
+                  <td className="py-3 px-4">At new instrument introduction; after major maintenance affecting sample path</td>
+                  <td className="py-3 px-4">42 CFR §493.1253(b)(1); CLSI EP10-A3</td>
+                </tr>
                 <tr className="hover:bg-muted/20 transition-colors">
                   <td className="py-3 px-4 font-medium text-primary">Multi-Analyte Coagulation Verification</td>
                   <td className="py-3 px-4 text-muted-foreground">Are all analytes on my coagulation analyzer performing within specification?</td>
@@ -319,8 +413,8 @@ export default function StudyGuidePage() {
             badge="Most Common"
             title="Calibration Verification / Linearity"
             subtitle="Verify your instrument reads accurately from low to high"
-            what="Calibration verification confirms that your instrument is producing accurate results across its entire reportable range, from the lowest to the highest value it can measure. It is sometimes called a linearity study because you are confirming that measured values track linearly with known assigned values."
-            howIt="You test materials with known assigned concentrations at multiple levels spanning the reportable range (minimum 3 levels: low, mid, high). VeritaCheck™ calculates percent recovery and observed error for each level, runs OLS regression, and evaluates every result against the calibration verification acceptance criterion your laboratory has adopted (typically the §493 PT TEa for that analyte, approved by the medical director or designee). The report shows a scatter plot, percent recovery chart, linearity summary, and a pass/fail verdict. OLS regression is used because calibrator assigned values are treated as exact. Other evaluation tools and software may use different regression methods by default. Minor slope differences between tools are expected and do not affect pass/fail evaluation."
+            what="Calibration verification confirms that your instrument is producing accurate results across its entire reportable range, from the lowest to the highest value it can measure. It is sometimes called a linearity study because you are confirming that measured values track linearly with known assigned values. Reportable Range is the same data shape and study type group in VeritaCheck; a lab that wants to verify only the upper and lower extremes uses the same form with fewer levels."
+            howIt="You test materials with known assigned concentrations at multiple levels spanning the reportable range (minimum 3 levels: low, mid, high). VeritaCheck™ calculates percent recovery and observed error for each level, runs OLS regression, and evaluates every result against the calibration verification acceptance criterion your laboratory has adopted (typically the §493 PT TEa for that analyte, approved by the medical director or designee). The report shows a scatter plot, percent recovery chart, linearity summary, and a pass/fail verdict. OLS regression is used because calibrator assigned values are treated as exact. Other evaluation tools and software may use different regression methods by default. Minor slope differences between tools are expected and do not affect pass/fail evaluation. Optional AMR coverage analysis reports how close your lowest and highest tested points come to each AMR edge, with a verdict per CLSI EP06 commentary (fully exercised at 95% each end, near-edge at 90 to 94%, under-tested below 90%). Per-point exclusion lets the director remove an outlier or transcription error from the regression without redoing the study; the excluded point stays on the record with the reason."
             when={[
               "Every 6 months (required by CLIA for all non-waived tests)",
               "Whenever calibration is performed",
@@ -341,13 +435,39 @@ export default function StudyGuidePage() {
           />
 
           <StudyCard
+            icon={<Shuffle size={22} className="text-white" />}
+            color="bg-[#a16207]"
+            badge="New Instrument / Major Service"
+            title="Carryover (CLSI EP10-A3)"
+            subtitle="Confirm a high-concentration sample does not contaminate the next low sample"
+            what="Carryover quantifies how much of a high-concentration sample's analyte gets carried into the next sample through the analyzer's probe, tubing, or reaction vessel. Even small carryover can falsely elevate a subsequent low result and clinical decisions made on that result. CLIA-relevant when introducing a new instrument, after a major service event affecting the sample path, and when manufacturer carryover claims need to be verified for the lab's specific use."
+            howIt="The lab runs a defined alternating sequence of Low and High specimens, typically 21 samples in the pattern L,L,H,H,L,L,H,L,H,H,L,L,L,L,H,H,L,L,H,L,L. VeritaCheck™ classifies each Low result as either Low-after-Low (no high specimen preceded it) or Low-after-High (a high specimen preceded it), then computes the SD of each group. The carryover statistic is the difference between Mean(Low-after-High) and Mean(Low-after-Low). The error limit is three times the SD of the Low-after-Low group. Carryover passes when the carryover statistic does not exceed the error limit. Many modern closed-tube analyzers carry the manufacturer's carryover claim through normal operation, and many labs document Carryover as Not Performed with the manufacturer carryover claim citation when the analyzer is new and unmodified. Per-point exclusion lets the director remove an outlier specimen from the SD calculation; the excluded point stays on the record with the reason."
+            when={[
+              "At new instrument introduction (CLIA-required as part of method verification)",
+              "After major service that touches the sample path: probe replacement, valve service, wash station rebuild",
+              "When QC patterns suggest sample-to-sample interaction (e.g., a high result followed by an unexpectedly elevated low)",
+              "When manufacturer carryover claims are not provided or are inadequate for the specific specimen type the lab uses",
+              "When clinically sensitive analytes (cardiac markers, infectious-disease serology, tumor markers) are added to the menu",
+            ]}
+            frequency="At method introduction; after major sample-path service"
+            regulation="42 CFR §493.1253(b)(1); CLSI EP10-A3 is the methodology standard"
+            passFail="Carryover passes when Mean(Low-after-High) minus Mean(Low-after-Low) does not exceed three times the SD of Low-after-Low (the EP10 error limit). VeritaCheck™ reports the carryover statistic, error limit, Low-after-Low and Low-after-High counts, and a pass/fail verdict. For most modern closed-tube analyzers running an unmodified manufacturer procedure, this study confirms the manufacturer's carryover claim rather than producing a new claim. Your laboratory director or designee makes the final acceptability determination."
+            refs={[
+              REFS.clsiEP10,
+              REFS.cliaVerificationBrochure,
+              REFS.cfr4931253,
+            ]}
+            ctaStudyType="carryover"
+          />
+
+          <StudyCard
             icon={<Activity size={22} className="text-white" />}
             color="bg-[#2563eb]"
             badge="New Method / Instrument"
             title="Correlation / Method Comparison"
             subtitle="Confirm two methods or instruments agree before reporting patient results"
             what="A method comparison study determines whether two measurement procedures (or two instruments running the same assay) produce equivalent results on the same patient samples. It is required any time a laboratory introduces a new test method, adds an instrument, or begins reporting results from a second analyzer."
-            howIt="You run a set of patient or split samples on both the reference method and the test method simultaneously. VeritaCheck™ performs Deming regression, OLS regression with 95% confidence intervals, Bland-Altman analysis, and calculates bias at each concentration level. The report includes correlation and Bland-Altman plots, regression statistics, and a level-by-level pass/fail table. Deming regression is used because both methods carry measurement error. Other evaluation tools and software may use different regression methods by default. Minor slope differences between tools are expected and do not affect pass/fail evaluation."
+            howIt="You run a set of patient or split samples on both the reference method and the test method simultaneously. VeritaCheck™ performs OLS regression on the paired data, reports slope, intercept, correlation r, and r-squared, and then computes systematic error at each medical decision level for the analyte. Systematic error at MDL is decomposed into constant bias (intercept) and proportional bias (slope minus one), and |SE at MDL| is compared against TEa at that concentration to produce a per-MDL verdict. Optional AMR coverage analysis reports how close your tested data spans to each edge of the claimed AMR. Per-point exclusion lets the director remove an outlier or transcription error from the regression without redoing the study; the excluded point stays on the record with the reason. Other evaluation tools and software may use different regression methods or different MDL tables by default. Minor numerical differences between tools are expected and do not affect pass/fail evaluation."
             when={[
               "Before putting a new instrument or analyzer into service",
               "When introducing a new test method or reagent system",
@@ -357,7 +477,7 @@ export default function StudyGuidePage() {
             ]}
             frequency="At method introduction; annually recommended"
             regulation="42 CFR §493.1253(b)(2)"
-            passFail="Each paired result is evaluated against the method comparison acceptance criterion adopted by your lab (typically the §493 PT TEa for that analyte, under §493.1253(b)(2)). VeritaCheck™ also evaluates mean % bias from Bland-Altman analysis. A PASS requires the majority of paired results within the adopted criterion and mean bias within acceptable limits. Your laboratory director or designee makes the final acceptability determination."
+            passFail="Each paired result is evaluated against the method comparison acceptance criterion adopted by your lab (typically the §493 PT TEa for that analyte, under §493.1253(b)(2)). The systematic error analysis at medical decision levels provides an additional per-MDL verdict: |SE at MDL| under TEa at that concentration meets criteria; |SE at MDL| at or above TEa at that concentration does not. A PASS requires the regression to meet the adopted criterion AND |SE at MDL| to be under TEa at every clinically relevant decision level. Your laboratory director or designee makes the final acceptability determination."
             refs={[
               REFS.cliaVerificationBrochure,
               REFS.cfr4931253,
@@ -374,7 +494,7 @@ export default function StudyGuidePage() {
             title="Precision"
             subtitle="Confirm your instrument is producing reproducible, consistent results"
             what="Precision verification measures how consistently an instrument produces the same result when the same sample is tested multiple times. Imprecision (variability) is expressed as a standard deviation (SD) or coefficient of variation (CV%). CLIA requires laboratories to verify that their instruments meet the manufacturer's stated precision claims before reporting patient results."
-            howIt="You run control materials repeatedly, typically 20 times over multiple days or runs. VeritaCheck™ calculates the mean, SD, and CV for each control level. In Advanced (EP15 ANOVA) mode, within-run, between-run, between-day, and total imprecision are separated using analysis of variance, exactly per CLSI EP15-A3. Results are compared to the precision acceptance criterion adopted by your lab for that analyte (typically the §493 PT TEa, approved by the medical director or designee)."
+            howIt="You run control materials repeatedly, typically 20 times over multiple days or runs. VeritaCheck™ calculates the mean, SD, and CV for each control level. In Advanced (EP15 ANOVA) mode, within-run, between-run, between-day, and total imprecision are separated using analysis of variance, exactly per CLSI EP15-A3. Results are compared to the precision acceptance criterion adopted by your lab for that analyte (typically the §493 PT TEa, approved by the medical director or designee). Per-point exclusion lets the director remove a transcription error or specimen issue from the SD calculation without redoing the run; the excluded point stays on the record with the reason."
             when={[
               "Before introducing any new test method into service (CLIA required)",
               "After a major instrument repair or component replacement",
@@ -427,7 +547,7 @@ export default function StudyGuidePage() {
             title="Reference Range Verification"
             subtitle="Verify manufacturer reference ranges for your patient population"
             what="Reference range verification determines whether a manufacturer's published reference ranges are appropriate for your laboratory's patient population. This is required when your laboratory adopts reference ranges from the manufacturer rather than establishing its own. The CLSI EP28-A3c protocol provides the standard methodology."
-            howIt="You collect specimens from a minimum of 20 healthy individuals representative of your patient population. Each specimen is tested using your method. If 2 or fewer of the 20 results fall outside the manufacturer's stated reference range, the range is considered verified for your population. If more than 2 results fall outside, further investigation or a full reference range study may be required."
+            howIt="You collect specimens from a minimum of 20 healthy individuals representative of your patient population. Each specimen is tested using your method. If 2 or fewer of the 20 results fall outside the manufacturer's stated reference range, the range is considered verified for your population. If more than 2 results fall outside, further investigation or a full reference range study may be required. Optional AMR coverage analysis surfaces a compact summary of how the specimen value range relates to the claimed AMR. Per-point exclusion lets the director remove a specimen later identified as non-representative (e.g., subclinical condition discovered after collection) from the analysis; the excluded specimen stays on the record with the reason."
             when={[
               "When adopting manufacturer reference ranges for a new test or method",
               "When changing to a new instrument platform with different reference ranges",
@@ -439,6 +559,7 @@ export default function StudyGuidePage() {
             passFail="Pass if 2 or fewer of 20 specimens fall outside the manufacturer's stated reference range. If more than 2 fall outside, the reference range may not be appropriate for your population, and a full reference range study or further investigation is required. Your laboratory director or designee makes the final determination."
             refs={[
               REFS.cliaVerificationBrochure,
+              REFS.clsiEP28,
               REFS.clsiOverview,
             ]}
             ctaStudyType="ref_interval"
@@ -542,7 +663,7 @@ export default function StudyGuidePage() {
       <section className="section-padding border-t border-border">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="font-serif text-2xl font-bold mb-3">Ready to run a study?</h2>
-          <p className="text-muted-foreground mb-6">VeritaCheck™ automates all six study types, no desktop software, no spreadsheets. Generate a CLIA-compliant PDF report in minutes.</p>
+          <p className="text-muted-foreground mb-6">VeritaCheck™ automates all nine study types, no desktop software, no spreadsheets. Generate a CLIA-compliant PDF report in minutes.</p>
           <Link href="/veritacheck" className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 rounded-lg font-semibold text-sm transition-colors">
             <FlaskConical size={16} />
             Open VeritaCheck{"\u2122"}
