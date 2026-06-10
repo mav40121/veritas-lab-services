@@ -363,7 +363,7 @@ function AppContent() {
           <Route path="/veritaqc-app">{wrapLegacy(VeritaQCAppPage)}</Route>
           <Route path="/veritaqc-app/review">{wrapLegacy(VeritaQCDailyReviewPage)}</Route>
           <Route path="/veritapolicy-app">{wrapLegacy(VeritaPolicyAppPage)}</Route>
-          <Route path="/veritapolicy">{wrapLegacy(VeritaPolicyPage, "/veritapolicy-app/my-policies")}</Route>
+          <Route path="/veritapolicy">{wrapLegacy(VeritaPolicyPage, "/veritapolicy-app")}</Route>
           <Route path="/veritacheck/cumsum">{wrapLegacy(CumsumPage)}</Route>
           <Route path="/calculator" component={ProductivityCalculatorPage} />
           <Route path="/veritabench" component={VeritaBenchPage} />

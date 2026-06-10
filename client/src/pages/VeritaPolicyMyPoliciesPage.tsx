@@ -10,6 +10,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { VeritaPolicyTabs } from "@/components/VeritaPolicyTabs";
 import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -896,6 +897,7 @@ export default function VeritaPolicyMyPoliciesPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
+      <VeritaPolicyTabs active="my-policies" />
       <div className="flex flex-col sm:flex-row items-stretch sm:items-start sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">My Policies</h1>
@@ -908,11 +910,6 @@ export default function VeritaPolicyMyPoliciesPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2 sm:shrink-0">
-          <a href={`/labs/${activeLabId}/veritapolicy-app/compliance`}>
-            <Button variant="outline">
-              <FileText size={14} className="mr-1.5" /> Compliance
-            </Button>
-          </a>
           <Button variant="outline" onClick={() => setNewManualOpen(true)}>
             <FolderPlus size={14} className="mr-1.5" /> New Manual
           </Button>
