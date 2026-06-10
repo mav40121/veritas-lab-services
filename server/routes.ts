@@ -8712,6 +8712,99 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return applyAmrUpdate(req, res, existing);
   });
 
+  // ── 2026-06-09 Study-level finalize + amendment (overnight item 5/11) ─
+  //
+  // POST /api/studies/:id/finalize  body { signature, title? }
+  //   Sets lifecycle_state='finalized'. Locks the study from direct
+  //   edits (PUT and the per-point / AMR endpoints already gate on
+  //   lifecycle_state in PR #693/#695). Captures finalized_signature,
+  //   finalized_at, finalized_by_user_id.
+  //
+  // POST /api/studies/:id/amend
+  //   Creates a new study row in DRAFT state with amends_study_id
+  //   pointing to the original. The original stays finalized;
+  //   nothing on it changes. Director edits the new draft, finalizes
+  //   when ready, and the audit chain ties them together. Both rows
+  //   show up in the dashboard with a small "Amendment of #N" badge.
+  //
+  // Both endpoints have lab-scoped variants.
+
+  function applyStudyFinalize(req: any, res: any, studyRow: any) {
+    if (!studyRow) return res.status(404).json({ error: "Study not found" });
+    if (studyRow.lifecycle_state === 'finalized') {
+      return res.status(409).json({ error: "Study is already finalized." });
+    }
+    const signature = typeof req.body?.signature === "string" ? req.body.signature.trim() : "";
+    if (!signature) return res.status(400).json({ error: "signature required" });
+    const now = new Date().toISOString();
+    (db as any).$client.prepare(`
+      UPDATE studies SET lifecycle_state = 'finalized',
+        finalized_at = ?, finalized_by_user_id = ?, finalized_signature = ?
+      WHERE id = ?
+    `).run(now, req.userId, signature, studyRow.id);
+    const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyRow.id);
+    res.json(updated);
+  }
+
+  function applyStudyAmend(req: any, res: any, studyRow: any) {
+    if (!studyRow) return res.status(404).json({ error: "Study not found" });
+    if (studyRow.lifecycle_state !== 'finalized') {
+      return res.status(400).json({ error: "Only finalized studies can be amended. Edit the draft directly." });
+    }
+    const now = new Date().toISOString();
+    // Clone the row but flip to draft and link via amends_study_id.
+    const ins = (db as any).$client.prepare(`
+      INSERT INTO studies (
+        user_id, lab_id, test_name, instrument, analyst, date, study_type,
+        clia_allowable_error, clia_preset_label, tea_is_percentage, tea_unit,
+        clia_absolute_floor, clia_absolute_unit,
+        data_points, instruments, status, instrument_meta,
+        created_by_user_id, vendor_sd, vendor_sd_concentration, target_mean, target_cv,
+        control_lot, reagent_lot, comment, result_units,
+        amr_low, amr_high, amr_units,
+        lifecycle_state, amends_study_id, created_at
+      )
+      SELECT
+        user_id, lab_id, test_name, instrument, analyst, date, study_type,
+        clia_allowable_error, clia_preset_label, tea_is_percentage, tea_unit,
+        clia_absolute_floor, clia_absolute_unit,
+        data_points, instruments, 'draft', instrument_meta,
+        ?, vendor_sd, vendor_sd_concentration, target_mean, target_cv,
+        control_lot, reagent_lot, comment, result_units,
+        amr_low, amr_high, amr_units,
+        'draft', id, ?
+      FROM studies WHERE id = ?
+    `).run(req.userId, now, studyRow.id);
+    const newId = Number((ins as any).lastInsertRowid);
+    const newRow = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(newId);
+    res.json(newRow);
+  }
+
+  app.post("/api/studies/:id/finalize", authMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    const studyId = parseInt(req.params.id);
+    const existing = userCanAccessStudy(studyId, req) as any;
+    return applyStudyFinalize(req, res, existing);
+  });
+  app.post("/api/labs/:labId/studies/:id/finalize", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    const studyId = parseInt(req.params.id);
+    const existing = (db as any).$client.prepare(
+      "SELECT * FROM studies WHERE id = ? AND lab_id = ?"
+    ).get(studyId, req.scope.labId) as any;
+    return applyStudyFinalize(req, res, existing);
+  });
+  app.post("/api/studies/:id/amend", authMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    const studyId = parseInt(req.params.id);
+    const existing = userCanAccessStudy(studyId, req) as any;
+    return applyStudyAmend(req, res, existing);
+  });
+  app.post("/api/labs/:labId/studies/:id/amend", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    const studyId = parseInt(req.params.id);
+    const existing = (db as any).$client.prepare(
+      "SELECT * FROM studies WHERE id = ? AND lab_id = ?"
+    ).get(studyId, req.scope.labId) as any;
+    return applyStudyAmend(req, res, existing);
+  });
+
   // DELETE /api/labs/:labId/studies/:id — lab-scoped delete.
   app.delete("/api/labs/:labId/studies/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
     const studyId = parseInt(req.params.id);

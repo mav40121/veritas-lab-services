@@ -601,6 +601,23 @@ const CSS = `
   .supp-stats .key { color: ${MUTED}; font-weight: 700; }
   .supp-stats .val { }
 
+  /* 2026-06-09 (overnight session 5/11): DRAFT watermark for studies
+     in lifecycle_state='draft'. Applied as a fixed pseudo-element on
+     body via a draft-mode class flipped by the renderer caller. */
+  body.draft-mode::before {
+    content: "DRAFT";
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-30deg);
+    font-size: 130pt;
+    font-weight: 900;
+    color: rgba(220, 80, 80, 0.10);
+    z-index: 9999;
+    pointer-events: none;
+    letter-spacing: 8pt;
+  }
+
   /* Key Stats summary card grid -- used by Linearity, Reportable Range,
      Reference Interval, Cal Ver compact summary renderers. Authored
      2026-06-10 (Michael L feedback on co2 Linearity PDF): the class
@@ -675,7 +692,15 @@ function headerHTML(study: Study, cliaNumber?: string): string {
   const cliaLine = cliaNumber ? `<div style="font-size:8pt;color:#555;margin-top:2px;">CLIA: ${cliaNumber}</div>` : `<div style="font-size:8pt;color:#999;margin-top:2px;">CLIA: Not on file - enter your CLIA number in account settings</div>`;
   const labName = (study as any)._labName;
   const labLine = labName ? `<div style="font-size:8.5pt;font-weight:600;color:#28251D;margin-top:1px;">${labName}</div>` : "";
-  return `
+  // 2026-06-09 (overnight session 5/11): DRAFT watermark for studies
+  // in lifecycle_state='draft'. Fixed-position overlay rotated -30deg
+  // across the page. Inline style so we do not depend on flipping a
+  // body class across many build functions.
+  const lifecycleState = (study as any).lifecycle_state || (study as any).lifecycleState;
+  const draftOverlay = lifecycleState === "draft" ? `
+    <div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);font-size:130pt;font-weight:900;color:rgba(220,80,80,0.10);z-index:9999;pointer-events:none;letter-spacing:8pt;">DRAFT</div>
+  ` : "";
+  return draftOverlay + `
   <div class="report-header">
     <div>
       <div class="logo">VeritaAssure\u2122</div>
