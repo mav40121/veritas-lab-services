@@ -2,6 +2,7 @@ import { useParams, Link } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { StudyPointExclusionDialog } from "@/components/StudyPointExclusionDialog";
 import { StudyAmrDialog } from "@/components/StudyAmrDialog";
+import { StudyFinalizeDialog } from "@/components/StudyFinalizeDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -2291,6 +2292,8 @@ export default function StudyResults() {
   // regression / SE-at-MDL re-renders without the excluded points.
   const [exclusionOpen, setExclusionOpen] = useState(false);
   const [amrOpen, setAmrOpen] = useState(false);
+  const [finalizeOpen, setFinalizeOpen] = useState(false);
+  const [amendBusy, setAmendBusy] = useState(false);
   const queryClient = useQueryClient();
   const studyUrl = labId ? `/api/labs/${labId}/studies/${id}` : `/api/studies/${id}`;
   const { data: study, isLoading, error } = useQuery<Study>({
@@ -3243,6 +3246,58 @@ export default function StudyResults() {
           resultUnits: (study as any).resultUnits,
         }}
         onUpdated={() => queryClient.invalidateQueries({ queryKey: [studyUrl] })}
+      />
+
+      {/* 2026-06-09 (overnight session 5/11): Sign + Lock + Amend.
+          Draft studies show Sign + Lock. Finalized studies show
+          Amend (creates a linked draft). */}
+      <div className="mt-3 flex items-center gap-3 flex-wrap" data-testid="lifecycle-panel">
+        {(study as any).lifecycle_state !== "finalized" ? (
+          <>
+            <Button variant="outline" size="sm" onClick={() => setFinalizeOpen(true)} data-testid="open-finalize-dialog">
+              Sign and lock
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Finalize this study with your signature. Edits after this require an amendment.
+            </span>
+          </>
+        ) : (
+          <>
+            <Button
+              variant="outline" size="sm" disabled={amendBusy} data-testid="open-amend-button"
+              onClick={async () => {
+                if (!confirm("Create a new draft amending this finalized study? The original stays locked in the audit trail.")) return;
+                setAmendBusy(true);
+                try {
+                  const r = await fetch(`${API_BASE}/api/studies/${study.id}/amend`, {
+                    method: "POST",
+                    headers: { ...authHeaders(), "Content-Type": "application/json" },
+                    body: "{}",
+                  });
+                  if (!r.ok) {
+                    const e = await r.json().catch(() => ({}));
+                    throw new Error(e.error || `HTTP ${r.status}`);
+                  }
+                  const newStudy = await r.json();
+                  window.location.href = labRoute(`/study/${newStudy.id}/results`);
+                } catch (e: any) {
+                  alert("Could not amend: " + e.message);
+                } finally { setAmendBusy(false); }
+              }}
+            >
+              Amend this study
+            </Button>
+            <span className="text-xs text-emerald-700 dark:text-emerald-400">
+              <strong>Finalized</strong> by {(study as any).finalized_signature} on {(study as any).finalized_at ? new Date((study as any).finalized_at).toLocaleDateString() : ""}.
+            </span>
+          </>
+        )}
+      </div>
+      <StudyFinalizeDialog
+        open={finalizeOpen}
+        onOpenChange={setFinalizeOpen}
+        studyId={study.id}
+        onFinalized={() => queryClient.invalidateQueries({ queryKey: [studyUrl] })}
       />
 
       {isCalVer(results) && <CalVerReport study={study} results={results} />}
