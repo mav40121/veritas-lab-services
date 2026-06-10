@@ -1,5 +1,6 @@
 import { useParams, Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { StudyPointExclusionDialog } from "@/components/StudyPointExclusionDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -2282,6 +2283,13 @@ export default function StudyResults() {
   // (React requires hooks to be called in the same order every render).
   const { toast } = useToast();
   const [sensitivityPdfLoading, setSensitivityPdfLoading] = useState(false);
+  // 2026-06-09 (Michael L feedback): point-exclusion dialog state for
+  // Method Comparison studies. Director clicks "Manage data points" on
+  // the header -> dialog opens -> per-row Exclude / Restore -> server
+  // re-saves data_points -> we invalidate the study query so the
+  // regression / SE-at-MDL re-renders without the excluded points.
+  const [exclusionOpen, setExclusionOpen] = useState(false);
+  const queryClient = useQueryClient();
   const studyUrl = labId ? `/api/labs/${labId}/studies/${id}` : `/api/studies/${id}`;
   const { data: study, isLoading, error } = useQuery<Study>({
     queryKey: [studyUrl],
@@ -3141,6 +3149,53 @@ export default function StudyResults() {
         </div>
       )}
       <StudyHeader study={study} results={results} />
+
+      {/* 2026-06-09 (Michael L feedback): Manage data points affordance
+          for Method Comparison studies. Other study types follow in
+          a separate PR; this is the EP09 outlier use case that drove
+          the feedback. */}
+      {(study.studyType === "method_comparison" || study.studyType === "correlation") && (
+        <div className="mt-3 flex items-center gap-3 flex-wrap" data-testid="point-exclusion-panel">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setExclusionOpen(true)}
+            data-testid="open-point-exclusion-dialog"
+            disabled={(study as any).lifecycle_state === "finalized"}
+          >
+            Manage data points
+          </Button>
+          {(study as any).lifecycle_state === "finalized" && (
+            <span className="text-xs text-amber-700 dark:text-amber-300">Study finalized; use amendment workflow to change.</span>
+          )}
+          {(study as any).lifecycle_state !== "finalized" && (
+            <span className="text-xs text-muted-foreground">Exclude an outlier or restore a previously excluded point. The regression re-runs immediately.</span>
+          )}
+        </div>
+      )}
+      <StudyPointExclusionDialog
+        open={exclusionOpen}
+        onOpenChange={setExclusionOpen}
+        study={{
+          id: study.id,
+          testName: study.testName,
+          studyType: study.studyType,
+          lifecycle_state: (study as any).lifecycle_state,
+          dataPoints: (() => {
+            try {
+              const dp = typeof study.dataPoints === "string" ? JSON.parse(study.dataPoints) : (study.dataPoints || []);
+              return Array.isArray(dp) ? dp : [];
+            } catch { return []; }
+          })(),
+          instruments: (() => {
+            try {
+              const inst = typeof study.instruments === "string" ? JSON.parse(study.instruments) : (study.instruments || []);
+              return Array.isArray(inst) ? inst : [];
+            } catch { return []; }
+          })(),
+        }}
+        onUpdated={() => queryClient.invalidateQueries({ queryKey: [studyUrl] })}
+      />
 
       {isCalVer(results) && <CalVerReport study={study} results={results} />}
       {isMethodComp(results) && <MethodCompReport study={study} results={results} />}
