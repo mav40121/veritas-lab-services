@@ -258,9 +258,12 @@ export default function LabMembersPage() {
         <InventoryPinCard labId={activeLabId} />
       )}
 
-      {canManage && (
-        <StaffPortalPinCard labId={activeLabId} />
-      )}
+      {/* 2026-06-09 Auth unification PR Option 1: Staff Portal PIN UI
+          retired. The POST /api/staff-portal-pin/regenerate endpoint
+          still exists on the server (dormant), but the CLIA+PIN auth
+          model itself was replaced with real email + password accounts.
+          The StaffPortalPinCard component definition stays below until
+          a cleanup PR strips it; rendering it is gone here. */}
 
       {canManage && (
         <Card>
