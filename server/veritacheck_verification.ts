@@ -731,7 +731,7 @@ export function buildVerificationBlockHtml(v: any, instruments: any[], studies: 
         const status = a.lifecycle_state === "finalized"
           ? `<span style="color:#059669;font-weight:600">Finalized</span> ${a.finalized_signature ? `(${a.finalized_signature})` : ""} ${a.finalized_at ? `<span style="color:#6b7280">on ${new Date(a.finalized_at).toLocaleDateString("en-US")}</span>` : ""}`
           : `<span style="color:#d97706">Draft</span>`;
-        return `<tr>
+        return `<tr id="vc-analyte-${a.id}">
           <td style="padding:6px 10px;border-bottom:1px solid #f0f0f0;font-weight:600">${a.analyte_name}</td>
           <td style="padding:6px 10px;border-bottom:1px solid #f0f0f0;text-align:right">${tea}</td>
           <td style="padding:6px 10px;border-bottom:1px solid #f0f0f0;text-align:center">${mdls || "&mdash;"}</td>
@@ -753,12 +753,27 @@ export function buildVerificationBlockHtml(v: any, instruments: any[], studies: 
             </tr>
           </table>
         </div>`).join("");
+      // 2026-06-09 (overnight session 7/11): per-analyte TOC for
+      // chemistry analyzers with 5+ analytes. Multi-column grid of
+      // analyte names, each linking to its row anchor (#vc-analyte-N).
+      // Surveyor / director can scan the alphabet, click an analyte,
+      // jump to its row + signature block. Skips when fewer than 5
+      // analytes since a 2- or 3-analyte package fits on one screen.
+      const tocBlock = analytes.length >= 5 ? `
+        <div style="margin-bottom:14px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:6px;background:#f9fafb">
+          <div style="font-size:11px;font-weight:700;color:${teal};margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px">Analyte Index (${analytes.length})</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:4px 12px;font-size:10px">
+            ${analytes.map((a: any) => `<div><a href="#vc-analyte-${a.id}" style="color:${teal};text-decoration:none">${a.analyte_name}</a> ${a.lifecycle_state === "finalized" ? '<span style="color:#059669">&#10003;</span>' : '<span style="color:#d97706">&#9633;</span>'}</div>`).join("")}
+          </div>
+          <div style="font-size:9px;color:#6b7280;margin-top:6px">Click an analyte to jump to its row and signature block. &#10003; = finalized; &#9633; = draft.</div>
+        </div>` : "";
       analytesSection = `
         <div style="margin-top:32px;padding:16px;border:1px solid #e5e7eb;border-radius:6px">
           <div style="font-weight:700;font-size:14px;color:${teal};margin-bottom:8px">Analytes on This Package (${analytes.length})</div>
           <div style="font-size:11px;color:#6b7280;margin-bottom:10px">
             This verification package covers multiple analytes on the same instrument. Each analyte carries its own TEa, medical decision levels, AMR, and lifecycle. Per-analyte signatures appear below.
           </div>
+          ${tocBlock}
           <table style="width:100%;font-size:11px;border-collapse:collapse">
             <thead><tr style="background:#f3f4f6">
               <th style="padding:6px 10px;text-align:left">Analyte</th>
