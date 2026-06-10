@@ -8327,6 +8327,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       reagentLot: row.reagent_lot,
       comment: row.comment,
       resultUnits: row.result_units,
+      // 2026-06-09 (Michael L feedback): optional per-study AMR.
+      // Blank values disable the coverage analysis; renderer
+      // short-circuits via shouldRenderAmrCoverage.
+      amrLow: row.amr_low,
+      amrHigh: row.amr_high,
+      amrUnits: row.amr_units,
+      lifecycle_state: row.lifecycle_state,
       createdAt: row.created_at,
       lab_id: row.lab_id,
     };
@@ -8590,6 +8597,59 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT * FROM studies WHERE id = ? AND lab_id = ?"
     ).get(studyId, req.scope.labId) as any;
     return applyPointExclusion(req, res, "include", existing);
+  });
+
+  // ── 2026-06-09 Per-study AMR (Michael L feedback) ──────────────────
+  //
+  // POST /api/studies/:id/amr  body { amr_low, amr_high, amr_units? }
+  //
+  // Sets / clears the claimed Analytical Measurement Range on a study.
+  // Renderer surfaces an "AMR Coverage Analysis" block when both
+  // amr_low and amr_high are numeric and amr_high > amr_low; blank
+  // values turn the analysis off entirely. Gated on
+  // lifecycle_state !== 'finalized'. Clearing is done by sending
+  // null/empty for amr_low + amr_high.
+  function applyAmrUpdate(req: any, res: any, studyRow: any) {
+    if (!studyRow) return res.status(404).json({ error: "Study not found" });
+    if (studyRow.lifecycle_state === 'finalized') {
+      return res.status(409).json({
+        error: "Study is finalized and locked. Use the amendment workflow to change the AMR.",
+      });
+    }
+    const rawLow = req.body?.amr_low;
+    const rawHigh = req.body?.amr_high;
+    const rawUnits = req.body?.amr_units;
+    // Normalize: empty string / null / undefined -> NULL.
+    const amrLow = (rawLow === null || rawLow === undefined || rawLow === "") ? null : Number(rawLow);
+    const amrHigh = (rawHigh === null || rawHigh === undefined || rawHigh === "") ? null : Number(rawHigh);
+    if (amrLow !== null && !Number.isFinite(amrLow)) {
+      return res.status(400).json({ error: "amr_low must be a number" });
+    }
+    if (amrHigh !== null && !Number.isFinite(amrHigh)) {
+      return res.status(400).json({ error: "amr_high must be a number" });
+    }
+    if (amrLow !== null && amrHigh !== null && amrHigh <= amrLow) {
+      return res.status(400).json({ error: "amr_high must be greater than amr_low" });
+    }
+    const amrUnits = (typeof rawUnits === "string" && rawUnits.trim() !== "") ? rawUnits.trim() : null;
+    (db as any).$client.prepare(
+      "UPDATE studies SET amr_low = ?, amr_high = ?, amr_units = ? WHERE id = ?"
+    ).run(amrLow, amrHigh, amrUnits, studyRow.id);
+    const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyRow.id);
+    res.json(updated);
+  }
+
+  app.post("/api/studies/:id/amr", authMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    const studyId = parseInt(req.params.id);
+    const existing = userCanAccessStudy(studyId, req) as any;
+    return applyAmrUpdate(req, res, existing);
+  });
+  app.post("/api/labs/:labId/studies/:id/amr", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    const studyId = parseInt(req.params.id);
+    const existing = (db as any).$client.prepare(
+      "SELECT * FROM studies WHERE id = ? AND lab_id = ?"
+    ).get(studyId, req.scope.labId) as any;
+    return applyAmrUpdate(req, res, existing);
   });
 
   // DELETE /api/labs/:labId/studies/:id — lab-scoped delete.

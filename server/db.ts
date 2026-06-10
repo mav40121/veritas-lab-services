@@ -1606,6 +1606,16 @@ try { sqlite.exec("ALTER TABLE studies ADD COLUMN finalized_signature TEXT"); } 
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN amends_study_id INTEGER"); } catch {}
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN result_units TEXT"); } catch {}
 
+// 2026-06-09 (Michael L feedback): optional Analytical Measurement Range
+// (AMR) per study, so Linearity / Reportable Range renderers can report
+// edge-coverage (how close the lowest and highest tested points get to
+// the claimed AMR). Blank values disable the check entirely so this is
+// strictly additive. amr_units defaults to the study's existing result
+// units when not supplied at write time.
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN amr_low REAL"); } catch {}
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN amr_high REAL"); } catch {}
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN amr_units TEXT"); } catch {}
+
 // ─────────────────────────────────────────────────────────────────────────────────
 // Labs table — normalized lab identity (CLIA, name, accreditation flags)
 // Migrated from per-user columns to shared lab entity so seats inherit and
