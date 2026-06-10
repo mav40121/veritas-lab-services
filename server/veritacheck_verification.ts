@@ -1297,6 +1297,46 @@ export function registerVeritaCheckVerificationRoutes(
     res.json({ ok: true });
   });
 
+  // 2026-06-09 (overnight session 6/11): analyte amendment workflow.
+  // POST .../analytes/:analyteId/amend on a finalized analyte clones
+  // it into a new draft analyte with amends_analyte_id pointing at
+  // the original. Original stays finalized in the audit trail.
+  app.post("/api/veritacheck/verifications/:id/analytes/:analyteId/amend", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
+    const { row: parent, status: parentStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
+    if (!parent) {
+      if (parentStatus === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
+      return res.status(404).json({ error: "Not found" });
+    }
+    const existing = sqlite.prepare(
+      "SELECT * FROM veritacheck_verification_analytes WHERE id = ? AND verification_id = ?"
+    ).get(req.params.analyteId, req.params.id) as any;
+    if (!existing) return res.status(404).json({ error: "Analyte not found on this verification" });
+    if (existing.lifecycle_state !== "finalized") {
+      return res.status(400).json({ error: "Only finalized analytes can be amended. Edit this analyte directly." });
+    }
+    const ins = sqlite.prepare(`
+      INSERT INTO veritacheck_verification_analytes
+        (verification_id, analyte_name, tea_value, tea_units, tea_is_percentage, mdls_json,
+         amr_low, amr_high, amr_units, lifecycle_state, sort_order, amends_analyte_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?)
+    `).run(
+      existing.verification_id,
+      existing.analyte_name,
+      existing.tea_value,
+      existing.tea_units,
+      existing.tea_is_percentage,
+      existing.mdls_json,
+      existing.amr_low, existing.amr_high, existing.amr_units,
+      (existing.sort_order || 0) + 1,
+      existing.id,
+      new Date().toISOString(), new Date().toISOString(),
+    );
+    const newId = Number((ins as any).lastInsertRowid);
+    const newRow = sqlite.prepare("SELECT * FROM veritacheck_verification_analytes WHERE id = ?").get(newId);
+    res.json(newRow);
+  });
+
   // ── Element studies ───────────────────────────────────────────────────────
 
   // PATCH update an element study slot (link study, set rationale, mark pass/fail)
