@@ -202,7 +202,14 @@ function renderStudyAppendix(slot: any, teal: string): string {
     if (slot.studyType === "precision") {
       // dp = [{ level, levelName, values?, days? }]
       if (!Array.isArray(dp)) return "";
-      const rows = dp.map((p: any) => {
+      // 2026-06-09 (overnight session 4/11): honor per-level exclusion
+      // from PR #693/#694 dialog. Excluded levels are skipped from
+      // the SD math and surfaced as an "X level(s) excluded" note
+      // below the table. Audit trail (the level's data + reason)
+      // stays in the data_points blob.
+      const includedDp = (dp as any[]).filter((p: any) => p && p.excluded !== true);
+      const excludedDpCount = (dp as any[]).filter((p: any) => p && p.excluded === true).length;
+      const rows = includedDp.map((p: any) => {
         const vals: number[] = (p.days ? p.days.flat() : p.values || [])
           .filter((v: any) => v !== null && v !== undefined && !isNaN(v));
         const n = vals.length;
@@ -229,7 +236,8 @@ function renderStudyAppendix(slot: any, teal: string): string {
             <th style="padding:4px 8px;text-align:right">CV%</th>
           </tr></thead>
           <tbody>${rows}</tbody>
-        </table>`;
+        </table>
+        ${excludedDpCount > 0 ? `<div style="font-size:10px;color:#6b7280;margin-top:4px"><strong>${excludedDpCount} level(s) excluded by director.</strong> See data_points audit trail.</div>` : ""}`;
       // 2026-06-09 (Michael L feedback): embed Precision Plot +
       // Histogram graphs same as the single-study PDF. Aggregates
       // values across all levels (matching the single-study layout
@@ -237,7 +245,7 @@ function renderStudyAppendix(slot: any, teal: string): string {
       let precisionGraphs = "";
       try {
         const allValues: number[] = [];
-        for (const p of (dp as any[])) {
+        for (const p of includedDp) {
           const vs: any[] = (p.days ? p.days.flat() : p.values || [])
             .filter((v: any) => v !== null && v !== undefined && !isNaN(v));
           allValues.push(...vs);
@@ -264,7 +272,11 @@ function renderStudyAppendix(slot: any, teal: string): string {
       // dp = [{ level, assignedValue?, expectedValue?, instrumentValues: {name: value} }]
       if (!Array.isArray(dp)) return "";
       const teaPct = (slot.studyTea ?? 0) * 100;
-      const rows = dp.map((p: any) => {
+      // 2026-06-09 (overnight session 4/11): honor per-level exclusion
+      // from PR #693/#694 dialog. Same shape as precision.
+      const includedDp = (dp as any[]).filter((p: any) => p && p.excluded !== true);
+      const excludedDpCount = (dp as any[]).filter((p: any) => p && p.excluded === true).length;
+      const rows = includedDp.map((p: any) => {
         const assigned = p.assignedValue ?? p.expectedValue ?? 0;
         const vals = instNames.length > 0
           ? instNames.map(n => p.instrumentValues?.[n]).filter((v: any) => v !== null && v !== undefined && !isNaN(v))
@@ -292,7 +304,9 @@ function renderStudyAppendix(slot: any, teal: string): string {
             <th style="padding:4px 8px;text-align:center">Verdict (TEa +/-${teaPct.toFixed(1)}%)</th>
           </tr></thead>
           <tbody>${rows}</tbody>
-        </table>`;
+        </table>
+        ${excludedDpCount > 0 ? `<div style="font-size:10px;color:#6b7280;margin-top:4px"><strong>${excludedDpCount} level(s) excluded by director.</strong> See data_points audit trail.</div>` : ""}`;
+      // AMR coverage already filters excluded via extractValuesForCoverage; passing dp is safe.
       const amrBlock = renderAmrCoverageBlock(slot, slot.studyType, dp, undefined, "full");
       // 2026-06-09 (Michael L feedback): embed Recovery Plot +
       // Assigned-vs-Measured Scatter graphs. Per level: assignedValue,
@@ -303,7 +317,7 @@ function renderStudyAppendix(slot: any, teal: string): string {
         const assignedVals: number[] = [];
         const measuredMeans: number[] = [];
         const recoveries: number[] = [];
-        for (const p of (dp as any[])) {
+        for (const p of includedDp) {
           const assigned = Number(p.assignedValue ?? p.expectedValue ?? NaN);
           if (!Number.isFinite(assigned) || assigned === 0) continue;
           const vals = instNames.length > 0

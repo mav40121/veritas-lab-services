@@ -3156,7 +3156,9 @@ export default function StudyResults() {
           for Method Comparison studies. Other study types follow in
           a separate PR; this is the EP09 outlier use case that drove
           the feedback. */}
-      {(study.studyType === "method_comparison" || study.studyType === "correlation") && (
+      {(study.studyType === "method_comparison" || study.studyType === "correlation" ||
+        study.studyType === "cal_ver" || study.studyType === "precision" ||
+        study.studyType === "reportable_range") && (
         <div className="mt-3 flex items-center gap-3 flex-wrap" data-testid="point-exclusion-panel">
           <Button
             variant="outline"
@@ -3171,7 +3173,11 @@ export default function StudyResults() {
             <span className="text-xs text-amber-700 dark:text-amber-300">Study finalized; use amendment workflow to change.</span>
           )}
           {(study as any).lifecycle_state !== "finalized" && (
-            <span className="text-xs text-muted-foreground">Exclude an outlier or restore a previously excluded point. The regression re-runs immediately.</span>
+            <span className="text-xs text-muted-foreground">
+              {study.studyType === "precision"
+                ? "Exclude an entire level (e.g. retest mismatch) from the SD math. Level stays on record with reason."
+                : "Exclude an outlier or restore a previously excluded point. The math re-runs immediately."}
+            </span>
           )}
         </div>
       )}
