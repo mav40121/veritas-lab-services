@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { db } from "./db";
 import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
+import { getCanonicalMDLs, getCanonicalMDLProvenance, computeSystematicErrorAtMDL } from "./canonicalMDLs";
 
 const sqlite = db.$client;
 
@@ -184,6 +185,79 @@ function renderStudyAppendix(slot: any, teal: string): string {
       const intercept = ym - slope * xm;
       const r2 = sxx === 0 || syy === 0 ? 1 : (sxy ** 2) / (sxx * syy);
       const r = Math.sqrt(Math.max(0, r2));
+      // 2026-06-09 (Longstreth feedback): explicit systematic-error
+      // analysis at the medical decision levels for the analyte. The
+      // regression-output table above gives slope + intercept; the
+      // block below decomposes them into constant bias (intercept),
+      // proportional bias ((slope - 1) * 100%), and signed systematic
+      // error at each clinically-relevant cutoff.
+      //
+      // SE_at_MDL = intercept + (slope - 1) * MDL  (signed)
+      // |SE_at_MDL| < TEa  -> meets criteria
+      // |SE_at_MDL| >= TEa -> does not meet criteria
+      //
+      // MDLs come from the canonical table in server/canonicalMDLs.ts
+      // for common chem/heme analytes; analytes not in the table get a
+      // polite "not specified" note so the report still renders.
+      // The lab director or designee remains the source of truth for
+      // which MDLs apply at their specific institution; the PDF
+      // signature block endorses what they accept.
+      const constantBias = intercept;
+      const proportionalBiasPct = (slope - 1) * 100;
+      const analyteName = String(slot.analyte || slot.testName || "");
+      const userMDLs: number[] = Array.isArray((dp as any).medical_decision_levels)
+        ? ((dp as any).medical_decision_levels as any[]).filter((v: any) => typeof v === "number" && isFinite(v))
+        : [];
+      const canonicalMDLs = userMDLs.length === 0 ? getCanonicalMDLs(analyteName) : [];
+      const provenance = userMDLs.length === 0 ? getCanonicalMDLProvenance(analyteName) : "Director-specified for this study.";
+      const mdlsToUse = userMDLs.length > 0
+        ? userMDLs.map((m) => ({ mdl: m, label: "Director-specified" }))
+        : canonicalMDLs;
+      const teaFraction = Number(slot.studyTea ?? 0);
+      let seBlock = "";
+      if (mdlsToUse.length > 0) {
+        const seRows = mdlsToUse.map((m) => {
+          const se = computeSystematicErrorAtMDL(slope, intercept, m.mdl);
+          const teaAbsAtMDL = teaFraction > 0 ? teaFraction * m.mdl : 0;
+          const verdict = teaAbsAtMDL > 0
+            ? (se.se_abs <= teaAbsAtMDL ? "meets" : "does not meet")
+            : "no TEa on file";
+          const verdictColor = verdict === "meets" ? "#059669" : verdict === "does not meet" ? "#dc2626" : "#6b7280";
+          return `<tr>
+            <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0">${m.mdl} <span style="color:#6b7280">(${m.label})</span></td>
+            <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${se.se_signed >= 0 ? "+" : ""}${se.se_signed.toFixed(3)}</td>
+            <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${se.se_abs.toFixed(3)}</td>
+            <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${teaAbsAtMDL > 0 ? teaAbsAtMDL.toFixed(3) : "&mdash;"}</td>
+            <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:center;color:${verdictColor};font-weight:600">${verdict}</td>
+          </tr>`;
+        }).join("");
+        seBlock = `
+          <div style="margin-top:10px">
+            <div style="font-size:11px;font-weight:600;color:#374151;margin-bottom:4px">Systematic Error Analysis at Medical Decision Levels</div>
+            <div style="font-size:10px;color:#6b7280;margin-bottom:4px">
+              Constant bias (intercept): <strong>${constantBias.toFixed(3)}</strong> &nbsp;
+              Proportional bias: <strong>${proportionalBiasPct >= 0 ? "+" : ""}${proportionalBiasPct.toFixed(2)}%</strong>
+            </div>
+            <table style="font-size:11px;width:100%;border-collapse:collapse">
+              <thead><tr style="background:#f3f4f6">
+                <th style="padding:4px 8px;text-align:left">MDL</th>
+                <th style="padding:4px 8px;text-align:right">Signed SE</th>
+                <th style="padding:4px 8px;text-align:right">|SE|</th>
+                <th style="padding:4px 8px;text-align:right">TEa at MDL</th>
+                <th style="padding:4px 8px;text-align:center">Verdict</th>
+              </tr></thead>
+              <tbody>${seRows}</tbody>
+            </table>
+            ${provenance ? `<div style="font-size:10px;color:#6b7280;margin-top:4px">MDL source: ${provenance} Director or designee is the final arbiter; verify against laboratory policy.</div>` : ""}
+          </div>`;
+      } else {
+        seBlock = `
+          <div style="margin-top:10px;font-size:10px;color:#6b7280">
+            Systematic Error Analysis at Medical Decision Levels: medical decision levels not on file for this analyte.
+            Director may enter MDLs at study setup to extend the analysis.
+          </div>`;
+      }
+
       const inner = `
         <table style="font-size:11px;width:100%;border-collapse:collapse">
           <thead><tr style="background:#f3f4f6">
@@ -197,7 +271,8 @@ function renderStudyAppendix(slot: any, teal: string): string {
             <tr><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0">Correlation r</td><td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${r.toFixed(4)}</td></tr>
             <tr><td style="padding:4px 8px">r-squared</td><td style="padding:4px 8px;text-align:right">${r2.toFixed(4)}</td></tr>
           </tbody>
-        </table>`;
+        </table>
+        ${seBlock}`;
       return wrap(`Statistical Detail (CLSI EP09-A3 Method Comparison)`, inner);
     }
 
