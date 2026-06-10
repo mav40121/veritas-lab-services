@@ -21,6 +21,16 @@ import {
   recoveryPlotSVG,
   blandAltmanSVG,
 } from "./pdfReport";
+// 2026-06-10 (overnight backlog): Censoring Level 2 renderer integration.
+// Honors the per-study censoring_policy when a data point is a censored
+// (<X / >Y) result. Inert for studies with no censored points.
+import {
+  isCensored,
+  censorValueForMath,
+  policyLabel,
+  policyNarrative,
+  type CensoringPolicy,
+} from "./censoring";
 
 const sqlite = db.$client;
 
@@ -353,13 +363,31 @@ function renderStudyAppendix(slot: any, teal: string): string {
       const xs: number[] = [];
       const ys: number[] = [];
       let excludedCount = 0;
+      // 2026-06-10 Censoring Level 2: a value on either axis may be a
+      // censored result ({censored,censor_direction,censor_value}). The
+      // study's censoring_policy decides whether such a pair is dropped
+      // (exclude) or imputed (substitute_lld / substitute_lld_half).
+      // resolveAxis returns a number to use, or null to drop the point.
+      const censoringPolicy = (slot.studyCensoringPolicy || "exclude") as CensoringPolicy;
+      let censoredExcluded = 0;
+      let censoredSubstituted = 0;
+      const resolveAxis = (raw: any): number | null => {
+        if (isCensored(raw)) return censorValueForMath(raw, censoringPolicy);
+        return (raw !== null && raw !== undefined && !isNaN(raw)) ? Number(raw) : null;
+      };
       for (const p of dp) {
         if (p && p.excluded === true) { excludedCount++; continue; }
-        const x = p.expectedValue;
-        const y = p.instrumentValues?.[compName];
-        if (x !== null && x !== undefined && !isNaN(x) && y !== null && y !== undefined && !isNaN(y)) {
-          xs.push(x); ys.push(y);
+        const xRaw = p.expectedValue;
+        const yRaw = p.instrumentValues?.[compName];
+        const anyCensored = isCensored(xRaw) || isCensored(yRaw);
+        const x = resolveAxis(xRaw);
+        const y = resolveAxis(yRaw);
+        if (x === null || y === null) {
+          if (anyCensored) censoredExcluded++;
+          continue;
         }
+        if (anyCensored) censoredSubstituted++;
+        xs.push(x); ys.push(y);
       }
       const n = xs.length;
       if (n < 2) return wrap(`Statistical Detail (CLSI EP09-A3 Method Comparison)`, `<div style="font-size:11px;color:#6b7280">Insufficient paired data (n=${n}).</div>`);
@@ -488,7 +516,21 @@ function renderStudyAppendix(slot: any, teal: string): string {
       } catch (err) {
         console.error("[verification-pdf] method_comparison graphs error:", err);
       }
-      return wrap(`Statistical Detail (CLSI EP09-A3 Method Comparison)`, inner + mcGraphs + amrBlockMC);
+      // 2026-06-10 Censoring Level 2: surface how censored (<X / >Y)
+      // results were handled, so the surveyor sees the policy and its
+      // effect on N. Suppressed entirely when no censored points exist.
+      let censoringNote = "";
+      if (censoredExcluded + censoredSubstituted > 0) {
+        const parts: string[] = [];
+        if (censoredSubstituted > 0) parts.push(`${censoredSubstituted} substituted`);
+        if (censoredExcluded > 0) parts.push(`${censoredExcluded} excluded`);
+        censoringNote = `
+          <div style="margin-top:10px;padding:8px 10px;border-left:3px solid #6b7280;background:#f9fafb;font-size:10px;color:#374151">
+            <strong>Censored results:</strong> ${parts.join(", ")} (policy: ${policyLabel(censoringPolicy)}).
+            ${policyNarrative(censoringPolicy)}
+          </div>`;
+      }
+      return wrap(`Statistical Detail (CLSI EP09-A3 Method Comparison)`, inner + censoringNote + mcGraphs + amrBlockMC);
     }
 
     if (slot.studyType === "carryover") {
@@ -1422,7 +1464,8 @@ export function registerVeritaCheckVerificationRoutes(
         s.clia_allowable_error AS studyTea,
         s.tea_is_percentage AS studyTeaIsPct, s.tea_unit AS studyTeaUnit,
         s.clia_absolute_floor AS studyAbsFloor,
-        s.amr_low AS studyAmrLow, s.amr_high AS studyAmrHigh, s.amr_units AS studyAmrUnits
+        s.amr_low AS studyAmrLow, s.amr_high AS studyAmrHigh, s.amr_units AS studyAmrUnits,
+        s.censoring_policy AS studyCensoringPolicy
       FROM veritacheck_verification_studies vs
       LEFT JOIN studies s ON s.id = vs.study_id
       WHERE vs.verification_id = ?
@@ -1592,7 +1635,8 @@ export function registerVeritaCheckVerificationRoutes(
             s.data_points AS studyDataPoints, s.instruments AS studyInstrumentsJson,
             s.clia_allowable_error AS studyTea,
             s.tea_is_percentage AS studyTeaIsPct, s.tea_unit AS studyTeaUnit,
-            s.clia_absolute_floor AS studyAbsFloor
+            s.clia_absolute_floor AS studyAbsFloor,
+            s.censoring_policy AS studyCensoringPolicy
           FROM veritacheck_verification_studies vs
           LEFT JOIN studies s ON s.id = vs.study_id
           WHERE vs.verification_id = ?
