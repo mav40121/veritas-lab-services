@@ -8195,6 +8195,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const existing = userCanAccessStudy(studyId, req) as any;
     if (!existing) return res.status(404).json({ error: "Study not found" });
 
+    // 2026-06-09 Michael L feedback: lifecycle_state='finalized' gate.
+    // Once the director has signed the study (PR2 lifecycle action),
+    // direct edits return 409 with a pointer at the amendment workflow.
+    // Pre-finalize, the existing edit path is unchanged.
+    if (existing.lifecycle_state === 'finalized') {
+      return res.status(409).json({
+        error: "Study is finalized and locked. Use the amendment workflow to record a change.",
+        replacement: `/api/studies/${studyId}/amend`,
+      });
+    }
+
     const isDraft = req.body?.status === 'draft';
     let payload: any;
     if (isDraft) {
@@ -8431,6 +8442,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(studyId, req.scope.labId) as any;
     if (!existing) return res.status(404).json({ error: "Study not found" });
 
+    // 2026-06-09 lifecycle_state='finalized' gate (mirror of legacy PUT).
+    if (existing.lifecycle_state === 'finalized') {
+      return res.status(409).json({
+        error: "Study is finalized and locked. Use the amendment workflow to record a change.",
+        replacement: `/api/labs/${req.scope.labId}/studies/${studyId}/amend`,
+      });
+    }
+
     const isDraft = req.body?.status === 'draft';
     let payload: any;
     if (isDraft) {
@@ -8482,6 +8501,95 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     );
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId);
     res.json(updated);
+  });
+
+  // ── 2026-06-09 Per-point exclusion (Michael L feedback) ─────────────
+  //
+  // POST /api/studies/:id/points/:idx/exclude  body { reason }
+  // POST /api/studies/:id/points/:idx/include
+  //
+  // Mark / restore a single data point as excluded from statistical
+  // analysis. The point stays in data_points (never deleted) so the
+  // audit trail of "we collected this value and then excluded it for
+  // reason X" survives on the PDF, struck through with the reason
+  // inline. Stats math (regression, SD, EP09 SE-at-MDL, EP06 linearity,
+  // EP10 carryover, EP28 reference interval) all filter out
+  // x.excluded === true before computing.
+  //
+  // Gated on lifecycle_state !== 'finalized'. Existing PUT-shaped
+  // edits can also flip the excluded flag in the data_points payload,
+  // but the dedicated endpoint is the surveyor-friendly affordance:
+  // single click on a row -> exclusion reason dialog -> save.
+  function applyPointExclusion(req: any, res: any, mode: "exclude" | "include", studyRow: any) {
+    if (!studyRow) return res.status(404).json({ error: "Study not found" });
+    if (studyRow.lifecycle_state === 'finalized') {
+      return res.status(409).json({
+        error: "Study is finalized and locked. Use the amendment workflow to exclude a point.",
+      });
+    }
+    const idx = parseInt(req.params.idx, 10);
+    if (!Number.isFinite(idx) || idx < 0) return res.status(400).json({ error: "Invalid point index" });
+    let dp: any;
+    try { dp = JSON.parse(studyRow.data_points || "[]"); }
+    catch { return res.status(500).json({ error: "Study data_points is malformed" }); }
+    // Data points come in two shapes across study types: a flat array
+    // (precision, ref_interval, carryover use { value }, method
+    // comparison uses { expectedValue, instrumentValues }), or an
+    // object with sub-arrays (some legacy precision shapes). Index
+    // resolution treats the leaf as a single point.
+    if (!Array.isArray(dp)) {
+      return res.status(400).json({ error: "Per-point exclusion is only supported on flat-array data points for this study type" });
+    }
+    if (idx >= dp.length) return res.status(404).json({ error: "Point index out of range" });
+    const now = new Date().toISOString();
+    if (mode === "exclude") {
+      const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+      if (!reason) return res.status(400).json({ error: "Exclusion reason is required" });
+      dp[idx] = {
+        ...dp[idx],
+        excluded: true,
+        exclusion_reason: reason,
+        excluded_at: now,
+        excluded_by_user_id: req.userId,
+      };
+    } else {
+      dp[idx] = {
+        ...dp[idx],
+        excluded: false,
+        exclusion_reason: null,
+        excluded_at: null,
+        excluded_by_user_id: null,
+      };
+    }
+    (db as any).$client.prepare("UPDATE studies SET data_points = ? WHERE id = ?")
+      .run(JSON.stringify(dp), studyRow.id);
+    const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyRow.id);
+    res.json(updated);
+  }
+
+  app.post("/api/studies/:id/points/:idx/exclude", authMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    const studyId = parseInt(req.params.id);
+    const existing = userCanAccessStudy(studyId, req) as any;
+    return applyPointExclusion(req, res, "exclude", existing);
+  });
+  app.post("/api/studies/:id/points/:idx/include", authMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    const studyId = parseInt(req.params.id);
+    const existing = userCanAccessStudy(studyId, req) as any;
+    return applyPointExclusion(req, res, "include", existing);
+  });
+  app.post("/api/labs/:labId/studies/:id/points/:idx/exclude", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    const studyId = parseInt(req.params.id);
+    const existing = (db as any).$client.prepare(
+      "SELECT * FROM studies WHERE id = ? AND lab_id = ?"
+    ).get(studyId, req.scope.labId) as any;
+    return applyPointExclusion(req, res, "exclude", existing);
+  });
+  app.post("/api/labs/:labId/studies/:id/points/:idx/include", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    const studyId = parseInt(req.params.id);
+    const existing = (db as any).$client.prepare(
+      "SELECT * FROM studies WHERE id = ? AND lab_id = ?"
+    ).get(studyId, req.scope.labId) as any;
+    return applyPointExclusion(req, res, "include", existing);
   });
 
   // DELETE /api/labs/:labId/studies/:id — lab-scoped delete.

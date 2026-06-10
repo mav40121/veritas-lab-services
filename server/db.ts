@@ -1587,6 +1587,23 @@ try { sqlite.exec("ALTER TABLE studies ADD COLUMN target_cv REAL"); } catch {}
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN control_lot TEXT"); } catch {}
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN reagent_lot TEXT"); } catch {}
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN comment TEXT"); } catch {}
+
+// 2026-06-09 Michael L feedback: draft / finalize lifecycle so the
+// signed PDF, not the row, is the surveyor artifact. lifecycle_state
+// defaults to 'draft' for every existing row (the historical 'status'
+// column means something different -- it carries pass/fail-shaped
+// values like 'completed'/'fail'/'draft'/etc. that the eval pipeline
+// owns). lifecycle_state is the user-visible workflow gate.
+//
+// Transitions: 'draft' -> 'finalized' via the explicit Sign+Lock
+// action that captures finalized_at + finalized_by_user_id +
+// finalized_signature. No reverse transition; amendments create a
+// new row linked via amends_study_id.
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN lifecycle_state TEXT NOT NULL DEFAULT 'draft'"); } catch {}
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN finalized_at TEXT"); } catch {}
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN finalized_by_user_id INTEGER"); } catch {}
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN finalized_signature TEXT"); } catch {}
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN amends_study_id INTEGER"); } catch {}
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN result_units TEXT"); } catch {}
 
 // ─────────────────────────────────────────────────────────────────────────────────
