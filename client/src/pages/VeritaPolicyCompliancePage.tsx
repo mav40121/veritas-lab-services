@@ -10,6 +10,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { VeritaPolicyTabs } from "@/components/VeritaPolicyTabs";
 import { apiRequest, queryClient, getQueryFn, API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -221,6 +222,7 @@ export default function VeritaPolicyCompliancePage() {
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
+      <VeritaPolicyTabs active="compliance" />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Compliance Dashboard</h1>
