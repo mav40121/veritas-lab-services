@@ -587,15 +587,15 @@ export function staffPortalAuthMiddleware(req: any, res: any, next: any) {
   if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
   try {
     const payload = jwt.verify(auth.slice(7), JWT_SECRET) as any;
-    // 2026-06-09 Auth unification: ALSO accept a regular user JWT when
-    // the user has an active user_seats row with seat_type='staff_portal'.
-    // Resolves the lab from the seat's lab_id (single Tier 2 lab per
-    // Staff Portal account) and stashes both labId and the linked
-    // staff_employees row so downstream handlers can scope by either.
-    if (payload && payload.kind === "staff_portal" && typeof payload.labId === "number") {
-      req.staffPortalLabId = payload.labId;
-      return next();
-    }
+    // 2026-06-09 PR Option 1: synthetic-JWT (kind='staff_portal') path is
+    // retired. Only real user JWTs reach here now. A user qualifies for
+    // Staff Portal access via either:
+    //   1. an active user_seats row with seat_type='staff_portal' (the
+    //      invited-tech path), OR
+    //   2. a staff_employees row linked via user_id to req.userId
+    //      (the lab-director-on-roster path).
+    // Both paths resolve a single labs.id which gets stashed as
+    // req.staffPortalLabId for downstream handlers.
     if (payload && typeof payload.userId === "number") {
       const sqlite = (db as any).$client;
       const seat = sqlite.prepare(
@@ -604,6 +604,24 @@ export function staffPortalAuthMiddleware(req: any, res: any, next: any) {
       if (seat && seat.lab_id) {
         req.staffPortalLabId = seat.lab_id;
         req.staffPortalStaffEmployeeId = seat.staff_employee_id;
+        req.staffPortalUserId = payload.userId;
+        return next();
+      }
+      // Director-on-roster fallback. Pick the lab from the ?lab_id
+      // query param when supplied (so the bell can scope to the
+      // active lab), else any lab where the user has a staff_employees
+      // row linked.
+      const queryLabId = parseInt(String((req.query || {}).lab_id || ""), 10);
+      const empRow = Number.isFinite(queryLabId) && queryLabId > 0
+        ? sqlite.prepare(
+            "SELECT id, tier2_lab_id FROM staff_employees WHERE user_id = ? AND tier2_lab_id = ? AND status = 'active' LIMIT 1"
+          ).get(payload.userId, queryLabId) as any
+        : sqlite.prepare(
+            "SELECT id, tier2_lab_id FROM staff_employees WHERE user_id = ? AND status = 'active' LIMIT 1"
+          ).get(payload.userId) as any;
+      if (empRow && empRow.tier2_lab_id) {
+        req.staffPortalLabId = empRow.tier2_lab_id;
+        req.staffPortalStaffEmployeeId = empRow.id;
         req.staffPortalUserId = payload.userId;
         return next();
       }
@@ -4808,10 +4826,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
-  // POST /api/staff-portal-login body { clia, pin } → JWT scoped to the
-  // lab's Staff Portal. Mirror of /api/inventory-login but with
-  // kind="staff_portal". 8-hour TTL (one shift). 5 failures = 15-min lockout.
+  // POST /api/staff-portal-login — RETIRED 2026-06-09. The Staff Portal
+  // auth model is now real users + email + password. CLIA + shared PIN
+  // was a leftover from the Inventory Kiosk pattern and never made sense
+  // for a personal-device surface. Any client still calling this gets
+  // 410 Gone with a clear pointer at /login. The synthetic-JWT path in
+  // staffPortalAuthMiddleware is gone in the same commit so the
+  // returned JWT shape would be unverifiable anyway.
   app.post("/api/staff-portal-login", (req: any, res) => {
+    return res.status(410).json({
+      error: "Staff Portal CLIA+PIN login retired. Please use /login with your email and password.",
+      replacement: "/login",
+    });
+  });
+  // Pre-retirement implementation kept here as a dead branch behind the
+  // 410 above so the diff hunk is minimal. The whole block can be
+  // pruned in a follow-up cleanup PR.
+  app.post("/api/staff-portal-login-retired-stub", (req: any, res) => {
     try {
       const { clia, pin } = req.body || {};
       if (!clia || !pin || typeof clia !== "string" || typeof pin !== "string") {
@@ -6918,27 +6949,80 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, status: newStatus, emailSent, role, inviteToken });
   });
 
-  // GET /api/me/staff-portal-employee
+  // GET /api/me/staff-portal-employee?lab_id=N
   //   2026-06-09 Auth unification helper. Resolves the logged-in user's
   //   Staff Portal identity: which staff_employees row they're pinned
   //   to, which lab, and the two per-employee toggles the existing
   //   tile UI gates on. The /staff-access page calls this on mount;
-  //   a 200 means "skip CLIA+PIN entry and the picker, render tiles
-  //   directly for this employee"; a 404 means "this account isn't a
-  //   Staff Portal user".
+  //   a 200 means "render tiles directly for this employee"; a 404
+  //   means "this account has no Staff Portal access path".
+  //
+  //   Two resolution paths (in order):
+  //     1. user_seats with seat_type='staff_portal' (invited-tech path)
+  //     2. staff_employees.user_id = req.userId (director-on-roster
+  //        path; lab director added themselves to VeritaStaff). When
+  //        ?lab_id=N is supplied we scope to that lab.
+  //     3. Opportunistic auto-link: if neither resolves, try matching
+  //        the user's name to a staff_employees row with user_id IS
+  //        NULL on a lab they own. If exactly one match, link it.
   app.get("/api/me/staff-portal-employee", authMiddleware, (req: any, res) => {
     const sqlite = (db as any).$client;
+    const queryLabId = parseInt(String((req.query || {}).lab_id || ""), 10);
+    const wantLabId = Number.isFinite(queryLabId) && queryLabId > 0 ? queryLabId : null;
+
+    // Path 1: user_seats
     const seat = sqlite.prepare(
       "SELECT lab_id, staff_employee_id FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' AND status = 'active' LIMIT 1"
     ).get(req.userId) as any;
-    if (!seat || !seat.lab_id || !seat.staff_employee_id) {
-      return res.status(404).json({ error: "No Staff Portal seat for this account" });
+    let resolvedLabId: number | null = null;
+    let resolvedEmpId: number | null = null;
+    if (seat && seat.lab_id && seat.staff_employee_id) {
+      resolvedLabId = seat.lab_id;
+      resolvedEmpId = seat.staff_employee_id;
+    } else {
+      // Path 2: staff_employees.user_id direct link
+      const empRow = wantLabId
+        ? sqlite.prepare("SELECT id, tier2_lab_id FROM staff_employees WHERE user_id = ? AND tier2_lab_id = ? AND status = 'active' LIMIT 1").get(req.userId, wantLabId) as any
+        : sqlite.prepare("SELECT id, tier2_lab_id FROM staff_employees WHERE user_id = ? AND status = 'active' LIMIT 1").get(req.userId) as any;
+      if (empRow) {
+        resolvedLabId = empRow.tier2_lab_id;
+        resolvedEmpId = empRow.id;
+      } else {
+        // Path 3: opportunistic auto-link by name match on a lab the
+        // user owns or is a member of. Only links when there's exactly
+        // one candidate so we never silently bind the wrong row.
+        const user = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
+        if (user && user.name) {
+          const labs = sqlite.prepare(
+            wantLabId
+              ? "SELECT l.id FROM labs l WHERE l.id = ? AND (l.owner_user_id = ? OR EXISTS (SELECT 1 FROM lab_members lm WHERE lm.lab_id = l.id AND lm.user_id = ? AND lm.status = 'active'))"
+              : "SELECT l.id FROM labs l WHERE l.owner_user_id = ? OR EXISTS (SELECT 1 FROM lab_members lm WHERE lm.lab_id = l.id AND lm.user_id = ? AND lm.status = 'active')"
+          ).all(...(wantLabId ? [wantLabId, req.userId, req.userId] : [req.userId, req.userId])) as any[];
+          for (const lab of labs) {
+            const candidates = sqlite.prepare(
+              "SELECT id FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active' AND user_id IS NULL AND lower(trim(first_name || ' ' || last_name)) = lower(trim(?))"
+            ).all(lab.id, user.name) as any[];
+            if (candidates.length === 1) {
+              try {
+                sqlite.prepare("UPDATE staff_employees SET user_id = ? WHERE id = ? AND user_id IS NULL").run(req.userId, candidates[0].id);
+                resolvedLabId = lab.id;
+                resolvedEmpId = candidates[0].id;
+                break;
+              } catch { /* unique-constraint race; fall through */ }
+            }
+          }
+        }
+      }
+    }
+
+    if (!resolvedLabId || !resolvedEmpId) {
+      return res.status(404).json({ error: "No Staff Portal access for this account" });
     }
     const employee = sqlite.prepare(
       "SELECT id, first_name, last_name, middle_initial, title, title_code, can_adjust_inventory, can_view_audit FROM staff_employees WHERE id = ?"
-    ).get(seat.staff_employee_id) as any;
+    ).get(resolvedEmpId) as any;
     if (!employee) return res.status(404).json({ error: "Staff employee record not found" });
-    const lab = sqlite.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?").get(seat.lab_id) as any;
+    const lab = sqlite.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?").get(resolvedLabId) as any;
     res.json({
       employee: {
         id: employee.id,
@@ -6951,6 +7035,112 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         can_view_audit: !!employee.can_view_audit,
       },
       lab: lab ? { id: lab.id, name: lab.lab_name, clia_number: lab.clia_number } : null,
+    });
+  });
+
+  // GET /api/me/pending-staff-portal-items?lab_id=N
+  //   2026-06-09 Auth unification PR Option 1. Surfaces the count and
+  //   minimal preview of every pending Staff Portal item (quizzes,
+  //   policies, competencies) for the logged-in user across their
+  //   labs. The NavBar bell polls this every minute and shows an
+  //   amber badge + dropdown when total > 0. Always 200 OK with
+  //   empty arrays when there's no bridge (the bell hides itself).
+  app.get("/api/me/pending-staff-portal-items", authMiddleware, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const queryLabId = parseInt(String((req.query || {}).lab_id || ""), 10);
+    const wantLabId = Number.isFinite(queryLabId) && queryLabId > 0 ? queryLabId : null;
+
+    // Find all staff_employees rows linked to this user. We do not
+    // auto-link here — that responsibility lives on the staff-portal-
+    // employee endpoint which the /staff-access page hits on mount.
+    const empRows = wantLabId
+      ? sqlite.prepare(
+          "SELECT id, tier2_lab_id FROM staff_employees WHERE user_id = ? AND tier2_lab_id = ? AND status = 'active'"
+        ).all(req.userId, wantLabId) as any[]
+      : sqlite.prepare(
+          "SELECT id, tier2_lab_id FROM staff_employees WHERE user_id = ? AND status = 'active'"
+        ).all(req.userId) as any[];
+    if (!empRows.length) {
+      return res.json({ quizzes: [], policies: [], competencies: [] });
+    }
+
+    // Pending quizzes: competency_quiz_assignments with status='assigned'.
+    const empIds = empRows.map((r) => r.id);
+    const labIds = empRows.map((r) => r.tier2_lab_id);
+    const placeholders = empIds.map(() => "?").join(",");
+    const quizRows = sqlite.prepare(
+      `SELECT qa.id AS assignment_id, qa.quiz_id, qa.due_date, qa.assigned_at,
+              q.title, q.method_group_name
+       FROM competency_quiz_assignments qa
+       JOIN competency_quizzes q ON q.id = qa.quiz_id
+       WHERE qa.staff_employee_id IN (${placeholders}) AND qa.status = 'assigned'
+       ORDER BY qa.due_date ASC, qa.assigned_at DESC`
+    ).all(...empIds) as any[];
+
+    // Pending policies: lab_documents that haven't been signed by
+    // this staff member yet. Mirrors the GET
+    // /api/staff-portal-session/policies pattern but inlined for one
+    // signer.
+    let policies: any[] = [];
+    try {
+      const policyPlaceholders = empIds.map(() => "?").join(",");
+      policies = sqlite.prepare(
+        `SELECT DISTINCT ld.id AS document_id, ld.title, ld.effective_date
+         FROM lab_documents ld
+         WHERE ld.lab_id IN (${labIds.map(() => "?").join(",")})
+           AND ld.status = 'approved'
+           AND NOT EXISTS (
+             SELECT 1 FROM policy_signoffs ps
+             WHERE ps.document_id = ld.id
+               AND ps.staff_employee_id IN (${policyPlaceholders})
+           )
+         LIMIT 100`
+      ).all(...labIds, ...empIds) as any[];
+    } catch { /* policies table shape may differ on older deploys */ }
+
+    // Pending competencies: assessments where employee_acknowledged = 0
+    // for this staff member's competency_employees bridge.
+    let competencies: any[] = [];
+    try {
+      const bridges = sqlite.prepare(
+        `SELECT ce.id FROM competency_employees ce
+         WHERE ce.staff_employee_id IN (${placeholders})`
+      ).all(...empIds) as any[];
+      const bridgeIds = bridges.map((b) => b.id);
+      if (bridgeIds.length) {
+        const bridgePlaceholders = bridgeIds.map(() => "?").join(",");
+        competencies = sqlite.prepare(
+          `SELECT ca.id AS assessment_id, ca.assessment_date, ca.assessment_type,
+                  cp.name AS program_name
+           FROM competency_assessments ca
+           JOIN competency_programs cp ON cp.id = ca.program_id
+           WHERE ca.employee_id IN (${bridgePlaceholders})
+             AND COALESCE(ca.employee_acknowledged, 0) = 0
+             AND ca.status = 'completed'
+           ORDER BY ca.assessment_date DESC
+           LIMIT 50`
+        ).all(...bridgeIds) as any[];
+      }
+    } catch { /* table shape may differ on older deploys */ }
+
+    res.json({
+      quizzes: quizRows.map((r) => ({
+        assignment_id: r.assignment_id,
+        quiz_id: r.quiz_id,
+        title: r.title || r.method_group_name || `Quiz ${r.quiz_id}`,
+        due_date: r.due_date,
+      })),
+      policies: (policies || []).map((p: any) => ({
+        document_id: p.document_id,
+        title: p.title,
+        effective_date: p.effective_date,
+      })),
+      competencies: (competencies || []).map((c: any) => ({
+        assessment_id: c.assessment_id,
+        program_name: c.program_name,
+        assessment_date: c.assessment_date,
+        assessment_type: c.assessment_type,
+      })),
     });
   });
 

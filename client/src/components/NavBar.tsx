@@ -7,6 +7,7 @@ import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, TestTube, User, LogOut, 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { LabSwitcher, LabSwitcherMobile } from "@/components/LabSwitcher";
+import { PendingStaffPortalBell } from "@/components/PendingStaffPortalBell";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -247,6 +248,7 @@ export function NavBar() {
               cliaCertExpirationDate field still flows on /api/labs/me
               for any future consumer. */}
           {isLoggedIn && <LabSwitcher />}
+          {isLoggedIn && <PendingStaffPortalBell />}
           <Button variant="ghost" size="icon" onClick={toggleTheme} className="w-8 h-8" aria-label="Toggle theme">
             {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
           </Button>
