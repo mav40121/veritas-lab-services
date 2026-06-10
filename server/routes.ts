@@ -9155,7 +9155,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const sqlite = (db as any).$client;
     const now = new Date().toISOString();
-    const labRow = resolveLabForUser(userId);
+    // 2026-06-09 (Q3 write-path Shape A sweep, conservative): prefer the
+    // X-Active-Lab-Id header so a multi-lab user's instrument request
+    // tags the lab they are actively viewing, not their legacy
+    // default_lab_id. Falls back to legacy resolver when no header is
+    // present so single-lab callers are unchanged.
+    const labRow = resolveActiveLabForRequest(userId, req);
     const labId = labRow?.id ?? null;
 
     // Soft dedup: same user, same name, in last 5 minutes.
