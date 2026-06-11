@@ -27,10 +27,40 @@ import {
 import {
   isCensored,
   censorValueForMath,
+  applyCensoringToVector,
+  displayPointValue,
   policyLabel,
   policyNarrative,
   type CensoringPolicy,
 } from "./censoring";
+
+// Build a "N censored (policy: X)" note for the appendix, or "" when
+// no censored points were seen. Shared by every renderer branch.
+function censoringNoteHtml(
+  excludedCount: number,
+  substitutedCount: number,
+  policy: CensoringPolicy,
+): string {
+  if (excludedCount + substitutedCount <= 0) return "";
+  const parts: string[] = [];
+  if (substitutedCount > 0) parts.push(`${substitutedCount} substituted`);
+  if (excludedCount > 0) parts.push(`${excludedCount} excluded`);
+  return `
+    <div style="margin-top:10px;padding:8px 10px;border-left:3px solid #6b7280;background:#f9fafb;font-size:10px;color:#374151">
+      <strong>Censored results:</strong> ${parts.join(", ")} (policy: ${policyLabel(policy)}).
+      ${policyNarrative(policy)}
+    </div>`;
+}
+
+// Map a raw value list (bare numbers and/or censored objects) into the
+// {value}|{censored} shape applyCensoringToVector expects, then apply
+// the policy. Reuses the tested helper so every branch is consistent.
+function resolveRawValues(rawList: any[], policy: CensoringPolicy) {
+  return applyCensoringToVector(
+    (rawList || []).map((v: any) => (isCensored(v) ? v : { value: v })),
+    policy,
+  );
+}
 
 const sqlite = db.$client;
 
@@ -219,9 +249,16 @@ function renderStudyAppendix(slot: any, teal: string): string {
       // stays in the data_points blob.
       const includedDp = (dp as any[]).filter((p: any) => p && p.excluded !== true);
       const excludedDpCount = (dp as any[]).filter((p: any) => p && p.excluded === true).length;
+      // 2026-06-10 Censoring Level 2: a replicate reading may be a
+      // censored (<X / >Y) result. Resolve each level's readings per
+      // the study policy; accumulate censored counts for the note.
+      const precPolicy = (slot.studyCensoringPolicy || "exclude") as CensoringPolicy;
+      let precCensExc = 0, precCensSub = 0;
       const rows = includedDp.map((p: any) => {
-        const vals: number[] = (p.days ? p.days.flat() : p.values || [])
-          .filter((v: any) => v !== null && v !== undefined && !isNaN(v));
+        const rawVals = p.days ? p.days.flat() : (p.values || []);
+        const rv = resolveRawValues(rawVals, precPolicy);
+        precCensExc += rv.excludedCount; precCensSub += rv.substitutedCount;
+        const vals: number[] = rv.values;
         const n = vals.length;
         if (n < 2) return `<tr><td>${p.levelName || p.level}</td><td>${n}</td><td colspan="3" style="color:#6b7280">Insufficient data</td></tr>`;
         const mean = vals.reduce((a, b) => a + b, 0) / n;
@@ -247,7 +284,8 @@ function renderStudyAppendix(slot: any, teal: string): string {
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
-        ${excludedDpCount > 0 ? `<div style="font-size:10px;color:#6b7280;margin-top:4px"><strong>${excludedDpCount} level(s) excluded by director.</strong> See data_points audit trail.</div>` : ""}`;
+        ${excludedDpCount > 0 ? `<div style="font-size:10px;color:#6b7280;margin-top:4px"><strong>${excludedDpCount} level(s) excluded by director.</strong> See data_points audit trail.</div>` : ""}
+        ${censoringNoteHtml(precCensExc, precCensSub, precPolicy)}`;
       // 2026-06-09 (Michael L feedback): embed Precision Plot +
       // Histogram graphs same as the single-study PDF. Aggregates
       // values across all levels (matching the single-study layout
@@ -286,11 +324,18 @@ function renderStudyAppendix(slot: any, teal: string): string {
       // from PR #693/#694 dialog. Same shape as precision.
       const includedDp = (dp as any[]).filter((p: any) => p && p.excluded !== true);
       const excludedDpCount = (dp as any[]).filter((p: any) => p && p.excluded === true).length;
+      // 2026-06-10 Censoring Level 2: a measured value per level may be
+      // censored; resolve per policy and accumulate counts for the note.
+      const calPolicy = (slot.studyCensoringPolicy || "exclude") as CensoringPolicy;
+      let calCensExc = 0, calCensSub = 0;
       const rows = includedDp.map((p: any) => {
         const assigned = p.assignedValue ?? p.expectedValue ?? 0;
-        const vals = instNames.length > 0
-          ? instNames.map(n => p.instrumentValues?.[n]).filter((v: any) => v !== null && v !== undefined && !isNaN(v))
-          : Object.values(p.instrumentValues || {}).filter((v: any) => v !== null && v !== undefined && !isNaN(v));
+        const rawVals = instNames.length > 0
+          ? instNames.map(n => p.instrumentValues?.[n])
+          : Object.values(p.instrumentValues || {});
+        const rv = resolveRawValues(rawVals, calPolicy);
+        calCensExc += rv.excludedCount; calCensSub += rv.substitutedCount;
+        const vals = rv.values;
         if (vals.length === 0) return `<tr><td>${p.level}</td><td>${assigned}</td><td colspan="3" style="color:#6b7280">No values</td></tr>`;
         const mean = (vals as number[]).reduce((a, b) => a + b, 0) / vals.length;
         const pctRecovery = assigned !== 0 ? (mean / assigned) * 100 : 100;
@@ -584,9 +629,23 @@ function renderStudyAppendix(slot: any, teal: string): string {
       const refLow = (dp as any).refLow ?? 0;
       const refHigh = (dp as any).refHigh ?? 0;
       const units = (dp as any).units || "";
-      const valid = specimens.filter((s: any) => s.value !== null && s.value !== undefined && !isNaN(s.value));
+      // 2026-06-10 Censoring Level 2: a specimen reading may be a
+      // censored (<X / >Y) result. Resolve each specimen's value per
+      // the study policy; the per-specimen table still shows the raw
+      // "<17" marker, but the verdict math uses the resolved value.
+      const riPolicy = (slot.studyCensoringPolicy || "exclude") as CensoringPolicy;
+      let riCensExc = 0, riCensSub = 0;
+      const resolvedSpecimens = specimens.map((s: any) => {
+        const wasCensored = isCensored(s.value);
+        const resolved = wasCensored
+          ? censorValueForMath(s.value, riPolicy)
+          : (s.value !== null && s.value !== undefined && !isNaN(s.value) ? Number(s.value) : null);
+        if (wasCensored) { if (resolved === null) riCensExc++; else riCensSub++; }
+        return { ...s, _resolved: resolved, _censored: wasCensored };
+      });
+      const valid = resolvedSpecimens.filter((s: any) => s._resolved !== null);
       const n = valid.length;
-      const outsideCount = valid.filter((s: any) => s.value < refLow || s.value > refHigh).length;
+      const outsideCount = valid.filter((s: any) => s._resolved < refLow || s._resolved > refHigh).length;
       const outsidePct = n > 0 ? (outsideCount / n) * 100 : 0;
       const inner = `
         <div style="font-size:11px;margin-bottom:8px">
@@ -603,15 +662,17 @@ function renderStudyAppendix(slot: any, teal: string): string {
             <th style="padding:3px 6px;text-align:center">In Range</th>
           </tr></thead>
           <tbody>${valid.slice(0, 30).map((s: any) => {
-            const inRange = s.value >= refLow && s.value <= refHigh;
+            const inRange = s._resolved >= refLow && s._resolved <= refHigh;
+            const shown = s._censored ? displayPointValue(s.value) : s.value;
             return `<tr>
               <td style="padding:3px 6px;border-bottom:1px solid #f0f0f0">${s.specimenId ?? ""}</td>
-              <td style="padding:3px 6px;border-bottom:1px solid #f0f0f0;text-align:right">${s.value}</td>
+              <td style="padding:3px 6px;border-bottom:1px solid #f0f0f0;text-align:right">${shown}</td>
               <td style="padding:3px 6px;border-bottom:1px solid #f0f0f0;text-align:center;color:${inRange ? "#059669" : "#dc2626"}">${inRange ? "Yes" : "No"}</td>
             </tr>`;
           }).join("")}</tbody>
         </table>
-        ${valid.length > 30 ? `<div style="font-size:10px;color:#6b7280;margin-top:4px">(Showing first 30 of ${valid.length} specimens; full list in the underlying study report.)</div>` : ""}`;
+        ${valid.length > 30 ? `<div style="font-size:10px;color:#6b7280;margin-top:4px">(Showing first 30 of ${valid.length} specimens; full list in the underlying study report.)</div>` : ""}
+        ${censoringNoteHtml(riCensExc, riCensSub, riPolicy)}`;
       const amrBlockRI = renderAmrCoverageBlock(slot, slot.studyType, dp, undefined, "compact");
       // 2026-06-09 (Michael L feedback): embed Histogram of the
       // reference specimens. Mean / SD computed from the same valid
