@@ -53,7 +53,26 @@ import {
   type SensitivityInput,
 } from "@/lib/calculations";
 import type { Study } from "@shared/schema";
+import { isCensored, censorValueForMath, type CensoringPolicy } from "@shared/censoring";
 import { teaLabelFor } from "@/lib/cliaTeaData";
+
+// 2026-06-11: a saved study's data_points may contain censored ("<17") values
+// (Censoring Level 2). The on-screen results are RE-COMPUTED from data_points
+// through the numeric calculate* engine, which would NaN-poison on a censored
+// object. Resolve every censored value per the study's policy (exclude -> null
+// which every calculate* filters; substitute -> imputed number) before
+// computing, so the screen matches the server-rendered PDF. No-op when the blob
+// has no censored values.
+function deepResolveCensored(obj: any, policy: CensoringPolicy): any {
+  if (isCensored(obj)) return censorValueForMath(obj, policy);
+  if (Array.isArray(obj)) return obj.map((x) => deepResolveCensored(x, policy));
+  if (obj && typeof obj === "object") {
+    const out: any = {};
+    for (const k of Object.keys(obj)) out[k] = deepResolveCensored(obj[k], policy);
+    return out;
+  }
+  return obj;
+}
 import {
   ScatterChart,
   Scatter,
@@ -2804,7 +2823,11 @@ export default function StudyResults() {
   }
 
   const instrumentNames: string[] = JSON.parse(study.instruments);
-  const rawDataPoints = JSON.parse(study.dataPoints);
+  // Resolve censored ("<17") values per the study's policy BEFORE the numeric
+  // calculate* engine runs, so the screen matches the PDF (which resolves the
+  // same way server-side). Falls back to "exclude" (the default) when unset.
+  const viewCensoringPolicy = ((study as any).censoringPolicy || (study as any).censoring_policy || "exclude") as CensoringPolicy;
+  const rawDataPoints = deepResolveCensored(JSON.parse(study.dataPoints), viewCensoringPolicy);
   let results: StudyResults;
   if (study.studyType === "precision") {
     results = calculatePrecision(

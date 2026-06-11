@@ -27,41 +27,14 @@
 // import path (./censoring) keeps resolving unchanged.
 export {
   isCensored,
+  censorValueForMath,
   parseCensoredInput,
   displayPointValue,
   type CensoringPolicy,
   type CensoredPoint,
 } from "@shared/censoring";
 
-import { isCensored, type CensoringPolicy } from "@shared/censoring";
-
-/**
- * Given a point and a study-level policy, return either:
- *   - a number to feed into stat math (substitution)
- *   - null to skip (exclude)
- *
- * Caller should also separately surface censored-point counts on the
- * report so the surveyor sees how many were dropped or imputed.
- */
-export function censorValueForMath(
-  point: any,
-  policy: CensoringPolicy,
-): number | null {
-  if (!isCensored(point)) {
-    // Not censored: caller uses point.value directly.
-    return typeof point?.value === "number" && Number.isFinite(point.value) ? point.value : null;
-  }
-  switch (policy) {
-    case "exclude":
-      return null;
-    case "substitute_lld":
-      return point.censor_value;
-    case "substitute_lld_half":
-      return point.censor_value / 2;
-    default:
-      return null;
-  }
-}
+import { isCensored, censorValueForMath, type CensoringPolicy } from "@shared/censoring";
 
 /**
  * Filter + map a list of points to a numeric vector per policy, with
