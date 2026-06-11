@@ -71,3 +71,29 @@ Total daytime cost: ~1 day for the two missing modules.
 ## Why this is documentation-only tonight
 
 The remediation patterns above touch read paths that are surveyor-facing (VeritaScan PDF, VeritaTrack signoff lists). Per the overnight rule "if a class of error shows up twice, stop touching that area and document", I am surfacing the audit findings rather than shipping behavior changes on routes Michael has not asked me to touch directly. The fixes are mechanical once authorized; the risk is low; but the precondition is "look at this audit and tell me which module first."
+
+---
+
+## 2026-06-11 UPDATE — write-path defect found; why the read-fix is NOT safe to ship alone
+
+While preparing this remediation autonomously (Michael away), I traced the **write** paths the original audit only "sampled". Finding: both modules ALREADY dual-write `lab_id`, but they write the user's **primary** lab, not the **active** lab from the request. This is a Shape-A defect on the write path, and it is the reason the read-path rewrite cannot be shipped on its own.
+
+**Exact defects (verified in code):**
+
+- `server/routes.ts:11500-11505` (VeritaScan create scan): after the insert, dual-writes
+  `UPDATE veritascan_scans SET lab_id = (SELECT lab_id FROM users WHERE id = ?) ...`
+  — `users.lab_id` is the legacy *primary* lab pointer, NOT the active lab.
+- `server/veritatrack.ts:355-358` (VeritaTrack create task): same pattern,
+  `UPDATE veritatrack_tasks SET lab_id = (SELECT lab_id FROM users WHERE id = ?) ...`.
+- The one-time backfill migrations (db.ts Phase 3.4 / 3.7) likewise tagged every
+  historical row to the creator's primary lab.
+
+**Consequence:** for a multi-lab owner working in Lab B, a scan/task created today is tagged `lab_id = Lab A (primary)`. If we flip the surveyor-facing reads to `WHERE lab_id = <active>` now, those Lab-B-created rows would VANISH from the Lab B view (fail-closed) — missing data in a survey bundle is worse than the current over-showing leak (fail-open). This is exactly the multi-lab failure class that broke a demo on 2026-06-01.
+
+**Safe remediation sequence (write-first, verify, then read):**
+
+1. **PR 1 — write-path Shape A fix (low risk, no read change):** in both create routes, replace the `(SELECT lab_id FROM users WHERE id = ?)` dual-write with the active lab: `resolveActiveLabForRequest(userId, req)?.id ?? <primary fallback>`. `resolveActiveLabForRequest` (routes.ts:862) already honors the `X-Active-Lab-Id` header and falls back to the user's lab, so **single-lab users are unaffected**; only multi-lab header-present writes change. Reads still use `user_id`, so nothing can be hidden. Verifiable on `verilabguy@gmail.com`: switch NavBar to Riverside Regional, create a scan/task, confirm `lab_id` = Riverside not Michaels Lab.
+2. **PR 2 — historical re-tag (one-time, supervised):** a guarded admin script that re-tags only rows a multi-lab owner created in a non-primary lab. Needs Michael to confirm the mapping per owner; do NOT auto-cascade (see `feedback_boot_migration_no_cascading_writes`).
+3. **PR 3 — read-path scoping (after writes are correct + history re-tagged):** flip the High-severity read sites (scan list 13719, single-scan 14596/14620, count 22415; track list 562/661) to `WHERE user_id = ? AND (lab_id = ? OR lab_id IS NULL)` using the active lab. The `OR lab_id IS NULL` keeps it fail-open for any un-backfilled row. The uniqueness checks (track 534/543/643) can scope to `lab_id` in the same PR (relaxing a false-positive collision = safe direction).
+
+**Why I did not ship even PR 1 autonomously:** it edits the most demo-sensitive subsystem (multi-lab routing) and its correctness is only observable with the two-lab test account, which needs Michael driving the NavBar switch. The change is ready; it needs his go + a 2-minute multi-lab verification, not blind deployment.
