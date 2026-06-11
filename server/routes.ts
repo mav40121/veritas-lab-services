@@ -872,12 +872,17 @@ function resolveActiveLabForRequest(userId: number, req: any): any | null {
   }
   if (requested) {
     // Shape A guard: this is a read-only membership/ownership check
-    // (does the user own lab `requested` via labs.user_id, OR hold an
-    // active lab_members row). It is the access guard itself, not a
-    // leaky data scope; the `WHERE id = ? AND user_id = ?` shape here
-    // is intentional and validated by the surrounding UNION.
+    // (does the user own lab `requested` via labs.owner_user_id, OR hold
+    // an active lab_members row). It is the access guard itself, not a
+    // leaky data scope; the `WHERE id = ? AND owner_user_id = ?` shape
+    // here is intentional and validated by the surrounding UNION.
+    // 2026-06-11 FIX: this previously read `user_id` on the labs table,
+    // which has no such column (it is owner_user_id). The query threw
+    // "no such column: user_id"; callers swallow it in try/catch, so the
+    // active lab silently failed to resolve and PDFs lost lab identity
+    // (showed neither the wrong lab nor the right one).
     const mem = (db as any).$client.prepare(
-      `SELECT 1 AS ok FROM labs WHERE id = ? AND user_id = ?
+      `SELECT 1 AS ok FROM labs WHERE id = ? AND owner_user_id = ?
        UNION
        SELECT 1 AS ok FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'`
     ).get(requested, userId, requested, userId) as any;
@@ -890,7 +895,7 @@ function resolveActiveLabForRequest(userId: number, req: any): any | null {
       ).get(userId) as any;
       if (seatOwner) {
         const seatMem = (db as any).$client.prepare(
-          `SELECT 1 AS ok FROM labs WHERE id = ? AND user_id = ?
+          `SELECT 1 AS ok FROM labs WHERE id = ? AND owner_user_id = ?
            UNION
            SELECT 1 AS ok FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'`
         ).get(requested, seatOwner.owner_user_id, requested, seatOwner.owner_user_id) as any;
@@ -8872,6 +8877,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       let cliaLabName: string | undefined;
       let preferredStandards: string[] | undefined;
       let resolvedLabId: number | null = null;
+      let licenseCtx: LicenseContext | undefined;
       const auth = req.headers.authorization;
       if (auth?.startsWith("Bearer ")) {
         try {
@@ -8904,6 +8910,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               try { preferredStandards = JSON.parse(userRow.preferred_standards); } catch {}
             }
           }
+          // 2026-06-11: stamp the license band from the authenticated
+          // identity + resolved lab. licenseCtxFromReq(req) cannot be used
+          // here: this route has no authMiddleware (token-nav PDF path),
+          // so req.user is unset and the band would read "Demo Preview"
+          // even for a logged-in lab.
+          const idUser = storage.getUserById(payload.userId) as any;
+          if (idUser?.email) {
+            licenseCtx = {
+              licensee: cliaLabName || idUser.name || idUser.email,
+              email: idUser.email,
+              plan: idUser.plan,
+              issueDate: new Date().toISOString().slice(0, 10),
+            };
+          }
         } catch {}
       }
 
@@ -8928,7 +8948,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         } catch {}
       }
 
-      const pdfBuffer = await generatePDFBuffer(study, results, cliaNumber, preferredStandards as any, licenseCtxFromReq(req));
+      const pdfBuffer = await generatePDFBuffer(study, results, cliaNumber, preferredStandards as any, licenseCtx ?? licenseCtxFromReq(req));
       const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefRange", sensitivity: "Sensitivity", carryover: "Carryover" };
       const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
       // Store in token cache so client can use a direct GET URL (bypasses Adobe interception)
