@@ -30,6 +30,7 @@ import { authHeaders } from "@/lib/auth";
 import { trackEvent } from "@/lib/analytics";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import type { InsertStudy } from "@shared/schema";
+import { isCensored, parseCensoredInput, displayPointValue, type CensoredPoint } from "@shared/censoring";
 import fdaData from "@/lib/fdaInstrumentData.json";
 import { useLabRoute } from "@/hooks/useLabRoute";
 
@@ -155,7 +156,60 @@ function labInstrumentLabel(inst: { instrument_name: string; nickname?: string |
   return suffix ? `${inst.instrument_name} (${suffix})` : inst.instrument_name;
 }
 
-function makeEmptyPoints(instruments: string[], count: number): DataPoint[] {
+// 2026-06-10 (PR B): a data-entry cell may hold a censored result
+// ({censored:true, censor_direction, censor_value}) so directors can
+// type "<17" / ">500". EntryDataPoint widens DataPoint's numeric cells
+// to accept that object. The censored object is what gets stored
+// (data_points blob) and consumed by the server PDF renderer; for the
+// client-side status calc we normalize censored cells to null (the
+// default "exclude" policy) at the calculateStudy boundary so the pure
+// numeric engine is untouched.
+type EntryCell = number | CensoredPoint | null;
+type EntryDataPoint = Omit<DataPoint, "expectedValue" | "instrumentValues"> & {
+  expectedValue: EntryCell;
+  instrumentValues: { [key: string]: EntryCell };
+};
+
+// Strip censored objects to null for the numeric engine (exclude policy).
+function toNumericDataPoints(points: EntryDataPoint[]): DataPoint[] {
+  return points.map(dp => ({
+    ...dp,
+    expectedValue: isCensored(dp.expectedValue) ? null : dp.expectedValue,
+    instrumentValues: Object.fromEntries(
+      Object.entries(dp.instrumentValues).map(([k, v]) => [k, isCensored(v) ? null : v]),
+    ),
+  })) as DataPoint[];
+}
+
+// Render a stored cell value back into its text input: censored objects
+// show their marker ("<17"), bare numbers show themselves, null shows "".
+function cellDisplay(v: EntryCell): string | number {
+  return isCensored(v) ? displayPointValue(v) : (v ?? "");
+}
+
+// A cell counts as "entered" if it is a finite number OR a censored
+// result. Used by the readiness checks so a "<17" cell is not treated
+// as empty.
+function cellFilled(v: EntryCell): boolean {
+  return isCensored(v) || (v !== null && v !== undefined && !isNaN(v as number));
+}
+
+// Parse a raw input string into a stored cell (censored object | number | null).
+function parseCell(value: string): EntryCell {
+  const parsed = parseCensoredInput(value);
+  return parsed === null ? null : (parsed.censored ?? parsed.value ?? null);
+}
+
+// Reference-interval specimens widened to accept a censored value.
+type EntryRefDataPoint = Omit<RefIntervalDataPoint, "value"> & { value: EntryCell };
+
+// Strip censored specimens to null for the numeric ref-interval engine
+// (exclude policy); the stored blob keeps the censored object.
+function toNumericRefData(rows: EntryRefDataPoint[]): RefIntervalDataPoint[] {
+  return rows.map(r => ({ ...r, value: isCensored(r.value) ? null : r.value })) as RefIntervalDataPoint[];
+}
+
+function makeEmptyPoints(instruments: string[], count: number): EntryDataPoint[] {
   return Array.from({ length: count }, (_, i) => ({
     level: i + 1,
     expectedValue: null,
@@ -163,7 +217,7 @@ function makeEmptyPoints(instruments: string[], count: number): DataPoint[] {
   }));
 }
 
-function resizeDataPoints(prev: DataPoint[], instruments: string[], newCount: number): DataPoint[] {
+function resizeDataPoints(prev: EntryDataPoint[], instruments: string[], newCount: number): EntryDataPoint[] {
   if (newCount > prev.length) {
     // Add empty rows at the end
     const extras = Array.from({ length: newCount - prev.length }, (_, i) => ({
@@ -503,7 +557,7 @@ export default function VeritaCheckPage() {
   const prevAnalytePresetRef = useRef(0);
   const [customClia, setCustomClia] = useState(0.15);
   const [numLevels, setNumLevels] = useState(DEFAULT_LEVELS);
-  const [dataPoints, setDataPoints] = useState<DataPoint[]>(makeEmptyPoints(["Instrument 1", "Instrument 2"], DEFAULT_LEVELS));
+  const [dataPoints, setDataPoints] = useState<EntryDataPoint[]>(makeEmptyPoints(["Instrument 1", "Instrument 2"], DEFAULT_LEVELS));
 
   // When editing, pre-populate form state from the fetched study. Runs once
   // when editStudy first resolves. Uses a hydrated ref so editing toggles
@@ -677,13 +731,16 @@ export default function VeritaCheckPage() {
   const [precisionMode, setPrecisionMode] = useState<"simple" | "advanced">("simple");
   const [precisionLevels, setPrecisionLevels] = useState(2);
   const [precisionLevelNames, setPrecisionLevelNames] = useState<string[]>(["Level 1 (Low)", "Level 2 (High)", "Level 3 (Mid)"]);
-  const [precisionValues, setPrecisionValues] = useState<number[][]>([[], [], []]);
+  // 2026-06-10 (PR B): widened to EntryCell so a replicate can be a
+  // censored ("<17") result. Stored intact for the renderer; stripped to
+  // numbers (exclude policy) before calculatePrecision.
+  const [precisionValues, setPrecisionValues] = useState<EntryCell[][]>([[], [], []]);
   const [precisionReps, setPrecisionReps] = useState(20);
   // Advanced mode
   const [precisionDays, setPrecisionDays] = useState(5);
   const [precisionRunsPerDay, setPrecisionRunsPerDay] = useState(1);
   const [precisionReplicatesPerRun, setPrecisionReplicatesPerRun] = useState(2);
-  const [precisionAdvancedData, setPrecisionAdvancedData] = useState<number[][][]>([[], [], []]);
+  const [precisionAdvancedData, setPrecisionAdvancedData] = useState<EntryCell[][][]>([[], [], []]);
   // Phase 3 simple-precision parity (2026-05-20): optional EE-style inputs.
   // All four are stored as strings (text inputs) and parsed at save time so
   // an empty box stays "" rather than NaN. The calculator + PDF only render
@@ -865,7 +922,7 @@ export default function VeritaCheckPage() {
   const [refLow, setRefLow] = useState<number | "">("");
   const [refHigh, setRefHigh] = useState<number | "">("");
   const [refNumSpecimens, setRefNumSpecimens] = useState(20);
-  const [refData, setRefData] = useState<RefIntervalDataPoint[]>(
+  const [refData, setRefData] = useState<EntryRefDataPoint[]>(
     Array.from({ length: 20 }, (_, i) => ({ specimenId: `S${String(i + 1).padStart(3, "0")}`, value: null }))
   );
 
@@ -1380,11 +1437,16 @@ export default function VeritaCheckPage() {
   };
 
   const updateDataPoint = (levelIdx: number, field: string, value: string) => {
-    const num = value === "" ? null : parseFloat(value);
+    // 2026-06-10 (PR B): accept censored entry. parseCensoredInput turns
+    // "<17"/">500" into the censored object, "17" into {value:17}, and
+    // ""/non-numeric into null. Store the censored object or the bare
+    // number; null clears the cell.
+    const parsed = parseCensoredInput(value);
+    const stored: EntryCell = parsed === null ? null : (parsed.censored ?? parsed.value ?? null);
     setDataPoints(prev => prev.map((dp, i) => {
       if (i !== levelIdx) return dp;
-      if (field === "expectedValue") return { ...dp, expectedValue: num };
-      return { ...dp, instrumentValues: { ...dp.instrumentValues, [field]: num } };
+      if (field === "expectedValue") return { ...dp, expectedValue: stored };
+      return { ...dp, instrumentValues: { ...dp.instrumentValues, [field]: stored } };
     }));
   };
 
@@ -1398,8 +1460,8 @@ export default function VeritaCheckPage() {
 
   const filledLevels = studyType === "precision"
     ? (precisionMode === "simple"
-      ? precisionValues.slice(0, precisionLevels).filter(arr => (arr || []).filter(v => v !== undefined && v !== null && !isNaN(v)).length >= 3).length
-      : precisionAdvancedData.slice(0, precisionLevels).filter(days => (days || []).flat().filter(v => v !== undefined && v !== null && !isNaN(v)).length >= 3).length)
+      ? precisionValues.slice(0, precisionLevels).filter(arr => (arr || []).filter(v => cellFilled(v)).length >= 3).length
+      : precisionAdvancedData.slice(0, precisionLevels).filter(days => (days || []).flat().filter(v => cellFilled(v)).length >= 3).length)
     : studyType === "lot_to_lot"
     ? lotData.filter(dp => dp.currentLot !== null && dp.newLot !== null).length + (lotSampleType === "both" ? lotDataAbnormal.filter(dp => dp.currentLot !== null && dp.newLot !== null).length : 0)
     : studyType === "pt_coag"
@@ -1409,7 +1471,7 @@ export default function VeritaCheckPage() {
     : studyType === "multi_analyte_coag"
     ? maSpecimens.filter(s => (s.ptNew && s.ptOld) || (s.apttNew && s.apttOld) || (s.fibNew && s.fibOld)).length
     : studyType === "ref_interval"
-    ? refData.filter(dp => dp.value !== null && !isNaN(dp.value as number)).length
+    ? refData.filter(dp => cellFilled(dp.value)).length
     : studyType === "sensitivity"
     ? sensBlanksText.split(/\r?\n/).map(l => parseFloat(l.split(/[,\t]/)[0])).filter(v => !isNaN(v)).length
     : studyType === "carryover"
@@ -1704,9 +1766,11 @@ export default function VeritaCheckPage() {
       const lo = Number(refLow);
       const hi = Number(refHigh);
       if (lo >= hi) { toast({ title: "Reference range low must be less than high", variant: "destructive" }); return; }
-      const validData = refData.filter(dp => dp.value !== null && !isNaN(dp.value as number));
+      // Count censored ("<17") specimens toward the 20-entry minimum; the
+      // verdict math excludes them per the default policy (server renderer).
+      const validData = refData.filter(dp => cellFilled(dp.value));
       if (validData.length < 20) { toast({ title: `Please enter at least 20 specimen values (${validData.length} entered)`, variant: "destructive" }); return; }
-      const results = calculateRefInterval(refData, lo, hi, refAnalyte, refUnits);
+      const results = calculateRefInterval(toNumericRefData(refData), lo, hi, refAnalyte, refUnits);
       const study: InsertStudy = {
         testName: testName.trim(), instrument: instrumentNames[0] || "-", analyst: analyst.trim() || "-",
         date, studyType: "ref_interval", cliaAllowableError: 0.1,
@@ -2179,18 +2243,30 @@ export default function VeritaCheckPage() {
 
     if (studyType === "precision") {
       if (filledLevels < 1) { toast({ title: "Please enter at least 3 measurements for one level", variant: "destructive" }); return; }
-      const precDataPoints: PrecisionDataPoint[] = precisionLevelNames.slice(0, precisionLevels).map((name, i) => {
+      // Stored shape: KEEP censored ("<17") replicates so the server PDF
+      // renderer can resolve them per the study policy. cellFilled keeps a
+      // finite number OR a censored object; only blanks/NaN are dropped.
+      const precDataPoints: any[] = precisionLevelNames.slice(0, precisionLevels).map((name, i) => {
         if (precisionMode === "simple") {
-          return { level: i + 1, levelName: name, values: (precisionValues[i] || []).filter(v => v !== undefined && v !== null && !isNaN(v)) };
+          return { level: i + 1, levelName: name, values: (precisionValues[i] || []).filter(v => cellFilled(v)) };
         } else {
           return {
             level: i + 1, levelName: name,
             days: precisionAdvancedData[i] || [],
             numDays: precisionDays, runsPerDay: precisionRunsPerDay, replicatesPerRun: precisionReplicatesPerRun,
-            values: (precisionAdvancedData[i] || []).flat().filter(v => v !== undefined && v !== null && !isNaN(v))
+            values: (precisionAdvancedData[i] || []).flat().filter(v => cellFilled(v))
           };
         }
       });
+      // Client status calc needs numbers only: drop censored replicates
+      // (default "exclude" policy), matching the server renderer's default.
+      const stripReps = (arr: any[]): number[] =>
+        (arr || []).filter((v: any) => !isCensored(v) && v !== undefined && v !== null && !isNaN(v)) as number[];
+      const precDataPointsForCalc: PrecisionDataPoint[] = precDataPoints.map((p: any) => ({
+        ...p,
+        values: stripReps(p.values),
+        ...(Array.isArray(p.days) ? { days: (p.days as any[][]).map(d => stripReps(d)) } : {}),
+      }));
       // VeritaQC Import audit trail (design doc v2 decision #5). When the
       // tech ran "Import from VeritaQC…" earlier in this session, augment
       // level 0 of the persisted precDataPoints with importedFromVeritaqc +
@@ -2213,7 +2289,7 @@ export default function VeritaCheckPage() {
       const vendorSdConcNum = numOrNull(precisionVendorSdConc);
       const targetMeanNum = numOrNull(precisionTargetMean);
       const targetCvNum = numOrNull(precisionTargetCv);
-      const results = calculatePrecision(precDataPoints, cliaValue, precisionMode, {
+      const results = calculatePrecision(precDataPointsForCalc, cliaValue, precisionMode, {
         vendorSD: vendorSdNum ?? undefined,
         vendorSDConcentration: vendorSdConcNum ?? undefined,
         targetMean: targetMeanNum ?? undefined,
@@ -2294,7 +2370,9 @@ export default function VeritaCheckPage() {
       // Quantitative method comparison (existing behavior)
       const primaryName = instrumentNames[0];
       const comparisonNames = instrumentNames.slice(1);
-      const mappedPoints: DataPoint[] = dataPoints.map(dp => ({
+      // Censored cells normalize to null (exclude) for the client status
+      // calc; the stored data_points blob below keeps the "<17" object.
+      const mappedPoints: DataPoint[] = toNumericDataPoints(dataPoints).map(dp => ({
         level: dp.level,
         expectedValue: dp.instrumentValues[primaryName] ?? null,
         instrumentValues: Object.fromEntries(comparisonNames.map(n => [n, dp.instrumentValues[n] ?? null])),
@@ -2312,7 +2390,9 @@ export default function VeritaCheckPage() {
       return;
     }
 
-    const results = calculateStudy(dataPoints, instrumentNames, cliaValue, studyType as "cal_ver" | "method_comparison", teaIsPercentage);
+    // Censored cells normalize to null (exclude) for the client status
+    // calc; JSON.stringify(dataPoints) below keeps the "<17" object.
+    const results = calculateStudy(toNumericDataPoints(dataPoints), instrumentNames, cliaValue, studyType as "cal_ver" | "method_comparison", teaIsPercentage);
     const study: InsertStudy = {
       testName: testName.trim(), instrument: instrumentNames.join(", "), analyst: analyst.trim() || "---",
       date, studyType, cliaAllowableError: cliaValue,
@@ -2489,7 +2569,7 @@ return (
                     <div className="space-y-1.5"><Label>Study Date</Label><Input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
                     <div className="space-y-1.5"><Label>Study Type</Label>
                       <Select value={studyType} onValueChange={v => setStudyType(v as any)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger data-testid="select-study-type"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="cal_ver">Calibration Verification (CLSI EP06)</SelectItem>
                           <SelectItem value="method_comparison">Method Comparison: Multi-Instrument Correlation (CLSI EP09 + EP15-A3)</SelectItem>
@@ -3478,15 +3558,17 @@ return (
                           </tr></thead>
                           <tbody>
                             {refData.map((dp, idx) => {
-                              const val = dp.value;
+                              // A censored specimen is excluded (default policy) so it
+                              // gets neither in-range nor outside highlight.
+                              const num = isCensored(dp.value) ? null : dp.value;
                               const lo = Number(refLow);
                               const hi = Number(refHigh);
-                              const inRange = val !== null && refLow !== "" && refHigh !== "" && val >= lo && val <= hi;
-                              const outRange = val !== null && refLow !== "" && refHigh !== "" && (val < lo || val > hi);
+                              const inRange = num !== null && refLow !== "" && refHigh !== "" && num >= lo && num <= hi;
+                              const outRange = num !== null && refLow !== "" && refHigh !== "" && (num < lo || num > hi);
                               return (
                                 <tr key={idx} className="border-b border-border/50">
                                   <td className="py-1.5 pr-4"><Input value={dp.specimenId} onChange={e => { const d = [...refData]; d[idx] = { ...d[idx], specimenId: e.target.value }; setRefData(d); }} className="h-8 text-sm w-24" /></td>
-                                  <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="-" value={dp.value ?? ""} onChange={e => { const d = [...refData]; d[idx] = { ...d[idx], value: e.target.value === "" ? null : parseFloat(e.target.value) }; setRefData(d); }} className="h-8 text-sm w-32" /></td>
+                                  <td className="py-1.5 pr-4"><Input type="text" inputMode="text" placeholder="-" title="Enter a number, or <17 / >500 for a censored result" value={cellDisplay(dp.value)} onChange={e => { const d = [...refData]; d[idx] = { ...d[idx], value: parseCell(e.target.value) }; setRefData(d); }} className="h-8 text-sm w-32" /></td>
                                   <td className="py-1.5">
                                     {inRange && <span className="text-xs text-green-600 dark:text-green-400 font-medium">In range</span>}
                                     {outRange && <span className="text-xs text-red-600 dark:text-red-400 font-medium">Outside</span>}
@@ -3500,7 +3582,8 @@ return (
                       {refLow !== "" && refHigh !== "" && (() => {
                         const lo = Number(refLow);
                         const hi = Number(refHigh);
-                        const filled = refData.filter(d => d.value !== null && !isNaN(d.value as number));
+                        // Censored specimens are excluded from the EP28 outside-range count (default policy).
+                        const filled = refData.filter(d => d.value !== null && !isCensored(d.value) && !isNaN(d.value as number));
                         const outside = filled.filter(d => (d.value as number) < lo || (d.value as number) > hi).length;
                         const pct = filled.length > 0 ? ((outside / filled.length) * 100).toFixed(1) : "0.0";
                         return filled.length > 0 ? (
@@ -4288,13 +4371,14 @@ return (
                         {precisionMode === "simple" ? (
                           <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
                             {Array.from({ length: precisionReps }).map((_, vi) => (
-                              <Input key={vi} type="number" step="any" placeholder="-"
-                                value={precisionValues[li]?.[vi] ?? ""}
+                              <Input key={vi} type="text" inputMode="text" placeholder="-"
+                                title="Enter a number, or <17 / >500 for a censored result"
+                                value={cellDisplay(precisionValues[li]?.[vi] ?? null)}
                                 onChange={e => {
                                   const vals = [...precisionValues];
                                   if (!vals[li]) vals[li] = [];
                                   vals[li] = [...vals[li]];
-                                  vals[li][vi] = e.target.value === "" ? (undefined as any) : parseFloat(e.target.value);
+                                  vals[li][vi] = parseCell(e.target.value);
                                   setPrecisionValues(vals);
                                 }}
                                 className="h-8 text-xs text-center"
@@ -4320,15 +4404,16 @@ return (
                                     <td className="py-1 pr-2 text-xs text-muted-foreground font-mono">Day {di + 1}</td>
                                     {Array.from({ length: precisionRunsPerDay * precisionReplicatesPerRun }).map((_, ci) => (
                                       <td key={ci} className="py-1 px-1">
-                                        <Input type="number" step="any" placeholder="-"
-                                          value={precisionAdvancedData[li]?.[di]?.[ci] ?? ""}
+                                        <Input type="text" inputMode="text" placeholder="-"
+                                          title="Enter a number, or <17 / >500 for a censored result"
+                                          value={cellDisplay(precisionAdvancedData[li]?.[di]?.[ci] ?? null)}
                                           onChange={e => {
                                             const data = [...precisionAdvancedData];
                                             if (!data[li]) data[li] = [];
                                             data[li] = [...data[li]];
                                             if (!data[li][di]) data[li][di] = [];
                                             data[li][di] = [...data[li][di]];
-                                            data[li][di][ci] = e.target.value === "" ? (undefined as any) : parseFloat(e.target.value);
+                                            data[li][di][ci] = parseCell(e.target.value);
                                             setPrecisionAdvancedData(data);
                                           }}
                                           className="h-7 text-xs text-center w-20"
@@ -4436,7 +4521,7 @@ return (
                                   data-testid={`input-sample-label-mc-${idx}`}
                                 />
                               </td>
-                              {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="number" step="any" placeholder="--" value={dp.instrumentValues[n] ?? ""} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, colIdx)} onKeyDown={e => handleGridKeyDown(e, idx, colIdx)} /></td>)}
+                              {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="text" inputMode="text" placeholder="--" title="Enter a number, or <17 / >500 for a censored result" data-testid={`input-dp-value-${idx}-${colIdx}`} value={cellDisplay(dp.instrumentValues[n])} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, colIdx)} onKeyDown={e => handleGridKeyDown(e, idx, colIdx)} /></td>)}
                             </tr>
                           ))}
                         </tbody>
@@ -4459,8 +4544,8 @@ return (
                                   data-testid={`input-level-label-${idx}`}
                                 />
                               </td>
-                              <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="--" value={dp.expectedValue ?? ""} onChange={e => updateDataPoint(idx, "expectedValue", e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, 0)} onKeyDown={e => handleGridKeyDown(e, idx, 0)} /></td>
-                              {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="number" step="any" placeholder="--" value={dp.instrumentValues[n] ?? ""} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, colIdx + 1)} onKeyDown={e => handleGridKeyDown(e, idx, colIdx + 1)} /></td>)}
+                              <td className="py-1.5 pr-4"><Input type="text" inputMode="text" placeholder="--" title="Enter a number, or <17 / >500 for a censored result" data-testid={`input-dp-expected-${idx}`} value={cellDisplay(dp.expectedValue)} onChange={e => updateDataPoint(idx, "expectedValue", e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, 0)} onKeyDown={e => handleGridKeyDown(e, idx, 0)} /></td>
+                              {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="text" inputMode="text" placeholder="--" title="Enter a number, or <17 / >500 for a censored result" data-testid={`input-dp-value-${idx}-${colIdx + 1}`} value={cellDisplay(dp.instrumentValues[n])} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, colIdx + 1)} onKeyDown={e => handleGridKeyDown(e, idx, colIdx + 1)} /></td>)}
                             </tr>
                           ))}
                         </tbody>
