@@ -2569,7 +2569,7 @@ return (
                     <div className="space-y-1.5"><Label>Study Date</Label><Input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
                     <div className="space-y-1.5"><Label>Study Type</Label>
                       <Select value={studyType} onValueChange={v => setStudyType(v as any)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger data-testid="select-study-type"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="cal_ver">Calibration Verification (CLSI EP06)</SelectItem>
                           <SelectItem value="method_comparison">Method Comparison: Multi-Instrument Correlation (CLSI EP09 + EP15-A3)</SelectItem>
@@ -4521,7 +4521,7 @@ return (
                                   data-testid={`input-sample-label-mc-${idx}`}
                                 />
                               </td>
-                              {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="text" inputMode="text" placeholder="--" title="Enter a number, or <17 / >500 for a censored result" value={cellDisplay(dp.instrumentValues[n])} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, colIdx)} onKeyDown={e => handleGridKeyDown(e, idx, colIdx)} /></td>)}
+                              {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="text" inputMode="text" placeholder="--" title="Enter a number, or <17 / >500 for a censored result" data-testid={`input-dp-value-${idx}-${colIdx}`} value={cellDisplay(dp.instrumentValues[n])} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, colIdx)} onKeyDown={e => handleGridKeyDown(e, idx, colIdx)} /></td>)}
                             </tr>
                           ))}
                         </tbody>
@@ -4544,8 +4544,8 @@ return (
                                   data-testid={`input-level-label-${idx}`}
                                 />
                               </td>
-                              <td className="py-1.5 pr-4"><Input type="text" inputMode="text" placeholder="--" title="Enter a number, or <17 / >500 for a censored result" value={cellDisplay(dp.expectedValue)} onChange={e => updateDataPoint(idx, "expectedValue", e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, 0)} onKeyDown={e => handleGridKeyDown(e, idx, 0)} /></td>
-                              {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="text" inputMode="text" placeholder="--" title="Enter a number, or <17 / >500 for a censored result" value={cellDisplay(dp.instrumentValues[n])} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, colIdx + 1)} onKeyDown={e => handleGridKeyDown(e, idx, colIdx + 1)} /></td>)}
+                              <td className="py-1.5 pr-4"><Input type="text" inputMode="text" placeholder="--" title="Enter a number, or <17 / >500 for a censored result" data-testid={`input-dp-expected-${idx}`} value={cellDisplay(dp.expectedValue)} onChange={e => updateDataPoint(idx, "expectedValue", e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, 0)} onKeyDown={e => handleGridKeyDown(e, idx, 0)} /></td>
+                              {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="text" inputMode="text" placeholder="--" title="Enter a number, or <17 / >500 for a censored result" data-testid={`input-dp-value-${idx}-${colIdx + 1}`} value={cellDisplay(dp.instrumentValues[n])} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, colIdx + 1)} onKeyDown={e => handleGridKeyDown(e, idx, colIdx + 1)} /></td>)}
                             </tr>
                           ))}
                         </tbody>
