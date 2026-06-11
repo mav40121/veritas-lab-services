@@ -871,40 +871,46 @@ function resolveActiveLabForRequest(userId: number, req: any): any | null {
     if (Number.isFinite(n) && n > 0) requested = n;
   }
   if (requested) {
-    // Shape A guard: this is a read-only membership/ownership check
-    // (does the user own lab `requested` via labs.owner_user_id, OR hold
-    // an active lab_members row). It is the access guard itself, not a
-    // leaky data scope; the `WHERE id = ? AND owner_user_id = ?` shape
-    // here is intentional and validated by the surrounding UNION.
-    // 2026-06-11 FIX: this previously read `user_id` on the labs table,
-    // which has no such column (it is owner_user_id). The query threw
-    // "no such column: user_id"; callers swallow it in try/catch, so the
-    // active lab silently failed to resolve and PDFs lost lab identity
-    // (showed neither the wrong lab nor the right one).
-    const mem = (db as any).$client.prepare(
-      `SELECT 1 AS ok FROM labs WHERE id = ? AND owner_user_id = ?
-       UNION
-       SELECT 1 AS ok FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'`
-    ).get(requested, userId, requested, userId) as any;
-    // Seat-user path (Shape A guard): the seat owner's lab access
-    // counts as the seat user's. Same read-only ownership/membership
-    // check against the resolved owner_user_id.
-    if (!mem) {
-      const seatOwner = (db as any).$client.prepare(
-        "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
-      ).get(userId) as any;
-      if (seatOwner) {
-        const seatMem = (db as any).$client.prepare(
-          `SELECT 1 AS ok FROM labs WHERE id = ? AND owner_user_id = ?
-           UNION
-           SELECT 1 AS ok FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'`
-        ).get(requested, seatOwner.owner_user_id, requested, seatOwner.owner_user_id) as any;
-        if (seatMem) {
-          return (db as any).$client.prepare("SELECT * FROM labs WHERE id = ?").get(requested);
+    // 2026-06-11: wrap the lab membership lookup so any DB error (e.g. a
+    // future schema drift like the user_id/owner_user_id bug that hid for
+    // ~24h) is LOGGED with context and then degrades to the legacy
+    // resolver, instead of throwing into a caller's bare try/catch where
+    // it vanishes silently. The membership match itself is unchanged.
+    try {
+      // Shape A guard: this is a read-only membership/ownership check
+      // (does the user own lab `requested` via labs.owner_user_id, OR hold
+      // an active lab_members row). It is the access guard itself, not a
+      // leaky data scope; the `WHERE id = ? AND owner_user_id = ?` shape
+      // here is intentional and validated by the surrounding UNION.
+      const mem = (db as any).$client.prepare(
+        `SELECT 1 AS ok FROM labs WHERE id = ? AND owner_user_id = ?
+         UNION
+         SELECT 1 AS ok FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'`
+      ).get(requested, userId, requested, userId) as any;
+      // Seat-user path (Shape A guard): the seat owner's lab access
+      // counts as the seat user's. Same read-only ownership/membership
+      // check against the resolved owner_user_id.
+      if (!mem) {
+        const seatOwner = (db as any).$client.prepare(
+          "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
+        ).get(userId) as any;
+        if (seatOwner) {
+          const seatMem = (db as any).$client.prepare(
+            `SELECT 1 AS ok FROM labs WHERE id = ? AND owner_user_id = ?
+             UNION
+             SELECT 1 AS ok FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'`
+          ).get(requested, seatOwner.owner_user_id, requested, seatOwner.owner_user_id) as any;
+          if (seatMem) {
+            return (db as any).$client.prepare("SELECT * FROM labs WHERE id = ?").get(requested);
+          }
         }
+      } else {
+        return (db as any).$client.prepare("SELECT * FROM labs WHERE id = ?").get(requested);
       }
-    } else {
-      return (db as any).$client.prepare("SELECT * FROM labs WHERE id = ?").get(requested);
+    } catch (err: any) {
+      console.error(
+        `[resolveActiveLabForRequest] lab membership lookup failed for user ${userId}, requested lab ${requested}: ${err?.message || err}. Falling back to legacy default-lab resolver.`
+      );
     }
   }
   return resolveLabForUser(userId);
@@ -8924,7 +8930,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               issueDate: new Date().toISOString().slice(0, 10),
             };
           }
-        } catch {}
+        } catch (err: any) {
+          // Expired/invalid JWTs are normal here (the PDF then renders with
+          // the anonymous "Demo Preview" band) -- do not log those. Any
+          // OTHER failure means lab identity silently dropped, so surface it.
+          const name = err?.name || "";
+          if (!/TokenExpiredError|JsonWebTokenError|NotBeforeError/.test(name)) {
+            console.error(`[generate-pdf] lab identity resolution failed: ${err?.message || err}`);
+          }
+        }
       }
 
       if (cliaLabName) { (study as any)._labName = cliaLabName; }
