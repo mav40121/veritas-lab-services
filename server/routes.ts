@@ -25,7 +25,17 @@ function licenseCtxFromReq(req: any, productName?: string): LicenseContext {
   // normalizeLicenseContext when omitted.
   const u = req?.user || null;
   const userRow = req?.userId ? storage.getUserById(req.userId) as any : null;
-  const labName = userRow?.cliaLabName || userRow?.clia_lab_name || null;
+  // 2026-06-11: prefer the ACTIVE lab's name so the license band matches the
+  // report header for multi-lab users. resolveActiveLabForRequest honors the
+  // X-Active-Lab-Id header (sent by every /labs/:id page) and validates
+  // membership; it falls back to the user's default lab when no header is
+  // present, so single-lab users are unaffected. Guarded so a resolver hiccup
+  // degrades to the user-record lab name rather than throwing.
+  let activeLabName: string | null = null;
+  if (req?.userId) {
+    try { activeLabName = resolveActiveLabForRequest(req.userId, req)?.lab_name || null; } catch {}
+  }
+  const labName = activeLabName || userRow?.cliaLabName || userRow?.clia_lab_name || null;
   if (u?.email) {
     return {
       licensee: labName || u.name || u.email,
