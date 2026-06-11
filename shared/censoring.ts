@@ -27,6 +27,26 @@ export function isCensored(p: any): p is CensoredPoint {
 }
 
 /**
+ * Resolve a point (censored object or {value} envelope) to a number for stat
+ * math, or null to drop it, per the study-level policy. Lives in shared so the
+ * server PDF renderer AND the client on-screen recompute resolve identically.
+ *   exclude              -> null (drop)
+ *   substitute_lld       -> censor_value
+ *   substitute_lld_half  -> censor_value / 2 (Helsel)
+ */
+export function censorValueForMath(point: any, policy: CensoringPolicy): number | null {
+  if (!isCensored(point)) {
+    return typeof point?.value === "number" && Number.isFinite(point.value) ? point.value : null;
+  }
+  switch (policy) {
+    case "exclude": return null;
+    case "substitute_lld": return point.censor_value;
+    case "substitute_lld_half": return point.censor_value / 2;
+    default: return null;
+  }
+}
+
+/**
  * Parse a string input like "17", "<17", or ">500" into a structured
  * shape. Used by the client when the director enters values, and by
  * server bulk-import paths.
