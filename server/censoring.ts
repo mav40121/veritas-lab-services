@@ -21,18 +21,19 @@
 // conservative imputation. We do not implement MLE / ROS (overkill
 // for clinical EP studies).
 
-export type CensoringPolicy = "exclude" | "substitute_lld" | "substitute_lld_half";
+// 2026-06-10 (PR B): the pure helpers (isCensored, parseCensoredInput,
+// displayPointValue) + types now live in shared/ so the client data-entry
+// grid can import them too. Re-exported here so every existing server
+// import path (./censoring) keeps resolving unchanged.
+export {
+  isCensored,
+  parseCensoredInput,
+  displayPointValue,
+  type CensoringPolicy,
+  type CensoredPoint,
+} from "@shared/censoring";
 
-export interface CensoredPoint {
-  censored: true;
-  censor_direction: "below" | "above";
-  censor_value: number;
-}
-
-export function isCensored(p: any): p is CensoredPoint {
-  return !!p && p.censored === true && typeof p.censor_value === "number" && Number.isFinite(p.censor_value)
-    && (p.censor_direction === "below" || p.censor_direction === "above");
-}
+import { isCensored, type CensoringPolicy } from "@shared/censoring";
 
 /**
  * Given a point and a study-level policy, return either:
@@ -60,47 +61,6 @@ export function censorValueForMath(
     default:
       return null;
   }
-}
-
-/**
- * Parse a string input like "17", "<17", or ">500" into a structured
- * shape. Used by the client when the director enters values.
- * Server may also use this for bulk-import paths.
- */
-export function parseCensoredInput(s: string): { value?: number; censored?: CensoredPoint } | null {
-  if (typeof s !== "string") return null;
-  const trimmed = s.trim();
-  if (!trimmed) return null;
-  let direction: "below" | "above" | null = null;
-  let body = trimmed;
-  if (trimmed.startsWith("<")) {
-    direction = "below";
-    body = trimmed.slice(1).trim();
-  } else if (trimmed.startsWith(">")) {
-    direction = "above";
-    body = trimmed.slice(1).trim();
-  }
-  const n = Number(body);
-  if (!Number.isFinite(n)) return null;
-  if (direction) {
-    return { censored: { censored: true, censor_direction: direction, censor_value: n } };
-  }
-  return { value: n };
-}
-
-/**
- * Display a point as a string for tables / PDFs. Censored points
- * render as "<17" or ">500"; numeric points render as their value.
- */
-export function displayPointValue(point: any, digits = 3): string {
-  if (isCensored(point)) {
-    const sign = point.censor_direction === "below" ? "<" : ">";
-    return `${sign}${point.censor_value}`;
-  }
-  if (typeof point?.value === "number" && Number.isFinite(point.value)) {
-    return point.value.toFixed(digits);
-  }
-  return "-";
 }
 
 /**
