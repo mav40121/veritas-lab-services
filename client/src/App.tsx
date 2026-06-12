@@ -428,6 +428,10 @@ function AppContent() {
           <Route path="/labs/:labId/veritaops-app" component={VeritaOpsAppPage} />
           <Route path="/labs/:labId/account/settings" component={AccountSettingsPage} />
           <Route path="/labs/:labId/members" component={LabMembersPage} />
+          {/* Bare /members is a natural guessed URL (it 404'd on Michael
+              2026-06-12); LegacyWorkspaceRedirect forwards it to the primary
+              lab's members page once memberships load. */}
+          <Route path="/members">{wrapLegacy(LabMembersPage)}</Route>
 
           <Route component={NotFound} />
         </Switch>
