@@ -44,6 +44,10 @@ test.describe("Account settings Team Members home-lab guard", () => {
     // Edit Permissions buttons.
     await expect(page.getByRole("button", { name: /^Remove$/ })).toHaveCount(0);
     await expect(page.getByText(/^Edit Permissions$/)).toHaveCount(0);
+    // Follow-up fix (same day): the account-seat header copy and the
+    // "All seats are in use" warning are account-seat UI too — hidden.
+    await expect(page.getByText(/All seats are in use/i)).toHaveCount(0);
+    await expect(page.getByText(/additional seats? used/i)).toHaveCount(0);
   });
 
   test("home lab still shows the seat management list (no banner)", async ({ page }) => {

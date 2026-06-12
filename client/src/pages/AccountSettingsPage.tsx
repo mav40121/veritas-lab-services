@@ -644,16 +644,26 @@ export default function AccountSettingsPage() {
               <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 flex items-start gap-2">
                 <AlertTriangle size={14} className="text-amber-600 mt-0.5 shrink-0" />
                 <div className="text-xs text-amber-900 dark:text-amber-200">
-                  These are seats on your account ({user?.email}). They are not tied to the lab you have selected above ({activeLab?.labName || "this lab"}). To manage team members for that lab, switch back to your primary lab or contact its owner.
+                  These are seats on your account ({user?.email}). They are not tied to the lab you have selected above ({activeLab?.labName || "this lab"}).{" "}
+                  {(activeLab?.role === "owner" || activeLab?.role === "admin") ? (
+                    <>You are {activeLab.role === "admin" ? "an admin" : "the owner"} of that lab, so you can manage its team on the{" "}
+                      <a href={`/labs/${activeLabId}/members`} className="underline font-medium">Lab Members page</a>.</>
+                  ) : (
+                    <>To manage team members for that lab, contact its owner or an admin.</>
+                  )}
                 </div>
               </div>
             )}
-            <p className="text-sm text-muted-foreground">
-              Invite staff to access your VeritaAssure™ account. {usedSeats - 1} of {seatCount - 1} additional seat{seatCount - 1 !== 1 ? "s" : ""} used.
-            </p>
-            <p className="text-xs text-muted-foreground mt-2">
-              Some hospital and corporate email systems quarantine outside invitations before they reach the inbox. If a teammate hasn&apos;t received their email after a few minutes, click &quot;Copy invite link&quot; on their row and send the link to them directly through email, Teams, Slack, or text.
-            </p>
+            {!isViewingNonPrimaryLab && (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Invite staff to access your VeritaAssure™ account. {usedSeats - 1} of {seatCount - 1} additional seat{seatCount - 1 !== 1 ? "s" : ""} used.
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Some hospital and corporate email systems quarantine outside invitations before they reach the inbox. If a teammate hasn&apos;t received their email after a few minutes, click &quot;Copy invite link&quot; on their row and send the link to them directly through email, Teams, Slack, or text.
+                </p>
+              </>
+            )}
           </CardHeader>
           <CardContent className="space-y-3">
             {/* On a non-home lab, the banner in the header is the whole story:
@@ -832,7 +842,9 @@ export default function AccountSettingsPage() {
             {!isViewingNonPrimaryLab && activeSeats.length === 0 && (
               <p className="text-sm text-muted-foreground">No team members added yet.</p>
             )}
-            {usedSeats < seatCount && !isViewingNonPrimaryLab ? (
+            {/* On a non-home lab, render neither the invite form NOR the
+                "all seats in use" warning — both are account-seat UI. */}
+            {!isViewingNonPrimaryLab && (usedSeats < seatCount ? (
               <form onSubmit={handleInviteSeat} className="space-y-4">
                 <div>
                   <p className="text-sm font-medium text-foreground mb-2">Invite a team member</p>
@@ -916,7 +928,7 @@ export default function AccountSettingsPage() {
               <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                 All seats are in use. Remove a team member to invite someone new.
               </p>
-            )}
+            ))}
           </CardContent>
         </Card>
       )}
