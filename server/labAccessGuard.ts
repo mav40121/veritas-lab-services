@@ -57,6 +57,7 @@ export interface RequestLike {
   userId?: number;
   ownerUserId?: number;
   user?: { userId?: number };
+  headers?: Record<string, any>;
 }
 
 export interface ResolveOptions {
@@ -106,17 +107,26 @@ export function resolveRowForMutation<T = any>(
 
 /**
  * resolveLegacyLabId — for legacy unscoped GET endpoints that need to filter
- * by the user's active lab. Returns the user's default_lab_id (set by the
- * LabSwitcher on every NavBar switch), falling back to the oldest active
- * lab_members row. Returns null only when the user has no membership at all.
+ * by the user's active lab. Resolution order (2026-06-12 unification):
  *
- * Use case: a list endpoint like `GET /api/veritascan/scans` historically
- * filtered by user_id and bled cross-lab rows for multi-lab users. Threading
- * through resolveLegacyLabId + scoping by lab_id matches what the user sees
- * in the NavBar without requiring the client to migrate to `/api/labs/:labId/...`.
+ *   1. A membership-validated X-Active-Lab-Id header (the NavBar's active
+ *      lab). Honored ONLY when the requester owns that lab, holds an active
+ *      lab_members row, or is an active seat user whose owner does. This
+ *      makes the legacy endpoints follow the lab switcher exactly like the
+ *      /labs/:labId routes.
+ *   2. The user's default_lab_id (set by the LabSwitcher on every switch).
+ *   3. The oldest active lab_members row.
  *
- * Documented in detail in routes.ts comment block (added 2026-06-05). This
- * exported copy lives in labAccessGuard so non-routes modules can share it.
+ * Returns null only when the user has no membership at all. Branches 2-3 are
+ * byte-identical to the pre-unification behavior, so no-header requests and
+ * invalid/foreign/pending-membership headers are unchanged.
+ *
+ * This is THE single implementation: routes.ts's private resolveLegacyLabId
+ * delegates here. Writes that pair with resolveLegacyLabId-scoped list reads
+ * must tag lab_id through THIS function (not resolveActiveLabForRequest,
+ * whose no-header fallback uses users.lab_id and can drift from
+ * default_lab_id — proven in scripts/verify-legacy-resolver-unification.mjs
+ * case 9b).
  */
 export function resolveLegacyLabId(
   sqlite: SqliteLike,
@@ -124,6 +134,31 @@ export function resolveLegacyLabId(
 ): number | null {
   const userId = req.user?.userId ?? req.userId;
   if (userId == null) return null;
+  const hdr = req?.headers?.["x-active-lab-id"];
+  if (hdr) {
+    const requested = Number(hdr);
+    if (Number.isFinite(requested) && requested > 0) {
+      try {
+        const mem = sqlite.prepare(
+          `SELECT 1 AS ok FROM labs WHERE id = ? AND owner_user_id = ?
+           UNION
+           SELECT 1 AS ok FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'`
+        ).get(requested, userId, requested, userId) as any;
+        if (mem) return requested;
+        const seatOwner = sqlite.prepare(
+          "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
+        ).get(userId) as any;
+        if (seatOwner) {
+          const seatMem = sqlite.prepare(
+            `SELECT 1 AS ok FROM labs WHERE id = ? AND owner_user_id = ?
+             UNION
+             SELECT 1 AS ok FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'`
+          ).get(requested, seatOwner.owner_user_id, requested, seatOwner.owner_user_id) as any;
+          if (seatMem) return requested;
+        }
+      } catch {}
+    }
+  }
   const u = sqlite.prepare("SELECT default_lab_id FROM users WHERE id = ?").get(userId) as any;
   if (u?.default_lab_id) return Number(u.default_lab_id);
   const m = sqlite.prepare(

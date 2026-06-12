@@ -352,9 +352,11 @@ export function registerVeritaTrackRoutes(
     const r = sqlite.prepare(
       "INSERT INTO veritatrack_tasks (user_id,name,category,instrument,owner,frequency,frequency_months,map_analyte,map_field,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
     ).run(userId, name, category || "Other", instrument || null, owner || null, frequency || "Monthly", freqMonths, map_analyte || null, map_field || null, notes || null, now, now);
-    // Phase 3.7 dual-write lab_id.
+    // write-path Shape A (resolver unification PR B): tag via the SAME shared
+    // resolveLegacyLabId the tasks list read uses, so write==read in every
+    // branch (validated active lab -> default lab -> first membership).
     try {
-      sqlite.prepare("UPDATE veritatrack_tasks SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?").run(userId, r.lastInsertRowid);
+      sqlite.prepare("UPDATE veritatrack_tasks SET lab_id = ? WHERE id = ?").run(resolveLegacyLabId(sqlite, req) ?? null, r.lastInsertRowid);
     } catch {}
     res.json(sqlite.prepare("SELECT * FROM veritatrack_tasks WHERE id = ?").get(r.lastInsertRowid));
   });
@@ -408,9 +410,11 @@ export function registerVeritaTrackRoutes(
     const r = sqlite.prepare(
       "INSERT INTO veritatrack_signoffs (task_id,user_id,completed_date,initials,performed_by,notes) VALUES (?,?,?,?,?,?)"
     ).run(task.id, userId, completed_date, initials || null, performed_by || null, notes || null);
-    // Phase 3.7 dual-write lab_id.
+    // write-path Shape A (resolver unification PR B): a signoff belongs to its
+    // parent task's lab; fall back to the shared resolver if the task is
+    // untagged (legacy rows).
     try {
-      sqlite.prepare("UPDATE veritatrack_signoffs SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?").run(userId, r.lastInsertRowid);
+      sqlite.prepare("UPDATE veritatrack_signoffs SET lab_id = ? WHERE id = ?").run(task.lab_id ?? resolveLegacyLabId(sqlite, req) ?? null, r.lastInsertRowid);
     } catch {}
     // If linked to a VeritaMap field, update it there too.
     //
