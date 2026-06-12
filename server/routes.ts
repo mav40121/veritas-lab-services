@@ -4487,6 +4487,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ORDER BY lm.is_primary_lab DESC, lm.id ASC
     `).all(req.userId) as any[];
 
+    // 2026-06-12 (account-seats guard fix): is_primary_lab FOLLOWS the NavBar
+    // switcher (POST /api/labs/me/default flips it), so it cannot identify the
+    // user's account home lab. users.lab_id is the static original-lab pointer
+    // the switcher never touches — expose it as isAccountHomeLab so the
+    // account-level seat UI can tell "my lab" from "a lab I switched into".
+    const homeLabRow = (db as any).$client.prepare(
+      "SELECT lab_id FROM users WHERE id = ?"
+    ).get(req.userId) as any;
+    const homeLabId = homeLabRow?.lab_id ? Number(homeLabRow.lab_id) : null;
+
     res.json(memberships.map(m => ({
       membershipId: m.membership_id,
       labId: m.lab_id,
@@ -4495,6 +4505,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       role: m.role,
       permissions: (() => { try { return JSON.parse(m.permissions_json || '{}'); } catch { return {}; } })(),
       isPrimaryLab: !!m.is_primary_lab,
+      isAccountHomeLab: homeLabId != null && Number(m.lab_id) === homeLabId,
       accreditationCap: !!m.accreditation_cap,
       accreditationTjc: !!m.accreditation_tjc,
       accreditationCola: !!m.accreditation_cola,
