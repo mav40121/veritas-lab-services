@@ -92,7 +92,17 @@ export function NavBar() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-card/90 backdrop-blur-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+      {/* 2026-06-12 root-cause fix for the recurring "top bar shifted right":
+          the inner container was max-w-7xl mx-auto (1280px, centered), but the
+          logged-in content (menu + long lab-name switcher + bell + account)
+          is wider than 1280px. Flex children don't clip, so the centered box
+          OVERFLOWED right: on narrow windows the account button fell off-screen;
+          on wide windows a dead gap appeared on the left. Every prior fix
+          (shortening lab names, removing the CLIA chip) treated symptoms.
+          Full width anchors the logo left and the account cluster right at any
+          window size. Do NOT reintroduce a max-w cap here without measuring
+          the logged-in content width first. */}
+      <div className="w-full px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
 
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
