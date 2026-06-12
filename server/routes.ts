@@ -15343,9 +15343,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO pt_enrollments_v2 (user_id, vendor, program_name, pt_category, year_enrolled) VALUES (?, ?, ?, ?, ?)"
     ).run(dataUserId, vendor, program_name, pt_category, Number(year_enrolled));
-    // Phase 3.6 dual-write lab_id.
+    // write-path Shape A (batch 1, docs/shape-a-class-audit-2026-06-09.md): tag
+    // the ACTIVE lab, not the owner's default lab. resolveActiveLabForRequest
+    // falls back to the default lab with no X-Active-Lab-Id header, so single-lab
+    // users are unchanged. This table's reads key on user_id, so nothing hides.
     try {
-      (db as any).$client.prepare("UPDATE pt_enrollments_v2 SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?").run(dataUserId, result.lastInsertRowid);
+      const activeLab = resolveActiveLabForRequest(dataUserId, req);
+      (db as any).$client.prepare("UPDATE pt_enrollments_v2 SET lab_id = ? WHERE id = ?").run(activeLab?.id ?? null, result.lastInsertRowid);
     } catch {}
     const created = (db as any).$client.prepare("SELECT * FROM pt_enrollments_v2 WHERE id = ?").get(Number(result.lastInsertRowid));
     res.status(201).json(created);
@@ -15413,9 +15417,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       last_result_summary ?? null, last_pass_fail ?? null, corrective_action_notes ?? null,
       director_reviewed_at ?? null, director_id ?? null, retention_through_date ?? null,
     );
-    // Phase 3.6 dual-write lab_id.
+    // write-path Shape A (batch 1, docs/shape-a-class-audit-2026-06-09.md): tag
+    // the ACTIVE lab, not the owner's default lab. resolveActiveLabForRequest
+    // falls back to the default lab with no X-Active-Lab-Id header, so single-lab
+    // users are unchanged. This table's reads key on user_id, so nothing hides.
     try {
-      (db as any).$client.prepare("UPDATE aa_records SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?").run(dataUserId, result.lastInsertRowid);
+      const activeLab = resolveActiveLabForRequest(dataUserId, req);
+      (db as any).$client.prepare("UPDATE aa_records SET lab_id = ? WHERE id = ?").run(activeLab?.id ?? null, result.lastInsertRowid);
     } catch {}
     const created = (db as any).$client.prepare("SELECT * FROM aa_records WHERE id = ?").get(Number(result.lastInsertRowid));
     res.status(201).json(created);
@@ -15659,9 +15667,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       corrective_action ?? null, preventive_action ?? null, monitoring_plan ?? null,
       completion_date ?? null, signed_by ?? null, signed_at ?? null, external_submission_ref ?? null,
     );
-    // Phase 3.10 dual-write lab_id from the owning user's lab.
+    // write-path Shape A (batch 1, docs/shape-a-class-audit-2026-06-09.md): tag
+    // the ACTIVE lab, not the owner's default lab. resolveActiveLabForRequest
+    // falls back to the default lab with no X-Active-Lab-Id header, so single-lab
+    // users are unchanged. This table's reads key on user_id, so nothing hides.
     try {
-      (db as any).$client.prepare("UPDATE findings SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?").run(dataUserId, result.lastInsertRowid);
+      const activeLab = resolveActiveLabForRequest(dataUserId, req);
+      (db as any).$client.prepare("UPDATE findings SET lab_id = ? WHERE id = ?").run(activeLab?.id ?? null, result.lastInsertRowid);
     } catch {}
     const created = (db as any).$client.prepare("SELECT * FROM findings WHERE id = ?").get(Number(result.lastInsertRowid));
     // Audit trail entry for the create event
@@ -22575,9 +22587,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO pt_enrollments (user_id, analyte, specialty, pt_provider, program_code, enrollment_year, enrollment_date, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(dataUserId, analyte.trim(), specialty.trim(), pt_provider.trim(), program_code || null, enrollment_year, enrollment_date, status || 'active', now, now);
-    // Phase 3.6 dual-write lab_id.
+    // write-path Shape A (batch 1, docs/shape-a-class-audit-2026-06-09.md): tag
+    // the ACTIVE lab, not the owner's default lab. resolveActiveLabForRequest
+    // falls back to the default lab with no X-Active-Lab-Id header, so single-lab
+    // users are unchanged. This table's reads key on user_id, so nothing hides.
     try {
-      (db as any).$client.prepare("UPDATE pt_enrollments SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?").run(dataUserId, result.lastInsertRowid);
+      const activeLab = resolveActiveLabForRequest(dataUserId, req);
+      (db as any).$client.prepare("UPDATE pt_enrollments SET lab_id = ? WHERE id = ?").run(activeLab?.id ?? null, result.lastInsertRowid);
     } catch {}
     const created = (db as any).$client.prepare("SELECT * FROM pt_enrollments WHERE id = ?").get(Number(result.lastInsertRowid));
     res.json(created);

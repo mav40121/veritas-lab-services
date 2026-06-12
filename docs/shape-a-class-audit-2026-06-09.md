@@ -97,3 +97,30 @@ While preparing this remediation autonomously (Michael away), I traced the **wri
 3. **PR 3 — read-path scoping (after writes are correct + history re-tagged):** flip the High-severity read sites (scan list 13719, single-scan 14596/14620, count 22415; track list 562/661) to `WHERE user_id = ? AND (lab_id = ? OR lab_id IS NULL)` using the active lab. The `OR lab_id IS NULL` keeps it fail-open for any un-backfilled row. The uniqueness checks (track 534/543/643) can scope to `lab_id` in the same PR (relaxing a false-positive collision = safe direction).
 
 **Why I did not ship even PR 1 autonomously:** it edits the most demo-sensitive subsystem (multi-lab routing) and its correctness is only observable with the two-lab test account, which needs Michael driving the NavBar switch. The change is ready; it needs his go + a 2-minute multi-lab verification, not blind deployment.
+
+---
+
+## 2026-06-12 UPDATE — the write-path defect is a 21-instance CLASS, not 2 routes; #722 shipped, CI guard pins it
+
+The 2026-06-11 update scoped the write-path defect to two create routes (VeritaScan + VeritaTrack). A tree-wide grep proved that undercounts. The identical create-time dual-write
+`UPDATE <table> SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?`
+exists at **21 sites across 3 server files and 7+ modules**. VeritaScan was the 1st; it is now fixed.
+
+**Status:**
+- **PR #722 merged + LIVE** (commit `845a983`, prod `bootedAt` 2026-06-12T03:36:51Z): VeritaScan create now uses `resolveActiveLabForRequest(dataUserId, req)?.id ?? null`. 1 of 21 done. Functional multi-lab proof (create a scan in the secondary lab on `verilabguy@gmail.com`, confirm `lab_id`) is still owed — needs a multi-lab session.
+- **PR #723 (CI guard):** `scripts/verify-write-path-active-lab.js`, wired into `multilab-mutations-audit.yml`. Counts the create pattern (excludes the 6 `... AND lab_id IS NULL` backfill guards, which are intentional), and fails CI if the count exceeds the pinned `BASELINE` (20, a new bug) or drops below it without lowering the constant (a fix not ratcheted in). Stops the class regrowing.
+
+**Remaining 20, by module (table names are authoritative; module labels approximate):**
+
+| Module | Count | File · tables |
+|---|---|---|
+| VeritaPT | 4 | routes.ts · pt_enrollments_v2, pt_enrollments, pt_events, pt_corrective_actions |
+| VeritaResponse | 2 | routes.ts · aa_records, findings |
+| VeritaComp | 5 | routes.ts · competency_programs ×2, competency_employees, competency_quizzes ×2 |
+| VeritaLab | 4 | routes.ts · lab_certificates ×3, lab_certificate_documents |
+| VeritaTrack | 2 | veritatrack.ts · veritatrack_tasks (357), veritatrack_signoffs (413) |
+| VeritaMap | 1 | routes.ts · veritamap_maps (9567) |
+| VeritaCheck (CUMSUM) | 1 | routes.ts · cumsum_trackers (13487) |
+| VeritaStock | 1 | veritabench.ts · inventory_items (1197) |
+
+**Remediation = module-batched PRs.** Each batch swaps the default-lab dual-write for `resolveActiveLabForRequest(...)?.id ?? <fallback>`, lowers the guard `BASELINE` by the batch size, and is verified per-site (is the create reachable by a multi-lab owner in an active-lab context, or is it admin/seed/single-lab only?) plus a multi-lab pass on `verilabguy@gmail.com`. The 3 sites in `veritatrack.ts` / `veritabench.ts` are helpers that receive only `userId`/`accountId`, so they need the active-lab id threaded in — more care than the 17 `routes.ts` sites where `req` is already in scope. This is NOT a blind 20-site sweep. The 6 `IS NULL` backfill guards stay as-is.
