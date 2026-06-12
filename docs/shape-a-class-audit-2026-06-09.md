@@ -124,3 +124,27 @@ exists at **21 sites across 3 server files and 7+ modules**. VeritaScan was the 
 | VeritaStock | 1 | veritabench.ts · inventory_items (1197) |
 
 **Remediation = module-batched PRs.** Each batch swaps the default-lab dual-write for `resolveActiveLabForRequest(...)?.id ?? <fallback>`, lowers the guard `BASELINE` by the batch size, and is verified per-site (is the create reachable by a multi-lab owner in an active-lab context, or is it admin/seed/single-lab only?) plus a multi-lab pass on `verilabguy@gmail.com`. The 3 sites in `veritatrack.ts` / `veritabench.ts` are helpers that receive only `userId`/`accountId`, so they need the active-lab id threaded in — more care than the 17 `routes.ts` sites where `req` is already in scope. This is NOT a blind 20-site sweep. The 6 `IS NULL` backfill guards stay as-is.
+
+---
+
+## 2026-06-12 CLOSE-OUT — class EXTINCT (21/21 fixed), resolver unified, guard at zero
+
+The campaign completed in one overnight run, six PRs, all merged + deployed:
+
+| PR | Scope | Guard after |
+|---|---|---|
+| #722 | VeritaScan create -> active lab | (pre-guard) |
+| #723 | CI guard `verify-write-path-active-lab.js`, ratcheting baseline | 20 |
+| #724 | PT/Response x4 (pt_enrollments_v2, aa_records, findings, pt_enrollments) | 16 |
+| #726 | VeritaComp x5 (programs x2, employees, quizzes x2 — admin-upload quiz inherits program.lab_id) | 11 |
+| #727 | VeritaLab x4 (lab_certificates x3, lab_certificate_documents) | 7 |
+| #728 | **Resolver unification PR A**: routes.ts resolveLegacyLabId honors a membership-validated X-Active-Lab-Id (strictly additive); veritamap_maps, cumsum_trackers, pt_events, pt_corrective_actions write THROUGH that resolver so write==read in every branch | 3 |
+| #729 | **PR B**: the validated-header honor moved into the single shared `labAccessGuard.resolveLegacyLabId` (routes.ts copy is now a one-line delegate); veritatrack_tasks + inventory_items write through it; veritatrack_signoffs inherit the parent task's lab; guard flipped to hard zero-tolerance | **0** |
+
+**Key architectural results:**
+- ONE resolver: `server/labAccessGuard.ts` `resolveLegacyLabId(sqlite, req)` — validated active lab (owner / active member / active seat-owner) -> `users.default_lab_id` -> first active membership. routes.ts delegates; veritatrack.ts/veritabench.ts already imported it.
+- All 13 routes.ts legacy list reads + the veritatrack/veritabench list reads now follow the NavBar lab switcher; single-lab users see zero change (no header, or self-lab header).
+- Writes that pair with resolver-scoped reads tag lab_id through the SAME resolver — never `resolveActiveLabForRequest`, whose no-header fallback (`users.lab_id`) can drift from the read fallback (`users.default_lab_id`). Proven in `scripts/verify-legacy-resolver-unification.mjs` case 9b.
+- Receipts: `verify-legacy-resolver-unification.mjs` 10/10 (owned / member / foreign / pending / seat / garbage / no-header / drift); `verify-write-path-active-lab.js` PASS at 0 and now zero-tolerance in `multilab-mutations-audit.yml`.
+
+**Open Gate-3 receipt:** two-lab browser pass on `verilabguy@gmail.com` — NavBar to Riverside Regional; create a VeritaTrack task, an inventory item, and a CUMSUM tracker; confirm each lists under Riverside and not under Michaels Lab. Everything else is script/CI/prod-health verified.
