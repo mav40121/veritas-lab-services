@@ -53,3 +53,11 @@ jobs:
         # pattern lands on a multi-lab table. See scripts/verify-shape-a-class-clean.js
         # for the allowlist (single-tenant tables, comments, demo routes).
         run: node scripts/verify-shape-a-class-clean.js
+
+      - name: Run write-path active-lab guard
+        # Fails CI if a NEW create-time `SET lab_id = (SELECT lab_id FROM
+        # users WHERE id = ?) WHERE id = ?` dual-write is introduced (the
+        # PR #722 class), or if the count drops without lowering the pinned
+        # baseline. See scripts/verify-write-path-active-lab.js. Baseline
+        # ratchets to 0 as the module-batch fix PRs land.
+        run: node scripts/verify-write-path-active-lab.js
