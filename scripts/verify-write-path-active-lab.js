@@ -28,17 +28,20 @@
 // was introduced) or DOWN without lowering BASELINE (a fix landed but the
 // ratchet was not advanced). Drive BASELINE to 0 via the module-batch PRs.
 //
-// Inventory at BASELINE=11 (2026-06-12; #722 veritascan; batch 1 the 4
-// PT/Response sites; batch 2 the 5 competency_* sites):
+// Inventory at BASELINE=7 (2026-06-12; #722 veritascan; batch 1 the 4
+// PT/Response; batch 2 the 5 competency_*; batch 3 the 4 VeritaLab cert sites):
 //   server/routes.ts        : veritamap_maps, cumsum_trackers,
-//                             lab_certificates x3, lab_certificate_documents,
-//                             pt_events, pt_corrective_actions                   (8)
+//                             pt_events, pt_corrective_actions                   (4)
 //   server/veritabench.ts   : inventory_items                                    (1)
 //   server/veritatrack.ts   : veritatrack_tasks, veritatrack_signoffs            (2)
 //
-// pt_events + pt_corrective_actions are DEFERRED on purpose: their reads key on
-// lab_id via resolveLegacyLabId (the legacy primary-lab resolver), so the write
-// fix must be coordinated with a read-path change. See the audit doc.
+// The 4 routes.ts sites are the resolveLegacyLabId GROUP: each has a legacy LIST
+// read that scopes by the DEFAULT lab (resolveLegacyLabId), so an active-lab
+// write alone would hide rows (fail-closed). They need a coordinated read-path
+// change plus a decision on the legacy resolver, not a blind write swap.
+// inventory_items + veritatrack_* live in helper files (server/veritabench.ts,
+// server/veritatrack.ts) that take only userId/accountId; they need the
+// active-lab id threaded in. Both groups are deliberately held.
 
 import fs from "fs";
 import path from "path";
@@ -53,7 +56,7 @@ const DUAL_WRITE = /SET lab_id = \(SELECT lab_id FROM users WHERE id = \?\) WHER
 
 // Number of known, not-yet-fixed instances. LOWER THIS as module-batch PRs
 // land. When it reaches 0, flip the comparison to a hard zero-tolerance gate.
-const BASELINE = 11;
+const BASELINE = 7;
 
 let found = [];
 

@@ -21234,11 +21234,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         now,
         now
       );
-      // Dual-write lab_id so the auto-created CLIA cert is visible cross-member.
+      // write-path Shape A (batch 3): tag the ACTIVE lab, not the owner's
+      // default lab. Reads key on user_id + the lab-scoped read uses
+      // req.scope.labId (active), so this repairs the lab-scoped view; no
+      // default-lab-resolver read exists for lab_certificates.
       try {
+        const activeLab = resolveActiveLabForRequest(req.userId, req);
         (db as any).$client.prepare(
-          "UPDATE lab_certificates SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
-        ).run(req.userId, Number(certResult.lastInsertRowid));
+          "UPDATE lab_certificates SET lab_id = ? WHERE id = ?"
+        ).run(activeLab?.id ?? null, Number(certResult.lastInsertRowid));
       } catch {}
     }
 
@@ -21677,11 +21681,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const cliaResult = (db as any).$client.prepare(
           "INSERT INTO lab_certificates (user_id, cert_type, cert_name, cert_number, issuing_body, lab_director, is_auto_populated, notes, created_at, updated_at) VALUES (?, 'clia', 'CLIA Certificate', ?, 'Centers for Medicare and Medicaid Services (CMS)', ?, 1, 'Auto-populated from CLIA verification. Enter your expiration date to activate renewal reminders.', ?, ?)"
         ).run(req.userId, userRow.clia_number, userRow.clia_director || null, now, now);
-        // Dual-write lab_id so the auto-created CLIA cert is visible cross-member.
+        // write-path Shape A (batch 3): active lab, not the owner's default lab.
         try {
+          const activeLab = resolveActiveLabForRequest(req.userId, req);
           (db as any).$client.prepare(
-            "UPDATE lab_certificates SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
-          ).run(req.userId, Number(cliaResult.lastInsertRowid));
+            "UPDATE lab_certificates SET lab_id = ? WHERE id = ?"
+          ).run(activeLab?.id ?? null, Number(cliaResult.lastInsertRowid));
         } catch {}
       }
     }
@@ -21713,11 +21718,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).run(req.userId, cert_type || "other", cert_name.trim(), cert_number || null, issuing_body || null, issued_date || null, expiration_date || null, lab_director || null, notes || null, now, now);
 
     const certId = Number(result.lastInsertRowid);
-    // Phase 3.8 dual-write lab_id from the owning user's lab.
+    // write-path Shape A (batch 3): tag the ACTIVE lab, not the owner's default.
     try {
+      const activeLab = resolveActiveLabForRequest(req.userId, req);
       (db as any).$client.prepare(
-        "UPDATE lab_certificates SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
-      ).run(req.userId, certId);
+        "UPDATE lab_certificates SET lab_id = ? WHERE id = ?"
+      ).run(activeLab?.id ?? null, certId);
     } catch {}
     if (expiration_date) {
       scheduleReminders(certId, req.userId, expiration_date);
@@ -21871,11 +21877,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO lab_certificate_documents (certificate_id, user_id, filename, original_filename, file_size, mime_type, file_data, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(req.params.id, req.userId, filename, req.file.originalname, req.file.size, req.file.mimetype, req.file.buffer, now);
-    // Phase 3.8 dual-write lab_id.
+    // write-path Shape A (batch 3): tag the ACTIVE lab (doc reads scope by
+    // certificate_id, so this is safe; keeps the doc's lab consistent).
     try {
+      const activeLab = resolveActiveLabForRequest(req.userId, req);
       (db as any).$client.prepare(
-        "UPDATE lab_certificate_documents SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
-      ).run(req.userId, result.lastInsertRowid);
+        "UPDATE lab_certificate_documents SET lab_id = ? WHERE id = ?"
+      ).run(activeLab?.id ?? null, result.lastInsertRowid);
     } catch {}
 
     res.status(201).json({
