@@ -14,6 +14,7 @@ import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCo
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
+import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard";
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
 
@@ -4769,31 +4770,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // narrow from "everything you created anywhere" to "everything in your
   // active lab" — matching what LegacyWorkspaceRedirect would route to.
   function resolveLegacyLabId(req: any): number | null {
-    const userId = req.user?.userId;
-    if (!userId) return null;
-    // Resolver unification (2026-06-12): honor the NavBar's X-Active-Lab-Id on
-    // the legacy list endpoints so they follow the lab switcher like the
-    // /labs/:labId routes do. STRICTLY ADDITIVE: only when the header names a
-    // lab AND resolveActiveLabForRequest validates membership to that exact
-    // lab does the result change; no-header and invalid-membership requests
-    // fall through to the original default-lab logic unchanged.
-    const hdr = req?.headers?.["x-active-lab-id"];
-    if (hdr) {
-      const requested = Number(hdr);
-      if (Number.isFinite(requested) && requested > 0) {
-        try {
-          const active = resolveActiveLabForRequest(userId, req);
-          if (active?.id && Number(active.id) === requested) return requested;
-        } catch {}
-      }
-    }
-    const sqlite = (db as any).$client;
-    const u = sqlite.prepare("SELECT default_lab_id FROM users WHERE id = ?").get(userId) as any;
-    if (u?.default_lab_id) return Number(u.default_lab_id);
-    const m = sqlite.prepare(
-      "SELECT lab_id FROM lab_members WHERE user_id = ? AND status = 'active' ORDER BY id ASC LIMIT 1"
-    ).get(userId) as any;
-    return m?.lab_id ? Number(m.lab_id) : null;
+    // Resolver unification PR B (2026-06-12): delegates to the SINGLE shared
+    // implementation in server/labAccessGuard.ts (validated X-Active-Lab-Id ->
+    // default_lab_id -> first active membership). veritatrack.ts and
+    // veritabench.ts call the same function, so legacy reads AND the writes
+    // that pair with them resolve the lab identically everywhere.
+    return sharedResolveLegacyLabId((db as any).$client, req);
   }
 
   // ── LAB MEMBER MANAGEMENT (Phase 1: admin role + transfer ownership) ─────

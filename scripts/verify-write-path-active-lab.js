@@ -28,17 +28,15 @@
 // was introduced) or DOWN without lowering BASELINE (a fix landed but the
 // ratchet was not advanced). Drive BASELINE to 0 via the module-batch PRs.
 //
-// Inventory at BASELINE=3 (2026-06-12; #722 veritascan; batch 1 PT/Response x4;
-// batch 2 competency_* x5; batch 3 VeritaLab certs x4; batch 4 the resolver
-// unification: resolveLegacyLabId now honors a membership-validated
-// X-Active-Lab-Id, and veritamap_maps + cumsum_trackers + pt_events +
-// pt_corrective_actions write through resolveLegacyLabId so write==read in
-// every branch):
-//   server/veritabench.ts   : inventory_items                                    (1)
-//   server/veritatrack.ts   : veritatrack_tasks, veritatrack_signoffs            (2)
-//
-// The last 3 live in helper files registered with injected params; they need
-// the active-lab resolution threaded in (PR B of the unification).
+// BASELINE=0 (2026-06-12): the class is EXTINCT. All 21 sites fixed across
+// #722 (veritascan), #724 (PT/Response x4), #726 (competency x5), #727
+// (VeritaLab certs x4), #728 (resolver unification PR A: veritamap_maps,
+// cumsum_trackers, pt_events, pt_corrective_actions), and PR B (shared
+// labAccessGuard resolver + veritatrack_tasks/signoffs + inventory_items).
+// This guard is now a hard zero-tolerance gate: ANY create-time default-lab
+// dual-write fails CI. The correct pattern is to tag lab_id through the same
+// resolver the table's list reads use (usually labAccessGuard's
+// resolveLegacyLabId, or req.scope.labId on /labs/:labId routes).
 
 import fs from "fs";
 import path from "path";
@@ -53,7 +51,7 @@ const DUAL_WRITE = /SET lab_id = \(SELECT lab_id FROM users WHERE id = \?\) WHER
 
 // Number of known, not-yet-fixed instances. LOWER THIS as module-batch PRs
 // land. When it reaches 0, flip the comparison to a hard zero-tolerance gate.
-const BASELINE = 3;
+const BASELINE = 0;
 
 let found = [];
 
