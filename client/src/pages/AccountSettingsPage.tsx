@@ -94,8 +94,17 @@ export default function AccountSettingsPage() {
   // when the active lab is not the user's primary, so the operator does
   // not accidentally manage account-level seats while thinking they are
   // managing a different lab's team.
-  const primaryLab = memberships?.find(m => m.isPrimaryLab) ?? null;
-  const isViewingNonPrimaryLab = !!activeLabId && primaryLab != null && primaryLab.labId !== activeLabId;
+  // 2026-06-12 fix: isPrimaryLab FOLLOWS the NavBar switcher (POST
+  // /api/labs/me/default flips it on every switch), so comparing it to
+  // activeLabId was always equal and this guard NEVER fired — Michael saw his
+  // personal account's full seat list, with Remove links, while switched into
+  // a customer lab (SCAHC, /labs/6). Key on isAccountHomeLab instead: a
+  // STATIC flag derived from users.lab_id, which the switcher never touches.
+  // Fallback to the old comparison only when the server predates the flag.
+  const homeLab = memberships?.find(m => m.isAccountHomeLab)
+    ?? memberships?.find(m => m.isPrimaryLab)
+    ?? null;
+  const isViewingNonPrimaryLab = !!activeLabId && homeLab != null && homeLab.labId !== activeLabId;
   const activeLab = memberships?.find(m => m.labId === activeLabId) ?? null;
   const [cliaNumber, setCliaNumber] = useState("");
   const [labName, setLabName] = useState("");
@@ -647,7 +656,11 @@ export default function AccountSettingsPage() {
             </p>
           </CardHeader>
           <CardContent className="space-y-3">
-            {activeSeats.length > 0 && (
+            {/* On a non-home lab, the banner in the header is the whole story:
+                these are ACCOUNT seats, not this lab's team. Hide the
+                management list so Remove/Edit cannot be clicked in the wrong
+                mental context (2026-06-12 fix). */}
+            {!isViewingNonPrimaryLab && activeSeats.length > 0 && (
               <div className="space-y-2">
                 {activeSeats.map((seat: any) => {
                   const seatPerms = (() => { try { return typeof seat.permissions === 'string' ? JSON.parse(seat.permissions || '{}') : (seat.permissions || {}); } catch { return {}; } })();
@@ -816,7 +829,7 @@ export default function AccountSettingsPage() {
                 })}
               </div>
             )}
-            {activeSeats.length === 0 && (
+            {!isViewingNonPrimaryLab && activeSeats.length === 0 && (
               <p className="text-sm text-muted-foreground">No team members added yet.</p>
             )}
             {usedSeats < seatCount && !isViewingNonPrimaryLab ? (

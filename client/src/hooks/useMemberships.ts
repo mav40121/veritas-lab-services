@@ -9,6 +9,12 @@ export interface Membership {
   role: string;
   permissions: Record<string, any>;
   isPrimaryLab: boolean;
+  // STATIC account-home-lab flag derived from users.lab_id, which the
+  // NavBar switcher never touches. isPrimaryLab FOLLOWS the switcher
+  // (POST /api/labs/me/default flips it), so it cannot distinguish "my
+  // lab" from "a lab I switched into" — this flag can. Optional because
+  // older server responses do not carry it (deploy skew).
+  isAccountHomeLab?: boolean;
   lastActiveAt: string | null;
   plan: string | null;
   subscriptionStatus: string | null;
