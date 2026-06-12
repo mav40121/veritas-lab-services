@@ -11541,11 +11541,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO veritascan_scans (user_id, name, created_at, updated_at) VALUES (?, ?, ?, ?)"
     ).run(dataUserId, name.trim(), now, now);
-    // Phase 3.4 dual-write lab_id from the owning user's lab.
+    // 2026-06-11 (Shape A write-path fix): tag the ACTIVE lab
+    // (X-Active-Lab-Id), not the user's default lab, so a multi-lab owner's
+    // scan lands in the lab they are working in. resolveActiveLabForRequest
+    // validates membership and falls back to the user's default lab when no
+    // active-lab header is present, so single-lab users are unchanged (the
+    // resolved id equals the old `users.lab_id` value). Reads are unchanged,
+    // so nothing can be hidden by this.
     try {
+      const activeLab = resolveActiveLabForRequest(dataUserId, req);
       (db as any).$client.prepare(
-        "UPDATE veritascan_scans SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
-      ).run(dataUserId, result.lastInsertRowid);
+        "UPDATE veritascan_scans SET lab_id = ? WHERE id = ?"
+      ).run(activeLab?.id ?? null, result.lastInsertRowid);
     } catch {}
     res.json({ id: Number(result.lastInsertRowid), name: name.trim(), created_at: now, updated_at: now });
   });
