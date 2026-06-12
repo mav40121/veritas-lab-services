@@ -28,12 +28,11 @@
 // was introduced) or DOWN without lowering BASELINE (a fix landed but the
 // ratchet was not advanced). Drive BASELINE to 0 via the module-batch PRs.
 //
-// Inventory at BASELINE=16 (2026-06-12; #722 fixed veritascan_scans, batch 1
-// fixed pt_enrollments_v2 / aa_records / findings / pt_enrollments):
-//   server/routes.ts        : veritamap_maps, cumsum_trackers, competency_programs x2,
-//                             competency_employees, competency_quizzes x2,
+// Inventory at BASELINE=11 (2026-06-12; #722 veritascan; batch 1 the 4
+// PT/Response sites; batch 2 the 5 competency_* sites):
+//   server/routes.ts        : veritamap_maps, cumsum_trackers,
 //                             lab_certificates x3, lab_certificate_documents,
-//                             pt_events, pt_corrective_actions                   (13)
+//                             pt_events, pt_corrective_actions                   (8)
 //   server/veritabench.ts   : inventory_items                                    (1)
 //   server/veritatrack.ts   : veritatrack_tasks, veritatrack_signoffs            (2)
 //
@@ -54,7 +53,7 @@ const DUAL_WRITE = /SET lab_id = \(SELECT lab_id FROM users WHERE id = \?\) WHER
 
 // Number of known, not-yet-fixed instances. LOWER THIS as module-batch PRs
 // land. When it reaches 0, flip the comparison to a hard zero-tolerance gate.
-const BASELINE = 16;
+const BASELINE = 11;
 
 let found = [];
 

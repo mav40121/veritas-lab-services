@@ -16282,11 +16282,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "INSERT INTO competency_programs (user_id, name, department, type, map_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
       ).run(dataUserId, name.trim(), department || "Chemistry", type, mapId || null, now, now);
       const programId = Number(result.lastInsertRowid);
-      // Phase 3.5 dual-write lab_id from the owning user's lab.
+      // write-path Shape A (batch 2): tag the ACTIVE lab, not the owner's
+      // default lab. Legacy create route; the lab-scoped reads use
+      // req.scope.labId (active lab), so the default-lab write was fail-closed
+      // for multi-lab. resolveActiveLabForRequest honors X-Active-Lab-Id and
+      // falls back to the default lab (single-lab unchanged).
       try {
+        const activeLab = resolveActiveLabForRequest(dataUserId, req);
         (db as any).$client.prepare(
-          "UPDATE competency_programs SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
-        ).run(dataUserId, programId);
+          "UPDATE competency_programs SET lab_id = ? WHERE id = ?"
+        ).run(activeLab?.id ?? null, programId);
       } catch {}
 
       // Insert method groups for technical type
@@ -16329,11 +16334,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "INSERT INTO competency_programs (user_id, name, department, type, map_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
       ).run(dataUserId, name.trim(), department || "Chemistry", type, mapId || null, now, now);
       const programId = Number(result.lastInsertRowid);
-      // Phase 3.5 dual-write lab_id from the owning user's lab.
+      // write-path Shape A (batch 2): tag the ACTIVE lab, not the owner's
+      // default lab. Legacy create route; the lab-scoped reads use
+      // req.scope.labId (active lab), so the default-lab write was fail-closed
+      // for multi-lab. resolveActiveLabForRequest honors X-Active-Lab-Id and
+      // falls back to the default lab (single-lab unchanged).
       try {
+        const activeLab = resolveActiveLabForRequest(dataUserId, req);
         (db as any).$client.prepare(
-          "UPDATE competency_programs SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
-        ).run(dataUserId, programId);
+          "UPDATE competency_programs SET lab_id = ? WHERE id = ?"
+        ).run(activeLab?.id ?? null, programId);
       } catch {}
 
       if (type === "technical" && Array.isArray(methodGroups)) {
@@ -16614,11 +16624,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO competency_employees (user_id, name, title, hire_date, lis_initials, status, created_at) VALUES (?, ?, ?, ?, ?, 'active', ?)"
     ).run(dataUserId, name.trim(), title || "", hireDate || null, lisInitials || null, now);
-    // Phase 3.5 dual-write lab_id from the owning user's lab.
+    // write-path Shape A (batch 2): tag the ACTIVE lab, not the owner's default
+    // lab (legacy create route; lab-scoped reads use req.scope.labId).
     try {
+      const activeLab = resolveActiveLabForRequest(dataUserId, req);
       (db as any).$client.prepare(
-        "UPDATE competency_employees SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
-      ).run(dataUserId, result.lastInsertRowid);
+        "UPDATE competency_employees SET lab_id = ? WHERE id = ?"
+      ).run(activeLab?.id ?? null, result.lastInsertRowid);
     } catch {}
     res.json({ id: Number(result.lastInsertRowid), user_id: dataUserId, name: name.trim(), title: title || "", hire_date: hireDate || null, lis_initials: lisInitials || null, status: "active", created_at: now });
   });
@@ -17426,11 +17438,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       qFormat,
       now,
     );
-    // Phase 3.5 dual-write lab_id from the owning user's lab.
+    // write-path Shape A (batch 2): tag the ACTIVE lab. Quiz reads never filter
+    // by the quiz's lab_id (they scope by id / program_id), so this is safe; it
+    // keeps the tag consistent with the active lab the user is working in.
     try {
+      const activeLab = resolveActiveLabForRequest(dataUserId, req);
       (db as any).$client.prepare(
-        "UPDATE competency_quizzes SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
-      ).run(dataUserId, result.lastInsertRowid);
+        "UPDATE competency_quizzes SET lab_id = ? WHERE id = ?"
+      ).run(activeLab?.id ?? null, result.lastInsertRowid);
     } catch {}
     res.json({
       id: Number(result.lastInsertRowid),
@@ -24095,10 +24110,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       JSON.stringify(questions),
       now,
     );
+    // write-path Shape A (batch 2): admin-upload route (no user session); a quiz
+    // inherits its parent program's lab. program.lab_id is loaded above.
     try {
       (db as any).$client.prepare(
-        "UPDATE competency_quizzes SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
-      ).run(program.user_id, result.lastInsertRowid);
+        "UPDATE competency_quizzes SET lab_id = ? WHERE id = ?"
+      ).run(program.lab_id ?? null, result.lastInsertRowid);
     } catch {}
     logAudit({
       userId: 0,
