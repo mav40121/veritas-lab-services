@@ -28,20 +28,17 @@
 // was introduced) or DOWN without lowering BASELINE (a fix landed but the
 // ratchet was not advanced). Drive BASELINE to 0 via the module-batch PRs.
 //
-// Inventory at BASELINE=7 (2026-06-12; #722 veritascan; batch 1 the 4
-// PT/Response; batch 2 the 5 competency_*; batch 3 the 4 VeritaLab cert sites):
-//   server/routes.ts        : veritamap_maps, cumsum_trackers,
-//                             pt_events, pt_corrective_actions                   (4)
+// Inventory at BASELINE=3 (2026-06-12; #722 veritascan; batch 1 PT/Response x4;
+// batch 2 competency_* x5; batch 3 VeritaLab certs x4; batch 4 the resolver
+// unification: resolveLegacyLabId now honors a membership-validated
+// X-Active-Lab-Id, and veritamap_maps + cumsum_trackers + pt_events +
+// pt_corrective_actions write through resolveLegacyLabId so write==read in
+// every branch):
 //   server/veritabench.ts   : inventory_items                                    (1)
 //   server/veritatrack.ts   : veritatrack_tasks, veritatrack_signoffs            (2)
 //
-// The 4 routes.ts sites are the resolveLegacyLabId GROUP: each has a legacy LIST
-// read that scopes by the DEFAULT lab (resolveLegacyLabId), so an active-lab
-// write alone would hide rows (fail-closed). They need a coordinated read-path
-// change plus a decision on the legacy resolver, not a blind write swap.
-// inventory_items + veritatrack_* live in helper files (server/veritabench.ts,
-// server/veritatrack.ts) that take only userId/accountId; they need the
-// active-lab id threaded in. Both groups are deliberately held.
+// The last 3 live in helper files registered with injected params; they need
+// the active-lab resolution threaded in (PR B of the unification).
 
 import fs from "fs";
 import path from "path";
@@ -56,7 +53,7 @@ const DUAL_WRITE = /SET lab_id = \(SELECT lab_id FROM users WHERE id = \?\) WHER
 
 // Number of known, not-yet-fixed instances. LOWER THIS as module-batch PRs
 // land. When it reaches 0, flip the comparison to a hard zero-tolerance gate.
-const BASELINE = 7;
+const BASELINE = 3;
 
 let found = [];
 

@@ -4771,6 +4771,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   function resolveLegacyLabId(req: any): number | null {
     const userId = req.user?.userId;
     if (!userId) return null;
+    // Resolver unification (2026-06-12): honor the NavBar's X-Active-Lab-Id on
+    // the legacy list endpoints so they follow the lab switcher like the
+    // /labs/:labId routes do. STRICTLY ADDITIVE: only when the header names a
+    // lab AND resolveActiveLabForRequest validates membership to that exact
+    // lab does the result change; no-header and invalid-membership requests
+    // fall through to the original default-lab logic unchanged.
+    const hdr = req?.headers?.["x-active-lab-id"];
+    if (hdr) {
+      const requested = Number(hdr);
+      if (Number.isFinite(requested) && requested > 0) {
+        try {
+          const active = resolveActiveLabForRequest(userId, req);
+          if (active?.id && Number(active.id) === requested) return requested;
+        } catch {}
+      }
+    }
     const sqlite = (db as any).$client;
     const u = sqlite.prepare("SELECT default_lab_id FROM users WHERE id = ?").get(userId) as any;
     if (u?.default_lab_id) return Number(u.default_lab_id);
@@ -9559,13 +9575,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO veritamap_maps (user_id, name, instruments, created_at, updated_at) VALUES (?, ?, '[]', ?, ?)"
     ).run(dataUserId, name.trim(), now, now);
-    // Phase 3.3 dual-write lab_id from the user's lab so new maps land
-    // already scoped to the right lab. Best-effort; if lab_id is missing
-    // it gets picked up by the next idempotent backfill.
+    // write-path Shape A (resolver unification): tag via resolveLegacyLabId —
+    // the SAME resolver the legacy list read uses (now active-lab-aware) — so
+    // write and read agree by construction in every branch (header-validated,
+    // no-header default, membership-fail default).
     try {
       (db as any).$client.prepare(
-        "UPDATE veritamap_maps SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
-      ).run(dataUserId, result.lastInsertRowid);
+        "UPDATE veritamap_maps SET lab_id = ? WHERE id = ?"
+      ).run(resolveLegacyLabId(req) ?? null, result.lastInsertRowid);
     } catch {}
     res.json({ id: Number(result.lastInsertRowid), name: name.trim(), created_at: now, updated_at: now });
   });
@@ -13480,12 +13497,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "INSERT INTO cumsum_trackers (user_id, instrument_name, analyte, created_at) VALUES (?, ?, ?, ?)"
     ).run(req.user.userId, instrumentName.trim(), analyte || "PTT", now);
     const trackerId = Number(result.lastInsertRowid);
-    // Legacy fallback dual-write from users.lab_id; the lab-scoped POST above
-    // sets lab_id directly and should be preferred when activeLabId is known.
+    // write-path Shape A (resolver unification): tag via resolveLegacyLabId —
+    // the SAME resolver the legacy trackers list uses (now active-lab-aware) —
+    // so write and read agree in every branch. The lab-scoped POST above still
+    // sets lab_id directly from the URL-validated lab.
     try {
       (db as any).$client.prepare(
-        "UPDATE cumsum_trackers SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?"
-      ).run(req.user.userId, trackerId);
+        "UPDATE cumsum_trackers SET lab_id = ? WHERE id = ?"
+      ).run(resolveLegacyLabId(req) ?? null, trackerId);
     } catch {}
     res.json({ id: trackerId, user_id: req.user.userId, instrument_name: instrumentName.trim(), analyte: analyte || "PTT", created_at: now });
   });
@@ -22695,9 +22714,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO pt_events (enrollment_id, user_id, event_id, event_name, event_date, analyte, your_result, your_method, peer_mean, peer_sd, peer_n, acceptable_low, acceptable_high, sdi, pass_fail, notes, tested_by_employee_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(enrollment_id, dataUserId, event_id || null, event_name || null, event_date, analyte.trim(), your_result ?? null, your_method || null, peer_mean ?? null, peer_sd ?? null, peer_n ?? null, acceptable_low ?? null, acceptable_high ?? null, sdi, pass_fail || 'pending', notes || null, tested_by_employee_id ? Number(tested_by_employee_id) : null, now, now);
-    // Phase 3.6 dual-write lab_id.
+    // write-path Shape A (resolver unification): tag via resolveLegacyLabId —
+    // the SAME resolver the events list read uses (now active-lab-aware) — so
+    // a multi-lab owner's new event always appears in the lab they created it in.
     try {
-      (db as any).$client.prepare("UPDATE pt_events SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?").run(dataUserId, result.lastInsertRowid);
+      (db as any).$client.prepare("UPDATE pt_events SET lab_id = ? WHERE id = ?").run(resolveLegacyLabId(req) ?? null, result.lastInsertRowid);
     } catch {}
     const created = (db as any).$client.prepare("SELECT * FROM pt_events WHERE id = ?").get(Number(result.lastInsertRowid));
     res.json(created);
@@ -22785,9 +22806,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO pt_corrective_actions (event_id, user_id, root_cause, corrective_action, preventive_action, responsible_person, date_initiated, date_completed, status, verified_by, verified_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(event_id, dataUserId, root_cause || null, corrective_action.trim(), preventive_action || null, responsible_person || null, date_initiated, date_completed || null, status || 'open', verified_by || null, verified_date || null, now, now);
-    // Phase 3.6 dual-write lab_id.
+    // write-path Shape A (resolver unification): tag via resolveLegacyLabId —
+    // the SAME resolver the corrective-actions list read uses (now
+    // active-lab-aware) — so write and read agree in every branch.
     try {
-      (db as any).$client.prepare("UPDATE pt_corrective_actions SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?").run(dataUserId, result.lastInsertRowid);
+      (db as any).$client.prepare("UPDATE pt_corrective_actions SET lab_id = ? WHERE id = ?").run(resolveLegacyLabId(req) ?? null, result.lastInsertRowid);
     } catch {}
     const created = (db as any).$client.prepare("SELECT * FROM pt_corrective_actions WHERE id = ?").get(Number(result.lastInsertRowid));
     res.json(created);
