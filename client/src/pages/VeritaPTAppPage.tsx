@@ -251,6 +251,23 @@ export default function VeritaPTAppPage() {
     await fetchData();
   };
 
+  // #18 Phase 3: open a VeritaResponse corrective-action finding from a failed
+  // alternative assessment. The escalate endpoint is non-lab-scoped; it resolves
+  // the finding's lab from the record's tagged lab_id. 409 = already escalated
+  // (idempotent), so still refetch to render the linked chip.
+  const handleEscalateAaaRecord = async (id: number) => {
+    const res = await fetch(`${API_BASE}/api/pt/aa-records/${id}/escalate-to-response`, {
+      method: "POST",
+      headers: authHeaders(),
+    });
+    if (res.ok || res.status === 409) {
+      await fetchData();
+    } else {
+      const e = await res.json().catch(() => ({}));
+      alert("Could not escalate to VeritaResponse: " + (e.error || `HTTP ${res.status}`));
+    }
+  };
+
   // Filter coverage rows
   const filteredCoverage = coverage.filter((row) => {
     if (filter === "all") return true;
@@ -760,20 +777,45 @@ export default function VeritaPTAppPage() {
                           {(!r.last_pass_fail || r.last_pass_fail === "pending") && <span className="text-muted-foreground">Pending</span>}
                         </td>
                         <td className="py-2 pr-3">
-                          <ConfirmDialog
-                            title="Remove AAA Record?"
-                            message="Remove this alternative assessment record? Coverage analysis will update."
-                            confirmLabel="Remove"
-                            onConfirm={() => handleRemoveAaaRecord(r.id)}
-                          >
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
+                          <div className="flex items-center gap-2 justify-end">
+                            {/* #18 Phase 3: a failed AAA can be escalated into a
+                                VeritaResponse finding, or shows a linked chip
+                                once it has been. */}
+                            {r.last_pass_fail === "fail" && r.response_finding_ref && (
+                              <Link
+                                href={labRoute("/veritaresponse")}
+                                className="text-xs text-primary hover:underline whitespace-nowrap"
+                                title="Open the linked VeritaResponse finding"
+                              >
+                                Linked {r.response_finding_ref}
+                              </Link>
+                            )}
+                            {r.last_pass_fail === "fail" && !r.response_finding_ref && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs whitespace-nowrap"
+                                onClick={() => handleEscalateAaaRecord(r.id)}
+                                title="Open a VeritaResponse corrective-action finding for this failed assessment (42 CFR 493.1236(c)(1))"
+                              >
+                                Escalate to VeritaResponse
+                              </Button>
+                            )}
+                            <ConfirmDialog
+                              title="Remove AAA Record?"
+                              message="Remove this alternative assessment record? Coverage analysis will update."
+                              confirmLabel="Remove"
+                              onConfirm={() => handleRemoveAaaRecord(r.id)}
                             >
-                              <Trash2 size={13} />
-                            </Button>
-                          </ConfirmDialog>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
+                              >
+                                <Trash2 size={13} />
+                              </Button>
+                            </ConfirmDialog>
+                          </div>
                         </td>
                       </tr>
                     ))}
