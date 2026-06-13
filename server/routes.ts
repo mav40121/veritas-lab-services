@@ -11344,7 +11344,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "Number of Instruments", "CFR Section", "Correlation Required",
         "Units of Measure", "Reference Range Low", "Reference Range High",
         "Critical Low (Mayo Clinic Laboratories starting point)", "Critical High (Mayo Clinic Laboratories starting point)",
+        "MEC Reviewed/Approved",
         "AMR Low", "AMR High (per instrument)",
+        "Reference Range Attestation (42 CFR 493.1253)", "AMR Attestation (42 CFR 493.1253, per instrument)",
         "Last Calibration Verification Date", "Calibration Verification Status",
         "Last Correlation / Method Comparison Date", "Correlation / Method Comparison Status",
         "Last Precision Date", "Precision Status", "Last SOP Review Date", "SOP Review Status",
@@ -11354,7 +11356,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Column widths
       const colWidths = [
         22, 55, 20, 18, 20, 14, 22, 14, 20,
-        18, 20, 20, 16, 16, 16, 22,
+        18, 20, 20, 16, 16, 26, 16, 22, 34, 34,
         30, 28, 36, 36, 18, 18, 18, 18, 30, 50,
       ];
       ws.columns = headers.map((h, i) => ({ header: h, key: `col${i}`, width: colWidths[i] ?? 18 }));
@@ -11392,6 +11394,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           return `${inst.instrument_name}: ${lo} - ${hi}`;
         }).join("; ");
 
+        // Wave A4 provenance columns. MEC owns the final critical values
+        // (Mayo Clinic Laboratories values are a starting point); reference
+        // range and AMR carry the director-or-designee attestation per
+        // 42 CFR 493.1253 once recorded.
+        const mecCell = av?.mec_reviewed_at
+          ? `Reviewed/approved ${String(av.mec_reviewed_at).slice(0, 10)}${av.mec_reviewed_by ? ` (recorded by ${av.mec_reviewed_by})` : ""}`
+          : (av?.critical_low || av?.critical_high) ? "Pending MEC review" : "";
+        const refAttestCell = av?.ref_locked
+          ? `Attested by ${av.ref_attested_by}, ${av.ref_attested_title} on ${String(av.ref_attested_at).slice(0, 10)}`
+          : (av?.ref_range_low && av?.ref_range_high) ? "Pending director attestation" : "";
+        const amrAttestCell = instruments.map((inst: any) => {
+          const amrEntry = amrValuesMap[`${inst.id}::${t.analyte}`];
+          if (!amrEntry?.amr_low || !amrEntry?.amr_high) return null;
+          return amrEntry.amr_locked
+            ? `${inst.instrument_name}: attested by ${amrEntry.amr_attested_by} on ${String(amrEntry.amr_attested_at).slice(0, 10)}`
+            : `${inst.instrument_name}: pending`;
+        }).filter(Boolean).join("; ");
+
         return [
           t.analyte,
           instrList,
@@ -11407,8 +11427,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           refHigh,
           critLow,
           critHigh,
+          mecCell,
           amrLines || NE,
           "", // AMR High (per instrument) -- shown inline in AMR Low column above
+          refAttestCell,
+          amrAttestCell,
           t.last_cal_ver || "",
           calVerStatus,
           t.last_method_comp || "",
@@ -11446,8 +11469,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
 
       // ── Data rows (row 2 onward) ──
-      const statusCols = [18, 20, 22, 24]; // 1-indexed: Cal Ver Status, Method Comp Status, Precision Status, SOP Status
-      const dateCols = [17, 19, 21, 23];   // 1-indexed: date columns
+      // Wave A4 shifted these +3 (MEC Reviewed/Approved after Critical High,
+      // plus the two 493.1253 attestation columns after the AMR pair).
+      const statusCols = [21, 23, 25, 27]; // 1-indexed: Cal Ver Status, Method Comp Status, Precision Status, SOP Status
+      const dateCols = [20, 22, 24, 26];   // 1-indexed: date columns
       const numCol = 7; // 1-indexed: Number of Instruments
       const complexityCol = 6; // 1-indexed: Complexity
       const correlCol = 9;     // 1-indexed: Correlation Required
@@ -11525,9 +11550,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // ── Add notes to lab-entered value header cells ──
       const labNote = "CLIA requires each laboratory to establish and verify these values for their specific instruments and patient population. Values shown are lab-entered only. \"Not established\" indicates the lab has not yet entered a value.";
-      for (const col of [10, 11, 12, 13, 14, 15]) {
+      // Wave A4: AMR pair shifted to 16-17 by the MEC column at 15.
+      for (const col of [10, 11, 12, 13, 14, 16, 17]) {
         headerRow.getCell(col).note = labNote;
       }
+      // Wave A4 provenance header notes.
+      headerRow.getCell(15).note = "Critical values from Mayo Clinic Laboratories are a STARTING POINT. The Medical Executive Committee reviews and adopts the facility's critical values; this column records that review.";
+      const attestNote = "Reference ranges and AMR are verified by the laboratory per 42 CFR 493.1253. This column records the medical director or designee attestation that locks the value in VeritaMap.";
+      headerRow.getCell(18).note = attestNote;
+      headerRow.getCell(19).note = attestNote;
 
 
 

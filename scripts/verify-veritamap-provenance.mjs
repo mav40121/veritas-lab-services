@@ -129,6 +129,29 @@ check("5c. different instrument unaffected", amrLockConflict(1, 8, "Sodium", { a
 // 6. MEC review precondition: criticals must exist first.
 check("6. mec-review requires criticals entered first", !(k.critical_low || k.critical_high));
 
+// ── 7. Export cell branches (Wave A4.3) — mirror of the routes.ts logic ──
+function mecCell(av) {
+  return av?.mec_reviewed_at
+    ? `Reviewed/approved ${String(av.mec_reviewed_at).slice(0, 10)}${av.mec_reviewed_by ? ` (recorded by ${av.mec_reviewed_by})` : ""}`
+    : (av?.critical_low || av?.critical_high) ? "Pending MEC review" : "";
+}
+function refAttestCell(av) {
+  return av?.ref_locked
+    ? `Attested by ${av.ref_attested_by}, ${av.ref_attested_title} on ${String(av.ref_attested_at).slice(0, 10)}`
+    : (av?.ref_range_low && av?.ref_range_high) ? "Pending director attestation" : "";
+}
+check("7a. export: reviewed criticals show date + recorder",
+  mecCell({ mec_reviewed_at: "2026-06-12", mec_reviewed_by: "MV", critical_low: "120" }) === "Reviewed/approved 2026-06-12 (recorded by MV)");
+check("7b. export: criticals without review show Pending MEC review",
+  mecCell({ critical_low: "120" }) === "Pending MEC review");
+check("7c. export: no criticals -> blank MEC cell", mecCell({}) === "");
+check("7d. export: locked range shows attestation line",
+  refAttestCell({ ref_locked: 1, ref_attested_by: "M. Veri", ref_attested_title: "Laboratory Director", ref_attested_at: "2026-06-12T01:00:00Z", ref_range_low: "136", ref_range_high: "145" }) ===
+  "Attested by M. Veri, Laboratory Director on 2026-06-12");
+check("7e. export: unattested complete range shows pending",
+  refAttestCell({ ref_range_low: "136", ref_range_high: "145" }) === "Pending director attestation");
+check("7f. export: empty range -> blank attestation cell", refAttestCell({}) === "");
+
 console.log("");
 if (failures) { console.log(`${failures} FAILURE(S)`); process.exit(1); }
-console.log("ALL PASS (11/11): Wave A4.1 provenance schema, 493.1253 lock semantics, and preconditions verified.");
+console.log("ALL PASS (19/19): Wave A4 provenance schema, 493.1253 lock semantics, preconditions, and export cell branches verified.");
