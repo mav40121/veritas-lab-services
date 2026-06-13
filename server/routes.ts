@@ -9990,10 +9990,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // PUT analyte-values for one analyte
+  // Wave A4 helper: a director-attested reference range is LOCKED per 42 CFR
+  // 493.1253. Returns an error string when the incoming body would change a
+  // locked ref range, else null. Critical values and units stay editable
+  // (the MEC review flow governs criticals). Shared by the lab-scoped AND
+  // legacy analyte-values PUTs so the lock cannot be bypassed.
+  function refLockConflict(mapId: number, analyte: string, body: any): string | null {
+    const existing = (db as any).$client.prepare(
+      "SELECT ref_range_low, ref_range_high, ref_locked FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?"
+    ).get(mapId, analyte) as any;
+    if (!existing?.ref_locked) return null;
+    const refChanged =
+      (body?.ref_range_low || null) !== (existing.ref_range_low || null) ||
+      (body?.ref_range_high || null) !== (existing.ref_range_high || null);
+    return refChanged
+      ? "Reference range is locked by director attestation per 42 CFR 493.1253. Unlock it (owner or admin) before editing."
+      : null;
+  }
+
   app.put("/api/labs/:labId/veritamap/maps/:id/analyte-values/:analyte", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
     const mapId = Number(req.params.id);
     const analyte = decodeURIComponent(req.params.analyte);
+    const lockErr = refLockConflict(mapId, analyte, req.body);
+    if (lockErr) return res.status(409).json({ error: lockErr });
     const { ref_range_low, ref_range_high, critical_low, critical_high, units } = req.body;
     const now = new Date().toISOString();
     (db as any).$client.prepare(`
@@ -10013,6 +10033,94 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(row);
   });
 
+  // ── Wave A4: VeritaMap provenance (MEC review + 493.1253 attestation) ────
+  // POST mec-review: record that the Medical Executive Committee reviewed and
+  // adopted the critical values for this analyte. Mayo Clinic Laboratories
+  // values are a STARTING POINT; the MEC owns the final values. We store the
+  // review date and who recorded it; the values themselves live in
+  // critical_low/critical_high (entered via the normal PUT).
+  app.post("/api/labs/:labId/veritamap/maps/:id/analyte-values/:analyte/mec-review", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
+    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
+    const mapId = Number(req.params.id);
+    const analyte = decodeURIComponent(req.params.analyte);
+    const { reviewed_at, recorded_by } = req.body || {};
+    if (!reviewed_at || !recorded_by?.trim()) {
+      return res.status(400).json({ error: "reviewed_at (date) and recorded_by are required" });
+    }
+    const row = (db as any).$client.prepare(
+      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?"
+    ).get(mapId, analyte) as any;
+    if (!row || (!row.critical_low && !row.critical_high)) {
+      return res.status(400).json({ error: "Enter the MEC-adopted critical values first, then record the review" });
+    }
+    logAudit({
+      userId: req.user?.userId, ownerUserId: req.ownerUserId, module: "veritamap",
+      action: "update", entityType: "analyte_mec_review", entityId: `${mapId}:${analyte}`,
+      entityLabel: analyte, before: { mec_reviewed_at: row.mec_reviewed_at }, after: { mec_reviewed_at: reviewed_at, mec_reviewed_by: recorded_by.trim() },
+      ipAddress: req.ip,
+    });
+    (db as any).$client.prepare(
+      "UPDATE veritamap_analyte_values SET mec_reviewed_at = ?, mec_reviewed_by = ?, updated_at = ? WHERE map_id = ? AND analyte = ?"
+    ).run(reviewed_at, recorded_by.trim(), new Date().toISOString(), mapId, analyte);
+    res.json((db as any).$client.prepare("SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?").get(mapId, analyte));
+  });
+
+  // POST attest-ref: director-or-designee attestation on the lab-entered
+  // reference range per 42 CFR 493.1253. Locks the ref fields.
+  app.post("/api/labs/:labId/veritamap/maps/:id/analyte-values/:analyte/attest-ref", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
+    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
+    const mapId = Number(req.params.id);
+    const analyte = decodeURIComponent(req.params.analyte);
+    const { attested_by, attested_title } = req.body || {};
+    if (!attested_by?.trim() || !attested_title?.trim()) {
+      return res.status(400).json({ error: "attested_by and attested_title are required" });
+    }
+    const row = (db as any).$client.prepare(
+      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?"
+    ).get(mapId, analyte) as any;
+    if (!row || !row.ref_range_low || !row.ref_range_high) {
+      return res.status(400).json({ error: "Enter the verified reference range first; an empty range cannot be attested" });
+    }
+    const now = new Date().toISOString();
+    logAudit({
+      userId: req.user?.userId, ownerUserId: req.ownerUserId, module: "veritamap",
+      action: "update", entityType: "analyte_ref_attestation", entityId: `${mapId}:${analyte}`,
+      entityLabel: analyte, before: { ref_locked: row.ref_locked }, after: { ref_attested_by: attested_by.trim(), ref_attested_title: attested_title.trim(), ref_locked: 1 },
+      ipAddress: req.ip,
+    });
+    (db as any).$client.prepare(
+      "UPDATE veritamap_analyte_values SET ref_attested_at = ?, ref_attested_by = ?, ref_attested_title = ?, ref_locked = 1, updated_at = ? WHERE map_id = ? AND analyte = ?"
+    ).run(now, attested_by.trim(), attested_title.trim(), now, mapId, analyte);
+    res.json((db as any).$client.prepare("SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?").get(mapId, analyte));
+  });
+
+  // POST unlock-ref: owner/admin removes the attestation lock (e.g. a method
+  // change requiring re-verification). Audited; attestation fields cleared so
+  // a stale attestation can never cover new values.
+  app.post("/api/labs/:labId/veritamap/maps/:id/analyte-values/:analyte/unlock-ref", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
+    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
+    const role = req.scope?.role;
+    if (role !== "owner" && role !== "admin") {
+      return res.status(403).json({ error: "Only the lab owner or an admin can unlock an attested reference range" });
+    }
+    const mapId = Number(req.params.id);
+    const analyte = decodeURIComponent(req.params.analyte);
+    const row = (db as any).$client.prepare(
+      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?"
+    ).get(mapId, analyte) as any;
+    if (!row?.ref_locked) return res.status(400).json({ error: "Reference range is not locked" });
+    logAudit({
+      userId: req.user?.userId, ownerUserId: req.ownerUserId, module: "veritamap",
+      action: "update", entityType: "analyte_ref_attestation", entityId: `${mapId}:${analyte}`,
+      entityLabel: analyte, before: { ref_locked: 1, ref_attested_by: row.ref_attested_by, ref_attested_at: row.ref_attested_at }, after: { ref_locked: 0, reason: req.body?.reason || null },
+      ipAddress: req.ip,
+    });
+    (db as any).$client.prepare(
+      "UPDATE veritamap_analyte_values SET ref_attested_at = NULL, ref_attested_by = NULL, ref_attested_title = NULL, ref_locked = 0, updated_at = ? WHERE map_id = ? AND analyte = ?"
+    ).run(new Date().toISOString(), mapId, analyte);
+    res.json((db as any).$client.prepare("SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?").get(mapId, analyte));
+  });
+
   // GET amr-values
   app.get("/api/labs/:labId/veritamap/maps/:id/amr-values", authMiddleware, labScopeMiddleware, requireMapInActiveLab, (req: any, res) => {
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
@@ -10023,11 +10131,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // PUT amr-values for one instrument+analyte
+  // Wave A4 helper: a director-attested AMR is LOCKED per 42 CFR 493.1253.
+  // Shared by the lab-scoped AND legacy AMR PUTs so the lock cannot be
+  // bypassed.
+  function amrLockConflict(mapId: number, instrumentId: number, analyte: string, body: any): string | null {
+    const existing = (db as any).$client.prepare(
+      "SELECT amr_low, amr_high, amr_locked FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ?"
+    ).get(mapId, instrumentId, analyte) as any;
+    if (!existing?.amr_locked) return null;
+    const changed =
+      (body?.amr_low || null) !== (existing.amr_low || null) ||
+      (body?.amr_high || null) !== (existing.amr_high || null);
+    return changed
+      ? "AMR is locked by director attestation per 42 CFR 493.1253. Unlock it (owner or admin) before editing."
+      : null;
+  }
+
   app.put("/api/labs/:labId/veritamap/maps/:id/amr-values/:instId/:analyte", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
     const mapId = Number(req.params.id);
     const instrumentId = Number(req.params.instId);
     const analyte = decodeURIComponent(req.params.analyte);
+    const lockErr = amrLockConflict(mapId, instrumentId, analyte, req.body);
+    if (lockErr) return res.status(409).json({ error: lockErr });
     const { amr_low, amr_high } = req.body;
     const now = new Date().toISOString();
     (db as any).$client.prepare(`
@@ -10042,6 +10168,61 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ?"
     ).get(mapId, instrumentId, analyte);
     res.json(row);
+  });
+
+  // POST attest-amr / unlock-amr: same 493.1253 attestation flow as the
+  // reference range, scoped per instrument because AMR is per instrument.
+  app.post("/api/labs/:labId/veritamap/maps/:id/amr-values/:instId/:analyte/attest", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
+    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
+    const mapId = Number(req.params.id);
+    const instrumentId = Number(req.params.instId);
+    const analyte = decodeURIComponent(req.params.analyte);
+    const { attested_by, attested_title } = req.body || {};
+    if (!attested_by?.trim() || !attested_title?.trim()) {
+      return res.status(400).json({ error: "attested_by and attested_title are required" });
+    }
+    const row = (db as any).$client.prepare(
+      "SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ?"
+    ).get(mapId, instrumentId, analyte) as any;
+    if (!row || !row.amr_low || !row.amr_high) {
+      return res.status(400).json({ error: "Enter the verified AMR first; an empty AMR cannot be attested" });
+    }
+    const now = new Date().toISOString();
+    logAudit({
+      userId: req.user?.userId, ownerUserId: req.ownerUserId, module: "veritamap",
+      action: "update", entityType: "amr_attestation", entityId: `${mapId}:${instrumentId}:${analyte}`,
+      entityLabel: analyte, before: { amr_locked: row.amr_locked }, after: { amr_attested_by: attested_by.trim(), amr_attested_title: attested_title.trim(), amr_locked: 1 },
+      ipAddress: req.ip,
+    });
+    (db as any).$client.prepare(
+      "UPDATE veritamap_amr_values SET amr_attested_at = ?, amr_attested_by = ?, amr_attested_title = ?, amr_locked = 1, updated_at = ? WHERE map_id = ? AND instrument_id = ? AND analyte = ?"
+    ).run(now, attested_by.trim(), attested_title.trim(), now, mapId, instrumentId, analyte);
+    res.json((db as any).$client.prepare("SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ?").get(mapId, instrumentId, analyte));
+  });
+
+  app.post("/api/labs/:labId/veritamap/maps/:id/amr-values/:instId/:analyte/unlock", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
+    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
+    const role = req.scope?.role;
+    if (role !== "owner" && role !== "admin") {
+      return res.status(403).json({ error: "Only the lab owner or an admin can unlock an attested AMR" });
+    }
+    const mapId = Number(req.params.id);
+    const instrumentId = Number(req.params.instId);
+    const analyte = decodeURIComponent(req.params.analyte);
+    const row = (db as any).$client.prepare(
+      "SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ?"
+    ).get(mapId, instrumentId, analyte) as any;
+    if (!row?.amr_locked) return res.status(400).json({ error: "AMR is not locked" });
+    logAudit({
+      userId: req.user?.userId, ownerUserId: req.ownerUserId, module: "veritamap",
+      action: "update", entityType: "amr_attestation", entityId: `${mapId}:${instrumentId}:${analyte}`,
+      entityLabel: analyte, before: { amr_locked: 1, amr_attested_by: row.amr_attested_by, amr_attested_at: row.amr_attested_at }, after: { amr_locked: 0, reason: req.body?.reason || null },
+      ipAddress: req.ip,
+    });
+    (db as any).$client.prepare(
+      "UPDATE veritamap_amr_values SET amr_attested_at = NULL, amr_attested_by = NULL, amr_attested_title = NULL, amr_locked = 0, updated_at = ? WHERE map_id = ? AND instrument_id = ? AND analyte = ?"
+    ).run(new Date().toISOString(), mapId, instrumentId, analyte);
+    res.json((db as any).$client.prepare("SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ?").get(mapId, instrumentId, analyte));
   });
 
   // Bulk upsert tests (used when building from instrument or updating)
@@ -11424,6 +11605,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // PUT (upsert) analyte values for a specific analyte
   app.put("/api/veritamap/maps/:id/analyte-values/:analyte", authMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
+    // Wave A4: enforce the 493.1253 attestation lock on the legacy PUT too.
+    {
+      const lockErr = refLockConflict(Number(req.params.id), decodeURIComponent(req.params.analyte), req.body);
+      if (lockErr) return res.status(409).json({ error: lockErr });
+    }
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap\u2122 subscription required" });
     const mapId = Number(req.params.id);
     const analyte = decodeURIComponent(req.params.analyte);
@@ -11465,6 +11651,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const mapId = Number(req.params.id);
     const instrumentId = Number(req.params.instId);
     const analyte = decodeURIComponent(req.params.analyte);
+    // Wave A4: enforce the 493.1253 attestation lock on the legacy PUT too.
+    {
+      const lockErr = amrLockConflict(mapId, instrumentId, analyte, req.body);
+      if (lockErr) return res.status(409).json({ error: lockErr });
+    }
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const map = userCanAccessMap(mapId, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
