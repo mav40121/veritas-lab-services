@@ -3884,6 +3884,28 @@ sqlite.exec(`
     if (!pmtColNames.includes("active")) {
       try { sqlite.exec("ALTER TABLE pi_metrics ADD COLUMN active INTEGER DEFAULT 1"); } catch {}
     }
+    // Wave D2 (2026-06-12): VeritaPace TAT defensibility. A turnaround-time
+    // indicator is only defensible if the lab documents HOW it is measured:
+    // the start event (collection / receipt / order / registration), the end
+    // event (result verified / reported), the threshold, and the data source.
+    // CLIA has no single TAT definition, so the lab's documented methodology
+    // IS the standard a surveyor reviews. Free-text methodology plus the
+    // structured start/end/threshold that a TAT metric needs.
+    if (!pmtColNames.includes("measurement_methodology")) {
+      try { sqlite.exec("ALTER TABLE pi_metrics ADD COLUMN measurement_methodology TEXT"); } catch {}
+    }
+    if (!pmtColNames.includes("is_tat")) {
+      try { sqlite.exec("ALTER TABLE pi_metrics ADD COLUMN is_tat INTEGER DEFAULT 0"); } catch {}
+    }
+    if (!pmtColNames.includes("tat_start_event")) {
+      try { sqlite.exec("ALTER TABLE pi_metrics ADD COLUMN tat_start_event TEXT"); } catch {}
+    }
+    if (!pmtColNames.includes("tat_end_event")) {
+      try { sqlite.exec("ALTER TABLE pi_metrics ADD COLUMN tat_end_event TEXT"); } catch {}
+    }
+    if (!pmtColNames.includes("tat_threshold_minutes")) {
+      try { sqlite.exec("ALTER TABLE pi_metrics ADD COLUMN tat_threshold_minutes REAL"); } catch {}
+    }
   }
 }
 

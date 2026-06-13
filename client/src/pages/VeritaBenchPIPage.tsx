@@ -54,6 +54,12 @@ interface PIMetric {
   benchmark_red: number | null;
   sort_order: number;
   active: number;
+  // Wave D2: TAT defensibility.
+  measurement_methodology?: string | null;
+  is_tat?: number;
+  tat_start_event?: string | null;
+  tat_end_event?: string | null;
+  tat_threshold_minutes?: number | null;
 }
 
 interface PIEntry {
@@ -340,7 +346,7 @@ export default function VeritaBenchPIPage() {
 
   // Metric edit dialog
   const [editMetric, setEditMetric] = useState<PIMetric | null>(null);
-  const [metricForm, setMetricForm] = useState({ name: "", unit: "%", direction: "lower_is_better", benchmark_green: "", benchmark_yellow: "", benchmark_red: "" });
+  const [metricForm, setMetricForm] = useState({ name: "", unit: "%", direction: "lower_is_better", benchmark_green: "", benchmark_yellow: "", benchmark_red: "", is_tat: false, tat_start_event: "", tat_end_event: "", tat_threshold_minutes: "", measurement_methodology: "" });
   const [showMetricDialog, setShowMetricDialog] = useState(false);
   const [deleteMetricTarget, setDeleteMetricTarget] = useState<PIMetric | null>(null);
 
@@ -455,7 +461,7 @@ export default function VeritaBenchPIPage() {
 
   function openAddMetric() {
     setEditMetric(null);
-    setMetricForm({ name: "", unit: "%", direction: "lower_is_better", benchmark_green: "", benchmark_yellow: "", benchmark_red: "" });
+    setMetricForm({ name: "", unit: "%", direction: "lower_is_better", benchmark_green: "", benchmark_yellow: "", benchmark_red: "", is_tat: false, tat_start_event: "", tat_end_event: "", tat_threshold_minutes: "", measurement_methodology: "" });
     setShowMetricDialog(true);
   }
 
@@ -468,6 +474,11 @@ export default function VeritaBenchPIPage() {
       benchmark_green: m.benchmark_green != null ? String(m.benchmark_green) : "",
       benchmark_yellow: m.benchmark_yellow != null ? String(m.benchmark_yellow) : "",
       benchmark_red: m.benchmark_red != null ? String(m.benchmark_red) : "",
+      is_tat: !!m.is_tat,
+      tat_start_event: m.tat_start_event ?? "",
+      tat_end_event: m.tat_end_event ?? "",
+      tat_threshold_minutes: m.tat_threshold_minutes != null ? String(m.tat_threshold_minutes) : "",
+      measurement_methodology: m.measurement_methodology ?? "",
     });
     setShowMetricDialog(true);
   }
@@ -481,6 +492,11 @@ export default function VeritaBenchPIPage() {
       benchmark_green: metricForm.benchmark_green !== "" ? parseFloat(metricForm.benchmark_green) : null,
       benchmark_yellow: metricForm.benchmark_yellow !== "" ? parseFloat(metricForm.benchmark_yellow) : null,
       benchmark_red: metricForm.benchmark_red !== "" ? parseFloat(metricForm.benchmark_red) : null,
+      is_tat: metricForm.is_tat,
+      tat_start_event: metricForm.is_tat ? (metricForm.tat_start_event || null) : null,
+      tat_end_event: metricForm.is_tat ? (metricForm.tat_end_event || null) : null,
+      tat_threshold_minutes: metricForm.is_tat && metricForm.tat_threshold_minutes !== "" ? parseFloat(metricForm.tat_threshold_minutes) : null,
+      measurement_methodology: metricForm.measurement_methodology || null,
     };
     try {
       const url = editMetric ? `${API_BASE}/api/pi/metrics/${editMetric.id}` : `${API_BASE}/api/pi/metrics`;
@@ -1036,6 +1052,61 @@ export default function VeritaBenchPIPage() {
                 <Input type="number" step="any" value={metricForm.benchmark_red} onChange={e => setMetricForm(f => ({ ...f, benchmark_red: e.target.value }))} placeholder="-" />
               </div>
             </div>
+
+            {/* Wave D2: TAT defensibility. A turnaround-time indicator needs a
+                documented measurement methodology to survive a survey. */}
+            <div className="rounded-md border p-3 space-y-3">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input type="checkbox" checked={metricForm.is_tat} onChange={e => setMetricForm(f => ({ ...f, is_tat: e.target.checked }))} />
+                This is a turnaround time (TAT) indicator
+              </label>
+              {metricForm.is_tat && (
+                <div className="space-y-3">
+                  <p className="text-xs text-muted-foreground">
+                    CLIA has no single TAT definition, so a surveyor reviews the methodology you document. Define the two clock events and the goal so the indicator is defensible.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label>Start event (clock starts)</Label>
+                      <Select value={metricForm.tat_start_event || undefined} onValueChange={v => setMetricForm(f => ({ ...f, tat_start_event: v }))}>
+                        <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="collection">Specimen collection</SelectItem>
+                          <SelectItem value="receipt">Lab receipt / accession</SelectItem>
+                          <SelectItem value="order">Order placed</SelectItem>
+                          <SelectItem value="registration">Patient registration</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>End event (clock stops)</Label>
+                      <Select value={metricForm.tat_end_event || undefined} onValueChange={v => setMetricForm(f => ({ ...f, tat_end_event: v }))}>
+                        <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="result_verified">Result verified</SelectItem>
+                          <SelectItem value="result_reported">Result reported / released</SelectItem>
+                          <SelectItem value="critical_called">Critical value called</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Goal threshold (minutes)</Label>
+                    <Input type="number" step="any" value={metricForm.tat_threshold_minutes} onChange={e => setMetricForm(f => ({ ...f, tat_threshold_minutes: e.target.value }))} placeholder="e.g. 60" />
+                  </div>
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label>Measurement methodology and data source</Label>
+                <textarea
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-[60px]"
+                  value={metricForm.measurement_methodology}
+                  onChange={e => setMetricForm(f => ({ ...f, measurement_methodology: e.target.value }))}
+                  placeholder="How this indicator is measured: data source (LIS order-to-verify timestamps), exclusions (add-on tests, send-outs), and any sampling. This is the surveyor-facing answer to how do you measure this."
+                />
+              </div>
+            </div>
+
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setShowMetricDialog(false)}>Cancel</Button>
               <Button onClick={handleSaveMetric} disabled={!metricForm.name.trim()} style={{ backgroundColor: "#01696F" }}>
