@@ -259,7 +259,31 @@ export function registerVeritaTrackRoutes(
       }
       compMilestonesDue.sort((a, b) => a.dueAt.localeCompare(b.dueAt));
 
+      // Wave C3 (VeritaResponse effectiveness monitoring, 2026-06-12): pending
+      // 30/60/90-day effectiveness checkpoints due in the next 30 days surface
+      // in the worklist. A closed plan of correction is not finished until its
+      // corrective action is verified effective over time; this keeps that
+      // verification on the single-pane action list.
+      const effChecks = sqlite.prepare(`
+        SELECT ec.id, ec.finding_id, ec.interval_days, ec.due_date,
+               f.finding_number, f.accreditor, f.standard_ref
+          FROM finding_effectiveness_checks ec
+          JOIN findings f ON f.id = ec.finding_id
+         WHERE ec.lab_id = ?
+           AND ec.status = 'pending'
+           AND date(ec.due_date) <= date('now', '+30 days')
+         ORDER BY ec.due_date ASC
+         LIMIT 20
+      `).all(labId) as any[];
+
       const crossModule = [
+        ...effChecks.map((e: any) => ({
+          source: "veritaresponse",
+          source_id: e.finding_id,
+          label: `Effectiveness check (${e.interval_days}-day): ${e.finding_number || e.accreditor + " finding"}`,
+          due_date: e.due_date,
+          link: `/labs/${labId}/veritaresponse/${e.finding_id}`,
+        })),
         ...certs.map(c => ({
           source: "veritalab",
           source_id: c.id,
