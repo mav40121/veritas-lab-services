@@ -16582,6 +16582,45 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch {}
     res.json({ ok: true, reopened, check: sqlite.prepare("SELECT * FROM finding_effectiveness_checks WHERE id = ?").get(check.id) });
   });
+
+  // ── Wave C4 (2026-06-12): VeritaResponse cross-module linkage closure ──────
+  // The finding becomes the hub. A surveyor opening a citation expects to see
+  // its full evidence chain in one place: the external evidence documents
+  // cross-linked to it (VeritaScan, URL pointers only), and the originating
+  // VeritaQC corrective action when the finding was escalated from a Westgard
+  // rejection (A7 stamped nce_reference = "VeritaResponse#<id>"). This read
+  // closes the loop the other waves opened. Lab-scoped.
+  app.get("/api/labs/:labId/findings/:id/links", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const finding = findingForLabScope(req);
+    if (!finding) return res.status(404).json({ error: "Finding not found" });
+    const sqlite = (db as any).$client;
+    // VeritaScan evidence documents cross-linked to this finding.
+    const evidence = sqlite.prepare(
+      `SELECT x.id AS link_id, x.notes, x.linked_at, x.target_entity_label,
+              d.id AS document_id, d.title AS document_title, d.external_url,
+              d.storage_provider, d.effective_date, d.review_due_date,
+              d.owner_name, d.owner_attested_at
+         FROM lab_document_cross_links x
+         JOIN lab_documents d ON d.id = x.document_id
+        WHERE x.lab_id = ? AND x.target_module = 'veritaresponse' AND x.target_entity_id = ?
+        ORDER BY x.linked_at DESC`
+    ).all(req.scope.labId, finding.id);
+    // Originating VeritaQC corrective action(s) (A7 escalation back-reference).
+    const qcSources = sqlite.prepare(
+      `SELECT ca.id AS corrective_action_id, ca.action_taken, ca.taken_at, ca.status,
+              cl.analyte, cl.level AS qc_level, cl.lot_number
+         FROM qc_corrective_actions ca
+         JOIN qc_results qr ON qr.id = ca.qc_result_id
+         JOIN qc_control_lots cl ON cl.id = qr.control_lot_id
+        WHERE ca.lab_id = ? AND ca.nce_reference = ?
+        ORDER BY ca.taken_at DESC`
+    ).all(req.scope.labId, `VeritaResponse#${finding.id}`);
+    res.json({
+      evidence,
+      qc_sources: qcSources,
+      counts: { evidence: evidence.length, qc_sources: qcSources.length },
+    });
+  });
   app.post("/api/labs/:labId/findings", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
     const {
       accreditor, inspection_id, finding_number, standard_ref,

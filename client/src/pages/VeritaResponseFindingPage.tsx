@@ -136,6 +136,86 @@ function clientValidateAabb(finding: any): { ok: boolean; missing: string[] } {
   return { ok: missing.length === 0, missing };
 }
 
+// Wave C4 (2026-06-12): cross-module linkage panel. Surfaces the finding's
+// evidence chain in one place: VeritaScan documents cross-linked to it and the
+// originating VeritaQC corrective action (A7 escalation back-reference).
+interface FindingLinks {
+  evidence: Array<{
+    link_id: number; document_id: number; document_title: string;
+    external_url: string; storage_provider: string | null; owner_name: string | null;
+    review_due_date: string | null;
+  }>;
+  qc_sources: Array<{
+    corrective_action_id: number; action_taken: string; taken_at: string;
+    status: string; analyte: string; qc_level: string | null; lot_number: string | null;
+  }>;
+  counts: { evidence: number; qc_sources: number };
+}
+function LinkagePanel({ activeLabId, findingId }: { activeLabId: number; findingId: string }) {
+  const [links, setLinks] = useState<FindingLinks | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/findings/${findingId}/links`, { headers: authHeaders() });
+        if (r.ok && !cancelled) setLinks(await r.json());
+      } catch { /* leave null */ }
+    })();
+    return () => { cancelled = true; };
+  }, [activeLabId, findingId]);
+
+  const total = (links?.counts.evidence ?? 0) + (links?.counts.qc_sources ?? 0);
+  return (
+    <Card>
+      <CardHeader className="py-3 px-4 border-b">
+        <CardTitle className="text-base font-semibold">Linked evidence and sources</CardTitle>
+      </CardHeader>
+      <CardContent className="p-4 space-y-3">
+        <p className="text-xs text-muted-foreground">
+          The evidence chain a surveyor expects in one place: external documents linked from VeritaScan, and the VeritaQC corrective action this finding was escalated from. Link a document to this finding from the VeritaScan evidence library.
+        </p>
+        {total === 0 ? (
+          <p className="text-sm text-muted-foreground">No links yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {links!.qc_sources.length > 0 && (
+              <div>
+                <div className="text-xs font-medium text-muted-foreground mb-1">VeritaQC source</div>
+                {links!.qc_sources.map(s => (
+                  <div key={s.corrective_action_id} className="rounded-md border p-2.5 text-sm">
+                    <span className="font-medium">{s.analyte}{s.qc_level ? ` ${s.qc_level}` : ""}</span>
+                    {s.lot_number ? <span className="text-muted-foreground"> (lot {s.lot_number})</span> : null}
+                    <div className="text-xs text-muted-foreground">Corrective action {s.status}, recorded {s.taken_at?.slice(0, 10)}: {s.action_taken}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {links!.evidence.length > 0 && (
+              <div>
+                <div className="text-xs font-medium text-muted-foreground mb-1">VeritaScan evidence ({links!.evidence.length})</div>
+                <div className="space-y-1">
+                  {links!.evidence.map(e => (
+                    <div key={e.link_id} className="rounded-md border p-2.5 text-sm flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <a href={e.external_url} target="_blank" rel="noopener noreferrer" className="font-medium text-teal-700 hover:underline truncate block">
+                          {e.document_title}
+                        </a>
+                        <div className="text-xs text-muted-foreground">
+                          {e.storage_provider || "External"}{e.owner_name ? ` · owner ${e.owner_name}` : ""}{e.review_due_date ? ` · review due ${e.review_due_date}` : ""}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // Wave C3 (2026-06-12): effectiveness monitoring panel. Generates and tracks
 // the 30/60/90-day checkpoints that verify a corrective action stayed effective
 // after the plan of correction closed. A "not effective" outcome reopens the
@@ -1145,6 +1225,9 @@ export default function VeritaResponseFindingPage() {
           onFindingChange={fetchFinding}
         />
       )}
+
+      {/* Wave C4: cross-module linkage closure */}
+      {activeLabId && <LinkagePanel activeLabId={activeLabId} findingId={id!} />}
 
       {/* PHI nudge */}
       <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-800 p-4">
