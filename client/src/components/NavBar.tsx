@@ -118,7 +118,7 @@ export function NavBar() {
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden lg:flex items-center gap-0.5">
+        <nav className="hidden min-[1450px]:flex items-center gap-0.5">
 
           {/* Home */}
           <Link href="/" className={cn("px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
@@ -266,7 +266,7 @@ export function NavBar() {
           {isLoggedIn ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="hidden lg:flex gap-1.5">
+                <Button variant="outline" size="sm" className="hidden min-[1450px]:flex gap-1.5">
                   <User size={13} />
                   {user?.name.split(" ")[0]}
                   <ChevronDown size={12} />
@@ -284,7 +284,7 @@ export function NavBar() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <Button asChild size="sm" variant="outline" className="hidden lg:flex">
+            <Button asChild size="sm" variant="outline" className="hidden min-[1450px]:flex">
               <Link href="/login">Sign in</Link>
             </Button>
           )}
@@ -294,12 +294,12 @@ export function NavBar() {
               accessible via the User dropdown above (DropdownMenuItem
               -> /dashboard). */}
 
-          <Button asChild size="sm" className="hidden lg:flex bg-primary hover:bg-primary/90 text-primary-foreground font-medium">
+          <Button asChild size="sm" className="hidden min-[1450px]:flex bg-primary hover:bg-primary/90 text-primary-foreground font-medium">
             <Link href="/veritacheck">Run a Study</Link>
           </Button>
 
           {/* Mobile menu toggle */}
-          <Button variant="ghost" size="icon" className="lg:hidden w-8 h-8" onClick={() => mobileOpen ? closeMobile() : setMobileOpen(true)}>
+          <Button variant="ghost" size="icon" className="min-[1450px]:hidden w-8 h-8" onClick={() => mobileOpen ? closeMobile() : setMobileOpen(true)}>
             {mobileOpen ? <X size={18} /> : <Menu size={18} />}
           </Button>
         </div>
@@ -310,7 +310,7 @@ export function NavBar() {
           the bottom CTAs off-screen. */}
       {mobileOpen && (
         <div
-          className="lg:hidden border-t border-border bg-card flex flex-col overflow-y-auto"
+          className="min-[1450px]:hidden border-t border-border bg-card flex flex-col overflow-y-auto"
           style={{ maxHeight: "calc(100vh - 4rem)" }}
         >
           <div className="px-4 py-3 flex flex-col gap-1">
@@ -323,7 +323,7 @@ export function NavBar() {
             ))}
 
             {/* 2026-06-08: mobile lab switcher. The desktop dropdown
-                (LabSwitcher above) is "hidden lg:flex" so iPhone Safari
+                (LabSwitcher above) is "hidden min-[1450px]:flex" so iPhone Safari
                 users had no way to switch labs. This inline list mirrors
                 the dropdown's content and closes the drawer after a
                 successful switch. Renders null when the user has fewer
