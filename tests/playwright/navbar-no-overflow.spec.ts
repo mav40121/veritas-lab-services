@@ -19,12 +19,17 @@
 // Run: PW_TOKEN=... PW_LAB_ID=2 npx playwright test navbar-no-overflow
 
 // 2026-06-13 update: browser QA found #733 only fixed the overflow at wide
-// widths. The logged-in bar (lab switcher + user menu + Run a Study) needs
-// ~1423px, so 1280/1366 laptops still overflowed 143px/57px. Fix: collapse the
-// desktop bar to the hamburger below 1450px (min-[1450px]: variant). This spec
-// now also checks 1366 (the common laptop width that bit) and injects the FULL
-// auth (token + user) so the logged-in bar actually renders, instead of the
-// gated state a token-only injection produced.
+// widths. The logged-in bar (8 marketing links + lab switcher + user menu +
+// Run a Study) measures ~1539px on prod with the longest lab name, so
+// 1280/1366 laptops overflowed. First fix collapsed the bar to the hamburger
+// below 1450px, but prod QA at the exact boundary then showed the FULL bar
+// still overflowed 89px at 1450-1538 (it appears before there is room for it,
+// pushing "Run a Study" off-screen). Final fix: breakpoint = 1560px
+// (min-[1560px]: variant), comfortably above the bar's 1539px intrinsic width.
+// This spec checks 1500 — a width where the old 1450 breakpoint showed the
+// full bar but it did not fit — and injects the FULL auth (token + user) so
+// the logged-in bar actually renders, instead of the gated state a token-only
+// injection produced.
 
 import { test, expect } from "@playwright/test";
 import { injectAuth } from "./_auth";
@@ -47,8 +52,11 @@ async function assertNoOverflowAndLeftLogo(page: any) {
 }
 
 test.describe("NavBar full-width: no right overflow, no left dead gap", () => {
-  // 1366 is the laptop width #733's first fix still overflowed at (57px).
-  for (const width of [1280, 1366, 1920]) {
+  // 1280/1366: the laptop widths #733's first fix still overflowed at.
+  // 1500: between the bar's 1539px width and the 1560px breakpoint — the old
+  // 1450 breakpoint showed the full bar here and it overflowed 89px; the
+  // 1560 breakpoint keeps it collapsed, so it must be clean.
+  for (const width of [1280, 1366, 1500, 1920]) {
     test(`logged-out at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`${BASE}/`);
