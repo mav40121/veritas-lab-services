@@ -3343,6 +3343,27 @@ sqlite.exec(`
     if (!ssColNames.includes("status")) {
       try { sqlite.exec("ALTER TABLE staffing_studies ADD COLUMN status TEXT DEFAULT 'active'"); } catch {}
     }
+    // Wave D3 (2026-06-12): VeritaShift staffing defensibility. The hour-by-hour
+    // workload analysis shows where capacity matches demand, but a surveyor
+    // wants the laboratory director's determination that staffing is ADEQUATE
+    // for the volume and complexity (42 CFR 493.1445(e)(5): the director must
+    // ensure sufficient qualified personnel). These fields capture that signed
+    // adequacy determination on top of the analysis.
+    if (!ssColNames.includes("adequacy_determination")) {
+      try { sqlite.exec("ALTER TABLE staffing_studies ADD COLUMN adequacy_determination TEXT"); } catch {}
+    }
+    if (!ssColNames.includes("adequacy_note")) {
+      try { sqlite.exec("ALTER TABLE staffing_studies ADD COLUMN adequacy_note TEXT"); } catch {}
+    }
+    if (!ssColNames.includes("adequacy_attested_at")) {
+      try { sqlite.exec("ALTER TABLE staffing_studies ADD COLUMN adequacy_attested_at TEXT"); } catch {}
+    }
+    if (!ssColNames.includes("adequacy_attested_by")) {
+      try { sqlite.exec("ALTER TABLE staffing_studies ADD COLUMN adequacy_attested_by TEXT"); } catch {}
+    }
+    if (!ssColNames.includes("adequacy_attested_title")) {
+      try { sqlite.exec("ALTER TABLE staffing_studies ADD COLUMN adequacy_attested_title TEXT"); } catch {}
+    }
   }
 }
 
