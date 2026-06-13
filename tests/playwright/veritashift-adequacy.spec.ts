@@ -10,6 +10,7 @@
 // Run: PW_TOKEN=... PW_STUDY_ID=1 npx playwright test veritashift-adequacy
 
 import { test, expect } from "@playwright/test";
+import { injectAuth } from "./_auth";
 
 const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
 const TOKEN = process.env.PW_TOKEN || "";
@@ -18,8 +19,7 @@ const STUDY_ID = process.env.PW_STUDY_ID || "";
 test.describe("VeritaShift staffing adequacy (Wave D3)", () => {
   test("analysis tab shows the staffing adequacy determination panel", async ({ page }) => {
     test.skip(!TOKEN, "PW_TOKEN required");
-    await page.goto(`${BASE}/`);
-    await page.evaluate((t: string) => localStorage.setItem("veritas_token", t), TOKEN);
+    await injectAuth(page, BASE, TOKEN);
     await page.goto(`${BASE}/veritabench/staffing`);
     // Open the first study (cards are clickable) then the Analysis tab.
     const firstCard = page.locator(".cursor-pointer").first();

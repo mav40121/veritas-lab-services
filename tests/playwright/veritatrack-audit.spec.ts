@@ -9,6 +9,7 @@
 // Run: PW_TOKEN=... PW_LAB_ID=2 npx playwright test veritatrack-audit
 
 import { test, expect } from "@playwright/test";
+import { injectAuth } from "./_auth";
 
 const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
 const TOKEN = process.env.PW_TOKEN || "";
@@ -17,9 +18,8 @@ const LAB_ID = process.env.PW_LAB_ID || "";
 test.describe("VeritaTrack audit trail (Wave B3)", () => {
   test("a task row opens a History dialog with the audit trail", async ({ page }) => {
     test.skip(!TOKEN || !LAB_ID, "PW_TOKEN + PW_LAB_ID required");
-    await page.goto(`${BASE}/`);
-    await page.evaluate((t: string) => localStorage.setItem("veritas_token", t), TOKEN);
-    await page.goto(`${BASE}/labs/${LAB_ID}/veritatrack`);
+    await injectAuth(page, BASE, TOKEN);
+    await page.goto(`${BASE}/labs/${LAB_ID}/veritatrack-app`);
     // Expand the first category group so task rows render.
     const firstGroup = page.locator("button", { hasText: /overdue|due soon|Calibration|Review|QC/i }).first();
     if (await firstGroup.count()) await firstGroup.click().catch(() => {});

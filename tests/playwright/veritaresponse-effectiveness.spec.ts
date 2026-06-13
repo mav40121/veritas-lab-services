@@ -10,6 +10,7 @@
 // Run: PW_TOKEN=... PW_LAB_ID=2 PW_FINDING_ID=1 npx playwright test veritaresponse-effectiveness
 
 import { test, expect } from "@playwright/test";
+import { injectAuth } from "./_auth";
 
 const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
 const TOKEN = process.env.PW_TOKEN || "";
@@ -19,8 +20,7 @@ const FINDING_ID = process.env.PW_FINDING_ID || "";
 test.describe("VeritaResponse effectiveness monitoring (Wave C3)", () => {
   test("finding page shows the effectiveness panel and can start monitoring", async ({ page }) => {
     test.skip(!TOKEN || !LAB_ID || !FINDING_ID, "PW_TOKEN + PW_LAB_ID + PW_FINDING_ID required");
-    await page.goto(`${BASE}/`);
-    await page.evaluate((t: string) => localStorage.setItem("veritas_token", t), TOKEN);
+    await injectAuth(page, BASE, TOKEN);
     await page.goto(`${BASE}/labs/${LAB_ID}/veritaresponse/${FINDING_ID}`);
     const panel = page.getByText(/Effectiveness monitoring/i).first();
     await expect(panel).toBeVisible({ timeout: 20000 });
