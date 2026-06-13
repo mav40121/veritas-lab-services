@@ -28,6 +28,7 @@ interface CARow {
   action_taken: string;
   status: string;
   taken_at: string;
+  nce_reference: string | null;
 }
 interface RecentResult {
   id: number;
@@ -105,6 +106,36 @@ export default function VeritaQCDailyReviewPage() {
   const [dateFilter, setDateFilter] = useState<DateFilter>("30d");
   const [results, setResults] = useState<RecentResult[]>([]);
   const [loading, setLoading] = useState(true);
+  const [escalatingCaId, setEscalatingCaId] = useState<number | null>(null);
+
+  // Wave A7: escalate a filed corrective action into a VeritaResponse finding
+  // stub. The QC corrective action documents the in-the-moment fix; the
+  // finding is the formal CAPA record (root cause, corrective + preventive
+  // action, monitoring plan) a surveyor expects for a recurring rejection.
+  async function escalateToResponse(ca: CARow) {
+    if (!activeLabId || escalatingCaId) return;
+    setEscalatingCaId(ca.id);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/labs/${activeLabId}/qc/corrective-actions/${ca.id}/escalate-to-response`,
+        { method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" } },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        toast({ title: "Opened in VeritaResponse", description: `Finding #${data.finding_id} created, citing 42 CFR 493.1256(d). Document root cause and CAPA to close.` });
+        await load();
+      } else if (res.status === 409 && data.finding_id) {
+        toast({ title: "Already in VeritaResponse", description: `This action is linked to finding #${data.finding_id}.` });
+        await load();
+      } else {
+        toast({ title: "Could not escalate", description: data.error || "Try again.", variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Could not escalate", description: "Network error.", variant: "destructive" });
+    } finally {
+      setEscalatingCaId(null);
+    }
+  }
 
   // Monthly review state
   const [lots, setLots] = useState<LotRow[]>([]);
@@ -397,9 +428,33 @@ export default function VeritaQCDailyReviewPage() {
                           </td>
                           <td className="py-2 pr-2 text-xs">
                             {r.corrective_actions.length > 0 ? (
-                              <span className="text-muted-foreground">
-                                {r.corrective_actions.length} action{r.corrective_actions.length === 1 ? "" : "s"}
-                              </span>
+                              (() => {
+                                const linked = r.corrective_actions.find(c => c.nce_reference && /^VeritaResponse#\d+$/.test(c.nce_reference));
+                                const escalatable = r.corrective_actions.find(c => !c.nce_reference);
+                                return (
+                                  <div className="flex flex-col items-start gap-1">
+                                    <span className="text-muted-foreground">
+                                      {r.corrective_actions.length} action{r.corrective_actions.length === 1 ? "" : "s"}
+                                    </span>
+                                    {linked ? (
+                                      <Link href={`/veritaresponse/${linked.nce_reference!.split("#")[1]}`} className="inline-flex items-center gap-1 text-emerald-700 hover:underline" title="Open in VeritaResponse">
+                                        <ClipboardList className="h-3 w-3" /> VeritaResponse #{linked.nce_reference!.split("#")[1]}
+                                      </Link>
+                                    ) : escalatable && hasPlanAccess ? (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 px-2 text-xs text-amber-700 hover:text-amber-800"
+                                        disabled={escalatingCaId === escalatable.id}
+                                        onClick={() => escalateToResponse(escalatable)}
+                                        title="Open a formal CAPA record in VeritaResponse, citing 42 CFR 493.1256(d)"
+                                      >
+                                        {escalatingCaId === escalatable.id ? "Opening..." : "Escalate to VeritaResponse"}
+                                      </Button>
+                                    ) : null}
+                                  </div>
+                                );
+                              })()
                             ) : needsCA ? (
                               <span className="inline-flex items-center gap-1 text-red-700 font-medium">
                                 <AlertTriangle className="h-3 w-3" /> missing
