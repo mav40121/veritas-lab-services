@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   Lock, Users, Activity, BarChart3, Save, Plus, Edit2, Trash2,
-  ChevronDown, ChevronRight, BookOpen, Library,
+  ChevronDown, ChevronRight, BookOpen, Library, AlertTriangle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -71,6 +71,11 @@ interface PIEntry {
   value: number | null;
   volume: number | null;
   notes: string | null;
+  // Wave D4: VeritaQA root-cause documentation for a missed (red) month.
+  root_cause?: string | null;
+  corrective_action?: string | null;
+  rca_reviewed_by?: string | null;
+  rca_reviewed_at?: string | null;
 }
 
 interface DashboardMetric {
@@ -343,6 +348,34 @@ export default function VeritaBenchPIPage() {
   // Entry form state (batch editing)
   const [entryValues, setEntryValues] = useState<Record<number, { value: string; volume: string; notes: string }>>({});
   const [saving, setSaving] = useState(false);
+  // Wave D4: root-cause documentation dialog state.
+  const [rcaEntry, setRcaEntry] = useState<PIEntry | null>(null);
+  const [rcaMetricName, setRcaMetricName] = useState("");
+  const [rcaForm, setRcaForm] = useState({ root_cause: "", corrective_action: "", reviewed_by: "" });
+  const [rcaSaving, setRcaSaving] = useState(false);
+
+  function openRca(metric: PIMetric) {
+    const entry = entries.find(e => e.metric_id === metric.id && e.month === entryMonth) || null;
+    if (!entry) { toast({ title: "Save the value first", description: "Enter and save this month's value before documenting a root cause." }); return; }
+    setRcaEntry(entry);
+    setRcaMetricName(metric.name);
+    setRcaForm({ root_cause: entry.root_cause || "", corrective_action: entry.corrective_action || "", reviewed_by: entry.rca_reviewed_by || "" });
+  }
+
+  async function saveRca(clear = false) {
+    if (!rcaEntry) return;
+    setRcaSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/pi/entries/${rcaEntry.id}/rca`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(clear ? { clear: true } : rcaForm),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) { toast({ title: clear ? "Root cause cleared" : "Root cause documented" }); setRcaEntry(null); loadMetrics(); }
+      else toast({ title: "Error", description: data.error, variant: "destructive" });
+    } finally { setRcaSaving(false); }
+  }
 
   // Metric edit dialog
   const [editMetric, setEditMetric] = useState<PIMetric | null>(null);
@@ -976,6 +1009,20 @@ export default function VeritaBenchPIPage() {
                           </td>
                           <td className="px-3 py-2">
                             <div className="flex gap-1">
+                              {(status === "red" || status === "yellow") && (() => {
+                                const entry = entries.find(e => e.metric_id === m.id && e.month === entryMonth);
+                                const hasRca = !!(entry && entry.rca_reviewed_at);
+                                return (
+                                  <Button
+                                    variant="ghost" size="icon"
+                                    className={`h-7 w-7 ${hasRca ? "text-emerald-600" : "text-amber-600"}`}
+                                    title={hasRca ? "Root cause documented (edit)" : "Document root cause and corrective action"}
+                                    onClick={() => openRca(m)} disabled={readOnly}
+                                  >
+                                    <AlertTriangle size={13} />
+                                  </Button>
+                                );
+                              })()}
                               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditMetric(m)} disabled={readOnly}>
                                 <Edit2 size={13} />
                               </Button>
@@ -1111,6 +1158,50 @@ export default function VeritaBenchPIPage() {
               <Button variant="outline" onClick={() => setShowMetricDialog(false)}>Cancel</Button>
               <Button onClick={handleSaveMetric} disabled={!metricForm.name.trim()} style={{ backgroundColor: "#01696F" }}>
                 {editMetric ? "Update" : "Create"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* -- Wave D4: Root-cause documentation dialog ----------------------- */}
+      <Dialog open={!!rcaEntry} onOpenChange={(o) => { if (!o) setRcaEntry(null); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Root cause and corrective action</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              {rcaMetricName} missed its benchmark this period. The QA review is defensible when the lab documents why and what was done, not just the number.
+            </p>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Root cause</label>
+              <textarea
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-[60px]"
+                value={rcaForm.root_cause}
+                onChange={e => setRcaForm(f => ({ ...f, root_cause: e.target.value }))}
+                placeholder="Why the indicator missed. Address the system, not the person."
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Corrective action</label>
+              <textarea
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-[60px]"
+                value={rcaForm.corrective_action}
+                onChange={e => setRcaForm(f => ({ ...f, corrective_action: e.target.value }))}
+                placeholder="What changed: process, staffing, training, vendor. Include a follow-up check if applicable."
+              />
+            </div>
+            <input
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+              value={rcaForm.reviewed_by}
+              onChange={e => setRcaForm(f => ({ ...f, reviewed_by: e.target.value }))}
+              placeholder="Reviewed by (name)"
+            />
+            <div className="flex justify-end gap-2 pt-1">
+              {rcaEntry?.rca_reviewed_at && <Button variant="outline" size="sm" disabled={rcaSaving} onClick={() => saveRca(true)}>Clear</Button>}
+              <Button size="sm" disabled={rcaSaving || (!rcaForm.root_cause.trim() && !rcaForm.corrective_action.trim())} onClick={() => saveRca(false)} style={{ backgroundColor: "#01696F" }}>
+                {rcaSaving ? "Saving..." : "Save"}
               </Button>
             </div>
           </div>
