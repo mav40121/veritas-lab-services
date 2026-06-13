@@ -1633,13 +1633,15 @@ export function registerVeritaBenchRoutes(
   app.post("/api/pi/metrics", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
-    const { department_id, name, unit, direction, benchmark_green, benchmark_yellow, benchmark_red, sort_order } = req.body;
+    const { department_id, name, unit, direction, benchmark_green, benchmark_yellow, benchmark_red, sort_order,
+            measurement_methodology, is_tat, tat_start_event, tat_end_event, tat_threshold_minutes } = req.body;
     if (!department_id || !name) return res.status(400).json({ error: "department_id and name are required" });
     const now = new Date().toISOString();
     try {
       const result = sqlite.prepare(
-        "INSERT INTO pi_metrics (department_id, account_id, name, unit, direction, benchmark_green, benchmark_yellow, benchmark_red, sort_order, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)"
-      ).run(department_id, accountId, name, unit ?? "%", direction ?? "lower_is_better", benchmark_green ?? null, benchmark_yellow ?? null, benchmark_red ?? null, sort_order ?? 0, now);
+        "INSERT INTO pi_metrics (department_id, account_id, name, unit, direction, benchmark_green, benchmark_yellow, benchmark_red, sort_order, active, created_at, measurement_methodology, is_tat, tat_start_event, tat_end_event, tat_threshold_minutes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)"
+      ).run(department_id, accountId, name, unit ?? "%", direction ?? "lower_is_better", benchmark_green ?? null, benchmark_yellow ?? null, benchmark_red ?? null, sort_order ?? 0, now,
+            measurement_methodology ?? null, is_tat ? 1 : 0, tat_start_event ?? null, tat_end_event ?? null, tat_threshold_minutes ?? null);
       const row = sqlite.prepare("SELECT * FROM pi_metrics WHERE id = ?").get(Number(result.lastInsertRowid));
       res.json(row);
     } catch (err: any) {
@@ -1654,16 +1656,23 @@ export function registerVeritaBenchRoutes(
     const { id } = req.params;
     const existing = sqlite.prepare("SELECT * FROM pi_metrics WHERE id = ? AND account_id = ?").get(id, accountId) as any;
     if (!existing) return res.status(404).json({ error: "Metric not found" });
-    const { name, unit, direction, benchmark_green, benchmark_yellow, benchmark_red, sort_order, active } = req.body;
+    const { name, unit, direction, benchmark_green, benchmark_yellow, benchmark_red, sort_order, active,
+            measurement_methodology, is_tat, tat_start_event, tat_end_event, tat_threshold_minutes } = req.body;
     try {
       sqlite.prepare(
-        "UPDATE pi_metrics SET name = ?, unit = ?, direction = ?, benchmark_green = ?, benchmark_yellow = ?, benchmark_red = ?, sort_order = ?, active = ? WHERE id = ? AND account_id = ?"
+        "UPDATE pi_metrics SET name = ?, unit = ?, direction = ?, benchmark_green = ?, benchmark_yellow = ?, benchmark_red = ?, sort_order = ?, active = ?, measurement_methodology = ?, is_tat = ?, tat_start_event = ?, tat_end_event = ?, tat_threshold_minutes = ? WHERE id = ? AND account_id = ?"
       ).run(
         name ?? existing.name, unit ?? existing.unit, direction ?? existing.direction,
         benchmark_green !== undefined ? benchmark_green : existing.benchmark_green,
         benchmark_yellow !== undefined ? benchmark_yellow : existing.benchmark_yellow,
         benchmark_red !== undefined ? benchmark_red : existing.benchmark_red,
-        sort_order ?? existing.sort_order, active ?? existing.active, id, accountId
+        sort_order ?? existing.sort_order, active ?? existing.active,
+        measurement_methodology !== undefined ? measurement_methodology : existing.measurement_methodology,
+        is_tat !== undefined ? (is_tat ? 1 : 0) : existing.is_tat,
+        tat_start_event !== undefined ? tat_start_event : existing.tat_start_event,
+        tat_end_event !== undefined ? tat_end_event : existing.tat_end_event,
+        tat_threshold_minutes !== undefined ? tat_threshold_minutes : existing.tat_threshold_minutes,
+        id, accountId
       );
       const row = sqlite.prepare("SELECT * FROM pi_metrics WHERE id = ?").get(id);
       res.json(row);
