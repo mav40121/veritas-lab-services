@@ -18,7 +18,16 @@
 //
 // Run: PW_TOKEN=... PW_LAB_ID=2 npx playwright test navbar-no-overflow
 
+// 2026-06-13 update: browser QA found #733 only fixed the overflow at wide
+// widths. The logged-in bar (lab switcher + user menu + Run a Study) needs
+// ~1423px, so 1280/1366 laptops still overflowed 143px/57px. Fix: collapse the
+// desktop bar to the hamburger below 1450px (min-[1450px]: variant). This spec
+// now also checks 1366 (the common laptop width that bit) and injects the FULL
+// auth (token + user) so the logged-in bar actually renders, instead of the
+// gated state a token-only injection produced.
+
 import { test, expect } from "@playwright/test";
+import { injectAuth } from "./_auth";
 
 const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
 const TOKEN = process.env.PW_TOKEN || "";
@@ -38,7 +47,8 @@ async function assertNoOverflowAndLeftLogo(page: any) {
 }
 
 test.describe("NavBar full-width: no right overflow, no left dead gap", () => {
-  for (const width of [1280, 1920]) {
+  // 1366 is the laptop width #733's first fix still overflowed at (57px).
+  for (const width of [1280, 1366, 1920]) {
     test(`logged-out at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`${BASE}/`);
@@ -48,8 +58,11 @@ test.describe("NavBar full-width: no right overflow, no left dead gap", () => {
     test(`logged-in (wide LabSwitcher) at ${width}px`, async ({ page }) => {
       test.skip(!TOKEN || !LAB_ID, "PW_TOKEN + PW_LAB_ID required");
       await page.setViewportSize({ width, height: 900 });
-      await page.goto(`${BASE}/`);
-      await page.evaluate((t: string) => localStorage.setItem("veritas_token", t), TOKEN);
+      // injectAuth seeds BOTH veritas_token and veritas_user so the full
+      // logged-in bar (lab switcher + user menu + Run a Study) renders; a
+      // token-only injection leaves the bar in its gated/minimal state and
+      // would never reproduce the overflow this guards against.
+      await injectAuth(page, BASE, TOKEN);
       await page.goto(`${BASE}/labs/${LAB_ID}/account/settings`);
       await assertNoOverflowAndLeftLogo(page);
       // The account button must be fully inside the viewport (the narrow-
