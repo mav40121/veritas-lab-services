@@ -33,6 +33,12 @@ interface StaffingStudy {
   start_date: string | null;
   status: string;
   created_at: string;
+  // Wave D3: staffing-adequacy determination.
+  adequacy_determination?: string | null;
+  adequacy_note?: string | null;
+  adequacy_attested_at?: string | null;
+  adequacy_attested_by?: string | null;
+  adequacy_attested_title?: string | null;
 }
 
 interface HourlyDataItem {
@@ -512,6 +518,89 @@ function AnalysisView({ data, studyName }: { data: HourlyDataItem[]; studyName: 
   );
 }
 
+// ── Wave D3: staffing-adequacy determination ───────────────────────────────
+// The hour-by-hour analysis shows where capacity meets demand; this panel
+// captures the laboratory director (or designee) determination that staffing
+// is adequate for the volume and complexity, per 42 CFR 493.1445(e)(5). A gap
+// determination requires a documented plan to close it.
+function AdequacyPanel({ study, readOnly, onAttested }: {
+  study: StaffingStudy; readOnly: boolean; onAttested: (updated: StaffingStudy) => void;
+}) {
+  const { toast } = useToast();
+  const [determination, setDetermination] = useState<string>(study.adequacy_determination || "adequate");
+  const [note, setNote] = useState(study.adequacy_note || "");
+  const [attestedBy, setAttestedBy] = useState(study.adequacy_attested_by || "");
+  const [attestedTitle, setAttestedTitle] = useState(study.adequacy_attested_title || "Laboratory Director");
+  const [busy, setBusy] = useState(false);
+  const attested = !!study.adequacy_attested_at;
+
+  async function submit(clear = false) {
+    setBusy(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/staffing-studies/${study.id}/attest-adequacy`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(clear ? { clear: true } : { determination, note, attested_by: attestedBy, attested_title: attestedTitle }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) { onAttested(data); toast({ title: clear ? "Determination cleared" : "Staffing adequacy recorded" }); }
+      else toast({ title: "Could not save", description: data.error || "Try again.", variant: "destructive" });
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="py-3 px-4 border-b">
+        <CardTitle className="text-base font-semibold">Staffing adequacy determination</CardTitle>
+      </CardHeader>
+      <CardContent className="p-4 space-y-3">
+        <p className="text-xs text-muted-foreground">
+          The workload analysis above is the evidence. A surveyor wants the laboratory director or designee determination that staffing is adequate for the volume and complexity of testing, per 42 CFR 493.1445(e)(5). Record it here.
+        </p>
+        {attested && (
+          <div className={`rounded-md border p-3 text-sm ${study.adequacy_determination === "adequate" ? "border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20" : "border-amber-300 bg-amber-50 dark:bg-amber-950/20"}`}>
+            <div className="font-medium">
+              {study.adequacy_determination === "adequate" ? "Staffing determined adequate" : "Gap identified"}
+              {" "}by {study.adequacy_attested_by}{study.adequacy_attested_title ? `, ${study.adequacy_attested_title}` : ""} on {String(study.adequacy_attested_at).slice(0, 10)}
+            </div>
+            {study.adequacy_note && <div className="text-xs mt-1">{study.adequacy_note}</div>}
+          </div>
+        )}
+        {!readOnly && (
+          <div className="space-y-3">
+            <div className="flex gap-4 text-sm">
+              <label className="flex items-center gap-1.5">
+                <input type="radio" name="adq" checked={determination === "adequate"} onChange={() => setDetermination("adequate")} />
+                Staffing is adequate
+              </label>
+              <label className="flex items-center gap-1.5">
+                <input type="radio" name="adq" checked={determination === "gap_identified"} onChange={() => setDetermination("gap_identified")} />
+                Gap identified
+              </label>
+            </div>
+            <textarea
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-[60px]"
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder={determination === "gap_identified" ? "Required: describe the gap (hours, department) and the plan to close it (added FTE, schedule change, cross-training)." : "Optional: basis for the adequacy determination."}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <input className="rounded-md border bg-background px-3 py-2 text-sm" value={attestedBy} onChange={e => setAttestedBy(e.target.value)} placeholder="Director or designee name" />
+              <input className="rounded-md border bg-background px-3 py-2 text-sm" value={attestedTitle} onChange={e => setAttestedTitle(e.target.value)} placeholder="Title" />
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" disabled={busy || !attestedBy.trim()} onClick={() => submit(false)} style={{ backgroundColor: "#01696F" }}>
+                {attested ? "Update determination" : "Record determination"}
+              </Button>
+              {attested && <Button size="sm" variant="outline" disabled={busy} onClick={() => submit(true)}>Clear</Button>}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Main Page Component ─────────────────────────────────────────────────────
 export default function VeritaBenchStaffingPage() {
   const { user, isLoggedIn } = useAuth();
@@ -675,7 +764,14 @@ export default function VeritaBenchStaffingPage() {
         )}
 
         {activeTab === "analysis" && (
-          <AnalysisView data={studyData} studyName={selectedStudy.name} />
+          <div className="space-y-6">
+            <AnalysisView data={studyData} studyName={selectedStudy.name} />
+            <AdequacyPanel
+              study={selectedStudy}
+              readOnly={readOnly}
+              onAttested={(updated) => { setSelectedStudy(updated); loadStudies(); }}
+            />
+          </div>
         )}
       </div>
     );

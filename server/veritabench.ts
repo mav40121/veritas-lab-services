@@ -357,6 +357,40 @@ export function registerVeritaBenchRoutes(
     res.json({ study, data });
   });
 
+  // Wave D3 (2026-06-12): POST staffing-adequacy determination. The director
+  // (or designee) attests, on top of the workload analysis, that staffing is
+  // adequate for the volume and complexity, or records a gap and the plan to
+  // close it. Cites 42 CFR 493.1445(e)(5). An empty determination clears the
+  // attestation (re-open for re-review).
+  app.post("/api/staffing-studies/:id/attest-adequacy", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const { id } = req.params;
+    const study = sqlite.prepare("SELECT * FROM staffing_studies WHERE id = ? AND account_id = ?").get(id, accountId) as any;
+    if (!study) return res.status(404).json({ error: "Study not found" });
+    const { determination, note, attested_by, attested_title, clear } = req.body || {};
+    const now = new Date().toISOString();
+    if (clear) {
+      sqlite.prepare(
+        "UPDATE staffing_studies SET adequacy_determination = NULL, adequacy_note = NULL, adequacy_attested_at = NULL, adequacy_attested_by = NULL, adequacy_attested_title = NULL, updated_at = ? WHERE id = ?"
+      ).run(now, id);
+      return res.json(sqlite.prepare("SELECT * FROM staffing_studies WHERE id = ?").get(id));
+    }
+    if (!["adequate", "gap_identified"].includes(determination)) {
+      return res.status(400).json({ error: "determination must be 'adequate' or 'gap_identified'" });
+    }
+    if (!attested_by || !String(attested_by).trim()) {
+      return res.status(400).json({ error: "attested_by (director or designee name) is required" });
+    }
+    if (determination === "gap_identified" && (!note || !String(note).trim())) {
+      return res.status(400).json({ error: "A gap determination requires a note describing the gap and the plan to close it." });
+    }
+    sqlite.prepare(
+      "UPDATE staffing_studies SET adequacy_determination = ?, adequacy_note = ?, adequacy_attested_at = ?, adequacy_attested_by = ?, adequacy_attested_title = ?, updated_at = ? WHERE id = ?"
+    ).run(determination, note ?? null, now, String(attested_by).trim(), attested_title ?? null, now, id);
+    res.json(sqlite.prepare("SELECT * FROM staffing_studies WHERE id = ?").get(id));
+  });
+
   // POST /api/staffing-studies/:id/data - batch upsert hourly data
   app.post("/api/staffing-studies/:id/data", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
