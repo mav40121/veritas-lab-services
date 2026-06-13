@@ -2590,6 +2590,37 @@ sqlite.exec(`
   );
 `);
 
+// Wave B3 (2026-06-12): VeritaTrack audit trail. The signoff rows are the
+// completion record, but task edits, deactivations, and signoff DELETIONS
+// left no trace -- a surveyor-defensibility gap (a vanished completion record
+// or a silently shortened interval is exactly what an inspector probes). One
+// append-only row per lifecycle event, lab-scoped, never mutated.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritatrack_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER,
+    task_id INTEGER,
+    signoff_id INTEGER,
+    event TEXT NOT NULL,
+    detail TEXT,
+    by_user_id INTEGER,
+    at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_vtrack_audit_task ON veritatrack_audit(task_id);
+  CREATE INDEX IF NOT EXISTS idx_vtrack_audit_lab  ON veritatrack_audit(lab_id);
+`);
+// PRAGMA migration block per the New DB Table Rule (CLAUDE.md §8).
+{
+  try {
+    const cols = (sqlite.prepare("PRAGMA table_info(veritatrack_audit)").all() as { name: string }[]).map(c => c.name);
+    if (cols.length > 0) {
+      // Future ALTER TABLE veritatrack_audit ADD COLUMN ... blocks go here.
+    }
+  } catch {
+    // fresh DB: CREATE TABLE above handled it
+  }
+}
+
 // VeritaMap analyte values -- per lab, per analyte (shared across instruments)
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS veritamap_analyte_values (
