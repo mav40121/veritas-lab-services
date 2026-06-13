@@ -114,7 +114,10 @@ export default function LabMembersPage() {
   // (counts against tier cap); 'view_only' = reviewer (medical director,
   // technical consultant, supervisor; capped per tier 1/2/3 with $99/yr
   // add-on for extras). Default 'active'.
-  const [inviteSeatType, setInviteSeatType] = useState<"active" | "view_only">("active");
+  // 2026-06-12: seat type is pinned to "active" — the view-only seat model
+  // (PLAN_VIEW_ONLY_SEATS + $99/yr extras) was retired 2026-06-08 for the
+  // Staff Portal flat bands; the dropdown that set this was removed.
+  const inviteSeatType = "active" as const;
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/members`] });
 
@@ -233,21 +236,24 @@ export default function LabMembersPage() {
                   </div>
                 </div>
               </div>
+              {/* 2026-06-12: the view-only seat counter retired (Michael's
+                  "what is going on with the 0 out of 5 view only slots?").
+                  The per-seat view-only model (PLAN_VIEW_ONLY_SEATS + $99/yr
+                  extras) was retired 2026-06-08 in favor of Staff Portal
+                  flat bands; this page kept rendering it. Read-and-sign
+                  staff belong in the Staff Portal, not seats. */}
               <div className="flex items-center gap-3">
-                {seatTypeBadge("view_only")}
                 <div>
-                  <div className="font-medium">
-                    {seatCounts.viewOnly} of {seatLimits.viewOnlyIncluded} view-only seats used
-                  </div>
+                  <div className="font-medium">Read-and-sign staff</div>
                   <div className="text-xs text-muted-foreground">
-                    Reviewers: medical director or designee, technical consultant, technical supervisor. Extras are ${seatLimits.addOnRatePerYear} per year.
+                    Medical director or designee, reviewers, and staff who only read and sign use the Staff Portal at /staff-access. They do not consume seats.
                   </div>
                 </div>
               </div>
             </div>
-            {(seatCounts.active >= seatLimits.activeIncluded || seatCounts.viewOnly >= seatLimits.viewOnlyIncluded) && (
+            {seatCounts.active >= seatLimits.activeIncluded && (
               <div className="mt-3 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                You are at a seat cap. Inviting another seat of that type will require a tier upgrade (active) or a ${seatLimits.addOnRatePerYear} per year add-on (view-only).
+                All active seats are in use. Inviting another writer requires a tier upgrade or an additional seat.
               </div>
             )}
           </CardContent>
@@ -274,7 +280,11 @@ export default function LabMembersPage() {
         <Card>
           <CardHeader><CardTitle className="text-base flex items-center gap-2"><UserPlus size={16} /> Invite a new member</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_140px_160px_auto] gap-2">
+            {/* 2026-06-12: Seat type dropdown retired with the view-only seat
+                model. Every invited member is an active (writer) seat; the
+                mutation pins seatType to "active". Read-and-sign people use
+                the Staff Portal instead of a seat. */}
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_140px_auto] gap-2">
               <div>
                 <Label htmlFor="invite-email" className="text-xs">Email</Label>
                 <Input id="invite-email" type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="member@example.com" />
@@ -286,13 +296,6 @@ export default function LabMembersPage() {
                   <option value="admin" disabled={!isOwner}>Admin{!isOwner ? " (owner only)" : ""}</option>
                 </select>
               </div>
-              <div>
-                <Label htmlFor="invite-seat-type" className="text-xs">Seat type</Label>
-                <select id="invite-seat-type" value={inviteSeatType} onChange={e => setInviteSeatType(e.target.value as "active" | "view_only")} className="w-full h-10 border border-input bg-background rounded-md px-3 text-sm">
-                  <option value="active">Active (writer)</option>
-                  <option value="view_only">View-only (reviewer)</option>
-                </select>
-              </div>
               <div className="flex items-end">
                 <Button onClick={() => inviteMutation.mutate()} disabled={inviteMutation.isPending || !inviteEmail.includes("@")}>
                   {inviteMutation.isPending && <Loader2 className="animate-spin mr-1" size={14} />} Send invite
@@ -300,7 +303,7 @@ export default function LabMembersPage() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Active seats (writers: techs, supervisors who enter data) count against the tier seat cap. View-only seats (medical director or designee, technical consultant, supervisor reviewers) are included per tier: 1 Clinic, 2 Community, 3 Hospital; additional view-only seats are $99 per year. Admins can invite/remove members and manage lab settings. They cannot change billing or transfer ownership. Staff get operational access only.
+              Every member is an active (writer) seat and counts against the tier seat cap. Staff who only read and sign policies, self-attest competency, or acknowledge corrective actions do not need a seat: they use the Staff Portal. Admins can invite/remove members and manage lab settings. They cannot change billing or transfer ownership. Staff get operational access only.
             </p>
           </CardContent>
         </Card>
