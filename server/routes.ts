@@ -16100,6 +16100,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     (db as any).$client.prepare("DELETE FROM finding_history WHERE finding_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM finding_extension_requests WHERE finding_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM finding_reminder_log WHERE finding_id = ?").run(req.params.id);
+    // Wave C3 added finding_effectiveness_checks with a FK to findings(id).
+    // PR #748 cleared it in the lab-scoped delete handler but missed THIS
+    // legacy /api/findings/:id route, which still 500s on a foreign-key
+    // constraint when the finding has 30/60/90-day checkpoints. Same class as
+    // PR #748; the duplicate handler is exactly what the fix-the-class rule
+    // exists to catch. Found by scripts/audit-delete-cascades.mjs 2026-06-13.
+    (db as any).$client.prepare("DELETE FROM finding_effectiveness_checks WHERE finding_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM findings WHERE id = ?").run(req.params.id);
     res.json({ success: true });
   });

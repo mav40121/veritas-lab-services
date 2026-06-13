@@ -1193,6 +1193,13 @@ export function registerVeritaCheckVerificationRoutes(
     }
     sqlite.prepare("DELETE FROM veritacheck_verification_studies WHERE verification_id = ?").run(req.params.id);
     sqlite.prepare("DELETE FROM veritacheck_verification_instruments WHERE verification_id = ?").run(req.params.id);
+    // The multi-analyte wave (2026-06-10) added veritacheck_verification_analytes
+    // with an FK to veritacheck_verifications. This delete handler predates that
+    // table, so a package that has any analyte rows hit a foreign-key 500 on
+    // delete. Clear analytes AFTER studies (studies carry analyte_id) and before
+    // the parent row. Same FK-cascade class as the finding-delete fix (PR #748);
+    // found in browser QA 2026-06-13.
+    sqlite.prepare("DELETE FROM veritacheck_verification_analytes WHERE verification_id = ?").run(req.params.id);
     sqlite.prepare("DELETE FROM veritacheck_verifications WHERE id = ?").run(req.params.id);
     res.json({ ok: true });
   });
