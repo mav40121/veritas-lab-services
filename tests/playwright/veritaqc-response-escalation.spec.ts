@@ -11,6 +11,7 @@
 // Run: PW_TOKEN=... PW_LAB_ID=2 npx playwright test veritaqc-response-escalation
 
 import { test, expect } from "@playwright/test";
+import { injectAuth } from "./_auth";
 
 const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
 const TOKEN = process.env.PW_TOKEN || "";
@@ -19,8 +20,7 @@ const LAB_ID = process.env.PW_LAB_ID || "";
 test.describe("VeritaQC -> VeritaResponse escalation (Wave A7)", () => {
   test("daily review surfaces the escalation control or a linked chip", async ({ page }) => {
     test.skip(!TOKEN || !LAB_ID, "PW_TOKEN + PW_LAB_ID required");
-    await page.goto(`${BASE}/`);
-    await page.evaluate((t: string) => localStorage.setItem("veritas_token", t), TOKEN);
+    await injectAuth(page, BASE, TOKEN);
     await page.goto(`${BASE}/labs/${LAB_ID}/veritaqc-app/review`);
     // Filter to results that fired a violation so the CA column is populated.
     const table = page.locator("table").first();

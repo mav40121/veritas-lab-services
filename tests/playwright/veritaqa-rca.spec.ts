@@ -11,6 +11,7 @@
 // Run: PW_TOKEN=... npx playwright test veritaqa-rca
 
 import { test, expect } from "@playwright/test";
+import { injectAuth } from "./_auth";
 
 const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
 const TOKEN = process.env.PW_TOKEN || "";
@@ -18,8 +19,7 @@ const TOKEN = process.env.PW_TOKEN || "";
 test.describe("VeritaQA root-cause documentation (Wave D4)", () => {
   test("a red/yellow metric row opens the root-cause dialog", async ({ page }) => {
     test.skip(!TOKEN, "PW_TOKEN required");
-    await page.goto(`${BASE}/`);
-    await page.evaluate((t: string) => localStorage.setItem("veritas_token", t), TOKEN);
+    await injectAuth(page, BASE, TOKEN);
     await page.goto(`${BASE}/veritabench/pi`);
     // Move to the Data entry tab if present.
     const dataTab = page.getByRole("button", { name: /^Data/i }).first();

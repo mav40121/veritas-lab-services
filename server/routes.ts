@@ -16123,6 +16123,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     sqlite.prepare("DELETE FROM finding_history WHERE finding_id = ?").run(req.params.id);
     sqlite.prepare("DELETE FROM finding_extension_requests WHERE finding_id = ?").run(req.params.id);
     sqlite.prepare("DELETE FROM finding_reminder_log WHERE finding_id = ?").run(req.params.id);
+    // Wave C3 added finding_effectiveness_checks with a FK to findings(id).
+    // Without clearing it first, deleting any finding that has 30/60/90-day
+    // checkpoints hits the FK constraint and 500s. Found in browser QA
+    // 2026-06-13 when a seeded QA finding with checkpoints could not be deleted.
+    sqlite.prepare("DELETE FROM finding_effectiveness_checks WHERE finding_id = ?").run(req.params.id);
     sqlite.prepare("DELETE FROM findings WHERE id = ?").run(req.params.id);
     res.json({ success: true });
   });
