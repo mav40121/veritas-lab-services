@@ -130,7 +130,6 @@ export default function LabMembersPage() {
       toast({ title: "Invitation sent", description: r.emailSent ? `Email delivered to ${inviteEmail}` : `Seat created. Email delivery failed — share the invite link manually.` });
       setInviteEmail("");
       setInviteRole("staff");
-      setInviteSeatType("active");
       invalidate();
     },
     onError: (err: any) => toast({ title: "Invite failed", description: String(err?.message || err), variant: "destructive" }),
