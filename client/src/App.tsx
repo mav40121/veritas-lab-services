@@ -1,4 +1,4 @@
-import { Switch, Route, Router, useLocation } from "wouter";
+import { Switch, Route, Router, useLocation, Redirect } from "wouter";
 import VeritaCheckVerificationPage from "@/pages/VeritaCheckVerificationPage";
 import ArticleInventoryManagementPage from "@/pages/ArticleInventoryManagementPage";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -98,7 +98,6 @@ import VeritaStockSnapOrderPage from "@/pages/VeritaStockSnapOrderPage";
 import VeritaOpsAppPage from "@/pages/VeritaOpsAppPage";
 import LabMembersPage from "@/pages/LabMembersPage";
 import FoundingLabApplyPage from "@/pages/FoundingLabApplyPage";
-import InventoryKioskPage from "@/pages/InventoryKioskPage";
 import StaffPortalPage from "@/pages/StaffPortalPage";
 import VeritaBenchPIPage from "@/pages/VeritaBenchPIPage";
 import RequestInvoicePage from "@/pages/RequestInvoicePage";
@@ -380,7 +379,13 @@ function AppContent() {
           <Route path="/account/seats">{() => { window.location.replace("/account/settings"); return null; }}</Route>
           <Route path="/account">{() => { window.location.replace("/account/settings"); return null; }}</Route>
           <Route path="/founding-lab/apply" component={FoundingLabApplyPage} />
-          <Route path="/inventory" component={InventoryKioskPage} />
+          {/* 2026-06-12: the standalone CLIA+PIN inventory kiosk is retired
+              (superseded by the Staff Portal's Adjust Inventory module when
+              auth unified on email + password). Bench techs with the old
+              bookmark land on the Staff Portal entry instead of a PIN prompt.
+              InventoryKioskPage.tsx stays on disk (no longer imported) until
+              a cleanup PR strips it. */}
+          <Route path="/inventory">{() => <Redirect to="/staff-access" />}</Route>
           <Route path="/staff-access" component={StaffPortalPage} />
           <Route path="/surveyor/:token" component={SurveyorViewPage} />
 

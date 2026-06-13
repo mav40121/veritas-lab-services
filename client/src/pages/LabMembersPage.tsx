@@ -254,9 +254,14 @@ export default function LabMembersPage() {
         </Card>
       )}
 
-      {canManage && (
-        <InventoryPinCard labId={activeLabId} />
-      )}
+      {/* 2026-06-12: Inventory Kiosk PIN UI retired (Michael: "I thought we
+          had eliminated pins?"). The Wave K standalone /inventory kiosk was
+          superseded by the Staff Portal's Adjust Inventory module when auth
+          unified on email + password (PR #689); this card was the leftover.
+          Same treatment as the Staff Portal PIN below: server endpoints stay
+          dormant, the InventoryPinCard definition stays until a cleanup PR
+          strips it, rendering is gone here. /inventory now redirects to
+          /staff-access. */}
 
       {/* 2026-06-09 Auth unification PR Option 1: Staff Portal PIN UI
           retired. The POST /api/staff-portal-pin/regenerate endpoint
