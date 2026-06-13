@@ -2532,7 +2532,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT id, qc_result_id, rule_code, severity, detail, evaluated_at FROM qc_rule_violations WHERE qc_result_id IN (" + placeholders + ")"
     ).all(...ids) as any[];
     const cas = sqlite.prepare(
-      "SELECT id, qc_result_id, action_taken, status, taken_at FROM qc_corrective_actions WHERE qc_result_id IN (" + placeholders + ")"
+      "SELECT id, qc_result_id, qc_rule_violation_id, action_taken, status, taken_at, nce_reference FROM qc_corrective_actions WHERE qc_result_id IN (" + placeholders + ")"
     ).all(...ids) as any[];
     const vByR: Record<number, any[]> = {};
     for (const v of violations) (vByR[v.qc_result_id] = vByR[v.qc_result_id] || []).push(v);
@@ -2750,6 +2750,88 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).run(now, Number(qc_result_id), req.scope.labId);
     }
     res.json({ ok: true, corrective_action_id: newId, excluded_from_baseline: !!exclude_from_baseline });
+  });
+
+  // Wave A7 (2026-06-12): escalate a QC corrective action into a VeritaResponse
+  // finding stub. Closes the QC -> VeritaResponse seam the schema anticipated
+  // (qc_corrective_actions.nce_reference was reserved as the "future
+  // VeritaResponse FK" hook). A surveyor reading a recurring or unresolved
+  // Westgard rejection expects a formal CAPA record; this one click opens it
+  // pre-filled from the QC context, citing 42 CFR 493.1256(d) (the CLIA QC
+  // corrective-action requirement). CMS is always an allowed accreditor
+  // (every lab holds CLIA), so the finding gate never blocks this path.
+  app.post("/api/labs/:labId/qc/corrective-actions/:caId/escalate-to-response", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const caId = Number(req.params.caId);
+    if (!caId) return res.status(400).json({ error: "caId required" });
+    const ca = sqlite.prepare(
+      "SELECT id, lab_id, qc_result_id, qc_rule_violation_id, action_taken, nce_reference FROM qc_corrective_actions WHERE id = ? AND lab_id = ?"
+    ).get(caId, req.scope.labId) as any;
+    if (!ca) return res.status(404).json({ error: "Corrective action not found in this lab" });
+    // Idempotency: a CA already escalated keeps its existing finding. Parse the
+    // finding id back out of the "VeritaResponse#<id>" reference we stamped.
+    const existingMatch = /^VeritaResponse#(\d+)$/.exec(String(ca.nce_reference || ""));
+    if (existingMatch) {
+      return res.status(409).json({ error: "Already escalated", finding_id: Number(existingMatch[1]) });
+    }
+    // Pull the QC context for a descriptive, surveyor-legible stub.
+    const ctx = sqlite.prepare(
+      `SELECT r.result_value, r.result_date, r.instrument, l.analyte, l.lot_number, l.level
+       FROM qc_results r JOIN qc_control_lots l ON r.control_lot_id = l.id
+       WHERE r.id = ? AND r.lab_id = ?`
+    ).get(Number(ca.qc_result_id), req.scope.labId) as any;
+    const viol = ca.qc_rule_violation_id
+      ? sqlite.prepare("SELECT rule_code, severity, detail FROM qc_rule_violations WHERE id = ?").get(Number(ca.qc_rule_violation_id)) as any
+      : null;
+    const ruleCode = viol?.rule_code || "QC";
+    const analyte = ctx?.analyte || "analyte";
+    const today = new Date().toISOString().slice(0, 10);
+    const description =
+      `VeritaQC escalation. ${analyte}` +
+      (ctx?.level ? ` ${ctx.level}` : "") +
+      (ctx?.lot_number ? ` (control lot ${ctx.lot_number})` : "") +
+      ` fired Westgard rule ${ruleCode}` +
+      (ctx?.result_date ? ` on ${ctx.result_date}` : "") +
+      (ctx?.instrument ? `, instrument ${ctx.instrument}` : "") +
+      `. Value ${ctx?.result_value ?? "n/a"}.` +
+      (viol?.detail ? ` ${viol.detail}` : "");
+    const due_date = dueDateForFinding("CMS", today);
+    const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    const userIdForRow = ownerRow?.owner_user_id ?? req.userId;
+    let findingId: number;
+    try {
+      const ins = sqlite.prepare(
+        `INSERT INTO findings (
+          user_id, lab_id, accreditor, finding_number, standard_ref,
+          phase_or_severity, description, surveyor_notes,
+          anchor_date, due_date, status, immediate_action
+        ) VALUES (?, ?, 'CMS', ?, '42 CFR 493.1256(d)', ?, ?, ?, ?, ?, 'open', ?)`
+      ).run(
+        userIdForRow, req.scope.labId,
+        `QC-${ruleCode}`,
+        viol?.severity || "rejection",
+        description,
+        `Auto-created from VeritaQC corrective action #${caId}. Document root cause, corrective and preventive action, and the monitoring plan to close.`,
+        today, due_date,
+        String(ca.action_taken || "").trim() || null,
+      );
+      findingId = Number(ins.lastInsertRowid);
+    } catch (err: any) {
+      console.error("[qc/escalate-to-response] finding insert failed:", err.message);
+      return res.status(500).json({ error: err.message || "Could not create finding" });
+    }
+    // Stamp the back-reference so the QC side renders a linked chip and the
+    // escalation is idempotent.
+    sqlite.prepare(
+      "UPDATE qc_corrective_actions SET nce_reference = ?, updated_at = ? WHERE id = ? AND lab_id = ?"
+    ).run(`VeritaResponse#${findingId}`, new Date().toISOString(), caId, req.scope.labId);
+    try {
+      sqlite.prepare(
+        "INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, 'created', ?, ?)"
+      ).run(findingId, req.user?.userId ?? null, JSON.stringify({ source: "veritaqc", corrective_action_id: caId, rule_code: ruleCode }));
+    } catch {}
+    const finding = sqlite.prepare("SELECT * FROM findings WHERE id = ?").get(findingId);
+    res.json({ ok: true, finding_id: findingId, finding, nce_reference: `VeritaResponse#${findingId}` });
   });
 
   // ─── VeritaQC → VeritaCheck Verification Import (Phase A: Precision) ─────
