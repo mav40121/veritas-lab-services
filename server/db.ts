@@ -4057,6 +4057,43 @@ sqlite.exec(`
 
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_finding_reminder_log_finding ON finding_reminder_log(finding_id)`); } catch {}
 
+// Wave C3 (2026-06-12): VeritaResponse effectiveness monitoring. A corrective
+// action plan is not done when it is signed; CLIA/CAP expect the lab to verify
+// the corrective action was EFFECTIVE over time (the monitoring-plan element of
+// a plan of correction). This table holds the 30/60/90-day effectiveness
+// checkpoints anchored on a finding's completion date. Each checkpoint is
+// surfaced in the VeritaTrack worklist while pending and resolved as effective
+// or not-effective (the latter reopens the finding).
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS finding_effectiveness_checks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    finding_id INTEGER NOT NULL,
+    lab_id INTEGER,
+    interval_days INTEGER NOT NULL,
+    due_date TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','effective','not_effective')),
+    outcome_note TEXT,
+    verified_at TEXT,
+    verified_by TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(finding_id, interval_days),
+    FOREIGN KEY (finding_id) REFERENCES findings(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_finding_eff_finding ON finding_effectiveness_checks(finding_id);
+  CREATE INDEX IF NOT EXISTS idx_finding_eff_lab     ON finding_effectiveness_checks(lab_id, status);
+`);
+// PRAGMA migration block per the New DB Table Rule (CLAUDE.md §8).
+{
+  try {
+    const cols = (sqlite.prepare("PRAGMA table_info(finding_effectiveness_checks)").all() as { name: string }[]).map(c => c.name);
+    if (cols.length > 0) {
+      // Future ALTER TABLE finding_effectiveness_checks ADD COLUMN ... blocks go here.
+    }
+  } catch {
+    // fresh DB: CREATE TABLE above handled it
+  }
+}
+
 // VeritaResponse migration blocks (idempotent). Per New DB Table Rule
 // (CLAUDE.md §8): every new CREATE TABLE ships with a PRAGMA-guarded ALTER
 // block so future column additions can be applied to live DBs that already

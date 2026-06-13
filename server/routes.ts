@@ -16498,6 +16498,90 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!row) return res.status(404).json({ error: "Finding not found" });
     res.json(row);
   });
+
+  // ── Wave C3 (2026-06-12): VeritaResponse effectiveness monitoring ──────────
+  // 30/60/90-day checkpoints that verify a corrective action stayed effective
+  // after the plan of correction closed. The checkpoints feed the VeritaTrack
+  // worklist while pending; a "not effective" outcome reopens the finding.
+  const EFFECTIVENESS_INTERVALS = [30, 60, 90];
+
+  function findingForLabScope(req: any): any | null {
+    return (db as any).$client.prepare(
+      "SELECT * FROM findings WHERE id = ? AND lab_id = ?"
+    ).get(req.params.id, req.scope.labId);
+  }
+
+  // GET the checkpoints for a finding.
+  app.get("/api/labs/:labId/findings/:id/effectiveness-checks", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const finding = findingForLabScope(req);
+    if (!finding) return res.status(404).json({ error: "Finding not found" });
+    const rows = (db as any).$client.prepare(
+      "SELECT * FROM finding_effectiveness_checks WHERE finding_id = ? ORDER BY interval_days ASC"
+    ).all(finding.id);
+    res.json(rows);
+  });
+
+  // POST generate the 30/60/90-day checkpoints, anchored on completion_date.
+  // Idempotent via the UNIQUE(finding_id, interval_days) constraint. Requires a
+  // completion_date (you cannot monitor effectiveness of an action not yet
+  // completed).
+  app.post("/api/labs/:labId/findings/:id/effectiveness-checks/generate", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
+    const finding = findingForLabScope(req);
+    if (!finding) return res.status(404).json({ error: "Finding not found" });
+    const anchor = finding.completion_date;
+    if (!anchor) return res.status(400).json({ error: "Set a completion date on the finding before starting effectiveness monitoring." });
+    const sqlite = (db as any).$client;
+    let created = 0;
+    for (const days of EFFECTIVENESS_INTERVALS) {
+      const d = new Date(anchor);
+      if (isNaN(d.getTime())) return res.status(400).json({ error: "Finding completion_date is not a valid date." });
+      d.setUTCDate(d.getUTCDate() + days);
+      try {
+        const r = sqlite.prepare(
+          "INSERT INTO finding_effectiveness_checks (finding_id, lab_id, interval_days, due_date) VALUES (?, ?, ?, ?)"
+        ).run(finding.id, req.scope.labId, days, d.toISOString().slice(0, 10));
+        if (r.changes) created++;
+      } catch { /* UNIQUE conflict: checkpoint already exists, idempotent */ }
+    }
+    try {
+      sqlite.prepare("INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, 'effectiveness_started', ?, ?)")
+        .run(finding.id, req.user?.userId ?? null, JSON.stringify({ created, anchor }));
+    } catch {}
+    const rows = sqlite.prepare("SELECT * FROM finding_effectiveness_checks WHERE finding_id = ? ORDER BY interval_days ASC").all(finding.id);
+    res.json({ ok: true, created, checks: rows });
+  });
+
+  // PUT record a checkpoint outcome. "not_effective" reopens the finding to
+  // 'drafting' so the lab revises the corrective action; "effective" closes the
+  // checkpoint. Both stamp verified_at/by.
+  app.put("/api/labs/:labId/findings/:id/effectiveness-checks/:checkId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
+    const finding = findingForLabScope(req);
+    if (!finding) return res.status(404).json({ error: "Finding not found" });
+    const { status, outcome_note, verified_by } = req.body || {};
+    if (!["effective", "not_effective"].includes(status)) {
+      return res.status(400).json({ error: "status must be 'effective' or 'not_effective'" });
+    }
+    const sqlite = (db as any).$client;
+    const check = sqlite.prepare(
+      "SELECT * FROM finding_effectiveness_checks WHERE id = ? AND finding_id = ? AND lab_id = ?"
+    ).get(Number(req.params.checkId), finding.id, req.scope.labId);
+    if (!check) return res.status(404).json({ error: "Checkpoint not found" });
+    const now = new Date().toISOString();
+    sqlite.prepare(
+      "UPDATE finding_effectiveness_checks SET status = ?, outcome_note = ?, verified_at = ?, verified_by = ? WHERE id = ?"
+    ).run(status, outcome_note ?? null, now, verified_by ?? (req.user?.name ?? null), check.id);
+    let reopened = false;
+    if (status === "not_effective" && finding.status === "closed") {
+      sqlite.prepare("UPDATE findings SET status = 'drafting', updated_at = ? WHERE id = ?").run(now, finding.id);
+      reopened = true;
+    }
+    try {
+      sqlite.prepare("INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)")
+        .run(finding.id, status === "effective" ? "effectiveness_verified" : "effectiveness_failed", req.user?.userId ?? null,
+             JSON.stringify({ interval_days: check.interval_days, reopened }));
+    } catch {}
+    res.json({ ok: true, reopened, check: sqlite.prepare("SELECT * FROM finding_effectiveness_checks WHERE id = ?").get(check.id) });
+  });
   app.post("/api/labs/:labId/findings", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
     const {
       accreditor, inspection_id, finding_number, standard_ref,

@@ -136,6 +136,117 @@ function clientValidateAabb(finding: any): { ok: boolean; missing: string[] } {
   return { ok: missing.length === 0, missing };
 }
 
+// Wave C3 (2026-06-12): effectiveness monitoring panel. Generates and tracks
+// the 30/60/90-day checkpoints that verify a corrective action stayed effective
+// after the plan of correction closed. A "not effective" outcome reopens the
+// finding, so the parent refetches.
+interface EffCheck {
+  id: number;
+  interval_days: number;
+  due_date: string;
+  status: "pending" | "effective" | "not_effective";
+  outcome_note: string | null;
+  verified_at: string | null;
+  verified_by: string | null;
+}
+function EffectivenessPanel({ activeLabId, findingId, completionDate, canEdit, onFindingChange }: {
+  activeLabId: number; findingId: string; completionDate: string | null; canEdit: boolean; onFindingChange: () => void;
+}) {
+  const [checks, setChecks] = useState<EffCheck[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const base = `${API_BASE}/api/labs/${activeLabId}/findings/${findingId}/effectiveness-checks`;
+
+  const load = async () => {
+    try {
+      const r = await fetch(base, { headers: authHeaders() });
+      if (r.ok) setChecks(await r.json());
+    } catch { /* leave as-is */ }
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [findingId, activeLabId]);
+
+  const generate = async () => {
+    setBusy(true);
+    try {
+      const r = await fetch(`${base}/generate`, { method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" } });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok) setChecks(data.checks || []);
+      else alert(data.error || "Could not start effectiveness monitoring.");
+    } finally { setBusy(false); }
+  };
+
+  const record = async (check: EffCheck, status: "effective" | "not_effective") => {
+    const note = window.prompt(
+      status === "effective"
+        ? `What evidence shows the corrective action held at ${check.interval_days} days?`
+        : `What recurred at ${check.interval_days} days? (this reopens the finding)`,
+      "",
+    );
+    if (note === null) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`${base}/${check.id}`, {
+        method: "PUT",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ status, outcome_note: note }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok) { await load(); if (data.reopened) onFindingChange(); }
+      else alert(data.error || "Could not record checkpoint.");
+    } finally { setBusy(false); }
+  };
+
+  const hasChecks = checks && checks.length > 0;
+  return (
+    <Card>
+      <CardHeader className="py-3 px-4 border-b">
+        <CardTitle className="text-base font-semibold">Effectiveness monitoring</CardTitle>
+      </CardHeader>
+      <CardContent className="p-4 space-y-3">
+        <p className="text-xs text-muted-foreground">
+          A plan of correction is not finished when it is signed. CLIA and CAP expect the lab to verify the corrective action stayed effective. These 30, 60, and 90 day checkpoints are anchored on the completion date and appear on the VeritaTrack worklist until resolved.
+        </p>
+        {!hasChecks ? (
+          <div className="flex items-center gap-3">
+            <Button size="sm" onClick={generate} disabled={busy || !canEdit || !completionDate}>
+              Start 30/60/90 day monitoring
+            </Button>
+            {!completionDate && <span className="text-xs text-amber-700">Set a completion date above first.</span>}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {checks!.map(c => {
+              const overdue = c.status === "pending" && new Date(c.due_date) < new Date();
+              return (
+                <div key={c.id} className="flex items-center gap-3 rounded-md border p-2.5 text-sm">
+                  <span className="font-medium w-16 shrink-0">{c.interval_days}-day</span>
+                  <span className={`text-xs ${overdue ? "text-red-600 font-medium" : "text-muted-foreground"} w-28 shrink-0`}>Due {c.due_date}</span>
+                  <div className="flex-1 min-w-0">
+                    {c.status === "pending" ? (
+                      <span className={`text-xs ${overdue ? "text-red-600" : "text-muted-foreground"}`}>{overdue ? "Overdue" : "Pending"}</span>
+                    ) : (
+                      <span className={`text-xs font-medium ${c.status === "effective" ? "text-emerald-700" : "text-red-700"}`}>
+                        {c.status === "effective" ? "Verified effective" : "Not effective (finding reopened)"}
+                        {c.verified_by ? ` by ${c.verified_by}` : ""}
+                        {c.outcome_note ? `: ${c.outcome_note}` : ""}
+                      </span>
+                    )}
+                  </div>
+                  {c.status === "pending" && canEdit && (
+                    <div className="flex gap-1 shrink-0">
+                      <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={() => record(c, "effective")}>Effective</Button>
+                      <Button size="sm" variant="outline" className="h-7 text-xs text-red-700" disabled={busy} onClick={() => record(c, "not_effective")}>Not effective</Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function VeritaResponseFindingPage() {
   const labRoute = useLabRoute();
   const { user } = useAuth();
@@ -1023,6 +1134,17 @@ export default function VeritaResponseFindingPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Wave C3: effectiveness monitoring */}
+      {activeLabId && (
+        <EffectivenessPanel
+          activeLabId={activeLabId}
+          findingId={id!}
+          completionDate={finding.completion_date}
+          canEdit={hasPlanAccess}
+          onFindingChange={fetchFinding}
+        />
+      )}
 
       {/* PHI nudge */}
       <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-800 p-4">
