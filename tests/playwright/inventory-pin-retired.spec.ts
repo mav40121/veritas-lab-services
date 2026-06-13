@@ -29,6 +29,22 @@ test.describe("Inventory Kiosk PIN retirement", () => {
     await expect(page.getByTestId("inventory-pin-card")).toHaveCount(0);
   });
 
+  test("Lab Members no longer shows the retired view-only seat model", async ({ page }) => {
+    // Second retirement leftover on the same page (Michael: "what is going
+    // on with the 0 out of 5 view only slots?"): the per-seat view-only
+    // counter, the Seat type dropdown, and the $99/yr extras copy are gone;
+    // read-and-sign staff are pointed at the Staff Portal instead.
+    test.skip(!TOKEN || !LAB_ID, "PW_TOKEN + PW_LAB_ID required");
+    await page.goto(`${BASE}/`);
+    await page.evaluate((t: string) => localStorage.setItem("veritas_token", t), TOKEN);
+    await page.goto(`${BASE}/labs/${LAB_ID}/members`);
+    await expect(page.getByText(/Lab Members/i).first()).toBeVisible({ timeout: 20000 });
+    await expect(page.getByText(/view-only seats used/i)).toHaveCount(0);
+    await expect(page.getByText(/\$99 per year/i)).toHaveCount(0);
+    await expect(page.locator("#invite-seat-type")).toHaveCount(0);
+    await expect(page.getByText(/Read-and-sign staff/i).first()).toBeVisible();
+  });
+
   test("/inventory redirects to /staff-access (no PIN prompt)", async ({ page }) => {
     await page.goto(`${BASE}/inventory`);
     await page.waitForURL(/\/staff-access/, { timeout: 20000 });
