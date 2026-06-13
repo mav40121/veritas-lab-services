@@ -8,6 +8,7 @@
     "build": "tsx script/build.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
+    "test:e2e": "playwright test",
     "db:push": "drizzle-kit push",
     "prepare": "node -e \"if(process.env.CI || !require('fs').existsSync('.git')){process.exit(0)}else{require('child_process').execSync('husky',{stdio:'inherit'})}\""
   },
@@ -105,6 +106,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.1",
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "^4.1.18",
     "@types/better-sqlite3": "^7.6.12",

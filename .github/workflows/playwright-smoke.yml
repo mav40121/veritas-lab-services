@@ -1,0 +1,84 @@
+name: Playwright Smoke
+
+# Cross-cutting CI runner (2026-06-12). The repo accumulated 55+ authored
+# Playwright specs (one per Gate 3 step 8 wave) that were never executed: they
+# live outside the app tsconfig, so even `tsc` never compiled them. This job
+# runs `npx playwright test` so that, at minimum, EVERY spec compiles and its
+# env-guarded skip path is exercised on each PR. The first run already caught a
+# spec that called test.use({...devices}) inside a describe and zeroed the whole
+# suite.
+#
+# Most specs target production behind PW_TOKEN / PW_LAB_ID guards and skip
+# cleanly when those secrets are absent, so a no-secret run is GREEN as long as
+# everything compiles. When PW_TOKEN is configured as a repo secret, the
+# authenticated paths run against prod and assert real user-visible state.
+#
+# To make this block merges, enable in:
+#   Settings -> Branches -> main -> Branch protection ->
+#   Require status checks to pass -> select "playwright-smoke".
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  playwright-smoke:
+    name: playwright-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser (chromium)
+        run: npx playwright install --with-deps chromium
+
+      # BLOCKING GATE: every spec must compile and collect. This is the real
+      # regression catcher — it caught a spec that called test.use({...devices})
+      # inside a describe and zeroed the whole suite. A compile error here fails
+      # the job and blocks the merge.
+      - name: Validate all specs compile and collect
+        run: npx playwright test --list
+
+      # REPORTING (non-blocking): the full run executes against prod. 32 specs
+      # pass (unauthenticated endpoint guards), 74 skip without PW_TOKEN, and 24
+      # PRE-EXISTING legacy specs currently fail — a mix of stale assertions
+      # (e.g. the retired Staff Portal CLIA+PIN login form) and specs that need
+      # prod credentials or specific lab data to assert anything. Greening those
+      # 24 is a separate triage tracked outside this runner, so the full run is
+      # report-only until then. Wire PW_TOKEN/PW_LAB_ID/etc as repo secrets to
+      # exercise the authenticated paths.
+      - name: Run Playwright specs (reporting only)
+        continue-on-error: true
+        env:
+          CI: 'true'
+          PW_BASE: ${{ secrets.PW_BASE || 'https://www.veritaslabservices.com' }}
+          PW_TOKEN: ${{ secrets.PW_TOKEN }}
+          PW_LAB_ID: ${{ secrets.PW_LAB_ID }}
+          PW_MAP_ID: ${{ secrets.PW_MAP_ID }}
+          PW_FINDING_ID: ${{ secrets.PW_FINDING_ID }}
+          PW_STUDY_ID: ${{ secrets.PW_STUDY_ID }}
+        run: npx playwright test
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
