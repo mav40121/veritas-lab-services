@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import {
   CheckCircle2, Plus, Download, Upload,
-  ChevronDown, ChevronRight, Pencil, Trash2, CalendarDays, List, Settings,
+  ChevronDown, ChevronRight, Pencil, Trash2, CalendarDays, List, Settings, History,
 } from "lucide-react";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
@@ -349,6 +349,71 @@ function TaskFormDialog({ trigger, existing, onDone, trackApi, tasksKey, dashKey
 }
 
 // ── Compact task row (inside accordion) ───────────────────────────────────────
+// Wave B3 (2026-06-12): per-task audit trail. Surveyor-facing record of every
+// lifecycle event, especially sign-off deletions, which otherwise vanish.
+interface AuditEvent {
+  id: number;
+  event: string;
+  detail: string | null;
+  at: string;
+  by_name: string | null;
+}
+const AUDIT_LABELS: Record<string, string> = {
+  task_created: "Task created",
+  task_updated: "Task edited",
+  task_deactivated: "Task removed",
+  signoff_recorded: "Sign-off recorded",
+  signoff_deleted: "Sign-off deleted",
+};
+function HistoryDialog({ task }: { task: Task }) {
+  const [open, setOpen] = useState(false);
+  const { data: events, isLoading } = useQuery<AuditEvent[]>({
+    queryKey: [`/api/veritatrack/tasks/${task.id}/audit`],
+    enabled: open,
+    queryFn: async () => {
+      const r = await fetch(`${API_BASE}/api/veritatrack/tasks/${task.id}/audit`, { headers: authHeaders() });
+      if (!r.ok) throw new Error("audit failed");
+      return r.json();
+    },
+  });
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="History"><History size={10} /></Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>History: {task.name}</DialogTitle>
+        </DialogHeader>
+        <p className="text-xs text-muted-foreground">
+          Append-only audit trail. Sign-off deletions and task changes are recorded here so the record survives an edit.
+        </p>
+        <div className="max-h-80 overflow-y-auto divide-y divide-border/50">
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground py-4">Loading...</p>
+          ) : !events || events.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4">No recorded events yet.</p>
+          ) : events.map(e => {
+            const isDelete = e.event === "signoff_deleted" || e.event === "task_deactivated";
+            return (
+              <div key={e.id} className="py-2 flex items-start gap-2 text-xs">
+                <span className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${isDelete ? "bg-red-500" : "bg-emerald-500"}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-foreground">{AUDIT_LABELS[e.event] || e.event}</div>
+                  {e.detail && <div className="text-muted-foreground">{e.detail}</div>}
+                  <div className="text-[10px] text-muted-foreground">
+                    {new Date(e.at).toLocaleString()}{e.by_name ? ` by ${e.by_name}` : ""}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function CompactTaskRow({ task, onRefresh, trackApi, tasksKey, dashKey }: {
   task: Task; onRefresh: () => void; trackApi: string; tasksKey: string; dashKey: string;
 }) {
@@ -408,6 +473,7 @@ function CompactTaskRow({ task, onRefresh, trackApi, tasksKey, dashKey }: {
       {/* Actions */}
       <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
         <SignoffDialog task={task} onDone={onRefresh} tasksKey={tasksKey} dashKey={dashKey} />
+        <HistoryDialog task={task} />
         <TaskFormDialog
           trigger={<Button size="sm" variant="ghost" className="h-6 w-6 p-0"><Pencil size={10} /></Button>}
           existing={task}

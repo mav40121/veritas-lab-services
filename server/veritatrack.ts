@@ -61,6 +61,19 @@ export function registerVeritaTrackRoutes(
 ) {
   const sqlite = (db as any).$client;
 
+  // Wave B3 (2026-06-12): append-only VeritaTrack audit writer. Never throws
+  // into the caller; an audit failure must not break a sign-off or an edit.
+  function trackAudit(opts: {
+    labId: number | null; taskId: number | null; signoffId?: number | null;
+    event: string; detail?: string | null; byUserId: number | null;
+  }) {
+    try {
+      sqlite.prepare(
+        "INSERT INTO veritatrack_audit (lab_id, task_id, signoff_id, event, detail, by_user_id) VALUES (?,?,?,?,?,?)"
+      ).run(opts.labId ?? null, opts.taskId ?? null, opts.signoffId ?? null, opts.event, opts.detail ?? null, opts.byUserId ?? null);
+    } catch { /* audit must never break the operation */ }
+  }
+
   function hasTrackAccess(user: any, lab?: any) {
     const plan = lab?.plan ?? user?.plan;
     return [
@@ -355,9 +368,11 @@ export function registerVeritaTrackRoutes(
     // write-path Shape A (resolver unification PR B): tag via the SAME shared
     // resolveLegacyLabId the tasks list read uses, so write==read in every
     // branch (validated active lab -> default lab -> first membership).
+    const newLabId = resolveLegacyLabId(sqlite, req) ?? null;
     try {
-      sqlite.prepare("UPDATE veritatrack_tasks SET lab_id = ? WHERE id = ?").run(resolveLegacyLabId(sqlite, req) ?? null, r.lastInsertRowid);
+      sqlite.prepare("UPDATE veritatrack_tasks SET lab_id = ? WHERE id = ?").run(newLabId, r.lastInsertRowid);
     } catch {}
+    trackAudit({ labId: newLabId, taskId: Number(r.lastInsertRowid), event: "task_created", detail: `${name} (${frequency || "Monthly"})`, byUserId: req.user?.userId ?? null });
     res.json(sqlite.prepare("SELECT * FROM veritatrack_tasks WHERE id = ?").get(r.lastInsertRowid));
   });
 
@@ -379,6 +394,13 @@ export function registerVeritaTrackRoutes(
     sqlite.prepare(
       "UPDATE veritatrack_tasks SET name=?,category=?,instrument=?,owner=?,frequency=?,frequency_months=?,map_analyte=?,map_field=?,notes=?,active=?,updated_at=datetime('now') WHERE id=?"
     ).run(name, category || "Other", instrument || null, owner || null, frequency || "Monthly", freqMonths, map_analyte || null, map_field || null, notes || null, active !== false ? 1 : 0, taskId);
+    const wasDeactivated = (existing as any).active === 1 && active === false;
+    trackAudit({
+      labId: (existing as any).lab_id ?? null, taskId,
+      event: wasDeactivated ? "task_deactivated" : "task_updated",
+      detail: wasDeactivated ? `${name} deactivated` : `${name} (${frequency || "Monthly"})`,
+      byUserId: req.user?.userId ?? null,
+    });
     res.json(sqlite.prepare("SELECT * FROM veritatrack_tasks WHERE id = ?").get(taskId));
   });
 
@@ -392,6 +414,7 @@ export function registerVeritaTrackRoutes(
       return res.status(404).json({ error: "Task not found" });
     }
     sqlite.prepare("UPDATE veritatrack_tasks SET active=0 WHERE id=?").run(taskId);
+    trackAudit({ labId: (existing as any).lab_id ?? null, taskId, event: "task_deactivated", detail: `${(existing as any).name} removed from active list`, byUserId: req.user?.userId ?? null });
     res.json({ ok: true });
   });
 
@@ -413,9 +436,16 @@ export function registerVeritaTrackRoutes(
     // write-path Shape A (resolver unification PR B): a signoff belongs to its
     // parent task's lab; fall back to the shared resolver if the task is
     // untagged (legacy rows).
+    const signoffLabId = task.lab_id ?? resolveLegacyLabId(sqlite, req) ?? null;
     try {
-      sqlite.prepare("UPDATE veritatrack_signoffs SET lab_id = ? WHERE id = ?").run(task.lab_id ?? resolveLegacyLabId(sqlite, req) ?? null, r.lastInsertRowid);
+      sqlite.prepare("UPDATE veritatrack_signoffs SET lab_id = ? WHERE id = ?").run(signoffLabId, r.lastInsertRowid);
     } catch {}
+    trackAudit({
+      labId: signoffLabId, taskId: task.id, signoffId: Number(r.lastInsertRowid),
+      event: "signoff_recorded",
+      detail: `Completed ${completed_date}${performed_by ? ` by ${performed_by}` : initials ? ` by ${initials}` : ""}`,
+      byUserId: req.user?.userId ?? null,
+    });
     // If linked to a VeritaMap field, update it there too.
     //
     // Shape A class sweep (2026-06-08): prior code picked ONE map per user
@@ -462,7 +492,34 @@ export function registerVeritaTrackRoutes(
       return res.status(404).json({ error: "Signoff not found" });
     }
     sqlite.prepare("DELETE FROM veritatrack_signoffs WHERE id = ?").run(signoffId);
+    // Wave B3: a deleted completion record is the highest-risk audit event.
+    // Capture it (with the date it claimed) BEFORE the row is gone -- already
+    // read into `existing` by resolveRowForMutation above.
+    trackAudit({
+      labId: (existing as any).lab_id ?? null,
+      taskId: (existing as any).task_id ?? null,
+      signoffId,
+      event: "signoff_deleted",
+      detail: `Removed sign-off dated ${(existing as any).completed_date}${(existing as any).performed_by ? ` (${(existing as any).performed_by})` : ""}`,
+      byUserId: req.user?.userId ?? null,
+    });
     res.json({ ok: true });
+  });
+
+  // GET audit trail for a task (Wave B3). Lab-scoped read: resolves the task
+  // through the same ownership guard the mutations use, then returns the
+  // append-only event log newest-first.
+  app.get("/api/veritatrack/tasks/:id/audit", authMiddleware, (req: any, res) => {
+    if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+    const { row: task, status } = resolveRowForMutation<any>((db as any).$client, "veritatrack_tasks", Number(req.params.id), req);
+    if (!task) {
+      if (status === 403) return res.status(403).json({ error: "You don't have access to this task's lab" });
+      return res.status(404).json({ error: "Task not found" });
+    }
+    const rows = sqlite.prepare(
+      "SELECT a.id, a.event, a.detail, a.at, a.signoff_id, u.name AS by_name FROM veritatrack_audit a LEFT JOIN users u ON u.id = a.by_user_id WHERE a.task_id = ? ORDER BY a.at DESC, a.id DESC"
+    ).all(task.id);
+    res.json(rows);
   });
 
   // POST import tasks from VeritaMap
@@ -871,6 +928,7 @@ export function registerVeritaTrackRoutes(
       const r = sqlite.prepare(
         "INSERT INTO veritatrack_tasks (user_id,lab_id,name,category,instrument,owner,frequency,frequency_months,map_analyte,map_field,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
       ).run(userIdForRow, req.scope.labId, name, category || "Other", instrument || null, owner || null, frequency || "Monthly", freqMonths, map_analyte || null, map_field || null, notes || null, now, now);
+      trackAudit({ labId: req.scope.labId, taskId: Number(r.lastInsertRowid), event: "task_created", detail: `${name} (${frequency || "Monthly"})`, byUserId: req.user?.userId ?? null });
       res.json(sqlite.prepare("SELECT * FROM veritatrack_tasks WHERE id = ?").get(r.lastInsertRowid));
     });
 
