@@ -2620,6 +2620,36 @@ sqlite.exec(`
   );
 `);
 
+// Wave A4 (2026-06-12): VeritaMap provenance columns.
+// Critical values: record WHEN the Medical Executive Committee reviewed and
+// adopted them (Mayo Clinic Laboratories values stay a STARTING POINT; the
+// MEC owns the final values) and who recorded the adoption.
+// Reference range + AMR: director-or-designee attestation per 42 CFR
+// 493.1253 locks the lab-entered values; unlock is owner/admin with an
+// audit_log entry. Idempotent PRAGMA-guarded ALTERs per the New DB Table Rule.
+{
+  const avCols = (sqlite.prepare("PRAGMA table_info(veritamap_analyte_values)").all() as { name: string }[]).map(c => c.name);
+  for (const [col, ddl] of [
+    ["mec_reviewed_at", "ALTER TABLE veritamap_analyte_values ADD COLUMN mec_reviewed_at TEXT"],
+    ["mec_reviewed_by", "ALTER TABLE veritamap_analyte_values ADD COLUMN mec_reviewed_by TEXT"],
+    ["ref_attested_at", "ALTER TABLE veritamap_analyte_values ADD COLUMN ref_attested_at TEXT"],
+    ["ref_attested_by", "ALTER TABLE veritamap_analyte_values ADD COLUMN ref_attested_by TEXT"],
+    ["ref_attested_title", "ALTER TABLE veritamap_analyte_values ADD COLUMN ref_attested_title TEXT"],
+    ["ref_locked", "ALTER TABLE veritamap_analyte_values ADD COLUMN ref_locked INTEGER NOT NULL DEFAULT 0"],
+  ] as const) {
+    if (!avCols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+  }
+  const amrCols = (sqlite.prepare("PRAGMA table_info(veritamap_amr_values)").all() as { name: string }[]).map(c => c.name);
+  for (const [col, ddl] of [
+    ["amr_attested_at", "ALTER TABLE veritamap_amr_values ADD COLUMN amr_attested_at TEXT"],
+    ["amr_attested_by", "ALTER TABLE veritamap_amr_values ADD COLUMN amr_attested_by TEXT"],
+    ["amr_attested_title", "ALTER TABLE veritamap_amr_values ADD COLUMN amr_attested_title TEXT"],
+    ["amr_locked", "ALTER TABLE veritamap_amr_values ADD COLUMN amr_locked INTEGER NOT NULL DEFAULT 0"],
+  ] as const) {
+    if (!amrCols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+  }
+}
+
 // Multi-Lab Tier 2 — Phase 3.10 (VeritaResponse module):
 // findings (user_id) is the parent; finding_attachments scopes through
 // finding_id and inherits lab scope. Add lab_id to findings only.
