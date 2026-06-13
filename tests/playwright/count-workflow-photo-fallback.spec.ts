@@ -23,8 +23,12 @@ const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
 const TOKEN = process.env.PW_TOKEN || "";
 const LAB_ID = process.env.PW_LAB_ID || "3";
 
+// Strip defaultBrowserType so test.use() is legal inside the describe; emulate
+// the iPhone 13 under the configured browser (chromium in CI).
+const { defaultBrowserType: _photoBt, ...iPhone13 } = devices["iPhone 13"];
+
 test.describe("InventoryCountWorkflow photo-capture fallback", () => {
-  test.use({ ...devices["iPhone 13"] });
+  test.use({ ...iPhone13 });
 
   test("photo-capture button mounts on mobile when modal opens", async ({ page }) => {
     test.skip(!TOKEN, "PW_TOKEN not set");
