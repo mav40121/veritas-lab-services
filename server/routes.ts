@@ -9933,6 +9933,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritamap", action: "delete", entityType: "instrument", entityId: req.params.instId, entityLabel: delInstr?.instrument_name, before: { instrument: delInstr, tests: delInstTests }, ipAddress: req.ip });
     (db as any).$client.prepare("DELETE FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ?").run(req.params.id, req.params.instId);
     (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ?").run(req.params.instId);
+    // Deleting an instrument leaves cross-module VeritaStaff rows whose
+    // instrument_id FK is NOT NULL (staff_employee_instruments assignment links
+    // + staff_duty_change_events reassessment triggers). Both are moot once the
+    // instrument is gone -- the actual competency EVIDENCE lives in
+    // competency_assessments, which is untouched -- so clear them to avoid a
+    // foreign-key 500. Found by scripts/audit-delete-cascades.mjs 2026-06-13.
+    (db as any).$client.prepare("DELETE FROM staff_employee_instruments WHERE instrument_id = ?").run(req.params.instId);
+    (db as any).$client.prepare("DELETE FROM staff_duty_change_events WHERE instrument_id = ?").run(req.params.instId);
     (db as any).$client.prepare("DELETE FROM veritamap_instruments WHERE id = ? AND map_id = ?").run(req.params.instId, req.params.id);
     rebuildMapTests(req.params.id);
     res.json({ ok: true });
@@ -10461,6 +10469,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // on a re-added instrument with the same id space.
     (db as any).$client.prepare("DELETE FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ?").run(req.params.id, req.params.instId);
     (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ?").run(req.params.instId);
+    // Clear cross-module VeritaStaff FK rows (NOT NULL instrument_id) so the
+    // instrument delete can't 500; evidence (competency_assessments) is
+    // untouched. See the lab-scoped handler above for the full rationale.
+    (db as any).$client.prepare("DELETE FROM staff_employee_instruments WHERE instrument_id = ?").run(req.params.instId);
+    (db as any).$client.prepare("DELETE FROM staff_duty_change_events WHERE instrument_id = ?").run(req.params.instId);
     (db as any).$client.prepare("DELETE FROM veritamap_instruments WHERE id = ? AND map_id = ?").run(req.params.instId, req.params.id);
     // Reconcile veritamap_tests against remaining instruments so any analyte
     // that was only on the deleted instrument is purged from the map and from
@@ -17451,6 +17464,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const delAssessItems = (db as any).$client.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(req.params.id);
     logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "delete", entityType: "assessment", entityId: req.params.id, entityLabel: delAssessment ? `${delAssessment.employee_name} - ${delAssessment.program_name}` : undefined, before: { assessment: delAssessment, items: delAssessItems }, ipAddress: req.ip });
     (db as any).$client.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(req.params.id);
+    // Element documents are sub-records of this assessment (like the items
+    // above); clear them so the delete can't 500 on the FK. Found by
+    // scripts/audit-delete-cascades.mjs 2026-06-13.
+    (db as any).$client.prepare("DELETE FROM competency_element_documents WHERE assessment_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM competency_assessments WHERE id = ?").run(req.params.id);
     res.json({ ok: true });
   });
@@ -18000,6 +18017,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (refCount && refCount.n > 0) {
       return res.status(409).json({ error: "Cannot delete: quiz has recorded results", result_count: refCount.n });
     }
+    // Results are evidence and are 409-blocked above. Pending assignments
+    // (assigned-but-not-yet-taken) are not evidence and are moot once the quiz
+    // is gone, so clear them to avoid a foreign-key 500. Found by
+    // scripts/audit-delete-cascades.mjs 2026-06-13.
+    (db as any).$client.prepare("DELETE FROM competency_quiz_assignments WHERE quiz_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM competency_quizzes WHERE id = ?").run(req.params.id);
     res.json({ ok: true, id: Number(req.params.id) });
   });

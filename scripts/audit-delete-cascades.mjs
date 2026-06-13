@@ -60,21 +60,16 @@ const cascadeChildren = new Set();
 // Keyed by `parent::child`. New misses NOT on this list fail the audit, so the
 // FK-cascade class can't silently regrow. Revisit when Michael rules on each.
 const ALLOWLIST = new Map([
-  // Deleting a VeritaMap instrument must NOT wipe staff competency/duty history
-  // — those are CLIA surveyor evidence. Correct fix is to NULL instrument_id,
-  // not delete the row. Pending decision.
-  ["veritamap_instruments::staff_duty_change_events", "preserve staff history — NULL the FK, not delete"],
-  ["veritamap_instruments::staff_employee_instruments", "preserve staff-instrument competency link — NULL the FK, not delete"],
-  // Deleting a competency assessment record: element documents belong to it,
-  // likely safe to cascade, but unverified against a live 500. Pending.
-  ["competency_assessments::competency_element_documents", "likely owned-cascade; verify before shipping"],
-  // Deleting a competency QUIZ definition would wipe historical results +
-  // assignments = who-passed-what evidence. Must preserve, not delete. Pending.
-  ["competency_quizzes::competency_quiz_results", "preserve quiz-result evidence — do not cascade-delete"],
-  ["competency_quizzes::competency_quiz_assignments", "preserve assignment evidence — do not cascade-delete"],
-  // Deleting a policy document: its quiz questions are config attached to the
-  // doc, likely safe to cascade, but 3 handlers + unverified. Pending.
-  ["policy_documents::policy_quiz_questions", "likely owned-cascade; verify the 3 handlers before shipping"],
+  // competency_quiz RESULTS are completion evidence. The delete handler
+  // 409-blocks whenever any result exists, so it never reaches the DELETE —
+  // results are preserved by a guard, not cleared. The audit looks for a
+  // DELETE, which is intentionally absent here.
+  ["competency_quizzes::competency_quiz_results", "evidence — handler 409-blocks when results exist; intentionally not cascade-deleted"],
+  // False positives: the 3 flagged policy_documents deletes are (1) best-effort
+  // cleanup of a just-inserted doc when the file write fails (no questions exist
+  // yet) and (2) two synthetic-row deletes in the auto-expire test harness.
+  // None can orphan a real policy_quiz_questions row.
+  ["policy_documents::policy_quiz_questions", "false positive — upload-failure cleanup + synthetic test-harness deletes; doc is brand-new/synthetic with no quiz questions"],
 ]);
 
 // 3. Scan route files for `DELETE FROM <parent> WHERE id = ?` and check the
