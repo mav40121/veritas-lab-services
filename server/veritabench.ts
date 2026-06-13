@@ -1769,6 +1769,33 @@ export function registerVeritaBenchRoutes(
     }
   });
 
+  // Wave D4 (2026-06-12): POST root-cause documentation for a QA entry. When a
+  // quality indicator misses its benchmark (a red month), the QA loop expects
+  // the lab to document the root cause and corrective action. Operates on an
+  // existing entry, account-scoped. An empty body clears the RCA.
+  app.post("/api/pi/entries/:id/rca", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const { id } = req.params;
+    const entry = sqlite.prepare("SELECT * FROM pi_entries WHERE id = ? AND account_id = ?").get(id, accountId) as any;
+    if (!entry) return res.status(404).json({ error: "Entry not found" });
+    const { root_cause, corrective_action, reviewed_by, clear } = req.body || {};
+    const now = new Date().toISOString();
+    if (clear) {
+      sqlite.prepare(
+        "UPDATE pi_entries SET root_cause = NULL, corrective_action = NULL, rca_reviewed_by = NULL, rca_reviewed_at = NULL, updated_at = ? WHERE id = ?"
+      ).run(now, id);
+      return res.json(sqlite.prepare("SELECT * FROM pi_entries WHERE id = ?").get(id));
+    }
+    if ((!root_cause || !String(root_cause).trim()) && (!corrective_action || !String(corrective_action).trim())) {
+      return res.status(400).json({ error: "Provide a root cause or a corrective action." });
+    }
+    sqlite.prepare(
+      "UPDATE pi_entries SET root_cause = ?, corrective_action = ?, rca_reviewed_by = ?, rca_reviewed_at = ?, updated_at = ? WHERE id = ?"
+    ).run(root_cause ?? null, corrective_action ?? null, reviewed_by ?? null, now, now, id);
+    res.json(sqlite.prepare("SELECT * FROM pi_entries WHERE id = ?").get(id));
+  });
+
   // DELETE /api/pi/entries/:id - delete entry
   app.delete("/api/pi/entries/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });

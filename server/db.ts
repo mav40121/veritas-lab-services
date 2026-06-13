@@ -3961,6 +3961,24 @@ sqlite.exec(`
     if (!peColNames.includes("updated_at")) {
       try { sqlite.exec("ALTER TABLE pi_entries ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))"); } catch {}
     }
+    // Wave D4 (2026-06-12): VeritaQA root-cause documentation. When a quality
+    // indicator misses its benchmark (a red month), the QA loop expects the
+    // lab to document the root cause and the corrective action, not just the
+    // number. These fields hold that period-level RCA so the monthly QA review
+    // is defensible. Separate from `notes` (an operational free-text field) so
+    // an RCA can never be silently overwritten by a value edit.
+    if (!peColNames.includes("root_cause")) {
+      try { sqlite.exec("ALTER TABLE pi_entries ADD COLUMN root_cause TEXT"); } catch {}
+    }
+    if (!peColNames.includes("corrective_action")) {
+      try { sqlite.exec("ALTER TABLE pi_entries ADD COLUMN corrective_action TEXT"); } catch {}
+    }
+    if (!peColNames.includes("rca_reviewed_by")) {
+      try { sqlite.exec("ALTER TABLE pi_entries ADD COLUMN rca_reviewed_by TEXT"); } catch {}
+    }
+    if (!peColNames.includes("rca_reviewed_at")) {
+      try { sqlite.exec("ALTER TABLE pi_entries ADD COLUMN rca_reviewed_at TEXT"); } catch {}
+    }
   }
 }
 
