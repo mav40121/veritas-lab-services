@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useMemberships } from "@/hooks/useMemberships";
 import { getUser } from "@/lib/auth";
 import {
   Dialog,
@@ -110,10 +111,24 @@ interface AnalyteValues {
   critical_low?: string | null;
   critical_high?: string | null;
   units?: string | null;
+  // Wave A4 provenance: MEC review of critical values (Mayo Clinic
+  // Laboratories values are a starting point; the MEC owns the final values)
+  // and director-or-designee attestation per 42 CFR 493.1253, which locks
+  // the reference range until an owner/admin unlocks it.
+  mec_reviewed_at?: string | null;
+  mec_reviewed_by?: string | null;
+  ref_attested_at?: string | null;
+  ref_attested_by?: string | null;
+  ref_attested_title?: string | null;
+  ref_locked?: number | null;
 }
 
 interface AmrValues {
-  [instrumentId: number]: { amr_low?: string | null; amr_high?: string | null };
+  [instrumentId: number]: {
+    amr_low?: string | null; amr_high?: string | null;
+    amr_attested_at?: string | null; amr_attested_by?: string | null;
+    amr_attested_title?: string | null; amr_locked?: number | null;
+  };
 }
 
 interface MapDetail {
@@ -583,6 +598,16 @@ interface TestRowProps {
   onEditCorrelation?: (test: TestRecord, corr: CorrelationRecord | null) => void;
   readOnly?: boolean;
   colCount: number;
+  // Wave A4 provenance actions (lab-scoped routes only; undefined on the
+  // legacy URL form, which hides the controls). Returns the fresh row.
+  onProvenance?: (
+    action: "mec-review" | "attest-ref" | "unlock-ref" | "attest-amr" | "unlock-amr",
+    analyte: string,
+    payload?: Record<string, string>,
+    instrumentId?: number,
+  ) => Promise<void>;
+  // Owner/admin may unlock attested values.
+  canUnlock?: boolean;
 }
 
 // ── Correlation badges (read-only display on test rows) ─────────────────────
@@ -1023,11 +1048,20 @@ function CorrelationEditModal({ open, onClose, sourceTest, existing, mapId, onSa
   );
 }
 
-function TestRow({ test, onChange, onRowMount, analyteValues, amrValues, onSaveAnalyteValues, onSaveAmrValues, onEditCorrelation, readOnly, colCount }: TestRowProps) {
+function TestRow({ test, onChange, onRowMount, analyteValues, amrValues, onSaveAnalyteValues, onSaveAmrValues, onEditCorrelation, readOnly, colCount, onProvenance, canUnlock }: TestRowProps) {
   const [expanded, setExpanded] = React.useState(false);
   const [localAv, setLocalAv] = React.useState<AnalyteValues>(analyteValues || {});
   const [localAmr, setLocalAmr] = React.useState<AmrValues>(amrValues || {});
   const [saving, setSaving] = React.useState(false);
+  // Wave A4 provenance mini-forms. attestFor: "ref" or an instrument id.
+  const [attestFor, setAttestFor] = React.useState<"ref" | number | null>(null);
+  const [attestBy, setAttestBy] = React.useState("");
+  const [attestTitle, setAttestTitle] = React.useState("");
+  const [mecOpen, setMecOpen] = React.useState(false);
+  const [mecDate, setMecDate] = React.useState("");
+  const [mecBy, setMecBy] = React.useState("");
+  const [provBusy, setProvBusy] = React.useState(false);
+  const refLocked = !!localAv.ref_locked;
   // For the "Reference literature" link below: preserve active lab in URL so
   // opening it in a new tab doesn't bounce the user to their default lab via
   // the LegacyWorkspaceRedirect middleware (last follow-up from PR #182).
@@ -1358,22 +1392,24 @@ function TestRow({ test, onChange, onRowMount, analyteValues, amrValues, onSaveA
                 onChange={e => setLocalAv(v => ({ ...v, units: e.target.value }))}
               />
             </div>
-            {/* Ref Range */}
+            {/* Ref Range. Locked once director-attested per 42 CFR 493.1253. */}
             <div>
-              <label className="text-[10px] text-muted-foreground font-medium block mb-1">Reference Range Low</label>
+              <label className="text-[10px] text-muted-foreground font-medium block mb-1">Reference Range Low{refLocked ? " (locked)" : ""}</label>
               <Input
                 className="h-7 text-xs"
                 placeholder="e.g. 136"
                 value={localAv.ref_range_low || ""}
+                disabled={refLocked}
                 onChange={e => setLocalAv(v => ({ ...v, ref_range_low: e.target.value }))}
               />
             </div>
             <div>
-              <label className="text-[10px] text-muted-foreground font-medium block mb-1">Reference Range High</label>
+              <label className="text-[10px] text-muted-foreground font-medium block mb-1">Reference Range High{refLocked ? " (locked)" : ""}</label>
               <Input
                 className="h-7 text-xs"
                 placeholder="e.g. 145"
                 value={localAv.ref_range_high || ""}
+                disabled={refLocked}
                 onChange={e => setLocalAv(v => ({ ...v, ref_range_high: e.target.value }))}
               />
             </div>
@@ -1397,18 +1433,101 @@ function TestRow({ test, onChange, onRowMount, analyteValues, amrValues, onSaveA
               />
             </div>
           </div>
+          {/* Wave A4 provenance: MEC review on critical values + director
+              attestation (42 CFR 493.1253) on the reference range. Controls
+              only render on lab-scoped URLs (onProvenance present). */}
+          {onProvenance && (
+            <div className="mb-3 flex flex-col gap-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                {localAv.mec_reviewed_at ? (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                    Critical values: MEC reviewed/approved {String(localAv.mec_reviewed_at).slice(0, 10)}{localAv.mec_reviewed_by ? `, recorded by ${localAv.mec_reviewed_by}` : ""}
+                  </span>
+                ) : (
+                  <button type="button" className="text-[10px] underline text-blue-600 hover:text-blue-800" onClick={() => { setMecOpen(o => !o); setAttestFor(null); }}>
+                    Record MEC review of critical values
+                  </button>
+                )}
+                {refLocked ? (
+                  <>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                      Reference range attested per 42 CFR 493.1253 by {localAv.ref_attested_by}, {localAv.ref_attested_title} on {String(localAv.ref_attested_at).slice(0, 10)}
+                    </span>
+                    {canUnlock && (
+                      <button type="button" className="text-[10px] underline text-amber-700 hover:text-amber-900" disabled={provBusy}
+                        onClick={async () => { setProvBusy(true); try { await onProvenance("unlock-ref", test.analyte); } finally { setProvBusy(false); } }}>
+                        Unlock
+                      </button>
+                    )}
+                  </>
+                ) : (localAv.ref_range_low && localAv.ref_range_high) ? (
+                  <button type="button" className="text-[10px] underline text-blue-600 hover:text-blue-800" onClick={() => { setAttestFor(f => f === "ref" ? null : "ref"); setMecOpen(false); }}>
+                    Attest reference range (director or designee)
+                  </button>
+                ) : null}
+              </div>
+              {mecOpen && !localAv.mec_reviewed_at && (
+                <div className="flex flex-wrap items-end gap-2 bg-background border border-border rounded px-2 py-1.5">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block">MEC review/approval date</label>
+                    <Input type="date" className="h-7 text-xs w-36" value={mecDate} onChange={e => setMecDate(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block">Recorded by</label>
+                    <Input className="h-7 text-xs w-36" placeholder="Name or initials" value={mecBy} onChange={e => setMecBy(e.target.value)} />
+                  </div>
+                  <Button size="sm" className="h-7 text-xs" disabled={provBusy || !mecDate || !mecBy.trim()}
+                    onClick={async () => {
+                      setProvBusy(true);
+                      try { await onProvenance("mec-review", test.analyte, { reviewed_at: mecDate, recorded_by: mecBy.trim() }); setMecOpen(false); }
+                      finally { setProvBusy(false); }
+                    }}>
+                    Record review
+                  </Button>
+                  <span className="text-[10px] text-muted-foreground">Requires the MEC-adopted critical values entered above.</span>
+                </div>
+              )}
+              {attestFor !== null && (
+                <div className="flex flex-wrap items-end gap-2 bg-background border border-border rounded px-2 py-1.5">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block">Attested by (print name)</label>
+                    <Input className="h-7 text-xs w-40" placeholder="e.g. M. Veri" value={attestBy} onChange={e => setAttestBy(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block">Title</label>
+                    <Input className="h-7 text-xs w-44" placeholder="Medical director or designee" value={attestTitle} onChange={e => setAttestTitle(e.target.value)} />
+                  </div>
+                  <Button size="sm" className="h-7 text-xs" disabled={provBusy || !attestBy.trim() || !attestTitle.trim()}
+                    onClick={async () => {
+                      setProvBusy(true);
+                      try {
+                        if (attestFor === "ref") await onProvenance("attest-ref", test.analyte, { attested_by: attestBy.trim(), attested_title: attestTitle.trim() });
+                        else await onProvenance("attest-amr", test.analyte, { attested_by: attestBy.trim(), attested_title: attestTitle.trim() }, attestFor);
+                        setAttestFor(null);
+                      } finally { setProvBusy(false); }
+                    }}>
+                    Attest and lock
+                  </Button>
+                  <span className="text-[10px] text-muted-foreground">Verified per 42 CFR 493.1253. Locks the value; owner or admin can unlock.</span>
+                </div>
+              )}
+            </div>
+          )}
           {/* AMR per instrument */}
           {instruments.length > 0 && (
             <div className="mb-3">
               <label className="text-[10px] text-muted-foreground font-medium block mb-1">AMR (Analytical Measurement Range) - per instrument</label>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                {instruments.map(inst => (
+                {instruments.map(inst => {
+                  const amrLocked = !!localAmr[inst.id]?.amr_locked;
+                  return (
                   <div key={inst.id} className="flex items-center gap-2 bg-background rounded border border-border px-2 py-1.5">
                     <span className="text-[10px] font-medium min-w-[100px] truncate text-foreground">{inst.instrument_name}</span>
                     <Input
                       className="h-6 text-xs w-20"
                       placeholder="Low"
                       value={localAmr[inst.id]?.amr_low || ""}
+                      disabled={amrLocked}
                       onChange={e => setLocalAmr(v => ({ ...v, [inst.id]: { ...v[inst.id], amr_low: e.target.value } }))}
                     />
                     <span className="text-[10px] text-muted-foreground">to</span>
@@ -1416,10 +1535,30 @@ function TestRow({ test, onChange, onRowMount, analyteValues, amrValues, onSaveA
                       className="h-6 text-xs w-20"
                       placeholder="High"
                       value={localAmr[inst.id]?.amr_high || ""}
+                      disabled={amrLocked}
                       onChange={e => setLocalAmr(v => ({ ...v, [inst.id]: { ...v[inst.id], amr_high: e.target.value } }))}
                     />
+                    {/* Wave A4: per-instrument AMR attestation per 42 CFR 493.1253 */}
+                    {onProvenance && (amrLocked ? (
+                      <span className="flex items-center gap-1">
+                        <span className="text-[10px] text-emerald-700 dark:text-emerald-400" title={`Attested by ${localAmr[inst.id]?.amr_attested_by}, ${localAmr[inst.id]?.amr_attested_title} on ${String(localAmr[inst.id]?.amr_attested_at).slice(0, 10)}`}>
+                          Attested {String(localAmr[inst.id]?.amr_attested_at).slice(0, 10)}
+                        </span>
+                        {canUnlock && (
+                          <button type="button" className="text-[10px] underline text-amber-700 hover:text-amber-900" disabled={provBusy}
+                            onClick={async () => { setProvBusy(true); try { await onProvenance("unlock-amr", test.analyte, undefined, inst.id); } finally { setProvBusy(false); } }}>
+                            Unlock
+                          </button>
+                        )}
+                      </span>
+                    ) : (localAmr[inst.id]?.amr_low && localAmr[inst.id]?.amr_high) ? (
+                      <button type="button" className="text-[10px] underline text-blue-600 hover:text-blue-800" onClick={() => { setAttestFor(f => f === inst.id ? null : inst.id); setMecOpen(false); }}>
+                        Attest
+                      </button>
+                    ) : null)}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1618,6 +1757,10 @@ export default function VeritaMapMapPage() {
   const mapApiBase = activeLabId
     ? `/api/labs/${activeLabId}/veritamap/maps/${mapId}`
     : `/api/veritamap/maps/${mapId}`;
+  // Wave A4: owner/admin on the active lab may unlock attested values.
+  const { data: provMemberships } = useMemberships();
+  const activeRole = provMemberships?.find(m => m.labId === activeLabId)?.role;
+  const canUnlockProvenance = activeRole === "owner" || activeRole === "admin";
   const mapDetailUrl = mapApiBase;
 
   // Fetch map detail
@@ -1790,8 +1933,40 @@ export default function VeritaMapMapPage() {
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify(values),
     });
-    setAmrValuesMap(prev => ({ ...prev, [`${instrumentId}::${analyte}`]: values }));
+    setAmrValuesMap(prev => ({ ...prev, [`${instrumentId}::${analyte}`]: { ...prev[`${instrumentId}::${analyte}`], ...values } }));
   }, [mapId, mapApiBase]);
+
+  // Wave A4 provenance actions: MEC review on critical values, 493.1253
+  // attestation + unlock on ref range and per-instrument AMR. Lab-scoped
+  // routes only; the prop is undefined on the legacy URL form so the
+  // controls do not render there. The server returns the fresh row, which
+  // refreshes state so badges/locks update immediately.
+  const handleProvenance = useCallback(async (
+    action: "mec-review" | "attest-ref" | "unlock-ref" | "attest-amr" | "unlock-amr",
+    analyte: string,
+    payload?: Record<string, string>,
+    instrumentId?: number,
+  ) => {
+    const enc = encodeURIComponent(analyte);
+    const url =
+      action === "mec-review" ? `${mapApiBase}/analyte-values/${enc}/mec-review` :
+      action === "attest-ref" ? `${mapApiBase}/analyte-values/${enc}/attest-ref` :
+      action === "unlock-ref" ? `${mapApiBase}/analyte-values/${enc}/unlock-ref` :
+      action === "attest-amr" ? `${mapApiBase}/amr-values/${instrumentId}/${enc}/attest` :
+      `${mapApiBase}/amr-values/${instrumentId}/${enc}/unlock`;
+    const r = await fetch(`${API_BASE}${url}`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(payload || {}),
+    });
+    const row = await r.json();
+    if (!r.ok) { alert(row?.error || "Action failed"); return; }
+    if (action === "attest-amr" || action === "unlock-amr") {
+      setAmrValuesMap(prev => ({ ...prev, [`${instrumentId}::${analyte}`]: row }));
+    } else {
+      setAnalyteValuesMap(prev => ({ ...prev, [analyte]: row }));
+    }
+  }, [mapApiBase]);
 
   // Intelligence — use API data or compute client-side from localTests
   const intelligence: IntelligenceData = useMemo(
@@ -2397,6 +2572,8 @@ export default function VeritaMapMapPage() {
                     )}
                     onSaveAnalyteValues={handleSaveAnalyteValues}
                     onSaveAmrValues={handleSaveAmrValues}
+                    onProvenance={activeLabId ? handleProvenance : undefined}
+                    canUnlock={canUnlockProvenance}
                     onEditCorrelation={openCorrModal}
                     readOnly={readOnly}
                     colCount={12}
