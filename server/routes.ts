@@ -15816,6 +15816,82 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ success: true });
   });
 
+  // #18 Phase 3 (2026-06-13): escalate a FAILED Alternative Assessment (AAA)
+  // into a VeritaResponse finding. Mirrors the Wave A7 QC -> VeritaResponse seam.
+  // When a lab's twice-yearly alternative performance assessment for an
+  // unregulated analyte fails, a surveyor expects a formal corrective-action
+  // record citing 42 CFR 493.1236(c)(1) (verify accuracy at least twice a year
+  // for tests with no PT program). One click opens the finding pre-filled from
+  // the AAA context. CMS is always an allowed accreditor (every lab holds CLIA),
+  // so the finding gate never blocks this path.
+  app.post("/api/pt/aa-records/:id/escalate-to-response", authMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    if (!userCanAccessLabRow('aa_records', req.params.id, req)) return res.status(404).json({ error: "AAA record not found" });
+    const rec = sqlite.prepare("SELECT * FROM aa_records WHERE id = ?").get(req.params.id) as any;
+    if (!rec) return res.status(404).json({ error: "AAA record not found" });
+    // Only a failed assessment warrants a corrective-action finding.
+    if (rec.last_pass_fail !== "fail") {
+      return res.status(400).json({ error: "Only a failed alternative assessment can be escalated to VeritaResponse." });
+    }
+    // Idempotency: an already-escalated record keeps its existing finding.
+    const existingMatch = /^VeritaResponse#(\d+)$/.exec(String(rec.response_finding_ref || ""));
+    if (existingMatch) {
+      return res.status(409).json({ error: "Already escalated", finding_id: Number(existingMatch[1]) });
+    }
+    // Findings are lab-scoped; AAA rows are tagged with the active lab on create
+    // (Shape A). Fall back to the request's active lab for any legacy row whose
+    // lab_id was never stamped.
+    let labId: number | null = rec.lab_id ?? null;
+    if (!labId) { try { labId = resolveActiveLabForRequest(dataUserId, req)?.id ?? null; } catch {} }
+    if (!labId) return res.status(409).json({ error: "Could not resolve a lab for this AAA record. Open it from a lab context and retry." });
+    const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+    const userIdForRow = ownerRow?.owner_user_id ?? dataUserId;
+    const today = new Date().toISOString().slice(0, 10);
+    const methodLabel = String(rec.method || "").replace(/_/g, " ");
+    const description =
+      `VeritaPT alternative-assessment escalation. ${rec.analyte} failed its alternative performance assessment` +
+      (methodLabel ? ` (${methodLabel})` : "") +
+      (rec.last_performed_date ? ` performed ${rec.last_performed_date}` : "") +
+      `.` +
+      (rec.acceptance_criteria ? ` Acceptance criteria: ${rec.acceptance_criteria}.` : "") +
+      (rec.last_result_summary ? ` Result: ${rec.last_result_summary}.` : "");
+    const due_date = dueDateForFinding("CMS", today);
+    let findingId: number;
+    try {
+      const ins = sqlite.prepare(
+        `INSERT INTO findings (
+          user_id, lab_id, accreditor, finding_number, standard_ref,
+          phase_or_severity, description, surveyor_notes,
+          anchor_date, due_date, status, immediate_action
+        ) VALUES (?, ?, 'CMS', ?, '42 CFR 493.1236(c)(1)', 'alternative-assessment-failure', ?, ?, ?, ?, 'open', ?)`
+      ).run(
+        userIdForRow, labId,
+        `AAA-${rec.analyte}`,
+        description,
+        `Auto-created from VeritaPT alternative assessment #${rec.id}. Document root cause, corrective and preventive action, and the monitoring plan to close. The unregulated analyte must still be assessed at least twice per year.`,
+        today, due_date,
+        String(rec.corrective_action_notes || "").trim() || null,
+      );
+      findingId = Number(ins.lastInsertRowid);
+    } catch (err: any) {
+      console.error("[aa-records/escalate-to-response] finding insert failed:", err.message);
+      return res.status(500).json({ error: err.message || "Could not create finding" });
+    }
+    // Stamp the back-reference so the AAA side renders a linked chip and the
+    // escalation is idempotent.
+    sqlite.prepare(
+      "UPDATE aa_records SET response_finding_ref = ?, updated_at = datetime('now') WHERE id = ?"
+    ).run(`VeritaResponse#${findingId}`, rec.id);
+    try {
+      sqlite.prepare(
+        "INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, 'created', ?, ?)"
+      ).run(findingId, req.user?.userId ?? null, JSON.stringify({ source: "veritapt-aaa", aa_record_id: rec.id, analyte: rec.analyte }));
+    } catch {}
+    const finding = sqlite.prepare("SELECT * FROM findings WHERE id = ?").get(findingId);
+    res.json({ ok: true, finding_id: findingId, finding, response_finding_ref: `VeritaResponse#${findingId}` });
+  });
+
   // ── MULTI-LAB Tier 2 — Phase 3.6b: lab-scoped VeritaPT entry endpoints ─────
   app.get("/api/labs/:labId/pt/coverage", authMiddleware, labScopeMiddleware, (req: any, res) => {
     try {

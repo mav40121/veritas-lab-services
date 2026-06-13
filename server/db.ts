@@ -630,8 +630,13 @@ sqlite.exec(`
     const aaCols = sqlite.prepare("PRAGMA table_info(aa_records)").all() as { name: string }[];
     const aaColNames = aaCols.map((c) => c.name);
     if (aaColNames.length > 0) {
-      // Future ALTER TABLE aa_records ADD COLUMN ... blocks go here, mirroring the pattern in
-      // veritamap_instruments and other migration blocks below.
+      // #18 Phase 3 (2026-06-13): back-reference to the VeritaResponse finding an
+      // escalated AAA failure spawned, stamped "VeritaResponse#<id>". Mirrors
+      // qc_corrective_actions.nce_reference (Wave A7). Makes the escalation
+      // idempotent and lets the AAA UI render a "linked finding" chip.
+      if (!aaColNames.includes("response_finding_ref")) {
+        sqlite.exec("ALTER TABLE aa_records ADD COLUMN response_finding_ref TEXT");
+      }
     }
   } catch {
     // table doesn't exist yet (fresh DB); the CREATE above handled it
