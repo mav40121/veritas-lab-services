@@ -1,6 +1,11 @@
 export interface SEOMetadata {
   title: string;
   description: string;
+  // Optional per-route structured data (JSON-LD). When present, static.ts
+  // injects it as a <script type="application/ld+json"> into the served HTML,
+  // alongside the site-wide @graph already in index.html. Reference the
+  // existing Organization node via {"@id": ".../#organization"} for publisher.
+  jsonLd?: Record<string, unknown>;
 }
 
 const BASE_URL = "https://www.veritaslabservices.com";
@@ -99,8 +104,25 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     description: "A complete guide to CLIA calibration verification and method comparison requirements for clinical laboratories, including documentation and frequency requirements.",
   },
   "/resources/clia-tea-what-lab-directors-dont-know": {
-    title: "CLIA Total Allowable Error: What Lab Directors Don't Know | Veritas Lab Services",
-    description: "Understanding total allowable error (TEa) in CLIA compliance. How to apply TEa to performance verification studies and what surveyors look for in your documentation.",
+    title: "CLIA Total Allowable Error (TEa): 42 CFR §493 Guide",
+    description: "2025 CLIA total allowable error (TEa) values for chemistry, hematology, toxicology, and immunology, with 42 CFR §493 citations.",
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      headline: "CLIA Allowable Error (TEa): What It Is, Where to Find It, and Why Most Lab Directors Don't Know About It",
+      description: "2025 CLIA total allowable error (TEa) values for chemistry, hematology, toxicology, and immunology, with 42 CFR §493 citations.",
+      image: `${BASE_URL}/og-image.png`,
+      author: {
+        "@type": "Person",
+        name: "Michael Veri",
+        jobTitle: "Former Joint Commission Laboratory Surveyor",
+        url: `${BASE_URL}/team`,
+      },
+      publisher: { "@id": `${BASE_URL}/#organization` },
+      datePublished: "2026-03-01",
+      dateModified: "2026-06-14",
+      mainEntityOfPage: `${BASE_URL}/resources/clia-tea-what-lab-directors-dont-know`,
+    },
   },
   "/resources/how-veritaassure-trains-lab-leaders": {
     title: "How VeritaAssure\u2122 Trains Lab Leaders | Veritas Lab Services",
