@@ -76,7 +76,7 @@ return (
                 "It lives in 42 CFR Part 493, Subpart I: a publicly accessible, free government document",
                 "Most labs use manufacturer-stated allowable error instead, which may be more lenient than federal law requires",
                 "Adopting CLIA PT TEa as your calibration verification acceptance criterion (with medical director or designee approval) gives you a federally published, defensible threshold",
-                "The 2025 CLIA Final Rule updated TEa values for many analytes, effective July 11, 2024. Your lab may be using outdated criteria",
+                "The CLIA proficiency testing final rule (CMS-3355-F) updated TEa values for many analytes, effective July 11, 2024 and implemented January 1, 2025. Your lab may be using outdated criteria",
               ].map(t => (
                 <li key={t} className="flex items-start gap-2 text-sm">
                   <CheckCircle2 size={13} className="text-primary shrink-0 mt-0.5" />
@@ -129,8 +129,8 @@ return (
             Every section is publicly available at <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ecfr.gov</a> at no cost. The CFR is a US government publication and is in the public domain. You can read, reproduce, and share it freely. There is no paywalled version.
           </p>
 
-          <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Sample TEa Values: 2025 CLIA Final Rule</h2>
-          <p>The table below shows a representative sample. The 2025 CLIA Final Rule (effective July 11, 2024) updated values for many analytes, tightening some significantly.</p>
+          <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Sample TEa Values: 2025 CLIA Criteria</h2>
+          <p>The table below shows a representative sample. The CLIA proficiency testing final rule (CMS-3355-F, effective July 11, 2024, implemented January 1, 2025) updated values for many analytes, tightening some significantly.</p>
 
           <div className="overflow-x-auto my-4 rounded-lg border border-border">
             <table className="w-full text-sm">
@@ -232,7 +232,7 @@ return (
             },
             {
               q: "How often does CLIA TEa change?",
-              a: "Infrequently, but the 2025 CLIA Final Rule was the first major update in decades for many analytes. Before that, some values dated to 1992. The July 2024 effective date made this the largest single update to CLIA acceptable performance criteria in the modern era. Check the current eCFR rather than relying on reference cards or QC software that may not have been updated."
+              a: "Infrequently, but the CLIA proficiency testing final rule (CMS-3355-F) was the first major update in decades for many analytes. Before that, some values dated to 1992. The criteria became effective July 11, 2024 and were implemented for laboratories on January 1, 2025, making this the largest single update to CLIA acceptable performance criteria in the modern era. Check the current eCFR rather than relying on reference cards or QC software that may not have been updated."
             },
             {
               q: "What does 'target value ±X% or ±Y units, whichever is greater' mean in practice?",

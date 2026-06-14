@@ -140,7 +140,7 @@ const FAQ_CATEGORIES = [
       },
       {
         q: "How often is the regulatory data updated?",
-        a: "The 42 CFR Part 493 TEa values are sourced from the 2025 CLIA Final Rule effective July 11, 2024 and are updated when CMS publishes a Federal Register notice that changes them. TJC, CAP, COLA, AABB, and CMS checklists are mapped to the current published standards; updates are pushed to the platform without action on your part. See /resources/clia-tea-lookup for the live TEa reference tool.",
+        a: "The 42 CFR Part 493 TEa values are sourced from the CLIA proficiency testing final rule (CMS-3355-F), effective July 11, 2024 and implemented January 1, 2025, and are updated when CMS publishes a Federal Register notice that changes them. TJC, CAP, COLA, AABB, and CMS checklists are mapped to the current published standards; updates are pushed to the platform without action on your part. See /resources/clia-tea-lookup for the live TEa reference tool.",
       },
     ],
   },
