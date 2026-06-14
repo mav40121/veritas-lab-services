@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChevronRight, Clock, FlaskConical, User, Search, Download, Shield, CheckCircle2 } from "lucide-react";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
+import { teaData } from "@/lib/cliaTeaData";
 
 const articles = [
   {
@@ -134,7 +135,7 @@ const tools = [
   {
     slug: "clia-tea-lookup",
     title: "CLIA TEa Lookup Tool",
-    description: "Search the complete 2025 CLIA acceptable performance criteria for 76+ analytes. Free, no login required.",
+    description: `Search the complete 2025 CLIA acceptable performance criteria for ${teaData.length} analytes. Free, no login required.`,
     badge: "Free Tool",
   },
 ];

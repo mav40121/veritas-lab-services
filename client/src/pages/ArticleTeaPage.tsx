@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle2, ChevronRight, Clock, FlaskConical, User, AlertTriangle, ExternalLink, Search } from "lucide-react";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
+import { teaData } from "@/lib/cliaTeaData";
 
 function Callout({ children, type = "info" }: { children: React.ReactNode; type?: "info" | "warning" | "tip" }) {
   const styles = {
@@ -154,9 +155,9 @@ return (
           </div>
 
           <div className="flex justify-center my-6">
-            <Button asChild size="lg" className="bg-primary text-primary-foreground gap-2">
+            <Button asChild size="lg" className="bg-primary text-primary-foreground gap-2 whitespace-normal h-auto max-w-full text-center">
               <Link href="/resources/clia-tea-lookup">
-                <Search size={15} /> Search All {76}+ Analytes in the Free TEa Lookup Tool
+                <Search size={15} /> Search All {teaData.length} Analytes in the Free TEa Lookup Tool
               </Link>
             </Button>
           </div>
@@ -261,7 +262,7 @@ return (
             <Search size={28} className="mx-auto mb-3 opacity-80" />
             <h3 className="font-serif text-xl font-bold mb-2">Look up your analytes now</h3>
             <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
-              The complete 2025 CLIA TEa table: all 76+ analytes across chemistry, hematology, immunology, toxicology, and coagulation. Free, no login required.
+              The complete 2025 CLIA TEa table: all {teaData.length} analytes across chemistry, hematology, immunology, toxicology, and coagulation. Free, no login required.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">

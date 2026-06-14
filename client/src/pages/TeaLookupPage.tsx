@@ -163,7 +163,7 @@ export default function TeaLookupPage() {
                     )}
                   >
                     <CardContent className="p-3">
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap mb-1">
                             <span className="font-semibold text-sm">{analyte.analyte}</span>
@@ -178,7 +178,7 @@ export default function TeaLookupPage() {
                             <span className="text-xs text-muted-foreground font-mono">{analyte.cfr}</span>
                           </div>
                         </div>
-                        <div className="text-right shrink-0">
+                        <div className="sm:text-right sm:shrink-0">
                           <div className="text-sm font-bold text-primary">{analyte.criteria}</div>
                         </div>
                       </div>
