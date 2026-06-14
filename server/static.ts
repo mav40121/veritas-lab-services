@@ -2,8 +2,30 @@ import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
 import { seoMetadataMap, getBaseUrl, type SEOMetadata } from "./seo-metadata";
+import { teaData } from "../client/src/lib/cliaTeaData";
 
 let cachedIndexHtml: string | null = null;
+
+function escHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Server-rendered, crawlable copy of the full CLIA TEa table for the lookup
+// tool. The interactive table is client-rendered, so the raw HTML is otherwise
+// empty (the page sat "crawled, currently not indexed"). This puts every
+// analyte, its acceptable-performance (TEa) value, specialty, and CFR section
+// into the raw HTML so search engines see the content without running JS. The
+// React app replaces #root on mount, so real users still get the interactive
+// table.
+function renderTeaLookupTable(): string {
+  const rows = teaData
+    .map(
+      (a) =>
+        `<tr><td>${escHtml(a.analyte)}</td><td>${escHtml(a.criteria)}</td><td>${escHtml(a.specialty)}</td><td>42 CFR ${escHtml(a.cfr)}</td></tr>`,
+    )
+    .join("");
+  return `<h2>CLIA Total Allowable Error (TEa) by analyte</h2><p>Acceptable performance criteria from 42 CFR Part 493, Subpart I (CLIA proficiency testing final rule CMS-3355-F, effective July 11, 2024, implemented January 1, 2025).</p><table><thead><tr><th>Analyte</th><th>Acceptable performance (TEa)</th><th>Specialty</th><th>42 CFR section</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
 
 function getIndexHtml(distPath: string): string {
   if (!cachedIndexHtml) {
@@ -55,9 +77,15 @@ function injectSeoTags(html: string, routePath: string, meta: SEOMetadata): stri
     `<meta name="twitter:description" content="${meta.description}"`,
   );
 
-  // Inject noscript content inside <div id="root">
-  const noscriptBlock = `<noscript><h1>${meta.title}</h1><p>${meta.description}</p><nav><a href="/">Home</a> | <a href="/veritaassure">VeritaAssure&#8482;</a> | <a href="/veritacheck">VeritaCheck&#8482;</a> | <a href="/veritascan">VeritaScan&#8482;</a> | <a href="/veritamap">VeritaMap&#8482;</a> | <a href="/pricing">Pricing</a> | <a href="/contact">Contact</a></nav></noscript>`;
-  html = html.replace('<div id="root"></div>', `<div id="root">${noscriptBlock}</div>`);
+  // Inject noscript content inside <div id="root"> so crawlers and no-JS clients
+  // see real content. For data-heavy SPA routes whose rendered body is otherwise
+  // absent from the raw HTML, append the full dataset so it is crawlable without
+  // running JS.
+  let noscriptInner = `<h1>${meta.title}</h1><p>${meta.description}</p><nav><a href="/">Home</a> | <a href="/veritaassure">VeritaAssure&#8482;</a> | <a href="/veritacheck">VeritaCheck&#8482;</a> | <a href="/veritascan">VeritaScan&#8482;</a> | <a href="/veritamap">VeritaMap&#8482;</a> | <a href="/pricing">Pricing</a> | <a href="/contact">Contact</a></nav>`;
+  if (routePath === "/resources/clia-tea-lookup") {
+    noscriptInner += renderTeaLookupTable();
+  }
+  html = html.replace('<div id="root"></div>', `<div id="root"><noscript>${noscriptInner}</noscript></div>`);
 
   // Inject per-route JSON-LD (e.g. Article schema) when provided, alongside the
   // site-wide @graph already in index.html. Escape "<" so a stray sequence in
