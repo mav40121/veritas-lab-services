@@ -55,7 +55,7 @@ export default function TeaLookupPage() {
             The complete 2025 CLIA acceptable performance criteria for {stats.total} analytes, directly from 42 CFR Part 493. Search any analyte and get the exact regulatory standard in seconds.
           </p>
           <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1"><CheckCircle2 size={12} className="text-primary" /> Updated July 2024 (2025 CLIA Final Rule)</span>
+            <span className="flex items-center gap-1"><CheckCircle2 size={12} className="text-primary" /> Updated July 2024 (CLIA PT final rule CMS-3355-F, implemented Jan 2025)</span>
             <span className="flex items-center gap-1"><CheckCircle2 size={12} className="text-primary" /> Public domain: 42 CFR Part 493</span>
             <span className="flex items-center gap-1"><CheckCircle2 size={12} className="text-primary" /> No login required</span>
           </div>
@@ -279,7 +279,7 @@ export default function TeaLookupPage() {
 
         {/* Source attribution */}
         <p className="text-xs text-muted-foreground text-center mt-6">
-          Source: <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="hover:text-primary underline">42 CFR Part 493, Subpart I</a>. U.S. Government publication, public domain. Last updated per the 2025 CLIA Final Rule (effective July 11, 2024). Always verify against the current eCFR before use in compliance decisions.
+          Source: <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="hover:text-primary underline">42 CFR Part 493, Subpart I</a>. U.S. Government publication, public domain. Last updated per the CLIA proficiency testing final rule (CMS-3355-F, effective July 11, 2024, implemented January 1, 2025). Always verify against the current eCFR before use in compliance decisions.
         </p>
       </div>
     </div>
