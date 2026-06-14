@@ -17668,7 +17668,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Unlock: clears locked + completion_date so the supervisor can correct
   // an honest mistake. Restricted to owner / admin role on the lab; staff
   // role cannot reopen a finalized assessment.
-  app.post("/api/competency/assessments/:id/unlock", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+  // 2026-06-13: registered at the lab-scoped path the client actually calls
+  // (VeritaCompAppPage `unlock` POSTs /api/labs/:labId/.../unlock). It was at
+  // the non-:labId path, but the handler uses labScopeMiddleware -- which 400s
+  // without :labId -- so the route was doubly dead: the client's lab-scoped
+  // call hit the SPA catch-all (200 + index.html), and the client's
+  // `if (!res.ok)` passed, showing a false "Assessment unlocked" toast while the
+  // assessment stayed locked. Found by scripts/audit-labscoped-write-routes.mjs.
+  app.post("/api/labs/:labId/competency/assessments/:id/unlock", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required to unlock" });
     const sqlite = (db as any).$client;
