@@ -81,7 +81,7 @@ function buildHtml(): string {
 
   <div class="panel">
     <h3>4. Compliance defensibility</h3>
-    <p>Every VeritaCheck&trade; PDF has the laboratory director or designee signature block on page 1, alongside the results, the narrative, and the specialty-correct 42 CFR Part 493 citation (Chemistry 493.931, Hematology 493.927, etc.). ADLM internal goals appear alongside CLIA Total Allowable Error where applicable.</p>
+    <p>Every VeritaCheck&trade; PDF has the laboratory director or designee signature block on page 1, alongside the results, the narrative, and the specialty-correct 42 CFR Part 493 citation (Chemistry 493.931, Hematology 493.941, etc.). ADLM internal goals appear alongside CLIA Total Allowable Error where applicable.</p>
     <p>Every change to a study is captured in the audit log with timestamp and user identity. The lab name and CLIA number are stamped on every page header.</p>
     <p>Legacy reports vary in CFR citation accuracy and signature placement. A surveyor has to do their own regulatory cross-reference.</p>
   </div>
