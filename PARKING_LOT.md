@@ -259,10 +259,16 @@ asked for thoughts and recommendations on adding a deficiency-response
 module. Online research conducted same session covering CAP, TJC,
 COLA, CMS-2567, AABB. URLs cited above.
 
-**Status:** Open. Decision to build = Yes. Sequencing = Decide
-later. User explicitly chose "decide later — just park for now" on
-2026-05-07; will revisit after week of 2026-05-11 once COLA pipeline
-is clearer and multi-lab Tier 2 sequencing is firmer.
+**Status:** BUILT and LIVE (this entry was stale). VeritaResponse shipped as a
+full module: findings table + CRUD + lifecycle, due-date computation, 30/60/90-day
+effectiveness monitoring (wave C3), cross-module escalation INTO findings from
+VeritaQC corrective actions (wave A7) and from failed VeritaPT alternative
+assessments (Phase 3, PR #753), and VeritaScan-evidence linkage (wave C4).
+Remaining OPEN scope is narrower than this entry describes: (a) confirm which
+per-accreditor renderers (CMS-2567, CAP per-checklist, TJC ESC, AABB NER) and the
+5-elements POC validator are built vs pending — needs a render audit; (b) Tier 3
+(AABB NER renderer + multi-accreditor finding linking) remains deferred. Updated
+2026-06-13 during parking-lot reconciliation.
 
 **Pre- vs post-COLA:** Post-COLA. Build is multi-week regardless;
 zero rationale for any code change before the conference ends.
@@ -521,8 +527,11 @@ User confirmed this booth answer 2026-05-07.
   `VeritaPTAppPage.tsx:309`. The "STILL OWED" annotation was status
   drift; the work shipped sometime after the data layer but the
   parking lot was not updated.
-- Phase 3 (AAA-failure-to-finding linkage) remains deferred pending
-  #17 launch.
+- Phase 3 (AAA-failure-to-finding linkage) SHIPPED 2026-06-13 (PR #753,
+  commit 7a05420): a failed Alternative Assessment escalates to a VeritaResponse
+  finding citing 42 CFR 493.1236(c)(1), via an "Escalate to VeritaResponse"
+  button + a linked-finding chip. Browser-verified on the demo lab. (#17 going
+  live is what unblocked this.)
 
 **Pre- vs post-COLA:** Post-COLA. Phase 1 and Phase 2 data layer
 shipped 2026-05-10.
@@ -967,7 +976,8 @@ The 8 high-stakes backfill candidates surfaced by `scripts/audit_verify_script_c
 
 **Source:** scripts/audit_verify_script_coverage.py output, run 2026-06-02. Captured as the formal lookback that surfaced the gap.
 
-**Status:** Open. Pre- vs post-COLA: indifferent.
+**Status:** CLOSED 2026-06-13. All 8 high-stakes backfill scripts landed (the
+strike-throughs above); see C30. Pre- vs post-COLA: indifferent.
 
 ---
 
@@ -1029,7 +1039,91 @@ The 8 high-stakes backfill candidates surfaced by `scripts/audit_verify_script_c
 
 ---
 
+### 43. Wire the two static-audit guards into CI
+
+**Effort:** S (half a day)
+**Importance:** Medium — each guards a class that produced a real prod-500 / silent-no-op this session.
+
+`scripts/audit-delete-cascades.mjs` (catches a DELETE handler that orphans FK
+children, the 500 class) and `scripts/audit-labscoped-write-routes.mjs` (catches a
+client lab-scoped write with no matching server route, the silent SPA-fallback
+no-op class) are runnable and green but not yet a blocking CI gate. Add both to
+the validate workflow (or `script/audit.py`) so a new orphaning delete or a new
+unrouted lab-scoped write fails the PR. Both carry allowlists for known/intentional
+exceptions. Surfaced 2026-06-13 while fixing the instances each one found.
+
+---
+
+### 44. Legacy /api/studies over-returns studies across labs (latent multi-lab footgun)
+
+**Effort:** S (1-2 days)
+**Importance:** Low — not customer-reachable today; the UI uses the lab-scoped paths.
+
+The legacy `GET /api/studies` returns a user's studies across ALL their labs, while
+the app reads the lab-scoped `/api/labs/:id/studies`. A study from the legacy list
+404s on the lab-scoped detail page, so any future code wired to the legacy endpoint
+would render phantom "can't-open" rows. Scope it to the active lab or retire it
+after auditing the few client fallbacks that still reference it. Surfaced
+2026-06-13 during VeritaCheck StudyResultsPage browser QC.
+
+---
+
 ## CLOSED (audit trail)
+
+### C30. Verify-script convention backfill (was #41)
+
+**Closure evidence:** all 8 high-stakes math/logic commits now ship a paired
+`scripts/verify-*.js` (EP17 sensitivity, Deming lot-to-lot, CUMSUM+QC+multi-analyte,
+EP28 reference interval, Deming/OLS CI, EP15 ANOVA, qualitative method comparison,
+TEa boundary), per the strike-throughs in #41. Closed 2026-06-13.
+
+**Source:** scripts/audit_verify_script_coverage.py lookback, 2026-06-02; backfills
+landed 2026-06-03..06.
+
+---
+
+### C31. VeritaPT AAA create/update/delete silently no-op in the multi-lab UI
+
+**Closure evidence:** PR #754 (commit 92ad499) added lab-scoped POST/PUT/DELETE
+`/api/labs/:labId/pt/aa-records`. The UI posted to the lab-scoped path but only GET
+existed, so writes fell through to the SPA catch-all (200 + index.html, nothing
+written); the UI did not check the response, so "Add AAA Record" cleared the form
+and looked saved. Confirmed in-browser (rows 20 -> 20), fixed, and prod-verified
+(create adds a row, delete removes it). Also fixed the lab-tagging defect (legacy
+route mis-filed records to the user's default lab on multi-lab accounts).
+
+**Source:** 2026-06-13, found during #18 Phase 3 QA;
+`scripts/audit-labscoped-write-routes.mjs` now guards the class.
+
+---
+
+### C32. VeritaComp "Unlock assessment" false-success no-op
+
+**Closure evidence:** PR #755 (commit 4234007) moved the unlock route to
+`/api/labs/:labId/competency/assessments/:id/unlock` (the path the client calls).
+It had been registered at the non-:labId path while using labScopeMiddleware (which
+400s without :labId), so the client's lab-scoped POST hit the SPA fallback (200),
+and the client's `if (!res.ok)` showed a false "Assessment unlocked" toast while the
+signed assessment stayed locked. Prod-verified (path now returns JSON 404, not SPA
+HTML).
+
+**Source:** 2026-06-13, found by `scripts/audit-labscoped-write-routes.mjs`.
+
+---
+
+### C33. FK-cascade delete 500s + NavBar laptop-width overflow
+
+**Closure evidence:** PRs #749/#750 fixed NavBar horizontal overflow at laptop
+widths (collapse to the hamburger below 1560px); prod-verified at 1280-1920 with the
+longest lab name. PRs #751/#752 fixed 6 delete handlers that 500'd on foreign-key
+constraints (VeritaCheck verification analytes; VeritaResponse finding effectiveness
+checks, in BOTH the lab-scoped and legacy handlers; VeritaMap instrument staff links;
+competency assessment element docs; competency quiz assignments). All prod-verified
+500 -> 200. `scripts/audit-delete-cascades.mjs` guards the class.
+
+**Source:** 2026-06-13 browser QA of the A7-D4 wave + retro-QC of the 72h PR window.
+
+---
 
 ### C1. FAQ "over 25 years" -> "over 23 years"
 
