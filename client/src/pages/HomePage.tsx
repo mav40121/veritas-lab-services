@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, Award, Users, Shield, BarChart3, FlaskConical, BookOpen, ExternalLink, CheckCircle2, Star, Play, MapPin, AlertTriangle, ArrowRight, Briefcase, Wrench, Handshake, GraduationCap, Building2, UserCheck } from "lucide-react";
+import { ChevronRight, Award, Users, Shield, ShieldCheck, BarChart3, FlaskConical, BookOpen, ExternalLink, CheckCircle2, Star, Play, MapPin, AlertTriangle, ArrowRight, Briefcase, Wrench, Handshake, GraduationCap, Building2, UserCheck } from "lucide-react";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
 
 const services = [
@@ -118,6 +118,28 @@ return (
               <div className="text-sm sm:text-xs text-muted-foreground mt-0.5">{label}</div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* No-PHI Trust Block */}
+      <section className="border-b border-border">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
+          <div className="flex flex-col sm:flex-row items-start gap-4 rounded-xl border border-primary/20 bg-primary/5 px-5 sm:px-6 py-6">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+              <ShieldCheck size={20} />
+            </div>
+            <div>
+              <h2 className="font-serif text-xl font-bold mb-2 text-foreground">We never store PHI. By design.</h2>
+              <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+                VeritaAssure™ never asks for, transmits, or stores protected health information. No patient names, no specimen-to-patient links, no patient results. Every module works with statistical and compliance data only, never patient data, so there is nothing for a breach, or an inspector, to expose.
+              </p>
+              <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs font-medium text-foreground">
+                <span className="inline-flex items-center gap-1.5"><CheckCircle2 size={13} className="text-primary shrink-0" /> No patient identifiers</span>
+                <span className="inline-flex items-center gap-1.5"><CheckCircle2 size={13} className="text-primary shrink-0" /> No specimen-to-patient linkage</span>
+                <span className="inline-flex items-center gap-1.5"><CheckCircle2 size={13} className="text-primary shrink-0" /> No patient results</span>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -324,8 +346,8 @@ return (
             </Card>
           </div>
           <div className="text-center mt-8">
-            <Button asChild variant="outline">
-              <Link href="/resources/how-veritaassure-trains-lab-leaders">Read: How VeritaAssure™ Trains the Next Generation of Lab Leaders <ChevronRight size={14} className="ml-1" /></Link>
+            <Button asChild variant="outline" className="h-auto max-w-full whitespace-normal text-center leading-snug py-2">
+              <Link href="/resources/how-veritaassure-trains-lab-leaders">Read: How VeritaAssure™ Trains the Next Generation of Lab Leaders <ChevronRight size={14} className="ml-1 shrink-0" /></Link>
             </Button>
           </div>
         </div>
