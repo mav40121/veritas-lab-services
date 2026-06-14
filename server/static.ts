@@ -59,6 +59,14 @@ function injectSeoTags(html: string, routePath: string, meta: SEOMetadata): stri
   const noscriptBlock = `<noscript><h1>${meta.title}</h1><p>${meta.description}</p><nav><a href="/">Home</a> | <a href="/veritaassure">VeritaAssure&#8482;</a> | <a href="/veritacheck">VeritaCheck&#8482;</a> | <a href="/veritascan">VeritaScan&#8482;</a> | <a href="/veritamap">VeritaMap&#8482;</a> | <a href="/pricing">Pricing</a> | <a href="/contact">Contact</a></nav></noscript>`;
   html = html.replace('<div id="root"></div>', `<div id="root">${noscriptBlock}</div>`);
 
+  // Inject per-route JSON-LD (e.g. Article schema) when provided, alongside the
+  // site-wide @graph already in index.html. Escape "<" so a stray sequence in
+  // the data can't break out of the <script> element.
+  if (meta.jsonLd) {
+    const json = JSON.stringify(meta.jsonLd).replace(/</g, "\\u003c");
+    html = html.replace("</head>", `<script type="application/ld+json">${json}</script></head>`);
+  }
+
   return html;
 }
 
