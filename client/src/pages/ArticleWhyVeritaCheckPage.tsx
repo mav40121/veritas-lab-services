@@ -124,7 +124,7 @@ export default function ArticleWhyVeritaCheckPage() {
 
             <Panel icon={<ShieldCheck size={20} />} title="Compliance defensibility">
               <p>
-                Every VeritaCheck™ PDF has the laboratory director or designee signature block on page 1, alongside the study results, the narrative, and the 42 CFR §493 citation. The signature is not on a back page where it can be lost. The CFR citation is specialty-correct (Chemistry §493.931, Hematology §493.927, etc.) and CMS-style internal goals are cited alongside CLIA Total Allowable Error when ADLM recommendations apply.
+                Every VeritaCheck™ PDF has the laboratory director or designee signature block on page 1, alongside the study results, the narrative, and the 42 CFR §493 citation. The signature is not on a back page where it can be lost. The CFR citation is specialty-correct (Chemistry §493.931, Hematology §493.941, etc.) and CMS-style internal goals are cited alongside CLIA Total Allowable Error when ADLM recommendations apply.
               </p>
               <p>
                 Every change to a study is captured in the lab's audit log with timestamp and user identity. The lab name and CLIA number are stamped on every page header, so the document survives copy-paste, photocopy, and PDF combination without losing the identifying context.

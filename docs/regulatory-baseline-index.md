@@ -45,7 +45,7 @@ Section 6 ("Topic crosswalk") is the most useful section once you need to verify
 - **493.1253** — Establishment and verification of performance specifications (the canonical "Performance Verification" cite)
 - **493.1255** — Calibration and calibration verification procedures
 - **493.1281** — Comparison of test results
-- **Specialty CFR for VeritaCheck PDFs**: Chemistry §493.931, Hematology §493.927, Immunohematology §493.959, Microbiology §493.945, default §493.931 (per CLAUDE.md §5)
+- **Specialty CFR for VeritaCheck PDFs**: Chemistry §493.931, Hematology §493.941, Immunohematology §493.959, Microbiology §493.945, default §493.931 (per CLAUDE.md §5; §493.927 is General Immunology)
 
 ---
 
