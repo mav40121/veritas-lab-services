@@ -15937,6 +15937,86 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(rows);
   });
 
+  // 2026-06-13: lab-scoped AAA WRITE routes. The VeritaPT UI builds every
+  // aa-records URL from the lab-scoped `ptApi` (/api/labs/:labId/pt), but only
+  // GET had a lab-scoped route, so create / update / delete fell through to the
+  // SPA catch-all (HTTP 200 HTML, no record written). Confirmed in-browser:
+  // "Add AAA Record" cleared the form but persisted nothing. These routes tag
+  // and scope by the URL-validated lab (labScopeMiddleware), so the record lands
+  // in the lab the director is actually on -- unlike the legacy /api/pt routes,
+  // whose resolveActiveLabForRequest path mis-tagged the user's default lab on
+  // multi-lab accounts.
+  app.post("/api/labs/:labId/pt/aa-records", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const {
+      analyte, method, method_notes, frequency_per_year,
+      last_performed_date, next_due_date, acceptance_criteria,
+      last_result_summary, last_pass_fail, corrective_action_notes,
+      director_reviewed_at, director_id, retention_through_date,
+    } = req.body || {};
+    if (!analyte || !method) return res.status(400).json({ error: "analyte and method are required" });
+    if (!VALID_AAA_METHODS.includes(method)) return res.status(400).json({ error: `method must be one of: ${VALID_AAA_METHODS.join(', ')}` });
+    const freq = Number(frequency_per_year || 2);
+    if (!Number.isFinite(freq) || freq < 2) return res.status(400).json({ error: "frequency_per_year must be at least 2 per CMS §493.1236(c)(1)" });
+    const result = (db as any).$client.prepare(
+      `INSERT INTO aa_records (
+        user_id, lab_id, analyte, method, method_notes, frequency_per_year,
+        last_performed_date, next_due_date, acceptance_criteria,
+        last_result_summary, last_pass_fail, corrective_action_notes,
+        director_reviewed_at, director_id, retention_through_date
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      dataUserId, req.scope.labId, analyte, method, method_notes ?? null, freq,
+      last_performed_date ?? null, next_due_date ?? null, acceptance_criteria ?? null,
+      last_result_summary ?? null, last_pass_fail ?? null, corrective_action_notes ?? null,
+      director_reviewed_at ?? null, director_id ?? null, retention_through_date ?? null,
+    );
+    const created = (db as any).$client.prepare("SELECT * FROM aa_records WHERE id = ?").get(Number(result.lastInsertRowid));
+    res.status(201).json(created);
+  });
+
+  app.put("/api/labs/:labId/pt/aa-records/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
+    const existing = (db as any).$client.prepare("SELECT id, lab_id FROM aa_records WHERE id = ?").get(req.params.id) as any;
+    if (!existing || Number(existing.lab_id) !== Number(req.scope.labId)) return res.status(404).json({ error: "AAA record not found in this lab" });
+    const {
+      analyte, method, method_notes, frequency_per_year,
+      last_performed_date, next_due_date, acceptance_criteria,
+      last_result_summary, last_pass_fail, corrective_action_notes,
+      director_reviewed_at, director_id, retention_through_date,
+    } = req.body || {};
+    if (method && !VALID_AAA_METHODS.includes(method)) return res.status(400).json({ error: `method must be one of: ${VALID_AAA_METHODS.join(', ')}` });
+    if (frequency_per_year !== undefined) {
+      const freq = Number(frequency_per_year);
+      if (!Number.isFinite(freq) || freq < 2) return res.status(400).json({ error: "frequency_per_year must be at least 2" });
+    }
+    (db as any).$client.prepare(
+      `UPDATE aa_records SET
+        analyte = COALESCE(?, analyte), method = COALESCE(?, method), method_notes = ?,
+        frequency_per_year = COALESCE(?, frequency_per_year),
+        last_performed_date = ?, next_due_date = ?, acceptance_criteria = ?,
+        last_result_summary = ?, last_pass_fail = ?, corrective_action_notes = ?,
+        director_reviewed_at = ?, director_id = ?, retention_through_date = ?,
+        updated_at = datetime('now')
+      WHERE id = ?`
+    ).run(
+      analyte ?? null, method ?? null, method_notes ?? null,
+      frequency_per_year !== undefined ? Number(frequency_per_year) : null,
+      last_performed_date ?? null, next_due_date ?? null, acceptance_criteria ?? null,
+      last_result_summary ?? null, last_pass_fail ?? null, corrective_action_notes ?? null,
+      director_reviewed_at ?? null, director_id ?? null, retention_through_date ?? null,
+      req.params.id,
+    );
+    const updated = (db as any).$client.prepare("SELECT * FROM aa_records WHERE id = ?").get(req.params.id);
+    res.json(updated);
+  });
+
+  app.delete("/api/labs/:labId/pt/aa-records/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
+    const existing = (db as any).$client.prepare("SELECT id, lab_id FROM aa_records WHERE id = ?").get(req.params.id) as any;
+    if (!existing || Number(existing.lab_id) !== Number(req.scope.labId)) return res.status(404).json({ error: "AAA record not found in this lab" });
+    (db as any).$client.prepare("DELETE FROM aa_records WHERE id = ?").run(req.params.id);
+    res.json({ success: true });
+  });
+
   // ── VERITARESPONSE — POST-SURVEY DEFICIENCY RESPONSE ───────────────────
   // Parking-lot #17. Phase 1 ships the data layer + CRUD + due-date
   // auto-computation. Renderers (CMS-2567, CAP per-checklist, TJC ESC) and
