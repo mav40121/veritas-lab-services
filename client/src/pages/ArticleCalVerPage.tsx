@@ -1,4 +1,5 @@
 import { useSEO } from "@/hooks/useSEO";
+import { CALVER_ARTICLE_FAQ } from "@/lib/faqContent";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -238,32 +239,7 @@ return (
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Frequently Asked Questions</h2>
 
-          {[
-            {
-              q: "Does calibration verification apply to waived tests like point-of-care glucose meters?",
-              a: "No. Waived tests are explicitly exempt from calibration verification requirements under CLIA. If your lab is performing these studies on waived instruments, you are conducting unnecessary quality control. Redirect those resources."
-            },
-            {
-              q: "What if our analyzer is factory-calibrated and cannot be adjusted by the lab?",
-              a: "Calibration verification is not required. CLIA's position is clear: you cannot verify something you cannot perform. If the instrument's calibration is locked by the manufacturer and cannot be adjusted by laboratory personnel, the requirement does not apply."
-            },
-            {
-              q: "How many specimens do we need for a correlation / method comparison study?",
-              a: "The Joint Commission does not specify a minimum. The laboratory defines both the number of data points and the acceptability criteria. However, most accrediting bodies look for at least 20 patient specimens spanning the analytical range, which is the EP9 protocol standard."
-            },
-            {
-              q: "Can we use QC material or calibrators instead of commercial verification kits?",
-              a: "Yes. Any material with a documented, known true value qualifies as a calibration verification data point. This includes calibrators, manufacturer-assigned QC material, stable proficiency testing samples, and previously validated patient specimens. Commercial kits are a convenience, not a requirement."
-            },
-            {
-              q: "What is the exact deadline for our next calibration verification study?",
-              a: "Six months plus twenty days from the date your medical director or designee signed off on the last study. Not from when data was collected. Not from the date the report was generated. The sign-off date is what counts. Document it explicitly in your tracking system."
-            },
-            {
-              q: "Where do I find the CLIA allowable error (TEa) for a specific analyte?",
-              a: "In the Code of Federal Regulations Title 42, Part 493, Subpart I. The four sections cited by VeritaCheck™ are §493.927 (general immunology), §493.931 (routine chemistry), §493.937 (toxicology), and §493.941 (hematology). Search for 'acceptable performance' within each section to find the specific criteria."
-            },
-          ].map(({ q, a }) => (
+          {CALVER_ARTICLE_FAQ.map(({ q, a }) => (
             <div key={q} className="border-b border-border py-5 last:border-0">
               <h3 className="font-semibold text-base mb-2">{q}</h3>
               <p className="text-muted-foreground text-sm leading-relaxed">{a}</p>

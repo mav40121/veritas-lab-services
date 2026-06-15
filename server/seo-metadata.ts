@@ -1,14 +1,53 @@
+import {
+  TEA_ARTICLE_FAQ,
+  CALVER_ARTICLE_FAQ,
+  FAQ_CATEGORIES,
+  flattenFaq,
+  type FaqQA,
+} from "../client/src/lib/faqContent";
+
 export interface SEOMetadata {
   title: string;
   description: string;
   // Optional per-route structured data (JSON-LD). When present, static.ts
-  // injects it as a <script type="application/ld+json"> into the served HTML,
-  // alongside the site-wide @graph already in index.html. Reference the
-  // existing Organization node via {"@id": ".../#organization"} for publisher.
-  jsonLd?: Record<string, unknown>;
+  // injects it as one or more <script type="application/ld+json"> blocks into
+  // the served HTML, alongside the site-wide @graph already in index.html.
+  // Reference the existing Organization node via {"@id": ".../#organization"}
+  // for publisher. A route may supply a single object or an array of objects
+  // (e.g. Article + FAQPage + DefinedTerm on the same page).
+  jsonLd?: Record<string, unknown> | Record<string, unknown>[];
 }
 
 const BASE_URL = "https://www.veritaslabservices.com";
+
+// FAQPage JSON-LD from a list of visible Q&A. The questions/answers are the
+// SAME objects the page renders (imported from client/src/lib/faqContent), so
+// the structured data is verbatim-identical to the on-page FAQ by construction,
+// as Google's FAQ policy and the honest-content rule require.
+function faqPageJsonLd(items: FaqQA[]): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: items.map((it) => ({
+      "@type": "Question",
+      name: it.q,
+      acceptedAnswer: { "@type": "Answer", text: it.a },
+    })),
+  };
+}
+
+// DefinedTerm JSON-LD for a glossary term the site authoritatively defines.
+// inDefinedTermSet points at the page that defines the term, so AI answer
+// engines can anchor a citation to that URL.
+function definedTermJsonLd(name: string, description: string, pagePath: string): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "DefinedTerm",
+    name,
+    description,
+    inDefinedTermSet: `${BASE_URL}${pagePath}`,
+  };
+}
 
 export const seoMetadataMap: Record<string, SEOMetadata> = {
   "/": {
@@ -38,6 +77,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   "/faq": {
     title: "FAQ | VeritaAssure\u2122 Lab Compliance Software",
     description: "Frequently asked questions about VeritaAssure\u2122, CLIA compliance software, performance verification, and laboratory inspection readiness tools.",
+    jsonLd: faqPageJsonLd(flattenFaq(FAQ_CATEGORIES)),
   },
   "/getting-started": {
     title: "Getting Started | VeritaAssure\u2122 Lab Compliance Software",
@@ -102,11 +142,19 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   "/resources/clia-calibration-verification-method-comparison": {
     title: "CLIA Calibration Verification and Method Comparison Guide | Veritas Lab Services",
     description: "A complete guide to CLIA calibration verification and method comparison requirements for clinical laboratories, including documentation and frequency requirements.",
+    jsonLd: [
+      faqPageJsonLd(CALVER_ARTICLE_FAQ),
+      definedTermJsonLd(
+        "Calibration Verification",
+        "Calibration verification is an accuracy study: it measures correctness, not consistency.",
+        "/resources/clia-calibration-verification-method-comparison",
+      ),
+    ],
   },
   "/resources/clia-tea-what-lab-directors-dont-know": {
     title: "CLIA Total Allowable Error (TEa): 42 CFR §493 Guide",
     description: "2025 CLIA total allowable error (TEa) values for chemistry, hematology, toxicology, and immunology, with 42 CFR §493 citations.",
-    jsonLd: {
+    jsonLd: [{
       "@context": "https://schema.org",
       "@type": "Article",
       headline: "CLIA Allowable Error (TEa): What It Is, Where to Find It, and Why Most Lab Directors Don't Know About It",
@@ -123,6 +171,13 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
       dateModified: "2026-06-14",
       mainEntityOfPage: `${BASE_URL}/resources/clia-tea-what-lab-directors-dont-know`,
     },
+    faqPageJsonLd(TEA_ARTICLE_FAQ),
+    definedTermJsonLd(
+      "CLIA Total Allowable Error (TEa)",
+      "CLIA TEa (Total Allowable Error) is the maximum permissible difference between a laboratory's result and the target value for a given analyte, as defined in 42 CFR Part 493.",
+      "/resources/clia-tea-what-lab-directors-dont-know",
+    ),
+    ],
   },
   "/resources/how-veritaassure-trains-lab-leaders": {
     title: "How VeritaAssure\u2122 Trains Lab Leaders | Veritas Lab Services",
