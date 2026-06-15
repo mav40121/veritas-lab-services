@@ -1609,6 +1609,14 @@ try { sqlite.exec("ALTER TABLE studies ADD COLUMN finalized_at TEXT"); } catch {
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN finalized_by_user_id INTEGER"); } catch {}
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN finalized_signature TEXT"); } catch {}
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN amends_study_id INTEGER"); } catch {}
+// 2026-06-15: archive (VeritaCheck Sign-Off / Amendment / Archive, Phase 1).
+// A superseded original auto-archives when its amendment is signed off; any
+// study can also be manually archived with a reason. Archived studies drop
+// off the active list but are retained and surveyor-visible. Additive +
+// idempotent (the try/catch no-ops if the column already exists).
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN archived_at TEXT"); } catch {}
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN archived_by_user_id INTEGER"); } catch {}
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN archive_reason TEXT"); } catch {}
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN result_units TEXT"); } catch {}
 
 // 2026-06-09 (Michael L feedback): optional Analytical Measurement Range

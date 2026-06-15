@@ -7773,6 +7773,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           );
           userStudies = userStudies.filter((s) => labStudyIds.has(s.id));
         }
+        // 2026-06-15: hide archived studies from the legacy list too. drizzle's
+        // studies schema lacks archived_at, so resolve archived ids via raw SQL.
+        const archivedIds = new Set(
+          ((db as any).$client
+            .prepare("SELECT id FROM studies WHERE archived_at IS NOT NULL")
+            .all() as any[]).map((r) => r.id),
+        );
+        userStudies = userStudies.filter((s) => !archivedIds.has(s.id));
         userStudies.sort((a, b) => {
           const aDraft = a.status === 'draft' ? 1 : 0;
           const bDraft = b.status === 'draft' ? 1 : 0;
@@ -8529,6 +8537,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       amrUnits: row.amr_units,
       censoringPolicy: row.censoring_policy,
       lifecycle_state: row.lifecycle_state,
+      amends_study_id: row.amends_study_id,
+      archived_at: row.archived_at,
+      archived_by_user_id: row.archived_by_user_id,
+      archive_reason: row.archive_reason,
       createdAt: row.created_at,
       lab_id: row.lab_id,
     };
@@ -8539,8 +8551,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // createdAt, then completed studies sort by id (createdAt proxy) DESC.
     // SQLite returns boolean comparisons as 1/0; DESC on (status='draft')
     // puts the 1's first.
+    // 2026-06-15: archived studies (superseded originals + manually-archived
+    // ones) drop off the active list. ?archived=1 returns only the archived set
+    // for the dedicated Archived view.
+    const showArchived = String(req.query.archived || "") === "1";
     const rows = (db as any).$client.prepare(
-      "SELECT * FROM studies WHERE lab_id = ? ORDER BY (status = 'draft') DESC, id DESC"
+      showArchived
+        ? "SELECT * FROM studies WHERE lab_id = ? AND archived_at IS NOT NULL ORDER BY id DESC"
+        : "SELECT * FROM studies WHERE lab_id = ? AND archived_at IS NULL ORDER BY (status = 'draft') DESC, id DESC"
     ).all(req.scope.labId);
     res.json(rows.map(studyRowToClient));
   });
@@ -8904,6 +8922,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         finalized_at = ?, finalized_by_user_id = ?, finalized_signature = ?
       WHERE id = ?
     `).run(now, req.userId, signature, studyRow.id);
+    // 2026-06-15: signing off an amendment auto-archives the original it
+    // supersedes (the row amends_study_id points to), so the active list shows
+    // only the current valid result while the superseded original is retained
+    // and linked. Only archives the parent if it is not already archived.
+    if (studyRow.amends_study_id) {
+      (db as any).$client.prepare(
+        "UPDATE studies SET archived_at = ?, archived_by_user_id = ?, archive_reason = ? WHERE id = ? AND archived_at IS NULL"
+      ).run(now, req.userId, `Superseded by amendment #${studyRow.id}`, studyRow.amends_study_id);
+    }
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyRow.id);
     res.json(updated);
   }
@@ -8965,6 +8992,49 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT * FROM studies WHERE id = ? AND lab_id = ?"
     ).get(studyId, req.scope.labId) as any;
     return applyStudyAmend(req, res, existing);
+  });
+
+  // ── 2026-06-15 Study archive (VeritaCheck Sign-Off / Amendment / Archive) ─
+  //
+  // POST /api/studies/:id/archive   body { reason }  — retire a study from the
+  //   active list (read-only, retained, surveyor-visible). Reason required.
+  //   Available in any lifecycle state, so erroneous/duplicate/never-signed-off
+  //   studies can be retired. Superseded originals are auto-archived on
+  //   amendment sign-off; this is the manual path.
+  // POST /api/studies/:id/unarchive — director correction; restores to active.
+  // Both have lab-scoped variants.
+  function applyStudyArchive(req: any, res: any, studyRow: any) {
+    if (!studyRow) return res.status(404).json({ error: "Study not found" });
+    const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+    if (!reason) return res.status(400).json({ error: "reason required" });
+    if (studyRow.archived_at) return res.status(409).json({ error: "Study is already archived." });
+    const now = new Date().toISOString();
+    (db as any).$client.prepare(
+      "UPDATE studies SET archived_at = ?, archived_by_user_id = ?, archive_reason = ? WHERE id = ?"
+    ).run(now, req.userId, reason, studyRow.id);
+    res.json((db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyRow.id));
+  }
+  function applyStudyUnarchive(req: any, res: any, studyRow: any) {
+    if (!studyRow) return res.status(404).json({ error: "Study not found" });
+    if (!studyRow.archived_at) return res.status(409).json({ error: "Study is not archived." });
+    (db as any).$client.prepare(
+      "UPDATE studies SET archived_at = NULL, archived_by_user_id = NULL, archive_reason = NULL WHERE id = ?"
+    ).run(studyRow.id);
+    res.json((db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyRow.id));
+  }
+  app.post("/api/studies/:id/archive", authMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    return applyStudyArchive(req, res, userCanAccessStudy(parseInt(req.params.id), req) as any);
+  });
+  app.post("/api/studies/:id/unarchive", authMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    return applyStudyUnarchive(req, res, userCanAccessStudy(parseInt(req.params.id), req) as any);
+  });
+  app.post("/api/labs/:labId/studies/:id/archive", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    const s = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ? AND lab_id = ?").get(parseInt(req.params.id), req.scope.labId) as any;
+    return applyStudyArchive(req, res, s);
+  });
+  app.post("/api/labs/:labId/studies/:id/unarchive", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    const s = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ? AND lab_id = ?").get(parseInt(req.params.id), req.scope.labId) as any;
+    return applyStudyUnarchive(req, res, s);
   });
 
   // DELETE /api/labs/:labId/studies/:id — lab-scoped delete.
