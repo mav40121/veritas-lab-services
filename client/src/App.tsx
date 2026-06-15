@@ -1,8 +1,8 @@
 import { Switch, Route, Router, useLocation, Redirect } from "wouter";
-import VeritaCheckVerificationPage from "@/pages/VeritaCheckVerificationPage";
-import ArticleInventoryManagementPage from "@/pages/ArticleInventoryManagementPage";
+const VeritaCheckVerificationPage = lazy(() => import("@/pages/VeritaCheckVerificationPage"));
+const ArticleInventoryManagementPage = lazy(() => import("@/pages/ArticleInventoryManagementPage"));
 import { QueryClientProvider } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -15,92 +15,92 @@ import { SubscriptionModal } from "@/components/SubscriptionModal";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { ChevronUp } from "lucide-react";
 import HomePage from "@/pages/HomePage";
-import ServicesPage from "@/pages/ServicesPage";
-import BookScopingCallPage from "@/pages/BookScopingCallPage";
-import AdminSchedulingPage from "@/pages/AdminSchedulingPage";
-import TeamPage from "@/pages/TeamPage";
-import VeritaCheckPage from "@/pages/VeritaCheckPage";
-import StudyResultsPage from "@/pages/StudyResultsPage";
-import DashboardPage from "@/pages/DashboardPage";
-import ContactPage from "@/pages/ContactPage";
-import LoginPage from "@/pages/LoginPage";
-import NotFound from "@/pages/not-found";
-import TermsPage from "@/pages/TermsPage";
-import PrivacyPage from "@/pages/PrivacyPage";
-import TrustPage from "@/pages/TrustPage";
-import ResetPasswordPage from "@/pages/ResetPasswordPage";
-import StudyGuidePage from "@/pages/StudyGuidePage";
-import BookPage from "@/pages/BookPage";
-import VeritaScanPage from "@/pages/VeritaScanPage";
-import VeritaMapPage from "@/pages/VeritaMapPage";
-import DemoLabPage from "@/pages/DemoLabPage";
-import DemoPage from "@/pages/DemoPage";
-import DemoSelectorPage from "@/pages/DemoSelectorPage";
-import DemoCprtPage from "@/pages/DemoCprtPage";
-import DemoQcPage from "@/pages/DemoQcPage";
-import ResourcesPage from "@/pages/ResourcesPage";
-import ArticlePrecisionInterpretationPage from "@/pages/ArticlePrecisionInterpretationPage";
-import ArticleCostPerReportablePage from "@/pages/ArticleCostPerReportablePage";
-import ArticleWhyVeritaCheckPage from "@/pages/ArticleWhyVeritaCheckPage";
-import FAQPage from "@/pages/FAQPage";
-import PricingPage from "@/pages/PricingPage";
-import ArticleCalVerPage from "@/pages/ArticleCalVerPage";
-import ArticleTeaPage from "@/pages/ArticleTeaPage";
-import ArticleTrainingPage from "@/pages/ArticleTrainingPage";
-import ArticleCLIACalVerRequirementsPage from "@/pages/ArticleCLIACalVerRequirementsPage";
-import ArticleMethodComparisonPage from "@/pages/ArticleMethodComparisonPage";
-import ArticleTJCInspectionPage from "@/pages/ArticleTJCInspectionPage";
-import ArticleValidateVeritaCheckPage from "@/pages/ArticleValidateVeritaCheckPage";
-import ArticleManualLogsPage from "@/pages/ArticleManualLogsPage";
-import TeaLookupPage from "@/pages/TeaLookupPage";
-import VeritaScanAppPage from "@/pages/VeritaScanAppPage";
-import VeritaScanScanPage from "@/pages/VeritaScanScanPage";
-import VeritaScanDocumentLibraryPage from "@/pages/VeritaScanDocumentLibraryPage";
-import VeritaScanInspectionProofPage from "@/pages/VeritaScanInspectionProofPage";
-import VeritaMapAppPage from "@/pages/VeritaMapAppPage";
-import VeritaMapBuildPage from "@/pages/VeritaMapBuildPage";
-import VeritaMapMapPage from "@/pages/VeritaMapMapPage";
-import VeritaMapResourcesPage from "@/pages/VeritaMapResourcesPage";
-import VeritaMapLabwidePage from "@/pages/VeritaMapLabwidePage";
-import VeritaTrackAppPage from "@/pages/VeritaTrackAppPage";
-import VeritaTrackPage from "@/pages/VeritaTrackPage";
-import VeritaCompPage from "@/pages/VeritaCompPage";
-import VeritaCompAppPage from "@/pages/VeritaCompAppPage";
-import VeritaPTPage from "@/pages/VeritaPTPage";
-import VeritaPTAppPage from "@/pages/VeritaPTAppPage";
-import VeritaResponseAppPage from "@/pages/VeritaResponseAppPage";
-import VeritaResponseFindingPage from "@/pages/VeritaResponseFindingPage";
-import VeritaStaffPage from "@/pages/VeritaStaffPage";
-import VeritaStaffAppPage from "@/pages/VeritaStaffAppPage";
-import VeritaLabPage from "@/pages/VeritaLabPage";
-import VeritaLabAppPage from "@/pages/VeritaLabAppPage";
-import VeritaQCAppPage from "@/pages/VeritaQCAppPage";
-import VeritaQCDailyReviewPage from "@/pages/VeritaQCDailyReviewPage";
-import VeritaPolicyAppPage from "@/pages/VeritaPolicyAppPage";
-import VeritaPolicyMyPoliciesPage from "@/pages/VeritaPolicyMyPoliciesPage";
-import VeritaPolicyCompliancePage from "@/pages/VeritaPolicyCompliancePage";
-import SurveyorViewPage from "@/pages/SurveyorViewPage";
-import VeritaPolicyPage from "@/pages/VeritaPolicyPage";
-import CumsumPage from "@/pages/CumsumPage";
-import RoadmapPage from "@/pages/RoadmapPage";
-import GettingStartedPage from "@/pages/GettingStartedPage";
-import AccountSettingsPage from "@/pages/AccountSettingsPage";
-import VeritaAssurePage from "@/pages/VeritaAssurePage";
-import OperationsPage from "@/pages/OperationsPage";
-import AdminReportPage from "@/pages/AdminReportPage";
-import JoinPage from "@/pages/JoinPage";
-import ProductivityCalculatorPage from "@/pages/ProductivityCalculatorPage";
-import VeritaBenchPage from "@/pages/VeritaBenchPage";
-import VeritaBenchStaffingPage from "@/pages/VeritaBenchStaffingPage";
-import VeritaStockPage from "@/pages/VeritaStockPage";
-import VeritaStockVendorsPage from "@/pages/VeritaStockVendorsPage";
-import VeritaStockSnapOrderPage from "@/pages/VeritaStockSnapOrderPage";
-import VeritaOpsAppPage from "@/pages/VeritaOpsAppPage";
-import LabMembersPage from "@/pages/LabMembersPage";
-import FoundingLabApplyPage from "@/pages/FoundingLabApplyPage";
-import StaffPortalPage from "@/pages/StaffPortalPage";
-import VeritaBenchPIPage from "@/pages/VeritaBenchPIPage";
-import RequestInvoicePage from "@/pages/RequestInvoicePage";
+const ServicesPage = lazy(() => import("@/pages/ServicesPage"));
+const BookScopingCallPage = lazy(() => import("@/pages/BookScopingCallPage"));
+const AdminSchedulingPage = lazy(() => import("@/pages/AdminSchedulingPage"));
+const TeamPage = lazy(() => import("@/pages/TeamPage"));
+const VeritaCheckPage = lazy(() => import("@/pages/VeritaCheckPage"));
+const StudyResultsPage = lazy(() => import("@/pages/StudyResultsPage"));
+const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
+const ContactPage = lazy(() => import("@/pages/ContactPage"));
+const LoginPage = lazy(() => import("@/pages/LoginPage"));
+const NotFound = lazy(() => import("@/pages/not-found"));
+const TermsPage = lazy(() => import("@/pages/TermsPage"));
+const PrivacyPage = lazy(() => import("@/pages/PrivacyPage"));
+const TrustPage = lazy(() => import("@/pages/TrustPage"));
+const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage"));
+const StudyGuidePage = lazy(() => import("@/pages/StudyGuidePage"));
+const BookPage = lazy(() => import("@/pages/BookPage"));
+const VeritaScanPage = lazy(() => import("@/pages/VeritaScanPage"));
+const VeritaMapPage = lazy(() => import("@/pages/VeritaMapPage"));
+const DemoLabPage = lazy(() => import("@/pages/DemoLabPage"));
+const DemoPage = lazy(() => import("@/pages/DemoPage"));
+const DemoSelectorPage = lazy(() => import("@/pages/DemoSelectorPage"));
+const DemoCprtPage = lazy(() => import("@/pages/DemoCprtPage"));
+const DemoQcPage = lazy(() => import("@/pages/DemoQcPage"));
+const ResourcesPage = lazy(() => import("@/pages/ResourcesPage"));
+const ArticlePrecisionInterpretationPage = lazy(() => import("@/pages/ArticlePrecisionInterpretationPage"));
+const ArticleCostPerReportablePage = lazy(() => import("@/pages/ArticleCostPerReportablePage"));
+const ArticleWhyVeritaCheckPage = lazy(() => import("@/pages/ArticleWhyVeritaCheckPage"));
+const FAQPage = lazy(() => import("@/pages/FAQPage"));
+const PricingPage = lazy(() => import("@/pages/PricingPage"));
+const ArticleCalVerPage = lazy(() => import("@/pages/ArticleCalVerPage"));
+const ArticleTeaPage = lazy(() => import("@/pages/ArticleTeaPage"));
+const ArticleTrainingPage = lazy(() => import("@/pages/ArticleTrainingPage"));
+const ArticleCLIACalVerRequirementsPage = lazy(() => import("@/pages/ArticleCLIACalVerRequirementsPage"));
+const ArticleMethodComparisonPage = lazy(() => import("@/pages/ArticleMethodComparisonPage"));
+const ArticleTJCInspectionPage = lazy(() => import("@/pages/ArticleTJCInspectionPage"));
+const ArticleValidateVeritaCheckPage = lazy(() => import("@/pages/ArticleValidateVeritaCheckPage"));
+const ArticleManualLogsPage = lazy(() => import("@/pages/ArticleManualLogsPage"));
+const TeaLookupPage = lazy(() => import("@/pages/TeaLookupPage"));
+const VeritaScanAppPage = lazy(() => import("@/pages/VeritaScanAppPage"));
+const VeritaScanScanPage = lazy(() => import("@/pages/VeritaScanScanPage"));
+const VeritaScanDocumentLibraryPage = lazy(() => import("@/pages/VeritaScanDocumentLibraryPage"));
+const VeritaScanInspectionProofPage = lazy(() => import("@/pages/VeritaScanInspectionProofPage"));
+const VeritaMapAppPage = lazy(() => import("@/pages/VeritaMapAppPage"));
+const VeritaMapBuildPage = lazy(() => import("@/pages/VeritaMapBuildPage"));
+const VeritaMapMapPage = lazy(() => import("@/pages/VeritaMapMapPage"));
+const VeritaMapResourcesPage = lazy(() => import("@/pages/VeritaMapResourcesPage"));
+const VeritaMapLabwidePage = lazy(() => import("@/pages/VeritaMapLabwidePage"));
+const VeritaTrackAppPage = lazy(() => import("@/pages/VeritaTrackAppPage"));
+const VeritaTrackPage = lazy(() => import("@/pages/VeritaTrackPage"));
+const VeritaCompPage = lazy(() => import("@/pages/VeritaCompPage"));
+const VeritaCompAppPage = lazy(() => import("@/pages/VeritaCompAppPage"));
+const VeritaPTPage = lazy(() => import("@/pages/VeritaPTPage"));
+const VeritaPTAppPage = lazy(() => import("@/pages/VeritaPTAppPage"));
+const VeritaResponseAppPage = lazy(() => import("@/pages/VeritaResponseAppPage"));
+const VeritaResponseFindingPage = lazy(() => import("@/pages/VeritaResponseFindingPage"));
+const VeritaStaffPage = lazy(() => import("@/pages/VeritaStaffPage"));
+const VeritaStaffAppPage = lazy(() => import("@/pages/VeritaStaffAppPage"));
+const VeritaLabPage = lazy(() => import("@/pages/VeritaLabPage"));
+const VeritaLabAppPage = lazy(() => import("@/pages/VeritaLabAppPage"));
+const VeritaQCAppPage = lazy(() => import("@/pages/VeritaQCAppPage"));
+const VeritaQCDailyReviewPage = lazy(() => import("@/pages/VeritaQCDailyReviewPage"));
+const VeritaPolicyAppPage = lazy(() => import("@/pages/VeritaPolicyAppPage"));
+const VeritaPolicyMyPoliciesPage = lazy(() => import("@/pages/VeritaPolicyMyPoliciesPage"));
+const VeritaPolicyCompliancePage = lazy(() => import("@/pages/VeritaPolicyCompliancePage"));
+const SurveyorViewPage = lazy(() => import("@/pages/SurveyorViewPage"));
+const VeritaPolicyPage = lazy(() => import("@/pages/VeritaPolicyPage"));
+const CumsumPage = lazy(() => import("@/pages/CumsumPage"));
+const RoadmapPage = lazy(() => import("@/pages/RoadmapPage"));
+const GettingStartedPage = lazy(() => import("@/pages/GettingStartedPage"));
+const AccountSettingsPage = lazy(() => import("@/pages/AccountSettingsPage"));
+const VeritaAssurePage = lazy(() => import("@/pages/VeritaAssurePage"));
+const OperationsPage = lazy(() => import("@/pages/OperationsPage"));
+const AdminReportPage = lazy(() => import("@/pages/AdminReportPage"));
+const JoinPage = lazy(() => import("@/pages/JoinPage"));
+const ProductivityCalculatorPage = lazy(() => import("@/pages/ProductivityCalculatorPage"));
+const VeritaBenchPage = lazy(() => import("@/pages/VeritaBenchPage"));
+const VeritaBenchStaffingPage = lazy(() => import("@/pages/VeritaBenchStaffingPage"));
+const VeritaStockPage = lazy(() => import("@/pages/VeritaStockPage"));
+const VeritaStockVendorsPage = lazy(() => import("@/pages/VeritaStockVendorsPage"));
+const VeritaStockSnapOrderPage = lazy(() => import("@/pages/VeritaStockSnapOrderPage"));
+const VeritaOpsAppPage = lazy(() => import("@/pages/VeritaOpsAppPage"));
+const LabMembersPage = lazy(() => import("@/pages/LabMembersPage"));
+const FoundingLabApplyPage = lazy(() => import("@/pages/FoundingLabApplyPage"));
+const StaffPortalPage = lazy(() => import("@/pages/StaffPortalPage"));
+const VeritaBenchPIPage = lazy(() => import("@/pages/VeritaBenchPIPage"));
+const RequestInvoicePage = lazy(() => import("@/pages/RequestInvoicePage"));
 import { OnboardingBanner } from "@/components/OnboardingBanner";
 
 function BackToTop() {
@@ -257,12 +257,20 @@ function OnboardingGuard() {
   return <OnboardingWizard onComplete={handleComplete} />;
 }
 
+function PageFallback() {
+  return (
+    <div className="flex items-center justify-center py-24" role="status" aria-label="Loading">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
+    </div>
+  );
+}
+
 function AppContent() {
   const [location] = useLocation();
 
   // Standalone admin page: no NavBar, no footer, no subscription banners
   if (location === "/admin") {
-    return <AdminReportPage />;
+    return <Suspense fallback={<PageFallback />}><AdminReportPage /></Suspense>;
   }
 
   // Phase 2c: wraps a legacy workspace page component so unauthenticated /
@@ -291,7 +299,8 @@ function AppContent() {
       <OnboardingBanner />
       <OnboardingGuard />
       <main className="flex-1">
-        <Switch>
+        <Suspense fallback={<PageFallback />}>
+          <Switch>
           <Route path="/" component={HomePage} />
           <Route path="/services" component={ServicesPage} />
           <Route path="/book/scoping-call" component={BookScopingCallPage} />
@@ -440,6 +449,7 @@ function AppContent() {
 
           <Route component={NotFound} />
         </Switch>
+          </Suspense>
       </main>
       <SiteFooter />
       <BackToTop />
