@@ -1039,36 +1039,31 @@ strike-throughs above); see C30. Pre- vs post-COLA: indifferent.
 
 ---
 
-### 43. Wire the two static-audit guards into CI
-
-**Effort:** S (half a day)
-**Importance:** Medium — each guards a class that produced a real prod-500 / silent-no-op this session.
-
-`scripts/audit-delete-cascades.mjs` (catches a DELETE handler that orphans FK
-children, the 500 class) and `scripts/audit-labscoped-write-routes.mjs` (catches a
-client lab-scoped write with no matching server route, the silent SPA-fallback
-no-op class) are runnable and green but not yet a blocking CI gate. Add both to
-the validate workflow (or `script/audit.py`) so a new orphaning delete or a new
-unrouted lab-scoped write fails the PR. Both carry allowlists for known/intentional
-exceptions. Surfaced 2026-06-13 while fixing the instances each one found.
-
----
-
-### 44. Legacy /api/studies over-returns studies across labs (latent multi-lab footgun)
-
-**Effort:** S (1-2 days)
-**Importance:** Low — not customer-reachable today; the UI uses the lab-scoped paths.
-
-The legacy `GET /api/studies` returns a user's studies across ALL their labs, while
-the app reads the lab-scoped `/api/labs/:id/studies`. A study from the legacy list
-404s on the lab-scoped detail page, so any future code wired to the legacy endpoint
-would render phantom "can't-open" rows. Scope it to the active lab or retire it
-after auditing the few client fallbacks that still reference it. Surfaced
-2026-06-13 during VeritaCheck StudyResultsPage browser QC.
-
----
-
 ## CLOSED (audit trail)
+
+### C34. Wire the two static-audit guards into CI (was #43)
+
+**Closure evidence:** both guards wired into the Multi-Lab Mutations Audit CI
+workflow (.github/workflows/multilab-mutations-audit.yml) as steps:
+`audit-delete-cascades.mjs` (DELETE handlers that orphan non-cascade FK children)
+and `audit-labscoped-write-routes.mjs` (client lab-scoped writes with no matching
+server route). Both exit non-zero on a finding, failing the job. Confirmed 0
+findings on main at closure. Closed 2026-06-14. NOTE: a hard merge-block still
+needs the one-time branch-protection toggle for the "multilab-mutations" check
+(same caveat as the existing guards already in that workflow).
+
+---
+
+### C35. Legacy /api/studies over-returns studies across labs (was #44)
+
+**Closure evidence:** `GET /api/studies` now scopes its list to the active lab
+when one is resolved from the Referer (server/routes.ts), so every returned row
+opens on the lab-scoped detail page; the genuine no-active-lab legacy global
+fallback is unchanged. drizzle's studies schema lacks lab_id, so the scope filter
+resolves the lab's study ids via raw SQL (idx_studies_lab_id) and filters on id,
+mirroring the /api/labs/:labId/studies handler. Closed 2026-06-14.
+
+---
 
 ### C30. Verify-script convention backfill (was #41)
 
