@@ -61,3 +61,16 @@ jobs:
         # baseline. See scripts/verify-write-path-active-lab.js. Baseline
         # ratchets to 0 as the module-batch fix PRs land.
         run: node scripts/verify-write-path-active-lab.js
+
+      - name: Run delete-cascade orphan guard
+        # Fails CI if a `DELETE FROM <parent> WHERE id = ?` handler does not
+        # clear its non-cascade FK children (the prod-500 orphan class).
+        # Intentional exceptions are allowlisted in the script. (Parking-lot
+        # #43.) See scripts/audit-delete-cascades.mjs.
+        run: node scripts/audit-delete-cascades.mjs
+
+      - name: Run lab-scoped write-route guard
+        # Fails CI if a client lab-scoped write (/api/labs/:labId/...) has no
+        # matching server route, the silent SPA-fallback no-op class.
+        # (Parking-lot #43.) See scripts/audit-labscoped-write-routes.mjs.
+        run: node scripts/audit-labscoped-write-routes.mjs

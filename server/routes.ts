@@ -7755,7 +7755,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // Return only studies owned by this user (or owner)
         // 2026-06-01: drafts pin to the top of the dashboard regardless of id,
         // then completed studies sort by id DESC.
-        const userStudies = storage.getStudiesByUser(dataUserId);
+        let userStudies = storage.getStudiesByUser(dataUserId);
+        // 2026-06-14 (#44): when an active lab is resolved from the Referer,
+        // scope this legacy list to that lab so every row can open on the
+        // lab-scoped detail page (/labs/:labId/study/:id). Without this the
+        // list returns the user's studies across ALL their labs, and a
+        // cross-lab row 404s on the lab-scoped detail page (latent phantom
+        // "can't-open" footgun). drizzle's studies schema lacks lab_id, so
+        // resolve the lab's study ids via raw SQL (idx_studies_lab_id) and
+        // filter on id. No active-lab context (the genuine legacy global
+        // fallback) is left unchanged.
+        if (getActiveLabId) {
+          const labStudyIds = new Set(
+            ((db as any).$client
+              .prepare("SELECT id FROM studies WHERE lab_id = ?")
+              .all(getActiveLabId) as any[]).map((r) => r.id),
+          );
+          userStudies = userStudies.filter((s) => labStudyIds.has(s.id));
+        }
         userStudies.sort((a, b) => {
           const aDraft = a.status === 'draft' ? 1 : 0;
           const bDraft = b.status === 'draft' ? 1 : 0;
