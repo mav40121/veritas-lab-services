@@ -1,4 +1,5 @@
 import { useSEO } from "@/hooks/useSEO";
+import { TEA_ARTICLE_FAQ } from "@/lib/faqContent";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -218,28 +219,7 @@ return (
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Frequently Asked Questions</h2>
 
-          {[
-            {
-              q: "Does CLIA require labs to use CLIA TEa for calibration verification, or can we use manufacturer criteria?",
-              a: "No. CLIA requires (42 CFR §493.1253 and §493.1255) that calibration verification be performed and documented and that the lab establish acceptance criteria, but it does not specify numeric criteria. Many labs adopt the §493 PT acceptable performance criterion for the same analyte as their cal ver acceptance criterion, with medical director or designee approval. This is a recommendation, not a CLIA requirement. We recommend it because the value is federally published, well documented, and simpler to defend than a manufacturer claim or an unwritten internal policy."
-            },
-            {
-              q: "What's the difference between TEa used for proficiency testing and TEa used for calibration verification?",
-              a: "It's the same table: the TEa values in 42 CFR Part 493 apply to both. For proficiency testing, they define whether your PT results are graded as acceptable. For calibration verification, they define whether your instrument's performance at each calibration level is acceptable. The regulatory authority is the same; the application differs."
-            },
-            {
-              q: "Our analyte isn't in the CLIA TEa table. What do we use?",
-              a: "If an analyte isn't regulated under CLIA proficiency testing requirements, there is no federally mandated TEa. In that case, labs should use manufacturer-stated allowable error, biological variation-based goals (from EFLM or RCPA tables), or medical decision-based criteria established by the laboratory director or designee. Document the rationale for whatever criteria you choose."
-            },
-            {
-              q: "How often does CLIA TEa change?",
-              a: "Infrequently, but the CLIA proficiency testing final rule (CMS-3355-F) was the first major update in decades for many analytes. Before that, some values dated to 1992. The criteria became effective July 11, 2024 and were implemented for laboratories on January 1, 2025, making this the largest single update to CLIA acceptable performance criteria in the modern era. Check the current eCFR rather than relying on reference cards or QC software that may not have been updated."
-            },
-            {
-              q: "What does 'target value ±X% or ±Y units, whichever is greater' mean in practice?",
-              a: "The dual criterion accounts for concentration-dependent error. At low concentrations, a fixed percentage can be smaller than what's analytically meaningful, so the absolute value floor protects the criterion from being trivially easy to pass near zero. Apply both. The one that allows a larger absolute difference is the governing criterion at that concentration."
-            },
-          ].map(({ q, a }) => (
+          {TEA_ARTICLE_FAQ.map(({ q, a }) => (
             <div key={q} className="border-b border-border py-5 last:border-0">
               <h3 className="font-semibold text-base mb-2">{q}</h3>
               <p className="text-muted-foreground text-sm leading-relaxed">{a}</p>

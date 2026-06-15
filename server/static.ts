@@ -87,12 +87,17 @@ function injectSeoTags(html: string, routePath: string, meta: SEOMetadata): stri
   }
   html = html.replace('<div id="root"></div>', `<div id="root"><noscript>${noscriptInner}</noscript></div>`);
 
-  // Inject per-route JSON-LD (e.g. Article schema) when provided, alongside the
-  // site-wide @graph already in index.html. Escape "<" so a stray sequence in
-  // the data can't break out of the <script> element.
+  // Inject per-route JSON-LD (e.g. Article, FAQPage, DefinedTerm) when provided,
+  // alongside the site-wide @graph already in index.html. A route may supply a
+  // single object or an array of objects (e.g. Article + FAQPage + DefinedTerm
+  // on one page); each becomes its own <script>. Escape "<" so a stray sequence
+  // in the data can't break out of the <script> element.
   if (meta.jsonLd) {
-    const json = JSON.stringify(meta.jsonLd).replace(/</g, "\\u003c");
-    html = html.replace("</head>", `<script type="application/ld+json">${json}</script></head>`);
+    const blocks = Array.isArray(meta.jsonLd) ? meta.jsonLd : [meta.jsonLd];
+    for (const block of blocks) {
+      const json = JSON.stringify(block).replace(/</g, "\\u003c");
+      html = html.replace("</head>", `<script type="application/ld+json">${json}</script></head>`);
+    }
   }
 
   return html;
