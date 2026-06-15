@@ -3280,7 +3280,7 @@ export default function StudyResults() {
       />
 
       {/* 2026-06-09 (overnight session 5/11): Sign + Lock + Amend.
-          Draft studies show Sign + Lock. Finalized studies show
+          Draft studies show Sign + Lock. Signed-off studies show
           Amend (creates a linked draft). */}
       <div className="mt-3 flex items-center gap-3 flex-wrap" data-testid="lifecycle-panel">
         {(study as any).lifecycle_state !== "finalized" ? (
@@ -3289,7 +3289,7 @@ export default function StudyResults() {
               Sign and lock
             </Button>
             <span className="text-xs text-muted-foreground">
-              Finalize this study with your signature. Edits after this require an amendment.
+              Sign off this study with your signature. Edits after this require an amendment.
             </span>
           </>
         ) : (
@@ -3297,7 +3297,7 @@ export default function StudyResults() {
             <Button
               variant="outline" size="sm" disabled={amendBusy} data-testid="open-amend-button"
               onClick={async () => {
-                if (!confirm("Create a new draft amending this finalized study? The original stays locked in the audit trail.")) return;
+                if (!confirm("Create a new draft amending this signed-off study? The original stays locked in the audit trail.")) return;
                 setAmendBusy(true);
                 try {
                   const r = await fetch(`${API_BASE}/api/studies/${study.id}/amend`, {
@@ -3319,7 +3319,7 @@ export default function StudyResults() {
               Amend this study
             </Button>
             <span className="text-xs text-emerald-700 dark:text-emerald-400">
-              <strong>Finalized</strong> by {(study as any).finalized_signature} on {(study as any).finalized_at ? new Date((study as any).finalized_at).toLocaleDateString() : ""}.
+              <strong>Signed Off</strong> by {(study as any).finalized_signature} on {(study as any).finalized_at ? new Date((study as any).finalized_at).toLocaleDateString() : ""}.
             </span>
           </>
         )}

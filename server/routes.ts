@@ -8403,7 +8403,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Pre-finalize, the existing edit path is unchanged.
     if (existing.lifecycle_state === 'finalized') {
       return res.status(409).json({
-        error: "Study is finalized and locked. Use the amendment workflow to record a change.",
+        error: "Study is signed off and locked. Use the amendment workflow to record a change.",
         replacement: `/api/studies/${studyId}/amend`,
       });
     }
@@ -8665,7 +8665,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // 2026-06-09 lifecycle_state='finalized' gate (mirror of legacy PUT).
     if (existing.lifecycle_state === 'finalized') {
       return res.status(409).json({
-        error: "Study is finalized and locked. Use the amendment workflow to record a change.",
+        error: "Study is signed off and locked. Use the amendment workflow to record a change.",
         replacement: `/api/labs/${req.scope.labId}/studies/${studyId}/amend`,
       });
     }
@@ -8744,7 +8744,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!studyRow) return res.status(404).json({ error: "Study not found" });
     if (studyRow.lifecycle_state === 'finalized') {
       return res.status(409).json({
-        error: "Study is finalized and locked. Use the amendment workflow to exclude a point.",
+        error: "Study is signed off and locked. Use the amendment workflow to exclude a point.",
       });
     }
     const idx = parseInt(req.params.idx, 10);
@@ -8826,7 +8826,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!studyRow) return res.status(404).json({ error: "Study not found" });
     if (studyRow.lifecycle_state === 'finalized') {
       return res.status(409).json({
-        error: "Study is finalized and locked. Use the amendment workflow to change the AMR.",
+        error: "Study is signed off and locked. Use the amendment workflow to change the AMR.",
       });
     }
     const rawLow = req.body?.amr_low;
@@ -8869,7 +8869,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   function applyCensoringPolicy(req: any, res: any, studyRow: any) {
     if (!studyRow) return res.status(404).json({ error: "Study not found" });
     if (studyRow.lifecycle_state === 'finalized') {
-      return res.status(409).json({ error: "Study is finalized and locked. Use the amendment workflow." });
+      return res.status(409).json({ error: "Study is signed off and locked. Use the amendment workflow." });
     }
     const policy = String(req.body?.policy || "").trim();
     if (!["exclude", "substitute_lld", "substitute_lld_half"].includes(policy)) {

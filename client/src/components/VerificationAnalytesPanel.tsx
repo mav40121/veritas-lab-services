@@ -144,7 +144,7 @@ export function VerificationAnalytesPanel({ verificationId }: { verificationId: 
   }
   function startEdit(a: VerificationAnalyte) {
     if (a.lifecycle_state === "finalized") {
-      toast({ title: "Locked", description: "Finalized analytes are read-only. Use the amendment workflow.", variant: "destructive" });
+      toast({ title: "Locked", description: "Signed-off analytes are read-only. Use the amendment workflow.", variant: "destructive" });
       return;
     }
     setForm(fromAnalyte(a));
@@ -293,7 +293,7 @@ export function VerificationAnalytesPanel({ verificationId }: { verificationId: 
                 <h4 className="font-semibold text-sm">{a.analyte_name}</h4>
                 {a.lifecycle_state === "finalized" ? (
                   <Badge variant="outline" className="text-xs gap-1 bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300">
-                    <Lock size={10} /> Finalized
+                    <Lock size={10} /> Signed Off
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="text-xs">Draft</Badge>
