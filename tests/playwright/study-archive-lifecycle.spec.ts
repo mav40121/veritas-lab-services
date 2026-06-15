@@ -25,12 +25,18 @@ import { injectAuth } from "./_auth";
 const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
 const TOKEN = process.env.PW_TOKEN || "";
 const STUDY_ID = process.env.PW_STUDY_ID || "";
+// When the study lives in a specific lab (multi-lab accounts whose default
+// active lab differs), drive the lab-scoped routes so the study resolves
+// regardless of which lab the NavBar switcher defaults to.
+const LAB_ID = process.env.PW_LAB_ID || "";
+const studyResultsPath = (id: string) => (LAB_ID ? `/labs/${LAB_ID}/study/${id}/results` : `/study/${id}/results`);
+const dashboardPath = () => (LAB_ID ? `/labs/${LAB_ID}/dashboard` : `/dashboard`);
 
 test.describe("VeritaCheck Archive UI", () => {
   test("Study Dashboard exposes an Active / Archived view toggle", async ({ page }) => {
     test.skip(!TOKEN, "PW_TOKEN required for the authenticated dashboard");
     await injectAuth(page, BASE, TOKEN);
-    await page.goto(`${BASE}/dashboard`);
+    await page.goto(`${BASE}${dashboardPath()}`);
     await expect(page.getByTestId("toggle-active-studies")).toBeVisible({ timeout: 15000 });
     const archivedTab = page.getByTestId("toggle-archived-studies");
     await expect(archivedTab).toBeVisible();
@@ -47,7 +53,7 @@ test.describe("VeritaCheck Archive UI", () => {
     await injectAuth(page, BASE, TOKEN);
 
     // 1) Open the study results page; the Archive control must be present.
-    await page.goto(`${BASE}/study/${STUDY_ID}/results`);
+    await page.goto(`${BASE}${studyResultsPath(STUDY_ID)}`);
     await expect(page.getByTestId("lifecycle-panel")).toBeVisible({ timeout: 15000 });
     const archiveBtn = page.getByTestId("open-archive-button");
     const restoreBtn = page.getByTestId("open-unarchive-button");
@@ -73,18 +79,18 @@ test.describe("VeritaCheck Archive UI", () => {
     await expect(restoreBtn).toBeVisible();
 
     // 4) It is gone from the Active dashboard and present under Archived.
-    await page.goto(`${BASE}/dashboard`);
+    await page.goto(`${BASE}${dashboardPath()}`);
     await expect(page.getByTestId("toggle-active-studies")).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId(`card-study-${STUDY_ID}`)).toHaveCount(0);
     await page.getByTestId("toggle-archived-studies").click();
     await expect(page.getByTestId(`badge-archived-${STUDY_ID}`)).toBeVisible({ timeout: 15000 });
 
     // 5) Restore (cleanup) and confirm it returns to the Active list.
-    await page.goto(`${BASE}/study/${STUDY_ID}/results`);
+    await page.goto(`${BASE}${studyResultsPath(STUDY_ID)}`);
     await page.getByTestId("open-unarchive-button").click();
     await page.getByTestId("study-unarchive-confirm").click();
     await expect(page.getByTestId("open-archive-button")).toBeVisible({ timeout: 15000 });
-    await page.goto(`${BASE}/dashboard`);
+    await page.goto(`${BASE}${dashboardPath()}`);
     await expect(page.getByTestId(`card-study-${STUDY_ID}`)).toBeVisible({ timeout: 15000 });
   });
 });
