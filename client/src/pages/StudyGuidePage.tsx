@@ -295,9 +295,9 @@ export default function StudyGuidePage() {
               <div className="flex items-start gap-3">
                 <div className="mt-0.5"><Lock size={18} className="text-primary" /></div>
                 <div>
-                  <h3 className="text-sm font-semibold mb-1">Draft, finalize, amend lifecycle</h3>
+                  <h3 className="text-sm font-semibold mb-1">Draft, sign off, amend lifecycle</h3>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Studies move from draft to finalized when the director signs. Finalized studies are locked from direct edits; any change after sign-off creates an amendment row linked to the original, preserving the audit trail. Drafts can be edited freely.
+                    Studies move from draft to signed off when the director signs. Signed-off studies are locked from direct edits; any change after sign-off creates an amendment row linked to the original, preserving the audit trail. Drafts can be edited freely.
                   </p>
                 </div>
               </div>

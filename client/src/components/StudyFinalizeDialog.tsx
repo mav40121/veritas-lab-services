@@ -47,13 +47,13 @@ export function StudyFinalizeDialog({
         throw new Error(e.error || `HTTP ${r.status}`);
       }
       toast({
-        title: "Study finalized and locked",
+        title: "Study signed off and locked",
         description: "The study is now locked from direct edits. To change anything, use Amend.",
       });
       onFinalized();
       onOpenChange(false);
     } catch (e: any) {
-      toast({ title: "Could not finalize", description: e.message, variant: "destructive" });
+      toast({ title: "Could not sign off", description: e.message, variant: "destructive" });
     } finally { setBusy(false); }
   }
 
@@ -63,8 +63,8 @@ export function StudyFinalizeDialog({
         <DialogHeader>
           <DialogTitle>Sign and lock study</DialogTitle>
           <DialogDescription>
-            Signing finalizes this study and locks it from direct edits. To change anything after
-            finalize (e.g. exclude a newly identified outlier), use Amend to create a linked draft.
+            Signing off this study locks it from direct edits. To change anything after
+            sign-off (e.g. exclude a newly identified outlier), use Amend to create a linked draft.
             The original stays in the audit trail and shows the signature.
           </DialogDescription>
         </DialogHeader>
