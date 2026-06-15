@@ -7773,14 +7773,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           );
           userStudies = userStudies.filter((s) => labStudyIds.has(s.id));
         }
-        // 2026-06-15: hide archived studies from the legacy list too. drizzle's
-        // studies schema lacks archived_at, so resolve archived ids via raw SQL.
+        // 2026-06-15: archived studies drop off the legacy active list too.
+        // drizzle's studies schema lacks archived_at, so resolve archived ids
+        // via raw SQL. ?archived=1 returns ONLY the archived set so the legacy
+        // fallback matches the lab-scoped route's Archived view (rather than
+        // silently showing active studies when the Archived tab is selected).
         const archivedIds = new Set(
           ((db as any).$client
             .prepare("SELECT id FROM studies WHERE archived_at IS NOT NULL")
             .all() as any[]).map((r) => r.id),
         );
-        userStudies = userStudies.filter((s) => !archivedIds.has(s.id));
+        const showArchived = String((req.query as any).archived || "") === "1";
+        userStudies = showArchived
+          ? userStudies.filter((s) => archivedIds.has(s.id))
+          : userStudies.filter((s) => !archivedIds.has(s.id));
         userStudies.sort((a, b) => {
           const aDraft = a.status === 'draft' ? 1 : 0;
           const bDraft = b.status === 'draft' ? 1 : 0;

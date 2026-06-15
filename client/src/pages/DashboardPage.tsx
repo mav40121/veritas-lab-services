@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Study } from "@shared/schema";
-import { PlusCircle, FileText, Trash2, CheckCircle2, XCircle, FlaskConical, Download, Edit2, FileEdit } from "lucide-react";
+import { PlusCircle, FileText, Trash2, CheckCircle2, XCircle, FlaskConical, Download, Edit2, FileEdit, Archive, GitBranch } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -34,14 +34,21 @@ export default function Dashboard() {
   const studiesUrl = labId ? `/api/labs/${labId}/studies` : "/api/studies";
   const deleteUrl = (id: number) => labId ? `/api/labs/${labId}/studies/${id}` : `/api/studies/${id}`;
 
+  // VeritaCheck Phase 1 PR 3: Active / Archived view toggle. Archived studies
+  // are excluded server-side from the default list; ?archived=1 returns only
+  // the archived set. The query key includes the URL so the two views cache
+  // independently and the toggle is instant after first load.
+  const [showArchived, setShowArchived] = useState(false);
+  const listUrl = showArchived ? `${studiesUrl}?archived=1` : studiesUrl;
+
   const { data: studies, isLoading } = useQuery<Study[]>({
-    queryKey: [studiesUrl],
+    queryKey: [listUrl],
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", deleteUrl(id)),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [studiesUrl] });
+      queryClient.invalidateQueries({ queryKey: [listUrl] });
       toast({ title: "Study deleted" });
     },
     onError: () => toast({ title: "Failed to delete", variant: "destructive" }),
@@ -95,11 +102,30 @@ export default function Dashboard() {
         <div>
           <h1 className="text-xl font-bold">Study Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            All saved studies
+            {showArchived ? "Archived studies (off the active list, retained in the audit trail)" : "Active studies"}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {!!studies?.length && (
+          {/* Active / Archived view toggle */}
+          <div className="inline-flex rounded-md border border-border overflow-hidden" role="group" aria-label="Study view">
+            <button
+              type="button"
+              onClick={() => setShowArchived(false)}
+              className={`h-8 px-3 text-xs font-medium transition-colors ${!showArchived ? "bg-primary text-primary-foreground" : "bg-transparent text-muted-foreground hover:bg-muted"}`}
+              data-testid="toggle-active-studies"
+            >
+              Active
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowArchived(true)}
+              className={`h-8 px-3 text-xs font-medium transition-colors inline-flex items-center gap-1 ${showArchived ? "bg-primary text-primary-foreground" : "bg-transparent text-muted-foreground hover:bg-muted"}`}
+              data-testid="toggle-archived-studies"
+            >
+              <Archive size={12} />Archived
+            </button>
+          </div>
+          {!showArchived && !!studies?.length && (
             <Button
               variant="outline"
               size="sm"
@@ -210,6 +236,18 @@ export default function Dashboard() {
           {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}
         </div>
       ) : !studies?.length ? (
+        showArchived ? (
+          <div className="text-center py-20 border-2 border-dashed border-border rounded-xl">
+            <Archive size={32} className="text-muted-foreground mx-auto mb-3" />
+            <h3 className="font-semibold mb-1">No archived studies</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Studies you archive, and originals superseded by a signed-off amendment, appear here.
+            </p>
+            <Button variant="outline" onClick={() => setShowArchived(false)} data-testid="back-to-active-empty">
+              Back to active studies
+            </Button>
+          </div>
+        ) : (
         <div className="text-center py-20 border-2 border-dashed border-border rounded-xl">
           <FlaskConical size={32} className="text-muted-foreground mx-auto mb-3" />
           <h3 className="font-semibold mb-1">No studies yet</h3>
@@ -220,6 +258,7 @@ export default function Dashboard() {
             <Link href={labRoute("/study/new")}>Start a Study</Link>
           </Button>
         </div>
+        )
       ) : (
         <div className="space-y-2">
           {studies.map((study) => {
@@ -244,6 +283,16 @@ export default function Dashboard() {
                     <span className={`text-xs font-semibold ${isDraft ? "text-amber-500" : study.status === "pass" ? "pass-badge" : "fail-badge"}`}>
                       {(study.status || "").toUpperCase()}
                     </span>
+                    {(study as any).amends_study_id ? (
+                      <Badge variant="outline" className="text-xs shrink-0 border-blue-400/40 text-blue-500" data-testid={`badge-amendment-${study.id}`}>
+                        <GitBranch size={10} className="mr-1" />Amendment of #{(study as any).amends_study_id}
+                      </Badge>
+                    ) : null}
+                    {(study as any).archived_at ? (
+                      <Badge variant="outline" className="text-xs shrink-0 border-amber-500/40 text-amber-600" data-testid={`badge-archived-${study.id}`} title={(study as any).archive_reason || undefined}>
+                        <Archive size={10} className="mr-1" />Archived
+                      </Badge>
+                    ) : null}
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5 flex gap-3 flex-wrap">
                     <span>{study.instrument || (isDraft ? "(no instrument yet)" : "-")}</span>

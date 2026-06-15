@@ -4,6 +4,7 @@ import { StudyPointExclusionDialog } from "@/components/StudyPointExclusionDialo
 import { StudyAmrDialog } from "@/components/StudyAmrDialog";
 import { StudyFinalizeDialog } from "@/components/StudyFinalizeDialog";
 import { StudyCensoringPolicyDialog } from "@/components/StudyCensoringPolicyDialog";
+import { StudyArchiveDialog } from "@/components/StudyArchiveDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -86,7 +87,7 @@ import {
   Line,
   ResponsiveContainer,
 } from "recharts";
-import { FileDown, FileSpreadsheet, ArrowLeft, CheckCircle2, XCircle, Loader2, BookOpen } from "lucide-react";
+import { FileDown, FileSpreadsheet, ArrowLeft, CheckCircle2, XCircle, Loader2, BookOpen, Archive, ArchiveRestore, GitBranch } from "lucide-react";
 import React, { useState, useCallback, useEffect } from "react";
 import { API_BASE } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -152,6 +153,19 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
           <span className="text-sm text-muted-foreground">{study.date}</span>
           <span className="text-sm text-muted-foreground">·</span>
           <span className="text-sm text-muted-foreground">Analyst: {study.analyst}</span>
+          {/* VeritaCheck lifecycle badges (Phase 1 PR 3): an amendment points
+              back at the study it supersedes; an archived study is off the
+              active dashboard but retained in the audit trail. */}
+          {(study as any).amends_study_id ? (
+            <Badge variant="outline" className="text-xs border-blue-400/40 text-blue-500" data-testid="badge-amendment-of">
+              <GitBranch size={11} className="mr-1" />Amendment of #{(study as any).amends_study_id}
+            </Badge>
+          ) : null}
+          {(study as any).archived_at ? (
+            <Badge variant="outline" className="text-xs border-amber-500/40 text-amber-600" data-testid="badge-archived">
+              <Archive size={11} className="mr-1" />Archived
+            </Badge>
+          ) : null}
         </div>
       </div>
       <div className="flex items-center gap-3">
@@ -2315,6 +2329,9 @@ export default function StudyResults() {
   const [finalizeOpen, setFinalizeOpen] = useState(false);
   const [amendBusy, setAmendBusy] = useState(false);
   const [censoringOpen, setCensoringOpen] = useState(false);
+  // VeritaCheck Phase 1 PR 3: archive / restore dialog. Mode is derived from
+  // the study's archived_at at open time so one dialog serves both actions.
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const queryClient = useQueryClient();
   const studyUrl = labId ? `/api/labs/${labId}/studies/${id}` : `/api/studies/${id}`;
   const { data: study, isLoading, error } = useQuery<Study>({
@@ -3283,7 +3300,18 @@ export default function StudyResults() {
           Draft studies show Sign + Lock. Signed-off studies show
           Amend (creates a linked draft). */}
       <div className="mt-3 flex items-center gap-3 flex-wrap" data-testid="lifecycle-panel">
-        {(study as any).lifecycle_state !== "finalized" ? (
+        {(study as any).archived_at ? (
+          // Archived studies are off the active dashboard. Only Restore is
+          // offered here; restore first, then act on the study if needed.
+          <>
+            <Button variant="outline" size="sm" onClick={() => setArchiveOpen(true)} data-testid="open-unarchive-button">
+              <ArchiveRestore size={13} className="mr-1" />Restore from archive
+            </Button>
+            <span className="text-xs text-amber-700 dark:text-amber-400">
+              <strong>Archived</strong>{(study as any).archive_reason ? `: ${(study as any).archive_reason}` : ""}.
+            </span>
+          </>
+        ) : (study as any).lifecycle_state !== "finalized" ? (
           <>
             <Button variant="outline" size="sm" onClick={() => setFinalizeOpen(true)} data-testid="open-finalize-dialog">
               Sign and lock
@@ -3291,6 +3319,9 @@ export default function StudyResults() {
             <span className="text-xs text-muted-foreground">
               Sign off this study with your signature. Edits after this require an amendment.
             </span>
+            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setArchiveOpen(true)} data-testid="open-archive-button">
+              <Archive size={13} className="mr-1" />Archive
+            </Button>
           </>
         ) : (
           <>
@@ -3321,6 +3352,9 @@ export default function StudyResults() {
             <span className="text-xs text-emerald-700 dark:text-emerald-400">
               <strong>Signed Off</strong> by {(study as any).finalized_signature} on {(study as any).finalized_at ? new Date((study as any).finalized_at).toLocaleDateString() : ""}.
             </span>
+            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setArchiveOpen(true)} data-testid="open-archive-button">
+              <Archive size={13} className="mr-1" />Archive
+            </Button>
           </>
         )}
       </div>
@@ -3329,6 +3363,13 @@ export default function StudyResults() {
         onOpenChange={setFinalizeOpen}
         studyId={study.id}
         onFinalized={() => queryClient.invalidateQueries({ queryKey: [studyUrl] })}
+      />
+      <StudyArchiveDialog
+        open={archiveOpen}
+        onOpenChange={setArchiveOpen}
+        studyId={study.id}
+        mode={(study as any).archived_at ? "unarchive" : "archive"}
+        onDone={() => queryClient.invalidateQueries({ queryKey: [studyUrl] })}
       />
 
       {/* 2026-06-09 (overnight session 8/11, Q1 Censoring Level 2):
