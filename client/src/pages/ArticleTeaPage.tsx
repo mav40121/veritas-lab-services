@@ -165,7 +165,7 @@ return (
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Why Manufacturer Criteria Aren't Always Sufficient</h2>
           <p>
-            Manufacturer-stated allowable error is the performance claim made in the package insert or instrument specification sheet. It is based on what the manufacturer's testing showed their system can achieve, not on what regulators determined is acceptable for patient safety.
+            Manufacturer criteria are a vendor performance claim, not a federally published acceptance limit, so they are not always the most defensible basis for your calibration verification criteria. Manufacturer-stated allowable error is the performance claim made in the package insert or instrument specification sheet. It is based on what the manufacturer's testing showed their system can achieve, not on what regulators determined is acceptable for patient safety.
           </p>
           <p>
             In some cases, manufacturer claims are more stringent than CLIA PT TEa. In others, they are more lenient. The critical point: CLIA PT TEa is a federally published value, while a manufacturer claim is a vendor specification. Adopting the federally published value as your cal ver acceptance criterion (with medical director or designee approval) gives you a more defensible answer to a surveyor. "The manufacturer said so" works, but "42 CFR §493.931 establishes ±8% or ±6 mg/dL for glucose as the PT acceptance criterion, and our laboratory has adopted that as our cal ver criterion under §493.1255(b)(3); all five calibration levels fell within that range" is a stronger answer.
@@ -187,7 +187,7 @@ return (
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">How to Apply TEa to Calibration Verification</h2>
-          <p>The mechanics are straightforward once you have the correct TEa value:</p>
+          <p>To apply TEa to calibration verification, calculate each calibration level's difference from its target, compare it to the analyte's CLIA TEa using the criterion that governs at that concentration, and pass the study only if every level falls within TEa. The mechanics are straightforward once you have the correct TEa value:</p>
           <ol className="list-decimal list-inside space-y-2 pl-2">
             <li>For each calibration level, calculate: <strong>% difference = (observed − expected) ÷ expected × 100</strong></li>
             <li>For analytes with dual criteria (% or absolute, whichever is greater), calculate the absolute difference too: <strong>|observed − expected|</strong></li>
