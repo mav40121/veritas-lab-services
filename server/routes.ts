@@ -1681,8 +1681,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         account_id, lab_id, item_name, catalog_number, lot_number,
         department, category, quantity_on_hand, reorder_point, unit,
         expiration_date, vendor, storage_location, notes, status,
+        order_unit, usage_unit, count_unit, units_per_order_unit, units_per_count_unit,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     let inserted = 0;
@@ -1694,6 +1695,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           errors.push(`Skipped row without item_name: ${JSON.stringify(item).slice(0, 120)}`);
           continue;
         }
+        // Unit model: callers may pass the new order/usage/count units +
+        // pack sizes. Backward compatible: when only the legacy `unit` is
+        // given, all three unit roles mirror it and pack sizes default to 1.
+        const usageUnit = item.usage_unit ?? item.unit ?? "each";
+        const orderUnit = item.order_unit ?? usageUnit;
+        const countUnit = item.count_unit ?? usageUnit;
+        const unitsPerOrder = Number(item.units_per_order_unit ?? 1) || 1;
+        const unitsPerCount = Number(item.units_per_count_unit ?? 1) || 1;
         insertStmt.run(
           accountId,
           Number(labId),
@@ -1704,12 +1713,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           item.category ?? "Reagent",
           Number(item.quantity_on_hand ?? 0),
           Number(item.reorder_point ?? 0),
-          item.unit ?? "each",
+          item.unit ?? usageUnit,
           item.expiration_date ?? null,
           item.vendor ?? null,
           item.storage_location ?? null,
           item.notes ?? null,
           item.status ?? "active",
+          orderUnit,
+          usageUnit,
+          countUnit,
+          unitsPerOrder,
+          unitsPerCount,
           now,
           now,
         );
@@ -24678,7 +24692,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const labRow = sqlite.prepare("SELECT id, lab_name, owner_user_id FROM labs WHERE id = ?").get(labId) as { id: number; lab_name: string; owner_user_id: number } | undefined;
     if (!labRow) return res.status(404).json({ error: `lab ${labId} not found` });
     const items = sqlite.prepare(`
-      SELECT id, item_name, account_id, lab_id, barcode_value, quantity_on_hand
+      SELECT id, item_name, catalog_number, account_id, lab_id, barcode_value,
+             quantity_on_hand, unit, usage_unit, count_unit, units_per_count_unit
       FROM inventory_items
       WHERE lab_id = ? OR account_id = ?
       ORDER BY item_name ASC
