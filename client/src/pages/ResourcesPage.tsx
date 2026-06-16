@@ -64,6 +64,17 @@ const articles = [
     featured: false,
   },
   {
+    slug: "ep26-reagent-lot-verification",
+    title: "EP26-A Reagent Lot Verification: A Working Protocol for Clinical Laboratories",
+    summary: "A new reagent lot can shift your results before a single control flags it. Here is what CLSI EP26-A actually asks for, how to run it, the sample count and acceptance criterion the medical director owns, and where laboratories get it wrong.",
+    category: "Regulatory Compliance",
+    readTime: "9 min read",
+    author: "Michael Veri",
+    date: "June 2026",
+    tags: ["EP26-A", "Reagent Lot Verification", "CLIA", "Lot-to-Lot"],
+    featured: false,
+  },
+  {
     slug: "clia-tea-what-lab-directors-dont-know",
     title: "CLIA Allowable Error (TEa): What It Is, Where to Find It, and Why Most Lab Directors Don't Know About It",
     summary: "In 200+ inspections as a Joint Commission surveyor, most lab directors evaluated calibration verification against manufacturer criteria, unaware that the regulatory standard lives in federal law. Here's where to find it and how to use it.",
