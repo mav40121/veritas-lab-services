@@ -817,7 +817,76 @@ function footerHTML(): string {
 }
 
 // ─── Laboratory Director Review block HTML ───────────────────────────────────
-function directorReviewHTML(): string {
+// ─── Exclusions + Determination record (VeritaCheck Phase 3) ─────────────────
+// When a study carries documented per-point exclusions, a FAIL->PASS
+// determination override (Phase 2), or is an amendment, render a continuation
+// page documenting it. page-break-before keeps this OFF page 1 so the director
+// signature block stays anchored to page 1 (NON-NEGOTIABLE). Returns "" when
+// none apply, so unaffected studies are byte-identical to before.
+function excludedAndDeterminationHTML(study: any): string {
+  const esc = (s: any) => String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const fmtDate = (s: any) => { try { return s ? new Date(s).toISOString().slice(0, 10) : ""; } catch { return ""; } };
+
+  let dp: any[] = [];
+  try { const p = safeJsonParse(study?.dataPoints, []); if (Array.isArray(p)) dp = p; } catch {}
+  const excluded = dp.map((p: any, i: number) => ({ p, i })).filter((x) => x.p && x.p.excluded);
+  const hasOverride = !!study?.verdict_override_justification;
+  const isAmendment = study?.amends_study_id != null;
+  if (excluded.length === 0 && !hasOverride && !isAmendment) return "";
+
+  let body = "";
+  if (excluded.length) {
+    const rows = excluded.map(({ p, i }) => {
+      const label = p.level != null ? `Level ${esc(p.level)}` : `Point ${i + 1}`;
+      let vals = "";
+      if (p.expectedValue != null && p.instrumentValues) {
+        const meas = Object.values(p.instrumentValues).filter((v: any) => v != null).map((v: any) => esc(v)).join(", ");
+        vals = `target ${esc(p.expectedValue)}, measured ${meas}`;
+      } else if (p.value != null) { vals = `value ${esc(p.value)}`; }
+      const when = fmtDate(p.excluded_at);
+      return `<tr>
+        <td style="padding:3px 8px;border-bottom:1px solid #E5E3DD;font-weight:600;">${label}</td>
+        <td style="padding:3px 8px;border-bottom:1px solid #E5E3DD;">${vals}</td>
+        <td style="padding:3px 8px;border-bottom:1px solid #E5E3DD;">${esc(p.exclusion_reason || "no reason recorded")}${when ? ` (recorded ${when})` : ""}</td>
+      </tr>`;
+    }).join("");
+    body += `
+    <div style="font-size:9pt;font-weight:700;color:#01696F;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">Excluded Data Points</div>
+    <p style="font-size:7.5pt;color:#28251D;line-height:1.4;margin:0 0 6px 0;">The following points were excluded from the statistical determination by the laboratory director or designee and are retained on the record.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:7.5pt;color:#28251D;margin-bottom:12px;">
+      <thead><tr style="background:#F0F2F5;">
+        <th style="text-align:left;padding:3px 8px;">Point</th>
+        <th style="text-align:left;padding:3px 8px;">Value</th>
+        <th style="text-align:left;padding:3px 8px;">Reason</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  }
+
+  if (hasOverride) {
+    const before = study.verdict_before_override === "fail" ? "did not meet" : "met";
+    const when = fmtDate(study.verdict_override_at);
+    body += `
+    <div style="font-size:9pt;font-weight:700;color:#01696F;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">Determination Note</div>
+    <p style="font-size:7.5pt;color:#28251D;line-height:1.4;margin:0 0 12px 0;">Before the exclusion(s) above, the results ${before} the CLIA minimum total allowable error criteria. After the documented exclusion(s), the results meet the criteria. Justification recorded${when ? ` on ${when}` : ""}: "${esc(study.verdict_override_justification)}". Final approval and clinical determination must be made by the laboratory director or designee.</p>`;
+  }
+
+  if (isAmendment) {
+    body += `<p style="font-size:7.5pt;color:#28251D;margin:0 0 4px 0;">Amendment of study #${esc(study.amends_study_id)}, which it supersedes.</p>`;
+  }
+
+  return `<div style="page-break-before:always;padding-top:4px;">
+    <div style="font-size:11pt;font-weight:700;text-align:center;margin-bottom:8px;">Exclusions and Determination Record</div>
+    ${body}
+  </div>`;
+}
+
+// 2026-06-15: optional `study` arg appends the Phase 3 exclusions/determination
+// continuation page AFTER the signature div (its page-break-before puts it on a
+// fresh page, so the signature stays on page 1). Omitting the arg yields the
+// original signature-only block.
+function directorReviewHTML(study?: any): string {
   return `
   <div style="margin-top:4px;border:1px solid #D4D1CA;border-left:4px solid #01696F;border-radius:5px;padding:6px 12px;background:#FAFAF8;break-inside:avoid;page-break-inside:avoid;">
     <div style="font-size:8pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Laboratory Director or Designee Review</div>
@@ -842,7 +911,7 @@ function directorReviewHTML(): string {
         <div style="font-size:6.5pt;color:#888;margin-top:8px;">Title</div>
       </div>
     </div>
-  </div>`;
+  </div>${study ? excludedAndDeterminationHTML(study) : ""}`;
 }
 
 
@@ -1338,7 +1407,7 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
 
   ${regulatoryComplianceBoxHTML(study.studyType, (study as any)._preferredStandards)}
 
-  ${directorReviewHTML()}
+  ${directorReviewHTML(study)}
 
   <div class="stats-section">
     <div class="section-label">Statistical Analysis and Experimental Results (Continued from page 1)</div>
@@ -1469,7 +1538,7 @@ function buildQualitativeHTML(study: Study, results: any): string {
   </div>
 
   ${regulatoryComplianceBoxHTML(study.studyType, (study as any)._preferredStandards)}
-  ${directorReviewHTML()}
+  ${directorReviewHTML(study)}
   ${supportingPageHTML(study, allInstrumentNames)}
   </body></html>`;
 }
@@ -1566,7 +1635,7 @@ function buildSemiQuantHTML(study: Study, results: any): string {
   </div>
 
   ${regulatoryComplianceBoxHTML(study.studyType, (study as any)._preferredStandards)}
-  ${directorReviewHTML()}
+  ${directorReviewHTML(study)}
 
   <div class="stats-section">
     <div class="section-label">Sample-by-Sample Detail</div>
@@ -1825,7 +1894,7 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
 
   ${regulatoryComplianceBoxHTML(study.studyType, (study as any)._preferredStandards)}
 
-  ${directorReviewHTML()}
+  ${directorReviewHTML(study)}
 
   <div class="stats-section">
     <div class="section-label">Statistical Analysis and Experimental Results (Continued from page 1)</div>
@@ -2069,7 +2138,7 @@ export function buildPrecisionHTML(study: Study, results: any): string {
 
   ${regulatoryComplianceBoxHTML(study.studyType, (study as any)._preferredStandards)}
 
-  ${directorReviewHTML()}
+  ${directorReviewHTML(study)}
 
   <div class="stats-section">
     <div class="section-label">Statistical Analysis and Experimental Results (Continued from page 1)</div>
@@ -2247,7 +2316,7 @@ function buildRefIntervalHTML(study: Study, results: any): string {
   <div style="margin-bottom:12px;">${chartSVG}</div>
   ${narrative}
   ${regulatoryComplianceBoxHTML("ref_interval", (study as any)._preferredStandards)}
-  ${directorReviewHTML()}
+  ${directorReviewHTML(study)}
   <div class="page-break"></div>
   <div class="section-heading">Individual Specimen Results</div>
   <table>
@@ -2336,7 +2405,7 @@ function buildAccuracyBiasHTML(study: Study, results: any): string {
   ${summaryStats}
   ${narrative}
   ${regulatoryComplianceBoxHTML("accuracy_bias", (study as any)._preferredStandards)}
-  ${directorReviewHTML()}
+  ${directorReviewHTML(study)}
   <div class="page-break"></div>
   <div class="section-heading">Per-Level Accuracy / Bias Results</div>
   <p style="font-size:8pt;color:#666;margin:0 0 8px;">EP15-A3 § 6: bias estimation by comparison of mean measured value to the assigned reference value. Pass criterion: |observed bias| ≤ stated allowable error (TEa).</p>
@@ -2663,7 +2732,7 @@ function buildLinearityHTML(study: Study, results: any): string {
   ${coverageBlock}
   ${narrative}
   ${regulatoryComplianceBoxHTML("linearity", (study as any)._preferredStandards)}
-  ${directorReviewHTML()}
+  ${directorReviewHTML(study)}
   <div class="page-break"></div>
   <div class="section-heading">Per-Level Linearity Results</div>
   <p style="font-size:8pt;color:#666;margin:0 0 8px;">EP06: linearity of the analytical measurement range. Acceptance: |slope - 1| × 100 ≤ TEa% AND r² ≥ 0.95. Per-level verdict reflects bias against TEa at the level mean.</p>
@@ -2762,7 +2831,7 @@ function buildReportableRangeHTML(study: Study, results: any): string {
   ${summaryStats}
   ${narrative}
   ${regulatoryComplianceBoxHTML("reportable_range", (study as any)._preferredStandards)}
-  ${directorReviewHTML()}
+  ${directorReviewHTML(study)}
   <div class="page-break"></div>
   <div class="section-heading">Per-Level Reportable Range Results</div>
   <p style="font-size:8pt;color:#666;margin:0 0 8px;">CLIA §493.1255: verification of the analytical measurement range claimed by the laboratory. Acceptance: per-level |observed bias| ≤ stated allowable error (TEa) using the dual-criterion (percent or absolute) allowance.</p>
@@ -2851,7 +2920,7 @@ function buildCarryoverHTML(study: Study, results: any): string {
   ${summaryStats}
   ${narrative}
   ${regulatoryComplianceBoxHTML("carryover", (study as any)._preferredStandards)}
-  ${directorReviewHTML()}
+  ${directorReviewHTML(study)}
   <div class="page-break"></div>
   <div class="section-heading">Individual Specimen Sequence</div>
   <p style="font-size:8pt;color:#666;margin:0 0 8px;">EP10-A3 protocol: 21 alternating Low/High specimens. Each Low specimen is classified by the type of the immediately preceding specimen. L-after-L specimens reflect intrinsic precision; L-after-H specimens capture any carryover contamination from the preceding High aspiration.</p>
@@ -2971,7 +3040,7 @@ function buildSensitivityHTML(study: Study, results: any): string {
   ${summaryStats}
   ${narrative}
   ${regulatoryComplianceBoxHTML("sensitivity", (study as any)._preferredStandards)}
-  ${directorReviewHTML()}
+  ${directorReviewHTML(study)}
   ${detailSection}
   </body></html>`;
 }
@@ -3074,7 +3143,7 @@ function buildLotToLotHTML(study: Study, results: any): string {
 
   ${narrative}
   ${regulatoryComplianceBoxHTML(study.studyType, (study as any)._preferredStandards)}
-  ${directorReviewHTML()}
+  ${directorReviewHTML(study)}
 
   <div class="stats-section">
     <div class="section-label">Statistical Analysis and Experimental Results (Continued from page 1)</div>
@@ -3280,7 +3349,7 @@ function buildPTCoagHTML(study: Study, results: any): string {
 
   ${narrative}
   ${regulatoryComplianceBoxHTML(study.studyType, (study as any)._preferredStandards)}
-  ${directorReviewHTML()}
+  ${directorReviewHTML(study)}
 
   <div class="stats-section">
     <div class="section-label">Statistical Analysis and Experimental Results (Continued from page 1)</div>
@@ -3399,7 +3468,7 @@ function buildQCRangeHTML(study: Study, results: any): string {
       <div class="eval-text">${narrative}</div>
     </div>
     ${regulatoryComplianceBoxHTML(study.studyType, (study as any)._preferredStandards)}
-    ${directorReviewHTML()}
+    ${directorReviewHTML(study)}
     <div style="page-break-before:always"></div>
     ${headerHTML(study, (study as any)._cliaNumber)}
     <div class="eval-title" style="margin-top:8px">Statistical Analysis and Experimental Results (Continued from page 1)</div>
@@ -3503,7 +3572,7 @@ function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
     </div>
     ${isiNote}
     ${regulatoryComplianceBoxHTML(study.studyType, (study as any)._preferredStandards)}
-    ${directorReviewHTML()}
+    ${directorReviewHTML(study)}
     <div style="page-break-before:always"></div>
     ${headerHTML(study, (study as any)._cliaNumber)}
     <div class="eval-title" style="margin-top:8px">Statistical Analysis and Experimental Results (Continued from page 1)</div>
