@@ -249,6 +249,12 @@ export function calculateCalVer(
   teaIsPercentage: boolean = true,
   cliaAbsoluteFloor: number | null = null
 ): CalVerResults {
+  // VeritaCheck Phase 2 parity (2026-06-15): drop director-excluded points so
+  // the verdict, regression, and per-point table honor documented exclusions
+  // (mirrors the server computeStudyStatus filter, so the on-screen and PDF
+  // verdict match the exclusion-aware stored status). Excluded points are
+  // documented separately in the PDF "Exclusions and Determination Record".
+  dataPoints = dataPoints.filter((dp: any) => !(dp && dp.excluded));
   const valid = dataPoints.filter(
     (dp) => dp.expectedValue !== null && instrumentNames.some((n) => dp.instrumentValues[n] !== null)
   );
@@ -397,6 +403,8 @@ export function calculateMethodComparison(
   teaIsPercentage: boolean = true,
   cliaAbsoluteFloor: number | null = null
 ): MethodCompResults {
+  // Phase 2 parity: honor director-excluded points (see calculateCalVer).
+  dataPoints = dataPoints.filter((dp: any) => !(dp && dp.excluded));
   const valid = dataPoints.filter(
     (dp) => dp.expectedValue !== null && instrumentNames.some((n) => dp.instrumentValues[n] !== null)
   );
@@ -794,6 +802,8 @@ export function calculatePrecision(
   mode: "simple" | "advanced",
   opts: PrecisionOptions = {}
 ): PrecisionResults {
+  // Phase 2 parity: honor director-excluded levels (see calculateCalVer).
+  dataPoints = dataPoints.filter((dp: any) => !(dp && dp.excluded));
   const allowableCV = cliaAllowableImprecision * 100;
 
   // Compute the parity statistics (CIs, 2 SD range, bias, vendor verdict)
@@ -1587,6 +1597,8 @@ export function calculateRefInterval(
   analyte: string,
   units: string
 ): RefIntervalResults {
+  // Phase 2 parity: honor director-excluded specimens (see calculateCalVer).
+  dataPoints = dataPoints.filter((dp: any) => !(dp && dp.excluded));
   const valid = dataPoints.filter(dp => dp.value !== null && !isNaN(dp.value as number));
   const n = valid.length;
   const specimens = valid.map(dp => ({
