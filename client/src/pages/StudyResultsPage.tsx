@@ -3201,9 +3201,12 @@ export default function StudyResults() {
           for Method Comparison studies. Other study types follow in
           a separate PR; this is the EP09 outlier use case that drove
           the feedback. */}
+      {/* Per-point exclusion is only offered for flat-array study types the
+          server accepts. reportable_range stores object-shaped {levels:[]}
+          data, so the exclusion endpoint rejects it; don't show a button that
+          no-ops there. (cal_ver, method_comparison/correlation, precision.) */}
       {(study.studyType === "method_comparison" || study.studyType === "correlation" ||
-        study.studyType === "cal_ver" || study.studyType === "precision" ||
-        study.studyType === "reportable_range") && (
+        study.studyType === "cal_ver" || study.studyType === "precision") && (
         <div className="mt-3 flex items-center gap-3 flex-wrap" data-testid="point-exclusion-panel">
           <Button
             variant="outline"
