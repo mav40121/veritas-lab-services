@@ -95,6 +95,7 @@ const VeritaBenchStaffingPage = lazy(() => import("@/pages/VeritaBenchStaffingPa
 const VeritaStockPage = lazy(() => import("@/pages/VeritaStockPage"));
 const VeritaStockVendorsPage = lazy(() => import("@/pages/VeritaStockVendorsPage"));
 const VeritaStockSnapOrderPage = lazy(() => import("@/pages/VeritaStockSnapOrderPage"));
+const HospitalInventoryPage = lazy(() => import("@/pages/HospitalInventoryPage"));
 const VeritaOpsAppPage = lazy(() => import("@/pages/VeritaOpsAppPage"));
 const LabMembersPage = lazy(() => import("@/pages/LabMembersPage"));
 const FoundingLabApplyPage = lazy(() => import("@/pages/FoundingLabApplyPage"));
@@ -379,6 +380,7 @@ function AppContent() {
           <Route path="/veritabench/pi" component={VeritaBenchPIPage} />
           <Route path="/veritastock">{wrapLegacy(VeritaStockPage)}</Route>
           <Route path="/veritastock/snap-order">{wrapLegacy(VeritaStockSnapOrderPage)}</Route>
+          <Route path="/hospital-inventory" component={HospitalInventoryPage} />
           <Route path="/veritaops-app">{wrapLegacy(VeritaOpsAppPage)}</Route>
           <Route path="/roadmap" component={RoadmapPage} />
           <Route path="/veritaassure" component={VeritaAssurePage} />
