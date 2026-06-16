@@ -45,6 +45,7 @@ const ArticleWhyVeritaCheckPage = lazy(() => import("@/pages/ArticleWhyVeritaChe
 const FAQPage = lazy(() => import("@/pages/FAQPage"));
 const PricingPage = lazy(() => import("@/pages/PricingPage"));
 const ArticleCalVerPage = lazy(() => import("@/pages/ArticleCalVerPage"));
+const ArticleEP26Page = lazy(() => import("@/pages/ArticleEP26Page"));
 const ArticleTeaPage = lazy(() => import("@/pages/ArticleTeaPage"));
 const ArticleTrainingPage = lazy(() => import("@/pages/ArticleTrainingPage"));
 const ArticleCLIACalVerRequirementsPage = lazy(() => import("@/pages/ArticleCLIACalVerRequirementsPage"));
@@ -336,6 +337,7 @@ function AppContent() {
           <Route path="/pricing" component={PricingPage} />
           <Route path="/request-invoice" component={RequestInvoicePage} />
           <Route path="/resources/clia-calibration-verification-method-comparison" component={ArticleCalVerPage} />
+          <Route path="/resources/ep26-reagent-lot-verification" component={ArticleEP26Page} />
           <Route path="/resources/clia-tea-what-lab-directors-dont-know" component={ArticleTeaPage} />
           <Route path="/resources/how-veritaassure-trains-lab-leaders" component={ArticleTrainingPage} />
           <Route path="/resources/calibration-verification-requirements-clia" component={ArticleCLIACalVerRequirementsPage} />

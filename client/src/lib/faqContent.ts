@@ -73,6 +73,34 @@ export const CALVER_ARTICLE_FAQ: FaqQA[] = [
             },
           ];
 
+// /resources/ep26-reagent-lot-verification
+export const EP26_ARTICLE_FAQ: FaqQA[] = [
+  {
+    q: "Is reagent lot verification required by CLIA?",
+    a: "Yes. CLIA requires laboratories to verify that a new reagent lot performs acceptably before reporting patient results from it, and to define and document the acceptance criteria (42 CFR §493.1253(b)(3) and §493.1255). The regulation requires the verification and the documented criteria; it does not prescribe the exact protocol or sample count, which the laboratory establishes with medical director or designee approval.",
+  },
+  {
+    q: "How many samples does EP26-A require?",
+    a: "EP26-A and CLIA do not set a fixed number. The medical director or designee determines it based on the analyte's risk and the laboratory's total allowable error (TEa). In practice, many laboratories adopt a minimum of about 20 patient samples spanning the analytical measuring range, the same floor commonly used for reference interval verification, and use more for higher-stakes analytes.",
+  },
+  {
+    q: "What is the difference between lot-to-lot verification and calibration verification?",
+    a: "Calibration verification confirms accuracy against known true values across the reportable range. Reagent lot-to-lot verification confirms that results from a new reagent lot agree with the current lot on patient samples. Calibration verification asks whether your results are correct; lot verification asks whether changing the reagent lot shifted your results. Different triggers, different question.",
+  },
+  {
+    q: "How do I set the acceptance criterion for a lot change?",
+    a: "Anchor it to the analyte's total allowable error (TEa). A common, defensible rule is to accept when the mean absolute percent difference between the two lots is within TEa and at least 90 percent of paired patient specimens are within TEa, with the criterion approved by the medical director or designee.",
+  },
+  {
+    q: "What do I do if a new reagent lot fails verification?",
+    a: "Treat it as an investigation, not an automatic rejection. Confirm the samples and inputs, repeat or expand the study, and look for an assignable cause such as calibration, control performance, or sample integrity. The final determination rests with the laboratory director or designee.",
+  },
+  {
+    q: "How often must I verify reagent lots?",
+    a: "Each time a new reagent lot is put into service for patient testing, before results from that lot are reported. It is event-driven, triggered by every new lot, not a fixed calendar interval.",
+  },
+];
+
 // /faq  (the main FAQ page, grouped by category)
 export const FAQ_CATEGORIES: FaqCategory[] = [
   {
