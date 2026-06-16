@@ -1425,20 +1425,29 @@ export default function VeritaStockInventoryPage() {
                     <td className="px-3 py-2 text-xs hidden md:table-cell">{item.department}</td>
                   )}
                   {isColumnVisible("quantity_on_hand") && (
-                    <td className="px-3 py-2 font-mono text-sm">
+                    <td className="px-3 py-2 font-mono text-sm" data-testid="onhand-cell">
                       {(() => {
-                        // 2026-06-09: show in count_unit when pack_size > 1,
-                        // with parenthetical usage_unit total. Falls back to
-                        // legacy "N usage_units" display when count_unit is
-                        // unset or equal to usage_unit.
+                        // 2026-06-16: show On Hand in count_unit whenever the lab
+                        // set a count_unit that differs from usage_unit, REGARDLESS
+                        // of pack size. Previously gated on pack_size > 1, which hid
+                        // the count_unit (fell back to the usage_unit label, e.g.
+                        // "3 eaches") for items counted in boxes at 1 each/box. This
+                        // now matches the kiosk + staff portal on-hand displays,
+                        // which already label with count_unit at any pack size. The
+                        // parenthetical usage_unit total still shows only when
+                        // pack_size > 1 (at pack 1 the count equals the usage total,
+                        // so it is redundant). Falls back to the usage_unit display
+                        // when count_unit is unset or equal to usage_unit.
                         const pack = item.units_per_count_unit && item.units_per_count_unit > 0 ? item.units_per_count_unit : 1;
                         const countUnit = item.count_unit || item.usage_unit || "each";
-                        if (pack > 1 && countUnit !== item.usage_unit) {
-                          const countQty = Math.round(item.quantity_on_hand / pack);
+                        if (countUnit !== item.usage_unit) {
+                          const countQty = pack > 1 ? Math.round(item.quantity_on_hand / pack) : item.quantity_on_hand;
                           return (
                             <>
                               {countQty.toLocaleString()} <span className="text-xs text-muted-foreground">{countUnit}{countQty === 1 ? "" : "s"}</span>
-                              <div className="text-[10px] text-muted-foreground">({item.quantity_on_hand.toLocaleString()} {item.usage_unit}s)</div>
+                              {pack > 1 && (
+                                <div className="text-[10px] text-muted-foreground">({item.quantity_on_hand.toLocaleString()} {item.usage_unit}s)</div>
+                              )}
                             </>
                           );
                         }
