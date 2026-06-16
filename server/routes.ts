@@ -94,9 +94,18 @@ import { insertStudySchema, insertContactSchema, registerSchema, loginSchema, ty
 // Each study type has its own pass/fail rule derived from the raw dataPoints.
 function computeStudyStatus(studyType: string, dataPointsJson: string, instrumentsJson: string, cliaAllowableError: number, teaIsPercentage: boolean = true, cliaAbsoluteFloor: number | null = null): "pass" | "fail" {
   try {
-    const rawData = safeJsonParse(dataPointsJson, null);
+    let rawData = safeJsonParse(dataPointsJson, null);
     const instrumentNames: string[] = safeJsonParse(instrumentsJson, []);
     if (!rawData) return "fail";
+
+    // 2026-06-15 (Phase 2): the stored verdict honors documented per-point
+    // exclusions. Flat-array data points (cal_ver, method_comparison, precision,
+    // ref_interval, carryover, accuracy_bias) may carry an `excluded` flag set
+    // through the controlled exclusion endpoint; drop those before computing
+    // pass/fail. Object-shaped types (lot_to_lot, qualitative, sensitivity) can
+    // never carry exclusions (the exclusion endpoint rejects non-flat-arrays),
+    // so they are unaffected.
+    if (Array.isArray(rawData)) rawData = rawData.filter((p: any) => !(p && p.excluded));
 
     // Sensitivity (EP17-A2) — dataPoints is the wrapper {input, results} that
     // VeritaCheckPage.tsx persists; trust the pre-computed results.overallPass.
@@ -479,12 +488,28 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
   }
 }
 
+// True if any data point carries a documented exclusion. Used to keep the boot
+// recompute from auto-flipping an exclusion-affected verdict without the
+// director's FAIL->PASS justification (which is captured only at the controlled
+// exclusion endpoint).
+function dataPointsHaveExclusions(dataPointsJson: string): boolean {
+  const parsed = safeJsonParse(dataPointsJson, null);
+  return Array.isArray(parsed) && parsed.some((p: any) => p && p.excluded);
+}
+
 // Recompute and fix status for all existing studies
 export function recomputeAllStudyStatuses(): void {
   const allStudies = storage.getAllStudies();
   let fixed = 0;
   const sqlite = (db as any).$client;
   for (const study of allStudies) {
+    // 2026-06-15 (Phase 2): never auto-mutate an exclusion-affected verdict at
+    // boot. computeStudyStatus now honors exclusions, so without this guard the
+    // first boot after deploy would silently flip every study that has excluded
+    // points (potentially FAIL->PASS) WITHOUT the director's justification — a
+    // cascading-write footgun. Exclusion-driven verdict changes happen only
+    // through the controlled exclusion endpoint, which captures that decision.
+    if (dataPointsHaveExclusions(study.dataPoints)) continue;
     const computed = computeStudyStatus(study.studyType, study.dataPoints, study.instruments, study.cliaAllowableError, (study as any).teaIsPercentage !== 0, (study as any).cliaAbsoluteFloor ?? null);
     if (computed !== study.status) {
       storage.updateStudyStatus(study.id, computed);
@@ -8547,6 +8572,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       archived_at: row.archived_at,
       archived_by_user_id: row.archived_by_user_id,
       archive_reason: row.archive_reason,
+      verdict_override_justification: row.verdict_override_justification,
+      verdict_override_at: row.verdict_override_at,
+      verdict_override_by_user_id: row.verdict_override_by_user_id,
+      verdict_before_override: row.verdict_before_override,
       createdAt: row.created_at,
       lab_id: row.lab_id,
     };
@@ -8787,8 +8816,54 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         excluded_by_user_id: null,
       };
     }
-    (db as any).$client.prepare("UPDATE studies SET data_points = ? WHERE id = ?")
-      .run(JSON.stringify(dp), studyRow.id);
+    const newDpJson = JSON.stringify(dp);
+
+    // 2026-06-15 (Phase 2): recompute the verdict honoring the exclusion and
+    // persist it in place, so a documented correction updates the original
+    // study instead of being worked around with a duplicate. Only completed
+    // studies carry a pass/fail verdict; drafts stay 'draft'.
+    const cur = studyRow.status;
+    let newStatus: string = cur;
+    let flipFailToPass = false;
+    if (cur === "pass" || cur === "fail") {
+      newStatus = computeStudyStatus(
+        studyRow.study_type,
+        newDpJson,
+        studyRow.instruments,
+        studyRow.clia_allowable_error,
+        studyRow.tea_is_percentage !== 0,
+        studyRow.clia_absolute_floor ?? null,
+      );
+      flipFailToPass = cur === "fail" && newStatus === "pass";
+    }
+
+    // A FAIL -> PASS flip driven by an exclusion needs the director's
+    // justification before it lands. The client re-submits with `justification`
+    // once the user confirms the verdict change (422 signals that prompt).
+    if (mode === "exclude" && flipFailToPass) {
+      const justification = typeof req.body?.justification === "string" ? req.body.justification.trim() : "";
+      if (!justification) {
+        return res.status(422).json({
+          error: "Excluding this point changes the verdict from FAIL to PASS. A justification is required to record that decision.",
+          requiresVerdictJustification: true,
+          newVerdict: "pass",
+        });
+      }
+      (db as any).$client.prepare(
+        "UPDATE studies SET data_points = ?, status = ?, result = ?, verdict_override_justification = ?, verdict_override_at = ?, verdict_override_by_user_id = ?, verdict_before_override = ? WHERE id = ?"
+      ).run(newDpJson, newStatus, newStatus, justification, now, req.userId, "fail", studyRow.id);
+    } else {
+      // Non-flip exclusion, or an include that may revert the verdict. Persist
+      // the recomputed status; once the verdict is no longer a FAIL->PASS
+      // exclusion result, clear any stale override record.
+      const clearOverride = newStatus !== "pass";
+      (db as any).$client.prepare(
+        clearOverride
+          ? "UPDATE studies SET data_points = ?, status = ?, result = ?, verdict_override_justification = NULL, verdict_override_at = NULL, verdict_override_by_user_id = NULL, verdict_before_override = NULL WHERE id = ?"
+          : "UPDATE studies SET data_points = ?, status = ?, result = ? WHERE id = ?"
+      ).run(newDpJson, newStatus, newStatus, studyRow.id);
+    }
+
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyRow.id);
     res.json(updated);
   }

@@ -1619,6 +1619,17 @@ try { sqlite.exec("ALTER TABLE studies ADD COLUMN archived_by_user_id INTEGER");
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN archive_reason TEXT"); } catch {}
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN result_units TEXT"); } catch {}
 
+// 2026-06-15: VeritaCheck Phase 2 (close the orphan-creation hole). Excluding a
+// data point now recomputes and persists the verdict in place, so a documented
+// correction updates the original study instead of being worked around by
+// creating a duplicate. When an exclusion flips the verdict FAIL -> PASS, the
+// director must record a justification; the pre-exclusion FAIL is retained here
+// so the decision stays visible in the audit trail. Additive + idempotent.
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN verdict_override_justification TEXT"); } catch {}
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN verdict_override_at TEXT"); } catch {}
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN verdict_override_by_user_id INTEGER"); } catch {}
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN verdict_before_override TEXT"); } catch {}
+
 // 2026-06-09 (Michael L feedback): optional Analytical Measurement Range
 // (AMR) per study, so Linearity / Reportable Range renderers can report
 // edge-coverage (how close the lowest and highest tested points get to

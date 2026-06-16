@@ -305,6 +305,20 @@ export default function VeritaCheckPage() {
   const [cliaModalOpen, setCliaModalOpen] = useState(false);
   const [phiBannerDismissed, setPhiBannerDismissed] = useState(false);
 
+  // Phase 2 (2026-06-15): a signed-off study is corrected with an amendment,
+  // never edited in place. The server already 409s the PUT; this guards the
+  // client too, so opening "Edit" on a signed-off study lands the director on
+  // the study page (where Amend lives) instead of a form that will be rejected.
+  useEffect(() => {
+    if (isEditing && editStudy && (editStudy as any).lifecycle_state === "finalized") {
+      toast({
+        title: "This study is signed off",
+        description: "Signed-off studies are corrected with an amendment, not edited in place. Opening the study so you can Amend it.",
+      });
+      navigate(editingLabId ? `/labs/${editingLabId}/study/${editId}/results` : `/study/${editId}/results`);
+    }
+  }, [isEditing, editStudy, editingLabId, editId]);
+
   // Check URL params for payment result after Stripe redirect
   useEffect(() => {
     const params = new URLSearchParams(search);
