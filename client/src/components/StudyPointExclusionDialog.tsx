@@ -8,20 +8,23 @@
 //
 // Excluded points stay in the data array; they're hidden from the
 // regression but visible in the dialog with strikethrough + reason.
-// Surfacing on the PDF (struck through with reason inline) follows
-// in a separate render-side PR.
 //
-// Endpoint contract (PR1, already deployed):
-//   POST /api/studies/:id/points/:idx/exclude  body { reason }
+// 2026-06-15 (Phase 2): excluding a point now recomputes and persists the
+// verdict in place. If an exclusion flips the verdict FAIL -> PASS the server
+// returns 422 { requiresVerdictJustification }, and the director must record a
+// justification (the pre-exclusion FAIL is retained in the audit trail).
+//
+// Endpoint contract:
+//   POST /api/studies/:id/points/:idx/exclude  body { reason, justification? }
 //   POST /api/studies/:id/points/:idx/include
 //
-// Gated server-side on lifecycle_state !== 'finalized'. The dialog
-// optimistically shows the locked state too.
+// Gated server-side on lifecycle_state !== 'finalized'.
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -62,6 +65,12 @@ export function StudyPointExclusionDialog({
   const [busyIndex, setBusyIndex] = useState<number | null>(null);
   const [reasonOpenIndex, setReasonOpenIndex] = useState<number | null>(null);
   const [reasonText, setReasonText] = useState<string>("");
+  // Phase 2: the FAIL -> PASS verdict-justification step. When the server
+  // refuses an exclusion that would flip the verdict, we capture the per-point
+  // reason and prompt for a director-level justification, then re-submit both.
+  const [verdictJustifyIndex, setVerdictJustifyIndex] = useState<number | null>(null);
+  const [verdictJustifyText, setVerdictJustifyText] = useState<string>("");
+  const [pendingReason, setPendingReason] = useState<string>("");
 
   // Reset on open/close.
   useEffect(() => {
@@ -69,20 +78,36 @@ export function StudyPointExclusionDialog({
       setBusyIndex(null);
       setReasonOpenIndex(null);
       setReasonText("");
+      setVerdictJustifyIndex(null);
+      setVerdictJustifyText("");
+      setPendingReason("");
     }
   }, [open]);
 
   const isLocked = study.lifecycle_state === "finalized";
   const comparisonName = (study.instruments && study.instruments[1]) || (study.instruments && study.instruments[0]) || "";
 
-  async function postPointAction(idx: number, action: "exclude" | "include", reason?: string) {
+  async function postPointAction(idx: number, action: "exclude" | "include", reason?: string, justification?: string) {
     setBusyIndex(idx);
     try {
       const r = await fetch(`${API_BASE}/api/studies/${study.id}/points/${idx}/${action}`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: action === "exclude" ? JSON.stringify({ reason }) : "{}",
+        body: action === "exclude" ? JSON.stringify({ reason, justification }) : "{}",
       });
+      // 422 = the exclusion flips the verdict FAIL -> PASS and needs a
+      // director-level justification. Open that step rather than erroring.
+      if (r.status === 422) {
+        const body = await r.json().catch(() => ({}));
+        if (body?.requiresVerdictJustification) {
+          setPendingReason(reason || "");
+          setReasonOpenIndex(null);
+          setVerdictJustifyIndex(idx);
+          setVerdictJustifyText("");
+          return;
+        }
+        throw new Error(body?.error || `HTTP 422`);
+      }
       if (!r.ok) {
         const body = await r.json().catch(() => ({}));
         throw new Error(body.error || `HTTP ${r.status}`);
@@ -90,12 +115,17 @@ export function StudyPointExclusionDialog({
       toast({
         title: action === "exclude" ? "Point excluded" : "Point restored",
         description: action === "exclude"
-          ? `Regression will recompute without point ${idx + 1}.`
-          : `Point ${idx + 1} is back in the regression.`,
+          ? (justification
+              ? `Verdict updated to PASS; the original FAIL and your justification are retained in the audit trail.`
+              : `The study verdict was recomputed without point ${idx + 1}.`)
+          : `Point ${idx + 1} is back in the study; the verdict was recomputed.`,
       });
       onUpdated();
       setReasonOpenIndex(null);
       setReasonText("");
+      setVerdictJustifyIndex(null);
+      setVerdictJustifyText("");
+      setPendingReason("");
     } catch (e: any) {
       toast({ title: "Action failed", description: e.message, variant: "destructive" });
     } finally {
@@ -121,15 +151,15 @@ export function StudyPointExclusionDialog({
         <DialogHeader>
           <DialogTitle>Manage data points</DialogTitle>
           <DialogDescription>
-            Exclude a point from the regression (e.g. transcription error, specimen issue, known interference).
-            Excluded points stay on the record with the reason you provide; the surveyor sees the full audit trail
-            on the PDF. The lab director or designee remains the source of truth for any exclusion.
+            Exclude a point from the study (e.g. transcription error, specimen issue, known interference).
+            Excluded points stay on the record with the reason you provide and the study verdict is recomputed;
+            the surveyor sees the full audit trail. The lab director or designee remains the source of truth for any exclusion.
           </DialogDescription>
         </DialogHeader>
 
         {isLocked && (
           <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-900 dark:text-amber-200" data-testid="point-exclusion-locked">
-            This study is finalized and locked. To change an exclusion, use the amendment workflow.
+            This study is signed off and locked. To change an exclusion, use the amendment workflow.
           </div>
         )}
 
@@ -163,7 +193,7 @@ export function StudyPointExclusionDialog({
                     <td className="p-2 text-xs">
                       {excluded
                         ? <span className="text-amber-700 dark:text-amber-300 not-italic">Excluded: {p.exclusion_reason || "no reason recorded"}</span>
-                        : <span className="text-muted-foreground">In regression</span>}
+                        : <span className="text-muted-foreground">In study</span>}
                     </td>
                     <td className="p-2 text-right">
                       {!isLocked && (
@@ -200,7 +230,7 @@ export function StudyPointExclusionDialog({
           </table>
         </div>
 
-        {reasonOpenIndex !== null && (
+        {reasonOpenIndex !== null && verdictJustifyIndex === null && (
           <div className="border border-border rounded-md p-3 bg-card mt-3" data-testid="exclusion-reason-form">
             <Label htmlFor="exclusion-reason" className="text-xs">
               Reason for excluding point {reasonOpenIndex + 1}
@@ -224,6 +254,41 @@ export function StudyPointExclusionDialog({
                 data-testid="exclusion-reason-submit"
               >
                 Exclude point
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {verdictJustifyIndex !== null && (
+          <div className="border border-amber-400 rounded-md p-3 bg-amber-50 dark:bg-amber-950/20 mt-3" data-testid="verdict-justify-form">
+            <div className="text-sm font-semibold text-amber-900 dark:text-amber-200 mb-1">
+              This exclusion changes the verdict from FAIL to PASS
+            </div>
+            <p className="text-xs text-amber-900 dark:text-amber-200 mb-2">
+              Record why point {verdictJustifyIndex + 1} is excluded from the determination. The laboratory director or
+              designee owns this decision. The original FAIL and this justification are retained in the audit trail.
+            </p>
+            <Label htmlFor="verdict-justify" className="text-xs">Verdict change justification (required)</Label>
+            <Textarea
+              id="verdict-justify"
+              value={verdictJustifyText}
+              onChange={(e) => setVerdictJustifyText(e.target.value)}
+              placeholder="e.g. Point is a confirmed clotted-specimen outlier; repeat within criteria. Director-approved exclusion."
+              rows={3}
+              className="mt-1"
+              data-testid="verdict-justify-input"
+            />
+            <div className="flex justify-end gap-2 mt-3">
+              <Button variant="ghost" size="sm" onClick={() => { setVerdictJustifyIndex(null); setVerdictJustifyText(""); setPendingReason(""); }}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                disabled={!verdictJustifyText.trim() || busyIndex === verdictJustifyIndex}
+                onClick={() => postPointAction(verdictJustifyIndex, "exclude", pendingReason, verdictJustifyText.trim())}
+                data-testid="verdict-justify-submit"
+              >
+                Exclude and record FAIL to PASS justification
               </Button>
             </div>
           </div>
