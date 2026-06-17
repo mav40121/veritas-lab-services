@@ -1879,6 +1879,15 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
   ensure("staff_portal_pin_updated_at",   "ALTER TABLE labs ADD COLUMN staff_portal_pin_updated_at TEXT");
   ensure("staff_portal_pin_locked_until", "ALTER TABLE labs ADD COLUMN staff_portal_pin_locked_until TEXT");
   ensure("staff_portal_pin_failed_attempts", "ALTER TABLE labs ADD COLUMN staff_portal_pin_failed_attempts INTEGER DEFAULT 0");
+
+  // Enterprise inventory (VeritaStock multi-location). Nullable self-FK:
+  // null means this lab is standalone or a warehouse; a set value means
+  // this lab is a stockroom location reporting to that warehouse lab. One
+  // column models the whole warehouse/location hierarchy and is fully
+  // reversible. No backfill, no cascading writes (the lab_members incident
+  // rule): the column is added empty and only ever set by an explicit
+  // PATCH from an owner/admin.
+  ensure("parent_warehouse_lab_id", "ALTER TABLE labs ADD COLUMN parent_warehouse_lab_id INTEGER");
 }
 
 // users.default_lab_id — bare-route redirect target (per doc Section 4).
@@ -3552,6 +3561,60 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inventory_items_expiration ON 
 // because legacy rows without a barcode share NULL; the application layer
 // rejects duplicate barcode inserts via a per-account uniqueness check.
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inventory_barcode ON inventory_items(account_id, barcode_value)`); } catch {}
+
+// inventory_transfers — ledger of stock moved between two labs (locations)
+// in the same enterprise. One row per completed transfer. qty_usage_units
+// is the canonical amount moved (usage_units); display_qty/display_unit
+// record what the user actually typed (e.g. 4 boxes) for the slip and
+// audit readability. status defaults 'completed' for the one-step MVP; a
+// later phase adds 'pending'/'in_transit' for request-then-receive. Both
+// from_item_id and to_item_id are nullable because the destination row may
+// be auto-created during the transfer and a source row could later be
+// archived; the catalog_number/item_name copy keeps the ledger readable
+// regardless.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS inventory_transfers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_user_id INTEGER NOT NULL,
+    from_lab_id INTEGER NOT NULL,
+    to_lab_id INTEGER NOT NULL,
+    from_item_id INTEGER,
+    to_item_id INTEGER,
+    catalog_number TEXT,
+    item_name TEXT NOT NULL,
+    qty_usage_units INTEGER NOT NULL,
+    display_qty INTEGER,
+    display_unit TEXT,
+    status TEXT NOT NULL DEFAULT 'completed',
+    initiated_by_user_id INTEGER NOT NULL,
+    initiated_by_name TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+// ALTER TABLE migration for inventory_transfers (PRAGMA table_info pattern,
+// per the NEW DB TABLE RULE: ship the table with its own additive migration
+// so a pre-existing table on the live volume gains any later column).
+{
+  const itCols = sqlite.prepare("PRAGMA table_info(inventory_transfers)").all() as { name: string }[];
+  const itColNames = itCols.map((c) => c.name);
+  if (itCols.length > 0) {
+    const ensureIt = (col: string, sql: string) => {
+      if (!itColNames.includes(col)) { try { sqlite.exec(sql); itColNames.push(col); } catch {} }
+    };
+    ensureIt("from_item_id", "ALTER TABLE inventory_transfers ADD COLUMN from_item_id INTEGER");
+    ensureIt("to_item_id", "ALTER TABLE inventory_transfers ADD COLUMN to_item_id INTEGER");
+    ensureIt("catalog_number", "ALTER TABLE inventory_transfers ADD COLUMN catalog_number TEXT");
+    ensureIt("display_qty", "ALTER TABLE inventory_transfers ADD COLUMN display_qty INTEGER");
+    ensureIt("display_unit", "ALTER TABLE inventory_transfers ADD COLUMN display_unit TEXT");
+    ensureIt("status", "ALTER TABLE inventory_transfers ADD COLUMN status TEXT NOT NULL DEFAULT 'completed'");
+    ensureIt("initiated_by_name", "ALTER TABLE inventory_transfers ADD COLUMN initiated_by_name TEXT");
+    ensureIt("notes", "ALTER TABLE inventory_transfers ADD COLUMN notes TEXT");
+  }
+}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inv_transfers_from ON inventory_transfers(from_lab_id, created_at DESC)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inv_transfers_to ON inventory_transfers(to_lab_id, created_at DESC)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inv_transfers_owner ON inventory_transfers(owner_user_id, created_at DESC)`); } catch {}
 
 // VeritaStock vendor management (2026-06-07): the lab's vendor directory.
 // One row per (lab, vendor) — each lab has its own account numbers,

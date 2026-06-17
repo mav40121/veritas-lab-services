@@ -7,6 +7,7 @@ import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
 import { db, PLAN_SEATS, PLAN_VIEW_ONLY_SEATS, PLAN_PRICES, PLAN_BED_RANGES, suggestTierFromBeds } from "./db";
+import { computeUsageQty, validateTransfer, matchKey, countOnHand } from "./enterpriseTransfer";
 import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice, getSeatPriceForTier, VC_UNLIMITED_FIRST_YEAR_COUPON, getViewOnlyAddOnConfig } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
@@ -5459,6 +5460,346 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).all(labId) as Array<{ vendor_id: number; n: number }>;
       const countMap = new Map(counts.map((c) => [c.vendor_id, c.n]));
       res.json(rows.map((r) => ({ ...r, contact_count: countMap.get(r.id) || 0 })));
+    },
+  );
+
+  // ── Enterprise inventory transfers (VeritaStock multi-location) ──────────
+  //
+  // PR 1 backend for the warehouse <-> stockroom model San Carlos Apache
+  // Healthcare asked to demo. Each location is a lab; a transfer moves stock
+  // between two labs that share an owner and that the acting user belongs to.
+  // Pure guards/math live in ./enterpriseTransfer and are unit-tested by
+  // scripts/verify-enterprise-transfer.mjs. Every route is scoped to :labId
+  // via labScopeMiddleware, so the URL lab is always one the user can access;
+  // the destination lab is validated explicitly against owner + membership.
+
+  function userIsMemberOfLab(userId: number, labId: number): boolean {
+    const sqlite = (db as any).$client;
+    const row = sqlite.prepare(
+      "SELECT 1 AS ok FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1"
+    ).get(userId, labId) as any;
+    return !!row;
+  }
+
+  // POST /api/labs/:labId/veritastock/transfer
+  app.post(
+    "/api/labs/:labId/veritastock/transfer",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      try {
+        const sqlite = (db as any).$client;
+        const fromLabId = req.scope.labId;
+        const userId = req.scope.userId;
+        const toLabId = Number(req.body?.to_lab_id);
+        const itemId = Number(req.body?.item_id);
+        const quantity = Number(req.body?.quantity);
+        const notes = typeof req.body?.notes === "string" ? req.body.notes.trim().slice(0, 500) : null;
+
+        if (!Number.isFinite(toLabId) || toLabId <= 0) return res.status(400).json({ error: "to_lab_id required" });
+        if (!Number.isFinite(itemId) || itemId <= 0) return res.status(400).json({ error: "item_id required" });
+        if (!Number.isFinite(quantity) || quantity <= 0) return res.status(400).json({ error: "quantity must be a positive number" });
+
+        const sourceItem = sqlite.prepare(
+          "SELECT * FROM inventory_items WHERE id = ? AND lab_id = ?"
+        ).get(itemId, fromLabId) as any;
+        if (!sourceItem) return res.status(404).json({ error: "Item not found in this lab" });
+
+        const fromLab = sqlite.prepare("SELECT id, owner_user_id, lab_name FROM labs WHERE id = ?").get(fromLabId) as any;
+        const toLab = sqlite.prepare("SELECT id, owner_user_id, lab_name FROM labs WHERE id = ?").get(toLabId) as any;
+        if (!toLab) return res.status(404).json({ error: "Destination lab not found" });
+
+        const packSize =
+          Number.isFinite(sourceItem.units_per_count_unit) && sourceItem.units_per_count_unit > 0
+            ? sourceItem.units_per_count_unit
+            : 1;
+        const usageQty = computeUsageQty(quantity, packSize);
+
+        const guard = validateTransfer({
+          fromLabId,
+          toLabId,
+          fromOwnerUserId: fromLab?.owner_user_id ?? -1,
+          toOwnerUserId: toLab?.owner_user_id ?? -2,
+          actingUserIsMemberOfDestination: userIsMemberOfLab(userId, toLabId),
+          sourceQtyOnHand: sourceItem.quantity_on_hand,
+          usageQty,
+        });
+        if (!guard.ok) {
+          const status = guard.error === "cross_owner" || guard.error === "no_access_to_destination" ? 403 : 400;
+          return res.status(status).json({ error: guard.error });
+        }
+
+        const cat = (sourceItem.catalog_number || "").trim();
+        const destItem = cat
+          ? sqlite.prepare(
+              "SELECT * FROM inventory_items WHERE lab_id = ? AND lower(trim(catalog_number)) = lower(?) LIMIT 1"
+            ).get(toLabId, cat) as any
+          : sqlite.prepare(
+              "SELECT * FROM inventory_items WHERE lab_id = ? AND lower(trim(item_name)) = lower(?) LIMIT 1"
+            ).get(toLabId, (sourceItem.item_name || "").trim()) as any;
+
+        const countUnitLabel = sourceItem.count_unit || sourceItem.unit || "each";
+        const displayQty = Math.round(quantity);
+        const nowIso = new Date().toISOString();
+        const actor = sqlite.prepare("SELECT email FROM users WHERE id = ?").get(userId) as any;
+        const actorName = actor?.email || `user ${userId}`;
+
+        const run = sqlite.transaction(() => {
+          let destId: number;
+          let destBefore: number;
+          if (!destItem) {
+            const ins = sqlite.prepare(`
+              INSERT INTO inventory_items
+                (account_id, lab_id, item_name, catalog_number, department, category,
+                 quantity_on_hand, reorder_point, unit, vendor,
+                 order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit,
+                 status, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+            `).run(
+              toLab.owner_user_id, toLabId, sourceItem.item_name, sourceItem.catalog_number || null,
+              sourceItem.department || "Core Lab", sourceItem.category || "Reagent",
+              sourceItem.reorder_point ?? 5, sourceItem.unit || "each", sourceItem.vendor || null,
+              sourceItem.order_unit || "each", sourceItem.usage_unit || "each",
+              sourceItem.units_per_order_unit ?? 1, sourceItem.count_unit || "each",
+              sourceItem.units_per_count_unit ?? 1, nowIso, nowIso,
+            );
+            destId = Number(ins.lastInsertRowid);
+            destBefore = 0;
+          } else {
+            destId = destItem.id;
+            destBefore = destItem.quantity_on_hand;
+          }
+
+          const srcBefore = sourceItem.quantity_on_hand;
+          const srcAfter = srcBefore - usageQty;
+          const destAfter = destBefore + usageQty;
+
+          sqlite.prepare("UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?")
+            .run(srcAfter, nowIso, sourceItem.id);
+          sqlite.prepare("UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?")
+            .run(destAfter, nowIso, destId);
+
+          const insT = sqlite.prepare(`
+            INSERT INTO inventory_transfers
+              (owner_user_id, from_lab_id, to_lab_id, from_item_id, to_item_id,
+               catalog_number, item_name, qty_usage_units, display_qty, display_unit,
+               status, initiated_by_user_id, initiated_by_name, notes, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?, ?)
+          `).run(
+            fromLab.owner_user_id, fromLabId, toLabId, sourceItem.id, destId,
+            sourceItem.catalog_number || null, sourceItem.item_name, usageQty,
+            displayQty, countUnitLabel, userId, actorName, notes, nowIso,
+          );
+          const transferId = Number(insT.lastInsertRowid);
+
+          logAudit({
+            userId,
+            ownerUserId: fromLab.owner_user_id,
+            module: "veritastock",
+            action: "transfer_out",
+            entityType: "inventory_item",
+            entityId: String(sourceItem.id),
+            entityLabel: `${sourceItem.item_name}: -${displayQty} ${countUnitLabel} to ${toLab.lab_name || "lab " + toLabId}`,
+            before: { quantity_on_hand: srcBefore },
+            after: { quantity_on_hand: srcAfter, transfer_id: transferId, to_lab_id: toLabId, usage_qty: usageQty },
+            ipAddress: req.ip,
+          });
+          logAudit({
+            userId,
+            ownerUserId: toLab.owner_user_id,
+            module: "veritastock",
+            action: "transfer_in",
+            entityType: "inventory_item",
+            entityId: String(destId),
+            entityLabel: `${sourceItem.item_name}: +${displayQty} ${countUnitLabel} from ${fromLab.lab_name || "lab " + fromLabId}`,
+            before: { quantity_on_hand: destBefore },
+            after: { quantity_on_hand: destAfter, transfer_id: transferId, from_lab_id: fromLabId, usage_qty: usageQty },
+            ipAddress: req.ip,
+          });
+
+          return { transferId, destId, srcAfter, destAfter };
+        });
+
+        const result = run();
+        return res.json({
+          ok: true,
+          transfer_id: result.transferId,
+          item_name: sourceItem.item_name,
+          moved_usage_units: usageQty,
+          moved_display: `${displayQty} ${countUnitLabel}`,
+          source: { lab_id: fromLabId, item_id: sourceItem.id, quantity_on_hand: result.srcAfter },
+          destination: { lab_id: toLabId, item_id: result.destId, quantity_on_hand: result.destAfter },
+        });
+      } catch (err: any) {
+        console.error("[veritastock/transfer] error:", err);
+        return res.status(500).json({ error: err.message || "transfer_failed" });
+      }
+    },
+  );
+
+  // GET /api/labs/:labId/veritastock/enterprise/rollup
+  // Cross-location stock for the enterprise the URL lab belongs to. Scope =
+  // labs sharing the URL lab's owner that the acting user is a member of.
+  app.get(
+    "/api/labs/:labId/veritastock/enterprise/rollup",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      try {
+        const sqlite = (db as any).$client;
+        const labId = req.scope.labId;
+        const userId = req.scope.userId;
+        const baseLab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+        const owner = baseLab?.owner_user_id;
+        if (owner == null) return res.status(404).json({ error: "Lab not found" });
+
+        const locs = sqlite.prepare(`
+          SELECT l.id AS id, l.lab_name AS lab_name, l.parent_warehouse_lab_id AS parent_warehouse_lab_id
+            FROM labs l
+            JOIN lab_members lm ON lm.lab_id = l.id AND lm.user_id = ? AND lm.status = 'active'
+           WHERE l.owner_user_id = ?
+           ORDER BY (l.parent_warehouse_lab_id IS NOT NULL), l.id ASC
+        `).all(userId, owner) as any[];
+
+        const locations = locs.map((l) => ({
+          id: l.id,
+          name: l.lab_name || `Lab ${l.id}`,
+          is_warehouse: l.parent_warehouse_lab_id == null,
+        }));
+
+        const rowsByKey = new Map<string, any>();
+        for (const loc of locs) {
+          const items = sqlite.prepare(
+            "SELECT * FROM inventory_items WHERE lab_id = ? AND status = 'active'"
+          ).all(loc.id) as any[];
+          for (const it of items) {
+            const key = matchKey(it);
+            let row = rowsByKey.get(key);
+            if (!row) {
+              row = {
+                key,
+                item_name: it.item_name,
+                catalog_number: it.catalog_number || null,
+                count_unit: it.count_unit || it.unit || "each",
+                by_location: {} as Record<string, any>,
+                total_usage: 0,
+              };
+              rowsByKey.set(key, row);
+            }
+            const onHandUsage = it.quantity_on_hand || 0;
+            const reorder = it.reorder_point ?? 0;
+            row.by_location[loc.id] = {
+              quantity_on_hand: onHandUsage,
+              count_on_hand: countOnHand(onHandUsage, it.units_per_count_unit),
+              reorder_point: reorder,
+              low: onHandUsage < reorder,
+            };
+            row.total_usage += onHandUsage;
+          }
+        }
+
+        const rows = Array.from(rowsByKey.values()).sort((a, b) =>
+          String(a.item_name).localeCompare(String(b.item_name)),
+        );
+
+        return res.json({
+          owner_user_id: owner,
+          locations,
+          rows,
+          total_items: rows.length,
+        });
+      } catch (err: any) {
+        console.error("[veritastock/rollup] error:", err);
+        return res.status(500).json({ error: err.message || "rollup_failed" });
+      }
+    },
+  );
+
+  // GET /api/labs/:labId/veritastock/transfers — ledger touching this lab.
+  app.get(
+    "/api/labs/:labId/veritastock/transfers",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      try {
+        const sqlite = (db as any).$client;
+        const labId = req.scope.labId;
+        const rows = sqlite.prepare(`
+          SELECT t.*, lf.lab_name AS from_lab_name, lt.lab_name AS to_lab_name
+            FROM inventory_transfers t
+            LEFT JOIN labs lf ON lf.id = t.from_lab_id
+            LEFT JOIN labs lt ON lt.id = t.to_lab_id
+           WHERE t.from_lab_id = ? OR t.to_lab_id = ?
+           ORDER BY t.created_at DESC, t.id DESC
+           LIMIT 200
+        `).all(labId, labId) as any[];
+        return res.json({
+          transfers: rows.map((r) => ({ ...r, direction: r.from_lab_id === labId ? "out" : "in" })),
+          total: rows.length,
+        });
+      } catch (err: any) {
+        console.error("[veritastock/transfers] error:", err);
+        return res.status(500).json({ error: err.message || "transfers_failed" });
+      }
+    },
+  );
+
+  // PATCH /api/labs/:labId/veritastock/warehouse — owner/admin sets or clears
+  // this lab's warehouse parent, defining the enterprise structure.
+  app.patch(
+    "/api/labs/:labId/veritastock/warehouse",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      try {
+        if (req.scope.role !== "owner" && req.scope.role !== "admin") {
+          return res.status(403).json({ error: "Only an owner or admin can set the warehouse structure" });
+        }
+        const sqlite = (db as any).$client;
+        const labId = req.scope.labId;
+        const userId = req.scope.userId;
+        const raw = req.body?.parent_warehouse_lab_id;
+        const parentId = raw == null || raw === "" ? null : Number(raw);
+
+        if (parentId !== null) {
+          if (!Number.isFinite(parentId) || parentId <= 0) {
+            return res.status(400).json({ error: "parent_warehouse_lab_id must be a lab id or null" });
+          }
+          if (parentId === labId) {
+            return res.status(400).json({ error: "A lab cannot be its own warehouse" });
+          }
+          const base = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+          const parent = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(parentId) as any;
+          if (!parent) return res.status(404).json({ error: "Warehouse lab not found" });
+          if (parent.owner_user_id !== base?.owner_user_id) {
+            return res.status(403).json({ error: "Warehouse must belong to the same owner" });
+          }
+          if (!userIsMemberOfLab(userId, parentId)) {
+            return res.status(403).json({ error: "No access to the warehouse lab" });
+          }
+        }
+
+        sqlite.prepare("UPDATE labs SET parent_warehouse_lab_id = ?, updated_at = ? WHERE id = ?")
+          .run(parentId, new Date().toISOString(), labId);
+
+        logAudit({
+          userId,
+          ownerUserId: (sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any)?.owner_user_id ?? 0,
+          module: "veritastock",
+          action: "update",
+          entityType: "lab",
+          entityId: String(labId),
+          entityLabel: parentId === null ? "Cleared warehouse parent" : `Set warehouse parent to lab ${parentId}`,
+          before: {},
+          after: { parent_warehouse_lab_id: parentId },
+          ipAddress: req.ip,
+        });
+
+        return res.json({ ok: true, lab_id: labId, parent_warehouse_lab_id: parentId });
+      } catch (err: any) {
+        console.error("[veritastock/warehouse] error:", err);
+        return res.status(500).json({ error: err.message || "warehouse_update_failed" });
+      }
     },
   );
 
