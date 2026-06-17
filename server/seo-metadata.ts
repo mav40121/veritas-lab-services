@@ -153,14 +153,14 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     ],
   },
   "/resources/ep26-reagent-lot-verification": {
-    title: "EP26-A Reagent Lot Verification: Protocol and How-To Guide",
-    description: "How clinical laboratories verify a new reagent lot under CLSI EP26-A. The protocol, sample requirements, acceptance criteria, and documentation for lot-to-lot verification.",
+    title: "CLSI EP26 Reagent Lot Verification: Protocol and How-To Guide",
+    description: "How clinical laboratories verify a new reagent lot under CLSI EP26 (2nd edition, 2022). The protocol, sample requirements, acceptance criteria, and documentation for lot-to-lot verification.",
     jsonLd: [
       {
         "@context": "https://schema.org",
         "@type": "Article",
-        headline: "EP26-A Reagent Lot Verification: A Working Protocol for Clinical Laboratories",
-        description: "How clinical laboratories verify a new reagent lot under CLSI EP26-A: the protocol, sample requirements, acceptance criteria, and documentation for lot-to-lot verification.",
+        headline: "CLSI EP26 Reagent Lot Verification: A Working Protocol for Clinical Laboratories",
+        description: "How clinical laboratories verify a new reagent lot under CLSI EP26 (2nd edition, 2022): the protocol, sample requirements, acceptance criteria, and documentation for lot-to-lot verification.",
         image: `${BASE_URL}/og-image.png`,
         author: {
           "@type": "Person",
@@ -176,7 +176,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
       {
         "@context": "https://schema.org",
         "@type": "HowTo",
-        name: "How to verify a new reagent lot under CLSI EP26-A",
+        name: "How to verify a new reagent lot under CLSI EP26",
         description: "The step-by-step protocol for reagent lot-to-lot verification: select patient samples, run both lots, calculate the difference, compare against a TEa-anchored criterion, and document the determination.",
         step: [
           { "@type": "HowToStep", name: "Select patient samples", text: "Choose patient samples that span the analytical measuring range, including values near medical decision points. The medical director or designee sets the count; many laboratories use a minimum near 20." },
@@ -189,8 +189,8 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
       },
       faqPageJsonLd(EP26_ARTICLE_FAQ),
       definedTermJsonLd(
-        "CLSI EP26-A",
-        "CLSI EP26-A (User Evaluation of Between-Reagent Lot Variation) is the consensus guideline for evaluating whether a new reagent lot differs meaningfully from the current lot, using patient samples tested on both the current and new lot.",
+        "CLSI EP26",
+        "CLSI EP26, 2nd Edition (User Evaluation of Acceptability of a Reagent Lot Change, 2022) is the consensus guideline for evaluating whether a new reagent lot differs meaningfully from the current lot, using patient samples tested on both the current and new lot. It replaced the 2013 first edition (EP26-A).",
         "/resources/ep26-reagent-lot-verification",
       ),
     ],
