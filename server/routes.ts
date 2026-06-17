@@ -5689,6 +5689,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             const onHandUsage = it.quantity_on_hand || 0;
             const reorder = it.reorder_point ?? 0;
             row.by_location[loc.id] = {
+              item_id: it.id,
               quantity_on_hand: onHandUsage,
               count_on_hand: countOnHand(onHandUsage, it.units_per_count_unit),
               reorder_point: reorder,
