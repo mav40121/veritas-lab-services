@@ -23,9 +23,10 @@ test.describe("VeritaStock Enterprise view", () => {
     await page.goto(`${BASE}/labs/${LAB}/veritastock/enterprise`);
     await expect(page.getByRole("heading", { name: /Enterprise Inventory/i })).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId("rollup-table")).toBeVisible();
-    // With 2+ locations the transfer panel renders; with one, the hint does.
-    const panel = page.getByTestId("transfer-submit");
-    const hint = page.getByText(/need at least two locations/i);
-    await expect(panel.or(hint)).toBeVisible();
+    // Multi-item transfer setup: the From selector renders with 2+ locations,
+    // otherwise the single-location note does.
+    const fromSel = page.getByTestId("transfer-from");
+    const fewLocs = page.getByText(/need at least two locations/i);
+    await expect(fromSel.or(fewLocs)).toBeVisible();
   });
 });

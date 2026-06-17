@@ -7,7 +7,7 @@ import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
 import { db, PLAN_SEATS, PLAN_VIEW_ONLY_SEATS, PLAN_PRICES, PLAN_BED_RANGES, suggestTierFromBeds } from "./db";
-import { computeUsageQty, validateTransfer, matchKey, countOnHand } from "./enterpriseTransfer";
+import { computeUsageQty, validateTransfer, validateBatch, matchKey, countOnHand } from "./enterpriseTransfer";
 import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice, getSeatPriceForTier, VC_UNLIMITED_FIRST_YEAR_COUPON, getViewOnlyAddOnConfig } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
@@ -5633,6 +5633,159 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       } catch (err: any) {
         console.error("[veritastock/transfer] error:", err);
         return res.status(500).json({ error: err.message || "transfer_failed" });
+      }
+    },
+  );
+
+  // POST /api/labs/:labId/veritastock/transfer-batch
+  // Move many items from the URL lab (source) to to_lab_id in one
+  // all-or-nothing operation. Pre-validates the whole batch with
+  // validateBatch, then applies every line inside a single transaction, so
+  // one bad line moves nothing.
+  app.post(
+    "/api/labs/:labId/veritastock/transfer-batch",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      try {
+        const sqlite = (db as any).$client;
+        const fromLabId = req.scope.labId;
+        const userId = req.scope.userId;
+        const toLabId = Number(req.body?.to_lab_id);
+        const rawLines = Array.isArray(req.body?.lines) ? req.body.lines : [];
+        const notes = typeof req.body?.notes === "string" ? req.body.notes.trim().slice(0, 500) : null;
+
+        if (!Number.isFinite(toLabId) || toLabId <= 0) return res.status(400).json({ error: "to_lab_id required" });
+        if (rawLines.length === 0) return res.status(400).json({ error: "lines must be a non-empty array" });
+        if (rawLines.length > 500) return res.status(400).json({ error: "too many lines (max 500)" });
+
+        const fromLab = sqlite.prepare("SELECT id, owner_user_id, lab_name FROM labs WHERE id = ?").get(fromLabId) as any;
+        const toLab = sqlite.prepare("SELECT id, owner_user_id, lab_name FROM labs WHERE id = ?").get(toLabId) as any;
+        if (!toLab) return res.status(404).json({ error: "Destination lab not found" });
+
+        // Resolve every line's source item and usage quantity up front, so we
+        // can pre-validate the whole batch before touching any row.
+        const resolved = rawLines.map((ln: any) => {
+          const itemId = Number(ln?.item_id);
+          const quantity = Number(ln?.quantity);
+          const sourceItem = Number.isFinite(itemId)
+            ? sqlite.prepare("SELECT * FROM inventory_items WHERE id = ? AND lab_id = ?").get(itemId, fromLabId) as any
+            : null;
+          const packSize = sourceItem && Number.isFinite(sourceItem.units_per_count_unit) && sourceItem.units_per_count_unit > 0
+            ? sourceItem.units_per_count_unit : 1;
+          const usageQty = sourceItem ? computeUsageQty(quantity, packSize) : 0;
+          return { itemId, quantity, sourceItem, usageQty };
+        });
+
+        const guard = validateBatch({
+          fromLabId,
+          toLabId,
+          fromOwnerUserId: fromLab?.owner_user_id ?? -1,
+          toOwnerUserId: toLab?.owner_user_id ?? -2,
+          actingUserIsMemberOfDestination: userIsMemberOfLab(userId, toLabId),
+          lines: resolved.map((r: any) => ({
+            itemId: r.itemId,
+            usageQty: r.usageQty,
+            sourceQtyOnHand: r.sourceItem ? r.sourceItem.quantity_on_hand : 0,
+            existsAtSource: !!r.sourceItem,
+          })),
+        });
+        if (!guard.ok) {
+          const batchLevel = guard.errors.find((e) => e.itemId === null);
+          const status = batchLevel && (batchLevel.error === "cross_owner" || batchLevel.error === "no_access_to_destination") ? 403 : 400;
+          return res.status(status).json({ error: "batch_invalid", errors: guard.errors });
+        }
+
+        const nowIso = new Date().toISOString();
+        const actor = sqlite.prepare("SELECT email FROM users WHERE id = ?").get(userId) as any;
+        const actorName = actor?.email || `user ${userId}`;
+
+        const run = sqlite.transaction(() => {
+          const out: any[] = [];
+          for (const r of resolved) {
+            const sourceItem = r.sourceItem;
+            const countUnitLabel = sourceItem.count_unit || sourceItem.unit || "each";
+            const displayQty = Math.round(r.quantity);
+            const cat = (sourceItem.catalog_number || "").trim();
+            const destItem = cat
+              ? sqlite.prepare("SELECT * FROM inventory_items WHERE lab_id = ? AND lower(trim(catalog_number)) = lower(?) LIMIT 1").get(toLabId, cat) as any
+              : sqlite.prepare("SELECT * FROM inventory_items WHERE lab_id = ? AND lower(trim(item_name)) = lower(?) LIMIT 1").get(toLabId, (sourceItem.item_name || "").trim()) as any;
+
+            let destId: number;
+            let destBefore: number;
+            if (!destItem) {
+              const ins = sqlite.prepare(`
+                INSERT INTO inventory_items
+                  (account_id, lab_id, item_name, catalog_number, department, category,
+                   quantity_on_hand, reorder_point, unit, vendor,
+                   order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit,
+                   status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+              `).run(
+                toLab.owner_user_id, toLabId, sourceItem.item_name, sourceItem.catalog_number || null,
+                sourceItem.department || "Core Lab", sourceItem.category || "Reagent",
+                sourceItem.reorder_point ?? 5, sourceItem.unit || "each", sourceItem.vendor || null,
+                sourceItem.order_unit || "each", sourceItem.usage_unit || "each",
+                sourceItem.units_per_order_unit ?? 1, sourceItem.count_unit || "each",
+                sourceItem.units_per_count_unit ?? 1, nowIso, nowIso,
+              );
+              destId = Number(ins.lastInsertRowid);
+              destBefore = 0;
+            } else {
+              destId = destItem.id;
+              destBefore = destItem.quantity_on_hand;
+            }
+
+            const srcBefore = sourceItem.quantity_on_hand;
+            const srcAfter = srcBefore - r.usageQty;
+            const destAfter = destBefore + r.usageQty;
+            sqlite.prepare("UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?").run(srcAfter, nowIso, sourceItem.id);
+            sqlite.prepare("UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?").run(destAfter, nowIso, destId);
+
+            const insT = sqlite.prepare(`
+              INSERT INTO inventory_transfers
+                (owner_user_id, from_lab_id, to_lab_id, from_item_id, to_item_id,
+                 catalog_number, item_name, qty_usage_units, display_qty, display_unit,
+                 status, initiated_by_user_id, initiated_by_name, notes, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?, ?)
+            `).run(
+              fromLab.owner_user_id, fromLabId, toLabId, sourceItem.id, destId,
+              sourceItem.catalog_number || null, sourceItem.item_name, r.usageQty,
+              displayQty, countUnitLabel, userId, actorName, notes, nowIso,
+            );
+            const transferId = Number(insT.lastInsertRowid);
+
+            logAudit({
+              userId, ownerUserId: fromLab.owner_user_id, module: "veritastock", action: "transfer_out",
+              entityType: "inventory_item", entityId: String(sourceItem.id),
+              entityLabel: `${sourceItem.item_name}: -${displayQty} ${countUnitLabel} to ${toLab.lab_name || "lab " + toLabId}`,
+              before: { quantity_on_hand: srcBefore },
+              after: { quantity_on_hand: srcAfter, transfer_id: transferId, to_lab_id: toLabId, usage_qty: r.usageQty, batch: true },
+              ipAddress: req.ip,
+            });
+            logAudit({
+              userId, ownerUserId: toLab.owner_user_id, module: "veritastock", action: "transfer_in",
+              entityType: "inventory_item", entityId: String(destId),
+              entityLabel: `${sourceItem.item_name}: +${displayQty} ${countUnitLabel} from ${fromLab.lab_name || "lab " + fromLabId}`,
+              before: { quantity_on_hand: destBefore },
+              after: { quantity_on_hand: destAfter, transfer_id: transferId, from_lab_id: fromLabId, usage_qty: r.usageQty, batch: true },
+              ipAddress: req.ip,
+            });
+
+            out.push({
+              item_id: sourceItem.id, item_name: sourceItem.item_name,
+              moved_display: `${displayQty} ${countUnitLabel}`,
+              dest_item_id: destId, source_after: srcAfter, dest_after: destAfter, transfer_id: transferId,
+            });
+          }
+          return out;
+        });
+
+        const results = run();
+        return res.json({ ok: true, transferred: results.length, from_lab_id: fromLabId, to_lab_id: toLabId, results });
+      } catch (err: any) {
+        console.error("[veritastock/transfer-batch] error:", err);
+        return res.status(500).json({ error: err.message || "transfer_batch_failed" });
       }
     },
   );
