@@ -113,6 +113,20 @@ export default function VeritaStockEnterprisePage() {
 
   const transferReady = !!(fromLab && toLab && fromLab !== toLab);
 
+  // Column order for the roll-up grid: when a transfer is set up, the source
+  // (From) location is leftmost, the destination (To) is next, then any other
+  // locations. Keeps the grid reading left-to-right in the direction stock
+  // moves. Display-only: the transfer logic keys off fromLab, not column index.
+  const orderedLocations = useMemo(() => {
+    if (!transferReady) return locations;
+    const src = locations.find((l) => String(l.id) === fromLab);
+    const dst = locations.find((l) => String(l.id) === toLab);
+    const rest = locations.filter(
+      (l) => String(l.id) !== fromLab && String(l.id) !== toLab,
+    );
+    return [src, dst, ...rest].filter(Boolean) as LocationMeta[];
+  }, [locations, fromLab, toLab, transferReady]);
+
   // Filtered rows for display (the typed quantities persist regardless).
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -279,7 +293,7 @@ export default function VeritaStockEnterprisePage() {
             <thead>
               <tr className="border-b text-muted-foreground text-xs">
                 <th className="text-left font-medium p-3">Item</th>
-                {locations.map((l) => (
+                {orderedLocations.map((l) => (
                   <th key={l.id} className="text-center font-medium p-3 whitespace-nowrap">
                     {l.name}{l.is_warehouse && <Badge variant="outline" className="ml-1.5 text-[10px]">WH</Badge>}
                   </th>
@@ -302,7 +316,7 @@ export default function VeritaStockEnterprisePage() {
                       <div className="font-medium">{r.item_name}</div>
                       {r.catalog_number && <div className="text-xs text-muted-foreground">{r.catalog_number}</div>}
                     </td>
-                    {locations.map((l) => {
+                    {orderedLocations.map((l) => {
                       const c = r.by_location[l.id];
                       return (
                         <td key={l.id} className={`text-center p-3 ${c?.low ? "bg-amber-50 text-amber-700 font-medium" : ""}`}>
