@@ -88,6 +88,14 @@ export function NavBar() {
   const showMembersLink = activeMembership && (activeMembership.role === "owner" || activeMembership.role === "admin");
   const membersHref = activeMembership ? `/labs/${activeMembership.labId}/members` : null;
 
+  // Host-aware chrome: when served from the VeritaStock inventory domain
+  // (veritastock.com), drop the lab-compliance marketing nav and swap the
+  // brand so the inventory product does not read as a module bolted onto a
+  // lab site. Same app and login; the skin keys on the hostname. Full
+  // VeritaStock branding is a fast-follow; this is the demo-facing chrome
+  // suppression.
+  const onStockHost = typeof window !== "undefined" && /(^|\.)veritastock\.com$/i.test(window.location.hostname);
+
   const isActive = (href: string) => location === href;
 
   return (
@@ -105,19 +113,20 @@ export function NavBar() {
       <div className="w-full px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
 
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
-          <svg viewBox="0 0 36 36" width="32" height="32" fill="none" aria-label="Veritas Lab Services">
+        <Link href={onStockHost ? "/veritastock" : "/"} className="flex items-center gap-2.5 shrink-0 group">
+          <svg viewBox="0 0 36 36" width="32" height="32" fill="none" aria-label={onStockHost ? "VeritaStock" : "Veritas Lab Services"}>
             <rect width="36" height="36" rx="8" fill="hsl(182 65% 30%)" />
             <path d="M9 10h18M18 10v6l-6 10h12L18 16" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
             <path d="M13 24l2 2 4-4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
           <div className="leading-tight">
-            <div className="font-serif font-bold text-sm tracking-tight text-foreground">Veritas Lab Services</div>
-            <div className="text-xs text-muted-foreground leading-none">Clinical Laboratory Consulting</div>
+            <div className="font-serif font-bold text-sm tracking-tight text-foreground">{onStockHost ? "VeritaStock™" : "Veritas Lab Services"}</div>
+            <div className="text-xs text-muted-foreground leading-none">{onStockHost ? "Multi-Location Inventory" : "Clinical Laboratory Consulting"}</div>
           </div>
         </Link>
 
-        {/* Desktop nav */}
+        {/* Desktop nav (suppressed on the VeritaStock inventory host) */}
+        {!onStockHost && (
         <nav className="hidden min-[1560px]:flex items-center gap-0.5">
 
           {/* Home */}
@@ -244,6 +253,7 @@ export function NavBar() {
             Contact
           </Link>
         </nav>
+        )}
 
         {/* Right side */}
         <div className="flex items-center gap-2">
@@ -294,9 +304,11 @@ export function NavBar() {
               accessible via the User dropdown above (DropdownMenuItem
               -> /dashboard). */}
 
+          {!onStockHost && (
           <Button asChild size="sm" className="hidden min-[1560px]:flex bg-primary hover:bg-primary/90 text-primary-foreground font-medium">
             <Link href="/veritacheck">Run a Study</Link>
           </Button>
+          )}
 
           {/* Mobile menu toggle */}
           <Button variant="ghost" size="icon" className="min-[1560px]:hidden w-8 h-8" onClick={() => mobileOpen ? closeMobile() : setMobileOpen(true)}>
@@ -314,8 +326,8 @@ export function NavBar() {
           style={{ maxHeight: "calc(100vh - 4rem)" }}
         >
           <div className="px-4 py-3 flex flex-col gap-1">
-            {/* Top-level marketing links */}
-            {mobileTopLinks.map(({ href, label }) => (
+            {/* Top-level marketing links (suppressed on the VeritaStock host) */}
+            {!onStockHost && mobileTopLinks.map(({ href, label }) => (
               <Link key={href} href={href} onClick={closeMobile}
                 className="px-3 py-2 rounded-md text-sm font-medium text-foreground hover:bg-secondary transition-colors">
                 {label}
@@ -330,6 +342,7 @@ export function NavBar() {
                 than 2 memberships. */}
             {isLoggedIn && <LabSwitcherMobile onAfterSwitch={closeMobile} />}
 
+            {!onStockHost && (<>
             <MobileGroup
               label="VeritaAssure™"
               icon={<ShieldCheck size={14} className="text-primary" />}
@@ -353,7 +366,9 @@ export function NavBar() {
               links={mobileOperationsLinks}
               onLinkClick={closeMobile}
             />
+            </>)}
 
+            {!onStockHost && (<>
             {mobileFooterLinks.map(({ href, label }) => (
               <Link key={href} href={href} onClick={closeMobile}
                 className="px-3 py-2 rounded-md text-sm font-medium text-foreground hover:bg-secondary transition-colors">
@@ -366,6 +381,7 @@ export function NavBar() {
               className="px-3 py-2 rounded-md text-sm font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 inline-flex items-center gap-1.5">
               <Play size={11} /> Live Demo
             </Link>
+            </>)}
 
             <div className="pt-2 border-t border-border mt-2 flex gap-2">
               {isLoggedIn ? (
@@ -376,7 +392,7 @@ export function NavBar() {
               ) : (
                 <Button asChild variant="outline" size="sm" className="flex-1"><Link href="/login" onClick={closeMobile}>Sign in</Link></Button>
               )}
-              <Button asChild size="sm" className="flex-1 bg-primary text-primary-foreground"><Link href="/veritacheck" onClick={closeMobile}>Run a Study</Link></Button>
+              {!onStockHost && <Button asChild size="sm" className="flex-1 bg-primary text-primary-foreground"><Link href="/veritacheck" onClick={closeMobile}>Run a Study</Link></Button>}
             </div>
           </div>
         </div>
