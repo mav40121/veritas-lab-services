@@ -7907,7 +7907,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         case "precision": return "Precision (EP15)";
         case "ref_interval": return "Reference Interval Verification";
         case "pt_coag": return "PT/INR Geometric Mean Calculator";
-        case "lot_to_lot": return "Reagent Lot Verification (EP26-A)";
+        case "lot_to_lot": return "Reagent Lot Verification (EP26)";
         case "qc_range": return "QC Lot Verification (C24-Ed4)";
         case "multi_analyte_coag": return "Multi-Analyte Lot Comparison";
         case "cumsum": return "CUMSUM";

@@ -681,7 +681,7 @@ function headerHTML(study: Study, cliaNumber?: string): string {
     cal_ver: "Calibration Verification (CLSI EP06)",
     precision: "Precision Verification (EP15)",
     method_comparison: "Correlation / Method Comparison",
-    lot_to_lot: "Reagent Lot Verification (CLSI EP26-A)",
+    lot_to_lot: "Reagent Lot Verification (CLSI EP26)",
     ref_interval: "Reference Range Verification",
     pt_coag: "PT/INR Geometric Mean Calculator (CLSI H47)",
     qc_range: "QC Lot Verification (CLSI C24-Ed4)",
@@ -737,7 +737,7 @@ function supportingPageHTML(study: Study, instrumentNames: string[]): string {
   const presetLabel: string | null = (study as any).cliaPresetLabel ?? null;
   const teaStrWithPreset = presetLabel ? `${teaStr} (${presetLabel})` : teaStr;
   const specs: any[][] = [
-    ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification (CLSI EP06)" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (CLSI EP26-A)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (CLSI EP17-A2)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias: Single Instrument vs Target (CLSI EP15-A3)" : study.studyType === "linearity" ? "Linearity (CLSI EP06)" : study.studyType === "reportable_range" ? "Reportable Range (CLIA §493.1255)" : "Method Comparison: Multi-Instrument Correlation (CLSI EP09 + EP15-A3)"],
+    ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification (CLSI EP06)" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (CLSI EP26)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (CLSI EP17-A2)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias: Single Instrument vs Target (CLSI EP15-A3)" : study.studyType === "linearity" ? "Linearity (CLSI EP06)" : study.studyType === "reportable_range" ? "Reportable Range (CLIA §493.1255)" : "Method Comparison: Multi-Instrument Correlation (CLSI EP09 + EP15-A3)"],
     ["Test Name", study.testName],
     [criterionRowLabel, teaStrWithPreset],
     [cfrReferenceLabel, cfrReferenceValue],
@@ -958,7 +958,7 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
     tjc:  ["QSA.02.13.01"],
     cola: ["LAB.024"],
     aabb: ["5.7.2"],
-    clsi: ["EP26-A"],
+    clsi: ["EP26"],
     cfr:  ["42 CFR §493.1255(b)"],
   },
   qc_range: {
@@ -974,7 +974,7 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
     tjc:  ["QSA.02.02.01", "QSA.13.02.01"],
     cola: ["LAB.023", "LAB.024"],
     aabb: ["5.14.1", "5.14.2"],
-    clsi: ["EP26-A", "H47-A2", "H21-A5"],
+    clsi: ["EP26", "H47-A2", "H21-A5"],
     cfr:  ["42 CFR §493.1255(b)(3)"],
   },
   pt_coag: {
@@ -982,7 +982,7 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
     tjc:  ["QSA.02.08.01", "QSA.02.13.01"],
     cola: ["LAB.023", "LAB.025"],
     aabb: ["5.14.1", "5.14.3"],
-    clsi: ["EP26-A", "H21-A5"],
+    clsi: ["EP26", "H21-A5"],
     cfr:  ["42 CFR §493.1255", "42 CFR §493.1281"],
   },
   ref_interval: {
@@ -3122,7 +3122,7 @@ function buildLotToLotHTML(study: Study, results: any): string {
     <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${results.summary} ${cliaStatement}</p>
   </div>`;
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Reagent Lot Verification (EP26-A) - ${study.testName}</title><style>${CSS}
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Reagent Lot Verification (EP26) - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
   </style></head><body>
   ${footerHTML()}

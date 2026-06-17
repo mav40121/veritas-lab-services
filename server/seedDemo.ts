@@ -243,7 +243,7 @@ export async function seedDemoData() {
     console.log(`[seed] Backfilled Glucose Precision study id=${existingGlucosePrecision.id}`);
   }
 
-  // ─── 4e. Hemoglobin A1c Lot-to-Lot Verification (CLSI EP26-A) ───────────
+  // ─── 4e. Hemoglobin A1c Lot-to-Lot Verification (CLSI EP26) ───────────
   // 20 paired patient specimens, Bio-Rad D-100 HPLC, current lot vs new lot.
   // 10 normal cohort (HbA1c 4.9-6.9%), 10 abnormal cohort (7.1-11.3%).
   // CLIA TEa = 6.0% relative for HbA1c (per 2024 update to §493.931).
@@ -1061,11 +1061,11 @@ function generateGlucosePrecisionData() {
   ];
 }
 
-// ─── HbA1c Lot-to-Lot (EP26-A) demo data ──────────────────────────────────────
+// ─── HbA1c Lot-to-Lot (EP26) demo data ──────────────────────────────────────
 function generateHbA1cLotToLotData() {
   // 20 paired patient specimens. Bio-Rad D-100 HPLC.
   // Old (current) lot 79543 vs New lot 79612.
-  // Cohorts split per CLSI EP26-A:
+  // Cohorts split per CLSI EP26:
   //   Normal (n=10):   HbA1c 4.9 - 6.9%
   //   Abnormal (n=10): HbA1c 7.1 - 11.3%
   // Verified: mean |%diff| = 0.97%, max |%diff| = 1.96% at TEa = 6.0%.
