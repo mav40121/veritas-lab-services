@@ -61,4 +61,16 @@ test.describe("VeritaStock Enterprise view", () => {
     await expect(headerCells.nth(1)).toContainText(fromName);
     await expect(headerCells.nth(2)).toContainText(toName);
   });
+
+  test("roll-up header row is sticky so it stays visible while scrolling", async ({ page }) => {
+    test.skip(!TOKEN || !LAB, "PW_TOKEN and PW_LAB required for the authenticated enterprise view");
+    await injectAuth(page, BASE, TOKEN);
+    await page.goto(`${BASE}/labs/${LAB}/veritastock/enterprise`);
+    await expect(page.getByTestId("rollup-table")).toBeVisible({ timeout: 15000 });
+    const pos = await page
+      .locator('[data-testid="rollup-table"] thead th')
+      .first()
+      .evaluate((el) => getComputedStyle(el).position);
+    expect(pos).toBe("sticky");
+  });
 });

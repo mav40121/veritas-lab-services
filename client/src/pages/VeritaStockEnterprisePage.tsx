@@ -287,19 +287,22 @@ export default function VeritaStockEnterprisePage() {
       </div>
 
       {/* Roll-up grid with inline transfer quantity column */}
-      <Card className="mb-6 overflow-x-auto">
-        <CardContent className="p-0">
+      <Card className="mb-6">
+        <CardContent className="p-0 max-h-[70vh] overflow-auto">
           <table className="w-full text-sm" data-testid="rollup-table">
             <thead>
-              <tr className="border-b text-muted-foreground text-xs">
-                <th className="text-left font-medium p-3">Item</th>
+              {/* Sticky header: pins to the top of the scroll pane so the column
+                  labels stay visible while the item list scrolls. Each th carries
+                  its own opaque bg + bottom border so rows do not bleed through. */}
+              <tr className="text-muted-foreground text-xs">
+                <th className="sticky top-0 z-20 bg-card border-b text-left font-medium p-3">Item</th>
                 {orderedLocations.map((l) => (
-                  <th key={l.id} className="text-center font-medium p-3 whitespace-nowrap">
+                  <th key={l.id} className="sticky top-0 z-20 bg-card border-b text-center font-medium p-3 whitespace-nowrap">
                     {l.name}{l.is_warehouse && <Badge variant="outline" className="ml-1.5 text-[10px]">WH</Badge>}
                   </th>
                 ))}
-                <th className="text-center font-medium p-3">Total</th>
-                <th className="text-center font-medium p-3 whitespace-nowrap">Transfer{transferReady ? ` (${locName(fromLab).split(" ")[0]} to ${locName(toLab).split(" ")[0]})` : ""}</th>
+                <th className="sticky top-0 z-20 bg-card border-b text-center font-medium p-3">Total</th>
+                <th className="sticky top-0 z-20 bg-card border-b text-center font-medium p-3 whitespace-nowrap">Transfer{transferReady ? ` (${locName(fromLab).split(" ")[0]} to ${locName(toLab).split(" ")[0]})` : ""}</th>
               </tr>
             </thead>
             <tbody>
