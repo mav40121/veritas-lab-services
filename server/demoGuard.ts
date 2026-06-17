@@ -47,7 +47,7 @@ const REQUIRED_DEMO_STUDIES = [
   {
     test_name: "Hemoglobin A1c",
     study_type: "lot_to_lot",
-    description: "Hemoglobin A1c Lot-to-Lot Verification (Bio-Rad D-100, EP26-A)",
+    description: "Hemoglobin A1c Lot-to-Lot Verification (Bio-Rad D-100, EP26)",
   },
   {
     test_name: "Troponin I",

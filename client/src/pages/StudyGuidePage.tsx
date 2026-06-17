@@ -75,7 +75,7 @@ const REFS = {
     source: "CLSI",
   },
   clsiEP26: {
-    label: "CLSI EP26-A - User Evaluation of Between-Reagent Lot Variation",
+    label: "CLSI EP26 - User Evaluation of Acceptability of a Reagent Lot Change",
     url: "https://clsi.org/standards/products/method-evaluation/documents/ep26/",
     source: "CLSI",
   },
@@ -380,10 +380,10 @@ export default function StudyGuidePage() {
                   <td className="py-3 px-4">CLSI EP28-A3c</td>
                 </tr>
                 <tr className="border-b border-border hover:bg-muted/20 transition-colors">
-                  <td className="py-3 px-4 font-medium text-primary">Reagent Lot Verification (EP26-A)</td>
+                  <td className="py-3 px-4 font-medium text-primary">Reagent Lot Verification (EP26)</td>
                   <td className="py-3 px-4 text-muted-foreground">Does the new reagent lot perform equivalently to the current lot on patient samples?</td>
                   <td className="py-3 px-4">At each qualifying reagent lot change</td>
-                  <td className="py-3 px-4">42 CFR §493.1253(b)(3), §493.1255; CLSI EP26-A</td>
+                  <td className="py-3 px-4">42 CFR §493.1253(b)(3), §493.1255; CLSI EP26</td>
                 </tr>
                 <tr className="border-b border-border hover:bg-muted/20 transition-colors">
                   <td className="py-3 px-4 font-medium text-primary">QC Lot Verification (C24-Ed4)</td>
@@ -601,10 +601,10 @@ export default function StudyGuidePage() {
             icon={<Repeat size={22} className="text-white" />}
             color="bg-[#d97706]"
             badge="Reagent Change"
-            title="Reagent Lot Verification (CLSI EP26-A)"
+            title="Reagent Lot Verification (CLSI EP26)"
             subtitle="Confirm new reagent lot performs equivalently to the current lot, using patient samples"
-            what="Reagent Lot Verification confirms that a new reagent lot produces patient results consistent with the current lot, before the new lot is placed into routine clinical use. The study is governed by CLSI EP26-A (User Evaluation of Between-Reagent Lot Variation), which establishes that the comparison should use real patient specimens rather than QC material because QC matrices may not reflect how a reagent lot performs on the actual patient sample matrix."
-            howIt="Patient specimens spanning the analytical measurement range are tested in parallel on both the current reagent lot and the new reagent lot. VeritaCheck™ computes per-specimen percent difference and applies a two-part TEa-based pass rule: (1) the mean absolute percent difference must be within the adopted total allowable error, AND (2) at least 90 percent of paired specimens must fall within the TEa criterion. This TEa-based variant of EP26-A is the rule most working clinical labs apply; the formal critical-difference protocol described in the full EP26-A document is impractical for routine chemistry and has been flagged as such in peer-reviewed evaluations (Thompson 2017, Loh 2020)."
+            what="Reagent Lot Verification confirms that a new reagent lot produces patient results consistent with the current lot, before the new lot is placed into routine clinical use. The study is governed by CLSI EP26 (User Evaluation of Acceptability of a Reagent Lot Change), which establishes that the comparison should use real patient specimens rather than QC material because QC matrices may not reflect how a reagent lot performs on the actual patient sample matrix."
+            howIt="Patient specimens spanning the analytical measurement range are tested in parallel on both the current reagent lot and the new reagent lot. VeritaCheck™ computes per-specimen percent difference and applies a two-part TEa-based pass rule: (1) the mean absolute percent difference must be within the adopted total allowable error, AND (2) at least 90 percent of paired specimens must fall within the TEa criterion. This TEa-based variant is the rule most working clinical labs apply; the full formal EP26 protocol is heavier than routine chemistry workflows allow, a limitation flagged in peer-reviewed evaluations (Thompson 2017, Loh 2020)."
             when={[
               "Every time a new reagent lot is brought into clinical use, including coag, chemistry, hematology, and immunoassay reagents",
               "When the manufacturer's instructions for use (IFU) require verification at a lot change",
@@ -612,7 +612,7 @@ export default function StudyGuidePage() {
               "Recommended for high-volume or clinically sensitive analytes as standard practice",
             ]}
             frequency="At each qualifying reagent lot change"
-            regulation="42 CFR §493.1253(b)(3) (manufacturer's instructions) and §493.1255 (calibration verification). CLSI EP26-A is the methodology standard."
+            regulation="42 CFR §493.1253(b)(3) (manufacturer's instructions) and §493.1255 (calibration verification). CLSI EP26 is the methodology standard."
             passFail="The mean absolute percent difference between current and new lot must be within the adopted TEa, AND at least 90 percent of paired specimens must fall within TEa. Per-specimen results outside TEa on a passing study are documented in the per-sample table. Your laboratory director or designee reviews and approves results before the new lot enters service."
             refs={[
               REFS.clsiEP26,

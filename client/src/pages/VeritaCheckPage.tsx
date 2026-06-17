@@ -2511,7 +2511,7 @@ return (
                         <div>Calibration Verification / Linearity</div>
                         <div>Correlation / Method Comparison</div>
                         <div>Accuracy and Precision</div>
-                        <div>Reagent Lot Verification (EP26-A)</div>
+                        <div>Reagent Lot Verification (EP26)</div>
                         <div>PT/INR Geometric Mean Calculator</div>
                       </div>
                       <div className="w-12 h-0.5 bg-white/40 mb-4" />
@@ -2588,10 +2588,10 @@ return (
                           <SelectItem value="cal_ver">Calibration Verification (CLSI EP06)</SelectItem>
                           <SelectItem value="method_comparison">Method Comparison: Multi-Instrument Correlation (CLSI EP09 + EP15-A3)</SelectItem>
                           <SelectItem value="precision">Precision Verification (CLSI EP15-A3)</SelectItem>
-                          <SelectItem value="lot_to_lot">Reagent Lot Verification (CLSI EP26-A)</SelectItem>
+                          <SelectItem value="lot_to_lot">Reagent Lot Verification (CLSI EP26)</SelectItem>
                           <SelectItem value="pt_coag">PT/INR Geometric Mean Calculator (CLSI H47)</SelectItem>
                           <SelectItem value="qc_range">QC Lot Verification (CLSI C24-Ed4)</SelectItem>
-                          <SelectItem value="multi_analyte_coag">Multi-Analyte Lot Comparison, Coag (CLSI EP26-A)</SelectItem>
+                          <SelectItem value="multi_analyte_coag">Multi-Analyte Lot Comparison, Coag (CLSI EP26)</SelectItem>
                           <SelectItem value="ref_interval">Reference Range Verification (CLSI EP28)</SelectItem>
                           <SelectItem value="sensitivity">Sensitivity Verification (CLSI EP17-A2)</SelectItem>
                           <SelectItem value="carryover">Carryover Verification (CLSI EP10-A3)</SelectItem>
@@ -3026,7 +3026,7 @@ return (
               </div>
               {studyType === "lot_to_lot" ? (
                 <Card>
-                  <CardHeader className="pb-3"><CardTitle className="text-base">Reagent Lot Verification (CLSI EP26-A) Data Entry</CardTitle></CardHeader>
+                  <CardHeader className="pb-3"><CardTitle className="text-base">Reagent Lot Verification (CLSI EP26) Data Entry</CardTitle></CardHeader>
                   <CardContent className="space-y-4">
                     <div className="grid sm:grid-cols-2 gap-4">
                       <div className="space-y-1.5"><Label>Analyte Name</Label><Input placeholder="e.g. Fibrinogen" value={lotAnalyte} onChange={e => setLotAnalyte(e.target.value)} /></div>

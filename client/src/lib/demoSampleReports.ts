@@ -105,7 +105,7 @@ function buildQCLotSample() {
   return { study, results };
 }
 
-// ─── Sample 2: Reagent Lot Verification (Albumin, EP26-A two-cohort) ────────
+// ─── Sample 2: Reagent Lot Verification (Albumin, EP26 two-cohort) ────────
 
 function buildReagentLotSample() {
   // 20 paired specimens, Normal and Abnormal cohorts. New lot tracks current
@@ -142,7 +142,7 @@ function buildReagentLotSample() {
 
   const study = {
     id: -2, userId: -1, createdByUserId: -1,
-    testName: "Albumin Reagent Lot Verification (EP26-A)",
+    testName: "Albumin Reagent Lot Verification (EP26)",
     instrument: "Beckman AU5800",
     analyst: "K. Nguyen, MLS(ASCP)",
     date: "2026-04-22",
@@ -384,7 +384,7 @@ export const DEMO_SAMPLES: DemoSample[] = [
     key: "reagent-lot-verification",
     label: "Reagent Lot Verification",
     blurb: "Patient-sample comparison between current and new reagent lots. Two-part TEa pass rule: mean absolute percent difference within TEa AND at least 90 percent of paired specimens within TEa.",
-    clsi: "CLSI EP26-A",
+    clsi: "CLSI EP26",
     cfr: "42 CFR §493.1253(b)(3), §493.1255",
     filename: "VeritaCheck_Sample_Reagent_Lot_Verification.pdf",
     build: buildReagentLotSample,
