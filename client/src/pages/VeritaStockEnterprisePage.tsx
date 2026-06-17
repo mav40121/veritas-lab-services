@@ -1,11 +1,11 @@
 // client/src/pages/VeritaStockEnterprisePage.tsx
 //
-// VeritaStock Enterprise (multi-location) view. PR 2 of the enterprise
-// inventory build. Renders the cross-location stock roll-up, a transfer
-// panel (warehouse <-> stockroom, down/up/across), and the transfer ledger.
-// Wired to the PR 1 endpoints under /api/labs/:labId/veritastock/.
-// The roll-up scope is owner + the user's active memberships, enforced
-// server-side; this page only renders what those endpoints return.
+// VeritaStock Enterprise (multi-location) view. Cross-location stock roll-up
+// plus a multi-item transfer: pick From and To once, type quantities inline
+// on the grid (search + low-stock filter to find what to move), review the
+// running list, and submit it all as one atomic batch. Wired to the
+// /api/labs/:labId/veritastock/ endpoints. Roll-up scope is owner + the
+// user's active memberships, enforced server-side.
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useParams } from "wouter";
@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
-  ArrowLeft, ArrowRightLeft, Building2, Truck, RefreshCw, AlertTriangle, Package,
+  ArrowLeft, ArrowRightLeft, Building2, Truck, RefreshCw, AlertTriangle, Package, Search, X,
 } from "lucide-react";
 
 interface LocCell {
@@ -70,11 +70,13 @@ export default function VeritaStockEnterprisePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Transfer form state.
-  const [tItemKey, setTItemKey] = useState("");
-  const [tFrom, setTFrom] = useState("");
-  const [tTo, setTTo] = useState("");
-  const [tQty, setTQty] = useState("");
+  // Transfer state: one From and one To for the whole batch, plus a map of
+  // item key -> typed quantity (count_unit). Filled rows become the batch.
+  const [fromLab, setFromLab] = useState("");
+  const [toLab, setToLab] = useState("");
+  const [qtyByKey, setQtyByKey] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState("");
+  const [lowOnly, setLowOnly] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const loadAll = useCallback(async () => {
@@ -106,52 +108,66 @@ export default function VeritaStockEnterprisePage() {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  const selectedRow = useMemo(() => rows.find((r) => r.key === tItemKey) || null, [rows, tItemKey]);
-  const fromOptions = useMemo(
-    () => (selectedRow ? locations.filter((l) => selectedRow.by_location[l.id]) : []),
-    [selectedRow, locations],
-  );
-  const lowAlerts = useMemo(
-    () => rows.reduce((n, r) => n + Object.values(r.by_location).filter((c) => c.low).length, 0),
-    [rows],
-  );
   const locName = (id: number | string) =>
     locations.find((l) => String(l.id) === String(id))?.name || `Lab ${id}`;
 
-  async function submitTransfer() {
-    if (!selectedRow || !tFrom || !tTo || !tQty) {
-      toast({ title: "Fill in item, quantity, from, and to", variant: "destructive" });
-      return;
+  const transferReady = !!(fromLab && toLab && fromLab !== toLab);
+
+  // Filtered rows for display (the typed quantities persist regardless).
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (q && !(`${r.item_name} ${r.catalog_number || ""}`.toLowerCase().includes(q))) return false;
+      if (lowOnly && !Object.values(r.by_location).some((c) => c.low)) return false;
+      return true;
+    });
+  }, [rows, search, lowOnly]);
+
+  // The lines the batch will carry: any row with a positive typed quantity
+  // that is actually stocked at the chosen source.
+  const pendingLines = useMemo(() => {
+    if (!transferReady) return [] as Array<{ key: string; item_name: string; count_unit: string; qty: number; itemId: number; sourceCount: number; over: boolean }>;
+    const out: Array<{ key: string; item_name: string; count_unit: string; qty: number; itemId: number; sourceCount: number; over: boolean }> = [];
+    for (const r of rows) {
+      const raw = qtyByKey[r.key];
+      const qty = Number(raw);
+      const cell = r.by_location[fromLab];
+      if (!cell || !raw || !Number.isFinite(qty) || qty <= 0) continue;
+      out.push({
+        key: r.key, item_name: r.item_name, count_unit: r.count_unit, qty,
+        itemId: cell.item_id, sourceCount: cell.count_on_hand, over: qty > cell.count_on_hand,
+      });
     }
-    if (tFrom === tTo) {
-      toast({ title: "From and to must be different locations", variant: "destructive" });
-      return;
-    }
-    const cell = selectedRow.by_location[tFrom];
-    if (!cell) {
-      toast({ title: "That item is not stocked at the source location", variant: "destructive" });
-      return;
-    }
-    const qty = Number(tQty);
-    if (!Number.isFinite(qty) || qty <= 0) {
-      toast({ title: "Quantity must be a positive number", variant: "destructive" });
-      return;
-    }
+    return out;
+  }, [rows, qtyByKey, fromLab, transferReady]);
+
+  const anyOver = pendingLines.some((l) => l.over);
+
+  function setQty(key: string, val: string) {
+    setQtyByKey((m) => ({ ...m, [key]: val }));
+  }
+  function clearAll() { setQtyByKey({}); }
+
+  async function submitBatch() {
+    if (!transferReady) { toast({ title: "Pick a From and a To location first", variant: "destructive" }); return; }
+    if (pendingLines.length === 0) { toast({ title: "Type a quantity on at least one item", variant: "destructive" }); return; }
+    if (anyOver) { toast({ title: "One or more quantities exceed what the source has", variant: "destructive" }); return; }
     setSubmitting(true);
     try {
-      // Endpoint is scoped to the SOURCE lab; membership is validated there.
-      const res = await fetch(`${API_BASE}/api/labs/${tFrom}/veritastock/transfer`, {
+      const res = await fetch(`${API_BASE}/api/labs/${fromLab}/veritastock/transfer-batch`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ to_lab_id: Number(tTo), item_id: cell.item_id, quantity: qty }),
+        body: JSON.stringify({ to_lab_id: Number(toLab), lines: pendingLines.map((l) => ({ item_id: l.itemId, quantity: l.qty })) }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Transfer failed");
-      toast({
-        title: "Transfer recorded",
-        description: `${data.moved_display} of ${data.item_name}, ${locName(tFrom)} to ${locName(tTo)}`,
-      });
-      setTQty("");
+      if (!res.ok) {
+        const msg = data.error === "batch_invalid" && Array.isArray(data.errors)
+          ? data.errors.map((e: any) => e.error).join(", ")
+          : (data.error || "Transfer failed");
+        throw new Error(msg);
+      }
+      toast({ title: "Transfer recorded", description: `${data.transferred} item(s), ${locName(fromLab)} to ${locName(toLab)}` });
+      clearAll();
       await loadAll();
     } catch (e: any) {
       toast({ title: "Transfer failed", description: e.message, variant: "destructive" });
@@ -159,6 +175,11 @@ export default function VeritaStockEnterprisePage() {
       setSubmitting(false);
     }
   }
+
+  const lowAlerts = useMemo(
+    () => rows.reduce((n, r) => n + Object.values(r.by_location).filter((c) => c.low).length, 0),
+    [rows],
+  );
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8" data-testid="enterprise-page">
@@ -173,12 +194,11 @@ export default function VeritaStockEnterprisePage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Enterprise Inventory</h1>
           <p className="text-sm text-muted-foreground">
-            Stock across every location in your enterprise, with transfers between the warehouse and stockrooms.
+            Stock across every location in your enterprise, with multi-item transfers between the warehouse and stockrooms.
           </p>
         </div>
       </div>
 
-      {/* Summary tiles */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
           { label: "Locations", value: locations.length },
@@ -204,14 +224,56 @@ export default function VeritaStockEnterprisePage() {
         </Card>
       )}
 
-      {/* Roll-up grid */}
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="font-semibold text-sm flex items-center gap-1.5"><Package size={15} /> Stock by location</h2>
+      {/* Transfer setup: pick From and To once for the whole batch */}
+      <Card className="mb-4">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2 mb-3"><Truck size={15} className="text-primary" /><span className="font-semibold text-sm">Build a transfer</span></div>
+          {locations.length < 2 ? (
+            <p className="text-sm text-muted-foreground">Transfers need at least two locations in your enterprise.</p>
+          ) : (
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs">From (source)</Label>
+                <Select value={fromLab} onValueChange={(v) => { setFromLab(v); clearAll(); }}>
+                  <SelectTrigger data-testid="transfer-from"><SelectValue placeholder="Source location" /></SelectTrigger>
+                  <SelectContent>
+                    {locations.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">To (destination)</Label>
+                <Select value={toLab} onValueChange={setToLab}>
+                  <SelectTrigger data-testid="transfer-to"><SelectValue placeholder="Destination location" /></SelectTrigger>
+                  <SelectContent>
+                    {locations.filter((l) => String(l.id) !== fromLab).map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          {!transferReady && locations.length >= 2 && (
+            <p className="text-xs text-muted-foreground mt-3">Pick a source and destination, then type quantities in the Transfer column below.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Toolbar: search + low-stock filter */}
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search items" className="pl-8 h-9" data-testid="enterprise-search" />
+        </div>
+        <Button variant={lowOnly ? "default" : "outline"} size="sm" onClick={() => setLowOnly((v) => !v)}>
+          <AlertTriangle size={13} className="mr-1.5" /> Low stock only
+        </Button>
         <Button variant="ghost" size="sm" onClick={loadAll} disabled={loading}>
           <RefreshCw size={13} className={`mr-1.5 ${loading ? "animate-spin" : ""}`} /> Refresh
         </Button>
       </div>
-      <Card className="mb-8 overflow-x-auto">
+
+      {/* Roll-up grid with inline transfer quantity column */}
+      <Card className="mb-6 overflow-x-auto">
         <CardContent className="p-0">
           <table className="w-full text-sm" data-testid="rollup-table">
             <thead>
@@ -223,97 +285,96 @@ export default function VeritaStockEnterprisePage() {
                   </th>
                 ))}
                 <th className="text-center font-medium p-3">Total</th>
+                <th className="text-center font-medium p-3 whitespace-nowrap">Transfer{transferReady ? ` (${locName(fromLab).split(" ")[0]} to ${locName(toLab).split(" ")[0]})` : ""}</th>
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 && !loading && (
-                <tr><td colSpan={locations.length + 2} className="p-6 text-center text-muted-foreground">
-                  No items found across your locations.
-                </td></tr>
+              {filteredRows.length === 0 && !loading && (
+                <tr><td colSpan={locations.length + 3} className="p-6 text-center text-muted-foreground">No items match.</td></tr>
               )}
-              {rows.map((r) => (
-                <tr key={r.key} className="border-b last:border-0 hover:bg-muted/30">
-                  <td className="p-3">
-                    <div className="font-medium">{r.item_name}</div>
-                    {r.catalog_number && <div className="text-xs text-muted-foreground">{r.catalog_number}</div>}
-                  </td>
-                  {locations.map((l) => {
-                    const c = r.by_location[l.id];
-                    return (
-                      <td key={l.id} className={`text-center p-3 ${c?.low ? "bg-amber-50 text-amber-700 font-medium" : ""}`}>
-                        {c ? `${c.count_on_hand} ${r.count_unit}` : <span className="text-muted-foreground">.</span>}
-                      </td>
-                    );
-                  })}
-                  <td className="text-center p-3 text-muted-foreground">
-                    {Object.values(r.by_location).reduce((s, c) => s + c.count_on_hand, 0)} {r.count_unit}
-                  </td>
-                </tr>
-              ))}
+              {filteredRows.map((r) => {
+                const srcCell = transferReady ? r.by_location[fromLab] : undefined;
+                const raw = qtyByKey[r.key] || "";
+                const over = srcCell && raw !== "" && Number(raw) > srcCell.count_on_hand;
+                return (
+                  <tr key={r.key} className="border-b last:border-0 hover:bg-muted/30">
+                    <td className="p-3">
+                      <div className="font-medium">{r.item_name}</div>
+                      {r.catalog_number && <div className="text-xs text-muted-foreground">{r.catalog_number}</div>}
+                    </td>
+                    {locations.map((l) => {
+                      const c = r.by_location[l.id];
+                      return (
+                        <td key={l.id} className={`text-center p-3 ${c?.low ? "bg-amber-50 text-amber-700 font-medium" : ""}`}>
+                          {c ? `${c.count_on_hand} ${r.count_unit}` : <span className="text-muted-foreground">.</span>}
+                        </td>
+                      );
+                    })}
+                    <td className="text-center p-3 text-muted-foreground">
+                      {Object.values(r.by_location).reduce((s, c) => s + c.count_on_hand, 0)} {r.count_unit}
+                    </td>
+                    <td className="text-center p-2">
+                      {transferReady && srcCell ? (
+                        <Input
+                          type="number" min="0" max={srcCell.count_on_hand} value={raw}
+                          onChange={(e) => setQty(r.key, e.target.value)}
+                          className={`h-8 w-20 mx-auto text-center ${over ? "border-red-400 text-red-600" : ""}`}
+                          placeholder="0"
+                          aria-label={`Transfer quantity for ${r.item_name}`}
+                        />
+                      ) : (
+                        <span className="text-muted-foreground text-xs">.</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </CardContent>
       </Card>
 
-      {/* New transfer */}
-      <h2 className="font-semibold text-sm flex items-center gap-1.5 mb-2"><Truck size={15} /> New transfer</h2>
-      <Card className="mb-8">
-        <CardContent className="p-4">
-          {locations.length < 2 ? (
-            <p className="text-sm text-muted-foreground">
-              Transfers need at least two locations in your enterprise. Add a second location to enable them.
-            </p>
-          ) : (
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <Label className="text-xs">Item</Label>
-                <Select value={tItemKey} onValueChange={(v) => { setTItemKey(v); setTFrom(""); }}>
-                  <SelectTrigger data-testid="transfer-item"><SelectValue placeholder="Select an item" /></SelectTrigger>
-                  <SelectContent>
-                    {rows.map((r) => <SelectItem key={r.key} value={r.key}>{r.item_name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+      {/* Review tray: the pending batch */}
+      {transferReady && (
+        <Card className="mb-8 border-primary/30">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <ArrowRightLeft size={15} className="text-primary" />
+                Pending transfer: {locName(fromLab)} to {locName(toLab)}
               </div>
-              <div>
-                <Label className="text-xs">Quantity ({selectedRow?.count_unit || "units"})</Label>
-                <Input type="number" min="1" value={tQty} onChange={(e) => setTQty(e.target.value)} data-testid="transfer-qty" />
-              </div>
-              <div>
-                <Label className="text-xs">From</Label>
-                <Select value={tFrom} onValueChange={setTFrom} disabled={!selectedRow}>
-                  <SelectTrigger data-testid="transfer-from"><SelectValue placeholder="Source location" /></SelectTrigger>
-                  <SelectContent>
-                    {fromOptions.map((l) => (
-                      <SelectItem key={l.id} value={String(l.id)}>
-                        {l.name} ({selectedRow?.by_location[l.id]?.count_on_hand} {selectedRow?.count_unit})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs">To</Label>
-                <Select value={tTo} onValueChange={setTTo}>
-                  <SelectTrigger data-testid="transfer-to"><SelectValue placeholder="Destination location" /></SelectTrigger>
-                  <SelectContent>
-                    {locations.filter((l) => String(l.id) !== tFrom).map((l) => (
-                      <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="sm:col-span-2 flex items-center justify-between gap-3 pt-1">
-                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <ArrowRightLeft size={13} /> Moves stock and records a signed ledger entry on both locations.
-                </p>
-                <Button onClick={submitTransfer} disabled={submitting} data-testid="transfer-submit">
-                  <Truck size={14} className="mr-1.5" /> {submitting ? "Transferring." : "Transfer stock"}
-                </Button>
-              </div>
+              {pendingLines.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={clearAll} className="text-muted-foreground">Clear all</Button>
+              )}
             </div>
-          )}
-        </CardContent>
-      </Card>
+            {pendingLines.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Type quantities in the Transfer column above to build the batch.</p>
+            ) : (
+              <>
+                <ul className="divide-y mb-3">
+                  {pendingLines.map((l) => (
+                    <li key={l.key} className="py-2 flex items-center gap-3 text-sm">
+                      <span className="flex-1">{l.item_name}</span>
+                      <span className={l.over ? "text-red-600 font-medium" : ""}>
+                        {l.qty} {l.count_unit}{l.over ? ` (only ${l.sourceCount} available)` : ""}
+                      </span>
+                      <button onClick={() => setQty(l.key, "")} aria-label={`Remove ${l.item_name}`} className="text-muted-foreground hover:text-foreground">
+                        <X size={14} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs text-muted-foreground">{pendingLines.length} item(s). Moves stock and records a signed ledger entry on both locations, all or nothing.</p>
+                  <Button onClick={submitBatch} disabled={submitting || anyOver} data-testid="transfer-submit">
+                    <Truck size={14} className="mr-1.5" /> {submitting ? "Transferring." : `Transfer ${pendingLines.length} item(s)`}
+                  </Button>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* History */}
       <h2 className="font-semibold text-sm flex items-center gap-1.5 mb-2"><ArrowRightLeft size={15} /> Transfer history</h2>

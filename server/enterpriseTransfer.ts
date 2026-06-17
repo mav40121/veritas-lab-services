@@ -76,3 +76,55 @@ export function countOnHand(quantityOnHand: number, unitsPerCountUnit: number): 
       : 1;
   return pack > 1 ? Math.round(quantityOnHand / pack) : quantityOnHand;
 }
+
+// ── Multi-item (batch) transfer validation ──────────────────────────────
+// A batch moves several items from ONE source lab to ONE destination lab in
+// a single all-or-nothing operation. The batch-level checks (same-owner,
+// destination membership, distinct labs) are evaluated once; the per-line
+// checks (item present at source, positive quantity, enough stock) are
+// evaluated per line. The endpoint pre-validates with this BEFORE opening
+// the DB transaction, so a single bad line rejects the whole batch with a
+// precise error instead of half-moving stock. Mirrored in
+// scripts/verify-enterprise-transfer-batch.mjs.
+
+export interface BatchLineInput {
+  itemId: number;
+  usageQty: number; // usage_units to move
+  sourceQtyOnHand: number; // usage_units at source
+  existsAtSource: boolean; // a source-lab row was found for this item
+}
+
+export interface BatchGuardInput {
+  fromLabId: number;
+  toLabId: number;
+  fromOwnerUserId: number;
+  toOwnerUserId: number;
+  actingUserIsMemberOfDestination: boolean;
+  lines: BatchLineInput[];
+}
+
+export interface BatchGuardResult {
+  ok: boolean;
+  errors: Array<{ itemId: number | null; error: string }>;
+}
+
+export function validateBatch(i: BatchGuardInput): BatchGuardResult {
+  const errors: Array<{ itemId: number | null; error: string }> = [];
+  // Batch-level: same for every line.
+  if (!Number.isFinite(i.fromLabId) || !Number.isFinite(i.toLabId)) errors.push({ itemId: null, error: "invalid_lab" });
+  if (i.fromLabId === i.toLabId) errors.push({ itemId: null, error: "same_lab" });
+  if (i.fromOwnerUserId !== i.toOwnerUserId) errors.push({ itemId: null, error: "cross_owner" });
+  if (!i.actingUserIsMemberOfDestination) errors.push({ itemId: null, error: "no_access_to_destination" });
+  if (!Array.isArray(i.lines) || i.lines.length === 0) errors.push({ itemId: null, error: "empty_batch" });
+  // Per-line, including a duplicate-item guard so two lines can't both draw
+  // down the same source row past what validateBatch thinks is available.
+  const seen = new Set<number>();
+  for (const l of i.lines || []) {
+    if (seen.has(l.itemId)) { errors.push({ itemId: l.itemId, error: "duplicate_item" }); continue; }
+    seen.add(l.itemId);
+    if (!l.existsAtSource) errors.push({ itemId: l.itemId, error: "not_at_source" });
+    else if (!Number.isFinite(l.usageQty) || l.usageQty <= 0) errors.push({ itemId: l.itemId, error: "qty_must_be_positive" });
+    else if (l.usageQty > l.sourceQtyOnHand) errors.push({ itemId: l.itemId, error: "insufficient_stock" });
+  }
+  return { ok: errors.length === 0, errors };
+}
