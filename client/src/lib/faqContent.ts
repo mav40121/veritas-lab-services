@@ -80,8 +80,8 @@ export const EP26_ARTICLE_FAQ: FaqQA[] = [
     a: "Yes. CLIA requires laboratories to verify that a new reagent lot performs acceptably before reporting patient results from it, and to define and document the acceptance criteria (42 CFR §493.1253(b)(3) and §493.1255). The regulation requires the verification and the documented criteria; it does not prescribe the exact protocol or sample count, which the laboratory establishes with medical director or designee approval.",
   },
   {
-    q: "How many samples does EP26-A require?",
-    a: "EP26-A and CLIA do not set a fixed number. The medical director or designee determines it based on the analyte's risk and the laboratory's total allowable error (TEa). In practice, many laboratories adopt a minimum of about 20 patient samples spanning the analytical measuring range, the same floor commonly used for reference interval verification, and use more for higher-stakes analytes.",
+    q: "How many samples does EP26 require?",
+    a: "EP26 and CLIA do not set a fixed number. The medical director or designee determines it based on the analyte's risk and the laboratory's total allowable error (TEa). In practice, many laboratories adopt a minimum of about 20 patient samples spanning the analytical measuring range, the same floor commonly used for reference interval verification, and use more for higher-stakes analytes.",
   },
   {
     q: "What is the difference between lot-to-lot verification and calibration verification?",

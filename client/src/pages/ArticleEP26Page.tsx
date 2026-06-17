@@ -28,8 +28,8 @@ function Callout({ children, type = "info" }: { children: React.ReactNode; type?
 
 export default function ArticleEP26Page() {
   useSEO({
-    title: "EP26-A Reagent Lot Verification: Protocol and How-To Guide",
-    description: "How clinical laboratories verify a new reagent lot under CLSI EP26-A. The protocol, sample requirements, acceptance criteria, and documentation for lot-to-lot verification.",
+    title: "CLSI EP26 Reagent Lot Verification: Protocol and How-To Guide",
+    description: "How clinical laboratories verify a new reagent lot under CLSI EP26 (2nd edition, 2022). The protocol, sample requirements, acceptance criteria, and documentation for lot-to-lot verification.",
   });
   return (
     <div className="min-h-screen bg-background">
@@ -44,10 +44,10 @@ export default function ArticleEP26Page() {
           </div>
           <Badge variant="outline" className="mb-4 text-primary border-primary/30 bg-primary/5">Regulatory Compliance</Badge>
           <h1 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight mb-4 leading-tight">
-            EP26-A Reagent Lot Verification: A Working Protocol for Clinical Laboratories
+            CLSI EP26 Reagent Lot Verification: A Working Protocol for Clinical Laboratories
           </h1>
           <p className="text-muted-foreground text-lg leading-relaxed mb-6">
-            Every new reagent lot can shift your results before a single control flags it. CLIA requires you to catch that shift before you report patient results. Here is what CLSI EP26-A actually asks for, how to run it, and where laboratories get the sample count and acceptance criterion wrong.
+            Every new reagent lot can shift your results before a single control flags it. CLIA requires you to catch that shift before you report patient results. Here is what CLSI EP26 (2nd Edition) actually asks for, how to run it, and where laboratories get the sample count and acceptance criterion wrong.
           </p>
           <div className="flex items-center gap-5 text-xs text-muted-foreground border-t border-border pt-4">
             <span className="flex items-center gap-1.5"><User size={12} /> Michael Veri, Former Joint Commission Surveyor, CPHQ</span>
@@ -69,7 +69,7 @@ export default function ArticleEP26Page() {
                 "Reagent lot verification confirms a new lot agrees with the current lot on patient samples, before you report from it",
                 "CLIA requires the verification and documented acceptance criteria, but does not set a sample count",
                 "The medical director or designee owns the sample count and the acceptance criterion",
-                "Most laboratories anchor the criterion to total allowable error (TEa), not the formal EP26-A critical-difference math",
+                "Most laboratories anchor the acceptance criterion to total allowable error (TEa), a practical way to set the acceptable-difference limit EP26 calls for",
                 "It is event-driven: you verify every new lot, before patient reporting, not on a calendar",
               ].map(t => (
                 <li key={t} className="flex items-start gap-2 text-sm">
@@ -91,12 +91,12 @@ export default function ArticleEP26Page() {
             A new lot is a manufacturing change. Recalibration, a slightly different antibody, a new buffer, any of these can move your results enough to matter clinically while still passing your daily controls, because controls are a different matrix at a fixed concentration. The patient-safety rationale is direct: a lot-induced shift that goes undetected is reported on every patient until someone notices. CLIA requires laboratories to verify the new lot performs acceptably and to define and document the acceptance criteria (<a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">42 CFR §493.1253(b)(3) and §493.1255</a>). The regulation requires the act and the documented criteria; it leaves the protocol to the laboratory.
           </p>
 
-          <h2 className="font-serif text-2xl font-bold mt-10 mb-3">What is CLSI EP26-A?</h2>
+          <h2 className="font-serif text-2xl font-bold mt-10 mb-3">What is CLSI EP26?</h2>
           <p>
-            CLSI EP26-A, <em>User Evaluation of Between-Reagent Lot Variation</em> (published 2013), is the consensus guideline that describes how to evaluate whether a new reagent lot differs meaningfully from the current one. Its core design is to test patient samples on both the current lot and the new lot and to judge the difference against a clinically meaningful limit. The guideline deliberately balances reliably detecting a change that matters against the resource cost of a task laboratories perform constantly.
+            CLSI EP26, 2nd Edition (<em>User Evaluation of Acceptability of a Reagent Lot Change</em>, 2022) is the consensus guideline that describes how to evaluate whether a new reagent lot differs meaningfully from the current one. It replaced the 2013 first edition, which carried the older title <em>User Evaluation of Between-Reagent Lot Variation</em>. Its core design is to test patient samples on both the current lot and the new lot and to judge the difference against a clinically meaningful limit. The guideline deliberately balances reliably detecting a change that matters against the resource cost of a task laboratories perform constantly.
           </p>
           <Callout type="info">
-            <strong>One honest caveat up front:</strong> EP26-A describes a formal critical-difference calculation that, for routine clinical chemistry run constantly across many analytes, most laboratories find impractical. The common, defensible alternative used in practice is to anchor the decision to total allowable error (TEa). This guide describes that TEa-anchored approach, which is what VeritaCheck™ implements.
+            <strong>How the protocol is structured:</strong> EP26 works in two stages. First you decide the medically acceptable difference and the acceptable risk for each analyte, then you evaluate the new lot against that criterion. Many laboratories anchor the acceptable difference to total allowable error (TEa), a published, defensible yardstick. This guide describes that TEa-anchored approach, which is what VeritaCheck™ implements.
           </Callout>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">When you must verify a new reagent lot</h2>
@@ -108,7 +108,7 @@ export default function ArticleEP26Page() {
             <Link href="/resources/clia-calibration-verification-method-comparison" className="text-primary font-medium hover:underline">CLIA calibration verification and method comparison <ChevronRight size={13} className="inline" /></Link>.
           </p>
 
-          <h2 className="font-serif text-2xl font-bold mt-10 mb-3">The EP26-A protocol, step by step</h2>
+          <h2 className="font-serif text-2xl font-bold mt-10 mb-3">The EP26 protocol, step by step</h2>
           <ol className="list-decimal list-inside space-y-2 pl-2">
             <li><strong>Select patient samples.</strong> Choose samples that span the analytical measuring range, including values near medical decision points. The number is the medical director or designee's call; in practice many laboratories set a minimum around 20 and use more for higher-stakes analytes.</li>
             <li><strong>Run each sample on both lots.</strong> Test every selected sample on the current reagent lot and the new lot in the same run, under the same conditions, to isolate the lot as the only variable.</li>
@@ -127,7 +127,7 @@ export default function ArticleEP26Page() {
             <Link href="/resources/clia-tea-what-lab-directors-dont-know" className="text-primary font-medium hover:underline">CLIA total allowable error: what most lab directors don't know <ChevronRight size={13} className="inline" /></Link>.
           </p>
           <Callout type="tip">
-            <strong>The director owns the number.</strong> Neither EP26-A nor CLIA sets the sample count or the exact criterion. Both are the medical director or designee's documented decision, scaled to how much risk the analyte carries.
+            <strong>The director owns the number.</strong> Neither EP26 nor CLIA sets the sample count or the exact criterion. Both are the medical director or designee's documented decision, scaled to how much risk the analyte carries.
           </Callout>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">What to do when a lot fails verification</h2>
@@ -150,9 +150,9 @@ export default function ArticleEP26Page() {
             <div className="flex items-start gap-3">
               <FlaskConical size={20} className="text-primary shrink-0 mt-0.5" />
               <div>
-                <div className="font-semibold text-sm mb-1">How VeritaCheck™ automates EP26-A</div>
+                <div className="font-semibold text-sm mb-1">How VeritaCheck™ automates EP26</div>
                 <p className="text-sm text-muted-foreground mb-3">
-                  VeritaCheck™ runs Reagent Lot Verification (EP26-A) as a study type. Enter the paired patient results, and it computes the per-specimen differences, applies the TEa-anchored criterion, and generates a signed, CLIA-compliant PDF that names CLSI EP26-A and the CFR citation. No spreadsheets, no manual math. Your first study is free.
+                  VeritaCheck™ runs Reagent Lot Verification as a study type. Enter the paired patient results, and it computes the per-specimen differences, applies the TEa-anchored criterion, and generates a signed, CLIA-compliant PDF with the regulatory citation. No spreadsheets, no manual math. Your first study is free.
                 </p>
                 <Button asChild size="sm" className="bg-primary text-primary-foreground">
                   <Link href="/veritacheck">Run a Free Study <ChevronRight size={13} className="ml-1" /></Link>
@@ -172,7 +172,7 @@ export default function ArticleEP26Page() {
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Conclusion</h2>
           <p>
-            Reagent lot verification is a small study with a large failure mode: a lot shift that slips past daily QC and rides out on patient results. EP26-A gives you the design, CLIA gives you the obligation, and TEa gives you a defensible line. Set the sample count and the criterion deliberately, document them before you start, and let the medical director or designee own the determination. Done that way, lot verification is a routine, survey-ready part of your quality program rather than a scramble at the bench.
+            Reagent lot verification is a small study with a large failure mode: a lot shift that slips past daily QC and rides out on patient results. EP26 gives you the design, CLIA gives you the obligation, and TEa gives you a defensible line. Set the sample count and the criterion deliberately, document them before you start, and let the medical director or designee own the determination. Done that way, lot verification is a routine, survey-ready part of your quality program rather than a scramble at the bench.
           </p>
 
           {/* Newsletter */}
@@ -183,7 +183,7 @@ export default function ArticleEP26Page() {
             <FlaskConical size={28} className="mx-auto mb-3 opacity-80" />
             <h3 className="font-serif text-xl font-bold mb-2">Verify your next reagent lot in minutes</h3>
             <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
-              VeritaCheck™ runs Reagent Lot Verification (EP26-A) alongside calibration verification, method comparison, and EP15 precision, with automated CLIA TEa lookup and a signed PDF report.
+              VeritaCheck™ runs Reagent Lot Verification alongside calibration verification, method comparison, and EP15 precision, with automated CLIA TEa lookup and a signed PDF report.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">
@@ -199,7 +199,7 @@ export default function ArticleEP26Page() {
           <div className="mt-10 pt-6 border-t border-border">
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">References</div>
             <ol className="space-y-1.5 text-xs text-muted-foreground list-decimal list-inside">
-              <li>Clinical and Laboratory Standards Institute. (2013). EP26-A: User Evaluation of Between-Reagent Lot Variation; Approved Guideline. <a href="https://clsi.org/standards/products/method-evaluation/documents/ep26/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">clsi.org</a></li>
+              <li>Clinical and Laboratory Standards Institute. (2022). EP26, 2nd Edition: User Evaluation of Acceptability of a Reagent Lot Change. <a href="https://clsi.org/shop/standards/ep26/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">clsi.org</a></li>
               <li>Code of Federal Regulations. (2024). Title 42, Part 493: Laboratory Requirements, §493.1253 and §493.1255. <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ecfr.gov</a></li>
               <li>Loh TP, et al. (2020). Recommendations for laboratory informatics specifications needed for the application of patient-based real-time quality control. Clinica Chimica Acta.</li>
             </ol>
