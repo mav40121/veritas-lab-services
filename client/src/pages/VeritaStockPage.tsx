@@ -26,7 +26,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Lock, Plus, Edit2, Trash2, AlertTriangle, Package, Clock, AlertCircle, RefreshCw,
-  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users,
+  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users, Building2,
 } from "lucide-react";
 import BarcodeScannerModal from "@/components/BarcodeScannerModal";
 import InventoryCountWorkflow, { type CountItem } from "@/components/InventoryCountWorkflow";
@@ -1104,6 +1104,20 @@ export default function VeritaStockInventoryPage() {
             >
               <Users size={14} className="mr-1.5" />
               Vendor Directory
+            </Button>
+          </Link>
+          {/* Enterprise (multi-location) view: cross-location stock roll-up
+              and warehouse-to-stockroom transfers. Backend in PR 1
+              (enterpriseTransfer.ts + /api/labs/:labId/veritastock/*). */}
+          <Link href={activeLabId ? `/labs/${activeLabId}/veritastock/enterprise` : "/veritastock/enterprise"}>
+            <Button
+              size="sm"
+              variant="outline"
+              title="Cross-location stock roll-up and transfers between the warehouse and stockrooms"
+              data-testid="enterprise-button"
+            >
+              <Building2 size={14} className="mr-1.5" />
+              Enterprise
             </Button>
           </Link>
           {/* Snap Order: emergency manual-order PDF (additive to calculated
