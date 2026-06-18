@@ -21,6 +21,9 @@ test.describe("NavBar host-aware chrome", () => {
     if (isStockHost) {
       await expect(page.getByText(/Multi-Location Inventory/i).first()).toBeVisible({ timeout: 15000 });
       await expect(page.getByText(/Clinical Laboratory Consulting/i)).toHaveCount(0);
+      // Root route serves the VeritaStock landing, not the lab homepage.
+      await expect(page.getByRole("heading", { name: /Know what you have, everywhere/i })).toBeVisible();
+      await expect(page.getByText(/Nobody taught you the compliance/i)).toHaveCount(0);
     } else {
       // Default lab host stays the full compliance chrome.
       await expect(page.getByText(/Clinical Laboratory Consulting/i).first()).toBeVisible({ timeout: 15000 });

@@ -15,6 +15,7 @@ import { SubscriptionModal } from "@/components/SubscriptionModal";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { ChevronUp } from "lucide-react";
 import HomePage from "@/pages/HomePage";
+import { isStockHost } from "@/lib/host";
 const ServicesPage = lazy(() => import("@/pages/ServicesPage"));
 const BookScopingCallPage = lazy(() => import("@/pages/BookScopingCallPage"));
 const AdminSchedulingPage = lazy(() => import("@/pages/AdminSchedulingPage"));
@@ -97,6 +98,7 @@ const VeritaStockPage = lazy(() => import("@/pages/VeritaStockPage"));
 const VeritaStockVendorsPage = lazy(() => import("@/pages/VeritaStockVendorsPage"));
 const VeritaStockSnapOrderPage = lazy(() => import("@/pages/VeritaStockSnapOrderPage"));
 const VeritaStockEnterprisePage = lazy(() => import("@/pages/VeritaStockEnterprisePage"));
+const VeritaStockLandingPage = lazy(() => import("@/pages/VeritaStockLandingPage"));
 const HospitalInventoryPage = lazy(() => import("@/pages/HospitalInventoryPage"));
 const VeritaOpsAppPage = lazy(() => import("@/pages/VeritaOpsAppPage"));
 const LabMembersPage = lazy(() => import("@/pages/LabMembersPage"));
@@ -304,7 +306,10 @@ function AppContent() {
       <main className="flex-1">
         <Suspense fallback={<PageFallback />}>
           <Switch>
-          <Route path="/" component={HomePage} />
+          {/* On the veritastock.com host, "/" is the VeritaStock front door,
+              not the lab HomePage. Keyed on the hostname via lib/host.ts so it
+              matches the NavBar chrome. veritaslabservices.com is unaffected. */}
+          <Route path="/">{isStockHost() ? <VeritaStockLandingPage /> : <HomePage />}</Route>
           <Route path="/services" component={ServicesPage} />
           <Route path="/book/scoping-call" component={BookScopingCallPage} />
           <Route path="/admin/scheduling" component={AdminSchedulingPage} />
