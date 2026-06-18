@@ -128,6 +128,23 @@ function BackToTop() {
 }
 
 function SiteFooter() {
+  // On the veritastock.com host, render a minimal VeritaStock footer instead of
+  // the lab-services footer (company tagline, lab module links, the book, CLIA
+  // links) so the inventory front door stays free of lab-compliance chrome.
+  if (isStockHost()) {
+    return (
+      <footer className="border-t border-border bg-card">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row justify-between items-center gap-3">
+          <p className="text-xs text-muted-foreground">© 2026 Veritas Lab Services, LLC · VeritaStock™ Multi-Location Inventory</p>
+          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <a href="mailto:info@veritaslabservices.com" className="hover:text-primary transition-colors">info@veritaslabservices.com</a>
+            <a href="/terms" className="hover:text-primary transition-colors">Terms</a>
+            <a href="/privacy" className="hover:text-primary transition-colors">Privacy</a>
+          </div>
+        </div>
+      </footer>
+    );
+  }
   return (
     <footer className="border-t border-border bg-card">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
