@@ -11,6 +11,7 @@ import { PendingStaffPortalBell } from "@/components/PendingStaffPortalBell";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { isStockHost } from "@/lib/host";
 
 // Mobile menu IA \u2014 mirrors the desktop nav structure (top-level links +
 // collapsible groups) instead of dumping every route as a flat 27-item
@@ -93,8 +94,9 @@ export function NavBar() {
   // brand so the inventory product does not read as a module bolted onto a
   // lab site. Same app and login; the skin keys on the hostname. Full
   // VeritaStock branding is a fast-follow; this is the demo-facing chrome
-  // suppression.
-  const onStockHost = typeof window !== "undefined" && /(^|\.)veritastock\.com$/i.test(window.location.hostname);
+  // suppression. Host check shared with the router (lib/host.ts) so the brand
+  // and the root route can never disagree about which host is which.
+  const onStockHost = isStockHost();
 
   const isActive = (href: string) => location === href;
 
