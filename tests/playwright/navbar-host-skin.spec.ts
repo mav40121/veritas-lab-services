@@ -24,6 +24,9 @@ test.describe("NavBar host-aware chrome", () => {
       // Root route serves the VeritaStock landing, not the lab homepage.
       await expect(page.getByRole("heading", { name: /Know what you have, everywhere/i })).toBeVisible();
       await expect(page.getByText(/Nobody taught you the compliance/i)).toHaveCount(0);
+      // Footer is the minimal VeritaStock footer, not the lab-services footer.
+      await expect(page.getByText(/Leadership Coaching/i)).toHaveCount(0);
+      await expect(page.getByText(/Multi-Location Inventory/i).first()).toBeVisible();
     } else {
       // Default lab host stays the full compliance chrome.
       await expect(page.getByText(/Clinical Laboratory Consulting/i).first()).toBeVisible({ timeout: 15000 });
