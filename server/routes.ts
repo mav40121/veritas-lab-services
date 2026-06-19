@@ -1677,6 +1677,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const accountId = lab.owner_user_id;
     const now = new Date().toISOString();
 
+    // Idempotency: skip any item whose catalog_number already exists in this
+    // lab so re-seeding (e.g. adding new demo items to an already-provisioned
+    // tenant) inserts only the delta instead of duplicating rows. Items without
+    // a catalog_number are always inserted (no key to dedupe on).
+    const existingCatalogs = new Set<string>(
+      sqlite.prepare("SELECT catalog_number FROM inventory_items WHERE lab_id = ? AND catalog_number IS NOT NULL AND catalog_number != ''")
+        .all(Number(labId)).map((r: any) => String(r.catalog_number).trim())
+    );
+    let skipped = 0;
+
     const insertStmt = sqlite.prepare(`
       INSERT INTO inventory_items (
         account_id, lab_id, item_name, catalog_number, lot_number,
@@ -1696,6 +1706,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           errors.push(`Skipped row without item_name: ${JSON.stringify(item).slice(0, 120)}`);
           continue;
         }
+        const cat = item.catalog_number != null ? String(item.catalog_number).trim() : "";
+        if (cat && existingCatalogs.has(cat)) { skipped++; continue; }
         // Unit model: callers may pass the new order/usage/count units +
         // pack sizes. Backward compatible: when only the legacy `unit` is
         // given, all three unit roles mirror it and pack sizes default to 1.
@@ -1708,7 +1720,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           accountId,
           Number(labId),
           String(item.item_name).trim(),
-          item.catalog_number != null ? String(item.catalog_number) : null,
+          cat || null,
           item.lot_number ?? null,
           item.department ?? null,
           item.category ?? "Reagent",
@@ -1728,6 +1740,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           now,
           now,
         );
+        if (cat) existingCatalogs.add(cat);
         inserted++;
       }
       sqlite.exec("COMMIT");
@@ -1747,8 +1760,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (sb.changes > 0) console.log(`[admin/import-inventory] Backfilled barcode_value on ${sb.changes} fresh row(s) in lab_id=${labId}`);
     } catch {}
 
-    console.log(`[admin/import-inventory] Inserted ${inserted} items into lab_id=${labId} (owner_user_id=${accountId})`);
-    res.json({ ok: true, inserted, errors });
+    console.log(`[admin/import-inventory] Inserted ${inserted} items into lab_id=${labId} (owner_user_id=${accountId}); skipped ${skipped} already-present catalog number(s)`);
+    res.json({ ok: true, inserted, skipped, errors });
   });
 
   // Admin: update an existing lab's identity fields (lab_name, clia_number,
