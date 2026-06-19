@@ -127,6 +127,23 @@ export function NavBar() {
           </div>
         </Link>
 
+        {/* VeritaStock host nav: the lab marketing nav is suppressed here, so a
+            logged-in inventory user still needs a way between the single-lab
+            inventory and the cross-location roll-up. Without this the host is a
+            dead end after login. */}
+        {onStockHost && isLoggedIn && (
+          <nav className="hidden min-[1560px]:flex items-center gap-0.5">
+            <Link href={labRoute("/veritastock")} className={cn("px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+              location === labRoute("/veritastock") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
+              Inventory
+            </Link>
+            <Link href={labRoute("/veritastock/enterprise")} className={cn("px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+              location === labRoute("/veritastock/enterprise") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
+              All Locations
+            </Link>
+          </nav>
+        )}
+
         {/* Desktop nav (suppressed on the VeritaStock inventory host) */}
         {!onStockHost && (
         <nav className="hidden min-[1560px]:flex items-center gap-0.5">
@@ -344,6 +361,14 @@ export function NavBar() {
                 than 2 memberships. */}
             {isLoggedIn && <LabSwitcherMobile onAfterSwitch={closeMobile} />}
 
+            {/* VeritaStock host: inventory nav (lab marketing groups suppressed) */}
+            {onStockHost && isLoggedIn && (<>
+              <Link href={labRoute("/veritastock")} onClick={closeMobile}
+                className="px-3 py-2 rounded-md text-sm font-medium text-foreground hover:bg-secondary transition-colors">Inventory</Link>
+              <Link href={labRoute("/veritastock/enterprise")} onClick={closeMobile}
+                className="px-3 py-2 rounded-md text-sm font-medium text-foreground hover:bg-secondary transition-colors">All Locations</Link>
+            </>)}
+
             {!onStockHost && (<>
             <MobileGroup
               label="VeritaAssure™"
@@ -388,7 +413,7 @@ export function NavBar() {
             <div className="pt-2 border-t border-border mt-2 flex gap-2">
               {isLoggedIn ? (
                 <>
-                  <Button asChild variant="outline" size="sm" className="flex-1"><Link href={labRoute("/dashboard")} onClick={closeMobile}><LayoutDashboard size={13} className="mr-1" />My Studies</Link></Button>
+                  <Button asChild variant="outline" size="sm" className="flex-1"><Link href={labRoute(onStockHost ? "/veritastock" : "/dashboard")} onClick={closeMobile}><LayoutDashboard size={13} className="mr-1" />{onStockHost ? "Inventory" : "My Studies"}</Link></Button>
                   <Button variant="outline" size="sm" onClick={() => { logout(); closeMobile(); }} className="flex-1">Sign out</Button>
                 </>
               ) : (
