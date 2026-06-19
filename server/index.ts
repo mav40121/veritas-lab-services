@@ -74,6 +74,10 @@ app.use((req, res, next) => {
     "http://127.0.0.1:5000",
     "https://veritaslabservices.com",
     "https://www.veritaslabservices.com",
+    // VeritaStock™ inventory front door: same app + DB, served on its own
+    // domain, so browsers there make cross-origin API calls to this service.
+    "https://veritastock.com",
+    "https://www.veritastock.com",
     ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
   ]);
   const origin = req.headers.origin || "";
