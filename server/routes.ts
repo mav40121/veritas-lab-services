@@ -2031,6 +2031,38 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // Admin: create a standalone demo login (or return the existing one) so the
+  // whole demo tenant stands up from one command. The password is supplied by
+  // the operator at run time (the provisioner reads it from the DEMO_PASSWORD
+  // env var), bcrypt-hashed here, and never logged. Sets hipaa_acknowledged +
+  // onboarding so the account logs in with zero friction, plan 'free' (the demo
+  // labs get comped per-lab by provision-demo-lab). Idempotent: if the email
+  // already exists it is returned untouched (the password is NOT reset).
+  app.post("/api/admin/create-demo-user", async (req, res) => {
+    const { secret, email, password, name } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!email || !password) return res.status(400).json({ error: "email and password required" });
+    if (String(password).length < 8) return res.status(400).json({ error: "password must be at least 8 characters" });
+    const sqlite = (db as any).$client;
+    const existing = sqlite.prepare("SELECT id, email FROM users WHERE LOWER(email) = LOWER(?)").get(String(email).trim()) as any;
+    if (existing) {
+      return res.json({ ok: true, created: false, userId: existing.id, email: existing.email });
+    }
+    try {
+      const passwordHash = await bcrypt.hash(String(password), 10);
+      const fallbackName = String(email).trim().split("@")[0] || "Demo";
+      const user = storage.createUser(String(email).trim().toLowerCase(), passwordHash, name || fallbackName);
+      sqlite.prepare(
+        "UPDATE users SET hipaa_acknowledged = 1, hipaa_acknowledged_at = ?, has_completed_onboarding = 1, plan = 'free' WHERE id = ?"
+      ).run(new Date().toISOString(), user.id);
+      console.log(`[admin/create-demo-user] created demo user id=${user.id} (${email})`);
+      return res.json({ ok: true, created: true, userId: user.id, email: user.email });
+    } catch (err: any) {
+      console.error("[admin/create-demo-user] failed:", err.message);
+      return res.status(500).json({ error: err.message || "create failed" });
+    }
+  });
+
   // Admin: idempotent provisioning primitive for a multi-location VeritaStock
   // demo tenant. Find-or-create a comped lab by (owner_user_id, lab_name) with
   // NO CLIA (it is a demo location, not a real certificate), keep it comped on

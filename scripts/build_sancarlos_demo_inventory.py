@@ -19,10 +19,17 @@ Design goals so the demo lands:
 No PHI: supplies, reagents, controls, and over-the-counter meds only.
 
 Usage:
-  python scripts/build_sancarlos_demo_inventory.py            # write review xlsx
-  python scripts/build_sancarlos_demo_inventory.py --commit   # seed via API
-      requires:  ADMIN_SECRET env  AND  --labmap '{"San Carlos Warehouse": 12, ...}'
-      (lab ids come from creating the 7 labs under the demo account first)
+  python scripts/build_sancarlos_demo_inventory.py            # write review xlsx only
+  # One command, standalone demo account (recommended). First set two env vars,
+  # ADMIN_SECRET (your admin secret) and DEMO_PASSWORD (the login password you
+  # choose for the demo, 8+ chars), then run:
+  python scripts/build_sancarlos_demo_inventory.py --provision --owner-email "sancarlosdemo@example.com"
+  #   -> creates the demo login, the 7 labs (warehouse = home), and all 148 items.
+  #   Then log into veritastock.com with that email + DEMO_PASSWORD.
+  # Provision under an existing account instead: omit DEMO_PASSWORD, pass that
+  #   account's --owner-email (no login is created).
+  # Legacy: --commit with --labmap '{"San Carlos Warehouse": 12, ...}' seeds
+  #   pre-existing labs only.
 """
 import os, sys, json, datetime, urllib.request
 from collections import Counter
@@ -426,6 +433,15 @@ def main():
         # existing labs and only re-seeds ones it freshly created.
         owner = _arg("--owner-email", "verilabguy@gmail.com")
         plan = _arg("--plan", "enterprise")
+        # One-command setup: if DEMO_PASSWORD is set, create (or confirm) the
+        # standalone demo login first so the whole tenant comes from one run.
+        # The password lives only in your env; it is never printed or sent to
+        # anyone but the server.
+        demo_pw = os.environ.get("DEMO_PASSWORD", "")
+        if demo_pw:
+            acct = _post("/api/admin/create-demo-user",
+                         {"secret": sec, "email": owner, "password": demo_pw})
+            print(f"Demo login {owner}: {'created' if acct.get('created') else 'already exists'} (user {acct.get('userId')})")
         print(f"Provisioning 7 demo labs under {owner} (plan {plan})...")
         wh = _post("/api/admin/provision-demo-lab",
                    {"secret": sec, "ownerEmail": owner, "labName": WAREHOUSE_LOC, "plan": plan, "isWarehouse": True})
