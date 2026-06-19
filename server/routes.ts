@@ -1965,6 +1965,79 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // Admin: idempotent provisioning primitive for a multi-location VeritaStock
+  // demo tenant. Find-or-create a comped lab by (owner_user_id, lab_name) with
+  // NO CLIA (it is a demo location, not a real certificate), keep it comped on
+  // re-run, and optionally link it into a warehouse group via
+  // parent_warehouse_lab_id. Owner is resolved by email so the seeding script
+  // never threads a user id. The warehouse link is the one piece the
+  // customer-facing JWT PATCH (/api/labs/:labId/veritastock/warehouse) normally
+  // owns; doing it here lets the entire San Carlos demo be stood up with
+  // ADMIN_SECRET alone (scripts/build_sancarlos_demo_inventory.py --provision).
+  // Inventory is seeded separately via /api/admin/import-inventory; this only
+  // owns the lab + the group wiring. Returns created=true only when the lab row
+  // was newly inserted, so the caller can seed exactly once and stay idempotent.
+  app.post("/api/admin/provision-demo-lab", (req, res) => {
+    const { secret, ownerEmail, labName, plan, warehouseLabId, isWarehouse } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!ownerEmail || !labName) return res.status(400).json({ error: "ownerEmail and labName required" });
+    const validPlans = ["clinic", "waived", "community", "hospital", "enterprise", "large_hospital"];
+    const resolvedPlan = plan || "enterprise";
+    if (!validPlans.includes(resolvedPlan)) {
+      return res.status(400).json({ error: `plan must be one of: ${validPlans.join(", ")}` });
+    }
+    const sqlite = (db as any).$client;
+    const user = sqlite.prepare("SELECT id, email FROM users WHERE LOWER(email) = LOWER(?)").get(String(ownerEmail).trim()) as any;
+    if (!user) return res.status(404).json({ error: `No user with email ${ownerEmail}` });
+
+    const now = new Date().toISOString();
+    const farFuture = "2099-12-31T00:00:00.000Z";
+    let created = false;
+    let labId: number;
+    try {
+      sqlite.exec("BEGIN");
+      let lab = sqlite.prepare("SELECT id FROM labs WHERE owner_user_id = ? AND lab_name = ?").get(user.id, String(labName).trim()) as any;
+      if (!lab) {
+        const r = sqlite.prepare(
+          `INSERT INTO labs (
+            clia_number, lab_name, owner_user_id,
+            accreditation_cap, accreditation_tjc, accreditation_cola, accreditation_aabb,
+            clia_locked, lab_name_locked,
+            plan, subscription_status, subscription_expires_at, plan_expires_at,
+            stripe_customer_id, stripe_subscription_id,
+            parent_warehouse_lab_id, created_at, updated_at
+          ) VALUES (NULL, ?, ?, 0, 0, 0, 0, 0, 0, ?, 'active', ?, ?, NULL, NULL, NULL, ?, ?)`
+        ).run(String(labName).trim(), user.id, resolvedPlan, farFuture, farFuture, now, now);
+        labId = Number(r.lastInsertRowid);
+        sqlite.prepare(
+          `INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
+           VALUES (?, ?, 'owner', '{}', 'active', 0, ?, ?, ?)`
+        ).run(labId, user.id, now, now, now);
+        created = true;
+      } else {
+        labId = Number(lab.id);
+        sqlite.prepare(
+          "UPDATE labs SET plan = ?, subscription_status = 'active', subscription_expires_at = ?, plan_expires_at = ?, updated_at = ? WHERE id = ?"
+        ).run(resolvedPlan, farFuture, farFuture, now, labId);
+      }
+      if (isWarehouse) {
+        sqlite.prepare("UPDATE labs SET parent_warehouse_lab_id = NULL, updated_at = ? WHERE id = ?").run(now, labId);
+      } else if (warehouseLabId != null) {
+        sqlite.prepare("UPDATE labs SET parent_warehouse_lab_id = ?, updated_at = ? WHERE id = ?").run(Number(warehouseLabId), now, labId);
+      }
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[admin/provision-demo-lab] failed:", err.message);
+      return res.status(500).json({ error: err.message || "provision failed" });
+    }
+    const lab = sqlite.prepare(
+      "SELECT id, lab_name, owner_user_id, plan, subscription_status, parent_warehouse_lab_id FROM labs WHERE id = ?"
+    ).get(labId);
+    console.log(`[admin/provision-demo-lab] ${created ? "created" : "updated"} lab_id=${labId} (${String(labName).trim()}) owner=${user.email} plan=${resolvedPlan} parent=${(lab as any).parent_warehouse_lab_id ?? "none"}`);
+    res.json({ ok: true, created, labId, lab });
+  });
+
   // Admin: list all seat records (used by audit script to verify seat integrity)
   app.post("/api/admin/seats", (req, res) => {
     const { secret } = req.body;
