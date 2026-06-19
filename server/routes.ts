@@ -1677,15 +1677,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const accountId = lab.owner_user_id;
     const now = new Date().toISOString();
 
-    // Idempotency: skip any item whose catalog_number already exists in this
-    // lab so re-seeding (e.g. adding new demo items to an already-provisioned
-    // tenant) inserts only the delta instead of duplicating rows. Items without
-    // a catalog_number are always inserted (no key to dedupe on).
-    const existingCatalogs = new Set<string>(
-      sqlite.prepare("SELECT catalog_number FROM inventory_items WHERE lab_id = ? AND catalog_number IS NOT NULL AND catalog_number != ''")
-        .all(Number(labId)).map((r: any) => String(r.catalog_number).trim())
-    );
-    let skipped = 0;
+    // Upsert by (lab_id, catalog_number): update an item already present in
+    // this lab, insert it otherwise. Lets the seed both add new items and
+    // refresh enriched fields (burn rate, lead time, expiry, storage, ...) on
+    // re-run without ever duplicating rows. Items without a catalog_number are
+    // always inserted (no key to match on).
+    const existingByCatalog = new Map<string, number>();
+    for (const r of sqlite.prepare(
+      "SELECT id, catalog_number FROM inventory_items WHERE lab_id = ? AND catalog_number IS NOT NULL AND catalog_number != ''"
+    ).all(Number(labId)) as any[]) {
+      existingByCatalog.set(String(r.catalog_number).trim(), Number(r.id));
+    }
+    let updated = 0;
 
     const insertStmt = sqlite.prepare(`
       INSERT INTO inventory_items (
@@ -1693,8 +1696,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         department, category, quantity_on_hand, reorder_point, unit,
         expiration_date, vendor, storage_location, notes, status,
         order_unit, usage_unit, count_unit, units_per_order_unit, units_per_count_unit,
+        burn_rate, lead_time_days, safety_stock_days, desired_days_of_stock,
+        standing_order, standing_order_review_date,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const updateStmt = sqlite.prepare(`
+      UPDATE inventory_items SET
+        item_name = ?, lot_number = ?, department = ?, category = ?,
+        quantity_on_hand = ?, reorder_point = ?, unit = ?, expiration_date = ?,
+        vendor = ?, storage_location = ?, notes = ?, status = ?,
+        order_unit = ?, usage_unit = ?, count_unit = ?, units_per_order_unit = ?,
+        units_per_count_unit = ?, burn_rate = ?, lead_time_days = ?,
+        safety_stock_days = ?, desired_days_of_stock = ?, standing_order = ?,
+        standing_order_review_date = ?, updated_at = ?
+      WHERE id = ?
     `);
 
     let inserted = 0;
@@ -1707,41 +1723,78 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           continue;
         }
         const cat = item.catalog_number != null ? String(item.catalog_number).trim() : "";
-        if (cat && existingCatalogs.has(cat)) { skipped++; continue; }
-        // Unit model: callers may pass the new order/usage/count units +
-        // pack sizes. Backward compatible: when only the legacy `unit` is
-        // given, all three unit roles mirror it and pack sizes default to 1.
+        // Unit model: callers may pass the new order/usage/count units + pack
+        // sizes. Backward compatible: when only the legacy `unit` is given, all
+        // three unit roles mirror it and pack sizes default to 1.
         const usageUnit = item.usage_unit ?? item.unit ?? "each";
         const orderUnit = item.order_unit ?? usageUnit;
         const countUnit = item.count_unit ?? usageUnit;
         const unitsPerOrder = Number(item.units_per_order_unit ?? 1) || 1;
         const unitsPerCount = Number(item.units_per_count_unit ?? 1) || 1;
-        insertStmt.run(
-          accountId,
-          Number(labId),
-          String(item.item_name).trim(),
-          cat || null,
-          item.lot_number ?? null,
-          item.department ?? null,
-          item.category ?? "Reagent",
-          Number(item.quantity_on_hand ?? 0),
-          Number(item.reorder_point ?? 0),
-          item.unit ?? usageUnit,
-          item.expiration_date ?? null,
-          item.vendor ?? null,
-          item.storage_location ?? null,
-          item.notes ?? null,
-          item.status ?? "active",
-          orderUnit,
-          usageUnit,
-          countUnit,
-          unitsPerOrder,
-          unitsPerCount,
-          now,
-          now,
-        );
-        if (cat) existingCatalogs.add(cat);
-        inserted++;
+        const existingId = cat ? existingByCatalog.get(cat) : undefined;
+        if (existingId) {
+          updateStmt.run(
+            String(item.item_name).trim(),
+            item.lot_number ?? null,
+            item.department ?? null,
+            item.category ?? "Reagent",
+            Number(item.quantity_on_hand ?? 0),
+            Number(item.reorder_point ?? 0),
+            item.unit ?? usageUnit,
+            item.expiration_date ?? null,
+            item.vendor ?? null,
+            item.storage_location ?? null,
+            item.notes ?? null,
+            item.status ?? "active",
+            orderUnit,
+            usageUnit,
+            countUnit,
+            unitsPerOrder,
+            unitsPerCount,
+            Number(item.burn_rate ?? 0),
+            Number(item.lead_time_days ?? 5),
+            Number(item.safety_stock_days ?? 3),
+            Number(item.desired_days_of_stock ?? 30),
+            item.standing_order ? 1 : 0,
+            item.standing_order_review_date ?? null,
+            now,
+            existingId,
+          );
+          updated++;
+        } else {
+          const ins = insertStmt.run(
+            accountId,
+            Number(labId),
+            String(item.item_name).trim(),
+            cat || null,
+            item.lot_number ?? null,
+            item.department ?? null,
+            item.category ?? "Reagent",
+            Number(item.quantity_on_hand ?? 0),
+            Number(item.reorder_point ?? 0),
+            item.unit ?? usageUnit,
+            item.expiration_date ?? null,
+            item.vendor ?? null,
+            item.storage_location ?? null,
+            item.notes ?? null,
+            item.status ?? "active",
+            orderUnit,
+            usageUnit,
+            countUnit,
+            unitsPerOrder,
+            unitsPerCount,
+            Number(item.burn_rate ?? 0),
+            Number(item.lead_time_days ?? 5),
+            Number(item.safety_stock_days ?? 3),
+            Number(item.desired_days_of_stock ?? 30),
+            item.standing_order ? 1 : 0,
+            item.standing_order_review_date ?? null,
+            now,
+            now,
+          );
+          if (cat) existingByCatalog.set(cat, Number(ins.lastInsertRowid));
+          inserted++;
+        }
       }
       sqlite.exec("COMMIT");
     } catch (err: any) {
@@ -1760,8 +1813,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (sb.changes > 0) console.log(`[admin/import-inventory] Backfilled barcode_value on ${sb.changes} fresh row(s) in lab_id=${labId}`);
     } catch {}
 
-    console.log(`[admin/import-inventory] Inserted ${inserted} items into lab_id=${labId} (owner_user_id=${accountId}); skipped ${skipped} already-present catalog number(s)`);
-    res.json({ ok: true, inserted, skipped, errors });
+    console.log(`[admin/import-inventory] lab_id=${labId} (owner_user_id=${accountId}): inserted ${inserted}, updated ${updated}`);
+    res.json({ ok: true, inserted, updated, errors });
   });
 
   // Admin: update an existing lab's identity fields (lab_name, clia_number,
