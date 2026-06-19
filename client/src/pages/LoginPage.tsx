@@ -257,6 +257,8 @@ export default function LoginPage() {
     };
   }
 
+  const onStock = isStockHost();
+
   return (
     <div className="min-h-[70vh] flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
@@ -264,8 +266,8 @@ export default function LoginPage() {
           <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
             <FlaskConical size={22} className="text-primary" />
           </div>
-          <h1 className="font-serif text-2xl font-bold">VeritaAssure&#8482; Account</h1>
-          <p className="text-sm text-muted-foreground mt-1">Sign in to save and access your studies</p>
+          <h1 className="font-serif text-2xl font-bold">{onStock ? "VeritaStock™" : "VeritaAssure™ Account"}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{onStock ? "Sign in to manage your multi-location inventory" : "Sign in to save and access your studies"}</p>
         </div>
         <Card>
           <CardContent className="pt-5">
@@ -308,6 +310,35 @@ export default function LoginPage() {
 
               {/* ── REGISTER TAB ── */}
               <TabsContent value="register">
+
+                {/* VeritaStock host: a self-contained inventory signup. No
+                    VeritaAssure plan tiers, lab-type steps, or CLIA — just an
+                    account (free; the demo/inventory labs are provisioned
+                    separately). The lab host keeps the full flow below. */}
+                {onStock ? (
+                  <form onSubmit={handleRegister} className="space-y-4">
+                    <div className="space-y-1.5"><Label>Full Name</Label><Input value={registerForm.name} onChange={e => setRegisterForm(f => ({ ...f, name: e.target.value }))} placeholder="Your name" required /></div>
+                    <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={registerForm.email} onChange={e => setRegisterForm(f => ({ ...f, email: e.target.value }))} placeholder="you@lab.com" required /></div>
+                    <div className="space-y-1.5"><Label>Password</Label><Input type="password" value={registerForm.password} onChange={e => setRegisterForm(f => ({ ...f, password: e.target.value }))} placeholder="Min 6 characters" required /></div>
+                    <div className="space-y-2">
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={hipaaAcknowledged}
+                          onChange={e => { setHipaaAcknowledged(e.target.checked); if (e.target.checked) setHipaaError(""); }}
+                          className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary shrink-0"
+                        />
+                        <span className="text-sm text-foreground leading-relaxed">
+                          I understand VeritaStock™ is for laboratory inventory management only. It is not a HIPAA-covered platform and I will not enter protected health information (PHI).
+                        </span>
+                      </label>
+                      {hipaaError && <p className="text-sm text-red-600">{hipaaError}</p>}
+                    </div>
+                    <Button type="submit" disabled={loading || !hipaaAcknowledged} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+                      {loading ? "Creating account..." : "Create Account"}
+                    </Button>
+                  </form>
+                ) : (<>
 
                 {/* STEP 1: Lab type selection */}
                 {regStep === "labtype" && (
@@ -509,12 +540,13 @@ export default function LoginPage() {
                     </button>
                   </form>
                 )}
+                </>)}
 
               </TabsContent>
             </Tabs>
           </CardContent>
         </Card>
-        <p className="text-xs text-center text-muted-foreground mt-4">You can also run a study as a guest without an account.</p>
+        {!onStock && <p className="text-xs text-center text-muted-foreground mt-4">You can also run a study as a guest without an account.</p>}
       </div>
     </div>
   );
