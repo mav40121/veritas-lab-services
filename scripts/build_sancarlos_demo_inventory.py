@@ -191,15 +191,99 @@ PLACEMENT = {
 
 WAREHOUSE_LOC = "San Carlos Warehouse"
 
+TODAY = datetime.date.today()
+
+# Reorder policy by category: (lead_time_days, safety_stock_days,
+# desired_days_of_stock). The server computes reorder_point = burn_rate *
+# (lead + safety) and order_to_qty = burn_rate * desired_days from these.
+POLICY = {
+    "Reagent": (10, 5, 45),
+    "Control": (14, 7, 60),
+    "Supply":  (7,  3, 30),
+}
+# Per-catalog overrides where the real-world cadence differs from its category.
+POLICY_OVERRIDE = {
+    "RGT-TOSOH1": (14, 7, 45), "RGT-TOSOH2": (14, 7, 45),
+    "CELLPACK": (7, 3, 30), "SULFOLYSER": (7, 3, 30),
+    "NS-1000": (7, 4, 30), "D5W-1000": (7, 4, 30),
+    "BC-AERO": (10, 5, 30), "BC-ANAERO": (10, 5, 30),
+}
+# Cold-chain items live in the fridge; everything else on a shelf/bay.
+COLD = {"RGT-TOSOH1", "RGT-TOSOH2", "CELLPACK", "SULFOLYSER", "QC-MAS", "QC-HEME"}
+# Supplies that carry a real expiration date (additive tubes, culture media,
+# meds). Reagents/Controls always expire; pure hardware (gloves, slides) never.
+EXPIRES_SUPPLY = {
+    "TUBE-RED", "TUBE-LAV", "TUBE-BLUE", "TUBE-GRN", "MICROTAINER", "BCS-21G",
+    "BC-AERO", "BC-ANAERO", "CULTURETTE", "NS-1000", "D5W-1000", "FLUSH-NACL",
+    "APAP-500", "IBU-200",
+}
+# A few lots deliberately near expiry (days from today) so the expiry alerts fire.
+NEAR_EXPIRY = {"QC-MAS": 25, "RGT-TOSOH1": 35, "KIT-FLU": 40, "STRIP-UA": 50, "BC-ANAERO": 45}
+# Warehouse staples kept on a standing (auto) order.
+STANDING = {"GLV-NIT-M", "GLV-NIT-L", "ALC-PREP", "NS-1000", "SPEC-BAG"}
+
+
+def _stable(s):
+    return sum(ord(c) for c in s)
+
+
+def _policy(catalog, category):
+    return POLICY_OVERRIDE.get(catalog) or POLICY.get(category, (7, 3, 30))
+
+
+def _expires(catalog, category):
+    return category in ("Reagent", "Control") or catalog in EXPIRES_SUPPLY
+
+
+def _expiry_date(catalog, category):
+    if not _expires(catalog, category):
+        return None
+    if catalog in NEAR_EXPIRY:
+        days = NEAR_EXPIRY[catalog]
+    elif category == "Control":
+        days = 90
+    elif category == "Reagent":
+        days = 150
+    elif catalog in ("APAP-500", "IBU-200"):
+        days = 540
+    elif catalog in ("NS-1000", "D5W-1000", "FLUSH-NACL"):
+        days = 420
+    else:
+        days = 365
+    return (TODAY + datetime.timedelta(days=days)).isoformat()
+
+
+def _lot(catalog, loc):
+    code = "".join(w[0] for w in loc.split())[:3].upper()
+    n = (_stable(catalog + loc) % 9000) + 1000
+    return f"{catalog.replace('-', '')[:4].upper()}-{code}{n}"
+
+
+def _storage(catalog, loc):
+    if catalog in COLD:
+        return f"Refrigerator {1 + (_stable(catalog) % 2)}"
+    s = _stable(catalog + loc)
+    prefix = "Bay" if loc == WAREHOUSE_LOC else "Shelf"
+    return f"{prefix} {chr(65 + (s % 6))}{(s // 6) % 9 + 1}"
+
 
 def expand(loc):
-    """Yield full item dicts for a location."""
+    """Yield full item dicts for a location, with the full reorder-math +
+    lot / expiry / storage field set the system surfaces."""
     for cat, on_hand_ct, reorder_ct in PLACEMENT[loc]:
         name, order_unit, pack, category, dept, vendor = CATALOG[cat]
         usage_unit = "each" if pack > 1 else order_unit
         count_unit = order_unit
         on_hand_each = on_hand_ct * pack
-        reorder_each = reorder_ct * pack
+        lead, safety, desired = _policy(cat, category)
+        # burn_rate (usage units/day) chosen so the server's computed
+        # reorder_point = burn * (lead + safety) reproduces reorder_ct exactly,
+        # keeping the intended low/healthy design while powering days-of-supply
+        # and order suggestions.
+        burn = round(reorder_ct * pack / (lead + safety), 2)
+        reorder_each = round(burn * (lead + safety))
+        days_left = int(on_hand_each // burn) if burn > 0 else None
+        standing = 1 if (cat in STANDING and loc == WAREHOUSE_LOC) else 0
         yield {
             "catalog_number": cat, "item_name": name, "category": category,
             "department": dept, "vendor": vendor,
@@ -207,6 +291,12 @@ def expand(loc):
             "units_per_order_unit": pack, "units_per_count_unit": pack,
             "on_hand_ct": on_hand_ct, "reorder_ct": reorder_ct,
             "quantity_on_hand": on_hand_each, "reorder_point": reorder_each,
+            "burn_rate": burn, "lead_time_days": lead, "safety_stock_days": safety,
+            "desired_days_of_stock": desired, "days_left": days_left,
+            "lot_number": _lot(cat, loc), "expiration_date": _expiry_date(cat, category),
+            "storage_location": _storage(cat, loc),
+            "standing_order": standing,
+            "standing_order_review_date": (TODAY + datetime.timedelta(days=90)).isoformat() if standing else None,
             "low": on_hand_ct <= reorder_ct,
         }
 
@@ -216,13 +306,24 @@ def to_payload(loc):
     for r in expand(loc):
         out.append({
             "item_name": r["item_name"], "catalog_number": r["catalog_number"],
+            "lot_number": r["lot_number"], "expiration_date": r["expiration_date"],
+            "storage_location": r["storage_location"],
             "quantity_on_hand": r["quantity_on_hand"], "reorder_point": r["reorder_point"],
+            "burn_rate": r["burn_rate"], "lead_time_days": r["lead_time_days"],
+            "safety_stock_days": r["safety_stock_days"], "desired_days_of_stock": r["desired_days_of_stock"],
+            "standing_order": r["standing_order"], "standing_order_review_date": r["standing_order_review_date"],
             "category": r["category"], "department": r["department"], "vendor": r["vendor"],
             "unit": r["usage_unit"], "order_unit": r["order_unit"], "usage_unit": r["usage_unit"],
             "count_unit": r["count_unit"], "units_per_order_unit": r["units_per_order_unit"],
             "units_per_count_unit": r["units_per_count_unit"], "status": "active", "notes": TAG,
         })
     return out
+
+
+def _near_expiry(r, days=60):
+    if not r["expiration_date"]:
+        return False
+    return (datetime.date.fromisoformat(r["expiration_date"]) - TODAY).days <= days
 
 
 def write_xlsx(path):
@@ -232,30 +333,45 @@ def write_xlsx(path):
     amber = PatternFill("solid", fgColor="FFF3E0")
     wb = openpyxl.Workbook()
     # Summary sheet
+    red = PatternFill("solid", fgColor="FDE0E0")
     ws = wb.active; ws.title = "Summary"
-    ws.append(["Location", "Items", "Low-stock", "Warehouse?"])
+    ws.append(["Location", "Items", "Low-stock", "Near-expiry (<=60d)", "Standing orders", "Warehouse?"])
     for c in ws[1]:
         c.font = Font(bold=True, color="FFFFFF"); c.fill = teal
     for loc in PLACEMENT:
         rows = list(expand(loc))
-        ws.append([loc, len(rows), sum(1 for r in rows if r["low"]), "YES" if loc == WAREHOUSE_LOC else ""])
-    for col, w in zip("ABCD", [26, 10, 12, 12]):
+        ws.append([
+            loc, len(rows),
+            sum(1 for r in rows if r["low"]),
+            sum(1 for r in rows if _near_expiry(r)),
+            sum(1 for r in rows if r["standing_order"]),
+            "YES" if loc == WAREHOUSE_LOC else "",
+        ])
+    for col, w in zip("ABCDEF", [26, 8, 11, 18, 16, 11]):
         ws.column_dimensions[col].width = w
     ws.freeze_panes = "A2"
     # Per-location sheets
+    headers = ["Catalog #", "Item", "Category", "Department", "On Hand", "Unit",
+               "Burn/day (ea)", "Days Left", "Reorder Pt", "Low?", "Lot #",
+               "Expires", "Storage", "Lead (d)", "Standing", "Vendor"]
     for loc in PLACEMENT:
         s = wb.create_sheet(title=loc[:31])
-        s.append(["Catalog #", "Item", "Category", "Department", "On Hand", "Unit", "Reorder Pt", "Low?", "Vendor"])
+        s.append(headers)
         for c in s[1]:
             c.font = Font(bold=True, color="FFFFFF"); c.fill = teal
         for r in expand(loc):
             s.append([r["catalog_number"], r["item_name"], r["category"], r["department"],
-                      r["on_hand_ct"], r["count_unit"], r["reorder_ct"],
-                      "LOW" if r["low"] else "", r["vendor"]])
+                      r["on_hand_ct"], r["count_unit"], r["burn_rate"], r["days_left"],
+                      r["reorder_ct"], "LOW" if r["low"] else "", r["lot_number"],
+                      r["expiration_date"] or "", r["storage_location"], r["lead_time_days"],
+                      "Yes" if r["standing_order"] else "", r["vendor"]])
             if r["low"]:
                 for c in s[s.max_row]:
                     c.fill = amber
-        for col, w in zip("ABCDEFGHI", [12, 42, 11, 14, 9, 8, 10, 7, 18]):
+            if _near_expiry(r):
+                s.cell(row=s.max_row, column=12).fill = red   # Expires column
+        for col, w in zip("ABCDEFGHIJKLMNOP",
+                          [12, 38, 10, 13, 8, 7, 12, 9, 10, 6, 16, 12, 12, 8, 9, 16]):
             s.column_dimensions[col].width = w
         s.freeze_panes = "A2"
     wb.save(path)
@@ -263,12 +379,17 @@ def write_xlsx(path):
 
 def main():
     total = sum(len(PLACEMENT[l]) for l in PLACEMENT)
-    low = sum(1 for l in PLACEMENT for r in expand(l) if r["low"])
-    print(f"Locations: {len(PLACEMENT)}   Total items: {total}   Low-stock: {low}")
+    allrows = [r for l in PLACEMENT for r in expand(l)]
+    low = sum(1 for r in allrows if r["low"])
+    near = sum(1 for r in allrows if _near_expiry(r))
+    standing = sum(1 for r in allrows if r["standing_order"])
+    print(f"Locations: {len(PLACEMENT)}   Total items: {total}   Low-stock: {low}   "
+          f"Near-expiry(<=60d): {near}   Standing orders: {standing}")
     for loc in PLACEMENT:
         rows = list(expand(loc))
-        print(f"  {loc:<24} {len(rows):>2} items, {sum(1 for r in rows if r['low'])} low")
-    print("Category mix:", dict(Counter(r["category"] for l in PLACEMENT for r in expand(l))))
+        print(f"  {loc:<24} {len(rows):>2} items, {sum(1 for r in rows if r['low'])} low, "
+              f"{sum(1 for r in rows if _near_expiry(r))} near-expiry")
+    print("Category mix:", dict(Counter(r["category"] for r in allrows)))
 
     xlsx = r"C:\Users\veril\Desktop\Verita Products\SanCarlos_Demo_Inventory_Review.xlsx"
     write_xlsx(xlsx)
@@ -325,14 +446,14 @@ def main():
             print("labmap must map all 7 locations to lab ids:", list(PLACEMENT)); return
         created = {loc: True for loc in labmap}
 
-    # Seed inventory. import-inventory is idempotent per lab (it skips catalog
-    # numbers already present), so we always seed: a fresh lab gets everything,
-    # an already-provisioned lab gets only the new items. No duplicates either
-    # way, so adding items here and re-running --provision just tops up.
+    # Seed inventory. import-inventory upserts by (lab, catalog_number): a fresh
+    # lab gets everything inserted; an already-provisioned lab gets new items
+    # inserted and existing ones updated to the current definition (burn rates,
+    # lead times, expiry, etc.). Re-running always converges, no duplicates.
     for loc in PLACEMENT:
         lab_id = labmap[loc]
         res = _post("/api/admin/import-inventory", {"secret": sec, "labId": lab_id, "items": to_payload(loc)})
-        print(f"{loc} (lab {lab_id}): inserted {res.get('inserted')}  skipped {res.get('skipped', 0)}  errors {len(res.get('errors', []))}")
+        print(f"{loc} (lab {lab_id}): inserted {res.get('inserted')}  updated {res.get('updated', 0)}  errors {len(res.get('errors', []))}")
 
 
 if __name__ == "__main__":
