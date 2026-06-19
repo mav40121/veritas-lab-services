@@ -2088,6 +2088,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       if (isWarehouse) {
         sqlite.prepare("UPDATE labs SET parent_warehouse_lab_id = NULL, updated_at = ? WHERE id = ?").run(now, labId);
+        // Standalone demo account: if the owner has no primary lab yet (a fresh,
+        // dedicated demo login), make the warehouse the home lab so login lands
+        // in the demo and the switcher has an active lab. Guarded on "no existing
+        // primary" so it never hijacks a real owner who reused their login.
+        const hasPrimary = (sqlite.prepare(
+          "SELECT COUNT(*) AS n FROM lab_members WHERE user_id = ? AND is_primary_lab = 1 AND status = 'active'"
+        ).get(user.id) as { n: number }).n;
+        if (!hasPrimary) {
+          sqlite.prepare("UPDATE lab_members SET is_primary_lab = 1, updated_at = ? WHERE lab_id = ? AND user_id = ?").run(now, labId, user.id);
+          sqlite.prepare("UPDATE users SET lab_id = ? WHERE id = ?").run(labId, user.id);
+        }
       } else if (warehouseLabId != null) {
         sqlite.prepare("UPDATE labs SET parent_warehouse_lab_id = ?, updated_at = ? WHERE id = ?").run(Number(warehouseLabId), now, labId);
       }
