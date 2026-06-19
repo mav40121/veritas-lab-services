@@ -95,6 +95,17 @@ CATALOG = {
     "EXAM-PAPER": ("Exam Table Paper Roll",                 "case", 12,  "Supply",   "Clinic",      "Medline"),
     "OTO-TIP":    ("Otoscope Specula, Disposable",          "bag",  850, "Supply",   "Clinic",      "Welch Allyn"),
     "BANDAID":    ("Adhesive Bandages 3/4 in x 3 in",       "box",  100, "Supply",   "Clinic",      "Band-Aid"),
+    # ----- second batch (added on request) -----
+    "SLIDE-MICRO":   ("Microscope Slides, Frosted End",       "box",  72,  "Supply",  "Laboratory",   "Globe Scientific"),
+    "PIP-1000":      ("Pipette Tips 1000 uL, Racked",         "case", 960, "Supply",  "Laboratory",   "Rainin"),
+    "CONICAL-15":    ("Conical Centrifuge Tube 15 mL",        "case", 500, "Supply",  "Laboratory",   "Corning"),
+    "BC-AERO":       ("Blood Culture Bottle, Aerobic",        "box",  50,  "Supply",  "Microbiology", "BD BACTEC"),
+    "BC-ANAERO":     ("Blood Culture Bottle, Anaerobic",      "box",  50,  "Supply",  "Microbiology", "BD BACTEC"),
+    "MICROTAINER":   ("Capillary Microtainer Tube, K2EDTA",   "box",  50,  "Supply",  "Phlebotomy",   "Becton Dickinson"),
+    "GLUCOSE-STRIP": ("Blood Glucose Test Strips, 50 ct",     "box",  1,   "Reagent", "Point of Care","Roche Accu-Chek"),
+    "CULTURETTE":    ("Transport Swab, Liquid Amies",         "box",  50,  "Supply",  "Microbiology", "Copan"),
+    "QC-HEME":       ("Hematology Control, Tri-Level",        "box",  1,   "Control", "Hematology",   "Sysmex"),
+    "N95-RESP":      ("N95 Particulate Respirator",           "box",  20,  "Supply",  "General",      "3M"),
 }
 
 # location -> list of (catalog#, on_hand, reorder_point)  [both in COUNT units, e.g. boxes]
@@ -116,6 +127,10 @@ PLACEMENT = {
         ("IV-START", 18, 5), ("CATH-IV20", 26, 8), ("DRESS-FILM", 24, 6),
         ("APAP-500", 30, 8), ("IBU-200", 28, 8), ("EXAM-PAPER", 22, 6),
         ("BANDAID", 40, 10),
+        ("SLIDE-MICRO", 30, 8), ("PIP-1000", 24, 6), ("CONICAL-15", 26, 6),
+        ("BC-AERO", 28, 8), ("BC-ANAERO", 28, 8), ("MICROTAINER", 34, 10),
+        ("GLUCOSE-STRIP", 40, 10), ("CULTURETTE", 30, 8), ("QC-HEME", 12, 3),
+        ("N95-RESP", 50, 12),
     ],
     "ED Stockroom": [
         ("GLV-NIT-M", 4, 6),            # LOW
@@ -124,6 +139,7 @@ PLACEMENT = {
         ("CATH-FOLEY", 9, 4), ("ABG-KIT", 3, 4),  # LOW
         ("SUTURE-40", 6, 3), ("ECG-ELEC", 7, 4), ("SHARPS-1Q", 6, 3),
         ("FLUSH-NACL", 5, 3), ("NDL-21G", 4, 3),
+        ("BC-AERO", 5, 3), ("GLUCOSE-STRIP", 6, 3), ("CULTURETTE", 4, 3), ("N95-RESP", 8, 4),
     ],
     "San Carlos Main Lab": [
         ("TUBE-RED", 9, 6), ("TUBE-LAV", 3, 6),    # LOW
@@ -133,6 +149,9 @@ PLACEMENT = {
         ("QC-MAS", 2, 3),                          # LOW
         ("STRIP-UA", 6, 3), ("URINE-CUP", 80, 60), ("GLV-NIT-M", 6, 4),
         ("ALC-PREP", 5, 3), ("KIT-COVID", 8, 4),
+        ("SLIDE-MICRO", 6, 3), ("PIP-1000", 5, 2), ("CONICAL-15", 6, 3),
+        ("BC-AERO", 7, 4), ("BC-ANAERO", 3, 4),   # LOW
+        ("MICROTAINER", 6, 3), ("CULTURETTE", 5, 3), ("QC-HEME", 2, 2),
     ],
     "Clarence Wesley Lab": [
         ("TUBE-RED", 5, 3), ("TUBE-LAV", 2, 3),    # LOW
@@ -140,6 +159,7 @@ PLACEMENT = {
         ("KIT-FLU", 4, 2), ("KIT-COVID", 5, 3), ("KIT-HCG", 4, 2),
         ("URINE-CUP", 40, 30), ("GLV-NIT-M", 4, 3), ("ALC-PREP", 3, 2),
         ("LANCET", 5, 3), ("TOURNIQUET", 3, 2),
+        ("SLIDE-MICRO", 4, 2), ("MICROTAINER", 4, 2),
     ],
     "Pharmacy": [
         ("NS-1000", 4, 6),             # LOW
@@ -147,6 +167,7 @@ PLACEMENT = {
         ("SYR-10ML", 6, 3), ("MED-CUP", 5, 2), ("VIAL-LBL", 7, 3),
         ("APAP-500", 6, 4), ("IBU-200", 5, 3), ("GLV-NIT-S", 5, 3),
         ("ALC-PREP", 4, 3), ("SHARPS-1Q", 4, 2),
+        ("N95-RESP", 5, 3),
     ],
     "Inpatient Unit": [
         ("DRESS-FILM", 2, 4),          # LOW
@@ -154,6 +175,7 @@ PLACEMENT = {
         ("FEED-SET", 8, 4), ("FOAM-DRESS", 5, 3), ("GLV-NIT-L", 6, 4),
         ("GLV-NIT-M", 5, 4), ("GZ-4X4", 7, 4), ("TAPE-SILK", 5, 3),
         ("FLUSH-NACL", 6, 3), ("SHARPS-1Q", 5, 3),
+        ("GLUCOSE-STRIP", 6, 3), ("N95-RESP", 6, 3),
     ],
     "Clinic": [
         ("DEPRESSOR", 6, 3), ("SWAB-COT", 7, 3), ("EXAM-PAPER", 5, 3),
@@ -162,6 +184,8 @@ PLACEMENT = {
         ("KIT-COVID", 3, 4),           # LOW
         ("KIT-HCG", 5, 3), ("LANCET", 6, 3), ("GLV-NIT-M", 5, 3),
         ("ALC-PREP", 4, 3),
+        ("MICROTAINER", 5, 3), ("GLUCOSE-STRIP", 3, 4),   # GLUCOSE-STRIP LOW
+        ("CULTURETTE", 4, 2),
     ],
 }
 
@@ -301,17 +325,14 @@ def main():
             print("labmap must map all 7 locations to lab ids:", list(PLACEMENT)); return
         created = {loc: True for loc in labmap}
 
-    # Seed inventory. By default only seed labs we just created so re-running is
-    # safe (import-inventory appends). --force-seed overrides (will duplicate on
-    # an already-seeded lab; use only on fresh labs).
-    force = "--force-seed" in sys.argv
+    # Seed inventory. import-inventory is idempotent per lab (it skips catalog
+    # numbers already present), so we always seed: a fresh lab gets everything,
+    # an already-provisioned lab gets only the new items. No duplicates either
+    # way, so adding items here and re-running --provision just tops up.
     for loc in PLACEMENT:
         lab_id = labmap[loc]
-        if provision and not force and not created.get(loc):
-            print(f"{loc} (lab {lab_id}): already existed, skipping seed (use --force-seed to reseed)")
-            continue
         res = _post("/api/admin/import-inventory", {"secret": sec, "labId": lab_id, "items": to_payload(loc)})
-        print(f"{loc} (lab {lab_id}): inserted {res.get('inserted')}  errors {len(res.get('errors', []))}")
+        print(f"{loc} (lab {lab_id}): inserted {res.get('inserted')}  skipped {res.get('skipped', 0)}  errors {len(res.get('errors', []))}")
 
 
 if __name__ == "__main__":
