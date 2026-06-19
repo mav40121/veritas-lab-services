@@ -306,11 +306,11 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "Do you offer a free trial?",
-        a: "Yes. All subscription plans include a 14-day free trial. You can use the full platform during the trial; you're only charged when the trial ends. No commitment.",
+        a: "Yes, on our multi-seat suite plans (Clinic, Community, Hospital). Those subscriptions include a 14-day free trial: you can use the full platform during the trial and are only charged when it ends. VeritaCheck™ Unlimited does not include a trial; it bills at its discounted first-year price at checkout. You can also run individual VeritaCheck™ studies on a per-study basis with no subscription.",
       },
       {
         q: "Can I try VeritaAssure\u2122 before subscribing?",
-        a: "Yes. A fully interactive live demo is available at veritaslabservices.com/demo with no login required. All subscription plans include a 14-day free trial, so you can use the full platform before being billed. You can also run individual VeritaCheck\u2122 studies on a per-study basis without a subscription.",
+        a: "Yes. A fully interactive live demo is available at veritaslabservices.com/demo with no login required. Our multi-seat suite plans include a 14-day free trial, so you can use the full platform before being billed. VeritaCheck\u2122 Unlimited bills at its discounted first-year price at checkout, and you can also run individual VeritaCheck\u2122 studies on a per-study basis without a subscription.",
       },
       {
         q: "What's the difference between the per-study price and the unlimited subscription?",

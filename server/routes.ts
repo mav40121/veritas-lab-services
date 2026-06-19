@@ -3387,7 +3387,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         if (discountRow.discount_pct) discountPct = discountRow.discount_pct;
       }
     }
-    if (isSubscription && !trialDays) trialDays = 14;
+    // VeritaCheck Unlimited (veritacheck_only) gets NO default trial: a single
+    // study could otherwise be run during the trial and the sub cancelled before
+    // the first charge, dodging the $25/study fee. Suite tiers keep the trial.
+    if (isSubscription && !trialDays && priceType !== "veritacheck_only") trialDays = 14;
     const totalSeats = 1 + (additionalSeats || 0);
     const lineItems: any[] = [{ price: priceId, quantity: 1 }];
     if (additionalSeats && additionalSeats > 0 && priceType !== "veritacheck_only") {
@@ -4782,7 +4785,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           totalSeats: "1",
         },
       };
-      if (isSubscription) {
+      // VeritaCheck Unlimited gets no default trial (see /api/stripe/checkout);
+      // suite tiers added as extra labs keep the 14-day trial.
+      if (isSubscription && priceType !== "veritacheck_only") {
         sessionParams.subscription_data = { trial_period_days: 14 };
         sessionParams.payment_method_collection = "always";
       }
@@ -14080,8 +14085,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
     }
 
-    // Default 14-day free trial for all subscriptions without a discount code trial
-    if (isSubscription && !trialDays) {
+    // Default 14-day free trial for suite subscriptions without a discount-code
+    // trial. VeritaCheck Unlimited (veritacheck_only) is excluded: a single
+    // study could be run during the trial and the sub cancelled before the
+    // first charge, dodging the $25/study fee. It still gets the VCFIRSTYEAR
+    // first-year discount below, so the customer pays $299 up front instead.
+    if (isSubscription && !trialDays && priceType !== "veritacheck_only") {
       trialDays = 14;
     }
 

@@ -82,7 +82,7 @@ const TOP_PLANS = [
     // onto the headline $299 and miss the $499 renewal.
     priceY2: "$499",
     periodY2: "/yr after",
-    description: "Single user. Method verification suite only. 14-day free trial included. First-year discount auto-applied at checkout.",
+    description: "Single user. Method verification suite only. First-year discount auto-applied at checkout.",
     features: [
       "Unlimited studies",
       "All VeritaCheck\u2122 study types",
@@ -177,7 +177,7 @@ return (
             Simple annual pricing based on your lab type. No hidden fees. No long-term contracts.
           </p>
           <p className="text-muted-foreground text-base max-w-2xl mx-auto leading-relaxed">
-            Choose the plan that fits your lab's size and complexity. All subscription plans include a 14-day free trial.
+            Choose the plan that fits your lab's size and complexity. Multi-seat suite plans include a 14-day free trial.
           </p>
         </div>
       </section>
