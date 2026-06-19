@@ -108,6 +108,40 @@ export interface BatchGuardResult {
   errors: Array<{ itemId: number | null; error: string }>;
 }
 
+// ── Enterprise scope resolution ──────────────────────────────────────────
+// A "warehouse group" is a warehouse lab plus the stockrooms whose
+// parent_warehouse_lab_id points at it. Given the lab the user is viewing,
+// resolveWarehouseId returns the warehouse that anchors its group (the lab
+// itself when it is a warehouse or standalone, else its parent). inWarehouseGroup
+// decides membership. The enterprise roll-up uses these to scope which
+// locations appear, with an owner-wide fallback when no links are set so a
+// legacy enterprise that never set parent_warehouse_lab_id is never broken.
+// Pure so scripts/verify-enterprise-scope.mjs can unit-test the cases.
+
+export function resolveWarehouseId(lab: { id: number; parent_warehouse_lab_id?: number | null }): number {
+  const p = lab.parent_warehouse_lab_id;
+  return p == null ? lab.id : Number(p);
+}
+
+export function inWarehouseGroup(
+  lab: { id: number; parent_warehouse_lab_id?: number | null },
+  warehouseId: number,
+): boolean {
+  return lab.id === warehouseId || Number(lab.parent_warehouse_lab_id) === warehouseId;
+}
+
+// scopeEnterpriseLocations narrows an owner's labs to the warehouse group that
+// anchors `baseLab`; if that group has fewer than two labs (no links set), it
+// returns the full owner list unchanged (legacy behavior).
+export function scopeEnterpriseLocations<T extends { id: number; parent_warehouse_lab_id?: number | null }>(
+  baseLab: { id: number; parent_warehouse_lab_id?: number | null },
+  ownerLabs: T[],
+): T[] {
+  const warehouseId = resolveWarehouseId(baseLab);
+  const group = ownerLabs.filter((l) => inWarehouseGroup(l, warehouseId));
+  return group.length >= 2 ? group : ownerLabs;
+}
+
 export function validateBatch(i: BatchGuardInput): BatchGuardResult {
   const errors: Array<{ itemId: number | null; error: string }> = [];
   // Batch-level: same for every line.

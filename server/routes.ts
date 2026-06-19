@@ -7,7 +7,7 @@ import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
 import { db, PLAN_SEATS, PLAN_VIEW_ONLY_SEATS, PLAN_PRICES, PLAN_BED_RANGES, suggestTierFromBeds } from "./db";
-import { computeUsageQty, validateTransfer, validateBatch, matchKey, countOnHand } from "./enterpriseTransfer";
+import { computeUsageQty, validateTransfer, validateBatch, matchKey, countOnHand, scopeEnterpriseLocations } from "./enterpriseTransfer";
 import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice, getSeatPriceForTier, VC_UNLIMITED_FIRST_YEAR_COUPON, getViewOnlyAddOnConfig } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
@@ -5802,17 +5802,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const sqlite = (db as any).$client;
         const labId = req.scope.labId;
         const userId = req.scope.userId;
-        const baseLab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+        const baseLab = sqlite.prepare("SELECT owner_user_id, parent_warehouse_lab_id FROM labs WHERE id = ?").get(labId) as any;
         const owner = baseLab?.owner_user_id;
         if (owner == null) return res.status(404).json({ error: "Lab not found" });
 
-        const locs = sqlite.prepare(`
+        // Owner-scoped candidates the acting user is a member of (same-owner is
+        // the cross-tenant boundary), then narrowed to this lab's warehouse group
+        // (a warehouse + the stockrooms pointing at it). scopeEnterpriseLocations
+        // falls back to the full owner list when no warehouse links are set, so a
+        // legacy enterprise that never set parent_warehouse_lab_id is never broken.
+        const ownerLabs = sqlite.prepare(`
           SELECT l.id AS id, l.lab_name AS lab_name, l.parent_warehouse_lab_id AS parent_warehouse_lab_id
             FROM labs l
             JOIN lab_members lm ON lm.lab_id = l.id AND lm.user_id = ? AND lm.status = 'active'
            WHERE l.owner_user_id = ?
            ORDER BY (l.parent_warehouse_lab_id IS NOT NULL), l.id ASC
         `).all(userId, owner) as any[];
+        const locs = scopeEnterpriseLocations(
+          { id: labId, parent_warehouse_lab_id: baseLab.parent_warehouse_lab_id },
+          ownerLabs,
+        );
 
         const locations = locs.map((l) => ({
           id: l.id,
