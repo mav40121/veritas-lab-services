@@ -400,13 +400,16 @@ def main():
     if not (commit or provision):
         return
 
-    base = "https://www.veritaslabservices.com"
-
     def _arg(flag, default=None):
         for i, a in enumerate(sys.argv):
             if a == flag and i + 1 < len(sys.argv):
                 return sys.argv[i + 1]
         return default
+
+    # Target host. Defaults to the old shared deployment; pass
+    # --base https://www.veritastock.com to seed the SEPARATE VeritaStock service.
+    base = _arg("--base", "https://www.veritaslabservices.com").rstrip("/")
+    print(f"Target host: {base}")
 
     def _post(path, payload):
         req = urllib.request.Request(base + path, data=json.dumps(payload).encode(),
