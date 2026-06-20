@@ -3467,6 +3467,51 @@ sqlite.exec(`
   )
 `);
 
+// Monthly inventory valuation history per location. Powers the Valuation Trends
+// view: average value on hand per location per month, plus dollars written off
+// to expiry (waste) in that month. Recorded history, not derived from a movement
+// ledger. One row per (lab_id, year_month). year_month is "YYYY-MM".
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS inventory_monthly_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    year_month TEXT NOT NULL,
+    avg_value_on_hand REAL DEFAULT 0,
+    opening_value REAL DEFAULT 0,
+    closing_value REAL DEFAULT 0,
+    waste_value REAL DEFAULT 0,
+    waste_note TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+try { sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_inv_snapshots_lab_month ON inventory_monthly_snapshots(lab_id, year_month)"); } catch {}
+
+// ALTER TABLE migration for inventory_monthly_snapshots. New table, but the
+// migration block is required so an older copy of the table on a live DB gets
+// any missing columns (PRAGMA table_info pattern, matching inventory_items).
+{
+  const snapCols = sqlite.prepare("PRAGMA table_info(inventory_monthly_snapshots)").all() as { name: string }[];
+  const snapColNames = snapCols.map((c) => c.name);
+  if (snapCols.length > 0) {
+    if (!snapColNames.includes("avg_value_on_hand")) {
+      try { sqlite.exec("ALTER TABLE inventory_monthly_snapshots ADD COLUMN avg_value_on_hand REAL DEFAULT 0"); } catch {}
+    }
+    if (!snapColNames.includes("opening_value")) {
+      try { sqlite.exec("ALTER TABLE inventory_monthly_snapshots ADD COLUMN opening_value REAL DEFAULT 0"); } catch {}
+    }
+    if (!snapColNames.includes("closing_value")) {
+      try { sqlite.exec("ALTER TABLE inventory_monthly_snapshots ADD COLUMN closing_value REAL DEFAULT 0"); } catch {}
+    }
+    if (!snapColNames.includes("waste_value")) {
+      try { sqlite.exec("ALTER TABLE inventory_monthly_snapshots ADD COLUMN waste_value REAL DEFAULT 0"); } catch {}
+    }
+    if (!snapColNames.includes("waste_note")) {
+      try { sqlite.exec("ALTER TABLE inventory_monthly_snapshots ADD COLUMN waste_note TEXT"); } catch {}
+    }
+  }
+}
+
 // ALTER TABLE migration for inventory_items
 {
   const iiCols = sqlite.prepare("PRAGMA table_info(inventory_items)").all() as { name: string }[];
