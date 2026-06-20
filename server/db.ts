@@ -3512,6 +3512,46 @@ try { sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_inv_snapshots_lab_month
   }
 }
 
+// Itemized waste / write-off ledger. One row per disposal event: what, how much,
+// the dollar value lost, the reason, the date, and who did it. The monthly
+// snapshot's waste_value is the rollup of these. Audit-trailed so the waste
+// number on the trend is defensible, not hand-entered.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS inventory_waste_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    item_id INTEGER,
+    item_name TEXT,
+    qty REAL DEFAULT 0,
+    unit_cost REAL DEFAULT 0,
+    waste_value REAL DEFAULT 0,
+    reason_code TEXT,
+    note TEXT,
+    event_date TEXT,
+    created_by INTEGER,
+    created_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_waste_lab_date ON inventory_waste_events(lab_id, event_date)"); } catch {}
+
+// ALTER TABLE migration for inventory_waste_events (required for new tables so
+// an older copy on a live DB gets any missing columns; PRAGMA table_info pattern).
+{
+  const weCols = sqlite.prepare("PRAGMA table_info(inventory_waste_events)").all() as { name: string }[];
+  const weColNames = weCols.map((c) => c.name);
+  if (weCols.length > 0) {
+    if (!weColNames.includes("item_id")) { try { sqlite.exec("ALTER TABLE inventory_waste_events ADD COLUMN item_id INTEGER"); } catch {} }
+    if (!weColNames.includes("item_name")) { try { sqlite.exec("ALTER TABLE inventory_waste_events ADD COLUMN item_name TEXT"); } catch {} }
+    if (!weColNames.includes("qty")) { try { sqlite.exec("ALTER TABLE inventory_waste_events ADD COLUMN qty REAL DEFAULT 0"); } catch {} }
+    if (!weColNames.includes("unit_cost")) { try { sqlite.exec("ALTER TABLE inventory_waste_events ADD COLUMN unit_cost REAL DEFAULT 0"); } catch {} }
+    if (!weColNames.includes("waste_value")) { try { sqlite.exec("ALTER TABLE inventory_waste_events ADD COLUMN waste_value REAL DEFAULT 0"); } catch {} }
+    if (!weColNames.includes("reason_code")) { try { sqlite.exec("ALTER TABLE inventory_waste_events ADD COLUMN reason_code TEXT"); } catch {} }
+    if (!weColNames.includes("note")) { try { sqlite.exec("ALTER TABLE inventory_waste_events ADD COLUMN note TEXT"); } catch {} }
+    if (!weColNames.includes("event_date")) { try { sqlite.exec("ALTER TABLE inventory_waste_events ADD COLUMN event_date TEXT"); } catch {} }
+    if (!weColNames.includes("created_by")) { try { sqlite.exec("ALTER TABLE inventory_waste_events ADD COLUMN created_by INTEGER"); } catch {} }
+  }
+}
+
 // ALTER TABLE migration for inventory_items
 {
   const iiCols = sqlite.prepare("PRAGMA table_info(inventory_items)").all() as { name: string }[];
