@@ -3459,6 +3459,7 @@ sqlite.exec(`
     desired_days_of_stock INTEGER DEFAULT 30,
     standing_order INTEGER DEFAULT 0,
     standing_order_review_date TEXT,
+    unit_cost REAL DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )
@@ -3531,6 +3532,9 @@ sqlite.exec(`
     }
     if (!iiColNames.includes("standing_order_review_date")) {
       try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN standing_order_review_date TEXT"); } catch {}
+    }
+    if (!iiColNames.includes("unit_cost")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN unit_cost REAL DEFAULT 0"); } catch {}
     }
     // parking-lot #29 Phase 0: barcode_value for scan flow. Nullable so
     // existing rows do not break; uniqueness enforced per-account via
