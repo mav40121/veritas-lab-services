@@ -302,6 +302,41 @@ app.use((req, res, next) => {
     console.error("[backup] Scheduler setup error:", err.message);
   }
 
+  // Nightly VeritaStock demo reset at 07:00 UTC (midnight America/Phoenix).
+  // Restores the five San Carlos locations to the canonical baseline so the
+  // self-serve demo self-heals each night. ONLY scheduled on the VeritaStock
+  // deployment; resetVeritaStockDemo also hard-refuses elsewhere, so the main
+  // service can never reshape its real customer labs.
+  if (process.env.VITE_STOCK_DEPLOYMENT === "true" || process.env.STOCK_DEPLOYMENT === "true") {
+    try {
+      const { resetVeritaStockDemo } = await import("./veritastockDemoReset");
+      const { db } = await import("./db");
+      const runReset = () => {
+        try {
+          const r = resetVeritaStockDemo((db as any).$client);
+          console.log("[demo-reset] VeritaStock demo reset:", r.ok ? JSON.stringify(r.labs) : r.reason);
+        } catch (err: any) {
+          console.error("[demo-reset] Run failed:", err?.message || err);
+        }
+      };
+      const scheduleDemoReset = () => {
+        const now = new Date();
+        const next = new Date(now);
+        next.setUTCHours(7, 0, 0, 0);
+        if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
+        const msUntil = next.getTime() - now.getTime();
+        setTimeout(() => {
+          runReset();
+          setInterval(runReset, 24 * 60 * 60 * 1000);
+        }, msUntil);
+        console.log(`[demo-reset] Nightly VeritaStock demo reset scheduled in ${Math.round(msUntil / 60000)} minutes`);
+      };
+      scheduleDemoReset();
+    } catch (err: any) {
+      console.error("[demo-reset] Scheduler setup error:", err.message);
+    }
+  }
+
   try {
     await registerRoutes(httpServer, app);
     console.log('[startup] registerRoutes completed successfully');
