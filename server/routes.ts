@@ -805,9 +805,17 @@ export function registerDemoLogin(app: any) {
     ).get(DEMO_LOGIN_EMAIL) as any;
     if (!row) return res.status(500).json({ error: "Demo account not provisioned" });
     const token = jwt.sign({ userId: row.id, isDemo: true }, JWT_SECRET, { expiresIn: "8h" });
+    // Return a FULL user object so the client resolves accessLevel='full' and the
+    // page is NOT read-only (a thin object made useIsReadOnly disable edit/add).
     res.json({
       token,
-      user: { id: row.id, email: row.email, name: row.name, plan: row.plan, studyCredits: row.study_credits ?? 99999, isDemo: true },
+      user: {
+        id: row.id, email: row.email, name: row.name, plan: row.plan,
+        studyCredits: row.study_credits ?? 99999, isDemo: true,
+        accessLevel: "full", subscriptionStatus: "active",
+        subscriptionExpiresAt: "2099-12-31", hasCompletedOnboarding: true,
+        isSeatUser: false, seatCount: 0,
+      },
     });
   });
 }
