@@ -24,7 +24,7 @@ Usage:
       requires:  ADMIN_SECRET env  AND  --labmap '{"San Carlos Warehouse": 12, ...}'
       (lab ids come from creating the 7 labs under the demo account first)
 """
-import os, sys, json, datetime, urllib.request
+import os, sys, json, datetime, urllib.request, urllib.error
 from collections import Counter
 
 TAG = f"SCAHC demo seed {datetime.date.today().isoformat()}"
@@ -429,6 +429,20 @@ def main():
         # existing labs and only re-seeds ones it freshly created.
         owner = _arg("--owner-email", "verilabguy@gmail.com")
         plan = _arg("--plan", "enterprise")
+        # One-command, DNS-proof setup: if DEMO_PASSWORD is set, create (or
+        # confirm) the demo login via the normal signup endpoint against --base
+        # first, so the whole tenant comes from one run with no UI step. The
+        # password lives only in your env; it is never printed.
+        demo_pw = os.environ.get("DEMO_PASSWORD", "")
+        if demo_pw:
+            try:
+                _post("/api/auth/register", {
+                    "email": owner, "hipaa_acknowledged": True,
+                    "name": owner.split("@")[0], "password": demo_pw,
+                })
+                print(f"Demo login {owner}: created")
+            except urllib.error.HTTPError as e:
+                print(f"Demo login {owner}: " + ("already exists" if e.code == 409 else f"register HTTP {e.code} (continuing)"))
         print(f"Provisioning 7 demo labs under {owner} (plan {plan})...")
         wh = _post("/api/admin/provision-demo-lab",
                    {"secret": sec, "ownerEmail": owner, "labName": WAREHOUSE_LOC, "plan": plan, "isWarehouse": True})
