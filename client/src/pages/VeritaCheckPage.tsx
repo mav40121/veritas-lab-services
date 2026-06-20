@@ -34,7 +34,7 @@ import { isCensored, parseCensoredInput, displayPointValue, type CensoredPoint }
 import fdaData from "@/lib/fdaInstrumentData.json";
 import { useLabRoute } from "@/hooks/useLabRoute";
 
-const API_BASE = "https://www.veritaslabservices.com";
+const API_BASE = ""; // same-origin: works on the lab site and the separate VeritaStock deployment
 // Retained for potential future use; VeritaCheck picker no longer renders this catalog.
 const FDA_MODEL_NAMES = Object.keys(fdaData).sort();
 

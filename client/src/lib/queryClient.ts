@@ -2,8 +2,14 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { authHeaders, clearAuth } from "./auth";
 import { triggerSubscriptionError } from "@/components/SubscriptionModal";
 
-const RAILWAY_URL = "https://www.veritaslabservices.com";
-export const API_BASE = "__PORT_5000__".startsWith("__") ? RAILWAY_URL : "__PORT_5000__";
+// In production the "__PORT_5000__" placeholder is never substituted, so the app
+// calls its OWN origin (relative ""), letting the lab site and the SEPARATE
+// VeritaStock deployment each talk to their own backend instead of a hardcoded
+// domain. (A baked-in lab domain made the VeritaStock service call the lab API
+// cross-origin, which CORS blocked, so every lab/plan lookup failed and the
+// inventory app showed an "upgrade your plan" wall.) In Replit dev the
+// placeholder is replaced with the real cross-origin dev API URL.
+export const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {

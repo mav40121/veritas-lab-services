@@ -18,7 +18,7 @@ import { Link } from "wouter";
 import { geometricMean } from "@/lib/calculations";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 
-const API_BASE = "https://www.veritaslabservices.com";
+const API_BASE = ""; // same-origin: works on the lab site and the separate VeritaStock deployment
 
 interface Tracker {
   id: number;

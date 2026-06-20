@@ -15,7 +15,7 @@ import { Save, Tag, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { validateClia, CLIA_FORMAT_HINT } from "@shared/validateClia";
 
-const API_BASE = "https://www.veritaslabservices.com";
+const API_BASE = ""; // same-origin: works on the lab site and the separate VeritaStock deployment
 
 type AccreditationBody = "CAP" | "TJC" | "COLA" | "AABB";
 type AccreditationChoice = "TJC" | "CAP" | "AABB" | "COLA" | "CAP+AABB" | "CLIA";
