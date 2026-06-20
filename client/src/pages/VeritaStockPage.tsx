@@ -1437,6 +1437,20 @@ export default function VeritaStockInventoryPage() {
               Vendor Directory
             </Button>
           </Link>
+          {/* Receiving: one screen to receive all open POs, scan-to-receive, and
+              a receipt history that documents placed vs received dates so the
+              facility can verify its programmed lead times. */}
+          <Link href={activeLabId ? `/labs/${activeLabId}/veritastock/receiving` : "/veritastock/receiving"}>
+            <Button
+              size="sm"
+              variant="outline"
+              title="Receive open purchase orders and review receipt history"
+              data-testid="receiving-button"
+            >
+              <PackageCheck size={14} className="mr-1.5" />
+              Receiving
+            </Button>
+          </Link>
           {/* Enterprise (multi-location) view: cross-location stock roll-up
               and warehouse-to-stockroom transfers. Backend in PR 1
               (enterpriseTransfer.ts + /api/labs/:labId/veritastock/*). */}
