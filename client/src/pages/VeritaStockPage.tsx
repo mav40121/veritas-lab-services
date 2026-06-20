@@ -1141,6 +1141,17 @@ export default function VeritaStockInventoryPage() {
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [items]);
 
+  // Department filter options derived from the actual data, not the hardcoded
+  // lab DEPARTMENTS list, so a supply network shows its own departments
+  // (e.g. Materials Management) rather than Chemistry/Hematology/etc.
+  const uniqueDepartments = useMemo(() => {
+    const set = new Set<string>();
+    for (const it of items) {
+      if (it.department && it.department.trim()) set.add(it.department.trim());
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [items]);
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDir(sortDir === "asc" ? "desc" : "asc");
@@ -1329,6 +1340,11 @@ export default function VeritaStockInventoryPage() {
               picking a specific department lands here filtered to that
               department on every visit. Filter dropdown below still works
               as a session-level override. */}
+          {/* The department-scope selector lists lab departments and is
+              meaningless for a supply network (one department), so it is hidden
+              on the VeritaStock standalone deployment. Locations are the scope
+              there, via the header location switcher. */}
+          {!onStock && (
           <div className="mt-2 flex items-center gap-2 text-sm">
             <span className="text-muted-foreground">Working in:</span>
             <Select value={scope} onValueChange={handleScopeChange}>
@@ -1341,6 +1357,7 @@ export default function VeritaStockInventoryPage() {
               </SelectContent>
             </Select>
           </div>
+          )}
         </div>
         <div className="flex flex-wrap gap-2 justify-end">
           {/* Vendor Directory entry point (PR 2 of vendor management).
@@ -1598,7 +1615,7 @@ export default function VeritaStockInventoryPage() {
           <SelectTrigger className="w-[180px]"><SelectValue placeholder="Department" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="All">All Departments</SelectItem>
-            {DEPARTMENTS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+            {uniqueDepartments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={filterCat} onValueChange={setFilterCat}>

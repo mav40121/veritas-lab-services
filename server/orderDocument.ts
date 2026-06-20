@@ -202,15 +202,15 @@ function headerHTML(ctx: ReorderLabContext, totalItems: number, totalVendors: nu
   const bannerText = filterBannerText(ctx);
   const filterBanner = bannerText
     ? `<div style="margin:6px 0 0 0;padding:6px 12px;border:1px solid #D4A017;background:#FFF8E1;border-radius:4px;font-size:9pt;color:#7A5A00;text-align:center;">
-        <span style="font-weight:700;">FILTERED VIEW: this is not the full lab reorder list.</span>
+        <span style="font-weight:700;">FILTERED VIEW: this is not the full reorder list.</span>
         &nbsp; ${escapeHtml(bannerText)}
       </div>`
     : "";
   return `
   <div class="report-header">
     <div>
-      <div class="logo">VeritaAssure&trade;</div>
-      <div class="logo-sub">by Veritas Lab Services - veritaslabservices.com</div>
+      <div class="logo">${STOCK_DEPLOYMENT ? "VeritaStock&trade;" : "VeritaAssure&trade;"}</div>
+      <div class="logo-sub">${STOCK_DEPLOYMENT ? "Multi-Location Inventory - veritastock.com" : "by Veritas Lab Services - veritaslabservices.com"}</div>
       ${labLine}
       ${cliaLine}
     </div>
@@ -229,7 +229,7 @@ function signatureBlockHTML(ctx: ReorderLabContext): string {
   const preparedBy = ctx.preparedBy ? escapeHtml(ctx.preparedBy) : "";
   return `
   <div style="margin-top:8px;border:1px solid #D4D1CA;border-left:4px solid ${TEAL};border-radius:5px;padding:6px 12px;background:#FAFAF8;break-inside:avoid;page-break-inside:avoid;">
-    <div style="font-size:8pt;font-weight:700;color:${TEAL};margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Laboratory Director or Designee Approval</div>
+    <div style="font-size:8pt;font-weight:700;color:${TEAL};margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">${STOCK_DEPLOYMENT ? "Materials Manager or Designee Approval" : "Laboratory Director or Designee Approval"}</div>
     <p style="font-size:7.5pt;color:${DARK};line-height:1.4;margin:0 0 5px 0;font-style:italic;">"I have reviewed this reorder list against current inventory levels and approve placement of these orders."</p>
     <div style="font-size:8pt;color:${DARK};margin-bottom:2px;">
       <span style="margin-right:18px;">&#9675; Approved as listed</span>
@@ -400,9 +400,9 @@ export function buildReorderListHTML(items: ReorderItem[], ctx: ReorderLabContex
 const FOOTER_TEMPLATE = `
 <div style="width:100%;padding:0 15mm;box-sizing:border-box;font-family:Helvetica,Arial,sans-serif">
   <div style="border-top:1px solid #d2d7dc;padding-top:3px">
-    <div style="font-size:6px;color:#a0a0a0;line-height:1.4">VeritaStock&trade; reorder documents are generated from current inventory levels and burn-rate metrics. Final order quantities and vendor placement are the responsibility of the laboratory director or designee.</div>
+    <div style="font-size:6px;color:#a0a0a0;line-height:1.4">VeritaStock&trade; reorder documents are generated from current inventory levels and burn-rate metrics. Final order quantities and vendor placement are the responsibility of the ${STOCK_DEPLOYMENT ? "materials manager or designee" : "laboratory director or designee"}.</div>
     <div style="display:flex;justify-content:space-between;font-size:7px;color:#646e78;margin-top:2px">
-      <span>VeritaAssure&trade; | VeritaStock&trade; | Confidential - For Internal Lab Use Only</span>
+      <span>${STOCK_DEPLOYMENT ? "VeritaStock&trade; | Confidential - For Internal Use Only" : "VeritaAssure&trade; | VeritaStock&trade; | Confidential - For Internal Lab Use Only"}</span>
       <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
     </div>
   </div>
@@ -730,8 +730,8 @@ function snapHeaderHTML(ctx: ReorderLabContext, totalItems: number, totalVendors
   return `
   <div class="report-header">
     <div>
-      <div class="logo">VeritaAssure&trade;</div>
-      <div class="logo-sub">by Veritas Lab Services - veritaslabservices.com</div>
+      <div class="logo">${STOCK_DEPLOYMENT ? "VeritaStock&trade;" : "VeritaAssure&trade;"}</div>
+      <div class="logo-sub">${STOCK_DEPLOYMENT ? "Multi-Location Inventory - veritastock.com" : "by Veritas Lab Services - veritaslabservices.com"}</div>
       ${labLine}
       ${cliaLine}
     </div>
@@ -753,7 +753,7 @@ function snapSignatureBlockHTML(ctx: ReorderLabContext): string {
   const preparedBy = ctx.preparedBy ? escapeHtml(ctx.preparedBy) : "";
   return `
   <div style="margin-top:8px;border:1px solid #D4D1CA;border-left:4px solid #92400E;border-radius:5px;padding:6px 12px;background:#FFF8E1;break-inside:avoid;page-break-inside:avoid;">
-    <div style="font-size:8pt;font-weight:700;color:#92400E;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Laboratory Director or Designee Approval (Manual Order)</div>
+    <div style="font-size:8pt;font-weight:700;color:#92400E;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">${STOCK_DEPLOYMENT ? "Materials Manager or Designee Approval (Manual Order)" : "Laboratory Director or Designee Approval (Manual Order)"}</div>
     <p style="font-size:7.5pt;color:${DARK};line-height:1.4;margin:0 0 5px 0;font-style:italic;">"I have reviewed this manual order. The quantities below were entered by hand to address a specific event and intentionally bypass the calculated reorder thresholds."</p>
     <div style="font-size:8pt;color:${DARK};margin-bottom:2px;">
       <span style="margin-right:18px;">&#9675; Approved as listed</span>
