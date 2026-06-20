@@ -82,6 +82,13 @@ interface InventoryItem {
 
 const CATEGORIES = ["Reagent", "Control", "Calibrator", "Consumable", "Supply"];
 const DEPARTMENTS = ["Core Lab", "Chemistry", "Hematology", "Blood Bank", "Microbiology", "Urinalysis", "Point of Care"];
+// VeritaStock standalone product is a supply-chain platform, not a lab tool.
+// On the stock deployment the category/department vocabularies drop all lab
+// framing so a CFO or materials manager sees terms that fit a med-surg network.
+// STOCK_CATEGORIES must include every category the demo items actually use
+// (Supply, Diagnostics, Point of Care) so the category filter never hides stock.
+const STOCK_CATEGORIES = ["Supply", "Diagnostics", "Point of Care", "Consumable", "PPE", "Equipment"];
+const STOCK_DEPARTMENTS = ["Materials Management", "Emergency", "Inpatient", "Outpatient Clinic", "Central Supply"];
 const ORDER_UNITS = ["each", "box", "case", "kit", "pack", "bottle", "bag"];
 const USAGE_UNITS = ["each", "test", "cartridge", "strip", "slide", "tube", "vial", "tip", "glove", "bottle", "mL", "roll", "set"];
 
@@ -254,6 +261,14 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory }: {
   // Safety-stock advisor selections (not persisted; advisory only).
   const [serviceLevel, setServiceLevel] = useState("95");
   const [variability, setVariability] = useState("med");
+  // Supply-chain vocabulary on the standalone VeritaStock deployment; lab
+  // vocabulary in the suite. Defaults match the deployment so a new item never
+  // opens pre-stamped with a lab category/department on the stock product.
+  const onStock = isStockHost();
+  const cats = onStock ? STOCK_CATEGORIES : CATEGORIES;
+  const depts = onStock ? STOCK_DEPARTMENTS : DEPARTMENTS;
+  const defaultCategory = onStock ? "Supply" : "Reagent";
+  const defaultDepartment = onStock ? "Materials Management" : "Core Lab";
 
   useEffect(() => {
     if (editItem) {
@@ -263,8 +278,8 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory }: {
         item_name: "",
         catalog_number: "",
         lot_number: "",
-        department: "Core Lab",
-        category: "Reagent",
+        department: defaultDepartment,
+        category: defaultCategory,
         quantity_on_hand: 0,
         unit_cost: 0,
         on_order_qty: 0,
@@ -347,20 +362,20 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory }: {
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2 space-y-1.5">
                 <Label>Item Name *</Label>
-                <Input value={form.item_name ?? ""} onChange={(e) => setForm({ ...form, item_name: e.target.value })} placeholder="e.g. Troponin I Reagent Kit" />
+                <Input value={form.item_name ?? ""} onChange={(e) => setForm({ ...form, item_name: e.target.value })} placeholder={onStock ? "e.g. IV start kit" : "e.g. Troponin I Reagent Kit"} />
               </div>
               <div className="space-y-1.5">
                 <Label>Category</Label>
-                <Select value={form.category ?? "Reagent"} onValueChange={(v) => setForm({ ...form, category: v })}>
+                <Select value={form.category ?? defaultCategory} onValueChange={(v) => setForm({ ...form, category: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                  <SelectContent>{cats.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>Department</Label>
-                <Select value={form.department ?? "Core Lab"} onValueChange={(v) => setForm({ ...form, department: v })}>
+                <Select value={form.department ?? defaultDepartment} onValueChange={(v) => setForm({ ...form, department: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{DEPARTMENTS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+                  <SelectContent>{depts.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
@@ -1221,7 +1236,7 @@ export default function VeritaStockInventoryPage() {
   };
 
   const onStock = isStockHost();
-  useSEO({ title: "VeritaStock\u2122 | Laboratory Inventory & Reagent Management", description: onStock ? "Multi-location inventory for clinical laboratories: burn-rate par levels, lead-time-aware reorder alerts, expiration tracking, and one-click vendor orders." : "Track reagent and supply inventory with burn-rate-aware par levels, lead-time-aware reorder alerts, and expiration tracking. Included with VeritaAssure\u2122 Suite plans." });
+  useSEO({ title: onStock ? "VeritaStock\u2122 | Multi-Location Inventory Management" : "VeritaStock\u2122 | Laboratory Inventory & Reagent Management", description: onStock ? "Multi-location supply inventory: burn-rate par levels, lead-time-aware reorder alerts, expiration tracking, valuation by location, and one-click vendor orders." : "Track reagent and supply inventory with burn-rate-aware par levels, lead-time-aware reorder alerts, and expiration tracking. Included with VeritaAssure\u2122 Suite plans." });
 
   if (!isLoggedIn) {
     return (
@@ -1622,7 +1637,7 @@ export default function VeritaStockInventoryPage() {
           <SelectTrigger className="w-[170px]"><SelectValue placeholder="Category" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="All">All Categories</SelectItem>
-            {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            {(onStock ? STOCK_CATEGORIES : CATEGORIES).map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>

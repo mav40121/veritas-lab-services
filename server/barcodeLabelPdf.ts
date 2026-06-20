@@ -27,6 +27,10 @@
 import bwipjs from "bwip-js/node";
 import { getBrowser } from "./pdfReport";
 
+// The standalone VeritaStock product carries no CLIA on its labels.
+const STOCK_DEPLOYMENT =
+  process.env.VITE_STOCK_DEPLOYMENT === "true" || process.env.STOCK_DEPLOYMENT === "true";
+
 export interface BarcodeLabelInput {
   barcodeValue: string;
   itemName: string;
@@ -133,7 +137,7 @@ export async function generateBarcodeLabelSheetPdf(
 
   const labFooter = [
     meta.labName ? escapeHtml(meta.labName) : null,
-    meta.cliaNumber ? `CLIA ${escapeHtml(meta.cliaNumber)}` : null,
+    !STOCK_DEPLOYMENT && meta.cliaNumber ? `CLIA ${escapeHtml(meta.cliaNumber)}` : null,
   ]
     .filter(Boolean)
     .join("  ·  ");

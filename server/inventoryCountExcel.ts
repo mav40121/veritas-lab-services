@@ -29,6 +29,12 @@
 // lab identity stamped in three layers, sheet password from env,
 // no em-dashes anywhere in the workbook content.
 
+// The standalone VeritaStock product is a supply-chain platform, not a lab
+// tool. On that deployment the count workbook drops all lab / CLIA / accreditor
+// framing so a CFO or materials manager sees neutral supply language.
+const STOCK_DEPLOYMENT =
+  process.env.VITE_STOCK_DEPLOYMENT === "true" || process.env.STOCK_DEPLOYMENT === "true";
+
 export interface InventoryCountItem {
   storage_location: string | null;
   department: string | null;
@@ -54,14 +60,17 @@ export async function generateInventoryCountExcel(
   ctx: InventoryCountContext
 ): Promise<Buffer> {
   const { default: ExcelJS } = await import("exceljs");
+  const brand = STOCK_DEPLOYMENT ? "VeritaStock" : "VeritaAssure";
   const wb = new ExcelJS.Workbook();
-  wb.creator = "VeritaAssure";
-  wb.lastModifiedBy = "VeritaAssure";
+  wb.creator = brand;
+  wb.lastModifiedBy = brand;
   wb.created = new Date();
   wb.modified = new Date();
 
-  const labName = ctx.labName || "Lab name not on file";
+  const labName = ctx.labName || (STOCK_DEPLOYMENT ? "Organization name not on file" : "Lab name not on file");
   const cliaNumber = ctx.cliaNumber || "Not on file";
+  // VeritaStock deployment carries no CLIA on the inventory workbook.
+  const cliaSuffix = STOCK_DEPLOYMENT ? "" : `    CLIA: ${cliaNumber}`;
   const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || "veritaassure-export";
 
   const thinBorder: any = {
@@ -82,7 +91,7 @@ export async function generateInventoryCountExcel(
   about.getRow(1).height = 30;
 
   const id = about.getCell("A2");
-  id.value = `Prepared for: ${labName}    CLIA: ${cliaNumber}`;
+  id.value = `Prepared for: ${labName}${cliaSuffix}`;
   id.font = { name: "Calibri", bold: true, size: 11, color: { argb: "FF0A3A3D" } };
   id.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } };
   id.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
@@ -92,7 +101,7 @@ export async function generateInventoryCountExcel(
   let row = 3;
   if (ctx.filterLabel) {
     const f = about.getCell(`A${row}`);
-    f.value = `FILTERED VIEW: this workbook does not include the full lab. Scope: ${ctx.filterLabel}.`;
+    f.value = `FILTERED VIEW: this workbook does not include ${STOCK_DEPLOYMENT ? "every location" : "the full lab"}. Scope: ${ctx.filterLabel}.`;
     f.font = { name: "Calibri", bold: true, size: 11, color: { argb: "FF7A5A00" } };
     f.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF8E1" } };
     f.alignment = { vertical: "middle", horizontal: "left", wrapText: true, indent: 1 };
@@ -133,17 +142,21 @@ export async function generateInventoryCountExcel(
   body("Sort the Count sheet by Discrepancy after counting to surface every non-zero row at the top. Investigate each one: confirm the count, check for in-progress receipts or recent open kits, verify the lot number on the shelf matches the lot number in the system, then update the inventory record in VeritaStock to match the corrected quantity. Keep this workbook with the count records; do not edit Discrepancy directly.");
   blank();
   section("Disclaimer");
-  body("This workbook is a tool to help the laboratory take a physical inventory. It is not an audit, not a financial record, and not a substitute for whatever reconciliation process the laboratory has on file. Lot numbers, expiration dates, vendors, and storage locations reflect the data the lab has entered into VeritaStock; if those fields are out of date, the workbook will be out of date for them too. The laboratory director or designee is responsible for any corrective action taken on the basis of the counted quantities and the discrepancies they reveal. VeritaAssure does not certify physical inventory counts to any regulatory or accrediting body.");
+  body(STOCK_DEPLOYMENT
+    ? "This workbook is a tool to help take a physical inventory. It is not an audit, not a financial record, and not a substitute for whatever reconciliation process you have on file. Lot numbers, expiration dates, vendors, and storage locations reflect the data entered into VeritaStock; if those fields are out of date, the workbook will be out of date for them too. The materials manager or designee is responsible for any corrective action taken on the basis of the counted quantities and the discrepancies they reveal."
+    : "This workbook is a tool to help the laboratory take a physical inventory. It is not an audit, not a financial record, and not a substitute for whatever reconciliation process the laboratory has on file. Lot numbers, expiration dates, vendors, and storage locations reflect the data the lab has entered into VeritaStock; if those fields are out of date, the workbook will be out of date for them too. The laboratory director or designee is responsible for any corrective action taken on the basis of the counted quantities and the discrepancies they reveal. VeritaAssure does not certify physical inventory counts to any regulatory or accrediting body.");
   blank();
-  section("Lab identity");
-  body(`This workbook was prepared for ${labName} (CLIA ${cliaNumber}). The lab name and CLIA appear on every printed page header and footer.`);
+  section(STOCK_DEPLOYMENT ? "Organization identity" : "Lab identity");
+  body(STOCK_DEPLOYMENT
+    ? `This workbook was prepared for ${labName}. The organization name appears on every printed page header and footer.`
+    : `This workbook was prepared for ${labName} (CLIA ${cliaNumber}). The lab name and CLIA appear on every printed page header and footer.`);
   blank();
   if (ctx.preparedBy) { section("Prepared by"); body(ctx.preparedBy); blank(); }
   section("Coverage gaps");
   body("If a column you need for your count is missing, for example a second counter initial, a barcode column, or a recount-date column, please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.");
 
-  about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaStock Inventory Count&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
-  about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+  about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaStock Inventory Count&R&"Calibri,Regular"&10${labName}${cliaSuffix}`;
+  about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}${cliaSuffix}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9${brand}`;
   await about.protect(exportPwd, {
     selectLockedCells: false, selectUnlockedCells: false,
     formatCells: false, formatColumns: false, formatRows: false,
@@ -271,8 +284,8 @@ export async function generateInventoryCountExcel(
   ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: COLS.length } };
   // Freeze C2: Storage Location and Department stay visible while scrolling right.
   ws.views = [{ state: "frozen", xSplit: 2, ySplit: 1 }];
-  ws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaStock Inventory Count&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
-  ws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+  ws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaStock Inventory Count&R&"Calibri,Regular"&10${labName}${cliaSuffix}`;
+  ws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}${cliaSuffix}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9${brand}`;
   await ws.protect(exportPwd, {
     selectLockedCells: false, selectUnlockedCells: true,
     formatCells: false, formatColumns: false, formatRows: false,
