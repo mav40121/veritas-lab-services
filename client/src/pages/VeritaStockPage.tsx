@@ -52,6 +52,7 @@ interface InventoryItem {
   unit_cost: number;                // $ per usage unit; powers valuation + extended cost
   on_order_qty?: number;            // qty (usage units) on a PO but not yet received
   on_order_expected_date?: string | null; // promised arrival date for the open PO
+  on_order_placed_date?: string | null;    // date the open PO was placed (for lead-time tracking)
   order_unit: string;
   usage_unit: string;
   units_per_order_unit: number;
@@ -308,6 +309,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory }: {
         unit_cost: 0,
         on_order_qty: 0,
         on_order_expected_date: "",
+        on_order_placed_date: "",
         order_unit: "each",
         usage_unit: "each",
         units_per_order_unit: 1,
@@ -624,11 +626,31 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory }: {
             {/* On-order / in-transit. Inventory position (on hand + on order)
                 drives the reorder decision, so an item already on a PO stops
                 flagging Reorder Now and is not re-ordered. */}
-            <div className="grid grid-cols-2 gap-3 mt-3">
+            <div className="grid grid-cols-3 gap-3 mt-3">
               <div className="space-y-1.5">
                 <Label>On Order ({usageUnit}s)</Label>
-                <Input type="number" min={0} value={form.on_order_qty ?? 0} onChange={(e) => setForm({ ...form, on_order_qty: parseFloat(e.target.value) || 0 })} data-testid="on-order-qty-input" />
-                <p className="text-xs text-muted-foreground">Quantity already on a purchase order, not yet received.</p>
+                <Input type="number" min={0} value={form.on_order_qty ?? 0} onChange={(e) => {
+                  // Entering a quantity auto-stamps the order-placed date (today) and
+                  // an expected arrival of placed + programmed lead time, both still
+                  // editable. This is what lets the lab verify lead times later: the
+                  // placed date is captured at order time, the received date at receipt.
+                  const qty = parseFloat(e.target.value) || 0;
+                  const next: Partial<InventoryItem> = { ...form, on_order_qty: qty };
+                  if (qty > 0 && !form.on_order_placed_date) {
+                    const today = new Date().toISOString().slice(0, 10);
+                    next.on_order_placed_date = today;
+                    if (!form.on_order_expected_date) {
+                      const lt = Number(form.lead_time_days) || 0;
+                      next.on_order_expected_date = new Date(Date.now() + lt * 86400000).toISOString().slice(0, 10);
+                    }
+                  }
+                  setForm(next);
+                }} data-testid="on-order-qty-input" />
+                <p className="text-xs text-muted-foreground">On a PO, not yet received.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Order Placed</Label>
+                <Input type="date" value={form.on_order_placed_date ?? ""} onChange={(e) => setForm({ ...form, on_order_placed_date: e.target.value || null })} data-testid="on-order-placed-input" />
               </div>
               <div className="space-y-1.5">
                 <Label>Expected Arrival</Label>

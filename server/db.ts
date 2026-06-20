@@ -3462,6 +3462,7 @@ sqlite.exec(`
     unit_cost REAL DEFAULT 0,
     on_order_qty REAL DEFAULT 0,
     on_order_expected_date TEXT,
+    on_order_placed_date TEXT,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )
@@ -3533,6 +3534,59 @@ sqlite.exec(`
   )
 `);
 try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_waste_lab_date ON inventory_waste_events(lab_id, event_date)"); } catch {}
+
+// Permanent receipt history: one row per receive event against an open PO.
+// Records when the order was placed and when it was received so the facility
+// can verify programmed lead times. actual_lead_time_days = received - placed
+// (null when no placed date was on file); programmed_lead_time_days is the
+// item's lead_time_days snapshot at receipt for an apples-to-apples comparison.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS inventory_receipts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER,
+    item_id INTEGER NOT NULL,
+    account_id INTEGER,
+    item_name TEXT,
+    vendor TEXT,
+    qty_received REAL DEFAULT 0,
+    usage_unit TEXT,
+    order_placed_date TEXT,
+    expected_date TEXT,
+    received_date TEXT,
+    programmed_lead_time_days INTEGER,
+    actual_lead_time_days INTEGER,
+    received_by INTEGER,
+    created_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_receipts_item ON inventory_receipts(item_id)"); } catch {}
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_receipts_lab ON inventory_receipts(lab_id, received_date)"); } catch {}
+
+// ALTER TABLE migration for inventory_receipts (NEW DB TABLE RULE: older live DB
+// gets any missing columns via the PRAGMA table_info pattern).
+{
+  const rcCols = sqlite.prepare("PRAGMA table_info(inventory_receipts)").all() as { name: string }[];
+  const rcColNames = rcCols.map((c) => c.name);
+  if (rcCols.length > 0) {
+    const need: Array<[string, string]> = [
+      ["lab_id", "INTEGER"],
+      ["account_id", "INTEGER"],
+      ["item_name", "TEXT"],
+      ["vendor", "TEXT"],
+      ["qty_received", "REAL DEFAULT 0"],
+      ["usage_unit", "TEXT"],
+      ["order_placed_date", "TEXT"],
+      ["expected_date", "TEXT"],
+      ["received_date", "TEXT"],
+      ["programmed_lead_time_days", "INTEGER"],
+      ["actual_lead_time_days", "INTEGER"],
+      ["received_by", "INTEGER"],
+    ];
+    for (const [col, type] of need) {
+      if (!rcColNames.includes(col)) { try { sqlite.exec(`ALTER TABLE inventory_receipts ADD COLUMN ${col} ${type}`); } catch {} }
+    }
+  }
+}
 
 // ALTER TABLE migration for inventory_waste_events (required for new tables so
 // an older copy on a live DB gets any missing columns; PRAGMA table_info pattern).
@@ -3632,6 +3686,12 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_waste_lab_date ON inventor
     }
     if (!iiColNames.includes("on_order_expected_date")) {
       try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN on_order_expected_date TEXT"); } catch {}
+    }
+    // Order-placed date for the current open PO. With expected_date it lets the
+    // lab see when an order was placed and when to expect it; on receipt the pair
+    // (placed, received) is logged to inventory_receipts to verify lead times.
+    if (!iiColNames.includes("on_order_placed_date")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN on_order_placed_date TEXT"); } catch {}
     }
     // parking-lot #29 Phase 0: barcode_value for scan flow. Nullable so
     // existing rows do not break; uniqueness enforced per-account via
