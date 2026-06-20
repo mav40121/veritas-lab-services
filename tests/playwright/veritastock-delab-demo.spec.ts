@@ -40,3 +40,23 @@ test("stock demo: no lab framing, vendors populated, no dropped locations", asyn
   await expect(page.getByText(/Main Lab/i)).toHaveCount(0);
   await expect(page.getByText(/Pharmacy/i)).toHaveCount(0);
 });
+
+test("stock demo: Print Barcodes prints a barcode for every item", async ({ page }) => {
+  test.skip(!BASE, "needs PW_BASE");
+  await page.goto(`${BASE}/login`, { waitUntil: "networkidle", timeout: 45000 });
+  await page.getByTestId("launch-demo").click();
+  await page.waitForTimeout(4000);
+
+  await page.goto(`${BASE}/labs/2/veritastock`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(2500);
+  const printBtn = page.getByTestId("generate-labels-pdf-button");
+  // Button is the barcode-printing action, not "Print Labels".
+  await expect(printBtn).toHaveText(/Print Barcodes/);
+  // Clicking it generates one barcode label per item in the location.
+  const [resp] = await Promise.all([
+    page.waitForResponse((r) => r.url().includes("/labels/pdf") && r.request().method() === "POST", { timeout: 30000 }),
+    printBtn.click(),
+  ]);
+  const body = await resp.json();
+  expect(body.totalCount).toBeGreaterThan(0);
+});

@@ -831,13 +831,13 @@ export function registerVeritaBenchRoutes(
   // Generate an Avery 5160 sheet of Code 128 barcode labels for inventory
   // items. Two modes:
   //   - body.itemIds: number[]  →  labels for those specific items only
-  //   - body.itemIds omitted    →  labels for every item in the account that
-  //                                has a non-null barcode_value
+  //   - body.itemIds omitted    →  one label for EVERY item in the account
+  //                                (no barcode_value filter; see 2026-05-29 note below)
   //
-  // If a requested item does not yet have a barcode_value, we synthesize a
-  // stable VLS- prefix code from the item id so labels render even before
-  // Phase 2 wiring assigns "real" barcode values. The synthesized value is
-  // NOT persisted - this endpoint is print-only.
+  // Every item prints a barcode. If an item does not yet have a bound
+  // barcode_value, we synthesize a stable VLS- prefix code from the item id
+  // so it still renders a scannable label. The synthesized value is NOT
+  // persisted - this endpoint is print-only.
   app.post("/api/inventory/labels/pdf", authMiddleware, async (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;

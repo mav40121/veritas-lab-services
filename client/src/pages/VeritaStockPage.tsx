@@ -879,10 +879,11 @@ export default function VeritaStockInventoryPage() {
   };
 
   // parking-lot #29 Phase 3A: generate the Avery 5160 barcode label
-  // sheet for every inventory item in the account that has a
-  // barcode_value (or, when none are bound yet, the synthesized
-  // VLS-<id> placeholders so the user can print labels and apply
-  // them to physical items before the camera scanner lands in 3B).
+  // sheet for EVERY inventory item in scope. Each item gets one barcode
+  // label: its bound barcode_value, or a synthesized VLS-<id> code when
+  // the item has not been bound yet, so a freshly added item still prints
+  // a scannable label. This is the print-barcodes action, not an
+  // only-the-unbound action.
   const generateLabelsPdf = async () => {
     setGeneratingOrderDoc("labels");
     try {
@@ -1486,11 +1487,11 @@ export default function VeritaStockInventoryPage() {
             variant="outline"
             onClick={generateLabelsPdf}
             disabled={generatingOrderDoc !== null || readOnly}
-            title="Generate Avery 5160 barcode label sheet (30 per page)"
+            title="Print one Code 128 barcode label for every item (Avery 5160, 30 per page)"
             data-testid="generate-labels-pdf-button"
           >
             <Tag size={14} className="mr-1.5" />
-            {generatingOrderDoc === "labels" ? "Generating..." : "Print Labels"}
+            {generatingOrderDoc === "labels" ? "Generating..." : "Print Barcodes"}
           </Button>
           {/* Inventory Count workbook for the periodic physical inventory.
               Streamed inline as .xlsx, not a PDF token, because the counter
