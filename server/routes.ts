@@ -545,6 +545,22 @@ function signToken(userId: number) {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: "30d" });
 }
 
+// Actions a public demo session may NOT perform. Reads always pass (the demo is
+// fully browsable); only sensitive writes are blocked. Credentials, account,
+// billing, and membership changes are off-limits because the nightly reset
+// restores inventory only, not those. Admin routes are ADMIN_SECRET-gated
+// separately, so a demo token can never reach them.
+function isDemoBlockedPath(p: string, method: string): boolean {
+  const m = (method || "GET").toUpperCase();
+  if (m === "GET" || m === "HEAD" || m === "OPTIONS") return false;
+  if (p.startsWith("/api/account")) return true;
+  if (p.startsWith("/api/stripe") || p.startsWith("/api/checkout") || p.startsWith("/api/create-checkout") || p.startsWith("/api/billing")) return true;
+  if (p.startsWith("/api/founding-lab")) return true;
+  if (/\/members\b/.test(p) || /\/seats\b/.test(p) || /\/invite/.test(p)) return true;
+  if (p.includes("change-password") || p.includes("delete-account")) return true;
+  return false;
+}
+
 // ── SUBSCRIPTION ACCESS LEVEL ──────────────────────────────────────────
 // Phase 4.3a: optional `lab` second arg. When given, uses lab's
 // subscription_expires_at instead of user's. Existing callers that pass
@@ -673,10 +689,14 @@ function authMiddleware(req: any, res: any, next: any) {
   const auth = req.headers.authorization;
   if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
   try {
-    const payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number };
+    const payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number; isDemo?: boolean };
     const user = storage.getUserById(payload.userId);
     if (!user) return res.status(401).json({ error: "User not found" });
     req.userId = user.id;
+    // Public demo sessions carry isDemo so the demoGuard can block account-,
+    // billing-, member-, and admin-destructive actions (the nightly reset only
+    // restores inventory, not credentials, so those must be off-limits).
+    req.isDemo = payload.isDemo === true;
     // Pull subscription_status and grandfathered directly from DB (storage.getUserById
     // returns the typed user but TS shape may not include all migrated columns).
     const fullRow = (db as any).$client.prepare(
@@ -750,10 +770,46 @@ function authMiddleware(req: any, res: any, next: any) {
       });
     }
 
+    // Public demo sessions: block account/billing/member/credential writes.
+    if (req.isDemo && isDemoBlockedPath(req.path, req.method)) {
+      return res.status(403).json({ error: "demo_restricted", message: "This action is disabled in the live demo." });
+    }
+
     next();
   } catch {
     res.status(401).json({ error: "Invalid token" });
   }
+}
+
+// Public one-click demo login. VeritaStock deployment only. Mints a short-lived
+// isDemo token for the demo account so visitors explore without signup. No
+// user_sessions row, so single-session is bypassed and many visitors can be in
+// at once. IP rate-limited. The demoGuard above blocks anything destructive.
+const DEMO_LOGIN_EMAIL = process.env.DEMO_LOGIN_EMAIL || "info@veritaslabservices.com";
+const demoLoginHits = new Map<string, number[]>();
+function demoRateOk(ip: string): boolean {
+  const now = Date.now(), win = 60_000, max = 12;
+  const arr = (demoLoginHits.get(ip) || []).filter((t) => now - t < win);
+  arr.push(now);
+  demoLoginHits.set(ip, arr);
+  return arr.length <= max;
+}
+export function registerDemoLogin(app: any) {
+  app.post("/api/demo/login", (req: any, res: any) => {
+    const isStock = process.env.VITE_STOCK_DEPLOYMENT === "true" || process.env.STOCK_DEPLOYMENT === "true";
+    if (!isStock) return res.status(404).json({ error: "Not found" });
+    const ip = ((req.headers["x-forwarded-for"] as string)?.split(",")[0] || req.ip || "unknown").trim();
+    if (!demoRateOk(ip)) return res.status(429).json({ error: "Too many demo launches, try again in a minute" });
+    const row = (db as any).$client.prepare(
+      "SELECT id, email, name, plan, study_credits FROM users WHERE email = ?"
+    ).get(DEMO_LOGIN_EMAIL) as any;
+    if (!row) return res.status(500).json({ error: "Demo account not provisioned" });
+    const token = jwt.sign({ userId: row.id, isDemo: true }, JWT_SECRET, { expiresIn: "8h" });
+    res.json({
+      token,
+      user: { id: row.id, email: row.email, name: row.name, plan: row.plan, studyCredits: row.study_credits ?? 99999, isDemo: true },
+    });
+  });
 }
 
 
@@ -971,6 +1027,9 @@ function writeLabAuditEntry(labId: number, changedByUserId: number, fieldName: s
 const BOOT_TIMESTAMP = new Date().toISOString();
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+  // Public one-click demo login (VeritaStock deployment only).
+  registerDemoLogin(app);
+
   // ── DEMO COMPETENCY DATA BACKFILL (runs once on startup) ────────────────
   try {
     (db as any).$client.prepare(`UPDATE competency_assessment_items SET el1_specimen_id = '0326:C147', el1_observer_initials = 'MV' WHERE el1_specimen_id IS NULL OR el1_specimen_id = ''`).run();
