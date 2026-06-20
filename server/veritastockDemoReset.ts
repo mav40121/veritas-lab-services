@@ -24,18 +24,19 @@ type ItemSpec = {
   key: string; name: string; category: string; unit_cost: number;
   usage_unit: string; order_unit: string; units_per_order_unit: number;
   lead_time_days: number; safety_stock_days: number; desired_days_of_stock: number;
+  vendor: string; catalog_number: string;
 };
 const ITEMS: Record<string, ItemSpec> = {
-  RESP:   { key: "RESP",  name: "Rapid respiratory test cartridge", category: "Diagnostics",   unit_cost: 24.00, usage_unit: "test",  order_unit: "kit",  units_per_order_unit: 25,   lead_time_days: 21, safety_stock_days: 7, desired_days_of_stock: 45 },
-  STRIP:  { key: "STRIP", name: "Glucometer test strips",           category: "Point of Care",  unit_cost: 0.85,  usage_unit: "strip", order_unit: "box",  units_per_order_unit: 50,   lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30 },
-  IVKIT:  { key: "IVKIT", name: "IV start kit",                      category: "Supply",         unit_cost: 4.20,  usage_unit: "kit",   order_unit: "case", units_per_order_unit: 20,   lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30 },
-  SALINE: { key: "SALINE",name: "Normal saline 1000 mL IV bag",     category: "Supply",         unit_cost: 1.80,  usage_unit: "bag",   order_unit: "case", units_per_order_unit: 12,   lead_time_days: 10, safety_stock_days: 5, desired_days_of_stock: 30 },
-  BCSET:  { key: "BCSET", name: "Blood culture bottle set",         category: "Diagnostics",    unit_cost: 7.20,  usage_unit: "set",   order_unit: "case", units_per_order_unit: 20,   lead_time_days: 21, safety_stock_days: 7, desired_days_of_stock: 45 },
-  EDTA:   { key: "EDTA",  name: "EDTA collection tube",             category: "Supply",         unit_cost: 0.12,  usage_unit: "tube",  order_unit: "box",  units_per_order_unit: 100,  lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30 },
-  DRESS:  { key: "DRESS", name: "Wound care dressing kit",          category: "Supply",         unit_cost: 6.50,  usage_unit: "kit",   order_unit: "case", units_per_order_unit: 10,   lead_time_days: 14, safety_stock_days: 5, desired_days_of_stock: 30 },
-  GLOVE:  { key: "GLOVE", name: "Nitrile exam gloves",              category: "Supply",         unit_cost: 0.06,  usage_unit: "glove", order_unit: "case", units_per_order_unit: 1000, lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30 },
-  PADS:   { key: "PADS",  name: "Alcohol prep pads",                category: "Supply",         unit_cost: 0.02,  usage_unit: "pad",   order_unit: "box",  units_per_order_unit: 200,  lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30 },
-  TRANS:  { key: "TRANS", name: "Specimen transport kit",           category: "Supply",         unit_cost: 0.55,  usage_unit: "kit",   order_unit: "box",  units_per_order_unit: 50,   lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30 },
+  RESP:   { key: "RESP",  name: "Rapid respiratory test cartridge", category: "Diagnostics",   unit_cost: 24.00, usage_unit: "test",  order_unit: "kit",  units_per_order_unit: 25,   lead_time_days: 21, safety_stock_days: 7, desired_days_of_stock: 45, vendor: "Abbott",          catalog_number: "RESP-CART-25" },
+  STRIP:  { key: "STRIP", name: "Glucometer test strips",           category: "Point of Care",  unit_cost: 0.85,  usage_unit: "strip", order_unit: "box",  units_per_order_unit: 50,   lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Roche Accu-Chek", catalog_number: "GLU-STRIP-50" },
+  IVKIT:  { key: "IVKIT", name: "IV start kit",                      category: "Supply",         unit_cost: 4.20,  usage_unit: "kit",   order_unit: "case", units_per_order_unit: 20,   lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Medline",         catalog_number: "IV-START-20" },
+  SALINE: { key: "SALINE",name: "Normal saline 1000 mL IV bag",     category: "Supply",         unit_cost: 1.80,  usage_unit: "bag",   order_unit: "case", units_per_order_unit: 12,   lead_time_days: 10, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Baxter",          catalog_number: "NS-1000-12" },
+  BCSET:  { key: "BCSET", name: "Blood culture bottle set",         category: "Diagnostics",    unit_cost: 7.20,  usage_unit: "set",   order_unit: "case", units_per_order_unit: 20,   lead_time_days: 21, safety_stock_days: 7, desired_days_of_stock: 45, vendor: "BD BACTEC",       catalog_number: "BC-SET-20" },
+  EDTA:   { key: "EDTA",  name: "EDTA collection tube",             category: "Supply",         unit_cost: 0.12,  usage_unit: "tube",  order_unit: "box",  units_per_order_unit: 100,  lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Greiner",         catalog_number: "EDTA-4ML-100" },
+  DRESS:  { key: "DRESS", name: "Wound care dressing kit",          category: "Supply",         unit_cost: 6.50,  usage_unit: "kit",   order_unit: "case", units_per_order_unit: 10,   lead_time_days: 14, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Medline",         catalog_number: "WND-DRESS-10" },
+  GLOVE:  { key: "GLOVE", name: "Nitrile exam gloves",              category: "Supply",         unit_cost: 0.06,  usage_unit: "glove", order_unit: "case", units_per_order_unit: 1000, lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Medline",         catalog_number: "GLV-NIT-1000" },
+  PADS:   { key: "PADS",  name: "Alcohol prep pads",                category: "Supply",         unit_cost: 0.02,  usage_unit: "pad",   order_unit: "box",  units_per_order_unit: 200,  lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Medline",         catalog_number: "ALC-PREP-200" },
+  TRANS:  { key: "TRANS", name: "Specimen transport kit",           category: "Supply",         unit_cost: 0.55,  usage_unit: "kit",   order_unit: "box",  units_per_order_unit: 50,   lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Cardinal Health", catalog_number: "SPEC-TRANS-50" },
 };
 
 // Per-location distribution: [itemKey, qty, burn_rate/day, opts].
@@ -129,11 +130,11 @@ export function resetVeritaStockDemo(sqlite: any, now: Date = new Date()): { ok:
 
   const insertItem = sqlite.prepare(`
     INSERT INTO inventory_items
-      (account_id, lab_id, item_name, category, department, quantity_on_hand, unit, expiration_date,
+      (account_id, lab_id, item_name, category, department, vendor, catalog_number, quantity_on_hand, unit, expiration_date,
        status, burn_rate, order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit,
        lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, unit_cost,
        on_order_qty, on_order_expected_date, created_at, updated_at)
-    VALUES (@account_id, @lab_id, @item_name, @category, @department, @qty, @unit, @exp,
+    VALUES (@account_id, @lab_id, @item_name, @category, @department, @vendor, @catalog_number, @qty, @unit, @exp,
        'active', @burn, @order_unit, @usage_unit, @upo, @usage_unit, 1,
        @lead, @safety, @desired, 0, @unit_cost, @on_order, @on_order_eta, @now, @now)
   `);
@@ -167,7 +168,7 @@ export function resetVeritaStockDemo(sqlite: any, now: Date = new Date()): { ok:
         const o = opts || {};
         insertItem.run({
           account_id: accountId, lab_id: labId, item_name: it.name, category: it.category,
-          department: "Materials Management", qty, unit: it.usage_unit,
+          department: "Materials Management", vendor: it.vendor, catalog_number: it.catalog_number, qty, unit: it.usage_unit,
           exp: o.expDays != null ? isoPlusDays(now, o.expDays) : null,
           burn, order_unit: it.order_unit, usage_unit: it.usage_unit, upo: it.units_per_order_unit,
           lead: it.lead_time_days, safety: it.safety_stock_days, desired: it.desired_days_of_stock,
