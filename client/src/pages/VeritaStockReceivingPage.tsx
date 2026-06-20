@@ -9,7 +9,7 @@ import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Search, PackageCheck, QrCode, History, X } from "lucide-react";
+import { ArrowLeft, Search, PackageCheck, QrCode, History, X, AlertTriangle, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import BarcodeScannerModal from "@/components/BarcodeScannerModal";
 
@@ -39,6 +39,18 @@ interface Receipt {
   actual_lead_time_days: number | null;
 }
 
+interface LeadFlag {
+  item_id: number;
+  item_name: string;
+  vendor: string | null;
+  programmed_lead_time_days: number;
+  avg_actual_lead_time_days: number;
+  suggested_lead_time_days: number;
+  sample_size: number;
+  direction: "slower" | "faster";
+  delta_days: number;
+}
+
 // Lead-time drift threshold: only meaningful once actual deviates from
 // programmed by more than a few days. Matches the PR 3 flag direction so the
 // history column reads consistently (red = took longer, amber = arrived early).
@@ -63,6 +75,8 @@ export default function VeritaStockReceivingPage() {
 
   const [items, setItems] = useState<OpenItem[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [flags, setFlags] = useState<LeadFlag[]>([]);
+  const [applyingId, setApplyingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [scanOpen, setScanOpen] = useState(false);
@@ -71,6 +85,7 @@ export default function VeritaStockReceivingPage() {
 
   const inventoryListUrl = activeLabId ? `${API_BASE}/api/labs/${activeLabId}/inventory` : `${API_BASE}/api/inventory`;
   const receiptsUrl = activeLabId ? `${API_BASE}/api/labs/${activeLabId}/veritastock/receipts` : null;
+  const flagsUrl = activeLabId ? `${API_BASE}/api/labs/${activeLabId}/veritastock/lead-time-flags` : null;
   const stockReturnUrl = activeLabId ? `/labs/${activeLabId}/veritastock` : "/veritastock";
 
   const load = useCallback(async () => {
@@ -83,12 +98,36 @@ export default function VeritaStockReceivingPage() {
         const rRes = await fetch(receiptsUrl, { headers: authHeaders() });
         setReceipts(rRes.ok ? await rRes.json() : []);
       }
+      if (flagsUrl) {
+        const fRes = await fetch(flagsUrl, { headers: authHeaders() });
+        setFlags(fRes.ok ? await fRes.json() : []);
+      }
     } catch {
       toast({ title: "Could not load receiving data", variant: "destructive" });
     } finally {
       setLoading(false);
     }
-  }, [inventoryListUrl, receiptsUrl, toast]);
+  }, [inventoryListUrl, receiptsUrl, flagsUrl, toast]);
+
+  const applyLeadTime = async (f: LeadFlag) => {
+    setApplyingId(f.item_id);
+    try {
+      const res = await fetch(`${API_BASE}/api/inventory/${f.item_id}/lead-time`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ lead_time_days: f.suggested_lead_time_days }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        toast({ title: "Could not update lead time", description: e.error || `HTTP ${res.status}`, variant: "destructive" });
+        return;
+      }
+      toast({ title: `${f.item_name}: programmed lead time updated to ${f.suggested_lead_time_days} days`, description: "Reorder point recalculated." });
+      await load();
+    } finally {
+      setApplyingId(null);
+    }
+  };
 
   useEffect(() => { if (isLoggedIn) load(); }, [isLoggedIn, load]);
 
@@ -222,6 +261,38 @@ export default function VeritaStockReceivingPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Lead-time drift: items whose actual lead time consistently differs from
+          the programmed value that drives their reorder point. Slower = stockout
+          risk; faster = over-buffered safety stock. One-click apply the actual. */}
+      {flags.length > 0 && (
+        <div className="mt-8" data-testid="leadtime-drift-panel">
+          <h2 className="text-base font-semibold mb-2 flex items-center gap-2"><Clock size={16} />Lead-time check</h2>
+          <p className="text-xs text-muted-foreground mb-2">These items consistently arrive on a different schedule than their programmed lead time, so their reorder points may be off. Review and apply the observed lead time.</p>
+          <div className="space-y-2">
+            {flags.map((f) => {
+              const slower = f.direction === "slower";
+              return (
+                <div key={f.item_id} className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 ${slower ? "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/30" : "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30"}`} data-testid={`leadtime-flag-${f.item_id}`}>
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle size={18} className={`mt-0.5 shrink-0 ${slower ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-500"}`} />
+                    <div className="text-sm">
+                      <div className="font-semibold">{f.item_name}{f.vendor ? ` (${f.vendor})` : ""}</div>
+                      <div className={slower ? "text-red-800 dark:text-red-300" : "text-amber-800 dark:text-amber-300"}>
+                        Programmed lead time {f.programmed_lead_time_days} days, but the last {f.sample_size} receipts averaged {f.avg_actual_lead_time_days} days
+                        {slower ? ` (${f.delta_days} days slower, stockout risk).` : ` (${Math.abs(f.delta_days)} days faster, over-buffered).`}
+                      </div>
+                    </div>
+                  </div>
+                  <Button size="sm" variant="outline" disabled={readOnly || applyingId === f.item_id} onClick={() => applyLeadTime(f)} data-testid={`leadtime-apply-${f.item_id}`}>
+                    {applyingId === f.item_id ? "..." : `Update to ${f.suggested_lead_time_days} days`}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Receipt history */}
       <h2 className="text-base font-semibold mt-8 mb-2 flex items-center gap-2"><History size={16} />Receipt history</h2>
