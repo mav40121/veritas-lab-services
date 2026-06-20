@@ -108,6 +108,19 @@ const WASTE: Record<number, Record<number, { value: number; note: string }>> = {
   [WAREHOUSE]: { 2: { value: 960,  note: "Blood culture sets expired" } },
 };
 
+// Vendor directory records (the 7 real San Carlos vendors). Account numbers are
+// clearly-demo (SCAHC- prefix); no fabricated emails/phones. Seeded per location
+// so the Vendor Directory is never blank and the Order PDF auto-fills its cover.
+const VENDORS: Array<{ name: string; account_number: string; ordering_pattern: string; notes: string }> = [
+  { name: "Medline", account_number: "SCAHC-MED-0042", ordering_pattern: "EDI / punchout", notes: "Primary med-surg distributor" },
+  { name: "Baxter", account_number: "SCAHC-BAX-1187", ordering_pattern: "Online portal", notes: "IV solutions" },
+  { name: "BD BACTEC", account_number: "SCAHC-BD-3320", ordering_pattern: "Online portal", notes: "Blood culture media" },
+  { name: "Abbott", account_number: "SCAHC-ABT-5561", ordering_pattern: "Rep + portal", notes: "Rapid diagnostics" },
+  { name: "Roche Accu-Chek", account_number: "SCAHC-RAC-7790", ordering_pattern: "Online portal", notes: "Glucose monitoring" },
+  { name: "Greiner", account_number: "SCAHC-GBO-2204", ordering_pattern: "Distributor", notes: "Specimen collection tubes" },
+  { name: "Cardinal Health", account_number: "SCAHC-CAH-6615", ordering_pattern: "EDI", notes: "Distribution" },
+];
+
 function ymOf(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
@@ -158,7 +171,18 @@ export function resetVeritaStockDemo(sqlite: any, now: Date = new Date()): { ok:
   const tx = sqlite.transaction(() => {
     // Rename Bylas (drop the "Lab" framing) and empty the dropped locations.
     try { sqlite.prepare("UPDATE labs SET lab_name = ?, updated_at = ? WHERE id = ?").run("Bylas Health Center", nowIso, BYLAS); } catch {}
-    for (const lid of EMPTY_LABS) sqlite.prepare("DELETE FROM inventory_items WHERE lab_id = ?").run(lid);
+    // Remove the two dropped locations ENTIRELY (inventory + memberships + lab
+    // row + orphan demo data) so they vanish from the location switcher and the
+    // Enterprise roll-up, not just show as empty.
+    for (const lid of EMPTY_LABS) {
+      for (const t of ["inventory_items", "stock_vendors", "stock_vendor_contacts", "inventory_monthly_snapshots", "inventory_waste_events", "lab_members"]) {
+        try { sqlite.prepare(`DELETE FROM ${t} WHERE lab_id = ?`).run(lid); } catch {}
+      }
+      try { sqlite.prepare("DELETE FROM labs WHERE id = ?").run(lid); } catch {}
+    }
+    // Clear stale transfer history (old lab-reagent transfers leaked into the
+    // Enterprise view). Demo DB, so a full clear is safe.
+    try { sqlite.prepare("DELETE FROM inventory_transfers").run(); } catch {}
     // Clear demo waste events for a clean ledger each reset.
     sqlite.prepare(`DELETE FROM inventory_waste_events WHERE lab_id IN (${DEMO_LABS.join(",")})`).run();
 
@@ -182,6 +206,14 @@ export function resetVeritaStockDemo(sqlite: any, now: Date = new Date()): { ok:
       }
       // Canonical barcodes for any fresh rows.
       try { sqlite.prepare("UPDATE inventory_items SET barcode_value = 'VLS-' || printf('%08d', id) WHERE lab_id = ? AND (barcode_value IS NULL OR barcode_value = '')").run(labId); } catch {}
+
+      // Seed the Vendor Directory for this location so it is never blank and the
+      // Order PDF cover auto-fills. Replace any prior demo rows first.
+      try {
+        sqlite.prepare("DELETE FROM stock_vendors WHERE lab_id = ?").run(labId);
+        const insV = sqlite.prepare("INSERT INTO stock_vendors (lab_id, name, account_number, ordering_pattern, notes, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'active', ?, ?)");
+        for (const v of VENDORS) insV.run(labId, v.name, v.account_number, v.ordering_pattern, v.notes, nowIso, nowIso);
+      } catch {}
 
       // Current value = basis for the trend's latest month.
       const curVal = (sqlite.prepare("SELECT COALESCE(SUM(quantity_on_hand * unit_cost),0) AS v FROM inventory_items WHERE lab_id = ?").get(labId) as any)?.v || 0;

@@ -403,7 +403,7 @@ export default function AccountSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            Lab Information
+            {onStock ? "Organization" : "Lab Information"}
             {settings?.clia_locked && settings?.lab_name_locked && !settings?.is_seat && (
               <span className="ml-2 text-xs font-normal text-muted-foreground">Locked for regulatory record integrity</span>
             )}
@@ -412,7 +412,7 @@ export default function AccountSettingsPage() {
         <CardContent className="space-y-4">
           {settings?.is_seat && settings?.owner_name && (
             <p className="text-sm text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
-              Lab settings are managed by {settings.owner_name}.
+              {onStock ? "Organization settings" : "Lab settings"} are managed by {settings.owner_name}.
             </p>
           )}
           {!onStock && (<div className="space-y-2">
@@ -435,12 +435,12 @@ export default function AccountSettingsPage() {
             )}
           </div>)}
           <div className="space-y-2">
-            <Label htmlFor="lab_name">Lab Name</Label>
+            <Label htmlFor="lab_name">{onStock ? "Organization Name" : "Lab Name"}</Label>
             <Input
               id="lab_name"
               value={labName}
               onChange={(e) => setLabName(e.target.value)}
-              placeholder="e.g. Riverside Regional Medical Center"
+              placeholder={onStock ? "e.g. San Carlos Apache Healthcare" : "e.g. Riverside Regional Medical Center"}
               disabled={isLoading || !!settings?.is_seat || !!settings?.lab_name_locked}
             />
             {!settings?.is_seat && settings?.lab_name_locked && (

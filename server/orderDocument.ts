@@ -418,13 +418,17 @@ const FOOTER_TEMPLATE = `
 export async function generateReorderListExcel(items: ReorderItem[], ctx: ReorderLabContext): Promise<Buffer> {
   // Dynamic import keeps the cold-start cheap when the endpoint isn't hit.
   const { default: ExcelJS } = await import("exceljs");
+  // Brand + approver vocabulary follow the deployment: the standalone
+  // VeritaStock product never carries VeritaAssure or lab-director framing.
+  const brand = STOCK_DEPLOYMENT ? "VeritaStock" : "VeritaAssure";
+  const approver = STOCK_DEPLOYMENT ? "materials manager or designee" : "laboratory director or designee";
   const wb = new ExcelJS.Workbook();
-  wb.creator = "VeritaAssure";
-  wb.lastModifiedBy = "VeritaAssure";
+  wb.creator = brand;
+  wb.lastModifiedBy = brand;
   wb.created = new Date();
   wb.modified = new Date();
 
-  const labName = ctx.labName || "Lab name not on file";
+  const labName = ctx.labName || (STOCK_DEPLOYMENT ? "Organization name not on file" : "Lab name not on file");
   const cliaNumber = ctx.cliaNumber || "Not on file";
   // VeritaStock deployment carries no CLIA on the inventory workbook (see STOCK_DEPLOYMENT).
   const cliaSuffix = STOCK_DEPLOYMENT ? "" : `    CLIA: ${cliaNumber}`;
@@ -496,7 +500,7 @@ export async function generateReorderListExcel(items: ReorderItem[], ctx: Reorde
   body("This workbook is a snapshot of inventory items currently at or below their reorder point, grouped by vendor for purchasing. Reorder point per item is computed as burn rate multiplied by the sum of lead time and safety stock days; items appear here when on-hand quantity has fallen to or below that threshold. The Suggested Order column gives the quantity that, when delivered, will bring the item up to the desired days-of-stock target.");
   blank();
   section("How to use this workbook");
-  body("Each vendor has its own tab. Within a tab, rows are inventory items currently flagged for reorder. The Confirmed Qty and Notes columns are unlocked for purchasing to fill in; every other column is locked to preserve the underlying calculation. After the lab director signs the PDF version of this document, the workbook can be edited and sent to vendors as the formal order.");
+  body(`Each vendor has its own tab. Within a tab, rows are inventory items currently flagged for reorder. The Confirmed Qty and Notes columns are unlocked for purchasing to fill in; every other column is locked to preserve the underlying calculation. After the ${STOCK_DEPLOYMENT ? "materials manager" : "lab director"} signs the PDF version of this document, the workbook can be edited and sent to vendors as the formal order.`);
   blank();
   const estTotalXlsx = items.reduce((s, it) => s + (Number(it.delivered_qty) || 0) * (Number(it.unit_cost) || 0), 0);
   if (estTotalXlsx > 0) {
@@ -505,11 +509,13 @@ export async function generateReorderListExcel(items: ReorderItem[], ctx: Reorde
     blank();
   }
   section("Disclaimer");
-  body("This workbook is a computed projection from the lab's own inventory entries; it is not an audit, a guarantee of vendor availability, or a clinical or financial recommendation. Lead times, burn rates, and reorder points are only as accurate as the data the lab has entered into VeritaStock. Final order quantities and vendor placement are the responsibility of the laboratory director or designee. VeritaAssure does not place orders with vendors; it produces the documents the lab uses to do so.");
-  blank();
-  section("Lab identity");
   body(STOCK_DEPLOYMENT
-    ? `This workbook was prepared for ${labName}. The lab name appears on every printed page header and footer.`
+    ? `This workbook is a computed projection from your own inventory entries; it is not an audit, a guarantee of vendor availability, or a financial recommendation. Lead times, burn rates, and reorder points are only as accurate as the data entered into VeritaStock. Final order quantities and vendor placement are the responsibility of the ${approver}. VeritaStock does not place orders with vendors; it produces the documents purchasing uses to do so.`
+    : `This workbook is a computed projection from the lab's own inventory entries; it is not an audit, a guarantee of vendor availability, or a clinical or financial recommendation. Lead times, burn rates, and reorder points are only as accurate as the data the lab has entered into VeritaStock. Final order quantities and vendor placement are the responsibility of the ${approver}. VeritaAssure does not place orders with vendors; it produces the documents the lab uses to do so.`);
+  blank();
+  section(STOCK_DEPLOYMENT ? "Organization identity" : "Lab identity");
+  body(STOCK_DEPLOYMENT
+    ? `This workbook was prepared for ${labName}. The organization name appears on every printed page header and footer.`
     : `This workbook was prepared for ${labName} (CLIA ${cliaNumber}). The lab name and CLIA appear on every printed page header and footer.`);
   blank();
   if (ctx.preparedBy) { section("Prepared by"); body(ctx.preparedBy); blank(); }
@@ -517,7 +523,7 @@ export async function generateReorderListExcel(items: ReorderItem[], ctx: Reorde
   body("If the workbook is missing a vendor field, a packaging unit, or a column you need for your purchasing workflow, please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.");
 
   about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaStock Reorder Document&R&"Calibri,Regular"&10${labName}${cliaSuffix}`;
-  about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}${cliaSuffix}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+  about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}${cliaSuffix}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9${brand}`;
   await about.protect(exportPwd, {
     selectLockedCells: false, selectUnlockedCells: false,
     formatCells: false, formatColumns: false, formatRows: false,
@@ -540,7 +546,7 @@ export async function generateReorderListExcel(items: ReorderItem[], ctx: Reorde
     c.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
     ws.getRow(1).height = 24;
     ws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaStock Reorder Document&R&"Calibri,Regular"&10${labName}${cliaSuffix}`;
-    ws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}${cliaSuffix}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+    ws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}${cliaSuffix}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9${brand}`;
   }
 
   for (const g of groups) {
@@ -622,7 +628,7 @@ export async function generateReorderListExcel(items: ReorderItem[], ctx: Reorde
     ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headers.length } };
     ws.views = [{ state: "frozen", xSplit: 1, ySplit: 1 }];
     ws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaStock Reorder Document&R&"Calibri,Regular"&10${labName}${cliaSuffix}`;
-    ws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}${cliaSuffix}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+    ws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}${cliaSuffix}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9${brand}`;
     await ws.protect(exportPwd, {
       selectLockedCells: false, selectUnlockedCells: true,
       formatCells: false, formatColumns: false, formatRows: false,
