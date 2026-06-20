@@ -1519,6 +1519,75 @@ export function registerVeritaBenchRoutes(
     });
   });
 
+  // POST /api/inventory/:id/write-off
+  //   body: { qty, reason_code, note? }   reason_code: expired|damaged|recalled|lost
+  // Capture wastage as a byproduct of the disposal a tech already does, never a
+  // separate form. Decrements on-hand, prices the loss (qty x unit_cost), logs
+  // an itemized waste event (who/when/why), and rolls the dollar value into the
+  // current month's snapshot so the trend reflects it. Dedicated endpoint (not a
+  // partial PUT, which would full-replace and zero on-hand).
+  const WASTE_REASONS = new Set(["expired", "damaged", "recalled", "lost"]);
+  app.post("/api/inventory/:id/write-off", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const { id } = req.params;
+    const itemId = Number(id);
+    if (!Number.isFinite(itemId) || itemId <= 0) return res.status(400).json({ error: "Invalid item id" });
+    const { item: existing, status: resolveStatus } = resolveInventoryItemForMutation(itemId, req);
+    if (!existing) {
+      if (resolveStatus === 403) return res.status(403).json({ error: "You don't have access to this item's lab" });
+      return res.status(404).json({ error: "Item not found" });
+    }
+    const reasonCode = String(req.body?.reason_code || "expired").toLowerCase();
+    if (!WASTE_REASONS.has(reasonCode)) return res.status(400).json({ error: "reason_code must be one of expired, damaged, recalled, lost" });
+    const onHand = (existing as any).quantity_on_hand || 0;
+    let qty = Number(req.body?.qty);
+    if (!Number.isFinite(qty) || qty <= 0) return res.status(400).json({ error: "qty must be a positive number" });
+    if (qty > onHand) qty = onHand; // cannot write off more than is on hand
+    if (qty <= 0) return res.status(400).json({ error: "Nothing on hand to write off" });
+    const unitCost = (existing as any).unit_cost || 0;
+    const wasteValue = qty * unitCost;
+    const newOnHand = onHand - qty;
+    const labId = (existing as any).lab_id;
+    const nowIso = new Date().toISOString();
+    const eventDate = nowIso.slice(0, 10);
+    const yearMonth = nowIso.slice(0, 7);
+
+    const tx = sqlite.transaction(() => {
+      sqlite.prepare("UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?").run(newOnHand, nowIso, itemId);
+      sqlite.prepare(`
+        INSERT INTO inventory_waste_events
+          (lab_id, item_id, item_name, qty, unit_cost, waste_value, reason_code, note, event_date, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(labId, itemId, (existing as any).item_name, qty, unitCost, wasteValue, reasonCode, req.body?.note || null, eventDate, req.userId, nowIso);
+      // Roll into the current month's snapshot. Increment waste_value and refresh
+      // closing_value to the lab's current inventory value; preserve a seeded
+      // avg_value_on_hand if the month row already exists.
+      const curVal = (sqlite.prepare(
+        "SELECT COALESCE(SUM(quantity_on_hand * unit_cost), 0) AS v FROM inventory_items WHERE lab_id = ?"
+      ).get(labId) as any)?.v || 0;
+      sqlite.prepare(`
+        INSERT INTO inventory_monthly_snapshots
+          (lab_id, year_month, avg_value_on_hand, opening_value, closing_value, waste_value, created_at, updated_at)
+        VALUES (?, ?, ?, 0, ?, ?, ?, ?)
+        ON CONFLICT(lab_id, year_month) DO UPDATE SET
+          waste_value = waste_value + excluded.waste_value,
+          closing_value = excluded.closing_value,
+          updated_at = excluded.updated_at
+      `).run(labId, yearMonth, curVal, curVal, wasteValue, nowIso, nowIso);
+    });
+    tx();
+
+    const fresh = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(itemId);
+    res.json({
+      item: decorateInventoryItem(fresh),
+      write_off: {
+        qty, unit_cost: unitCost, waste_value: wasteValue,
+        reason_code: reasonCode, event_date: eventDate,
+        before_on_hand: onHand, after_on_hand: newOnHand,
+      },
+    });
+  });
+
   // DELETE /api/inventory/:id - delete an inventory item
   app.delete("/api/inventory/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });

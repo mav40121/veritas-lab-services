@@ -27,7 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Lock, Plus, Edit2, Trash2, AlertTriangle, Package, Clock, AlertCircle, RefreshCw,
-  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users, Building2, DollarSign, PackageCheck,
+  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users, Building2, DollarSign, PackageCheck, PackageX,
 } from "lucide-react";
 import BarcodeScannerModal from "@/components/BarcodeScannerModal";
 import InventoryCountWorkflow, { type CountItem } from "@/components/InventoryCountWorkflow";
@@ -639,6 +639,10 @@ export default function VeritaStockInventoryPage() {
   // (defaults to the full open on-order qty).
   const [receiveTarget, setReceiveTarget] = useState<InventoryItem | null>(null);
   const [receiveQty, setReceiveQty] = useState<number>(0);
+  // Write-off (waste capture) dialog: target item, qty, and reason code.
+  const [writeOffTarget, setWriteOffTarget] = useState<InventoryItem | null>(null);
+  const [writeOffQty, setWriteOffQty] = useState<number>(0);
+  const [writeOffReason, setWriteOffReason] = useState<string>("expired");
 
   // Filters
   const [filterDept, setFilterDept] = useState("All");
@@ -976,6 +980,32 @@ export default function VeritaStockInventoryPage() {
       toast({ title: "Error", description: "Failed to receive stock", variant: "destructive" });
     }
     setReceiveTarget(null);
+  };
+
+  // Write off (waste capture). Posts to the dedicated /write-off endpoint, which
+  // decrements on-hand, prices the loss, logs the event, and rolls the dollars
+  // into this month's waste total. Reason defaults to Expired.
+  const handleWriteOff = async () => {
+    if (!writeOffTarget) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/inventory/${writeOffTarget.id}/write-off`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ qty: writeOffQty, reason_code: writeOffReason }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const v = data?.write_off?.waste_value || 0;
+        toast({ title: "Written off", description: `${writeOffQty} ${writeOffTarget.usage_unit}s (${writeOffReason}), $${v.toFixed(2)} recorded as waste` });
+        loadItems();
+      } else {
+        const err = await res.json();
+        toast({ title: "Error", description: err.error, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to write off", variant: "destructive" });
+    }
+    setWriteOffTarget(null);
   };
 
   // Computed stats
@@ -1786,6 +1816,19 @@ export default function VeritaStockInventoryPage() {
                           <PackageCheck size={14} />
                         </Button>
                       )}
+                      {(item.quantity_on_hand || 0) > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-amber-600 dark:text-amber-500"
+                          title="Write off expired or damaged stock"
+                          onClick={() => { setWriteOffTarget(item); setWriteOffQty(item.quantity_on_hand || 0); setWriteOffReason("expired"); }}
+                          disabled={readOnly}
+                          data-testid={`button-writeoff-${item.id}`}
+                        >
+                          <PackageX size={14} />
+                        </Button>
+                      )}
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditItem(item); setShowForm(true); }} disabled={readOnly}>
                         <Edit2 size={13} />
                       </Button>
@@ -1904,6 +1947,66 @@ export default function VeritaStockInventoryPage() {
                   data-testid="receive-confirm"
                 >
                   Receive
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Write off (waste capture). Reason defaults to Expired; qty defaults to
+          the full lot on hand. Shows the dollar value being written off. */}
+      <Dialog open={!!writeOffTarget} onOpenChange={(o) => { if (!o) setWriteOffTarget(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Write off stock</DialogTitle>
+          </DialogHeader>
+          {writeOffTarget && (
+            <div className="space-y-3">
+              <div className="text-sm">
+                <div className="font-medium">{writeOffTarget.item_name}</div>
+                <div className="text-muted-foreground">
+                  {writeOffTarget.quantity_on_hand} {writeOffTarget.usage_unit}s on hand
+                  {writeOffTarget.unit_cost ? ` at $${writeOffTarget.unit_cost.toFixed(2)} each` : ""}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Reason</Label>
+                  <Select value={writeOffReason} onValueChange={setWriteOffReason}>
+                    <SelectTrigger data-testid="writeoff-reason-select"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="expired">Expired</SelectItem>
+                      <SelectItem value="damaged">Damaged</SelectItem>
+                      <SelectItem value="recalled">Recalled</SelectItem>
+                      <SelectItem value="lost">Lost</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Quantity ({writeOffTarget.usage_unit}s)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={writeOffTarget.quantity_on_hand || 0}
+                    value={writeOffQty}
+                    onChange={(e) => setWriteOffQty(parseFloat(e.target.value) || 0)}
+                    data-testid="writeoff-qty-input"
+                  />
+                </div>
+              </div>
+              <div className="text-xs font-mono p-2 rounded-md bg-muted/40" data-testid="writeoff-value">
+                Waste value: ${((writeOffTarget.unit_cost || 0) * writeOffQty).toFixed(2)} (recorded against this month)
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button variant="outline" onClick={() => setWriteOffTarget(null)}>Cancel</Button>
+                <Button
+                  onClick={handleWriteOff}
+                  disabled={writeOffQty <= 0 || writeOffQty > (writeOffTarget.quantity_on_hand || 0)}
+                  className="bg-amber-600 text-white hover:bg-amber-700"
+                  data-testid="writeoff-confirm"
+                >
+                  Write off
                 </Button>
               </div>
             </div>
