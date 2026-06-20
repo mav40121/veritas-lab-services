@@ -30,4 +30,14 @@ test.describe("VeritaStock route lockdown", () => {
     await page.goto(`${BASE}/demo`);
     await expect(page.getByText(/Experience VeritaAssure/i)).toBeVisible({ timeout: 15000 });
   });
+
+  // The dedicated VeritaStock deployment injects window.__STOCK_DEPLOYMENT__ at
+  // the server (server/static.ts), forcing the VeritaStock skin on every URL.
+  // The lab deployment (veritaslabservices.com) must never carry that flag.
+  test("lab deployment does not inject the VeritaStock flag", async ({ page }) => {
+    test.skip(isStock, "lab-host only");
+    await page.goto(`${BASE}/`);
+    const flagged = await page.evaluate(() => (window as any).__STOCK_DEPLOYMENT__ === true);
+    expect(flagged).toBeFalsy();
+  });
 });
