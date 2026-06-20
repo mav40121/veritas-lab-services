@@ -77,7 +77,15 @@ interface InventoryItem {
   delivered_qty?: number;            // suggested_order_packs × upu
   ending_qty?: number;               // on_hand + delivered_qty
   ending_days?: number | null;       // floor(ending_qty / burn)
-  inventory_position?: number;       // on_hand + on_order (drives needs_reorder)
+  inventory_position?: number;       // on_hand + on_order
+  // Expiry-aware reorder fields (added 2026-06-20). effective_position caps
+  // usable on-hand at burn × days_until_expiry, so a short-dated lot flags for
+  // reorder even when raw quantity is above par.
+  days_until_expiry?: number | null;
+  usable_on_hand?: number;
+  effective_position?: number;        // drives needs_reorder
+  reorder_reason?: string | null;     // "Below reorder point" | "Expiring lot"
+  expiry_driven_reorder?: boolean;
 }
 
 const CATEGORIES = ["Reagent", "Control", "Calibrator", "Consumable", "Supply"];
@@ -185,9 +193,25 @@ function ExpirationBadge({ expDate }: { expDate: string | null }) {
 
 function StockStatusBadge({ item }: { item: InventoryItem }) {
   if (item.needs_reorder) {
+    // When the reorder is driven by a short-dated lot rather than low quantity,
+    // surface a second "Expiring lot" pill so it is obvious the item is on the
+    // order list despite having sufficient quantity on the shelf.
     return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300">
-        Reorder Now
+      <span className="inline-flex flex-col items-start gap-0.5">
+        <span
+          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
+          title={item.reorder_reason || "Reorder Now"}
+        >
+          Reorder Now
+        </span>
+        {item.expiry_driven_reorder && (
+          <span
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+            title="On hand looks sufficient, but this lot expires before it can be used at the current burn rate. Reorder a fresh lot."
+          >
+            Expiring lot
+          </span>
+        )}
       </span>
     );
   }

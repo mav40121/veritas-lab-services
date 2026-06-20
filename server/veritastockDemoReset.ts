@@ -46,7 +46,12 @@ type Line = [string, number, number, { expDays?: number; onOrder?: number; onOrd
 const DIST: Record<number, Line[]> = {
   [WAREHOUSE]: [
     ["RESP", 400, 9, { expDays: 240 }],
-    ["STRIP", 6000, 130, { expDays: 300 }],
+    // Expiry-driven reorder hero: 6000 strips is ~46 days of supply at 130/day,
+    // well above the ~2210 reorder point, so quantity alone would NOT flag it.
+    // But this lot expires in 14 days, so only ~1820 are usable before expiry.
+    // VeritaStock surfaces it in Reorder Now ("Expiring lot") even though the
+    // shelf looks full: sufficient quantity on hand, but short-dated.
+    ["STRIP", 6000, 130, { expDays: 14 }],
     // Four items intentionally below reorder point (burn x (lead+safety)) across
     // two vendors so the Reorder Now tile + vendor-grouped Order PDF populate:
     // IVKIT/GLOVE/DRESS = Medline, SALINE = Baxter.
