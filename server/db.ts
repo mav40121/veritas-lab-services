@@ -3460,6 +3460,8 @@ sqlite.exec(`
     standing_order INTEGER DEFAULT 0,
     standing_order_review_date TEXT,
     unit_cost REAL DEFAULT 0,
+    on_order_qty REAL DEFAULT 0,
+    on_order_expected_date TEXT,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   )
@@ -3535,6 +3537,16 @@ sqlite.exec(`
     }
     if (!iiColNames.includes("unit_cost")) {
       try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN unit_cost REAL DEFAULT 0"); } catch {}
+    }
+    // On-order / in-transit tracking. on_order_qty is the quantity (in usage
+    // units) already on a purchase order but not yet received; expected_date is
+    // the promised arrival. Inventory position (on_hand + on_order) drives the
+    // reorder decision so an item already on a truck stops flagging Reorder Now.
+    if (!iiColNames.includes("on_order_qty")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN on_order_qty REAL DEFAULT 0"); } catch {}
+    }
+    if (!iiColNames.includes("on_order_expected_date")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN on_order_expected_date TEXT"); } catch {}
     }
     // parking-lot #29 Phase 0: barcode_value for scan flow. Nullable so
     // existing rows do not break; uniqueness enforced per-account via

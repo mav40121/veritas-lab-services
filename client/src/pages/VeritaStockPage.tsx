@@ -50,6 +50,8 @@ interface InventoryItem {
   status: string;
   burn_rate: number;
   unit_cost: number;                // $ per usage unit; powers valuation + extended cost
+  on_order_qty?: number;            // qty (usage units) on a PO but not yet received
+  on_order_expected_date?: string | null; // promised arrival date for the open PO
   order_unit: string;
   usage_unit: string;
   units_per_order_unit: number;
@@ -71,10 +73,11 @@ interface InventoryItem {
   needs_reorder: boolean;
   // Order-math fields (added 2026-05-20). Renderers consume these directly
   // so the math has a single source of truth.
-  suggested_order_packs?: number;   // ceil(max(0, target - on_hand) / upu)
+  suggested_order_packs?: number;   // ceil(max(0, target - position) / upu)
   delivered_qty?: number;            // suggested_order_packs × upu
   ending_qty?: number;               // on_hand + delivered_qty
   ending_days?: number | null;       // floor(ending_qty / burn)
+  inventory_position?: number;       // on_hand + on_order (drives needs_reorder)
 }
 
 const CATEGORIES = ["Reagent", "Control", "Calibrator", "Consumable", "Supply"];
@@ -93,6 +96,7 @@ type ToggleableColumnKey =
   | "category"
   | "department"
   | "quantity_on_hand"
+  | "on_order"
   | "unit_cost"
   | "abc_class"
   | "burn_rate"
@@ -107,6 +111,7 @@ const TOGGLEABLE_COLUMNS: { key: ToggleableColumnKey; label: string }[] = [
   { key: "category",           label: "Category" },
   { key: "department",         label: "Dept" },
   { key: "quantity_on_hand",   label: "On Hand" },
+  { key: "on_order",           label: "On Order" },
   { key: "unit_cost",          label: "Unit Cost" },
   { key: "abc_class",          label: "ABC Class" },
   { key: "burn_rate",          label: "Burn Rate" },
@@ -236,6 +241,8 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory }: {
         category: "Reagent",
         quantity_on_hand: 0,
         unit_cost: 0,
+        on_order_qty: 0,
+        on_order_expected_date: "",
         order_unit: "each",
         usage_unit: "each",
         units_per_order_unit: 1,
@@ -508,6 +515,25 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory }: {
                 <Input type="date" value={form.expiration_date ?? ""} onChange={(e) => setForm({ ...form, expiration_date: e.target.value || null })} />
               </div>
             </div>
+            {/* On-order / in-transit. Inventory position (on hand + on order)
+                drives the reorder decision, so an item already on a PO stops
+                flagging Reorder Now and is not re-ordered. */}
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <div className="space-y-1.5">
+                <Label>On Order ({usageUnit}s)</Label>
+                <Input type="number" min={0} value={form.on_order_qty ?? 0} onChange={(e) => setForm({ ...form, on_order_qty: parseFloat(e.target.value) || 0 })} data-testid="on-order-qty-input" />
+                <p className="text-xs text-muted-foreground">Quantity already on a purchase order, not yet received.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Expected Arrival</Label>
+                <Input type="date" value={form.on_order_expected_date ?? ""} onChange={(e) => setForm({ ...form, on_order_expected_date: e.target.value || null })} data-testid="on-order-date-input" />
+              </div>
+            </div>
+            {(form.on_order_qty || 0) > 0 && (
+              <div className="mt-2 text-xs font-mono text-muted-foreground" data-testid="inventory-position-note">
+                Inventory position: {((form.quantity_on_hand || 0) + (form.on_order_qty || 0)).toLocaleString()} {usageUnit}s on hand plus on order
+              </div>
+            )}
           </div>
 
           {/* Group 6: Notes */}
@@ -1545,6 +1571,7 @@ export default function VeritaStockInventoryPage() {
                 {isColumnVisible("category") && <SortHeader field="category">Category</SortHeader>}
                 {isColumnVisible("department") && <SortHeader field="department" className="hidden md:table-cell">Dept</SortHeader>}
                 {isColumnVisible("quantity_on_hand") && <SortHeader field="quantity_on_hand">On Hand</SortHeader>}
+                {isColumnVisible("on_order") && <th className="text-left px-3 py-2 font-medium" title="Quantity on a purchase order but not yet received. Counts toward inventory position so an inbound item does not re-trigger Reorder Now.">On Order</th>}
                 {isColumnVisible("unit_cost") && <th className="text-left px-3 py-2 font-medium">Unit Cost</th>}
                 {isColumnVisible("abc_class") && <th className="text-center px-3 py-2 font-medium" title="ABC class by annual dollar usage (burn rate x unit cost x 365). A = the high-value few making up the first ~80% of spend, B = next ~15%, C = final ~5%.">ABC</th>}
                 {isColumnVisible("burn_rate") && <SortHeader field="burn_rate">Burn Rate</SortHeader>}
@@ -1601,6 +1628,18 @@ export default function VeritaStockInventoryPage() {
                         }
                         return <>{item.quantity_on_hand.toLocaleString()} <span className="text-xs text-muted-foreground">{item.usage_unit}s</span></>;
                       })()}
+                    </td>
+                  )}
+                  {isColumnVisible("on_order") && (
+                    <td className="px-3 py-2 font-mono text-sm">
+                      {(item.on_order_qty || 0) > 0 ? (
+                        <>
+                          {(item.on_order_qty || 0).toLocaleString()} <span className="text-xs text-muted-foreground">{item.usage_unit}s</span>
+                          {item.on_order_expected_date && (
+                            <div className="text-[10px] text-muted-foreground">ETA {item.on_order_expected_date}</div>
+                          )}
+                        </>
+                      ) : <span className="text-muted-foreground">-</span>}
                     </td>
                   )}
                   {isColumnVisible("unit_cost") && (
