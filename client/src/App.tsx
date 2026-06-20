@@ -288,7 +288,23 @@ function PageFallback() {
 }
 
 function AppContent() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
+
+  // VeritaStock is a VeritaStock-ONLY product. On the dedicated VeritaStock
+  // deployment (VITE_STOCK_DEPLOYMENT=true, or the veritastock.com host), redirect
+  // every VeritaAssure marketing/module route to the VeritaStock landing so the
+  // service never shows the lab-compliance site on any URL. The lab deployment
+  // (veritaslabservices.com) has isStockHost()=false, so it is fully unaffected.
+  useEffect(() => {
+    if (!isStockHost()) return;
+    const p = location;
+    const allowed =
+      p === "/" ||
+      p.startsWith("/login") || p.startsWith("/reset-password") || p.startsWith("/join") ||
+      p.startsWith("/inventory") || p.startsWith("/account") || p.startsWith("/veritastock") ||
+      /^\/labs\/\d+\/(veritastock|members|account)/.test(p);
+    if (!allowed) setLocation("/");
+  }, [location, setLocation]);
 
   // Standalone admin page: no NavBar, no footer, no subscription banners
   if (location === "/admin") {
@@ -317,9 +333,9 @@ function AppContent() {
       <GATracker />
       <CanonicalUpdater />
       <NavBar />
-      <SubscriptionBanner />
-      <OnboardingBanner />
-      <OnboardingGuard />
+      {!isStockHost() && <SubscriptionBanner />}
+      {!isStockHost() && <OnboardingBanner />}
+      {!isStockHost() && <OnboardingGuard />}
       <main className="flex-1">
         <Suspense fallback={<PageFallback />}>
           <Switch>
