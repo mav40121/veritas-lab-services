@@ -184,6 +184,20 @@ export default function LoginPage() {
     finally { setLoading(false); }
   }
 
+  // Public one-click demo: mint a sandbox session and drop straight into the
+  // VeritaStock inventory. No signup; the org resets nightly.
+  async function handleDemoLogin() {
+    setLoading(true);
+    try {
+      const res = await apiRequest("POST", "/api/demo/login", {});
+      const data = await res.json();
+      if (!res.ok) { toast({ title: data.error || "Demo is unavailable right now", variant: "destructive" }); return; }
+      login(data.token, data.user);
+      navigate(labRoute("/veritastock"));
+    } catch { toast({ title: "Demo is unavailable right now", variant: "destructive" }); }
+    finally { setLoading(false); }
+  }
+
   async function handleForceLogout() {
     if (!conflictData?.token) return;
     setLoading(true);
@@ -279,6 +293,15 @@ export default function LoginPage() {
 
               {/* ── LOGIN TAB ── */}
               <TabsContent value="login">
+                {onStock && (
+                  <div className="mb-5">
+                    <Button type="button" onClick={handleDemoLogin} disabled={loading} className="w-full text-white" style={{ backgroundColor: "#01696F" }} data-testid="launch-demo">
+                      {loading ? "Launching..." : "Launch live demo"}
+                    </Button>
+                    <p className="text-center text-[11px] text-muted-foreground mt-2">Explore a fully loaded multi-location supply network. No signup. Resets nightly.</p>
+                    <div className="flex items-center gap-3 my-4"><div className="flex-1 border-t" /><span className="text-[11px] text-muted-foreground">or sign in</span><div className="flex-1 border-t" /></div>
+                  </div>
+                )}
                 {sessionConflict ? (
                   <div className="space-y-4">
                     <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
