@@ -14,10 +14,17 @@ const OUT = "C:/Users/veril/Desktop/Verita Products/demo-run/audit";
 
 // Leakage: lab/clinical framing that should never appear on the VeritaStock product.
 const LEAK = /\b(labs?|laboratory|laboratories|CLIA|VeritaAssure|clinical|accreditor|accreditation|surveyor|competenc\w*|proficiency|westgard|phlebotomy|medical director|laboratory director|reagent)\b/gi;
-// Empty-state markers that signal a blank/dead page.
-const EMPTY = /(no items|no vendors|nothing to|0 items|add your first|no inventory|no data|requires an active subscription|no results|coming soon|not found)/i;
-// Item names legitimately contain these; do not count as leaks.
-const ALLOW = /Blood culture|EDTA|specimen transport|respiratory test/i;
+// Empty-state markers that signal a blank/dead page. "0 items" is intentionally
+// NOT here: it shows up in legitimate summary tiles (e.g. "Expiring Soon: 0")
+// on a fully populated page. Snap Order starts as an empty order-builder by
+// design, so its build-an-order copy is not a dead page either.
+const EMPTY = /(add your first|no inventory items|requires an active subscription|coming soon|page not found)/i;
+// Contexts that are legitimate, not lab-operations leakage:
+//  - item names that contain a flagged word (Blood culture, EDTA, etc.)
+//  - the parent-company legal name in the copyright footer. VeritaStock is a
+//    Veritas Lab Services, LLC product; the footer company name is correct and
+//    is not lab-operations framing.
+const ALLOW = /Blood culture|EDTA|specimen transport|respiratory test|Veritas Lab Services/i;
 
 const routes = [
   { name: "Warehouse inventory", path: "/labs/2/veritastock", content: true },
