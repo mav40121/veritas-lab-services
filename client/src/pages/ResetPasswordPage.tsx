@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/AuthContext";
 import { useLabRoute } from "@/hooks/useLabRoute";
 
-const API_BASE = "https://www.veritaslabservices.com";
+const API_BASE = ""; // same-origin: works on the lab site and the separate VeritaStock deployment
 
 export default function ResetPasswordPage() {
   const labRoute = useLabRoute();

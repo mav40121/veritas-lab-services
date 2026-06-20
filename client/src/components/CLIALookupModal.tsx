@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, Building2, CheckCircle2, Search, ArrowRight } from "lucide-react";
 import { authHeaders } from "@/lib/auth";
 
-const API_BASE = "https://www.veritaslabservices.com";
+const API_BASE = ""; // same-origin: works on the lab site and the separate VeritaStock deployment
 
 interface LabData {
   clia_number: string;
