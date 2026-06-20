@@ -1214,6 +1214,53 @@ export function registerVeritaBenchRoutes(
     });
   }
 
+  // GET /api/inventory/valuation-trend - 6-month inventory valuation history
+  // across every location in the requester's network (owned labs + active
+  // memberships). Returns, per location, the monthly average value on hand and
+  // the dollars written off to expiry that month. Powers the Valuation Trends
+  // view. Read-only; no lab scope param because it is a cross-location rollup.
+  app.get("/api/inventory/valuation-trend", authMiddleware, (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const userId = req.userId;
+    const ownerId = req.ownerUserId ?? req.userId;
+    // Labs the user owns plus labs they are an active member of.
+    const owned = sqlite.prepare("SELECT id, lab_name FROM labs WHERE owner_user_id = ?").all(ownerId) as any[];
+    const member = sqlite.prepare(
+      "SELECT l.id, l.lab_name FROM labs l JOIN lab_members m ON m.lab_id = l.id WHERE m.user_id = ? AND m.status = 'active'"
+    ).all(userId) as any[];
+    const labMap = new Map<number, string>();
+    for (const l of [...owned, ...member]) labMap.set(l.id, l.lab_name || `Location ${l.id}`);
+    const labIds = Array.from(labMap.keys());
+    if (labIds.length === 0) return res.json({ months: [], locations: [] });
+
+    const placeholders = labIds.map(() => "?").join(",");
+    const rows = sqlite.prepare(
+      `SELECT lab_id, year_month, avg_value_on_hand, waste_value, waste_note
+       FROM inventory_monthly_snapshots WHERE lab_id IN (${placeholders}) ORDER BY year_month ASC`
+    ).all(...labIds) as any[];
+
+    // Distinct months in order.
+    const months = Array.from(new Set(rows.map((r) => r.year_month))).sort();
+    const byLab = new Map<number, any[]>();
+    for (const r of rows) {
+      if (!byLab.has(r.lab_id)) byLab.set(r.lab_id, []);
+      byLab.get(r.lab_id)!.push(r);
+    }
+    const locations = Array.from(byLab.entries()).map(([labId, lrows]) => {
+      const monthly = months.map((m) => {
+        const row = lrows.find((x) => x.year_month === m);
+        return {
+          month: m,
+          avg_value_on_hand: row ? Number(row.avg_value_on_hand) || 0 : 0,
+          waste_value: row ? Number(row.waste_value) || 0 : 0,
+          waste_note: row?.waste_note || null,
+        };
+      });
+      return { lab_id: labId, lab_name: labMap.get(labId), monthly };
+    });
+    res.json({ months, locations });
+  });
+
   // POST /api/inventory - create new inventory item
   app.post("/api/inventory", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });

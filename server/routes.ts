@@ -1493,6 +1493,44 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, labId: targetLabId, user: { id: user?.id, email: user?.email, plan: user?.plan, studyCredits: user?.studyCredits } });
   });
 
+  // Seed / upsert monthly inventory valuation snapshots for the demo. Admin-gated.
+  // Body: { secret, rows: [{ lab_id, year_month, avg_value_on_hand, opening_value?,
+  //   closing_value?, waste_value?, waste_note? }] }. Upserts on (lab_id, year_month).
+  app.post("/api/admin/seed-valuation-history", (req, res) => {
+    const { secret, rows } = req.body;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!Array.isArray(rows)) return res.status(400).json({ error: "rows array required" });
+    const now = new Date().toISOString();
+    const upsert = db.$client.prepare(`
+      INSERT INTO inventory_monthly_snapshots
+        (lab_id, year_month, avg_value_on_hand, opening_value, closing_value, waste_value, waste_note, created_at, updated_at)
+      VALUES (@lab_id, @year_month, @avg_value_on_hand, @opening_value, @closing_value, @waste_value, @waste_note, @now, @now)
+      ON CONFLICT(lab_id, year_month) DO UPDATE SET
+        avg_value_on_hand = excluded.avg_value_on_hand,
+        opening_value = excluded.opening_value,
+        closing_value = excluded.closing_value,
+        waste_value = excluded.waste_value,
+        waste_note = excluded.waste_note,
+        updated_at = excluded.updated_at
+    `);
+    const tx = db.$client.transaction((list: any[]) => {
+      for (const r of list) {
+        upsert.run({
+          lab_id: Number(r.lab_id),
+          year_month: String(r.year_month),
+          avg_value_on_hand: Number(r.avg_value_on_hand ?? 0),
+          opening_value: Number(r.opening_value ?? 0),
+          closing_value: Number(r.closing_value ?? 0),
+          waste_value: Number(r.waste_value ?? 0),
+          waste_note: r.waste_note != null ? String(r.waste_note) : null,
+          now,
+        });
+      }
+    });
+    tx(rows);
+    res.json({ ok: true, upserted: rows.length });
+  });
+
   app.post("/api/admin/set-seats", (req, res) => {
     const { secret, userId, seatCount } = req.body;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
