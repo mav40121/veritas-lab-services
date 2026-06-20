@@ -14,6 +14,7 @@ import { useMemberships } from "@/hooks/useMemberships";
 import { Save, Tag, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { validateClia, CLIA_FORMAT_HINT } from "@shared/validateClia";
+import { isStockHost } from "@/lib/host";
 
 const API_BASE = ""; // same-origin: works on the lab site and the separate VeritaStock deployment
 
@@ -109,6 +110,7 @@ export default function AccountSettingsPage() {
   const [cliaNumber, setCliaNumber] = useState("");
   const [labName, setLabName] = useState("");
   const [accreditationChoice, setAccreditationChoice] = useState<AccreditationChoice>("CLIA");
+  const onStock = isStockHost();  // VeritaStock deployment: hide lab/compliance settings
   const [preferredPtVendor, setPreferredPtVendor] = useState<PtVendorPref>("none");
 
   // Module permission constants. Keys MUST match SEAT_MODULE_KEYS in
@@ -413,7 +415,7 @@ export default function AccountSettingsPage() {
               Lab settings are managed by {settings.owner_name}.
             </p>
           )}
-          <div className="space-y-2">
+          {!onStock && (<div className="space-y-2">
             <Label htmlFor="clia_number">CLIA Number</Label>
             <Input
               id="clia_number"
@@ -431,7 +433,7 @@ export default function AccountSettingsPage() {
                 Locked - contact support to change
               </p>
             )}
-          </div>
+          </div>)}
           <div className="space-y-2">
             <Label htmlFor="lab_name">Lab Name</Label>
             <Input
@@ -466,6 +468,7 @@ export default function AccountSettingsPage() {
 
       <ChangePasswordCard />
 
+      {!onStock && (<>
       <Card className="mt-6">
         <CardHeader>
           <CardTitle className="text-base">Accreditation &amp; Standards</CardTitle>
@@ -571,6 +574,7 @@ export default function AccountSettingsPage() {
           )}
         </CardContent>
       </Card>
+      </>)}
 
       <Card className="mt-6">
         <CardHeader>
@@ -657,7 +661,7 @@ export default function AccountSettingsPage() {
             {!isViewingNonPrimaryLab && (
               <>
                 <p className="text-sm text-muted-foreground">
-                  Invite staff to access your VeritaAssure™ account. {usedSeats - 1} of {seatCount - 1} additional seat{seatCount - 1 !== 1 ? "s" : ""} used.
+                  Invite staff to access your {onStock ? "VeritaStock™" : "VeritaAssure™"} account. {usedSeats - 1} of {seatCount - 1} additional seat{seatCount - 1 !== 1 ? "s" : ""} used.
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">
                   Some hospital and corporate email systems quarantine outside invitations before they reach the inbox. If a teammate hasn&apos;t received their email after a few minutes, click &quot;Copy invite link&quot; on their row and send the link to them directly through email, Teams, Slack, or text.
