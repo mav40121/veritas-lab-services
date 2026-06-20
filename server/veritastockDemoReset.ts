@@ -47,12 +47,15 @@ const DIST: Record<number, Line[]> = {
   [WAREHOUSE]: [
     ["RESP", 400, 9, { expDays: 240 }],
     ["STRIP", 6000, 130, { expDays: 300 }],
-    ["IVKIT", 1500, 45, { expDays: 540 }],
-    ["SALINE", 2000, 60, { expDays: 420 }],
+    // Four items intentionally below reorder point (burn x (lead+safety)) across
+    // two vendors so the Reorder Now tile + vendor-grouped Order PDF populate:
+    // IVKIT/GLOVE/DRESS = Medline, SALINE = Baxter.
+    ["IVKIT", 700, 45, { expDays: 540 }],    // reorder pt 765
+    ["SALINE", 800, 60, { expDays: 420 }],   // reorder pt 900
     ["BCSET", 800, 16, { expDays: 200, onOrder: 200, onOrderEtaDays: 12 }],
     ["EDTA", 13000, 360, { expDays: 600 }],
-    ["DRESS", 500, 10, { expDays: 540 }],
-    ["GLOVE", 12000, 320, { expDays: 720 }],
+    ["DRESS", 150, 10, { expDays: 540 }],    // reorder pt 190
+    ["GLOVE", 5000, 320, { expDays: 720 }],  // reorder pt 5440
     ["PADS", 20000, 300, { expDays: 720 }],
     ["TRANS", 1200, 20, { expDays: 480 }],
   ],
