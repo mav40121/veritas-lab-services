@@ -238,6 +238,32 @@ export function resetVeritaStockDemo(sqlite: any, now: Date = new Date()): { ok:
       });
       summary.push({ lab_id: labId, items: DIST[labId].length, current_value: Math.round(curVal) });
     }
+
+    // Seed receipt history at the Warehouse so the lead-time drift flag shows
+    // live. RESP (Abbott, programmed 21d) consistently takes ~28d -> SLOWER,
+    // stockout-risk red flag. EDTA (Greiner, programmed 12d) arrives in ~7d ->
+    // FASTER, over-buffered amber flag. (Receipts were cleared above.)
+    const insReceipt = sqlite.prepare(
+      `INSERT INTO inventory_receipts (lab_id, item_id, account_id, item_name, vendor, qty_received, usage_unit, order_placed_date, expected_date, received_date, programmed_lead_time_days, actual_lead_time_days, received_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    const SEED_RECEIPTS: Array<{ key: string; programmed: number; actuals: number[] }> = [
+      { key: "RESP", programmed: 21, actuals: [27, 29, 28, 30] },
+      { key: "EDTA", programmed: 12, actuals: [7, 6, 8] },
+    ];
+    for (const sr of SEED_RECEIPTS) {
+      const it = ITEMS[sr.key];
+      const row = sqlite.prepare("SELECT id, account_id FROM inventory_items WHERE lab_id = ? AND item_name = ?").get(WAREHOUSE, it.name) as any;
+      if (!row) continue;
+      sr.actuals.forEach((actual, idx) => {
+        // Oldest first; most recent receipt ~20 days ago, ~40 days apart.
+        const recvOffset = -(20 + (sr.actuals.length - 1 - idx) * 40);
+        const received = isoPlusDays(now, recvOffset);
+        const placed = isoPlusDays(now, recvOffset - actual);
+        const expected = isoPlusDays(now, recvOffset - actual + sr.programmed);
+        insReceipt.run(WAREHOUSE, row.id, row.account_id, it.name, it.vendor, it.units_per_order_unit, it.usage_unit, placed, expected, received, sr.programmed, actual, null, nowIso);
+      });
+    }
   });
   tx();
   return { ok: true, labs: summary, months };

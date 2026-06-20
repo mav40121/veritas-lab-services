@@ -1601,6 +1601,30 @@ export function registerVeritaBenchRoutes(
     });
   });
 
+  // POST /api/inventory/:id/lead-time
+  //   body: { lead_time_days }
+  // Apply an observed lead time to the item's PROGRAMMED lead time (which feeds
+  // the reorder point). This is the one-click "update to actual" behind the
+  // lead-time drift flag: the materials manager owns the parameter, so it is
+  // never auto-changed, only applied on their action. Dedicated endpoint so a
+  // partial PUT cannot full-replace and zero other fields.
+  app.post("/api/inventory/:id/lead-time", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const itemId = Number(req.params.id);
+    if (!Number.isFinite(itemId) || itemId <= 0) return res.status(400).json({ error: "Invalid item id" });
+    const days = Number(req.body?.lead_time_days);
+    if (!Number.isInteger(days) || days < 1 || days > 365) return res.status(400).json({ error: "lead_time_days must be an integer between 1 and 365" });
+    const { item: existing, status: resolveStatus } = resolveInventoryItemForMutation(itemId, req);
+    if (!existing) {
+      if (resolveStatus === 403) return res.status(403).json({ error: "You don't have access to this item's lab" });
+      return res.status(404).json({ error: "Item not found" });
+    }
+    const nowIso = new Date().toISOString();
+    sqlite.prepare("UPDATE inventory_items SET lead_time_days = ?, updated_at = ? WHERE id = ?").run(days, nowIso, itemId);
+    const fresh = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(itemId);
+    res.json({ item: decorateInventoryItem(fresh) });
+  });
+
   // POST /api/inventory/:id/write-off
   //   body: { qty, reason_code, note? }   reason_code: expired|damaged|recalled|lost
   // Capture wastage as a byproduct of the disposal a tech already does, never a
@@ -2342,6 +2366,61 @@ export function registerVeritaBenchRoutes(
            FROM inventory_receipts WHERE lab_id = ? ORDER BY received_date DESC, id DESC LIMIT 250`
         ).all(req.scope.labId);
         res.json(rows);
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+    // GET /api/labs/:labId/veritastock/lead-time-flags — lead-time drift.
+    // For each item with at least MIN_SAMPLE received POs (placed + received on
+    // file), compare the trailing-average actual lead time to the item's CURRENT
+    // programmed lead time. Flag only when the average deviates by more than
+    // max(3 days, 25%) so a single late shipment does not trigger it. Direction:
+    // "slower" = actual longer than programmed (stockout risk), "faster" = actual
+    // shorter (over-buffered safety stock). The materials manager applies the
+    // suggested value via POST /api/inventory/:id/lead-time; nothing auto-changes.
+    app.get("/api/labs/:labId/veritastock/lead-time-flags", authMiddleware, labScopeMiddleware, (req: any, res) => {
+      if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+      const MIN_SAMPLE = 3, WINDOW = 6;
+      try {
+        const rows = sqlite.prepare(
+          `SELECT item_id, item_name, vendor, actual_lead_time_days, received_date
+           FROM inventory_receipts
+           WHERE lab_id = ? AND actual_lead_time_days IS NOT NULL
+           ORDER BY received_date DESC, id DESC`
+        ).all(req.scope.labId) as any[];
+        // Group newest-first per item.
+        const byItem = new Map<number, { item_name: string; vendor: string | null; actuals: number[] }>();
+        for (const r of rows) {
+          let g = byItem.get(r.item_id);
+          if (!g) { g = { item_name: r.item_name, vendor: r.vendor, actuals: [] }; byItem.set(r.item_id, g); }
+          if (g.actuals.length < WINDOW) g.actuals.push(r.actual_lead_time_days);
+        }
+        const flags: any[] = [];
+        for (const [itemId, g] of byItem) {
+          if (g.actuals.length < MIN_SAMPLE) continue;
+          const itemRow = sqlite.prepare("SELECT lead_time_days FROM inventory_items WHERE id = ? AND lab_id = ?").get(itemId, req.scope.labId) as any;
+          const programmed = itemRow?.lead_time_days;
+          if (!Number.isFinite(programmed) || programmed <= 0) continue;
+          const avg = g.actuals.reduce((a, b) => a + b, 0) / g.actuals.length;
+          const tol = Math.max(3, programmed * 0.25);
+          const delta = avg - programmed;
+          if (Math.abs(delta) < tol) continue;
+          flags.push({
+            item_id: itemId,
+            item_name: g.item_name,
+            vendor: g.vendor,
+            programmed_lead_time_days: programmed,
+            avg_actual_lead_time_days: Math.round(avg),
+            suggested_lead_time_days: Math.round(avg),
+            sample_size: g.actuals.length,
+            direction: delta > 0 ? "slower" : "faster",
+            delta_days: Math.round(delta),
+          });
+        }
+        // Biggest exposure first.
+        flags.sort((a, b) => Math.abs(b.delta_days) - Math.abs(a.delta_days));
+        res.json(flags);
       } catch (err: any) {
         res.status(500).json({ error: err.message });
       }
