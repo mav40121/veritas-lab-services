@@ -35,6 +35,7 @@ export interface ReorderItem {
   order_to_qty: number;        // computed: TARGET inventory level = burn × desired_days
   days_remaining: number | null;
   unit?: string | null;
+  unit_cost?: number | null;   // $ per usage unit; powers extended order cost
   order_unit?: string | null;
   units_per_order_unit?: number | null;
   lead_time_days?: number | null;
@@ -306,6 +307,7 @@ function vendorSectionHTML(vendor: string, items: ReorderItem[], ctx?: ReorderLa
       <td style="text-align:right;">${days}</td>
       <td style="text-align:right;font-weight:700;color:${TEAL};">${suggestedOrderText(it)}</td>
       <td style="text-align:right;">${endingHint}</td>
+      <td style="text-align:right;">${(it.unit_cost && it.delivered_qty) ? `$${(it.delivered_qty * it.unit_cost).toFixed(2)}` : "—"}</td>
       <td style="text-align:center;width:60px;border:1px solid #D4D1CA;background:white;">&nbsp;</td>
     </tr>`;
   }).join("");
@@ -330,6 +332,7 @@ function vendorSectionHTML(vendor: string, items: ReorderItem[], ctx?: ReorderLa
           <th style="text-align:right;">Days Left</th>
           <th style="text-align:right;">Suggested Order</th>
           <th style="text-align:right;">After Delivery</th>
+          <th style="text-align:right;">Est. Cost</th>
           <th style="text-align:center;">Confirmed Qty</th>
         </tr>
       </thead>
@@ -358,6 +361,13 @@ export function buildReorderListHTML(items: ReorderItem[], ctx: ReorderLabContex
   const body = totalItems === 0
     ? emptyStateHTML()
     : groups.map(g => vendorSectionHTML(g.vendor, g.items, ctx)).join("\n");
+  // CFO line: estimated total cost of the suggested order across all vendors,
+  // from current unit costs. Buyers confirm final pricing with each vendor.
+  const estTotal = items.reduce((s, it) => s + (Number(it.delivered_qty) || 0) * (Number(it.unit_cost) || 0), 0);
+  const totalHTML = totalItems > 0 && estTotal > 0
+    ? `<div style="margin-top:12px;text-align:right;font-size:10.5pt;font-weight:700;color:${TEAL};">Estimated order total: $${estTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+       <div style="text-align:right;font-size:7pt;color:${MUTED};margin-top:1px;">Estimated from current unit costs; confirm final pricing with each vendor.</div>`
+    : "";
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaStock Reorder Document</title><style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -383,6 +393,7 @@ export function buildReorderListHTML(items: ReorderItem[], ctx: ReorderLabContex
   ${headerHTML(ctx, totalItems, totalVendors)}
   ${signatureBlockHTML(ctx)}
   ${body}
+  ${totalHTML}
   </body></html>`;
 }
 
