@@ -530,9 +530,39 @@ export function registerVeritaBenchRoutes(
     const reorderPoint = burnRate * ((item.lead_time_days || 0) + (item.safety_stock_days || 0));
     const orderToQty = burnRate * (item.desired_days_of_stock || 0);
     const daysRemaining = burnRate > 0 ? Math.floor(onHand / burnRate) : null;
-    const needsReorder = inventoryPosition <= reorderPoint;
 
-    const shortfall = Math.max(0, Math.round(orderToQty) - inventoryPosition);
+    // Expiry-aware reordering. You can only count stock you will actually use
+    // before it expires: the usable portion of the on-hand lot is capped at
+    // burn_rate * days_until_expiry. On-order stock is a fresh lot, so it is
+    // not capped. effective_position is the real available supply, and the
+    // reorder decision plus the suggested order size both work off it. An item
+    // with plenty on the shelf but a short-dated lot therefore flags for
+    // reorder ("Expiring lot") even when raw quantity is above par. Items with
+    // no expiration date are unchanged (usableOnHand === onHand), so this is
+    // backward compatible with every existing item.
+    let daysUntilExpiry: number | null = null;
+    if (item.expiration_date) {
+      const expMs = Date.parse(item.expiration_date);
+      if (!Number.isNaN(expMs)) {
+        daysUntilExpiry = Math.floor((expMs - Date.now()) / 86400000);
+      }
+    }
+    const usableOnHand = (burnRate > 0 && daysUntilExpiry !== null)
+      ? Math.max(0, Math.min(onHand, burnRate * daysUntilExpiry))
+      : onHand;
+    const effectivePosition = usableOnHand + onOrder;
+
+    const belowPar = inventoryPosition <= reorderPoint;
+    const needsReorder = effectivePosition <= reorderPoint;
+    // Expiry-driven = flagged for reorder by the expiry cap, not by raw quantity.
+    const expiryDrivenReorder = needsReorder && !belowPar;
+    const reorderReason = !needsReorder
+      ? null
+      : belowPar
+      ? "Below reorder point"
+      : "Expiring lot";
+
+    const shortfall = Math.max(0, Math.round(orderToQty) - effectivePosition);
     const suggestedOrderPacks = upu > 1
       ? Math.ceil(shortfall / upu)
       : shortfall;
@@ -549,6 +579,11 @@ export function registerVeritaBenchRoutes(
       days_remaining: daysRemaining,
       needs_reorder: needsReorder,
       inventory_position: inventoryPosition,
+      days_until_expiry: daysUntilExpiry,
+      usable_on_hand: Math.round(usableOnHand),
+      effective_position: Math.round(effectivePosition),
+      reorder_reason: reorderReason,
+      expiry_driven_reorder: expiryDrivenReorder,
       suggested_order_packs: suggestedOrderPacks,
       delivered_qty: deliveredQty,
       ending_qty: endingQty,

@@ -41,6 +41,11 @@ export interface ReorderItem {
   lead_time_days?: number | null;
   needs_reorder: boolean;
   standing_order?: number | null;
+  // Expiry-aware reorder (decorateInventoryItem). True when the item is on the
+  // reorder list because its on-hand lot will expire before it can be consumed,
+  // not because raw quantity is below par.
+  expiry_driven_reorder?: boolean;
+  days_until_expiry?: number | null;
 
   // Server-computed in decorateInventoryItem (veritabench.ts). Renderers
   // MUST consume these directly, never recompute, so the math has a single
@@ -288,6 +293,11 @@ function vendorSectionHTML(vendor: string, items: ReorderItem[], ctx?: ReorderLa
     const standing = it.standing_order
       ? ` <span style="background:#FEF3C7;color:#92400E;font-size:6.5pt;font-weight:700;padding:1px 4px;border-radius:3px;margin-left:4px;">STANDING</span>`
       : "";
+    // Flag items on the list because of a short-dated lot (sufficient quantity
+    // on the shelf, but it will expire before it can be used).
+    const expiring = it.expiry_driven_reorder
+      ? ` <span style="background:#FDE8C8;color:#92400E;font-size:6.5pt;font-weight:700;padding:1px 4px;border-radius:3px;margin-left:4px;">EXPIRING</span>`
+      : "";
     const days = it.days_remaining == null
       ? "—"
       : it.days_remaining <= 0
@@ -300,7 +310,7 @@ function vendorSectionHTML(vendor: string, items: ReorderItem[], ctx?: ReorderLa
       ? `${it.ending_qty}${it.ending_days != null ? ` <span style="color:${MUTED};">(${it.ending_days}d)</span>` : ""}`
       : "—";
     return `<tr style="${stripe}">
-      <td>${escapeHtml(it.item_name)}${standing}</td>
+      <td>${escapeHtml(it.item_name)}${standing}${expiring}</td>
       <td>${escapeHtml(it.catalog_number || "—")}</td>
       <td style="text-align:right;">${it.quantity_on_hand} ${escapeHtml(it.unit || "")}</td>
       <td style="text-align:right;">${it.reorder_point}</td>
