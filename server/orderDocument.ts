@@ -14,6 +14,13 @@
 
 import { getBrowser } from "./pdfReport";
 
+// On the dedicated VeritaStock deployment, suppress CLIA on the order documents:
+// VeritaStock is an inventory product, not a CLIA-regulated compliance tool, so
+// it never references CLIA. Gated on the same env flag the skin uses; the lab
+// deployment (no env var) is unchanged and keeps its CLIA header.
+const STOCK_DEPLOYMENT =
+  process.env.VITE_STOCK_DEPLOYMENT === "true" || process.env.STOCK_DEPLOYMENT === "true";
+
 export interface ReorderItem {
   id: number;
   item_name: string;
@@ -183,7 +190,9 @@ function headerHTML(ctx: ReorderLabContext, totalItems: number, totalVendors: nu
   const labLine = ctx.labName
     ? `<div style="font-size:8.5pt;font-weight:600;color:${DARK};margin-top:1px;">${escapeHtml(ctx.labName)}</div>`
     : "";
-  const cliaLine = ctx.cliaNumber
+  const cliaLine = STOCK_DEPLOYMENT
+    ? ""
+    : ctx.cliaNumber
     ? `<div style="font-size:8pt;color:#555;margin-top:2px;">CLIA: ${escapeHtml(ctx.cliaNumber)}</div>`
     : `<div style="font-size:8pt;color:#999;margin-top:2px;">CLIA: Not on file - enter in account settings</div>`;
   // Filter banner: rendered as a prominent amber callout under the title
@@ -406,6 +415,8 @@ export async function generateReorderListExcel(items: ReorderItem[], ctx: Reorde
 
   const labName = ctx.labName || "Lab name not on file";
   const cliaNumber = ctx.cliaNumber || "Not on file";
+  // VeritaStock deployment carries no CLIA on the inventory workbook (see STOCK_DEPLOYMENT).
+  const cliaSuffix = STOCK_DEPLOYMENT ? "" : `    CLIA: ${cliaNumber}`;
   const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || "veritaassure-export";
 
   const aboutBorder: any = {
@@ -427,7 +438,7 @@ export async function generateReorderListExcel(items: ReorderItem[], ctx: Reorde
   about.getRow(1).height = 30;
 
   const id = about.getCell("A2");
-  id.value = `Prepared for: ${labName}    CLIA: ${cliaNumber}`;
+  id.value = `Prepared for: ${labName}${cliaSuffix}`;
   id.font = { name: "Calibri", bold: true, size: 11, color: { argb: "FF0A3A3D" } };
   id.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6F2F2" } };
   id.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
@@ -480,14 +491,16 @@ export async function generateReorderListExcel(items: ReorderItem[], ctx: Reorde
   body("This workbook is a computed projection from the lab's own inventory entries; it is not an audit, a guarantee of vendor availability, or a clinical or financial recommendation. Lead times, burn rates, and reorder points are only as accurate as the data the lab has entered into VeritaStock. Final order quantities and vendor placement are the responsibility of the laboratory director or designee. VeritaAssure does not place orders with vendors; it produces the documents the lab uses to do so.");
   blank();
   section("Lab identity");
-  body(`This workbook was prepared for ${labName} (CLIA ${cliaNumber}). The lab name and CLIA appear on every printed page header and footer.`);
+  body(STOCK_DEPLOYMENT
+    ? `This workbook was prepared for ${labName}. The lab name appears on every printed page header and footer.`
+    : `This workbook was prepared for ${labName} (CLIA ${cliaNumber}). The lab name and CLIA appear on every printed page header and footer.`);
   blank();
   if (ctx.preparedBy) { section("Prepared by"); body(ctx.preparedBy); blank(); }
   section("Coverage gaps");
   body("If the workbook is missing a vendor field, a packaging unit, or a column you need for your purchasing workflow, please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.");
 
-  about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaStock Reorder Document&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
-  about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+  about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaStock Reorder Document&R&"Calibri,Regular"&10${labName}${cliaSuffix}`;
+  about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}${cliaSuffix}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
   await about.protect(exportPwd, {
     selectLockedCells: false, selectUnlockedCells: false,
     formatCells: false, formatColumns: false, formatRows: false,
@@ -509,8 +522,8 @@ export async function generateReorderListExcel(items: ReorderItem[], ctx: Reorde
     c.font = { name: "Calibri", bold: true, size: 12, color: { argb: "FF0A3A3D" } };
     c.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
     ws.getRow(1).height = 24;
-    ws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaStock Reorder Document&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
-    ws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+    ws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaStock Reorder Document&R&"Calibri,Regular"&10${labName}${cliaSuffix}`;
+    ws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}${cliaSuffix}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
   }
 
   for (const g of groups) {
@@ -586,8 +599,8 @@ export async function generateReorderListExcel(items: ReorderItem[], ctx: Reorde
 
     ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headers.length } };
     ws.views = [{ state: "frozen", xSplit: 1, ySplit: 1 }];
-    ws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaStock Reorder Document&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
-    ws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+    ws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaStock Reorder Document&R&"Calibri,Regular"&10${labName}${cliaSuffix}`;
+    ws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}${cliaSuffix}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
     await ws.protect(exportPwd, {
       selectLockedCells: false, selectUnlockedCells: true,
       formatCells: false, formatColumns: false, formatRows: false,
@@ -687,7 +700,9 @@ function snapHeaderHTML(ctx: ReorderLabContext, totalItems: number, totalVendors
   const labLine = ctx.labName
     ? `<div style="font-size:8.5pt;font-weight:600;color:${DARK};margin-top:1px;">${escapeHtml(ctx.labName)}</div>`
     : "";
-  const cliaLine = ctx.cliaNumber
+  const cliaLine = STOCK_DEPLOYMENT
+    ? ""
+    : ctx.cliaNumber
     ? `<div style="font-size:8pt;color:#555;margin-top:2px;">CLIA: ${escapeHtml(ctx.cliaNumber)}</div>`
     : `<div style="font-size:8pt;color:#999;margin-top:2px;">CLIA: Not on file - enter in account settings</div>`;
   return `
