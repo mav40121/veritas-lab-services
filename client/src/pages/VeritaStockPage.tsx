@@ -808,10 +808,13 @@ export default function VeritaStockInventoryPage() {
   const stats = useMemo(() => {
     const today = new Date().toISOString().split("T")[0];
     const now = new Date();
-    let reorderNow = 0, expiringSoon = 0, standingOrdersDue = 0, stockoutRisk = 0, valueOnHand = 0, expiringValue = 0;
+    let reorderNow = 0, expiringSoon = 0, standingOrdersDue = 0, stockoutRisk = 0, valueOnHand = 0, expiringValue = 0, dailyUsageValue = 0;
     for (const item of items) {
       if (item.needs_reorder) reorderNow++;
       valueOnHand += (item.quantity_on_hand || 0) * (item.unit_cost || 0);
+      // Daily consumption value (burn rate x unit cost). Drives inventory turns
+      // (annualized consumption / inventory value) and value-weighted days-on-hand.
+      dailyUsageValue += (item.burn_rate || 0) * (item.unit_cost || 0);
       // Stockout risk: runway (days of supply) is at or below the replenishment
       // lead time, so the item runs out before a reorder can arrive. The sharpest
       // CFO / materials-management signal: act today or you stock out.
@@ -829,7 +832,7 @@ export default function VeritaStockInventoryPage() {
         standingOrdersDue++;
       }
     }
-    return { total: items.length, reorderNow, expiringSoon, standingOrdersDue, stockoutRisk, valueOnHand, expiringValue };
+    return { total: items.length, reorderNow, expiringSoon, standingOrdersDue, stockoutRisk, valueOnHand, expiringValue, dailyUsageValue };
   }, [items]);
 
   // Filtered and sorted items
@@ -1287,6 +1290,11 @@ export default function VeritaStockInventoryPage() {
             <div>
               <div className="text-xs text-muted-foreground uppercase tracking-wider" title="Total value of inventory on hand: sum of quantity times unit cost across this location.">$ on Hand</div>
               <div className="text-2xl font-bold font-mono" style={{ color: "#01696F" }}>${stats.valueOnHand.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+              {stats.dailyUsageValue > 0 && stats.valueOnHand > 0 && (
+                <div className="text-[11px] font-mono text-muted-foreground" title="Inventory turns = annual consumption value / inventory value. Days on hand = inventory value / daily consumption value.">
+                  {((stats.dailyUsageValue * 365) / stats.valueOnHand).toFixed(1)}x turns/yr &middot; {Math.round(stats.valueOnHand / stats.dailyUsageValue)} days on hand
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
