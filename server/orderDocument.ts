@@ -498,6 +498,12 @@ export async function generateReorderListExcel(items: ReorderItem[], ctx: Reorde
   section("How to use this workbook");
   body("Each vendor has its own tab. Within a tab, rows are inventory items currently flagged for reorder. The Confirmed Qty and Notes columns are unlocked for purchasing to fill in; every other column is locked to preserve the underlying calculation. After the lab director signs the PDF version of this document, the workbook can be edited and sent to vendors as the formal order.");
   blank();
+  const estTotalXlsx = items.reduce((s, it) => s + (Number(it.delivered_qty) || 0) * (Number(it.unit_cost) || 0), 0);
+  if (estTotalXlsx > 0) {
+    section("Estimated order total");
+    body(`Estimated total cost of this suggested order: $${estTotalXlsx.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. Estimated from current unit costs; confirm final pricing with each vendor.`);
+    blank();
+  }
   section("Disclaimer");
   body("This workbook is a computed projection from the lab's own inventory entries; it is not an audit, a guarantee of vendor availability, or a clinical or financial recommendation. Lead times, burn rates, and reorder points are only as accurate as the data the lab has entered into VeritaStock. Final order quantities and vendor placement are the responsibility of the laboratory director or designee. VeritaAssure does not place orders with vendors; it produces the documents the lab uses to do so.");
   blank();
@@ -555,11 +561,14 @@ export async function generateReorderListExcel(items: ReorderItem[], ctx: Reorde
     // receive vs. what was strictly needed.
     const headers = [
       "Item", "Catalog #", "Lot #", "On Hand", "Unit", "Reorder Pt", "Days Left",
-      "Order Qty", "Order Unit", "Delivered", "Ending Qty", "Ending Days",
+      "Order Qty", "Order Unit", "Delivered", "Unit Cost", "Est. Cost", "Ending Qty", "Ending Days",
       "Standing?", "Confirmed Qty", "Notes",
     ];
-    const widths  = [38, 18, 14, 10, 10, 12, 11, 11, 14, 11, 12, 12, 12, 16, 36];
+    const widths  = [38, 18, 14, 10, 10, 12, 11, 11, 14, 11, 11, 11, 12, 12, 12, 16, 36];
     ws.columns = headers.map((h, i) => ({ header: h, key: `col${i}`, width: widths[i] }));
+    const _uc = headers.indexOf("Unit Cost") + 1, _ec = headers.indexOf("Est. Cost") + 1;
+    if (_uc > 0) ws.getColumn(_uc).numFmt = "$#,##0.00";
+    if (_ec > 0) ws.getColumn(_ec).numFmt = "$#,##0.00";
 
     for (const it of g.items) {
       ws.addRow([
@@ -573,6 +582,8 @@ export async function generateReorderListExcel(items: ReorderItem[], ctx: Reorde
         it.suggested_order_packs,
         it.order_unit || "",
         it.delivered_qty,
+        it.unit_cost ? it.unit_cost : "",
+        (it.unit_cost && it.delivered_qty) ? Number((it.delivered_qty * it.unit_cost).toFixed(2)) : "",
         it.ending_qty,
         it.ending_days == null ? "" : it.ending_days,
         it.standing_order ? "Yes" : "",
