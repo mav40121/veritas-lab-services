@@ -27,7 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Lock, Plus, Edit2, Trash2, AlertTriangle, Package, Clock, AlertCircle, RefreshCw,
-  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users, Building2, DollarSign, PackageCheck, PackageX,
+  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users, Building2, DollarSign, PackageCheck, PackageX, BarChart3,
 } from "lucide-react";
 import BarcodeScannerModal from "@/components/BarcodeScannerModal";
 import InventoryCountWorkflow, { type CountItem } from "@/components/InventoryCountWorkflow";
@@ -1370,6 +1370,19 @@ export default function VeritaStockInventoryPage() {
             >
               <Building2 size={14} className="mr-1.5" />
               Enterprise
+            </Button>
+          </Link>
+          {/* Valuation Trends: 6-month inventory value on hand by location with
+              monthly waste. Cross-location, reads /api/inventory/valuation-trend. */}
+          <Link href={activeLabId ? `/labs/${activeLabId}/veritastock/trends` : "/veritastock/trends"}>
+            <Button
+              size="sm"
+              variant="outline"
+              title="Six-month inventory value on hand by location, with monthly waste"
+              data-testid="trends-button"
+            >
+              <BarChart3 size={14} className="mr-1.5" />
+              Valuation Trends
             </Button>
           </Link>
           {/* Snap Order: emergency manual-order PDF (additive to calculated

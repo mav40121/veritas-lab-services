@@ -95,6 +95,7 @@ const ProductivityCalculatorPage = lazy(() => import("@/pages/ProductivityCalcul
 const VeritaBenchPage = lazy(() => import("@/pages/VeritaBenchPage"));
 const VeritaBenchStaffingPage = lazy(() => import("@/pages/VeritaBenchStaffingPage"));
 const VeritaStockPage = lazy(() => import("@/pages/VeritaStockPage"));
+const VeritaStockTrendsPage = lazy(() => import("@/pages/VeritaStockTrendsPage"));
 const VeritaStockVendorsPage = lazy(() => import("@/pages/VeritaStockVendorsPage"));
 const VeritaStockSnapOrderPage = lazy(() => import("@/pages/VeritaStockSnapOrderPage"));
 const VeritaStockEnterprisePage = lazy(() => import("@/pages/VeritaStockEnterprisePage"));
@@ -420,6 +421,7 @@ function AppContent() {
           <Route path="/veritabench/staffing" component={VeritaBenchStaffingPage} />
           <Route path="/veritabench/pi" component={VeritaBenchPIPage} />
           <Route path="/veritastock">{wrapLegacy(VeritaStockPage)}</Route>
+          <Route path="/veritastock/trends">{wrapLegacy(VeritaStockTrendsPage)}</Route>
           <Route path="/veritastock/snap-order">{wrapLegacy(VeritaStockSnapOrderPage)}</Route>
           <Route path="/veritastock/enterprise">{wrapLegacy(VeritaStockEnterprisePage)}</Route>
           <Route path="/hospital-inventory" component={HospitalInventoryPage} />
@@ -481,6 +483,7 @@ function AppContent() {
           <Route path="/labs/:labId/veritacheck" component={VeritaCheckPage} />
           <Route path="/labs/:labId/veritacheck/cumsum" component={CumsumPage} />
           <Route path="/labs/:labId/veritastock" component={VeritaStockPage} />
+          <Route path="/labs/:labId/veritastock/trends" component={VeritaStockTrendsPage} />
           <Route path="/labs/:labId/veritastock/snap-order" component={VeritaStockSnapOrderPage} />
           <Route path="/labs/:labId/veritastock/enterprise" component={VeritaStockEnterprisePage} />
           <Route path="/labs/:labId/veritastock/vendors" component={VeritaStockVendorsPage} />
