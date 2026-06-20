@@ -1,11 +1,16 @@
-// Shared host detection for the VeritaStock front door.
+// Shared "this is the VeritaStock product" detection. True in two cases:
 //
-// When the app is served from veritastock.com (or any subdomain of it), it
-// presents as a standalone VeritaStock inventory product rather than the
-// lab-compliance site: the NavBar swaps its chrome and the root route ("/")
-// renders the VeritaStock landing instead of the lab HomePage.
+//  1. The DEDICATED VeritaStock deployment is built with VITE_STOCK_DEPLOYMENT=true.
+//     That whole Railway service then IS VeritaStock on every URL it serves,
+//     including its raw *.up.railway.app URL — not VeritaAssure-with-a-skin that
+//     only flips when the hostname happens to match. This is the real product
+//     separation.
+//  2. The app is served from veritastock.com (or a subdomain), so the shared
+//     deployment still skins correctly if that domain ever points back at it.
 //
-// Keep this the single source of truth so the NavBar and the router can never
-// disagree about which host is which.
-export const isStockHost = (): boolean =>
-  typeof window !== "undefined" && /(^|\.)veritastock\.com$/i.test(window.location.hostname);
+// Single source of truth so the NavBar, the router, the login page, and the
+// route lockdown can never disagree about which deployment is which.
+export const isStockHost = (): boolean => {
+  if (import.meta.env.VITE_STOCK_DEPLOYMENT === "true") return true;
+  return typeof window !== "undefined" && /(^|\.)veritastock\.com$/i.test(window.location.hostname);
+};
