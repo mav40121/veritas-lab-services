@@ -6,6 +6,10 @@ import { teaData } from "../client/src/lib/cliaTeaData";
 
 let cachedIndexHtml: string | null = null;
 
+// The dedicated VeritaStock deployment sets this; veritaslabservices.com does not.
+const STOCK_DEPLOYMENT =
+  process.env.VITE_STOCK_DEPLOYMENT === "true" || process.env.STOCK_DEPLOYMENT === "true";
+
 function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -35,8 +39,20 @@ function getIndexHtml(distPath: string): string {
     // every URL, regardless of hostname or whether the Vite build baked the env
     // var. Read from the env at boot; this service has VITE_STOCK_DEPLOYMENT=true,
     // veritaslabservices.com does not, so it stays VeritaAssure.
-    if (process.env.VITE_STOCK_DEPLOYMENT === "true" || process.env.STOCK_DEPLOYMENT === "true") {
+    if (STOCK_DEPLOYMENT) {
       html = html.replace("</head>", `<script>window.__STOCK_DEPLOYMENT__=true;</script></head>`);
+      // VeritaStock is its own product: the default <title>/meta is VeritaStock,
+      // never the VeritaAssure compliance branding. Pages with their own useSEO
+      // still override this; pages without it (login, account, members) now read
+      // VeritaStock instead of the lab default.
+      const stockTitle = "VeritaStock™ | Multi-Location Lab Inventory Management";
+      const stockDesc = "Multi-location inventory for clinical laboratories: burn-rate par levels, lead-time-aware reorder alerts, expiration tracking, and one-click vendor orders.";
+      html = html
+        .replace(/<title>[^<]*<\/title>/, `<title>${stockTitle}</title>`)
+        .replace(/<meta name="description" content="[^"]*"/, `<meta name="description" content="${stockDesc}"`)
+        .replace(/<meta property="og:title" content="[^"]*"/, `<meta property="og:title" content="${stockTitle}"`)
+        .replace(/<meta property="og:description" content="[^"]*"/, `<meta property="og:description" content="${stockDesc}"`)
+        .replace(/<meta name="twitter:title" content="[^"]*"/, `<meta name="twitter:title" content="${stockTitle}"`);
     }
     cachedIndexHtml = html;
   }
@@ -160,6 +176,13 @@ export function serveStatic(app: Express) {
     const routePath = req.path.replace(/\/$/, "") || "/";
     const meta = seoMetadataMap[routePath];
     if (meta) {
+      // On the VeritaStock deployment, never inject the lab marketing metadata;
+      // serve the VeritaStock-default shell so no route carries VeritaAssure
+      // compliance branding in its title/description/OG tags.
+      if (STOCK_DEPLOYMENT) {
+        res.setHeader("Content-Type", "text/html");
+        return res.send(getIndexHtml(distPath));
+      }
       const html = getIndexHtml(distPath);
       const injectedHtml = injectSeoTags(html, routePath, meta);
       res.setHeader("Content-Type", "text/html");

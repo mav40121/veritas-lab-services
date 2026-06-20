@@ -5,6 +5,7 @@ import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useSEO } from "@/hooks/useSEO";
 import { API_BASE } from "@/lib/queryClient";
+import { isStockHost } from "@/lib/host";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { Button } from "@/components/ui/button";
@@ -958,7 +959,8 @@ export default function VeritaStockInventoryPage() {
     );
   };
 
-  useSEO({ title: "VeritaStock\u2122 | Laboratory Inventory & Reagent Management", description: "Track reagent and supply inventory with burn-rate-aware par levels, lead-time-aware reorder alerts, and expiration tracking. Included with VeritaAssure\u2122 Suite plans." });
+  const onStock = isStockHost();
+  useSEO({ title: "VeritaStock\u2122 | Laboratory Inventory & Reagent Management", description: onStock ? "Multi-location inventory for clinical laboratories: burn-rate par levels, lead-time-aware reorder alerts, expiration tracking, and one-click vendor orders." : "Track reagent and supply inventory with burn-rate-aware par levels, lead-time-aware reorder alerts, and expiration tracking. Included with VeritaAssure\u2122 Suite plans." });
 
   if (!isLoggedIn) {
     return (
@@ -970,8 +972,8 @@ export default function VeritaStockInventoryPage() {
               <div>
                 <div className="flex items-center gap-2 mb-4">
                   <Package size={20} className="text-primary" />
-                  <Badge className="bg-primary/10 text-primary border-0">Suite Module</Badge>
-                  <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border">Included</Badge>
+                  <Badge className="bg-primary/10 text-primary border-0">{onStock ? "Multi-Location" : "Suite Module"}</Badge>
+                  {!onStock && <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border">Included</Badge>}
                 </div>
                 <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaStock{"\u2122"}</h1>
                 <p className="text-xl text-muted-foreground font-medium mb-5">
@@ -1009,7 +1011,7 @@ export default function VeritaStockInventoryPage() {
                 <div className="flex flex-wrap gap-3 mb-8">
                   <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
                     <div className="text-2xl font-bold text-primary">From $499/yr</div>
-                    <div className="text-xs text-muted-foreground">Included with VeritaAssure{"\u2122"} Suite</div>
+                    <div className="text-xs text-muted-foreground">{onStock ? "Standalone inventory platform" : "Included with VeritaAssure\u2122 Suite"}</div>
                   </div>
                   <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
                     <div className="text-2xl font-bold text-primary">All Plans</div>
@@ -1043,7 +1045,7 @@ export default function VeritaStockInventoryPage() {
                       <div>Multi-Department</div>
                     </div>
                     <div className="w-12 h-0.5 bg-white/40 mb-4" />
-                    <div className="text-xs text-white/60 text-center">VeritaAssure{"\u2122"} Suite Module</div>
+                    <div className="text-xs text-white/60 text-center">{onStock ? "Multi-Location Inventory" : "VeritaAssure\u2122 Suite Module"}</div>
                   </div>
                   <div className="absolute -bottom-2 -right-2 w-64 h-80 bg-black/20 rounded-lg -z-10" />
                 </div>
@@ -1060,7 +1062,7 @@ export default function VeritaStockInventoryPage() {
       <div className="max-w-4xl mx-auto px-4 py-16 text-center">
         <Lock size={40} className="mx-auto text-muted-foreground mb-4" />
         <h1 className="font-serif text-2xl font-bold mb-2">VeritaStock{"\u2122"} Inventory Manager</h1>
-        <p className="text-muted-foreground">VeritaStock™ requires a suite subscription. Upgrade your plan to access inventory management.</p>
+        <p className="text-muted-foreground">{onStock ? "VeritaStock™ requires an active subscription. Upgrade your plan to access inventory management." : "VeritaStock™ requires a suite subscription. Upgrade your plan to access inventory management."}</p>
       </div>
     );
   }
