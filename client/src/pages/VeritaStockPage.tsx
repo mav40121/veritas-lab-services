@@ -1194,7 +1194,7 @@ export default function VeritaStockInventoryPage() {
     const isActive = sortField === field;
     return (
       <th
-        className={`text-left px-3 py-2 font-medium cursor-pointer hover:text-[#01696F] select-none ${className ?? ""}`}
+        className={`text-left px-3 py-2 font-medium cursor-pointer hover:text-[#01696F] select-none sticky top-0 z-20 bg-muted ${className ?? ""}`}
         onClick={() => handleSort(field)}
       >
         <span className="inline-flex items-center gap-1">
@@ -1336,13 +1336,13 @@ export default function VeritaStockInventoryPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="lab-wide">Lab-wide</SelectItem>
+                <SelectItem value="lab-wide">All departments</SelectItem>
                 {DEPARTMENTS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 justify-end">
           {/* Vendor Directory entry point (PR 2 of vendor management).
               Director clicks here to manage vendor accounts, ordering
               channels, and contact tracks. The Order PDF auto-fills
@@ -1701,17 +1701,17 @@ export default function VeritaStockInventoryPage() {
           )}
         </div>
       ) : (
-        <div className="overflow-x-auto border rounded-lg">
+        <div className="overflow-auto border rounded-lg max-h-[70vh]">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b" style={{ backgroundColor: "#01696F10" }}>
+              <tr className="border-b">
                 <SortHeader field="item_name">Item Name</SortHeader>
                 {isColumnVisible("category") && <SortHeader field="category">Category</SortHeader>}
                 {isColumnVisible("department") && <SortHeader field="department" className="hidden md:table-cell">Dept</SortHeader>}
                 {isColumnVisible("quantity_on_hand") && <SortHeader field="quantity_on_hand">On Hand</SortHeader>}
-                {isColumnVisible("on_order") && <th className="text-left px-3 py-2 font-medium" title="Quantity on a purchase order but not yet received. Counts toward inventory position so an inbound item does not re-trigger Reorder Now.">On Order</th>}
-                {isColumnVisible("unit_cost") && <th className="text-left px-3 py-2 font-medium">Unit Cost</th>}
-                {isColumnVisible("abc_class") && <th className="text-center px-3 py-2 font-medium" title="ABC class by annual dollar usage (burn rate x unit cost x 365). A = the high-value few making up the first ~80% of spend, B = next ~15%, C = final ~5%.">ABC</th>}
+                {isColumnVisible("on_order") && <th className="text-left px-3 py-2 font-medium sticky top-0 z-20 bg-muted" title="Quantity on a purchase order but not yet received. Counts toward inventory position so an inbound item does not re-trigger Reorder Now.">On Order</th>}
+                {isColumnVisible("unit_cost") && <th className="text-left px-3 py-2 font-medium sticky top-0 z-20 bg-muted">Unit Cost</th>}
+                {isColumnVisible("abc_class") && <th className="text-center px-3 py-2 font-medium sticky top-0 z-20 bg-muted" title="ABC class by annual dollar usage (burn rate x unit cost x 365). A = the high-value few making up the first ~80% of spend, B = next ~15%, C = final ~5%.">ABC</th>}
                 {isColumnVisible("burn_rate") && <SortHeader field="burn_rate">Burn Rate</SortHeader>}
                 {isColumnVisible("reorder_point") && <SortHeader field="reorder_point">Par Level</SortHeader>}
                 {isColumnVisible("days_remaining") && <SortHeader field="days_remaining">Days Left</SortHeader>}
@@ -1719,7 +1719,7 @@ export default function VeritaStockInventoryPage() {
                 {isColumnVisible("expiration_date") && <SortHeader field="expiration_date">Expiration</SortHeader>}
                 {isColumnVisible("vendor") && <SortHeader field="vendor" className="hidden lg:table-cell">Vendor</SortHeader>}
                 {isColumnVisible("barcode") && <SortHeader field="barcode_value" className="hidden xl:table-cell">Barcode</SortHeader>}
-                <th className="text-center px-3 py-2 font-medium w-[80px]">Actions</th>
+                <th className="text-center px-3 py-2 font-medium w-[80px] sticky top-0 z-20 bg-muted">Actions</th>
               </tr>
             </thead>
             <tbody>
