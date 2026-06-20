@@ -805,9 +805,13 @@ export default function VeritaStockInventoryPage() {
   const stats = useMemo(() => {
     const today = new Date().toISOString().split("T")[0];
     const now = new Date();
-    let reorderNow = 0, expiringSoon = 0, standingOrdersDue = 0;
+    let reorderNow = 0, expiringSoon = 0, standingOrdersDue = 0, stockoutRisk = 0;
     for (const item of items) {
       if (item.needs_reorder) reorderNow++;
+      // Stockout risk: runway (days of supply) is at or below the replenishment
+      // lead time, so the item runs out before a reorder can arrive. The sharpest
+      // CFO / materials-management signal: act today or you stock out.
+      if (item.days_remaining != null && item.burn_rate > 0 && item.days_remaining <= (item.lead_time_days || 0)) stockoutRisk++;
       if (item.expiration_date) {
         const exp = new Date(item.expiration_date + "T00:00:00");
         const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -817,7 +821,7 @@ export default function VeritaStockInventoryPage() {
         standingOrdersDue++;
       }
     }
-    return { total: items.length, reorderNow, expiringSoon, standingOrdersDue };
+    return { total: items.length, reorderNow, expiringSoon, standingOrdersDue, stockoutRisk };
   }, [items]);
 
   // Filtered and sorted items
@@ -840,6 +844,7 @@ export default function VeritaStockInventoryPage() {
         if (filterStatus === "Standing Order Due") {
           return i.standing_order === 1 && i.standing_order_review_date != null && i.standing_order_review_date < today;
         }
+        if (filterStatus === "Stockout Risk") return i.days_remaining != null && i.burn_rate > 0 && i.days_remaining <= (i.lead_time_days || 0);
         if (filterStatus === "OK") return !i.needs_reorder;
         return true;
       });
@@ -1254,7 +1259,7 @@ export default function VeritaStockInventoryPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <Card>
           <CardContent className="pt-5 flex items-center gap-3">
             <div className="p-2 rounded-lg" style={{ backgroundColor: "#01696F15" }}>
@@ -1274,6 +1279,17 @@ export default function VeritaStockInventoryPage() {
             <div>
               <div className="text-xs text-muted-foreground uppercase tracking-wider">Reorder Now</div>
               <div className="text-2xl font-bold font-mono text-red-600 dark:text-red-400">{stats.reorderNow}</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={stats.stockoutRisk > 0 ? "border-red-400 dark:border-red-700" : ""}>
+          <CardContent className="pt-5 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30">
+              <CalendarClock size={20} className="text-red-600 dark:text-red-400" />
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wider" title="Days of supply at or below the replenishment lead time: these items run out before a reorder can arrive.">Stockout Risk</div>
+              <div className="text-2xl font-bold font-mono text-red-600 dark:text-red-400">{stats.stockoutRisk}</div>
             </div>
           </CardContent>
         </Card>
