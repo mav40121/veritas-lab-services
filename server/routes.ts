@@ -1697,9 +1697,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         expiration_date, vendor, storage_location, notes, status,
         order_unit, usage_unit, count_unit, units_per_order_unit, units_per_count_unit,
         burn_rate, lead_time_days, safety_stock_days, desired_days_of_stock,
-        standing_order, standing_order_review_date,
+        standing_order, standing_order_review_date, unit_cost,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const updateStmt = sqlite.prepare(`
       UPDATE inventory_items SET
@@ -1709,7 +1709,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         order_unit = ?, usage_unit = ?, count_unit = ?, units_per_order_unit = ?,
         units_per_count_unit = ?, burn_rate = ?, lead_time_days = ?,
         safety_stock_days = ?, desired_days_of_stock = ?, standing_order = ?,
-        standing_order_review_date = ?, updated_at = ?
+        standing_order_review_date = ?, unit_cost = ?, updated_at = ?
       WHERE id = ?
     `);
 
@@ -1757,6 +1757,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             Number(item.desired_days_of_stock ?? 30),
             item.standing_order ? 1 : 0,
             item.standing_order_review_date ?? null,
+            Number(item.unit_cost ?? 0),
             now,
             existingId,
           );
@@ -1789,6 +1790,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             Number(item.desired_days_of_stock ?? 30),
             item.standing_order ? 1 : 0,
             item.standing_order_review_date ?? null,
+            Number(item.unit_cost ?? 0),
             now,
             now,
           );

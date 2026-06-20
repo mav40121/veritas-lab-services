@@ -27,7 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Lock, Plus, Edit2, Trash2, AlertTriangle, Package, Clock, AlertCircle, RefreshCw,
-  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users, Building2,
+  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users, Building2, DollarSign,
 } from "lucide-react";
 import BarcodeScannerModal from "@/components/BarcodeScannerModal";
 import InventoryCountWorkflow, { type CountItem } from "@/components/InventoryCountWorkflow";
@@ -49,6 +49,7 @@ interface InventoryItem {
   notes: string | null;
   status: string;
   burn_rate: number;
+  unit_cost: number;                // $ per usage unit; powers valuation + extended cost
   order_unit: string;
   usage_unit: string;
   units_per_order_unit: number;
@@ -92,6 +93,7 @@ type ToggleableColumnKey =
   | "category"
   | "department"
   | "quantity_on_hand"
+  | "unit_cost"
   | "burn_rate"
   | "reorder_point"
   | "days_remaining"
@@ -104,6 +106,7 @@ const TOGGLEABLE_COLUMNS: { key: ToggleableColumnKey; label: string }[] = [
   { key: "category",           label: "Category" },
   { key: "department",         label: "Dept" },
   { key: "quantity_on_hand",   label: "On Hand" },
+  { key: "unit_cost",          label: "Unit Cost" },
   { key: "burn_rate",          label: "Burn Rate" },
   { key: "reorder_point",      label: "Par Level" },
   { key: "days_remaining",     label: "Days Left" },
@@ -805,9 +808,10 @@ export default function VeritaStockInventoryPage() {
   const stats = useMemo(() => {
     const today = new Date().toISOString().split("T")[0];
     const now = new Date();
-    let reorderNow = 0, expiringSoon = 0, standingOrdersDue = 0, stockoutRisk = 0;
+    let reorderNow = 0, expiringSoon = 0, standingOrdersDue = 0, stockoutRisk = 0, valueOnHand = 0;
     for (const item of items) {
       if (item.needs_reorder) reorderNow++;
+      valueOnHand += (item.quantity_on_hand || 0) * (item.unit_cost || 0);
       // Stockout risk: runway (days of supply) is at or below the replenishment
       // lead time, so the item runs out before a reorder can arrive. The sharpest
       // CFO / materials-management signal: act today or you stock out.
@@ -821,7 +825,7 @@ export default function VeritaStockInventoryPage() {
         standingOrdersDue++;
       }
     }
-    return { total: items.length, reorderNow, expiringSoon, standingOrdersDue, stockoutRisk };
+    return { total: items.length, reorderNow, expiringSoon, standingOrdersDue, stockoutRisk, valueOnHand };
   }, [items]);
 
   // Filtered and sorted items
@@ -1259,7 +1263,7 @@ export default function VeritaStockInventoryPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <Card>
           <CardContent className="pt-5 flex items-center gap-3">
             <div className="p-2 rounded-lg" style={{ backgroundColor: "#01696F15" }}>
@@ -1268,6 +1272,17 @@ export default function VeritaStockInventoryPage() {
             <div>
               <div className="text-xs text-muted-foreground uppercase tracking-wider">Total Items</div>
               <div className="text-2xl font-bold font-mono" style={{ color: "#01696F" }}>{stats.total}</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5 flex items-center gap-3">
+            <div className="p-2 rounded-lg" style={{ backgroundColor: "#01696F15" }}>
+              <DollarSign size={20} style={{ color: "#01696F" }} />
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wider" title="Total value of inventory on hand: sum of quantity times unit cost across this location.">$ on Hand</div>
+              <div className="text-2xl font-bold font-mono" style={{ color: "#01696F" }}>${stats.valueOnHand.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
             </div>
           </CardContent>
         </Card>
@@ -1431,6 +1446,7 @@ export default function VeritaStockInventoryPage() {
                 {isColumnVisible("category") && <SortHeader field="category">Category</SortHeader>}
                 {isColumnVisible("department") && <SortHeader field="department" className="hidden md:table-cell">Dept</SortHeader>}
                 {isColumnVisible("quantity_on_hand") && <SortHeader field="quantity_on_hand">On Hand</SortHeader>}
+                {isColumnVisible("unit_cost") && <th className="text-left px-3 py-2 font-medium">Unit Cost</th>}
                 {isColumnVisible("burn_rate") && <SortHeader field="burn_rate">Burn Rate</SortHeader>}
                 {isColumnVisible("reorder_point") && <SortHeader field="reorder_point">Par Level</SortHeader>}
                 {isColumnVisible("days_remaining") && <SortHeader field="days_remaining">Days Left</SortHeader>}
@@ -1486,6 +1502,9 @@ export default function VeritaStockInventoryPage() {
                         return <>{item.quantity_on_hand.toLocaleString()} <span className="text-xs text-muted-foreground">{item.usage_unit}s</span></>;
                       })()}
                     </td>
+                  )}
+                  {isColumnVisible("unit_cost") && (
+                    <td className="px-3 py-2 font-mono text-sm">{item.unit_cost ? `$${item.unit_cost.toFixed(2)}` : <span className="text-muted-foreground">-</span>}</td>
                   )}
                   {isColumnVisible("burn_rate") && (
                     <td className="px-3 py-2 font-mono text-sm">

@@ -108,6 +108,30 @@ CATALOG = {
     "N95-RESP":      ("N95 Particulate Respirator",           "box",  20,  "Supply",  "General",      "3M"),
 }
 
+# unit_cost is the cost per USAGE unit (per each/test/tube/bottle), since
+# quantity_on_hand is stored in usage units. Plausible 2026 list prices so the
+# $-on-hand valuation and extended order cost read realistically in the demo.
+UNIT_COST = {
+    "GLV-NIT-S": 0.06, "GLV-NIT-M": 0.06, "GLV-NIT-L": 0.06, "ALC-PREP": 0.03,
+    "GZ-4X4": 0.08, "TAPE-SILK": 1.20, "SANI-WIPE": 4.50, "HAND-SAN": 2.75,
+    "SHARPS-1Q": 2.20, "SPEC-BAG": 0.05, "SYR-10ML": 0.18, "NDL-21G": 0.10,
+    "TUBE-RED": 0.12, "TUBE-LAV": 0.12, "TUBE-BLUE": 0.13, "TUBE-GRN": 0.13,
+    "TOURNIQUET": 0.09, "BCS-21G": 0.85, "URINE-CUP": 0.15,
+    "RGT-TOSOH1": 185.00, "RGT-TOSOH2": 175.00, "CELLPACK": 42.00, "SULFOLYSER": 38.00,
+    "QC-MAS": 135.00, "STRIP-UA": 0.48, "KIT-STREP": 4.50, "KIT-FLU": 12.00,
+    "KIT-COVID": 8.00, "KIT-RSV": 11.00, "KIT-HCG": 1.80, "LANCET": 0.07,
+    "NS-1000": 2.40, "D5W-1000": 2.80, "SYR-3ML": 0.14, "FLUSH-NACL": 0.55,
+    "MED-CUP": 0.02, "VIAL-LBL": 0.01, "APAP-500": 0.04, "IBU-200": 0.04,
+    "IV-START": 2.10, "CATH-IV20": 1.40, "CATH-FOLEY": 3.80, "ABG-KIT": 2.90,
+    "SUTURE-40": 3.20, "ECG-ELEC": 0.12, "DRESS-FILM": 0.70, "UNDERPAD": 0.35,
+    "BRIEF-L": 0.55, "BATH-WIPE": 0.18, "FEED-SET": 4.50, "FOAM-DRESS": 3.10,
+    "DEPRESSOR": 0.02, "SWAB-COT": 0.03, "EXAM-PAPER": 4.20, "OTO-TIP": 0.06,
+    "BANDAID": 0.04, "SLIDE-MICRO": 0.05, "PIP-1000": 0.04, "CONICAL-15": 0.25,
+    "BC-AERO": 3.60, "BC-ANAERO": 3.60, "MICROTAINER": 0.45, "GLUCOSE-STRIP": 0.55,
+    "CULTURETTE": 0.95, "QC-HEME": 155.00, "N95-RESP": 1.10,
+}
+_DEFAULT_COST = {"Reagent": 25.0, "Control": 90.0, "Control ": 90.0, "Supply": 0.50}
+
 # location -> list of (catalog#, on_hand, reorder_point)  [both in COUNT units, e.g. boxes]
 # low-stock (on_hand <= reorder) is deliberate where noted; the warehouse always
 # carries those items in quantity so a transfer demos cleanly.
@@ -139,7 +163,8 @@ PLACEMENT = {
         ("CATH-FOLEY", 9, 4), ("ABG-KIT", 3, 4),  # LOW
         ("SUTURE-40", 6, 3), ("ECG-ELEC", 7, 4), ("SHARPS-1Q", 6, 3),
         ("FLUSH-NACL", 5, 3), ("NDL-21G", 4, 3),
-        ("BC-AERO", 5, 3), ("GLUCOSE-STRIP", 6, 3), ("CULTURETTE", 4, 3), ("N95-RESP", 8, 4),
+        ("BC-AERO", 1, 5),   # HERO: ~5 days of aerobic blood culture bottles left, 21-day lead -> ~16-day stockout window unless transferred from the warehouse (which holds 28)
+        ("GLUCOSE-STRIP", 6, 3), ("CULTURETTE", 4, 3), ("N95-RESP", 8, 4),
     ],
     "San Carlos Main Lab": [
         ("TUBE-RED", 9, 6), ("TUBE-LAV", 3, 6),    # LOW
@@ -196,17 +221,23 @@ TODAY = datetime.date.today()
 # Reorder policy by category: (lead_time_days, safety_stock_days,
 # desired_days_of_stock). The server computes reorder_point = burn_rate *
 # (lead + safety) and order_to_qty = burn_rate * desired_days from these.
+# Lead times reflect a REMOTE / rural IHS facility (San Carlos Apache): long,
+# fragile supply lines, not a metro hospital with next-day distributor delivery.
+# This is what makes safety stock, reorder timing, and Snap Order matter. Note:
+# burn_rate is back-computed from reorder_ct so changing lead times does NOT move
+# which items are low; it lengthens the displayed lead and the days-of-supply.
 POLICY = {
-    "Reagent": (10, 5, 45),
-    "Control": (14, 7, 60),
-    "Supply":  (7,  3, 30),
+    "Reagent": (18, 7, 45),
+    "Control": (24, 10, 60),
+    "Supply":  (12, 5, 30),
 }
 # Per-catalog overrides where the real-world cadence differs from its category.
+# The specialized / sole-source items carry the longest lead times.
 POLICY_OVERRIDE = {
-    "RGT-TOSOH1": (14, 7, 45), "RGT-TOSOH2": (14, 7, 45),
-    "CELLPACK": (7, 3, 30), "SULFOLYSER": (7, 3, 30),
-    "NS-1000": (7, 4, 30), "D5W-1000": (7, 4, 30),
-    "BC-AERO": (10, 5, 30), "BC-ANAERO": (10, 5, 30),
+    "RGT-TOSOH1": (28, 10, 45), "RGT-TOSOH2": (28, 10, 45),   # sole-source chemistry analyzer reagent
+    "CELLPACK": (14, 5, 30), "SULFOLYSER": (14, 5, 30),       # Sysmex hematology reagents
+    "NS-1000": (10, 5, 30), "D5W-1000": (10, 5, 30),          # IV fluids, regional distributor
+    "BC-AERO": (21, 7, 30), "BC-ANAERO": (21, 7, 30),         # blood culture bottles, microbiology
 }
 # Cold-chain items live in the fridge; everything else on a shelf/bay.
 COLD = {"RGT-TOSOH1", "RGT-TOSOH2", "CELLPACK", "SULFOLYSER", "QC-MAS", "QC-HEME"}
@@ -218,7 +249,9 @@ EXPIRES_SUPPLY = {
     "APAP-500", "IBU-200",
 }
 # A few lots deliberately near expiry (days from today) so the expiry alerts fire.
-NEAR_EXPIRY = {"QC-MAS": 25, "RGT-TOSOH1": 35, "KIT-FLU": 40, "STRIP-UA": 50, "BC-ANAERO": 45}
+# QC-MAS at 15d is the waste hero: at Main Lab it is BOTH below reorder point AND
+# 15 days from expiry, so the lab either uses it now or buys it twice.
+NEAR_EXPIRY = {"QC-MAS": 15, "RGT-TOSOH1": 35, "KIT-FLU": 40, "STRIP-UA": 50, "BC-ANAERO": 45}
 # Warehouse staples kept on a standing (auto) order.
 STANDING = {"GLV-NIT-M", "GLV-NIT-L", "ALC-PREP", "NS-1000", "SPEC-BAG"}
 
@@ -315,7 +348,9 @@ def to_payload(loc):
             "category": r["category"], "department": r["department"], "vendor": r["vendor"],
             "unit": r["usage_unit"], "order_unit": r["order_unit"], "usage_unit": r["usage_unit"],
             "count_unit": r["count_unit"], "units_per_order_unit": r["units_per_order_unit"],
-            "units_per_count_unit": r["units_per_count_unit"], "status": "active", "notes": TAG,
+            "units_per_count_unit": r["units_per_count_unit"],
+            "unit_cost": UNIT_COST.get(r["catalog_number"], _DEFAULT_COST.get(r["category"], 1.0)),
+            "status": "active", "notes": TAG,
         })
     return out
 
@@ -443,6 +478,25 @@ def main():
                 print(f"Demo login {owner}: created")
             except urllib.error.HTTPError as e:
                 print(f"Demo login {owner}: " + ("already exists" if e.code == 409 else f"register HTTP {e.code} (continuing)"))
+            # Promote the OWNER ACCOUNT to the suite plan. VeritaStock's inventory
+            # page gates on the user's account plan (hasPlanAccess in
+            # VeritaStockPage.tsx), not the lab's plan, so an admin-provisioned
+            # owner whose account is still "free" hits the "requires a suite
+            # subscription" wall even though the labs are enterprise. A real paid
+            # signup sets this automatically; the demo path must do it explicitly.
+            # Resolve the user id by logging in with DEMO_PASSWORD, then set-plan.
+            try:
+                lr = _post("/api/auth/login", {"email": owner, "password": demo_pw})
+                uid = (lr.get("user") or {}).get("id")
+                if uid:
+                    _post("/api/admin/set-plan", {"secret": sec, "userId": uid, "plan": plan})
+                    print(f"Owner account {owner} (user {uid}) plan -> {plan}")
+                else:
+                    print(f"Could not resolve {owner} user id; set its plan manually via /api/admin/set-plan")
+            except urllib.error.HTTPError as e:
+                print(f"Owner plan set skipped: HTTP {e.code}")
+            except Exception as e:
+                print(f"Owner plan set skipped: {e}")
         print(f"Provisioning 7 demo labs under {owner} (plan {plan})...")
         wh = _post("/api/admin/provision-demo-lab",
                    {"secret": sec, "ownerEmail": owner, "labName": WAREHOUSE_LOC, "plan": plan, "isWarehouse": True})
