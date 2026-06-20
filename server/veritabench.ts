@@ -2330,6 +2330,23 @@ export function registerVeritaBenchRoutes(
       }
     });
 
+    // GET /api/labs/:labId/veritastock/receipts — receipt history for lead-time
+    // verification. Returns recent receive events (placed/expected/received
+    // dates plus programmed vs actual lead time), newest first, so the facility
+    // can document every received order and check it against programmed lead time.
+    app.get("/api/labs/:labId/veritastock/receipts", authMiddleware, labScopeMiddleware, (req: any, res) => {
+      if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+      try {
+        const rows = sqlite.prepare(
+          `SELECT id, item_id, item_name, vendor, qty_received, usage_unit, order_placed_date, expected_date, received_date, programmed_lead_time_days, actual_lead_time_days, created_at
+           FROM inventory_receipts WHERE lab_id = ? ORDER BY received_date DESC, id DESC LIMIT 250`
+        ).all(req.scope.labId);
+        res.json(rows);
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
     // POST /api/labs/:labId/inventory/labels/pdf — lab-scoped barcode label
     // sheet. Same shape as the legacy /api/inventory/labels/pdf above; differs
     // only in how items are scoped (lab_id, not account_id) and where lab

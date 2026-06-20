@@ -154,10 +154,10 @@ export function resetVeritaStockDemo(sqlite: any, now: Date = new Date()): { ok:
       (account_id, lab_id, item_name, category, department, vendor, catalog_number, quantity_on_hand, unit, expiration_date,
        status, burn_rate, order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit,
        lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, unit_cost,
-       on_order_qty, on_order_expected_date, created_at, updated_at)
+       on_order_qty, on_order_expected_date, on_order_placed_date, created_at, updated_at)
     VALUES (@account_id, @lab_id, @item_name, @category, @department, @vendor, @catalog_number, @qty, @unit, @exp,
        'active', @burn, @order_unit, @usage_unit, @upo, @usage_unit, 1,
-       @lead, @safety, @desired, 0, @unit_cost, @on_order, @on_order_eta, @now, @now)
+       @lead, @safety, @desired, 0, @unit_cost, @on_order, @on_order_eta, @on_order_placed, @now, @now)
   `);
   const upsertSnap = sqlite.prepare(`
     INSERT INTO inventory_monthly_snapshots
@@ -190,6 +190,9 @@ export function resetVeritaStockDemo(sqlite: any, now: Date = new Date()): { ok:
     try { sqlite.prepare("DELETE FROM inventory_transfers").run(); } catch {}
     // Clear demo waste events for a clean ledger each reset.
     sqlite.prepare(`DELETE FROM inventory_waste_events WHERE lab_id IN (${DEMO_LABS.join(",")})`).run();
+    // Clear demo receipt history each reset (any visitor receives + test residue);
+    // seeded lead-time history is added back per item below where applicable.
+    try { sqlite.prepare(`DELETE FROM inventory_receipts WHERE lab_id IN (${DEMO_LABS.join(",")})`).run(); } catch {}
 
     for (const labId of DEMO_LABS) {
       const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
@@ -206,6 +209,12 @@ export function resetVeritaStockDemo(sqlite: any, now: Date = new Date()): { ok:
           lead: it.lead_time_days, safety: it.safety_stock_days, desired: it.desired_days_of_stock,
           unit_cost: it.unit_cost, on_order: o.onOrder ?? 0,
           on_order_eta: o.onOrderEtaDays != null ? isoPlusDays(now, o.onOrderEtaDays) : null,
+          // Placed date for an in-flight PO is back-dated so placed + lead = ETA
+          // (e.g. 21-day lead, ETA in 12 days => placed 9 days ago). Lets the
+          // Receiving screen show a real Order Placed date and a coherent receipt.
+          on_order_placed: (o.onOrder && o.onOrderEtaDays != null)
+            ? isoPlusDays(now, -Math.max(0, it.lead_time_days - o.onOrderEtaDays))
+            : null,
           now: nowIso,
         });
       }
