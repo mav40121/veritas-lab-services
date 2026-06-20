@@ -85,6 +85,29 @@ const DEPARTMENTS = ["Core Lab", "Chemistry", "Hematology", "Blood Bank", "Micro
 const ORDER_UNITS = ["each", "box", "case", "kit", "pack", "bottle", "bag"];
 const USAGE_UNITS = ["each", "test", "cartridge", "strip", "slide", "tube", "vial", "tip", "glove", "bottle", "mL", "roll", "set"];
 
+// Statistical safety-stock advisor. Safety stock (units) = Z x sigma_demand x
+// sqrt(lead time). With sigma_demand = CV x burn_rate this reduces to a number
+// of DAYS that is independent of burn rate: SS_days = Z x CV x sqrt(lead_days).
+// Z is the service-level factor; CV (coefficient of variation) is a chosen
+// demand-variability level since there is no consumption ledger to learn it.
+const SERVICE_LEVELS: { value: string; label: string; z: number }[] = [
+  { value: "90", label: "90% service", z: 1.28 },
+  { value: "95", label: "95% service", z: 1.65 },
+  { value: "98", label: "98% service", z: 2.05 },
+  { value: "99", label: "99% service", z: 2.33 },
+];
+const DEMAND_VARIABILITY: { value: string; label: string; cv: number }[] = [
+  { value: "low", label: "Low variability", cv: 0.15 },
+  { value: "med", label: "Medium variability", cv: 0.30 },
+  { value: "high", label: "High variability", cv: 0.50 },
+];
+function suggestSafetyStockDays(leadTimeDays: number, serviceLevel: string, variability: string): number {
+  const z = SERVICE_LEVELS.find((s) => s.value === serviceLevel)?.z ?? 1.65;
+  const cv = DEMAND_VARIABILITY.find((v) => v.value === variability)?.cv ?? 0.30;
+  if (!(leadTimeDays > 0)) return 0;
+  return Math.ceil(z * cv * Math.sqrt(leadTimeDays));
+}
+
 type SortField = "item_name" | "category" | "department" | "quantity_on_hand" | "burn_rate" | "reorder_point" | "days_remaining" | "stock_status" | "expiration_date" | "vendor" | "barcode_value";
 type SortDir = "asc" | "desc";
 
@@ -228,6 +251,9 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory }: {
   inventory: InventoryItem[];
 }) {
   const [form, setForm] = useState<Partial<InventoryItem>>({});
+  // Safety-stock advisor selections (not persisted; advisory only).
+  const [serviceLevel, setServiceLevel] = useState("95");
+  const [variability, setVariability] = useState("med");
 
   useEffect(() => {
     if (editItem) {
@@ -283,6 +309,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory }: {
   const calcReorderPoint = Math.round(burnRate * (leadTime + safetyDays));
   const calcOrderToQty = Math.round(burnRate * desiredDays);
   const usageUnit = form.usage_unit || "each";
+  const suggestedSafetyDays = suggestSafetyStockDays(leadTime, serviceLevel, variability);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -478,6 +505,46 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory }: {
               <div className="mt-3 p-3 rounded-lg bg-muted/50 text-sm space-y-1">
                 <div>Par Level: <strong>{calcReorderPoint} {usageUnit}s</strong></div>
                 <div>Order-to Quantity: <strong>{calcOrderToQty} {usageUnit}s</strong></div>
+              </div>
+            )}
+            {/* Safety-stock advisor: statistically-derived safety days
+                (Z x CV x sqrt(lead time)) the director can compare against the
+                flat value above and apply with one click. */}
+            {leadTime > 0 && (
+              <div className="mt-3 p-3 rounded-lg border border-dashed text-sm" style={{ borderColor: "#01696F55" }} data-testid="safety-stock-advisor">
+                <div className="font-medium mb-2" style={{ color: "#01696F" }}>Safety Stock Advisor</div>
+                <div className="grid grid-cols-2 gap-3 mb-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Service Level</Label>
+                    <Select value={serviceLevel} onValueChange={setServiceLevel}>
+                      <SelectTrigger className="h-8" data-testid="service-level-select"><SelectValue /></SelectTrigger>
+                      <SelectContent>{SERVICE_LEVELS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Demand Variability</Label>
+                    <Select value={variability} onValueChange={setVariability}>
+                      <SelectTrigger className="h-8" data-testid="variability-select"><SelectValue /></SelectTrigger>
+                      <SelectContent>{DEMAND_VARIABILITY.map((v) => <SelectItem key={v.value} value={v.value}>{v.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs text-muted-foreground">
+                    Suggested: <strong className="text-foreground" data-testid="suggested-safety-days">{suggestedSafetyDays}</strong> day{suggestedSafetyDays === 1 ? "" : "s"} (Z x CV x &radic;lead). Current: {safetyDays}.
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => setForm({ ...form, safety_stock_days: suggestedSafetyDays })}
+                    disabled={suggestedSafetyDays === safetyDays}
+                    data-testid="apply-safety-days"
+                  >
+                    Apply
+                  </Button>
+                </div>
               </div>
             )}
           </div>
