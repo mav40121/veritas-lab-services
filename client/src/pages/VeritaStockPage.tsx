@@ -808,7 +808,7 @@ export default function VeritaStockInventoryPage() {
   const stats = useMemo(() => {
     const today = new Date().toISOString().split("T")[0];
     const now = new Date();
-    let reorderNow = 0, expiringSoon = 0, standingOrdersDue = 0, stockoutRisk = 0, valueOnHand = 0;
+    let reorderNow = 0, expiringSoon = 0, standingOrdersDue = 0, stockoutRisk = 0, valueOnHand = 0, expiringValue = 0;
     for (const item of items) {
       if (item.needs_reorder) reorderNow++;
       valueOnHand += (item.quantity_on_hand || 0) * (item.unit_cost || 0);
@@ -819,13 +819,17 @@ export default function VeritaStockInventoryPage() {
       if (item.expiration_date) {
         const exp = new Date(item.expiration_date + "T00:00:00");
         const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        if (diffDays >= 0 && diffDays <= 30) expiringSoon++;
+        if (diffDays >= 0 && diffDays <= 60) {
+          expiringSoon++;
+          // Dollar value at risk of write-off if not used before expiry.
+          expiringValue += (item.quantity_on_hand || 0) * (item.unit_cost || 0);
+        }
       }
       if (item.standing_order === 1 && item.standing_order_review_date && item.standing_order_review_date < today) {
         standingOrdersDue++;
       }
     }
-    return { total: items.length, reorderNow, expiringSoon, standingOrdersDue, stockoutRisk, valueOnHand };
+    return { total: items.length, reorderNow, expiringSoon, standingOrdersDue, stockoutRisk, valueOnHand, expiringValue };
   }, [items]);
 
   // Filtered and sorted items
@@ -843,7 +847,7 @@ export default function VeritaStockInventoryPage() {
         if (filterStatus === "Expiring Soon") {
           if (!i.expiration_date) return false;
           const diff = Math.ceil((new Date(i.expiration_date + "T00:00:00").getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-          return diff >= 0 && diff <= 30;
+          return diff >= 0 && diff <= 60;
         }
         if (filterStatus === "Standing Order Due") {
           return i.standing_order === 1 && i.standing_order_review_date != null && i.standing_order_review_date < today;
@@ -1314,8 +1318,9 @@ export default function VeritaStockInventoryPage() {
               <Clock size={20} className="text-amber-600 dark:text-amber-400" />
             </div>
             <div>
-              <div className="text-xs text-muted-foreground uppercase tracking-wider">Expiring &lt;30d</div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wider" title="Items expiring within 60 days, and the dollar value at risk of write-off if not used in time.">Expiring &lt;60d</div>
               <div className="text-2xl font-bold font-mono text-amber-600 dark:text-amber-400">{stats.expiringSoon}</div>
+              {stats.expiringValue > 0 && <div className="text-[11px] font-mono text-amber-700 dark:text-amber-300">${stats.expiringValue.toLocaleString(undefined, { maximumFractionDigits: 0 })} at risk</div>}
             </div>
           </CardContent>
         </Card>
