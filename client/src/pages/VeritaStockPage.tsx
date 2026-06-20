@@ -235,6 +235,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory }: {
         department: "Core Lab",
         category: "Reagent",
         quantity_on_hand: 0,
+        unit_cost: 0,
         order_unit: "each",
         usage_unit: "each",
         units_per_order_unit: 1,
@@ -408,6 +409,38 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory }: {
                   data-testid="pack-size-input"
                 />
                 <p className="text-xs text-muted-foreground">e.g. 100 tests in a box. Set to 1 if you count by the each.</p>
+              </div>
+            </div>
+            {/* Unit cost: $ per usage unit. This single field powers valuation
+                ($ on Hand), inventory turns, ABC stratification, and the
+                estimated cost on every reorder PDF/Excel. The read-only
+                Cost per Order Unit beside it derives unit_cost x units per
+                order unit so the buyer sees what one box/case costs. */}
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <div className="space-y-1.5">
+                <Label>Unit Cost (per {form.usage_unit ?? "each"})</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    className="pl-6"
+                    value={form.unit_cost ?? ""}
+                    onChange={(e) => setForm({ ...form, unit_cost: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })}
+                    data-testid="unit-cost-input"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Price per usage unit. Powers valuation, turns, ABC class, and order cost estimates.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Cost per Order Unit</Label>
+                <div className="h-9 flex items-center px-3 rounded-md border bg-muted/30 font-mono text-sm" data-testid="cost-per-order-unit">
+                  {(form.unit_cost || 0) > 0
+                    ? `$${((form.unit_cost || 0) * (form.units_per_order_unit || 1)).toFixed(2)}`
+                    : <span className="text-muted-foreground">-</span>}
+                </div>
+                <p className="text-xs text-muted-foreground">Unit cost times units per {form.order_unit ?? "order unit"}. What one {form.order_unit ?? "order unit"} costs.</p>
               </div>
             </div>
           </div>
