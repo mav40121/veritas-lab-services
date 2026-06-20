@@ -29,7 +29,16 @@ function renderTeaLookupTable(): string {
 
 function getIndexHtml(distPath: string): string {
   if (!cachedIndexHtml) {
-    cachedIndexHtml = fs.readFileSync(path.resolve(distPath, "index.html"), "utf-8");
+    let html = fs.readFileSync(path.resolve(distPath, "index.html"), "utf-8");
+    // Dedicated VeritaStock deployment: inject a runtime flag the client reads
+    // (client/src/lib/host.ts) so the whole service presents as VeritaStock on
+    // every URL, regardless of hostname or whether the Vite build baked the env
+    // var. Read from the env at boot; this service has VITE_STOCK_DEPLOYMENT=true,
+    // veritaslabservices.com does not, so it stays VeritaAssure.
+    if (process.env.VITE_STOCK_DEPLOYMENT === "true" || process.env.STOCK_DEPLOYMENT === "true") {
+      html = html.replace("</head>", `<script>window.__STOCK_DEPLOYMENT__=true;</script></head>`);
+    }
+    cachedIndexHtml = html;
   }
   return cachedIndexHtml;
 }
@@ -172,7 +181,8 @@ export function serveStatic(app: Express) {
     if (req.path.match(/\.[a-zA-Z0-9]+$/)) {
       return next();
     }
-    // Non-public routes get default sendFile behavior
-    res.sendFile(path.resolve(distPath, "index.html"));
+    // Serve the index shell via getIndexHtml so the VeritaStock deployment flag
+    // is injected on app routes too (not just the SEO-prerendered marketing ones).
+    res.type("html").send(getIndexHtml(distPath));
   });
 }

@@ -11,6 +11,10 @@
 // Single source of truth so the NavBar, the router, the login page, and the
 // route lockdown can never disagree about which deployment is which.
 export const isStockHost = (): boolean => {
+  // Runtime flag injected by the server (server/static.ts) on the dedicated
+  // VeritaStock deployment. The reliable signal: it does not depend on the Vite
+  // build baking an env var, and works on the raw *.up.railway.app URL too.
+  if (typeof window !== "undefined" && (window as any).__STOCK_DEPLOYMENT__ === true) return true;
   if (import.meta.env.VITE_STOCK_DEPLOYMENT === "true") return true;
   return typeof window !== "undefined" && /(^|\.)veritastock\.com$/i.test(window.location.hostname);
 };
