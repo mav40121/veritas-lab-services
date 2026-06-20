@@ -1531,6 +1531,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, upserted: rows.length });
   });
 
+  // One-shot canonical reset of the VeritaStock demo (also runs nightly via the
+  // scheduler in server/index.ts). ADMIN_SECRET-gated AND hard-gated to the stock
+  // deployment inside resetVeritaStockDemo so it can never touch the main service.
+  app.post("/api/admin/reset-demo", async (req, res) => {
+    const { secret } = req.body;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    try {
+      const { resetVeritaStockDemo } = await import("./veritastockDemoReset");
+      const result = resetVeritaStockDemo((db as any).$client);
+      if (!result.ok) return res.status(409).json(result);
+      console.log("[admin/reset-demo] VeritaStock demo reset:", JSON.stringify(result.labs));
+      res.json(result);
+    } catch (err: any) {
+      console.error("[admin/reset-demo] failed:", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/admin/set-seats", (req, res) => {
     const { secret, userId, seatCount } = req.body;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
