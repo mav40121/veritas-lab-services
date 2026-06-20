@@ -94,6 +94,7 @@ type ToggleableColumnKey =
   | "department"
   | "quantity_on_hand"
   | "unit_cost"
+  | "abc_class"
   | "burn_rate"
   | "reorder_point"
   | "days_remaining"
@@ -107,6 +108,7 @@ const TOGGLEABLE_COLUMNS: { key: ToggleableColumnKey; label: string }[] = [
   { key: "department",         label: "Dept" },
   { key: "quantity_on_hand",   label: "On Hand" },
   { key: "unit_cost",          label: "Unit Cost" },
+  { key: "abc_class",          label: "ABC Class" },
   { key: "burn_rate",          label: "Burn Rate" },
   { key: "reorder_point",      label: "Par Level" },
   { key: "days_remaining",     label: "Days Left" },
@@ -157,6 +159,24 @@ function StockStatusBadge({ item }: { item: InventoryItem }) {
   return (
     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
       OK
+    </span>
+  );
+}
+
+// ABC class badge. A = the high-value few that drive most of annual spend
+// (brand teal, the color the materials manager should watch); B = mid; C =
+// the low-value many (muted). A dash shows when an item has no annual usage
+// value to rank on (no burn rate or no unit cost on file).
+function AbcBadge({ cls }: { cls?: "A" | "B" | "C" }) {
+  if (!cls) return <span className="text-muted-foreground">-</span>;
+  const colorMap: Record<string, string> = {
+    A: "bg-teal-100 text-teal-900 dark:bg-teal-900/40 dark:text-teal-200",
+    B: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+    C: "bg-gray-100 text-gray-600 dark:bg-gray-800/40 dark:text-gray-400",
+  };
+  return (
+    <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${colorMap[cls]}`}>
+      {cls}
     </span>
   );
 }
@@ -835,6 +855,33 @@ export default function VeritaStockInventoryPage() {
     return { total: items.length, reorderNow, expiringSoon, standingOrdersDue, stockoutRisk, valueOnHand, expiringValue, dailyUsageValue };
   }, [items]);
 
+  // ABC stratification (Pareto by annual dollar usage). Annual usage value =
+  // burn_rate x unit_cost x 365. Items are ranked by descending annual value;
+  // Class A is the high-value few that together make up the first ~80% of total
+  // annual spend, Class B the next ~15%, Class C the final ~5%. This is the
+  // classic 80/15/5 materials-management split: tight control and frequent
+  // counts on the A items that tie up most of the money, light touch on the
+  // many C items. The boundary-crossing item falls into the higher (more
+  // valuable) class. Items with no annual usage value (no burn rate or no unit
+  // cost on file) are left unclassified. Computed across the full location list,
+  // not the filtered subset, so an item's class does not shift as filters change.
+  const abcClassMap = useMemo(() => {
+    const map = new Map<number, "A" | "B" | "C">();
+    const ranked = items
+      .map((i) => ({ id: i.id, val: (i.burn_rate || 0) * (i.unit_cost || 0) * 365 }))
+      .filter((r) => r.val > 0)
+      .sort((a, b) => b.val - a.val);
+    const totalVal = ranked.reduce((s, r) => s + r.val, 0);
+    if (totalVal <= 0) return map;
+    let cum = 0;
+    for (const r of ranked) {
+      const startPct = cum / totalVal; // cumulative share BEFORE adding this item
+      cum += r.val;
+      map.set(r.id, startPct < 0.8 ? "A" : startPct < 0.95 ? "B" : "C");
+    }
+    return map;
+  }, [items]);
+
   // Filtered and sorted items
   const filteredItems = useMemo(() => {
     let result = [...items];
@@ -856,6 +903,9 @@ export default function VeritaStockInventoryPage() {
           return i.standing_order === 1 && i.standing_order_review_date != null && i.standing_order_review_date < today;
         }
         if (filterStatus === "Stockout Risk") return i.days_remaining != null && i.burn_rate > 0 && i.days_remaining <= (i.lead_time_days || 0);
+        if (filterStatus === "Class A") return abcClassMap.get(i.id) === "A";
+        if (filterStatus === "Class B") return abcClassMap.get(i.id) === "B";
+        if (filterStatus === "Class C") return abcClassMap.get(i.id) === "C";
         if (filterStatus === "OK") return !i.needs_reorder;
         return true;
       });
@@ -893,7 +943,7 @@ export default function VeritaStockInventoryPage() {
     });
 
     return result;
-  }, [items, filterDept, filterCat, filterStatus, filterVendor, sortField, sortDir]);
+  }, [items, filterDept, filterCat, filterStatus, filterVendor, sortField, sortDir, abcClassMap]);
 
   // Unique vendors derived from the loaded items list. Sorted alphabetically;
   // items with no vendor are excluded from the dropdown (the filter cannot
@@ -1369,6 +1419,9 @@ export default function VeritaStockInventoryPage() {
             <SelectItem value="Expiring Soon">Expiring Soon</SelectItem>
             <SelectItem value="Standing Order Due">Standing Order Due</SelectItem>
             <SelectItem value="OK">OK</SelectItem>
+            <SelectItem value="Class A">ABC: Class A (high value)</SelectItem>
+            <SelectItem value="Class B">ABC: Class B</SelectItem>
+            <SelectItem value="Class C">ABC: Class C (low value)</SelectItem>
           </SelectContent>
         </Select>
         <Select value={filterVendor} onValueChange={setFilterVendor}>
@@ -1460,6 +1513,7 @@ export default function VeritaStockInventoryPage() {
                 {isColumnVisible("department") && <SortHeader field="department" className="hidden md:table-cell">Dept</SortHeader>}
                 {isColumnVisible("quantity_on_hand") && <SortHeader field="quantity_on_hand">On Hand</SortHeader>}
                 {isColumnVisible("unit_cost") && <th className="text-left px-3 py-2 font-medium">Unit Cost</th>}
+                {isColumnVisible("abc_class") && <th className="text-center px-3 py-2 font-medium" title="ABC class by annual dollar usage (burn rate x unit cost x 365). A = the high-value few making up the first ~80% of spend, B = next ~15%, C = final ~5%.">ABC</th>}
                 {isColumnVisible("burn_rate") && <SortHeader field="burn_rate">Burn Rate</SortHeader>}
                 {isColumnVisible("reorder_point") && <SortHeader field="reorder_point">Par Level</SortHeader>}
                 {isColumnVisible("days_remaining") && <SortHeader field="days_remaining">Days Left</SortHeader>}
@@ -1518,6 +1572,9 @@ export default function VeritaStockInventoryPage() {
                   )}
                   {isColumnVisible("unit_cost") && (
                     <td className="px-3 py-2 font-mono text-sm">{item.unit_cost ? `$${item.unit_cost.toFixed(2)}` : <span className="text-muted-foreground">-</span>}</td>
+                  )}
+                  {isColumnVisible("abc_class") && (
+                    <td className="px-3 py-2 text-center"><AbcBadge cls={abcClassMap.get(item.id)} /></td>
                   )}
                   {isColumnVisible("burn_rate") && (
                     <td className="px-3 py-2 font-mono text-sm">
