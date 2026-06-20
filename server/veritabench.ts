@@ -1423,6 +1423,55 @@ export function registerVeritaBenchRoutes(
     });
   });
 
+  // POST /api/inventory/:id/receive
+  //   body: { received_qty?, reason? }
+  // Receive inbound stock against an open PO: move received_qty (defaults to the
+  // full on_order_qty) from on-order into quantity_on_hand, decrement on_order_qty
+  // (floored at 0), and clear the expected-arrival date once nothing remains on
+  // order. This is a DEDICATED endpoint on purpose: PUT /api/inventory/:id is a
+  // full-replace that would zero on-hand/burn on a partial body, so receiving
+  // must never go through it. Access via the same Shape A guard as /adjust.
+  app.post("/api/inventory/:id/receive", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const { id } = req.params;
+    const itemId = Number(id);
+    if (!Number.isFinite(itemId) || itemId <= 0) return res.status(400).json({ error: "Invalid item id" });
+    const { item: existing, status: resolveStatus } = resolveInventoryItemForMutation(itemId, req);
+    if (!existing) {
+      if (resolveStatus === 403) return res.status(403).json({ error: "You don't have access to this item's lab" });
+      return res.status(404).json({ error: "Item not found" });
+    }
+    const onOrder = (existing as any).on_order_qty || 0;
+    if (onOrder <= 0) return res.status(400).json({ error: "Nothing on order to receive" });
+    const { received_qty } = req.body || {};
+    // Default to receiving the full open PO; clamp to (0, onOrder].
+    let recv = (received_qty === undefined || received_qty === null || received_qty === "")
+      ? onOrder
+      : Number(received_qty);
+    if (!Number.isFinite(recv) || recv <= 0) return res.status(400).json({ error: "received_qty must be a positive number" });
+    if (recv > onOrder) recv = onOrder;
+    const beforeOnHand = (existing as any).quantity_on_hand || 0;
+    const newOnHand = beforeOnHand + recv;
+    const newOnOrder = Math.max(0, onOrder - recv);
+    const newExpected = newOnOrder > 0 ? ((existing as any).on_order_expected_date ?? null) : null;
+    const nowIso = new Date().toISOString();
+    sqlite.prepare(
+      "UPDATE inventory_items SET quantity_on_hand = ?, on_order_qty = ?, on_order_expected_date = ?, updated_at = ? WHERE id = ?"
+    ).run(newOnHand, newOnOrder, newExpected, nowIso, itemId);
+    const fresh = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(itemId);
+    res.json({
+      item: decorateInventoryItem(fresh),
+      receipt: {
+        received_qty: recv,
+        before_on_hand: beforeOnHand,
+        after_on_hand: newOnHand,
+        before_on_order: onOrder,
+        after_on_order: newOnOrder,
+        at: nowIso,
+      },
+    });
+  });
+
   // DELETE /api/inventory/:id - delete an inventory item
   app.delete("/api/inventory/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });

@@ -27,7 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Lock, Plus, Edit2, Trash2, AlertTriangle, Package, Clock, AlertCircle, RefreshCw,
-  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users, Building2, DollarSign,
+  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users, Building2, DollarSign, PackageCheck,
 } from "lucide-react";
 import BarcodeScannerModal from "@/components/BarcodeScannerModal";
 import InventoryCountWorkflow, { type CountItem } from "@/components/InventoryCountWorkflow";
@@ -568,6 +568,10 @@ export default function VeritaStockInventoryPage() {
   const [countWorkflowOpen, setCountWorkflowOpen] = useState(false);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null);
+  // Receive-against-PO dialog: target item + the quantity being received
+  // (defaults to the full open on-order qty).
+  const [receiveTarget, setReceiveTarget] = useState<InventoryItem | null>(null);
+  const [receiveQty, setReceiveQty] = useState<number>(0);
 
   // Filters
   const [filterDept, setFilterDept] = useState("All");
@@ -881,6 +885,30 @@ export default function VeritaStockInventoryPage() {
       toast({ title: "Error", description: "Failed to delete item", variant: "destructive" });
     }
     setDeleteTarget(null);
+  };
+
+  // Receive inbound stock against an open PO. Posts to the dedicated /receive
+  // endpoint (NOT a partial PUT, which would full-replace and zero on-hand).
+  // The server moves the received qty from on-order into on-hand.
+  const handleReceive = async () => {
+    if (!receiveTarget) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/inventory/${receiveTarget.id}/receive`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ received_qty: receiveQty }),
+      });
+      if (res.ok) {
+        toast({ title: "Stock received", description: `${receiveQty} ${receiveTarget.usage_unit}s moved into on-hand` });
+        loadItems();
+      } else {
+        const err = await res.json();
+        toast({ title: "Error", description: err.error, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to receive stock", variant: "destructive" });
+    }
+    setReceiveTarget(null);
   };
 
   // Computed stats
@@ -1677,6 +1705,20 @@ export default function VeritaStockInventoryPage() {
                   )}
                   <td className="px-3 py-2 text-center">
                     <div className="flex items-center justify-center gap-1">
+                      {(item.on_order_qty || 0) > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          style={{ color: "#01696F" }}
+                          title={`Receive ${item.on_order_qty} ${item.usage_unit}s on order`}
+                          onClick={() => { setReceiveTarget(item); setReceiveQty(item.on_order_qty || 0); }}
+                          disabled={readOnly}
+                          data-testid={`button-receive-${item.id}`}
+                        >
+                          <PackageCheck size={14} />
+                        </Button>
+                      )}
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditItem(item); setShowForm(true); }} disabled={readOnly}>
                         <Edit2 size={13} />
                       </Button>
@@ -1755,6 +1797,52 @@ export default function VeritaStockInventoryPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Receive against PO. Moves received qty from on-order into on-hand via
+          the dedicated /receive endpoint. Defaults to the full open PO. */}
+      <Dialog open={!!receiveTarget} onOpenChange={(o) => { if (!o) setReceiveTarget(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Receive stock</DialogTitle>
+          </DialogHeader>
+          {receiveTarget && (
+            <div className="space-y-3">
+              <div className="text-sm">
+                <div className="font-medium">{receiveTarget.item_name}</div>
+                <div className="text-muted-foreground">
+                  {receiveTarget.on_order_qty} {receiveTarget.usage_unit}s on order
+                  {receiveTarget.on_order_expected_date ? ` · ETA ${receiveTarget.on_order_expected_date}` : ""}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Quantity received ({receiveTarget.usage_unit}s)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={receiveTarget.on_order_qty || 0}
+                  value={receiveQty}
+                  onChange={(e) => setReceiveQty(parseFloat(e.target.value) || 0)}
+                  data-testid="receive-qty-input"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Moves into on-hand. Remaining stays on order. New on-hand: {((receiveTarget.quantity_on_hand || 0) + receiveQty).toLocaleString()} {receiveTarget.usage_unit}s.
+                </p>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button variant="outline" onClick={() => setReceiveTarget(null)}>Cancel</Button>
+                <Button
+                  onClick={handleReceive}
+                  disabled={receiveQty <= 0 || receiveQty > (receiveTarget.on_order_qty || 0)}
+                  style={{ backgroundColor: "#01696F" }}
+                  data-testid="receive-confirm"
+                >
+                  Receive
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
