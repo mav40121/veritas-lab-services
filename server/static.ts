@@ -45,14 +45,18 @@ function getIndexHtml(distPath: string): string {
       // never the VeritaAssure compliance branding. Pages with their own useSEO
       // still override this; pages without it (login, account, members) now read
       // VeritaStock instead of the lab default.
-      const stockTitle = "VeritaStock™ | Multi-Location Lab Inventory Management";
-      const stockDesc = "Multi-location inventory for clinical laboratories: burn-rate par levels, lead-time-aware reorder alerts, expiration tracking, and one-click vendor orders.";
+      const stockTitle = "VeritaStock™ | Multi-Location Inventory Management";
+      const stockDesc = "Multi-location supply inventory: burn-rate par levels, lead-time-aware reorder alerts, expiration tracking, valuation by location, and one-click vendor orders.";
+      const stockKeywords = "VeritaStock, multi-location inventory management, supply inventory software, par level management, reorder point alerts, expiration date tracking, lead-time verification, vendor purchase orders, barcode inventory, materials management";
       html = html
         .replace(/<title>[^<]*<\/title>/, `<title>${stockTitle}</title>`)
         .replace(/<meta name="description" content="[^"]*"/, `<meta name="description" content="${stockDesc}"`)
+        .replace(/<meta name="keywords" content="[^"]*"/, `<meta name="keywords" content="${stockKeywords}"`)
         .replace(/<meta property="og:title" content="[^"]*"/, `<meta property="og:title" content="${stockTitle}"`)
         .replace(/<meta property="og:description" content="[^"]*"/, `<meta property="og:description" content="${stockDesc}"`)
-        .replace(/<meta name="twitter:title" content="[^"]*"/, `<meta name="twitter:title" content="${stockTitle}"`);
+        .replace(/<meta property="og:site_name" content="[^"]*"/, `<meta property="og:site_name" content="VeritaStock | Veritas Lab Services"`)
+        .replace(/<meta name="twitter:title" content="[^"]*"/, `<meta name="twitter:title" content="${stockTitle}"`)
+        .replace(/<meta name="twitter:description" content="[^"]*"/, `<meta name="twitter:description" content="${stockDesc}"`);
     }
     cachedIndexHtml = html;
   }
