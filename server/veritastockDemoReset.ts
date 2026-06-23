@@ -309,7 +309,8 @@ export function resetVeritaStockDemo(sqlite: any, now: Date = new Date()): { ok:
       for (const [d, hhmm, action, lab, key, label, before, after] of EVENTS) {
         const iid = itemIdAt(lab as number, key as string);
         if (iid == null) continue;
-        insAudit.run(demoOwner, action, iid, label, before ? JSON.stringify(before) : null, after ? JSON.stringify(after) : null, at(d as number, hhmm as string));
+        // user_id AND owner_user_id both = the demo owner (8 placeholders).
+        insAudit.run(demoOwner, demoOwner, action, iid, label, before ? JSON.stringify(before) : null, after ? JSON.stringify(after) : null, at(d as number, hhmm as string));
       }
     }
   });
