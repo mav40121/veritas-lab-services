@@ -1529,7 +1529,9 @@ export function registerVeritaBenchRoutes(
     }
     const onOrder = (existing as any).on_order_qty || 0;
     if (onOrder <= 0) return res.status(400).json({ error: "Nothing on order to receive" });
-    const { received_qty } = req.body || {};
+    const { received_qty, note } = req.body || {};
+    // Optional free-text note: partial shipment, damaged, received out of temp, etc.
+    const noteStr = (typeof note === "string" && note.trim()) ? note.trim().slice(0, 500) : null;
     // Default to receiving the full open PO; clamp to (0, onOrder].
     let recv = (received_qty === undefined || received_qty === null || received_qty === "")
       ? onOrder
@@ -1563,8 +1565,8 @@ export function registerVeritaBenchRoutes(
     // failure roll back the receive itself.
     try {
       sqlite.prepare(
-        `INSERT INTO inventory_receipts (lab_id, item_id, account_id, item_name, vendor, qty_received, usage_unit, order_placed_date, expected_date, received_date, programmed_lead_time_days, actual_lead_time_days, received_by, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO inventory_receipts (lab_id, item_id, account_id, item_name, vendor, qty_received, usage_unit, order_placed_date, expected_date, received_date, programmed_lead_time_days, actual_lead_time_days, received_by, note, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         (existing as any).lab_id ?? null,
         itemId,
@@ -1579,6 +1581,7 @@ export function registerVeritaBenchRoutes(
         programmedLead,
         actualLead,
         req.userId ?? null,
+        noteStr,
         nowIso,
       );
     } catch (e) { /* receipt logging is best-effort; receive already succeeded */ }
@@ -1596,6 +1599,7 @@ export function registerVeritaBenchRoutes(
         received_date: receivedDate,
         programmed_lead_time_days: programmedLead,
         actual_lead_time_days: actualLead,
+        note: noteStr,
         at: nowIso,
       },
     });
@@ -2362,7 +2366,7 @@ export function registerVeritaBenchRoutes(
       if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
       try {
         const rows = sqlite.prepare(
-          `SELECT id, item_id, item_name, vendor, qty_received, usage_unit, order_placed_date, expected_date, received_date, programmed_lead_time_days, actual_lead_time_days, created_at
+          `SELECT id, item_id, item_name, vendor, qty_received, usage_unit, order_placed_date, expected_date, received_date, programmed_lead_time_days, actual_lead_time_days, note, created_at
            FROM inventory_receipts WHERE lab_id = ? ORDER BY received_date DESC, id DESC LIMIT 250`
         ).all(req.scope.labId);
         res.json(rows);
