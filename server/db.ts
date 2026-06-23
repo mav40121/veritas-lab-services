@@ -3560,6 +3560,11 @@ sqlite.exec(`
   )
 `);
 try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_receipts_item ON inventory_receipts(item_id)"); } catch {}
+// Optional free-text note on a receipt: partial shipment, damaged, out-of-temp, etc. (John, San Carlos demo).
+try {
+  const rcptCols = (sqlite.prepare("PRAGMA table_info(inventory_receipts)").all() as { name: string }[]).map((c) => c.name);
+  if (!rcptCols.includes("note")) sqlite.exec("ALTER TABLE inventory_receipts ADD COLUMN note TEXT");
+} catch {}
 try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_receipts_lab ON inventory_receipts(lab_id, received_date)"); } catch {}
 
 // ALTER TABLE migration for inventory_receipts (NEW DB TABLE RULE: older live DB

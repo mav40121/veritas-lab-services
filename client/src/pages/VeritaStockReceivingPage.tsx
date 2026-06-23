@@ -35,6 +35,7 @@ interface Receipt {
   order_placed_date: string | null;
   expected_date: string | null;
   received_date: string | null;
+  note?: string | null;
   programmed_lead_time_days: number | null;
   actual_lead_time_days: number | null;
 }
@@ -81,6 +82,7 @@ export default function VeritaStockReceivingPage() {
   const [search, setSearch] = useState("");
   const [scanOpen, setScanOpen] = useState(false);
   const [receiveQ, setReceiveQ] = useState<Record<number, string>>({});
+  const [receiveNote, setReceiveNote] = useState<Record<number, string>>({});
   const [busyId, setBusyId] = useState<number | null>(null);
 
   const inventoryListUrl = activeLabId ? `${API_BASE}/api/labs/${activeLabId}/inventory` : `${API_BASE}/api/inventory`;
@@ -151,7 +153,7 @@ export default function VeritaStockReceivingPage() {
       const res = await fetch(`${API_BASE}/api/inventory/${item.id}/receive`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ received_qty: qty }),
+        body: JSON.stringify({ received_qty: qty, note: (receiveNote[item.id] || "").trim() || undefined }),
       });
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
@@ -165,6 +167,7 @@ export default function VeritaStockReceivingPage() {
         description: lead != null ? `Logged. Actual lead time: ${lead} days (programmed ${body.receipt.programmed_lead_time_days ?? "n/a"}).` : "Receipt logged.",
       });
       setReceiveQ((p) => { const n = { ...p }; delete n[item.id]; return n; });
+      setReceiveNote((p) => { const n = { ...p }; delete n[item.id]; return n; });
       await load();
     } finally {
       setBusyId(null);
@@ -248,6 +251,16 @@ export default function VeritaStockReceivingPage() {
                         data-testid={`receiving-qty-${it.id}`}
                         disabled={readOnly}
                       />
+                      <Input
+                        type="text"
+                        className="w-40 h-7 mt-1 text-xs ml-auto"
+                        placeholder="Note (optional)"
+                        value={receiveNote[it.id] ?? ""}
+                        onChange={(e) => setReceiveNote((p) => ({ ...p, [it.id]: e.target.value }))}
+                        data-testid={`receiving-note-${it.id}`}
+                        disabled={readOnly}
+                        title="Optional: partial shipment, damaged, received out of temperature, etc."
+                      />
                     </td>
                     <td className="px-3 py-2 text-right">
                       <Button size="sm" onClick={() => handleReceive(it)} disabled={readOnly || busyId === it.id} data-testid={`receiving-receive-${it.id}`} style={{ backgroundColor: "#01696F" }}>
@@ -310,11 +323,12 @@ export default function VeritaStockReceivingPage() {
                   <th className="px-3 py-2 font-medium sticky top-0 bg-muted z-10">Placed</th>
                   <th className="px-3 py-2 font-medium sticky top-0 bg-muted z-10 text-right">Programmed</th>
                   <th className="px-3 py-2 font-medium sticky top-0 bg-muted z-10 text-right">Actual lead</th>
+                  <th className="px-3 py-2 font-medium sticky top-0 bg-muted z-10">Note</th>
                 </tr>
               </thead>
               <tbody>
                 {receipts.length === 0 ? (
-                  <tr><td colSpan={7} className="px-3 py-6 text-center text-muted-foreground" data-testid="receipts-empty">No receipts logged yet. Receiving an order above records it here.</td></tr>
+                  <tr><td colSpan={8} className="px-3 py-6 text-center text-muted-foreground" data-testid="receipts-empty">No receipts logged yet. Receiving an order above records it here.</td></tr>
                 ) : receipts.map((r) => (
                   <tr key={r.id} className="border-b" data-testid={`receipt-row-${r.id}`}>
                     <td className="px-3 py-2">{r.received_date || "-"}</td>
@@ -326,6 +340,7 @@ export default function VeritaStockReceivingPage() {
                     <td className={`px-3 py-2 text-right font-mono ${leadColor(r.actual_lead_time_days, r.programmed_lead_time_days)}`}>
                       {r.actual_lead_time_days != null ? `${r.actual_lead_time_days}d` : "-"}
                     </td>
+                    <td className="px-3 py-2 text-xs">{r.note || <span className="text-muted-foreground">-</span>}</td>
                   </tr>
                 ))}
               </tbody>
