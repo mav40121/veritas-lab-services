@@ -26,6 +26,8 @@ interface InventoryItem {
   unit: string;
   order_unit: string;
   usage_unit: string;
+  on_order_qty?: number | null;             // qty on an open PO not yet received
+  on_order_placed_date?: string | null;     // date the open PO was placed
 }
 
 const SNAP_UNITS = ["each", "box", "case", "kit", "pack", "bottle", "bag"];
@@ -146,6 +148,28 @@ export default function VeritaStockSnapOrderPage() {
     if (orderRows.length === 0) {
       toast({ title: "Nothing to order", description: "Enter an Order Qty for at least one item.", variant: "destructive" });
       return;
+    }
+    // Item 3 (John, San Carlos 2026-06-23): warn if any item being snap-ordered
+    // already has an open order placed, so an emergency manual order does not
+    // silently duplicate a PO already in flight.
+    const byId = new Map(items.map((i) => [i.id, i]));
+    const dupes = orderRows
+      .map((r) => byId.get(r.id))
+      .filter((i): i is InventoryItem => !!i && (i.on_order_qty || 0) > 0);
+    if (dupes.length > 0) {
+      const lines = dupes
+        .slice(0, 12)
+        .map((i) => {
+          const placed = i.on_order_placed_date ? ` (placed ${i.on_order_placed_date})` : "";
+          return `• ${i.item_name}: ${(i.on_order_qty || 0).toLocaleString()} on order${placed}`;
+        })
+        .join("\n");
+      const more = dupes.length > 12 ? `\n…and ${dupes.length - 12} more` : "";
+      const n = dupes.length;
+      const ok = window.confirm(
+        `${n} item${n === 1 ? "" : "s"} on this snap order already ha${n === 1 ? "s" : "ve"} an open order:\n\n${lines}${more}\n\nPlacing another order may duplicate it. Generate anyway?`,
+      );
+      if (!ok) return;
     }
     setGenerating(true);
     try {
