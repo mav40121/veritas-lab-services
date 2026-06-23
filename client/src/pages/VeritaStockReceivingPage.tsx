@@ -278,9 +278,12 @@ export default function VeritaStockReceivingPage() {
       {/* Lead-time drift: items whose actual lead time consistently differs from
           the programmed value that drives their reorder point. Slower = stockout
           risk; faster = over-buffered safety stock. One-click apply the actual. */}
-      {flags.length > 0 && (
-        <div className="mt-8" data-testid="leadtime-drift-panel">
-          <h2 className="text-base font-semibold mb-2 flex items-center gap-2"><Clock size={16} />Lead-time check</h2>
+      <div className="mt-8" data-testid="leadtime-drift-panel">
+        <h2 className="text-base font-semibold mb-2 flex items-center gap-2"><Clock size={16} />Lead-time check</h2>
+        {flags.length === 0 ? (
+          <p className="text-xs text-muted-foreground rounded-lg border border-dashed p-3" data-testid="leadtime-empty">No lead-time drift detected. As you receive orders, any item that consistently arrives off its programmed lead time will flag here, with a one-click way to update its reorder point.</p>
+        ) : (
+          <>
           <p className="text-xs text-muted-foreground mb-2">These items consistently arrive on a different schedule than their programmed lead time, so their reorder points may be off. Review and apply the observed lead time.</p>
           <div className="space-y-2">
             {flags.map((f) => {
@@ -304,8 +307,9 @@ export default function VeritaStockReceivingPage() {
               );
             })}
           </div>
-        </div>
-      )}
+          </>
+        )}
+      </div>
 
       {/* Receipt history */}
       <h2 className="text-base font-semibold mt-8 mb-2 flex items-center gap-2"><History size={16} />Receipt history</h2>
