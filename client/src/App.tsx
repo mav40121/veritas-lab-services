@@ -99,6 +99,7 @@ const VeritaStockTrendsPage = lazy(() => import("@/pages/VeritaStockTrendsPage")
 const VeritaStockVendorsPage = lazy(() => import("@/pages/VeritaStockVendorsPage"));
 const VeritaStockSnapOrderPage = lazy(() => import("@/pages/VeritaStockSnapOrderPage"));
 const VeritaStockReceivingPage = lazy(() => import("@/pages/VeritaStockReceivingPage"));
+const VeritaStockAuditTrailPage = lazy(() => import("@/pages/VeritaStockAuditTrailPage"));
 const VeritaStockEnterprisePage = lazy(() => import("@/pages/VeritaStockEnterprisePage"));
 const VeritaStockLandingPage = lazy(() => import("@/pages/VeritaStockLandingPage"));
 const HospitalInventoryPage = lazy(() => import("@/pages/HospitalInventoryPage"));
@@ -425,6 +426,7 @@ function AppContent() {
           <Route path="/veritastock/trends">{wrapLegacy(VeritaStockTrendsPage)}</Route>
           <Route path="/veritastock/snap-order">{wrapLegacy(VeritaStockSnapOrderPage)}</Route>
           <Route path="/veritastock/receiving">{wrapLegacy(VeritaStockReceivingPage)}</Route>
+          <Route path="/veritastock/audit">{wrapLegacy(VeritaStockAuditTrailPage)}</Route>
           <Route path="/veritastock/enterprise">{wrapLegacy(VeritaStockEnterprisePage)}</Route>
           <Route path="/hospital-inventory" component={HospitalInventoryPage} />
           <Route path="/veritaops-app">{wrapLegacy(VeritaOpsAppPage)}</Route>
@@ -488,6 +490,7 @@ function AppContent() {
           <Route path="/labs/:labId/veritastock/trends" component={VeritaStockTrendsPage} />
           <Route path="/labs/:labId/veritastock/snap-order" component={VeritaStockSnapOrderPage} />
           <Route path="/labs/:labId/veritastock/receiving" component={VeritaStockReceivingPage} />
+          <Route path="/labs/:labId/veritastock/audit" component={VeritaStockAuditTrailPage} />
           <Route path="/labs/:labId/veritastock/enterprise" component={VeritaStockEnterprisePage} />
           <Route path="/labs/:labId/veritastock/vendors" component={VeritaStockVendorsPage} />
           <Route path="/labs/:labId/veritaops-app" component={VeritaOpsAppPage} />
