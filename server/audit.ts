@@ -17,7 +17,7 @@ export type AuditModule =
   | "veritastock"
   | "account";
 
-export type AuditAction = "create" | "update" | "delete" | "restore" | "transfer_out" | "transfer_in" | "transfer_rejected";
+export type AuditAction = "create" | "update" | "delete" | "restore" | "transfer_out" | "transfer_in" | "transfer_rejected" | "receive" | "adjust" | "write_off";
 
 export interface AuditEntry {
   userId: number;
