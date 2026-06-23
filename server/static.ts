@@ -185,18 +185,29 @@ export function serveStatic(app: Express) {
       // compliance branding in its title/description/OG tags.
       if (STOCK_DEPLOYMENT) {
         res.setHeader("Content-Type", "text/html");
+        // Never cache the HTML shell: after a redeploy the browser must
+        // revalidate and pick up the new hashed chunk references, or it renders
+        // a stale bundle (e.g. a toolbar missing a later-added button).
+        res.setHeader("Cache-Control", "no-cache");
         return res.send(getIndexHtml(distPath));
       }
       const html = getIndexHtml(distPath);
       const injectedHtml = injectSeoTags(html, routePath, meta);
       res.setHeader("Content-Type", "text/html");
+      res.setHeader("Cache-Control", "no-cache");
       return res.send(injectedHtml);
     }
 
     next();
   });
 
-  app.use(express.static(distPath));
+  app.use(express.static(distPath, {
+    setHeaders: (res, filePath) => {
+      // The HTML shell must always revalidate (so a redeploy's new chunk
+      // hashes load); hashed /assets above stay immutable for a year.
+      if (filePath.endsWith(".html")) res.setHeader("Cache-Control", "no-cache");
+    },
+  }));
 
   // SPA catch-all: only for routes that are NOT API requests or static asset requests
   app.use("/{*path}", (req, res, next) => {
@@ -210,6 +221,7 @@ export function serveStatic(app: Express) {
     }
     // Serve the index shell via getIndexHtml so the VeritaStock deployment flag
     // is injected on app routes too (not just the SEO-prerendered marketing ones).
+    res.setHeader("Cache-Control", "no-cache");
     res.type("html").send(getIndexHtml(distPath));
   });
 }
