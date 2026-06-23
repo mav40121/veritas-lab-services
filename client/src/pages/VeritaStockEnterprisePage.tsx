@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
-  ArrowLeft, ArrowRightLeft, Building2, Truck, RefreshCw, AlertTriangle, Package, Search, X,
+  ArrowLeft, ArrowRightLeft, Building2, Truck, RefreshCw, AlertTriangle, Package, Search, X, Check,
 } from "lucide-react";
 
 interface LocCell {
@@ -52,7 +52,10 @@ interface TransferRow {
   display_unit: string | null;
   initiated_by_name: string | null;
   created_at: string;
-  direction: "in" | "out";
+  direction?: "in" | "out";
+  status?: string | null;
+  batch_id?: string | null;
+  accepted_by_name?: string | null;
 }
 
 export default function VeritaStockEnterprisePage() {
@@ -78,15 +81,18 @@ export default function VeritaStockEnterprisePage() {
   const [search, setSearch] = useState("");
   const [lowOnly, setLowOnly] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [incoming, setIncoming] = useState<TransferRow[]>([]);
+  const [decidingBatch, setDecidingBatch] = useState<string | null>(null);
 
   const loadAll = useCallback(async () => {
     if (!labId) return;
     setLoading(true);
     setError(null);
     try {
-      const [rRes, tRes] = await Promise.all([
+      const [rRes, tRes, iRes] = await Promise.all([
         fetch(`${API_BASE}/api/labs/${labId}/veritastock/enterprise/rollup`, { headers: authHeaders() }),
         fetch(`${API_BASE}/api/labs/${labId}/veritastock/transfers`, { headers: authHeaders() }),
+        fetch(`${API_BASE}/api/labs/${labId}/veritastock/transfers/incoming`, { headers: authHeaders() }),
       ]);
       if (!rRes.ok) {
         const body = await rRes.json().catch(() => ({}));
@@ -98,6 +104,10 @@ export default function VeritaStockEnterprisePage() {
       if (tRes.ok) {
         const tData = await tRes.json();
         setTransfers(tData.transfers || []);
+      }
+      if (iRes.ok) {
+        const iData = await iRes.json();
+        setIncoming(iData.incoming || []);
       }
     } catch (e: any) {
       setError(e.message || "Failed to load enterprise view");
@@ -180,13 +190,77 @@ export default function VeritaStockEnterprisePage() {
           : (data.error || "Transfer failed");
         throw new Error(msg);
       }
-      toast({ title: "Transfer recorded", description: `${data.transferred} item(s), ${locName(fromLab)} to ${locName(toLab)}` });
+      toast({ title: "Transfer sent", description: `${data.sent} item(s) to ${locName(toLab)}, awaiting acceptance` });
       clearAll();
       await loadAll();
     } catch (e: any) {
       toast({ title: "Transfer failed", description: e.message, variant: "destructive" });
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  // Pending incoming shipments grouped by batch_id, so a multi-item shipment is
+  // accepted or rejected as one unit (mirrors how it was sent).
+  const incomingBatches = useMemo(() => {
+    const groups = new Map<string, {
+      batch_id: string; from_lab_name: string; to_lab_name: string;
+      initiated_by_name: string | null; created_at: string; items: TransferRow[];
+    }>();
+    for (const t of incoming) {
+      const bid = t.batch_id || `t${t.id}`;
+      let g = groups.get(bid);
+      if (!g) {
+        g = {
+          batch_id: bid,
+          from_lab_name: t.from_lab_name || `Lab ${t.from_lab_id}`,
+          to_lab_name: t.to_lab_name || `Lab ${t.to_lab_id}`,
+          initiated_by_name: t.initiated_by_name,
+          created_at: t.created_at,
+          items: [],
+        };
+        groups.set(bid, g);
+      }
+      g.items.push(t);
+    }
+    return Array.from(groups.values());
+  }, [incoming]);
+
+  // Destination accepts (lands the stock) or rejects (returns it to source) a
+  // whole pending shipment by its batch_id.
+  async function decideBatch(batchId: string, action: "accept" | "reject") {
+    if (!labId) return;
+    let reason: string | undefined;
+    if (action === "reject") {
+      const r = window.prompt("Reason for rejecting this shipment (optional): damaged, wrong item, out of temp...");
+      if (r === null) return; // cancelled
+      reason = r.trim() || undefined;
+    }
+    setDecidingBatch(batchId);
+    try {
+      // Literal accept/reject suffix (not an interpolated segment) so the
+      // lab-scoped write-route guard can match the server route statically.
+      const url = action === "accept"
+        ? `${API_BASE}/api/labs/${labId}/veritastock/transfers/${batchId}/accept`
+        : `${API_BASE}/api/labs/${labId}/veritastock/transfers/${batchId}/reject`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(action === "reject" ? { reason } : {}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `${action} failed`);
+      toast({
+        title: action === "accept" ? "Transfer accepted" : "Transfer rejected",
+        description: action === "accept"
+          ? `${data.accepted} item(s) added to ${locName(data.to_lab_id)}`
+          : `${data.rejected} item(s) returned to the source`,
+      });
+      await loadAll();
+    } catch (e: any) {
+      toast({ title: `Could not ${action} transfer`, description: e.message, variant: "destructive" });
+    } finally {
+      setDecidingBatch(null);
     }
   }
 
@@ -218,7 +292,7 @@ export default function VeritaStockEnterprisePage() {
           { label: "Locations", value: locations.length },
           { label: "Items tracked", value: rows.length },
           { label: "Low-stock alerts", value: lowAlerts, danger: lowAlerts > 0 },
-          { label: "Recent transfers", value: transfers.length },
+          { label: "Incoming to accept", value: incomingBatches.length, danger: incomingBatches.length > 0 },
         ].map((t) => (
           <div key={t.label} className="bg-muted/40 rounded-lg p-3">
             <div className="text-xs text-muted-foreground mb-1">{t.label}</div>
@@ -234,6 +308,56 @@ export default function VeritaStockEnterprisePage() {
             <Button variant="outline" size="sm" className="ml-auto" onClick={loadAll}>
               <RefreshCw size={13} className="mr-1.5" /> Retry
             </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Incoming transfers: pending shipments this enterprise must Accept
+          (land the stock) or Reject (return it to the source). */}
+      {incomingBatches.length > 0 && (
+        <Card className="mb-4 border-emerald-300 bg-emerald-50/40" data-testid="incoming-transfers">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Truck size={15} className="text-emerald-600" />
+              <span className="font-semibold text-sm">Incoming transfers to accept</span>
+              <Badge variant="outline" className="text-emerald-700">{incomingBatches.length}</Badge>
+            </div>
+            <ul className="space-y-3">
+              {incomingBatches.map((b) => (
+                <li key={b.batch_id} className="rounded-lg border bg-card p-3">
+                  <div className="flex items-center justify-between gap-3 mb-1.5">
+                    <div className="text-sm font-medium">{b.from_lab_name} to {b.to_lab_name}</div>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">{(b.created_at || "").slice(0, 10)}</span>
+                  </div>
+                  <ul className="text-sm text-muted-foreground mb-2 space-y-0.5">
+                    {b.items.map((it) => (
+                      <li key={it.id}>{it.item_name}{it.display_qty != null ? ` · ${it.display_qty} ${it.display_unit}` : ""}</li>
+                    ))}
+                  </ul>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-muted-foreground">{b.initiated_by_name ? `Sent by ${b.initiated_by_name}` : "In transit"}</span>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm" variant="outline"
+                        onClick={() => decideBatch(b.batch_id, "reject")}
+                        disabled={decidingBatch === b.batch_id}
+                        data-testid="reject-transfer"
+                      >
+                        <X size={13} className="mr-1" /> Reject
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => decideBatch(b.batch_id, "accept")}
+                        disabled={decidingBatch === b.batch_id}
+                        data-testid="accept-transfer"
+                      >
+                        <Check size={13} className="mr-1" /> {decidingBatch === b.batch_id ? "Working." : "Accept"}
+                      </Button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </CardContent>
         </Card>
       )}
@@ -382,9 +506,9 @@ export default function VeritaStockEnterprisePage() {
                   ))}
                 </ul>
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs text-muted-foreground">{pendingLines.length} item(s). Moves stock and records a signed ledger entry on both locations, all or nothing.</p>
+                  <p className="text-xs text-muted-foreground">{pendingLines.length} item(s). Stock leaves the source now and lands at {locName(toLab)} once it is accepted there, all or nothing.</p>
                   <Button onClick={submitBatch} disabled={submitting || anyOver} data-testid="transfer-submit">
-                    <Truck size={14} className="mr-1.5" /> {submitting ? "Transferring." : `Transfer ${pendingLines.length} item(s)`}
+                    <Truck size={14} className="mr-1.5" /> {submitting ? "Sending." : `Send ${pendingLines.length} item(s)`}
                   </Button>
                 </div>
               </>
@@ -409,9 +533,18 @@ export default function VeritaStockEnterprisePage() {
                   <div className="flex-1">
                     <span className="font-medium">{t.item_name}</span>
                     {t.display_qty != null && <span className="text-muted-foreground"> · {t.display_qty} {t.display_unit}</span>}
+                    {t.status && t.status !== "completed" && (
+                      <Badge
+                        variant="outline"
+                        className={`ml-2 text-[10px] ${t.status === "pending" ? "text-amber-700 border-amber-300" : t.status === "accepted" ? "text-emerald-700 border-emerald-300" : "text-red-600 border-red-300"}`}
+                      >
+                        {t.status}
+                      </Badge>
+                    )}
                     <div className="text-xs text-muted-foreground">
                       {t.from_lab_name || `Lab ${t.from_lab_id}`} to {t.to_lab_name || `Lab ${t.to_lab_id}`}
                       {t.initiated_by_name && ` · ${t.initiated_by_name}`}
+                      {t.accepted_by_name && t.status === "accepted" && ` · accepted by ${t.accepted_by_name}`}
                     </div>
                   </div>
                   <span className="text-xs text-muted-foreground whitespace-nowrap">{(t.created_at || "").slice(0, 10)}</span>
