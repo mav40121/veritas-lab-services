@@ -6112,6 +6112,65 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     },
   );
 
+  // GET /api/labs/:labId/veritastock/audit-log — the full VeritaStock audit
+  // trail for the owner's enterprise (every action across their locations),
+  // newest first. Reads the shared audit_log table that receive / adjust /
+  // transfer / write-off / item-edit already write via logAudit. Owner-scoped
+  // (audit_log has no lab_id); Location is resolved from the entity's item.
+  app.get(
+    "/api/labs/:labId/veritastock/audit-log",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      try {
+        const sqlite = (db as any).$client;
+        const labId = req.scope.labId;
+        const baseLab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+        const owner = baseLab?.owner_user_id;
+        if (owner == null) return res.status(404).json({ error: "Lab not found" });
+
+        const action = (req.query.action || "").toString().trim();
+        const since = (req.query.since || "").toString().trim(); // YYYY-MM-DD
+        const q = (req.query.q || "").toString().trim().toLowerCase();
+        const limit = Math.min(Math.max(Number(req.query.limit) || 250, 1), 1000);
+
+        let sql = `
+          SELECT a.id, a.user_id, a.action, a.entity_type, a.entity_id, a.entity_label,
+                 a.before_json, a.after_json, a.created_at,
+                 u.email AS actor_email,
+                 il.lab_name AS location_name
+            FROM audit_log a
+            LEFT JOIN users u ON u.id = a.user_id
+            LEFT JOIN inventory_items ii ON a.entity_type = 'inventory_item' AND ii.id = CAST(a.entity_id AS INTEGER)
+            LEFT JOIN labs il ON il.id = ii.lab_id
+           WHERE a.owner_user_id = ? AND a.module = 'veritastock'`;
+        const params: any[] = [owner];
+        if (action) { sql += ` AND a.action = ?`; params.push(action); }
+        if (since) { sql += ` AND a.created_at >= ?`; params.push(since); }
+        sql += ` ORDER BY a.created_at DESC, a.id DESC LIMIT ?`;
+        params.push(limit);
+
+        let rows = sqlite.prepare(sql).all(...params) as any[];
+        if (q) {
+          rows = rows.filter((r) =>
+            (r.entity_label || "").toLowerCase().includes(q) ||
+            (r.actor_email || "").toLowerCase().includes(q) ||
+            (r.action || "").toLowerCase().includes(q),
+          );
+        }
+        // Distinct action list (for the filter dropdown), across the whole trail.
+        const actions = (sqlite.prepare(
+          "SELECT DISTINCT action FROM audit_log WHERE owner_user_id = ? AND module = 'veritastock' ORDER BY action",
+        ).all(owner) as { action: string }[]).map((a) => a.action);
+
+        return res.json({ entries: rows, count: rows.length, actions });
+      } catch (err: any) {
+        console.error("[veritastock/audit-log] error:", err);
+        return res.status(500).json({ error: err.message || "audit_log_failed" });
+      }
+    },
+  );
+
   // GET /api/labs/:labId/veritastock/transfers/incoming — pending shipments
   // bound for any location in this lab's enterprise group, so the destination
   // can Accept (land the stock) or Reject (return it). Grouped by batch_id on

@@ -27,7 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Lock, Plus, Edit2, Trash2, AlertTriangle, Package, Clock, AlertCircle, RefreshCw,
-  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users, Building2, DollarSign, PackageCheck, PackageX, BarChart3,
+  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users, Building2, DollarSign, PackageCheck, PackageX, BarChart3, ScrollText,
 } from "lucide-react";
 import BarcodeScannerModal from "@/components/BarcodeScannerModal";
 import InventoryCountWorkflow, { type CountItem } from "@/components/InventoryCountWorkflow";
@@ -1506,6 +1506,19 @@ export default function VeritaStockInventoryPage() {
             >
               <BarChart3 size={14} className="mr-1.5" />
               Valuation Trends
+            </Button>
+          </Link>
+          {/* Audit Trail: every inventory action across locations (receive, adjust,
+              transfer, write-off, item edit), with who and when. Surveyor-defensible. */}
+          <Link href={activeLabId ? `/labs/${activeLabId}/veritastock/audit` : "/veritastock/audit"}>
+            <Button
+              size="sm"
+              variant="outline"
+              title="Full audit trail: every receive, adjust, transfer, and write-off, with who and when"
+              data-testid="audit-trail-button"
+            >
+              <ScrollText size={14} className="mr-1.5" />
+              Audit Trail
             </Button>
           </Link>
           {/* Snap Order: emergency manual-order PDF (additive to calculated
