@@ -264,6 +264,54 @@ export function resetVeritaStockDemo(sqlite: any, now: Date = new Date()): { ok:
         insReceipt.run(WAREHOUSE, row.id, row.account_id, it.name, it.vendor, it.units_per_order_unit, it.usage_unit, placed, expected, received, sr.programmed, actual, null, nowIso);
       });
     }
+
+    // Seed a believable VeritaStock audit history so the Audit Trail tab is
+    // alive in the demo. Clear the demo owner's prior veritastock rows first so
+    // the trail is consistent each reset and never accumulates stale test data.
+    // (The live endpoints now log receive/adjust/write-off/transfer; this seeds
+    // a backdated set of the SAME action types, so nothing here is fabricated
+    // beyond what the system genuinely produces.)
+    const demoOwner = (sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(WAREHOUSE) as any)?.owner_user_id;
+    if (demoOwner != null) {
+      try { sqlite.prepare("DELETE FROM audit_log WHERE module = 'veritastock' AND owner_user_id = ?").run(demoOwner); } catch {}
+      const itemIdAt = (lab: number, key: string): number | null => {
+        const r = sqlite.prepare("SELECT id FROM inventory_items WHERE lab_id = ? AND item_name = ?").get(lab, ITEMS[key].name) as any;
+        return r?.id ?? null;
+      };
+      const insAudit = sqlite.prepare(
+        `INSERT INTO audit_log (user_id, owner_user_id, module, action, entity_type, entity_id, entity_label, before_json, after_json, ip_address, created_at)
+         VALUES (?, ?, 'veritastock', ?, 'inventory_item', ?, ?, ?, ?, NULL, ?)`
+      );
+      const at = (daysAgo: number, hhmm: string) => `${isoPlusDays(now, -daysAgo)} ${hhmm}:00`;
+      // [daysAgo, time, action, lab, itemKey, entity_label, before, after]
+      const EVENTS: Array<[number, string, string, number, string, string, any, any]> = [
+        [44, "08:11", "receive",   WAREHOUSE, "GLOVE",  "Nitrile exam gloves: received 4000 glove (on hand 8000 to 12000)", { quantity_on_hand: 8000 }, { quantity_on_hand: 12000 }],
+        [41, "09:02", "receive",   WAREHOUSE, "EDTA",   "EDTA collection tube: received 5000 tube (on hand 6000 to 11000)", { quantity_on_hand: 6000 }, { quantity_on_hand: 11000 }],
+        [38, "13:24", "adjust",    WAREHOUSE, "GLOVE",  "Nitrile exam gloves: count adjusted 12000 to 11940 (cycle count)", { quantity_on_hand: 12000 }, { quantity_on_hand: 11940 }],
+        [35, "10:47", "receive",   WAREHOUSE, "SALINE", "Normal saline 1000 mL IV bag: received 600 bag (on hand 240 to 840)", { quantity_on_hand: 240 }, { quantity_on_hand: 840 }],
+        [33, "15:09", "write_off", WAREHOUSE, "BCSET",  "Blood culture bottle set: wrote off 120 set (expired), $864.00 loss", { quantity_on_hand: 540 }, { quantity_on_hand: 420 }],
+        [30, "11:31", "transfer_out", WAREHOUSE, "GLOVE", "Nitrile exam gloves: -2000 glove to ED Stockroom", { quantity_on_hand: 11940 }, { quantity_on_hand: 9940 }],
+        [30, "11:46", "transfer_in",  ED,        "GLOVE", "Nitrile exam gloves: +2000 glove accepted from San Carlos Warehouse", { quantity_on_hand: 1500 }, { quantity_on_hand: 3500 }],
+        [27, "08:55", "adjust",    ED,        "PADS",   "Alcohol prep pads: count adjusted 1800 to 1760 (cycle count)", { quantity_on_hand: 1800 }, { quantity_on_hand: 1760 }],
+        [24, "14:02", "receive",   WAREHOUSE, "RESP",   "Rapid respiratory test cartridge: received 75 test (on hand 90 to 165)", { quantity_on_hand: 90 }, { quantity_on_hand: 165 }],
+        [22, "09:38", "write_off", ED,        "STRIP",  "Glucometer test strips: wrote off 50 strip (damaged), $42.50 loss", { quantity_on_hand: 400 }, { quantity_on_hand: 350 }],
+        [19, "16:20", "transfer_out", WAREHOUSE, "EDTA", "EDTA collection tube: -1500 tube to Inpatient Unit", { quantity_on_hand: 11000 }, { quantity_on_hand: 9500 }],
+        [19, "16:33", "transfer_in",  INPATIENT, "EDTA", "EDTA collection tube: +1500 tube accepted from San Carlos Warehouse", { quantity_on_hand: 800 }, { quantity_on_hand: 2300 }],
+        [16, "10:05", "receive",   WAREHOUSE, "IVKIT",  "IV start kit: received 400 kit (on hand 160 to 560)", { quantity_on_hand: 160 }, { quantity_on_hand: 560 }],
+        [13, "12:50", "adjust",    WAREHOUSE, "SALINE", "Normal saline 1000 mL IV bag: count adjusted 720 to 700 (cycle count)", { quantity_on_hand: 720 }, { quantity_on_hand: 700 }],
+        [10, "08:19", "write_off", INPATIENT, "SALINE", "Normal saline 1000 mL IV bag: wrote off 24 bag (expired), $43.20 loss", { quantity_on_hand: 180 }, { quantity_on_hand: 156 }],
+        [8,  "11:14", "receive",   WAREHOUSE, "STRIP",  "Glucometer test strips: received 1000 strip (on hand 2000 to 3000)", { quantity_on_hand: 2000 }, { quantity_on_hand: 3000 }],
+        [6,  "13:41", "transfer_out", WAREHOUSE, "SALINE", "Normal saline 1000 mL IV bag: -300 bag to Clinic", { quantity_on_hand: 700 }, { quantity_on_hand: 400 }],
+        [6,  "14:02", "transfer_in",  CLINIC,    "SALINE", "Normal saline 1000 mL IV bag: +300 bag accepted from San Carlos Warehouse", { quantity_on_hand: 90 }, { quantity_on_hand: 390 }],
+        [3,  "09:27", "adjust",    WAREHOUSE, "BCSET",  "Blood culture bottle set: count adjusted 420 to 416 (cycle count)", { quantity_on_hand: 420 }, { quantity_on_hand: 416 }],
+        [1,  "10:48", "receive",   WAREHOUSE, "DRESS",  "Wound care dressing kit: received 100 kit (on hand 60 to 160)", { quantity_on_hand: 60 }, { quantity_on_hand: 160 }],
+      ];
+      for (const [d, hhmm, action, lab, key, label, before, after] of EVENTS) {
+        const iid = itemIdAt(lab as number, key as string);
+        if (iid == null) continue;
+        insAudit.run(demoOwner, action, iid, label, before ? JSON.stringify(before) : null, after ? JSON.stringify(after) : null, at(d as number, hhmm as string));
+      }
+    }
   });
   tx();
   return { ok: true, labs: summary, months };
