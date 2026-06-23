@@ -238,7 +238,12 @@ export default function VeritaStockEnterprisePage() {
     }
     setDecidingBatch(batchId);
     try {
-      const res = await fetch(`${API_BASE}/api/labs/${labId}/veritastock/transfers/${batchId}/${action}`, {
+      // Literal accept/reject suffix (not an interpolated segment) so the
+      // lab-scoped write-route guard can match the server route statically.
+      const url = action === "accept"
+        ? `${API_BASE}/api/labs/${labId}/veritastock/transfers/${batchId}/accept`
+        : `${API_BASE}/api/labs/${labId}/veritastock/transfers/${batchId}/reject`;
+      const res = await fetch(url, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify(action === "reject" ? { reason } : {}),
