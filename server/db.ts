@@ -5023,7 +5023,13 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_surveyor_links_token ON
   const manualsCols = (sqlite.prepare("PRAGMA table_info(policy_manuals)").all() as { name: string }[]).map((c) => c.name);
   void manualsCols;
   const docsCols = (sqlite.prepare("PRAGMA table_info(policy_documents)").all() as { name: string }[]).map((c) => c.name);
-  void docsCols;
+  // MediaLab parity #39 item 2 (gate): the lab decides whether a passing quiz
+  // score is required to complete an attestation, and sets the threshold. No
+  // product default; both columns stay null until the lab configures them.
+  // quiz_requires_pass: 1 = gate completion, 0 = record-only, null = not set.
+  // quiz_pass_threshold: integer percent 1-100; null when not gating.
+  if (!docsCols.includes("quiz_requires_pass")) sqlite.exec("ALTER TABLE policy_documents ADD COLUMN quiz_requires_pass INTEGER");
+  if (!docsCols.includes("quiz_pass_threshold")) sqlite.exec("ALTER TABLE policy_documents ADD COLUMN quiz_pass_threshold INTEGER");
   const versionsCols = (sqlite.prepare("PRAGMA table_info(policy_versions)").all() as { name: string }[]).map((c) => c.name);
   void versionsCols;
   const workflowsCols = (sqlite.prepare("PRAGMA table_info(policy_approval_workflows)").all() as { name: string }[]).map((c) => c.name);
