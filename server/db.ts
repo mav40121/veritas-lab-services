@@ -3755,6 +3755,11 @@ sqlite.exec(`
     initiated_by_user_id INTEGER NOT NULL,
     initiated_by_name TEXT,
     notes TEXT,
+    batch_id TEXT,
+    accepted_by_user_id INTEGER,
+    accepted_by_name TEXT,
+    accepted_at TEXT,
+    decision_notes TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )
 `);
@@ -3776,8 +3781,19 @@ sqlite.exec(`
     ensureIt("status", "ALTER TABLE inventory_transfers ADD COLUMN status TEXT NOT NULL DEFAULT 'completed'");
     ensureIt("initiated_by_name", "ALTER TABLE inventory_transfers ADD COLUMN initiated_by_name TEXT");
     ensureIt("notes", "ALTER TABLE inventory_transfers ADD COLUMN notes TEXT");
+    // Two-phase ship->accept lifecycle (John, San Carlos 2026-06-23). A transfer
+    // is sent as 'pending' (stock leaves the source, in transit) and the
+    // destination Accepts (stock lands) or Rejects (stock returns to source).
+    // batch_id groups a multi-item shipment so it is accepted/rejected as a
+    // unit. Legacy rows keep status 'completed' and are unaffected.
+    ensureIt("batch_id", "ALTER TABLE inventory_transfers ADD COLUMN batch_id TEXT");
+    ensureIt("accepted_by_user_id", "ALTER TABLE inventory_transfers ADD COLUMN accepted_by_user_id INTEGER");
+    ensureIt("accepted_by_name", "ALTER TABLE inventory_transfers ADD COLUMN accepted_by_name TEXT");
+    ensureIt("accepted_at", "ALTER TABLE inventory_transfers ADD COLUMN accepted_at TEXT");
+    ensureIt("decision_notes", "ALTER TABLE inventory_transfers ADD COLUMN decision_notes TEXT");
   }
 }
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inv_transfers_batch ON inventory_transfers(batch_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inv_transfers_from ON inventory_transfers(from_lab_id, created_at DESC)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inv_transfers_to ON inventory_transfers(to_lab_id, created_at DESC)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inv_transfers_owner ON inventory_transfers(owner_user_id, created_at DESC)`); } catch {}

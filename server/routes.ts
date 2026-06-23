@@ -5809,66 +5809,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           return res.status(status).json({ error: guard.error });
         }
 
-        const cat = (sourceItem.catalog_number || "").trim();
-        const destItem = cat
-          ? sqlite.prepare(
-              "SELECT * FROM inventory_items WHERE lab_id = ? AND lower(trim(catalog_number)) = lower(?) LIMIT 1"
-            ).get(toLabId, cat) as any
-          : sqlite.prepare(
-              "SELECT * FROM inventory_items WHERE lab_id = ? AND lower(trim(item_name)) = lower(?) LIMIT 1"
-            ).get(toLabId, (sourceItem.item_name || "").trim()) as any;
-
         const countUnitLabel = sourceItem.count_unit || sourceItem.unit || "each";
         const displayQty = Math.round(quantity);
         const nowIso = new Date().toISOString();
         const actor = sqlite.prepare("SELECT email FROM users WHERE id = ?").get(userId) as any;
         const actorName = actor?.email || `user ${userId}`;
 
+        const batchId = crypto.randomUUID();
         const run = sqlite.transaction(() => {
-          let destId: number;
-          let destBefore: number;
-          if (!destItem) {
-            const ins = sqlite.prepare(`
-              INSERT INTO inventory_items
-                (account_id, lab_id, item_name, catalog_number, department, category,
-                 quantity_on_hand, reorder_point, unit, vendor,
-                 order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit,
-                 status, created_at, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
-            `).run(
-              toLab.owner_user_id, toLabId, sourceItem.item_name, sourceItem.catalog_number || null,
-              sourceItem.department || "Core Lab", sourceItem.category || "Reagent",
-              sourceItem.reorder_point ?? 5, sourceItem.unit || "each", sourceItem.vendor || null,
-              sourceItem.order_unit || "each", sourceItem.usage_unit || "each",
-              sourceItem.units_per_order_unit ?? 1, sourceItem.count_unit || "each",
-              sourceItem.units_per_count_unit ?? 1, nowIso, nowIso,
-            );
-            destId = Number(ins.lastInsertRowid);
-            destBefore = 0;
-          } else {
-            destId = destItem.id;
-            destBefore = destItem.quantity_on_hand;
-          }
-
+          // Two-phase: stock leaves the source now (in transit); the destination
+          // Accepts to land it. The dest item is resolved/created at accept time
+          // (from from_item_id), so a rejected shipment creates nothing.
           const srcBefore = sourceItem.quantity_on_hand;
           const srcAfter = srcBefore - usageQty;
-          const destAfter = destBefore + usageQty;
-
           sqlite.prepare("UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?")
             .run(srcAfter, nowIso, sourceItem.id);
-          sqlite.prepare("UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?")
-            .run(destAfter, nowIso, destId);
 
           const insT = sqlite.prepare(`
             INSERT INTO inventory_transfers
               (owner_user_id, from_lab_id, to_lab_id, from_item_id, to_item_id,
                catalog_number, item_name, qty_usage_units, display_qty, display_unit,
-               status, initiated_by_user_id, initiated_by_name, notes, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?, ?)
+               status, batch_id, initiated_by_user_id, initiated_by_name, notes, created_at)
+            VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
           `).run(
-            fromLab.owner_user_id, fromLabId, toLabId, sourceItem.id, destId,
+            fromLab.owner_user_id, fromLabId, toLabId, sourceItem.id,
             sourceItem.catalog_number || null, sourceItem.item_name, usageQty,
-            displayQty, countUnitLabel, userId, actorName, notes, nowIso,
+            displayQty, countUnitLabel, batchId, userId, actorName, notes, nowIso,
           );
           const transferId = Number(insT.lastInsertRowid);
 
@@ -5879,36 +5845,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             action: "transfer_out",
             entityType: "inventory_item",
             entityId: String(sourceItem.id),
-            entityLabel: `${sourceItem.item_name}: -${displayQty} ${countUnitLabel} to ${toLab.lab_name || "lab " + toLabId}`,
+            entityLabel: `${sourceItem.item_name}: -${displayQty} ${countUnitLabel} to ${toLab.lab_name || "lab " + toLabId} (pending acceptance)`,
             before: { quantity_on_hand: srcBefore },
-            after: { quantity_on_hand: srcAfter, transfer_id: transferId, to_lab_id: toLabId, usage_qty: usageQty },
-            ipAddress: req.ip,
-          });
-          logAudit({
-            userId,
-            ownerUserId: toLab.owner_user_id,
-            module: "veritastock",
-            action: "transfer_in",
-            entityType: "inventory_item",
-            entityId: String(destId),
-            entityLabel: `${sourceItem.item_name}: +${displayQty} ${countUnitLabel} from ${fromLab.lab_name || "lab " + fromLabId}`,
-            before: { quantity_on_hand: destBefore },
-            after: { quantity_on_hand: destAfter, transfer_id: transferId, from_lab_id: fromLabId, usage_qty: usageQty },
+            after: { quantity_on_hand: srcAfter, transfer_id: transferId, batch_id: batchId, to_lab_id: toLabId, usage_qty: usageQty, status: "pending" },
             ipAddress: req.ip,
           });
 
-          return { transferId, destId, srcAfter, destAfter };
+          return { transferId, srcAfter };
         });
 
         const result = run();
         return res.json({
           ok: true,
           transfer_id: result.transferId,
+          batch_id: batchId,
+          status: "pending",
           item_name: sourceItem.item_name,
           moved_usage_units: usageQty,
           moved_display: `${displayQty} ${countUnitLabel}`,
           source: { lab_id: fromLabId, item_id: sourceItem.id, quantity_on_hand: result.srcAfter },
-          destination: { lab_id: toLabId, item_id: result.destId, quantity_on_hand: result.destAfter },
+          destination: { lab_id: toLabId, pending: true },
         });
       } catch (err: any) {
         console.error("[veritastock/transfer] error:", err);
@@ -5980,89 +5936,58 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const actor = sqlite.prepare("SELECT email FROM users WHERE id = ?").get(userId) as any;
         const actorName = actor?.email || `user ${userId}`;
 
+        // One shipment id for the whole batch, so the destination accepts or
+        // rejects every line as a single unit.
+        const batchId = crypto.randomUUID();
+
         const run = sqlite.transaction(() => {
           const out: any[] = [];
           for (const r of resolved) {
             const sourceItem = r.sourceItem;
             const countUnitLabel = sourceItem.count_unit || sourceItem.unit || "each";
             const displayQty = Math.round(r.quantity);
-            const cat = (sourceItem.catalog_number || "").trim();
-            const destItem = cat
-              ? sqlite.prepare("SELECT * FROM inventory_items WHERE lab_id = ? AND lower(trim(catalog_number)) = lower(?) LIMIT 1").get(toLabId, cat) as any
-              : sqlite.prepare("SELECT * FROM inventory_items WHERE lab_id = ? AND lower(trim(item_name)) = lower(?) LIMIT 1").get(toLabId, (sourceItem.item_name || "").trim()) as any;
 
-            let destId: number;
-            let destBefore: number;
-            if (!destItem) {
-              const ins = sqlite.prepare(`
-                INSERT INTO inventory_items
-                  (account_id, lab_id, item_name, catalog_number, department, category,
-                   quantity_on_hand, reorder_point, unit, vendor,
-                   order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit,
-                   status, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
-              `).run(
-                toLab.owner_user_id, toLabId, sourceItem.item_name, sourceItem.catalog_number || null,
-                sourceItem.department || "Core Lab", sourceItem.category || "Reagent",
-                sourceItem.reorder_point ?? 5, sourceItem.unit || "each", sourceItem.vendor || null,
-                sourceItem.order_unit || "each", sourceItem.usage_unit || "each",
-                sourceItem.units_per_order_unit ?? 1, sourceItem.count_unit || "each",
-                sourceItem.units_per_count_unit ?? 1, nowIso, nowIso,
-              );
-              destId = Number(ins.lastInsertRowid);
-              destBefore = 0;
-            } else {
-              destId = destItem.id;
-              destBefore = destItem.quantity_on_hand;
-            }
-
+            // Two-phase: stock leaves the source now (in transit); it does NOT
+            // land at the destination until the destination Accepts. The dest
+            // item is resolved/created at accept time (from from_item_id), so a
+            // rejected shipment never creates an empty item at the destination.
             const srcBefore = sourceItem.quantity_on_hand;
             const srcAfter = srcBefore - r.usageQty;
-            const destAfter = destBefore + r.usageQty;
             sqlite.prepare("UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?").run(srcAfter, nowIso, sourceItem.id);
-            sqlite.prepare("UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?").run(destAfter, nowIso, destId);
 
             const insT = sqlite.prepare(`
               INSERT INTO inventory_transfers
                 (owner_user_id, from_lab_id, to_lab_id, from_item_id, to_item_id,
                  catalog_number, item_name, qty_usage_units, display_qty, display_unit,
-                 status, initiated_by_user_id, initiated_by_name, notes, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?, ?)
+                 status, batch_id, initiated_by_user_id, initiated_by_name, notes, created_at)
+              VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
             `).run(
-              fromLab.owner_user_id, fromLabId, toLabId, sourceItem.id, destId,
+              fromLab.owner_user_id, fromLabId, toLabId, sourceItem.id,
               sourceItem.catalog_number || null, sourceItem.item_name, r.usageQty,
-              displayQty, countUnitLabel, userId, actorName, notes, nowIso,
+              displayQty, countUnitLabel, batchId, userId, actorName, notes, nowIso,
             );
             const transferId = Number(insT.lastInsertRowid);
 
             logAudit({
               userId, ownerUserId: fromLab.owner_user_id, module: "veritastock", action: "transfer_out",
               entityType: "inventory_item", entityId: String(sourceItem.id),
-              entityLabel: `${sourceItem.item_name}: -${displayQty} ${countUnitLabel} to ${toLab.lab_name || "lab " + toLabId}`,
+              entityLabel: `${sourceItem.item_name}: -${displayQty} ${countUnitLabel} to ${toLab.lab_name || "lab " + toLabId} (pending acceptance)`,
               before: { quantity_on_hand: srcBefore },
-              after: { quantity_on_hand: srcAfter, transfer_id: transferId, to_lab_id: toLabId, usage_qty: r.usageQty, batch: true },
-              ipAddress: req.ip,
-            });
-            logAudit({
-              userId, ownerUserId: toLab.owner_user_id, module: "veritastock", action: "transfer_in",
-              entityType: "inventory_item", entityId: String(destId),
-              entityLabel: `${sourceItem.item_name}: +${displayQty} ${countUnitLabel} from ${fromLab.lab_name || "lab " + fromLabId}`,
-              before: { quantity_on_hand: destBefore },
-              after: { quantity_on_hand: destAfter, transfer_id: transferId, from_lab_id: fromLabId, usage_qty: r.usageQty, batch: true },
+              after: { quantity_on_hand: srcAfter, transfer_id: transferId, batch_id: batchId, to_lab_id: toLabId, usage_qty: r.usageQty, status: "pending", batch: true },
               ipAddress: req.ip,
             });
 
             out.push({
               item_id: sourceItem.id, item_name: sourceItem.item_name,
               moved_display: `${displayQty} ${countUnitLabel}`,
-              dest_item_id: destId, source_after: srcAfter, dest_after: destAfter, transfer_id: transferId,
+              source_after: srcAfter, transfer_id: transferId, status: "pending",
             });
           }
           return out;
         });
 
         const results = run();
-        return res.json({ ok: true, transferred: results.length, from_lab_id: fromLabId, to_lab_id: toLabId, results });
+        return res.json({ ok: true, batch_id: batchId, status: "pending", sent: results.length, from_lab_id: fromLabId, to_lab_id: toLabId, results });
       } catch (err: any) {
         console.error("[veritastock/transfer-batch] error:", err);
         return res.status(500).json({ error: err.message || "transfer_batch_failed" });
@@ -6183,6 +6108,216 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       } catch (err: any) {
         console.error("[veritastock/transfers] error:", err);
         return res.status(500).json({ error: err.message || "transfers_failed" });
+      }
+    },
+  );
+
+  // GET /api/labs/:labId/veritastock/transfers/incoming — pending shipments
+  // bound for any location in this lab's enterprise group, so the destination
+  // can Accept (land the stock) or Reject (return it). Grouped by batch_id on
+  // the client. Scoped exactly like the rollup (same-owner + member, narrowed
+  // to this lab's warehouse group).
+  app.get(
+    "/api/labs/:labId/veritastock/transfers/incoming",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      try {
+        const sqlite = (db as any).$client;
+        const labId = req.scope.labId;
+        const userId = req.scope.userId;
+        const baseLab = sqlite.prepare("SELECT owner_user_id, parent_warehouse_lab_id FROM labs WHERE id = ?").get(labId) as any;
+        const owner = baseLab?.owner_user_id;
+        if (owner == null) return res.status(404).json({ error: "Lab not found" });
+        const ownerLabs = sqlite.prepare(`
+          SELECT l.id AS id, l.lab_name AS lab_name, l.parent_warehouse_lab_id AS parent_warehouse_lab_id
+            FROM labs l
+            JOIN lab_members lm ON lm.lab_id = l.id AND lm.user_id = ? AND lm.status = 'active'
+           WHERE l.owner_user_id = ?
+        `).all(userId, owner) as any[];
+        const locs = scopeEnterpriseLocations(
+          { id: labId, parent_warehouse_lab_id: baseLab.parent_warehouse_lab_id },
+          ownerLabs,
+        );
+        const groupIds = locs.map((l: any) => l.id);
+        if (groupIds.length === 0) return res.json({ incoming: [], total: 0 });
+        const placeholders = groupIds.map(() => "?").join(",");
+        const rows = sqlite.prepare(`
+          SELECT t.*, lf.lab_name AS from_lab_name, lt.lab_name AS to_lab_name
+            FROM inventory_transfers t
+            LEFT JOIN labs lf ON lf.id = t.from_lab_id
+            LEFT JOIN labs lt ON lt.id = t.to_lab_id
+           WHERE t.status = 'pending' AND t.to_lab_id IN (${placeholders})
+           ORDER BY t.created_at DESC, t.id DESC
+           LIMIT 500
+        `).all(...groupIds) as any[];
+        return res.json({ incoming: rows, total: rows.length });
+      } catch (err: any) {
+        console.error("[veritastock/transfers/incoming] error:", err);
+        return res.status(500).json({ error: err.message || "incoming_failed" });
+      }
+    },
+  );
+
+  // POST /api/labs/:labId/veritastock/transfers/:batchId/accept — the
+  // destination accepts a pending shipment. Stock lands at the destination
+  // (the dest item is resolved or created per line, from the still-existing
+  // source item), and every line in the batch flips to 'accepted'. Only a
+  // member of the destination location may accept.
+  app.post(
+    "/api/labs/:labId/veritastock/transfers/:batchId/accept",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      try {
+        const sqlite = (db as any).$client;
+        const userId = req.scope.userId;
+        const batchId = String(req.params.batchId || "");
+        if (!batchId) return res.status(400).json({ error: "batch_id required" });
+
+        const pending = sqlite.prepare(
+          "SELECT * FROM inventory_transfers WHERE batch_id = ? AND status = 'pending'"
+        ).all(batchId) as any[];
+        if (pending.length === 0) return res.status(404).json({ error: "No pending transfer for this batch" });
+
+        const toLabId = pending[0].to_lab_id;
+        if (pending.some((p) => p.to_lab_id !== toLabId)) {
+          return res.status(409).json({ error: "Batch spans multiple destinations" });
+        }
+        if (!userIsMemberOfLab(userId, toLabId)) {
+          return res.status(403).json({ error: "No access to the destination location" });
+        }
+        const toLab = sqlite.prepare("SELECT id, owner_user_id, lab_name FROM labs WHERE id = ?").get(toLabId) as any;
+        if (!toLab) return res.status(404).json({ error: "Destination lab not found" });
+
+        const nowIso = new Date().toISOString();
+        const actor = sqlite.prepare("SELECT email FROM users WHERE id = ?").get(userId) as any;
+        const actorName = actor?.email || `user ${userId}`;
+
+        const run = sqlite.transaction(() => {
+          const out: any[] = [];
+          for (const t of pending) {
+            const countUnitLabel = t.display_unit || "each";
+            const src = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(t.from_item_id) as any;
+            const cat = (t.catalog_number || "").trim();
+            const destItem = cat
+              ? sqlite.prepare("SELECT * FROM inventory_items WHERE lab_id = ? AND lower(trim(catalog_number)) = lower(?) LIMIT 1").get(toLabId, cat) as any
+              : sqlite.prepare("SELECT * FROM inventory_items WHERE lab_id = ? AND lower(trim(item_name)) = lower(?) LIMIT 1").get(toLabId, (t.item_name || "").trim()) as any;
+
+            let destId: number;
+            let destBefore: number;
+            if (!destItem) {
+              const ins = sqlite.prepare(`
+                INSERT INTO inventory_items
+                  (account_id, lab_id, item_name, catalog_number, department, category,
+                   quantity_on_hand, reorder_point, unit, vendor,
+                   order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit,
+                   status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+              `).run(
+                toLab.owner_user_id, toLabId, t.item_name, t.catalog_number || null,
+                src?.department || "Core Lab", src?.category || "Reagent",
+                src?.reorder_point ?? 5, src?.unit || "each", src?.vendor || null,
+                src?.order_unit || "each", src?.usage_unit || "each",
+                src?.units_per_order_unit ?? 1, src?.count_unit || countUnitLabel,
+                src?.units_per_count_unit ?? 1, nowIso, nowIso,
+              );
+              destId = Number(ins.lastInsertRowid);
+              destBefore = 0;
+            } else {
+              destId = destItem.id;
+              destBefore = destItem.quantity_on_hand;
+            }
+            const destAfter = destBefore + t.qty_usage_units;
+            sqlite.prepare("UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?").run(destAfter, nowIso, destId);
+            sqlite.prepare(
+              "UPDATE inventory_transfers SET status = 'accepted', to_item_id = ?, accepted_by_user_id = ?, accepted_by_name = ?, accepted_at = ? WHERE id = ?"
+            ).run(destId, userId, actorName, nowIso, t.id);
+
+            logAudit({
+              userId, ownerUserId: toLab.owner_user_id, module: "veritastock", action: "transfer_in",
+              entityType: "inventory_item", entityId: String(destId),
+              entityLabel: `${t.item_name}: +${t.display_qty ?? t.qty_usage_units} ${countUnitLabel} accepted from ${t.from_lab_name || "lab " + t.from_lab_id}`,
+              before: { quantity_on_hand: destBefore },
+              after: { quantity_on_hand: destAfter, transfer_id: t.id, batch_id: batchId, from_lab_id: t.from_lab_id, usage_qty: t.qty_usage_units, status: "accepted" },
+              ipAddress: req.ip,
+            });
+            out.push({ transfer_id: t.id, item_name: t.item_name, dest_item_id: destId, dest_after: destAfter });
+          }
+          return out;
+        });
+        const results = run();
+        return res.json({ ok: true, batch_id: batchId, status: "accepted", accepted: results.length, to_lab_id: toLabId, results });
+      } catch (err: any) {
+        console.error("[veritastock/transfers/accept] error:", err);
+        return res.status(500).json({ error: err.message || "accept_failed" });
+      }
+    },
+  );
+
+  // POST /api/labs/:labId/veritastock/transfers/:batchId/reject — the
+  // destination rejects a pending shipment (damaged, wrong item, out of temp).
+  // The in-transit stock returns to the source item; every line flips to
+  // 'rejected'. Only a member of the destination location may reject.
+  app.post(
+    "/api/labs/:labId/veritastock/transfers/:batchId/reject",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      try {
+        const sqlite = (db as any).$client;
+        const userId = req.scope.userId;
+        const batchId = String(req.params.batchId || "");
+        const decisionNotes = typeof req.body?.reason === "string" ? req.body.reason.trim().slice(0, 500) : null;
+        if (!batchId) return res.status(400).json({ error: "batch_id required" });
+
+        const pending = sqlite.prepare(
+          "SELECT * FROM inventory_transfers WHERE batch_id = ? AND status = 'pending'"
+        ).all(batchId) as any[];
+        if (pending.length === 0) return res.status(404).json({ error: "No pending transfer for this batch" });
+
+        const toLabId = pending[0].to_lab_id;
+        if (pending.some((p) => p.to_lab_id !== toLabId)) {
+          return res.status(409).json({ error: "Batch spans multiple destinations" });
+        }
+        if (!userIsMemberOfLab(userId, toLabId)) {
+          return res.status(403).json({ error: "No access to the destination location" });
+        }
+        const nowIso = new Date().toISOString();
+        const actor = sqlite.prepare("SELECT email FROM users WHERE id = ?").get(userId) as any;
+        const actorName = actor?.email || `user ${userId}`;
+
+        const run = sqlite.transaction(() => {
+          const out: any[] = [];
+          for (const t of pending) {
+            const countUnitLabel = t.display_unit || "each";
+            const src = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(t.from_item_id) as any;
+            let srcAfter: number | null = null;
+            if (src) {
+              const srcBefore = src.quantity_on_hand;
+              srcAfter = srcBefore + t.qty_usage_units;
+              sqlite.prepare("UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?").run(srcAfter, nowIso, src.id);
+              logAudit({
+                userId, ownerUserId: t.owner_user_id, module: "veritastock", action: "transfer_rejected",
+                entityType: "inventory_item", entityId: String(src.id),
+                entityLabel: `${t.item_name}: +${t.display_qty ?? t.qty_usage_units} ${countUnitLabel} returned (transfer to ${t.to_lab_name || "lab " + t.to_lab_id} rejected)`,
+                before: { quantity_on_hand: srcBefore },
+                after: { quantity_on_hand: srcAfter, transfer_id: t.id, batch_id: batchId, status: "rejected" },
+                ipAddress: req.ip,
+              });
+            }
+            sqlite.prepare(
+              "UPDATE inventory_transfers SET status = 'rejected', accepted_by_user_id = ?, accepted_by_name = ?, accepted_at = ?, decision_notes = ? WHERE id = ?"
+            ).run(userId, actorName, nowIso, decisionNotes, t.id);
+            out.push({ transfer_id: t.id, item_name: t.item_name, source_after: srcAfter });
+          }
+          return out;
+        });
+        const results = run();
+        return res.json({ ok: true, batch_id: batchId, status: "rejected", rejected: results.length, results });
+      } catch (err: any) {
+        console.error("[veritastock/transfers/reject] error:", err);
+        return res.status(500).json({ error: err.message || "reject_failed" });
       }
     },
   );
