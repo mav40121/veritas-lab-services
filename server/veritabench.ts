@@ -4,6 +4,7 @@
 import type { Express } from "express";
 import crypto from "crypto";
 import { db } from "./db";
+import { logAudit } from "./audit";
 import { resolveLegacyLabId } from "./labAccessGuard";
 import { DEMO_USER_EMAIL } from "./constants";
 import { applyLicenseToExcelJS } from "./licenseStamp";
@@ -1493,6 +1494,17 @@ export function registerVeritaBenchRoutes(
       "UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?"
     ).run(usageQty, nowIso, itemId);
 
+    try {
+      logAudit({
+        userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritastock", action: "adjust",
+        entityType: "inventory_item", entityId: itemId,
+        entityLabel: `${(existing as any).item_name}: count adjusted ${beforeQty} to ${usageQty}${reason ? ` (${reason})` : ""}`,
+        before: { quantity_on_hand: beforeQty },
+        after: { quantity_on_hand: usageQty, reason: reason || null },
+        ipAddress: req.ip,
+      });
+    } catch { /* audit is best-effort */ }
+
     const fresh = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(itemId);
     res.json({
       item: decorateInventoryItem(fresh),
@@ -1585,6 +1597,16 @@ export function registerVeritaBenchRoutes(
         nowIso,
       );
     } catch (e) { /* receipt logging is best-effort; receive already succeeded */ }
+    try {
+      logAudit({
+        userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritastock", action: "receive",
+        entityType: "inventory_item", entityId: itemId,
+        entityLabel: `${(existing as any).item_name}: received ${recv} ${(existing as any).usage_unit || "unit"} (on hand ${beforeOnHand} to ${newOnHand})${noteStr ? ` - ${noteStr}` : ""}`,
+        before: { quantity_on_hand: beforeOnHand, on_order_qty: onOrder },
+        after: { quantity_on_hand: newOnHand, on_order_qty: newOnOrder },
+        ipAddress: req.ip,
+      });
+    } catch { /* audit is best-effort */ }
     const fresh = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(itemId);
     res.json({
       item: decorateInventoryItem(fresh),
@@ -1686,6 +1708,17 @@ export function registerVeritaBenchRoutes(
       `).run(labId, yearMonth, curVal, curVal, wasteValue, nowIso, nowIso);
     });
     tx();
+
+    try {
+      logAudit({
+        userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritastock", action: "write_off",
+        entityType: "inventory_item", entityId: itemId,
+        entityLabel: `${(existing as any).item_name}: wrote off ${qty} ${(existing as any).usage_unit || "unit"} (${reasonCode}), $${wasteValue.toFixed(2)} loss`,
+        before: { quantity_on_hand: onHand },
+        after: { quantity_on_hand: newOnHand, reason_code: reasonCode, waste_value: wasteValue },
+        ipAddress: req.ip,
+      });
+    } catch { /* audit is best-effort */ }
 
     const fresh = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(itemId);
     res.json({
