@@ -30129,6 +30129,62 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     },
   );
 
+  // GET /documents/:id/quiz-config — read the lab's gate-or-record choice and
+  // threshold for this policy's quiz. The lab owns this; there is NO product
+  // default (null = not configured = not gated).
+  app.get(
+    "/api/labs/:labId/veritapolicy/documents/:id/quiz-config",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const docId = Number(req.params.id);
+      const row = sqlite.prepare(
+        "SELECT quiz_requires_pass, quiz_pass_threshold FROM policy_documents WHERE id = ? AND lab_id = ?"
+      ).get(docId, req.scope.labId) as any;
+      if (!row) return res.status(404).json({ error: "Policy not in this lab" });
+      res.json({
+        quiz_requires_pass: row.quiz_requires_pass == null ? null : row.quiz_requires_pass === 1,
+        quiz_pass_threshold: row.quiz_pass_threshold ?? null,
+      });
+    },
+  );
+
+  // PUT /documents/:id/quiz-config — the lab sets whether a passing quiz score
+  // is required to complete the attestation, and the passing threshold. The
+  // product imposes nothing: if requires_pass is true the lab must supply a
+  // numeric threshold 1-100 (no default); record-only clears the threshold.
+  app.put(
+    "/api/labs/:labId/veritapolicy/documents/:id/quiz-config",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const docId = Number(req.params.id);
+      const doc = sqlite.prepare(
+        "SELECT id FROM policy_documents WHERE id = ? AND lab_id = ?"
+      ).get(docId, req.scope.labId) as any;
+      if (!doc) return res.status(404).json({ error: "Policy not in this lab" });
+      const requiresPass = req.body?.quiz_requires_pass;
+      if (typeof requiresPass !== "boolean") {
+        return res.status(400).json({ error: "quiz_requires_pass (boolean) required" });
+      }
+      let threshold: number | null = null;
+      if (requiresPass) {
+        const t = Number(req.body?.quiz_pass_threshold);
+        if (!Number.isInteger(t) || t < 1 || t > 100) {
+          return res.status(400).json({ error: "quiz_pass_threshold must be an integer 1-100 when a passing score is required" });
+        }
+        threshold = t;
+      }
+      sqlite.prepare(
+        "UPDATE policy_documents SET quiz_requires_pass = ?, quiz_pass_threshold = ? WHERE id = ?"
+      ).run(requiresPass ? 1 : 0, threshold, docId);
+      res.json({ ok: true, quiz_requires_pass: requiresPass, quiz_pass_threshold: threshold });
+    },
+  );
+
   // ── Phase 5: periodic review re-certification ──────────────────────────
   //
   // Owner-or-member confirms a policy is still current at its annual /
@@ -30448,7 +30504,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const att = sqlite
         .prepare(
           `SELECT a.id, a.document_id, a.version_id, a.assigned_to_user_id, a.completed_at,
-                  d.lab_id, d.status AS doc_status, v.file_hash_sha256 AS version_hash
+                  a.quiz_score, d.lab_id, d.status AS doc_status,
+                  d.quiz_requires_pass, d.quiz_pass_threshold, v.file_hash_sha256 AS version_hash
              FROM policy_attestations a
              JOIN policy_documents d ON d.id = a.document_id
              LEFT JOIN policy_versions v ON v.id = a.version_id
@@ -30463,6 +30520,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       if (att.completed_at) {
         return res.status(409).json({ error: "Already completed" });
+      }
+      // MediaLab parity #39 item 2 (gate): when the lab opted to gate this
+      // policy on a passing quiz score, block completion until the recorded
+      // score meets the lab-set threshold. Fires ONLY when the lab opted in
+      // (quiz_requires_pass = 1) AND set a numeric threshold; record-only and
+      // ungated policies are unaffected. Mirrored by scripts/verify-policy-quiz-gate.js.
+      if (att.quiz_requires_pass === 1 && att.quiz_pass_threshold != null) {
+        if (att.quiz_score == null) {
+          return res.status(422).json({ error: "quiz_required", message: "This policy requires passing its comprehension quiz before you can attest." });
+        }
+        if (att.quiz_score < att.quiz_pass_threshold) {
+          return res.status(422).json({ error: "quiz_not_passed", threshold: att.quiz_pass_threshold, score: att.quiz_score, message: `A score of at least ${att.quiz_pass_threshold}% is required to complete this attestation. Your score was ${att.quiz_score}%.` });
+        }
       }
       // 21 CFR Part 11 re-auth.
       const userRow = sqlite
