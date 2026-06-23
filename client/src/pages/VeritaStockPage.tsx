@@ -867,7 +867,36 @@ export default function VeritaStockInventoryPage() {
     return parts;
   }, [filterDept, filterCat, filterVendor]);
 
+  // Item 3 (John, San Carlos 2026-06-23): before generating an order document,
+  // warn if any item that would land on it already has an open order placed
+  // (on_order_qty > 0). Mirrors the same dept/cat/vendor scoping the reorder
+  // endpoint applies, so the warning matches exactly what the PDF/XLSX include.
+  // Returns true to proceed, false to abort.
+  const confirmNoDuplicateOrder = useCallback((): boolean => {
+    const inScope = (i: InventoryItem) =>
+      (filterDept === "All" || i.department === filterDept) &&
+      (filterCat === "All" || i.category === filterCat) &&
+      (filterVendor === "All" || (i.vendor || "") === filterVendor);
+    const alreadyOpen = items.filter(
+      (i) => i.needs_reorder && inScope(i) && (i.on_order_qty || 0) > 0,
+    );
+    if (alreadyOpen.length === 0) return true;
+    const lines = alreadyOpen
+      .slice(0, 12)
+      .map((i) => {
+        const placed = i.on_order_placed_date ? ` (placed ${i.on_order_placed_date})` : "";
+        return `• ${i.item_name}: ${(i.on_order_qty || 0).toLocaleString()} on order${placed}`;
+      })
+      .join("\n");
+    const more = alreadyOpen.length > 12 ? `\n…and ${alreadyOpen.length - 12} more` : "";
+    const n = alreadyOpen.length;
+    return window.confirm(
+      `${n} item${n === 1 ? "" : "s"} on this order already ha${n === 1 ? "s" : "ve"} an open order:\n\n${lines}${more}\n\nPlacing another order may duplicate it. Generate anyway?`,
+    );
+  }, [items, filterDept, filterCat, filterVendor]);
+
   const generateOrderPdf = async () => {
+    if (!confirmNoDuplicateOrder()) return;
     setGeneratingOrderDoc("pdf");
     try {
       const res = await fetch(buildReorderUrl("pdf"), { method: "POST", headers: authHeaders() });
@@ -891,6 +920,7 @@ export default function VeritaStockInventoryPage() {
   };
 
   const generateOrderExcel = async () => {
+    if (!confirmNoDuplicateOrder()) return;
     setGeneratingOrderDoc("excel");
     try {
       const res = await fetch(buildReorderUrl("excel"), { method: "POST", headers: authHeaders() });
