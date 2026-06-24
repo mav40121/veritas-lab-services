@@ -3556,6 +3556,8 @@ sqlite.exec(`
     programmed_lead_time_days INTEGER,
     actual_lead_time_days INTEGER,
     received_by INTEGER,
+    document_url TEXT,
+    document_label TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )
 `);
@@ -3586,6 +3588,10 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_receipts_lab ON inventory_
       ["programmed_lead_time_days", "INTEGER"],
       ["actual_lead_time_days", "INTEGER"],
       ["received_by", "INTEGER"],
+      // Document attachment on receiving (URL pointer only, no binary upload):
+      // a link to the PO, packing slip, or invoice plus a short display label.
+      ["document_url", "TEXT"],
+      ["document_label", "TEXT"],
     ];
     for (const [col, type] of need) {
       if (!rcColNames.includes(col)) { try { sqlite.exec(`ALTER TABLE inventory_receipts ADD COLUMN ${col} ${type}`); } catch {} }
