@@ -3558,6 +3558,8 @@ sqlite.exec(`
     received_by INTEGER,
     document_url TEXT,
     document_label TEXT,
+    received_lot_number TEXT,
+    received_expiration_date TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )
 `);
@@ -3592,6 +3594,9 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_receipts_lab ON inventory_
       // a link to the PO, packing slip, or invoice plus a short display label.
       ["document_url", "TEXT"],
       ["document_label", "TEXT"],
+      // Lot + expiry of the stock that arrived in this receipt (multi-lot support).
+      ["received_lot_number", "TEXT"],
+      ["received_expiration_date", "TEXT"],
     ];
     for (const [col, type] of need) {
       if (!rcColNames.includes(col)) { try { sqlite.exec(`ALTER TABLE inventory_receipts ADD COLUMN ${col} ${type}`); } catch {} }

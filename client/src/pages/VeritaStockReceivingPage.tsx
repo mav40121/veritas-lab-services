@@ -38,6 +38,8 @@ interface Receipt {
   note?: string | null;
   document_url?: string | null;
   document_label?: string | null;
+  received_lot_number?: string | null;
+  received_expiration_date?: string | null;
   programmed_lead_time_days: number | null;
   actual_lead_time_days: number | null;
 }
@@ -90,6 +92,11 @@ export default function VeritaStockReceivingPage() {
   // document stays in its own SharePoint / Drive and VeritaStock stores the link.
   const [receiveDocUrl, setReceiveDocUrl] = useState<Record<number, string>>({});
   const [receiveDocLabel, setReceiveDocLabel] = useState<Record<number, string>>({});
+  // Lot # + expiration of the arriving stock. When they differ from the item's
+  // current lot/expiry, the server lands the received qty in a separate lot-row
+  // so multiple lots/expirations of the same product are tracked side by side.
+  const [receiveLot, setReceiveLot] = useState<Record<number, string>>({});
+  const [receiveExp, setReceiveExp] = useState<Record<number, string>>({});
   const [busyId, setBusyId] = useState<number | null>(null);
 
   const inventoryListUrl = activeLabId ? `${API_BASE}/api/labs/${activeLabId}/inventory` : `${API_BASE}/api/inventory`;
@@ -162,6 +169,8 @@ export default function VeritaStockReceivingPage() {
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
           received_qty: qty,
+          received_lot_number: (receiveLot[item.id] || "").trim() || undefined,
+          received_expiration_date: (receiveExp[item.id] || "").trim() || undefined,
           note: (receiveNote[item.id] || "").trim() || undefined,
           document_url: (receiveDocUrl[item.id] || "").trim() || undefined,
           document_label: (receiveDocLabel[item.id] || "").trim() || undefined,
@@ -180,6 +189,8 @@ export default function VeritaStockReceivingPage() {
       });
       setReceiveQ((p) => { const n = { ...p }; delete n[item.id]; return n; });
       setReceiveNote((p) => { const n = { ...p }; delete n[item.id]; return n; });
+      setReceiveLot((p) => { const n = { ...p }; delete n[item.id]; return n; });
+      setReceiveExp((p) => { const n = { ...p }; delete n[item.id]; return n; });
       setReceiveDocUrl((p) => { const n = { ...p }; delete n[item.id]; return n; });
       setReceiveDocLabel((p) => { const n = { ...p }; delete n[item.id]; return n; });
       await load();
@@ -264,6 +275,28 @@ export default function VeritaStockReceivingPage() {
                         onChange={(e) => setReceiveQ((p) => ({ ...p, [it.id]: e.target.value }))}
                         data-testid={`receiving-qty-${it.id}`}
                         disabled={readOnly}
+                      />
+                      {/* Lot # + expiration of the arriving stock. If different
+                          from the item's current lot/expiry, the received qty is
+                          stored as a separate lot-row (multi-lot tracking). */}
+                      <Input
+                        type="text"
+                        className="w-40 h-7 mt-1 text-xs ml-auto"
+                        placeholder="Lot # (optional)"
+                        value={receiveLot[it.id] ?? ""}
+                        onChange={(e) => setReceiveLot((p) => ({ ...p, [it.id]: e.target.value }))}
+                        data-testid={`receiving-lot-${it.id}`}
+                        disabled={readOnly}
+                        title="Lot number of the stock you are receiving. A new lot is stored separately from existing stock."
+                      />
+                      <Input
+                        type="date"
+                        className="w-40 h-7 mt-1 text-xs ml-auto"
+                        value={receiveExp[it.id] ?? ""}
+                        onChange={(e) => setReceiveExp((p) => ({ ...p, [it.id]: e.target.value }))}
+                        data-testid={`receiving-exp-${it.id}`}
+                        disabled={readOnly}
+                        title="Expiration date of the stock you are receiving. A different expiry is tracked as its own lot."
                       />
                       <Input
                         type="text"
@@ -366,13 +399,15 @@ export default function VeritaStockReceivingPage() {
                   <th className="px-3 py-2 font-medium sticky top-0 bg-muted z-10">Placed</th>
                   <th className="px-3 py-2 font-medium sticky top-0 bg-muted z-10 text-right">Programmed</th>
                   <th className="px-3 py-2 font-medium sticky top-0 bg-muted z-10 text-right">Actual lead</th>
+                  <th className="px-3 py-2 font-medium sticky top-0 bg-muted z-10">Lot</th>
+                  <th className="px-3 py-2 font-medium sticky top-0 bg-muted z-10">Exp</th>
                   <th className="px-3 py-2 font-medium sticky top-0 bg-muted z-10">Document</th>
                   <th className="px-3 py-2 font-medium sticky top-0 bg-muted z-10">Note</th>
                 </tr>
               </thead>
               <tbody>
                 {receipts.length === 0 ? (
-                  <tr><td colSpan={9} className="px-3 py-6 text-center text-muted-foreground" data-testid="receipts-empty">No receipts logged yet. Receiving an order above records it here.</td></tr>
+                  <tr><td colSpan={11} className="px-3 py-6 text-center text-muted-foreground" data-testid="receipts-empty">No receipts logged yet. Receiving an order above records it here.</td></tr>
                 ) : receipts.map((r) => (
                   <tr key={r.id} className="border-b" data-testid={`receipt-row-${r.id}`}>
                     <td className="px-3 py-2">{r.received_date || "-"}</td>
@@ -384,6 +419,8 @@ export default function VeritaStockReceivingPage() {
                     <td className={`px-3 py-2 text-right font-mono ${leadColor(r.actual_lead_time_days, r.programmed_lead_time_days)}`}>
                       {r.actual_lead_time_days != null ? `${r.actual_lead_time_days}d` : "-"}
                     </td>
+                    <td className="px-3 py-2 text-xs font-mono">{r.received_lot_number || <span className="text-muted-foreground">-</span>}</td>
+                    <td className="px-3 py-2 text-xs">{r.received_expiration_date || <span className="text-muted-foreground">-</span>}</td>
                     <td className="px-3 py-2 text-xs">
                       {r.document_url ? (
                         <a href={r.document_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary underline underline-offset-2" data-testid={`receipt-doc-${r.id}`}>
