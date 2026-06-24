@@ -1,16 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useMemberships } from "@/hooks/useMemberships";
 import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { isStockHost } from "@/lib/host";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, UserPlus, ShieldCheck, ShieldOff, Trash2, Crown, ArrowRightLeft, Clock, Link as LinkIcon, RotateCw, X, KeyRound, Copy, Check } from "lucide-react";
+import { Loader2, UserPlus, ShieldCheck, ShieldOff, Trash2, Crown, ArrowRightLeft, Clock, Link as LinkIcon, RotateCw, X, KeyRound, Copy, Check, MapPin } from "lucide-react";
 
 interface LabMember {
   membership_id: number;
@@ -424,6 +425,8 @@ export default function LabMembersPage() {
         </CardContent>
       </Card>
 
+      {canManage && activeLabId && <MemberLocationsCard labId={activeLabId} />}
+
       {isOwner && (
         <Card>
           <CardHeader>
@@ -477,6 +480,162 @@ export default function LabMembersPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// ── Member locations + default (VeritaStock multi-location) ──────────────
+// Demo feedback 2026-06-23: "when a user is built we need a default location
+// and which locations they can access (the ED person should only access ED)."
+// Membership = the allowlist: this grid grants a member access to chosen
+// enterprise locations and sets their default. ADDITIVE only here (you cannot
+// uncheck an existing location), so it can never lock anyone out; to remove a
+// location, use the per-location Remove on that lab's Members page. Owner/admin
+// only, shown on the VeritaStock deployment when the enterprise has >1 location.
+interface TeamLocation { labId: number; name: string }
+interface TeamMember {
+  userId: number; email: string; name: string | null; role: string;
+  isOwner: boolean; locationIds: number[]; defaultLocationId: number | null;
+}
+interface TeamResponse { locations: TeamLocation[]; members: TeamMember[]; owner: number | null }
+
+function MemberLocationsCard({ labId }: { labId: number }) {
+  const { toast } = useToast();
+  const { data, isLoading } = useQuery<TeamResponse>({
+    queryKey: [`/api/labs/${labId}/veritastock/team`],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!labId,
+  });
+  const locations = data?.locations || [];
+  const members = data?.members || [];
+
+  // Per-member edit state: the set of locations to grant + the default.
+  // Seeded from the server data; existing grants stay checked + locked.
+  const [edits, setEdits] = useState<Record<number, { checked: number[]; def: number }>>({});
+  useEffect(() => {
+    if (!members.length) return;
+    const next: Record<number, { checked: number[]; def: number }> = {};
+    for (const m of members) {
+      next[m.userId] = {
+        checked: [...m.locationIds],
+        def: m.defaultLocationId ?? m.locationIds[0] ?? locations[0]?.labId,
+      };
+    }
+    setEdits(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(members.map((m) => [m.userId, m.locationIds, m.defaultLocationId]))]);
+
+  const saveMutation = useMutation({
+    mutationFn: async ({ userId, locationIds, defaultLocationId }: { userId: number; locationIds: number[]; defaultLocationId: number }) => {
+      const res = await apiRequest("POST", `/api/labs/${labId}/veritastock/members/${userId}/locations`, { locationIds, defaultLocationId });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Locations updated" });
+      queryClient.invalidateQueries({ queryKey: [`/api/labs/${labId}/veritastock/team`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/labs/me"] });
+    },
+    onError: (err: any) => toast({ title: "Update failed", description: String(err?.message || err), variant: "destructive" }),
+  });
+
+  // Only meaningful on the VeritaStock deployment with a multi-location enterprise.
+  if (!isStockHost()) return null;
+  if (isLoading) return null;
+  if (locations.length < 2) return null;
+
+  const locName = (id: number) => locations.find((l) => l.labId === id)?.name || `Location ${id}`;
+
+  function toggle(userId: number, locId: number, wasGranted: boolean) {
+    if (wasGranted) return; // existing grants are locked (no revoke here)
+    setEdits((prev) => {
+      const cur = prev[userId] || { checked: [], def: locId };
+      const has = cur.checked.includes(locId);
+      const checked = has ? cur.checked.filter((x) => x !== locId) : [...cur.checked, locId];
+      // keep default valid (within checked)
+      const def = checked.includes(cur.def) ? cur.def : (checked[0] ?? locId);
+      return { ...prev, [userId]: { checked, def } };
+    });
+  }
+
+  return (
+    <Card data-testid="member-locations-card">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2"><MapPin size={16} /> Locations &amp; access</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          Choose which locations each member can access, and the location they land on by default. A member only sees locations they are granted here. Granting is additive; to remove access to a location, use Remove on that location&apos;s Members page.
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs uppercase text-muted-foreground">
+                <th className="py-2 pr-3">Member</th>
+                {locations.map((l) => <th key={l.labId} className="py-2 px-2 text-center">{l.name}</th>)}
+                <th className="py-2 px-2">Default</th>
+                <th className="py-2 pr-3 text-right">Save</th>
+              </tr>
+            </thead>
+            <tbody>
+              {members.map((m) => {
+                const e = edits[m.userId] || { checked: m.locationIds, def: m.defaultLocationId ?? m.locationIds[0] };
+                const originalSet = new Set(m.locationIds);
+                const editedSet = new Set(e.checked);
+                const dirty = !m.isOwner && (e.checked.length !== m.locationIds.length || e.checked.some((id) => !originalSet.has(id)) || e.def !== (m.defaultLocationId ?? m.locationIds[0]));
+                return (
+                  <tr key={m.userId} className="border-b last:border-b-0" data-testid={`member-locations-row-${m.userId}`}>
+                    <td className="py-2 pr-3">
+                      <div className="font-medium">{m.name || m.email}{m.isOwner && <span className="ml-1 text-xs text-amber-700">(owner)</span>}</div>
+                      {m.name && <div className="text-xs text-muted-foreground">{m.email}</div>}
+                    </td>
+                    {locations.map((l) => {
+                      const wasGranted = originalSet.has(l.labId) || m.isOwner;
+                      const isChecked = m.isOwner || editedSet.has(l.labId);
+                      return (
+                        <td key={l.labId} className="py-2 px-2 text-center">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-teal-600"
+                            checked={isChecked}
+                            disabled={m.isOwner || wasGranted}
+                            onChange={() => toggle(m.userId, l.labId, wasGranted)}
+                            data-testid={`member-loc-${m.userId}-${l.labId}`}
+                            title={m.isOwner ? "The owner has access to every location" : wasGranted ? "Already has access (remove on that location's Members page)" : `Grant access to ${l.name}`}
+                          />
+                        </td>
+                      );
+                    })}
+                    <td className="py-2 px-2">
+                      <select
+                        className="h-8 border border-input bg-background rounded-md px-2 text-xs"
+                        value={m.isOwner ? (m.defaultLocationId ?? "") : e.def}
+                        disabled={m.isOwner}
+                        onChange={(ev) => setEdits((prev) => ({ ...prev, [m.userId]: { ...(prev[m.userId] || { checked: e.checked }), def: Number(ev.target.value) } }))}
+                        data-testid={`member-default-${m.userId}`}
+                      >
+                        {(m.isOwner ? m.locationIds : e.checked).map((id) => <option key={id} value={id}>{locName(id)}</option>)}
+                      </select>
+                    </td>
+                    <td className="py-2 pr-3 text-right">
+                      {!m.isOwner && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!dirty || saveMutation.isPending || e.checked.length === 0}
+                          onClick={() => saveMutation.mutate({ userId: m.userId, locationIds: e.checked, defaultLocationId: e.def })}
+                          data-testid={`member-locations-save-${m.userId}`}
+                        >
+                          {saveMutation.isPending && <Loader2 className="animate-spin mr-1" size={12} />} Save
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
