@@ -6360,6 +6360,61 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     },
   );
 
+  // GET /api/labs/:labId/veritastock/expired-on-shelf — items PAST their
+  // expiration date that still have quantity on hand, across EVERY location in
+  // the enterprise that holds the product. This is the "expired but still on the
+  // shelf" alert: distinct from the "expiring soon" reorder flag, it catches
+  // stock that should already have been pulled. Grouped by product so the alert
+  // reads "Product X is expired on the shelf at locations A, B, C".
+  app.get(
+    "/api/labs/:labId/veritastock/expired-on-shelf",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      try {
+        const sqlite = (db as any).$client;
+        const { locations } = resolveEnterpriseGroup(sqlite, req.scope.labId, req.scope.userId);
+        const groupIds = locations.map((l) => l.id);
+        if (groupIds.length === 0) return res.json({ items: [], products: [], total: 0, totalValue: 0 });
+        // expiration_date is stored as a 'YYYY-MM-DD' string, so a lexical
+        // comparison against today's date is a correct "in the past" test.
+        const today = new Date().toISOString().slice(0, 10);
+        const ph = groupIds.map(() => "?").join(",");
+        const rows = sqlite.prepare(`
+          SELECT ii.id AS id, ii.item_name AS item_name, ii.catalog_number AS catalog_number,
+                 ii.lot_number AS lot_number, ii.expiration_date AS expiration_date,
+                 ii.quantity_on_hand AS quantity_on_hand, ii.usage_unit AS usage_unit,
+                 COALESCE(ii.unit_cost, 0) AS unit_cost, ii.lab_id AS lab_id, l.lab_name AS location_name
+            FROM inventory_items ii
+            LEFT JOIN labs l ON l.id = ii.lab_id
+           WHERE ii.lab_id IN (${ph})
+             AND COALESCE(ii.status, 'active') = 'active'
+             AND ii.expiration_date IS NOT NULL AND ii.expiration_date != ''
+             AND ii.expiration_date < ?
+             AND COALESCE(ii.quantity_on_hand, 0) > 0
+           ORDER BY ii.expiration_date ASC, ii.item_name ASC
+        `).all(...groupIds, today) as any[];
+        let totalValue = 0;
+        for (const r of rows) { r.value = (r.quantity_on_hand || 0) * (r.unit_cost || 0); totalValue += r.value; }
+        // Group by product so the alert lists each product + the locations
+        // holding expired stock of it.
+        const byProduct = new Map<string, any>();
+        for (const r of rows) {
+          const key = (r.item_name || "").toLowerCase();
+          let p = byProduct.get(key);
+          if (!p) { p = { item_name: r.item_name, locations: [], total_qty: 0, total_value: 0 }; byProduct.set(key, p); }
+          p.locations.push({ lab_id: r.lab_id, location_name: r.location_name, lot_number: r.lot_number, expiration_date: r.expiration_date, quantity_on_hand: r.quantity_on_hand, usage_unit: r.usage_unit, value: r.value });
+          p.total_qty += r.quantity_on_hand || 0;
+          p.total_value += r.value;
+        }
+        return res.json({ items: rows, products: Array.from(byProduct.values()), total: rows.length, totalValue: Math.round(totalValue) });
+      } catch (err: any) {
+        console.error("[veritastock/expired-on-shelf] error:", err);
+        return res.status(500).json({ error: err.message || "expired_on_shelf_failed" });
+      }
+    },
+  );
+
   // POST /api/labs/:labId/veritastock/transfers/:batchId/accept — the
   // destination accepts a pending shipment. Stock lands at the destination
   // (the dest item is resolved or created per line, from the still-existing

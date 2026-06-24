@@ -832,6 +832,27 @@ export default function VeritaStockInventoryPage() {
     return () => { cancelled = true; };
   }, [isLoggedIn, hasPlanAccess, activeLabId]);
 
+  // Expired-but-still-on-shelf alert across EVERY location in the enterprise.
+  // Items past their expiration date that still have quantity on hand should
+  // have been pulled; this surfaces them cross-location, grouped by product, so
+  // the user sees "Product X is expired on the shelf at ED, Clinic, Inpatient".
+  interface ExpiredProduct { item_name: string; total_qty: number; total_value: number; locations: Array<{ lab_id: number; location_name: string | null; lot_number: string | null; expiration_date: string | null; quantity_on_hand: number; usage_unit: string | null }>; }
+  const [expiredProducts, setExpiredProducts] = useState<ExpiredProduct[]>([]);
+  const [expiredCount, setExpiredCount] = useState(0);
+  const [expiredValue, setExpiredValue] = useState(0);
+  const reloadExpired = useCallback(async () => {
+    if (!isLoggedIn || !hasPlanAccess || !activeLabId) { setExpiredProducts([]); setExpiredCount(0); setExpiredValue(0); return; }
+    try {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/veritastock/expired-on-shelf`, { headers: authHeaders() });
+      if (!res.ok) return;
+      const d = await res.json();
+      setExpiredProducts(Array.isArray(d?.products) ? d.products : []);
+      setExpiredCount(Number(d?.total) || 0);
+      setExpiredValue(Number(d?.totalValue) || 0);
+    } catch { /* network error: leave prior */ }
+  }, [isLoggedIn, hasPlanAccess, activeLabId]);
+  useEffect(() => { reloadExpired(); }, [reloadExpired]);
+
   const handleSave = async (data: Partial<InventoryItem>) => {
     const isEdit = !!editItem;
     const url = isEdit ? `${API_BASE}/api/inventory/${editItem!.id}` : inventoryListUrl;
@@ -1115,6 +1136,7 @@ export default function VeritaStockInventoryPage() {
         const v = data?.write_off?.waste_value || 0;
         toast({ title: "Written off", description: `${writeOffQty} ${writeOffTarget.usage_unit}s (${writeOffReason}), $${v.toFixed(2)} recorded as waste` });
         loadItems();
+        reloadExpired(); // pulling expired stock should clear it from the alert
       } else {
         const err = await res.json();
         toast({ title: "Error", description: err.error, variant: "destructive" });
@@ -1199,6 +1221,10 @@ export default function VeritaStockInventoryPage() {
           if (!i.expiration_date) return false;
           const diff = Math.ceil((new Date(i.expiration_date + "T00:00:00").getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
           return diff >= 0 && diff <= 60;
+        }
+        if (filterStatus === "Expired (on shelf)") {
+          // Past expiration but still has stock to pull and write off.
+          return !!i.expiration_date && i.expiration_date < today && (i.quantity_on_hand || 0) > 0;
         }
         if (filterStatus === "Standing Order Due") {
           return i.standing_order === 1 && i.standing_order_review_date != null && i.standing_order_review_date < today;
@@ -1464,6 +1490,35 @@ export default function VeritaStockInventoryPage() {
               Review and accept
             </Button>
           </Link>
+        </div>
+      )}
+      {/* Expired-on-shelf alert: products past their expiration date that still
+          have stock on hand, listed for EVERY location that holds them. This is
+          the cross-location "expired but still on the shelf" alert. */}
+      {expiredCount > 0 && activeLabId && (
+        <div className="mb-4 rounded-md border border-red-300 bg-red-50 px-4 py-3" data-testid="expired-on-shelf-banner">
+          <div className="flex items-start gap-2 text-sm text-red-900">
+            <AlertTriangle size={16} className="text-red-600 shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <div className="font-semibold">
+                {expiredCount} expired item{expiredCount === 1 ? "" : "s"} still on the shelf across your locations
+                {expiredValue > 0 && <span className="font-normal"> (${expiredValue.toLocaleString()} to write off)</span>}
+              </div>
+              <ul className="mt-1 space-y-0.5 text-xs text-red-800">
+                {expiredProducts.slice(0, 6).map((p, i) => (
+                  <li key={i} data-testid="expired-product-row">
+                    <span className="font-medium">{p.item_name}</span>{": "}
+                    {p.locations.slice(0, 4).map((loc, j) => (
+                      <span key={j}>{j > 0 ? ", " : ""}{loc.location_name || `Lab ${loc.lab_id}`} ({loc.quantity_on_hand.toLocaleString()} {loc.usage_unit || "unit"}{loc.quantity_on_hand === 1 ? "" : "s"}, exp {loc.expiration_date})</span>
+                    ))}
+                    {p.locations.length > 4 ? `, +${p.locations.length - 4} more location${p.locations.length - 4 === 1 ? "" : "s"}` : ""}
+                  </li>
+                ))}
+                {expiredProducts.length > 6 && <li className="text-red-700">and {expiredProducts.length - 6} more product{expiredProducts.length - 6 === 1 ? "" : "s"}</li>}
+              </ul>
+              <div className="mt-1.5 text-xs text-red-700">Pull this stock and write it off. Switch to a location in the header to write off its expired items.</div>
+            </div>
+          </div>
         </div>
       )}
       {/* Header */}
@@ -1813,6 +1868,7 @@ export default function VeritaStockInventoryPage() {
             <SelectItem value="All">All Statuses</SelectItem>
             <SelectItem value="Reorder Now">Reorder Now</SelectItem>
             <SelectItem value="Expiring Soon">Expiring Soon</SelectItem>
+            <SelectItem value="Expired (on shelf)">Expired (on shelf)</SelectItem>
             <SelectItem value="Standing Order Due">Standing Order Due</SelectItem>
             <SelectItem value="OK">OK</SelectItem>
             <SelectItem value="Class A">ABC: Class A (high value)</SelectItem>
