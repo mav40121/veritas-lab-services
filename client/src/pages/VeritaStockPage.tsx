@@ -839,9 +839,20 @@ export default function VeritaStockInventoryPage() {
         const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/veritastock/transfers/incoming`, { headers: authHeaders() });
         if (!res.ok) return;
         const d = await res.json();
-        const rows = Array.isArray(d?.incoming) ? d.incoming : [];
-        const batches = new Set(rows.map((r: any) => r.batch_id ?? r.id));
-        if (!cancelled) setIncomingCount(batches.size);
+        // Active-location-scoped: the main-page badge/banner counts ONLY
+        // shipments bound for the currently-selected location (server
+        // active_count), not the whole enterprise group. A transfer waiting at
+        // another location lives on the Enterprise page, not here. Fall back to
+        // the client-side batch count only if the server hasn't shipped
+        // active_count yet (deploy-window safety).
+        let count: number;
+        if (typeof d?.active_count === "number") {
+          count = d.active_count;
+        } else {
+          const rows = Array.isArray(d?.incoming) ? d.incoming : [];
+          count = new Set(rows.map((r: any) => r.batch_id ?? r.id)).size;
+        }
+        if (!cancelled) setIncomingCount(count);
       } catch { /* network error: leave prior count */ }
     })();
     return () => { cancelled = true; };

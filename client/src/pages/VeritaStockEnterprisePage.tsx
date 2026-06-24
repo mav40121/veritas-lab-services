@@ -56,6 +56,10 @@ interface TransferRow {
   status?: string | null;
   batch_id?: string | null;
   accepted_by_name?: string | null;
+  // True only when this transfer's destination IS the currently-selected
+  // location (server-computed). Accept/Reject are enabled only when true;
+  // otherwise the row is read-only with a "switch location" hint.
+  can_accept?: boolean;
 }
 
 export default function VeritaStockEnterprisePage() {
@@ -205,7 +209,7 @@ export default function VeritaStockEnterprisePage() {
   const incomingBatches = useMemo(() => {
     const groups = new Map<string, {
       batch_id: string; from_lab_name: string; to_lab_name: string;
-      initiated_by_name: string | null; created_at: string; items: TransferRow[];
+      initiated_by_name: string | null; created_at: string; can_accept: boolean; items: TransferRow[];
     }>();
     for (const t of incoming) {
       const bid = t.batch_id || `t${t.id}`;
@@ -217,6 +221,11 @@ export default function VeritaStockEnterprisePage() {
           to_lab_name: t.to_lab_name || `Lab ${t.to_lab_id}`,
           initiated_by_name: t.initiated_by_name,
           created_at: t.created_at,
+          // A whole batch shares one destination, so can_accept is uniform
+          // across its items; take the first item's value. If the server
+          // hasn't shipped can_accept yet (deploy window), default to true so
+          // the page keeps working — the server 409 is the backstop.
+          can_accept: t.can_accept !== false,
           items: [],
         };
         groups.set(bid, g);
@@ -260,7 +269,15 @@ export default function VeritaStockEnterprisePage() {
         body: JSON.stringify(action === "reject" ? { reason } : {}),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || `${action} failed`);
+      if (!res.ok) {
+        // Backstop for a stale client that POSTs out of context: the server
+        // returns 409 switch_to_destination. Surface the same human hint the
+        // disabled-button state shows, not the raw code.
+        if (data.error === "switch_to_destination") {
+          throw new Error(`Switch to ${data.to_lab_name || "the destination location"} to ${action}`);
+        }
+        throw new Error(data.error || `${action} failed`);
+      }
       toast({
         title: action === "accept" ? "Transfer accepted" : "Transfer rejected",
         description: action === "accept"
@@ -347,11 +364,20 @@ export default function VeritaStockEnterprisePage() {
                   </ul>
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-xs text-muted-foreground">{b.initiated_by_name ? `Sent by ${b.initiated_by_name}` : "In transit"}</span>
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
+                      {/* Receiving happens AT the destination: Accept/Reject are
+                          live only when the selected location IS this shipment's
+                          destination. Otherwise the row is read-only with a hint
+                          to switch into that location first. */}
+                      {!b.can_accept && (
+                        <span className="text-xs text-amber-600 whitespace-nowrap" data-testid="switch-hint">
+                          Switch to {b.to_lab_name} to accept
+                        </span>
+                      )}
                       <Button
                         size="sm" variant="outline"
                         onClick={() => decideBatch(b.batch_id, "reject")}
-                        disabled={decidingBatch === b.batch_id}
+                        disabled={decidingBatch === b.batch_id || !b.can_accept}
                         data-testid="reject-transfer"
                       >
                         <X size={13} className="mr-1" /> Reject
@@ -359,7 +385,7 @@ export default function VeritaStockEnterprisePage() {
                       <Button
                         size="sm"
                         onClick={() => decideBatch(b.batch_id, "accept")}
-                        disabled={decidingBatch === b.batch_id}
+                        disabled={decidingBatch === b.batch_id || !b.can_accept}
                         data-testid="accept-transfer"
                       >
                         <Check size={13} className="mr-1" /> {decidingBatch === b.batch_id ? "Working." : "Accept"}

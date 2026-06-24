@@ -6211,7 +6211,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
            ORDER BY t.created_at DESC, t.id DESC
            LIMIT 500
         `).all(...groupIds) as any[];
-        return res.json({ incoming: rows, total: rows.length });
+        // Active-location dimension (membership is already guaranteed by the
+        // query scope): a row is actionable only when its destination IS the
+        // currently-selected location. active_count is the number of distinct
+        // actionable SHIPMENTS (batches) so the main-page badge reads in
+        // "shipments", matching the Enterprise panel.
+        const activeLabId = Number(labId);
+        for (const r of rows) { r.can_accept = Number(r.to_lab_id) === activeLabId; }
+        const activeBatches = new Set(rows.filter((r: any) => r.can_accept).map((r: any) => r.batch_id ?? `t${r.id}`));
+        return res.json({ incoming: rows, total: rows.length, active_count: activeBatches.size });
       } catch (err: any) {
         console.error("[veritastock/transfers/incoming] error:", err);
         return res.status(500).json({ error: err.message || "incoming_failed" });
@@ -6493,6 +6501,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }
         const toLab = sqlite.prepare("SELECT id, owner_user_id, lab_name FROM labs WHERE id = ?").get(toLabId) as any;
         if (!toLab) return res.status(404).json({ error: "Destination lab not found" });
+        // Active-location gate: receiving happens AT the destination. The caller
+        // must be operating in the destination location (not just a member of it).
+        // Distinct 409 so the client renders a "switch location" affordance.
+        if (Number(req.scope.labId) !== Number(toLabId)) {
+          return res.status(409).json({ error: "switch_to_destination", to_lab_id: toLabId, to_lab_name: toLab.lab_name });
+        }
 
         const nowIso = new Date().toISOString();
         const actor = sqlite.prepare("SELECT email FROM users WHERE id = ?").get(userId) as any;
@@ -6586,6 +6600,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }
         if (!userIsMemberOfLab(userId, toLabId)) {
           return res.status(403).json({ error: "No access to the destination location" });
+        }
+        // Active-location gate (mirrors accept): the destination location must be
+        // the currently-selected one. Membership 403 above is the backstop; this
+        // 409 is the in-context check. Distinct code so the client can offer a
+        // "switch location" affordance instead of a generic error.
+        if (Number(req.scope.labId) !== Number(toLabId)) {
+          return res.status(409).json({ error: "switch_to_destination", to_lab_id: toLabId, to_lab_name: pending[0].to_lab_name ?? null });
         }
         const nowIso = new Date().toISOString();
         const actor = sqlite.prepare("SELECT email FROM users WHERE id = ?").get(userId) as any;
