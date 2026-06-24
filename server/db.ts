@@ -3468,6 +3468,62 @@ sqlite.exec(`
   )
 `);
 
+// Lot-level inventory (Phase 1 of nested-lot tracking). A product (inventory_items
+// row) has many lots, each with its own quantity + expiration. In Phase 2 the
+// item's quantity_on_hand becomes SUM(lots.quantity) with oldest-first (FEFO)
+// depletion; Phase 1 only establishes the table, a one-lot-per-item backfill, and
+// exposes lots in reads. No mutation or behavior change yet, so nothing can drift.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS inventory_lots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id INTEGER NOT NULL,
+    lab_id INTEGER,
+    account_id INTEGER,
+    lot_number TEXT,
+    expiration_date TEXT,
+    quantity REAL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+// ALTER TABLE migration for inventory_lots (NEW DB TABLE RULE: an older live copy
+// gets any missing columns via the PRAGMA table_info pattern).
+{
+  const lotCols = sqlite.prepare("PRAGMA table_info(inventory_lots)").all() as { name: string }[];
+  const lotColNames = lotCols.map((c) => c.name);
+  if (lotCols.length > 0) {
+    const need: Array<[string, string]> = [
+      ["item_id", "INTEGER"],
+      ["lab_id", "INTEGER"],
+      ["account_id", "INTEGER"],
+      ["lot_number", "TEXT"],
+      ["expiration_date", "TEXT"],
+      ["quantity", "REAL DEFAULT 0"],
+      ["created_at", "TEXT"],
+      ["updated_at", "TEXT"],
+    ];
+    for (const [col, type] of need) {
+      if (!lotColNames.includes(col)) { try { sqlite.exec(`ALTER TABLE inventory_lots ADD COLUMN ${col} ${type}`); } catch {} }
+    }
+  }
+}
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_lots_item ON inventory_lots(item_id)"); } catch {}
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_lots_lab_exp ON inventory_lots(lab_id, expiration_date)"); } catch {}
+// One-shot backfill: seed one lot per item that has stock but no lot row yet,
+// mirroring its current (lot_number, expiration_date, quantity_on_hand). Gated on
+// NOT EXISTS so subsequent boots are no-ops (boot-migration-no-cascading-writes
+// rule: it runs once and never re-derives from the mutable quantity afterwards).
+try {
+  const seeded = sqlite.prepare(`
+    INSERT INTO inventory_lots (item_id, lab_id, account_id, lot_number, expiration_date, quantity, created_at, updated_at)
+    SELECT ii.id, ii.lab_id, ii.account_id, ii.lot_number, ii.expiration_date, ii.quantity_on_hand, datetime('now'), datetime('now')
+      FROM inventory_items ii
+     WHERE COALESCE(ii.quantity_on_hand, 0) > 0
+       AND NOT EXISTS (SELECT 1 FROM inventory_lots l WHERE l.item_id = ii.id)
+  `).run();
+  if (seeded.changes > 0) console.log(`[migration] inventory_lots backfill: seeded ${seeded.changes} lot(s)`);
+} catch (err: any) { console.warn("[migration] inventory_lots backfill skipped:", err?.message); }
+
 // Monthly inventory valuation history per location. Powers the Valuation Trends
 // view: average value on hand per location per month, plus dollars written off
 // to expiry (waste) in that month. Recorded history, not derived from a movement

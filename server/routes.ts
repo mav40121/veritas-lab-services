@@ -6415,6 +6415,48 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     },
   );
 
+  // GET /api/labs/:labId/veritastock/items/:itemId/lots — the lots held under a
+  // product, oldest-expiry first (FEFO order). Phase 1 of nested-lot tracking:
+  // read-only exposure of the inventory_lots table. The item must belong to the
+  // lab in scope. Quantities here are the lot breakdown; the item's
+  // quantity_on_hand remains the authoritative total until Phase 2.
+  app.get(
+    "/api/labs/:labId/veritastock/items/:itemId/lots",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      try {
+        const sqlite = (db as any).$client;
+        const itemId = Number(req.params.itemId);
+        if (!Number.isFinite(itemId)) return res.status(400).json({ error: "Invalid item id" });
+        const item = sqlite.prepare("SELECT id, lab_id, item_name, quantity_on_hand FROM inventory_items WHERE id = ?").get(itemId) as any;
+        if (!item) return res.status(404).json({ error: "Item not found" });
+        if (Number(item.lab_id) !== Number(req.scope.labId)) {
+          return res.status(403).json({ error: "Item is not in this location" });
+        }
+        const lots = sqlite.prepare(
+          `SELECT id, lot_number, expiration_date, quantity, created_at
+             FROM inventory_lots WHERE item_id = ?
+            ORDER BY (expiration_date IS NULL OR expiration_date = ''), expiration_date ASC, id ASC`
+        ).all(itemId) as any[];
+        const lotTotal = lots.reduce((s, l) => s + (l.quantity || 0), 0);
+        return res.json({
+          item_id: itemId,
+          item_name: item.item_name,
+          quantity_on_hand: item.quantity_on_hand,
+          lots,
+          lot_total: lotTotal,
+          // In Phase 1 the lot total should mirror quantity_on_hand; once mutations
+          // are lot-based (Phase 2) quantity_on_hand becomes this sum.
+          in_sync: Math.abs(lotTotal - (item.quantity_on_hand || 0)) < 0.0001,
+        });
+      } catch (err: any) {
+        console.error("[veritastock/items/lots] error:", err);
+        return res.status(500).json({ error: err.message || "lots_failed" });
+      }
+    },
+  );
+
   // POST /api/labs/:labId/veritastock/transfers/:batchId/accept — the
   // destination accepts a pending shipment. Stock lands at the destination
   // (the dest item is resolved or created per line, from the still-existing
