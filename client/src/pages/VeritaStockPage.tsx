@@ -703,6 +703,9 @@ export default function VeritaStockInventoryPage() {
   // Optional document link captured on receive (PO / packing slip / invoice).
   // URL pointer only, mirroring the dedicated Receiving page.
   const [receiveDocUrl, setReceiveDocUrl] = useState<string>("");
+  // Lot # + expiration of the arriving stock; a different lot lands in its own row.
+  const [receiveLot, setReceiveLot] = useState<string>("");
+  const [receiveExp, setReceiveExp] = useState<string>("");
   // Write-off (waste capture) dialog: target item, qty, and reason code.
   const [writeOffTarget, setWriteOffTarget] = useState<InventoryItem | null>(null);
   const [writeOffQty, setWriteOffQty] = useState<number>(0);
@@ -1104,11 +1107,23 @@ export default function VeritaStockInventoryPage() {
       const res = await fetch(`${API_BASE}/api/inventory/${receiveTarget.id}/receive`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ received_qty: receiveQty, document_url: receiveDocUrl.trim() || undefined }),
+        body: JSON.stringify({
+          received_qty: receiveQty,
+          document_url: receiveDocUrl.trim() || undefined,
+          received_lot_number: receiveLot.trim() || undefined,
+          received_expiration_date: receiveExp.trim() || undefined,
+        }),
       });
       if (res.ok) {
-        toast({ title: "Stock received", description: `${receiveQty} ${receiveTarget.usage_unit}s moved into on-hand` });
+        const d = await res.json().catch(() => ({}));
+        toast({
+          title: "Stock received",
+          description: d?.split_lot
+            ? `${receiveQty} ${receiveTarget.usage_unit}s stored as a new lot of ${receiveTarget.item_name}`
+            : `${receiveQty} ${receiveTarget.usage_unit}s moved into on-hand`,
+        });
         loadItems();
+        reloadExpired();
       } else {
         const err = await res.json();
         toast({ title: "Error", description: err.error, variant: "destructive" });
@@ -1117,7 +1132,7 @@ export default function VeritaStockInventoryPage() {
       toast({ title: "Error", description: "Failed to receive stock", variant: "destructive" });
     }
     setReceiveTarget(null);
-    setReceiveDocUrl("");
+    setReceiveDocUrl(""); setReceiveLot(""); setReceiveExp("");
   };
 
   // Write off (waste capture). Posts to the dedicated /write-off endpoint, which
@@ -2190,7 +2205,7 @@ export default function VeritaStockInventoryPage() {
 
       {/* Receive against PO. Moves received qty from on-order into on-hand via
           the dedicated /receive endpoint. Defaults to the full open PO. */}
-      <Dialog open={!!receiveTarget} onOpenChange={(o) => { if (!o) { setReceiveTarget(null); setReceiveDocUrl(""); } }}>
+      <Dialog open={!!receiveTarget} onOpenChange={(o) => { if (!o) { setReceiveTarget(null); setReceiveDocUrl(""); setReceiveLot(""); setReceiveExp(""); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Receive stock</DialogTitle>
@@ -2218,6 +2233,30 @@ export default function VeritaStockInventoryPage() {
                   Moves into on-hand. Remaining stays on order. New on-hand: {((receiveTarget.quantity_on_hand || 0) + receiveQty).toLocaleString()} {receiveTarget.usage_unit}s.
                 </p>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Lot # (optional)</Label>
+                  <Input
+                    type="text"
+                    placeholder="Lot of this shipment"
+                    value={receiveLot}
+                    onChange={(e) => setReceiveLot(e.target.value)}
+                    data-testid="receive-lot-input"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Expiration (optional)</Label>
+                  <Input
+                    type="date"
+                    value={receiveExp}
+                    onChange={(e) => setReceiveExp(e.target.value)}
+                    data-testid="receive-exp-input"
+                  />
+                </div>
+              </div>
+              <p className="-mt-1 text-xs text-muted-foreground">
+                A lot or expiry different from the current stock is tracked as its own lot-row.
+              </p>
               <div className="space-y-1.5">
                 <Label>Document link (optional)</Label>
                 <Input
@@ -2232,7 +2271,7 @@ export default function VeritaStockInventoryPage() {
                 </p>
               </div>
               <div className="flex justify-end gap-2 pt-1">
-                <Button variant="outline" onClick={() => { setReceiveTarget(null); setReceiveDocUrl(""); }}>Cancel</Button>
+                <Button variant="outline" onClick={() => { setReceiveTarget(null); setReceiveDocUrl(""); setReceiveLot(""); setReceiveExp(""); }}>Cancel</Button>
                 <Button
                   onClick={handleReceive}
                   disabled={receiveQty <= 0 || receiveQty > (receiveTarget.on_order_qty || 0)}

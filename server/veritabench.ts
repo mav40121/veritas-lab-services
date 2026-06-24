@@ -1555,14 +1555,19 @@ export function registerVeritaBenchRoutes(
     const docLabel = (typeof document_label === "string" && document_label.trim())
       ? document_label.trim().slice(0, 120)
       : (docUrl ? "Attached document" : null);
+    // Lot + expiry of the arriving stock (multi-lot support). When provided and
+    // different from the item's current lot/expiry, the received quantity lands
+    // in a separate lot-row instead of being lumped under the old expiry.
+    const recvLot = (typeof (req.body || {}).received_lot_number === "string" && req.body.received_lot_number.trim())
+      ? req.body.received_lot_number.trim().slice(0, 80) : null;
+    const recvExp = (typeof (req.body || {}).received_expiration_date === "string" && req.body.received_expiration_date.trim())
+      ? req.body.received_expiration_date.trim().slice(0, 10) : null;
     // Default to receiving the full open PO; clamp to (0, onOrder].
     let recv = (received_qty === undefined || received_qty === null || received_qty === "")
       ? onOrder
       : Number(received_qty);
     if (!Number.isFinite(recv) || recv <= 0) return res.status(400).json({ error: "received_qty must be a positive number" });
     if (recv > onOrder) recv = onOrder;
-    const beforeOnHand = (existing as any).quantity_on_hand || 0;
-    const newOnHand = beforeOnHand + recv;
     const newOnOrder = Math.max(0, onOrder - recv);
     const placedDate = (existing as any).on_order_placed_date ?? null;
     const expectedDate = (existing as any).on_order_expected_date ?? null;
@@ -1581,23 +1586,84 @@ export function registerVeritaBenchRoutes(
       const r = Date.parse(receivedDate);
       if (!Number.isNaN(p) && !Number.isNaN(r)) actualLead = Math.round((r - p) / 86400000);
     }
-    sqlite.prepare(
-      "UPDATE inventory_items SET quantity_on_hand = ?, on_order_qty = ?, on_order_expected_date = ?, on_order_placed_date = ?, updated_at = ? WHERE id = ?"
-    ).run(newOnHand, newOnOrder, newExpected, newPlaced, nowIso, itemId);
-    // Log a permanent receipt for lead-time verification. Never let a logging
-    // failure roll back the receive itself.
+
+    // Multi-lot routing: the PO (on_order) is always fulfilled on the existing
+    // row, but the received on-hand lands in the row for the RECEIVED lot/expiry.
+    // - No lot/expiry given, or it matches the existing row, or the existing row
+    //   is empty + unlotted -> lump onto the existing row (adopt lot/expiry if it
+    //   was blank). Backward compatible with receives that send no lot info.
+    // - A different lot/expiry -> land in an existing sibling lot-row for that
+    //   exact lot+expiry, or create a new lot-row carrying the product's settings.
+    const e = existing as any;
+    const curLot = (e.lot_number ?? "") || "";
+    const curExp = (e.expiration_date ?? "") || "";
+    const existingOnHand = e.quantity_on_hand || 0;
+    const hasLotInfo = !!(recvLot || recvExp);
+    const sameAsCurrent = (recvLot ?? "") === curLot && (recvExp ?? "") === curExp;
+    const existingEmptyUnlotted = existingOnHand <= 0 && !curLot && !curExp;
+    const lumpOntoExisting = !hasLotInfo || sameAsCurrent || existingEmptyUnlotted;
+
+    let targetId = itemId;
+    let targetBefore = existingOnHand;
+    let splitLot = false;
+    const tx = sqlite.transaction(() => {
+      if (lumpOntoExisting) {
+        const adoptLot = existingEmptyUnlotted && hasLotInfo ? recvLot : (e.lot_number ?? null);
+        const adoptExp = existingEmptyUnlotted && hasLotInfo ? recvExp : (e.expiration_date ?? null);
+        sqlite.prepare(
+          "UPDATE inventory_items SET quantity_on_hand = ?, on_order_qty = ?, on_order_expected_date = ?, on_order_placed_date = ?, lot_number = ?, expiration_date = ?, updated_at = ? WHERE id = ?"
+        ).run(existingOnHand + recv, newOnOrder, newExpected, newPlaced, adoptLot, adoptExp, nowIso, itemId);
+      } else {
+        splitLot = true;
+        // Fulfil the PO on the existing row; its on-hand is untouched.
+        sqlite.prepare(
+          "UPDATE inventory_items SET on_order_qty = ?, on_order_expected_date = ?, on_order_placed_date = ?, updated_at = ? WHERE id = ?"
+        ).run(newOnOrder, newExpected, newPlaced, nowIso, itemId);
+        const sib = sqlite.prepare(
+          `SELECT id, quantity_on_hand FROM inventory_items
+            WHERE lab_id IS ? AND account_id IS ? AND lower(trim(item_name)) = lower(trim(?))
+              AND COALESCE(lot_number,'') = ? AND COALESCE(expiration_date,'') = ?
+              AND COALESCE(status,'active') = 'active' AND id != ? LIMIT 1`
+        ).get(e.lab_id ?? null, e.account_id ?? null, e.item_name ?? "", recvLot ?? "", recvExp ?? "", itemId) as any;
+        if (sib) {
+          targetId = sib.id; targetBefore = sib.quantity_on_hand || 0;
+          sqlite.prepare("UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?").run(targetBefore + recv, nowIso, sib.id);
+        } else {
+          const r = sqlite.prepare(`
+            INSERT INTO inventory_items
+              (account_id, lab_id, item_name, catalog_number, lot_number, department, category, quantity_on_hand, reorder_point, unit, expiration_date, vendor, storage_location, status, burn_rate, order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, unit_cost, on_order_qty, created_at, updated_at)
+            VALUES (@account_id, @lab_id, @item_name, @catalog_number, @lot_number, @department, @category, @qty, @reorder_point, @unit, @exp, @vendor, @storage_location, 'active', @burn_rate, @order_unit, @usage_unit, @upo, @count_unit, @upcu, @lead, @safety, @desired, 0, @unit_cost, 0, @now, @now)
+          `).run({
+            account_id: e.account_id ?? null, lab_id: e.lab_id ?? null, item_name: e.item_name, catalog_number: e.catalog_number ?? null,
+            lot_number: recvLot, department: e.department ?? null, category: e.category ?? null, qty: recv, reorder_point: e.reorder_point ?? 5,
+            unit: e.unit ?? null, exp: recvExp, vendor: e.vendor ?? null, storage_location: e.storage_location ?? null,
+            burn_rate: e.burn_rate ?? 0, order_unit: e.order_unit ?? null, usage_unit: e.usage_unit ?? null, upo: e.units_per_order_unit ?? 1,
+            count_unit: e.count_unit ?? null, upcu: e.units_per_count_unit ?? 1, lead: e.lead_time_days ?? 5, safety: e.safety_stock_days ?? 3,
+            desired: e.desired_days_of_stock ?? 30, unit_cost: e.unit_cost ?? 0, now: nowIso,
+          });
+          targetId = Number(r.lastInsertRowid); targetBefore = 0;
+          // Give the new lot-row its own scannable barcode (VLS-<id>).
+          try { sqlite.prepare("UPDATE inventory_items SET barcode_value = 'VLS-' || printf('%08d', id) WHERE id = ? AND (barcode_value IS NULL OR barcode_value = '')").run(targetId); } catch {}
+        }
+      }
+    });
+    tx();
+    const targetAfter = targetBefore + recv;
+
+    // Log a permanent receipt for lead-time verification, recording the lot +
+    // expiry that arrived. Never let a logging failure roll back the receive.
     try {
       sqlite.prepare(
-        `INSERT INTO inventory_receipts (lab_id, item_id, account_id, item_name, vendor, qty_received, usage_unit, order_placed_date, expected_date, received_date, programmed_lead_time_days, actual_lead_time_days, received_by, document_url, document_label, note, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO inventory_receipts (lab_id, item_id, account_id, item_name, vendor, qty_received, usage_unit, order_placed_date, expected_date, received_date, programmed_lead_time_days, actual_lead_time_days, received_by, document_url, document_label, received_lot_number, received_expiration_date, note, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
-        (existing as any).lab_id ?? null,
+        e.lab_id ?? null,
         itemId,
-        (existing as any).account_id ?? null,
-        (existing as any).item_name ?? null,
-        (existing as any).vendor ?? null,
+        e.account_id ?? null,
+        e.item_name ?? null,
+        e.vendor ?? null,
         recv,
-        (existing as any).usage_unit ?? null,
+        e.usage_unit ?? null,
         placedDate,
         expectedDate,
         receivedDate,
@@ -1606,27 +1672,32 @@ export function registerVeritaBenchRoutes(
         req.userId ?? null,
         docUrl,
         docLabel,
+        recvLot,
+        recvExp,
         noteStr,
         nowIso,
       );
-    } catch (e) { /* receipt logging is best-effort; receive already succeeded */ }
+    } catch (err) { /* receipt logging is best-effort; receive already succeeded */ }
     try {
+      const lotStr = recvLot || recvExp ? ` [lot ${recvLot || "n/a"}${recvExp ? ` exp ${recvExp}` : ""}${splitLot ? ", new lot-row" : ""}]` : "";
       logAudit({
         userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritastock", action: "receive",
-        entityType: "inventory_item", entityId: itemId,
-        entityLabel: `${(existing as any).item_name}: received ${recv} ${(existing as any).usage_unit || "unit"} (on hand ${beforeOnHand} to ${newOnHand})${noteStr ? ` - ${noteStr}` : ""}`,
-        before: { quantity_on_hand: beforeOnHand, on_order_qty: onOrder },
-        after: { quantity_on_hand: newOnHand, on_order_qty: newOnOrder },
+        entityType: "inventory_item", entityId: targetId,
+        entityLabel: `${e.item_name}: received ${recv} ${e.usage_unit || "unit"} (on hand ${targetBefore} to ${targetAfter})${lotStr}${noteStr ? ` - ${noteStr}` : ""}`,
+        before: { quantity_on_hand: targetBefore, on_order_qty: onOrder },
+        after: { quantity_on_hand: targetAfter, on_order_qty: newOnOrder },
         ipAddress: req.ip,
       });
     } catch { /* audit is best-effort */ }
-    const fresh = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(itemId);
+    const fresh = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(targetId);
     res.json({
       item: decorateInventoryItem(fresh),
+      split_lot: splitLot,
+      target_item_id: targetId,
       receipt: {
         received_qty: recv,
-        before_on_hand: beforeOnHand,
-        after_on_hand: newOnHand,
+        before_on_hand: targetBefore,
+        after_on_hand: targetAfter,
         before_on_order: onOrder,
         after_on_order: newOnOrder,
         order_placed_date: placedDate,
@@ -1634,6 +1705,8 @@ export function registerVeritaBenchRoutes(
         received_date: receivedDate,
         programmed_lead_time_days: programmedLead,
         actual_lead_time_days: actualLead,
+        received_lot_number: recvLot,
+        received_expiration_date: recvExp,
         note: noteStr,
         at: nowIso,
       },
@@ -2412,7 +2485,7 @@ export function registerVeritaBenchRoutes(
       if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
       try {
         const rows = sqlite.prepare(
-          `SELECT id, item_id, item_name, vendor, qty_received, usage_unit, order_placed_date, expected_date, received_date, programmed_lead_time_days, actual_lead_time_days, document_url, document_label, note, created_at
+          `SELECT id, item_id, item_name, vendor, qty_received, usage_unit, order_placed_date, expected_date, received_date, programmed_lead_time_days, actual_lead_time_days, document_url, document_label, received_lot_number, received_expiration_date, note, created_at
            FROM inventory_receipts WHERE lab_id = ? ORDER BY received_date DESC, id DESC LIMIT 250`
         ).all(req.scope.labId);
         res.json(rows);
