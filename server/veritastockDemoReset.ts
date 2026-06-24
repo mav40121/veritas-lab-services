@@ -19,24 +19,30 @@ const WAREHOUSE = 2, ED = 3, BYLAS = 5, INPATIENT = 7, CLINIC = 8;
 const EMPTY_LABS = [4, 6]; // Main Lab + Pharmacy: dropped from the demo, kept empty.
 const DEMO_LABS = [WAREHOUSE, ED, BYLAS, INPATIENT, CLINIC];
 
-// 10 SKUs. unit_cost is per usage unit.
+// 10 SKUs. unit_cost is per usage unit. `code` is a STABLE per-SKU ordinal
+// (1-10) used to derive a deterministic barcode_value that does NOT depend on
+// the auto-increment row id. The reset deletes and re-inserts every demo item,
+// so an id-derived barcode (VLS-<id>) changed on every reset and invalidated
+// any preprinted labels. Deriving barcode_value from (lab_id, code) keeps the
+// printed barcode identical across every reset. NEVER renumber an existing
+// code: doing so re-issues that item's barcode and breaks labels in the field.
 type ItemSpec = {
-  key: string; name: string; category: string; unit_cost: number;
+  key: string; code: number; name: string; category: string; unit_cost: number;
   usage_unit: string; order_unit: string; units_per_order_unit: number;
   lead_time_days: number; safety_stock_days: number; desired_days_of_stock: number;
   vendor: string; catalog_number: string;
 };
 const ITEMS: Record<string, ItemSpec> = {
-  RESP:   { key: "RESP",  name: "Rapid respiratory test cartridge", category: "Diagnostics",   unit_cost: 24.00, usage_unit: "test",  order_unit: "kit",  units_per_order_unit: 25,   lead_time_days: 21, safety_stock_days: 7, desired_days_of_stock: 45, vendor: "Abbott",          catalog_number: "RESP-CART-25" },
-  STRIP:  { key: "STRIP", name: "Glucometer test strips",           category: "Point of Care",  unit_cost: 0.85,  usage_unit: "strip", order_unit: "box",  units_per_order_unit: 50,   lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Roche Accu-Chek", catalog_number: "GLU-STRIP-50" },
-  IVKIT:  { key: "IVKIT", name: "IV start kit",                      category: "Supply",         unit_cost: 4.20,  usage_unit: "kit",   order_unit: "case", units_per_order_unit: 20,   lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Medline",         catalog_number: "IV-START-20" },
-  SALINE: { key: "SALINE",name: "Normal saline 1000 mL IV bag",     category: "Supply",         unit_cost: 1.80,  usage_unit: "bag",   order_unit: "case", units_per_order_unit: 12,   lead_time_days: 10, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Baxter",          catalog_number: "NS-1000-12" },
-  BCSET:  { key: "BCSET", name: "Blood culture bottle set",         category: "Diagnostics",    unit_cost: 7.20,  usage_unit: "set",   order_unit: "case", units_per_order_unit: 20,   lead_time_days: 21, safety_stock_days: 7, desired_days_of_stock: 45, vendor: "BD BACTEC",       catalog_number: "BC-SET-20" },
-  EDTA:   { key: "EDTA",  name: "EDTA collection tube",             category: "Supply",         unit_cost: 0.12,  usage_unit: "tube",  order_unit: "box",  units_per_order_unit: 100,  lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Greiner",         catalog_number: "EDTA-4ML-100" },
-  DRESS:  { key: "DRESS", name: "Wound care dressing kit",          category: "Supply",         unit_cost: 6.50,  usage_unit: "kit",   order_unit: "case", units_per_order_unit: 10,   lead_time_days: 14, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Medline",         catalog_number: "WND-DRESS-10" },
-  GLOVE:  { key: "GLOVE", name: "Nitrile exam gloves",              category: "Supply",         unit_cost: 0.06,  usage_unit: "glove", order_unit: "case", units_per_order_unit: 1000, lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Medline",         catalog_number: "GLV-NIT-1000" },
-  PADS:   { key: "PADS",  name: "Alcohol prep pads",                category: "Supply",         unit_cost: 0.02,  usage_unit: "pad",   order_unit: "box",  units_per_order_unit: 200,  lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Medline",         catalog_number: "ALC-PREP-200" },
-  TRANS:  { key: "TRANS", name: "Specimen transport kit",           category: "Supply",         unit_cost: 0.55,  usage_unit: "kit",   order_unit: "box",  units_per_order_unit: 50,   lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Cardinal Health", catalog_number: "SPEC-TRANS-50" },
+  RESP:   { key: "RESP",  code: 1,  name: "Rapid respiratory test cartridge", category: "Diagnostics",   unit_cost: 24.00, usage_unit: "test",  order_unit: "kit",  units_per_order_unit: 25,   lead_time_days: 21, safety_stock_days: 7, desired_days_of_stock: 45, vendor: "Abbott",          catalog_number: "RESP-CART-25" },
+  STRIP:  { key: "STRIP", code: 2,  name: "Glucometer test strips",           category: "Point of Care",  unit_cost: 0.85,  usage_unit: "strip", order_unit: "box",  units_per_order_unit: 50,   lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Roche Accu-Chek", catalog_number: "GLU-STRIP-50" },
+  IVKIT:  { key: "IVKIT", code: 3,  name: "IV start kit",                      category: "Supply",         unit_cost: 4.20,  usage_unit: "kit",   order_unit: "case", units_per_order_unit: 20,   lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Medline",         catalog_number: "IV-START-20" },
+  SALINE: { key: "SALINE",code: 4,  name: "Normal saline 1000 mL IV bag",     category: "Supply",         unit_cost: 1.80,  usage_unit: "bag",   order_unit: "case", units_per_order_unit: 12,   lead_time_days: 10, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Baxter",          catalog_number: "NS-1000-12" },
+  BCSET:  { key: "BCSET", code: 5,  name: "Blood culture bottle set",         category: "Diagnostics",    unit_cost: 7.20,  usage_unit: "set",   order_unit: "case", units_per_order_unit: 20,   lead_time_days: 21, safety_stock_days: 7, desired_days_of_stock: 45, vendor: "BD BACTEC",       catalog_number: "BC-SET-20" },
+  EDTA:   { key: "EDTA",  code: 6,  name: "EDTA collection tube",             category: "Supply",         unit_cost: 0.12,  usage_unit: "tube",  order_unit: "box",  units_per_order_unit: 100,  lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Greiner",         catalog_number: "EDTA-4ML-100" },
+  DRESS:  { key: "DRESS", code: 7,  name: "Wound care dressing kit",          category: "Supply",         unit_cost: 6.50,  usage_unit: "kit",   order_unit: "case", units_per_order_unit: 10,   lead_time_days: 14, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Medline",         catalog_number: "WND-DRESS-10" },
+  GLOVE:  { key: "GLOVE", code: 8,  name: "Nitrile exam gloves",              category: "Supply",         unit_cost: 0.06,  usage_unit: "glove", order_unit: "case", units_per_order_unit: 1000, lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Medline",         catalog_number: "GLV-NIT-1000" },
+  PADS:   { key: "PADS",  code: 9,  name: "Alcohol prep pads",                category: "Supply",         unit_cost: 0.02,  usage_unit: "pad",   order_unit: "box",  units_per_order_unit: 200,  lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Medline",         catalog_number: "ALC-PREP-200" },
+  TRANS:  { key: "TRANS", code: 10, name: "Specimen transport kit",           category: "Supply",         unit_cost: 0.55,  usage_unit: "kit",   order_unit: "box",  units_per_order_unit: 50,   lead_time_days: 12, safety_stock_days: 5, desired_days_of_stock: 30, vendor: "Cardinal Health", catalog_number: "SPEC-TRANS-50" },
 };
 
 // Per-location distribution: [itemKey, qty, burn_rate/day, opts].
@@ -154,11 +160,18 @@ export function resetVeritaStockDemo(sqlite: any, now: Date = new Date()): { ok:
       (account_id, lab_id, item_name, category, department, vendor, catalog_number, quantity_on_hand, unit, expiration_date,
        status, burn_rate, order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit,
        lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, unit_cost,
-       on_order_qty, on_order_expected_date, on_order_placed_date, created_at, updated_at)
+       on_order_qty, on_order_expected_date, on_order_placed_date, barcode_value, created_at, updated_at)
     VALUES (@account_id, @lab_id, @item_name, @category, @department, @vendor, @catalog_number, @qty, @unit, @exp,
        'active', @burn, @order_unit, @usage_unit, @upo, @usage_unit, 1,
-       @lead, @safety, @desired, 0, @unit_cost, @on_order, @on_order_eta, @on_order_placed, @now, @now)
+       @lead, @safety, @desired, 0, @unit_cost, @on_order, @on_order_eta, @on_order_placed, @barcode, @now, @now)
   `);
+  // Deterministic barcode: VLS-<8 digits> where the number is lab_id * 1000 +
+  // the SKU's stable `code`. Independent of the auto-increment row id, so the
+  // SAME label scans the SAME item after every reset. The scanner resolves by
+  // exact barcode_value string (lab-scoped), so this stays in lockstep with the
+  // printed label. lab_id < 1000 and code <= 10 guarantees no cross-location
+  // collision (warehouse 2 -> VLS-00002001..010, ED 3 -> VLS-00003001..010).
+  const barcodeFor = (labId: number, code: number) => `VLS-${String(labId * 1000 + code).padStart(8, "0")}`;
   const upsertSnap = sqlite.prepare(`
     INSERT INTO inventory_monthly_snapshots
       (lab_id, year_month, avg_value_on_hand, opening_value, closing_value, waste_value, waste_note, created_at, updated_at)
@@ -208,6 +221,7 @@ export function resetVeritaStockDemo(sqlite: any, now: Date = new Date()): { ok:
           burn, order_unit: it.order_unit, usage_unit: it.usage_unit, upo: it.units_per_order_unit,
           lead: it.lead_time_days, safety: it.safety_stock_days, desired: it.desired_days_of_stock,
           unit_cost: it.unit_cost, on_order: o.onOrder ?? 0,
+          barcode: barcodeFor(labId, it.code),
           on_order_eta: o.onOrderEtaDays != null ? isoPlusDays(now, o.onOrderEtaDays) : null,
           // Placed date for an in-flight PO is back-dated so placed + lead = ETA
           // (e.g. 21-day lead, ETA in 12 days => placed 9 days ago). Lets the
@@ -218,8 +232,9 @@ export function resetVeritaStockDemo(sqlite: any, now: Date = new Date()): { ok:
           now: nowIso,
         });
       }
-      // Canonical barcodes for any fresh rows.
-      try { sqlite.prepare("UPDATE inventory_items SET barcode_value = 'VLS-' || printf('%08d', id) WHERE lab_id = ? AND (barcode_value IS NULL OR barcode_value = '')").run(labId); } catch {}
+      // Barcodes are assigned deterministically in the INSERT above (VLS-<lab*1000+code>),
+      // so there is no id-derived backfill here. Re-running the reset re-issues the
+      // exact same barcode for each item, keeping any preprinted labels valid.
 
       // Seed the Vendor Directory for this location so it is never blank and the
       // Order PDF cover auto-fills. Replace any prior demo rows first.
@@ -273,7 +288,13 @@ export function resetVeritaStockDemo(sqlite: any, now: Date = new Date()): { ok:
     // beyond what the system genuinely produces.)
     const demoOwner = (sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(WAREHOUSE) as any)?.owner_user_id;
     if (demoOwner != null) {
-      try { sqlite.prepare("DELETE FROM audit_log WHERE module = 'veritastock' AND owner_user_id = ?").run(demoOwner); } catch {}
+      // Clear the ENTIRE VeritaStock audit history, not just the warehouse
+      // owner's rows. This function only ever runs on the isolated STOCK
+      // deployment (hard-guarded at the top), where every module='veritastock'
+      // audit row is demo data. A blanket clear guarantees a clean trail on
+      // every reset regardless of which owner an action was logged under, and
+      // sweeps any post-reset "playing" residue that a single-owner delete missed.
+      try { sqlite.prepare("DELETE FROM audit_log WHERE module = 'veritastock'").run(); } catch {}
       const itemIdAt = (lab: number, key: string): number | null => {
         const r = sqlite.prepare("SELECT id FROM inventory_items WHERE lab_id = ? AND item_name = ?").get(lab, ITEMS[key].name) as any;
         return r?.id ?? null;
