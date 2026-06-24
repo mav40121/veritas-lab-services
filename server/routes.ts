@@ -6218,6 +6218,142 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     },
   );
 
+  // Helper: resolve the enterprise location group for a base lab + acting user,
+  // mirroring the transfers/incoming pattern (warehouse + its stockrooms).
+  function resolveEnterpriseGroup(sqlite: any, baseLabId: number, actingUserId: number):
+    { owner: number | null; locations: Array<{ id: number; lab_name: string }> } {
+    const baseLab = sqlite.prepare("SELECT owner_user_id, parent_warehouse_lab_id FROM labs WHERE id = ?").get(baseLabId) as any;
+    const owner = baseLab?.owner_user_id ?? null;
+    if (owner == null) return { owner: null, locations: [] };
+    const ownerLabs = sqlite.prepare(`
+      SELECT l.id AS id, l.lab_name AS lab_name, l.parent_warehouse_lab_id AS parent_warehouse_lab_id
+        FROM labs l
+        JOIN lab_members lm ON lm.lab_id = l.id AND lm.user_id = ? AND lm.status = 'active'
+       WHERE l.owner_user_id = ?
+    `).all(actingUserId, owner) as any[];
+    const locs = scopeEnterpriseLocations(
+      { id: baseLabId, parent_warehouse_lab_id: baseLab.parent_warehouse_lab_id },
+      ownerLabs,
+    );
+    return { owner, locations: locs.map((l: any) => ({ id: l.id, lab_name: l.lab_name })) };
+  }
+
+  // GET /api/labs/:labId/veritastock/team — owner/admin view of who can access
+  // which enterprise location, and each member's default location. Backs the
+  // location-provisioning UI on the Members page (membership = the allowlist).
+  app.get(
+    "/api/labs/:labId/veritastock/team",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      try {
+        if (req.scope.role !== "owner" && req.scope.role !== "admin") {
+          return res.status(403).json({ error: "Owner or admin only" });
+        }
+        const sqlite = (db as any).$client;
+        const { owner, locations } = resolveEnterpriseGroup(sqlite, req.scope.labId, req.scope.userId);
+        const groupIds = locations.map((l) => l.id);
+        if (groupIds.length === 0) return res.json({ locations: [], members: [], owner });
+        const ph = groupIds.map(() => "?").join(",");
+        const rows = sqlite.prepare(`
+          SELECT lm.lab_id AS lab_id, lm.user_id AS user_id, lm.role AS role, lm.is_primary_lab AS is_primary_lab,
+                 u.email AS email, u.name AS name
+            FROM lab_members lm
+            JOIN users u ON u.id = lm.user_id
+           WHERE lm.lab_id IN (${ph}) AND lm.status = 'active'
+        `).all(...groupIds) as any[];
+        const byUser = new Map<number, any>();
+        for (const r of rows) {
+          let m = byUser.get(r.user_id);
+          if (!m) { m = { userId: r.user_id, email: r.email, name: r.name, role: r.role, isOwner: r.user_id === owner, locationIds: [], defaultLocationId: null }; byUser.set(r.user_id, m); }
+          m.locationIds.push(r.lab_id);
+          if (r.is_primary_lab) m.defaultLocationId = r.lab_id;
+          if (r.role === "owner") m.role = "owner";
+        }
+        // Default to the first granted location if none is flagged primary.
+        for (const m of byUser.values()) if (m.defaultLocationId == null && m.locationIds.length) m.defaultLocationId = m.locationIds[0];
+        return res.json({ locations, owner, members: Array.from(byUser.values()) });
+      } catch (err: any) {
+        console.error("[veritastock/team] error:", err);
+        return res.status(500).json({ error: err.message || "team_failed" });
+      }
+    },
+  );
+
+  // POST /api/labs/:labId/veritastock/members/:userId/locations — owner/admin
+  // sets which enterprise locations a member can access and their default
+  // location. ADDITIVE by design: it grants memberships for the chosen
+  // locations and sets the default; it never deactivates a membership here
+  // (revoke stays the guarded per-lab Remove on the Members page), so this can
+  // never lock anyone out. Body: { locationIds: number[], defaultLocationId? }.
+  app.post(
+    "/api/labs/:labId/veritastock/members/:userId/locations",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      try {
+        if (req.scope.role !== "owner" && req.scope.role !== "admin") {
+          return res.status(403).json({ error: "Owner or admin only" });
+        }
+        const sqlite = (db as any).$client;
+        const targetUserId = Number(req.params.userId);
+        if (!Number.isFinite(targetUserId)) return res.status(400).json({ error: "Invalid user id" });
+        const body = req.body || {};
+        const rawList: any[] = Array.isArray(body.locationIds) ? body.locationIds : [];
+        const wanted: number[] = Array.from(new Set(rawList.map((x: any) => Number(x)).filter((n: number) => Number.isFinite(n))));
+        if (wanted.length === 0) return res.status(400).json({ error: "At least one location is required" });
+
+        const { owner, locations } = resolveEnterpriseGroup(sqlite, req.scope.labId, req.scope.userId);
+        const groupIds = new Set(locations.map((l) => l.id));
+        if (!wanted.every((id) => groupIds.has(id))) {
+          return res.status(400).json({ error: "A location is outside this enterprise" });
+        }
+        if (owner != null && targetUserId === owner) {
+          return res.status(400).json({ error: "The owner already has access to every location; manage other members here" });
+        }
+        const def = body.defaultLocationId != null ? Number(body.defaultLocationId) : wanted[0];
+        if (!wanted.includes(def)) return res.status(400).json({ error: "Default must be one of the selected locations" });
+
+        const nowIso = new Date().toISOString();
+        const tx = sqlite.transaction(() => {
+          for (const lid of wanted) {
+            const existing = sqlite.prepare("SELECT id, status FROM lab_members WHERE lab_id = ? AND user_id = ? LIMIT 1").get(lid, targetUserId) as any;
+            if (!existing) {
+              sqlite.prepare(
+                "INSERT INTO lab_members (lab_id, user_id, role, status, is_primary_lab, accepted_at, created_at, updated_at) VALUES (?, ?, 'staff', 'active', 0, ?, ?, ?)"
+              ).run(lid, targetUserId, nowIso, nowIso, nowIso);
+            } else if (existing.status !== "active") {
+              sqlite.prepare("UPDATE lab_members SET status = 'active', updated_at = ? WHERE id = ?").run(nowIso, existing.id);
+            }
+          }
+          // Set the default location: primary on def, cleared on the member's
+          // other memberships. Also update users.default_lab_id so the member
+          // lands on their default location on next sign-in.
+          sqlite.prepare("UPDATE lab_members SET is_primary_lab = 0, updated_at = ? WHERE user_id = ?").run(nowIso, targetUserId);
+          sqlite.prepare("UPDATE lab_members SET is_primary_lab = 1, updated_at = ? WHERE user_id = ? AND lab_id = ? AND status = 'active'").run(nowIso, targetUserId, def);
+          try { sqlite.prepare("UPDATE users SET default_lab_id = ? WHERE id = ?").run(def, targetUserId); } catch {}
+        });
+        tx();
+
+        try {
+          const defName = locations.find((l) => l.id === def)?.lab_name || `lab ${def}`;
+          logAudit({
+            userId: req.scope.userId, ownerUserId: owner ?? req.scope.userId, module: "veritastock", action: "update",
+            entityType: "lab_member", entityId: targetUserId,
+            entityLabel: `Set locations for user ${targetUserId}: ${wanted.length} location(s), default ${defName}`,
+            after: { locationIds: wanted, defaultLocationId: def },
+            ipAddress: req.ip,
+          });
+        } catch { /* best-effort */ }
+
+        return res.json({ ok: true, userId: targetUserId, locationIds: wanted, defaultLocationId: def });
+      } catch (err: any) {
+        console.error("[veritastock/members/locations] error:", err);
+        return res.status(500).json({ error: err.message || "set_locations_failed" });
+      }
+    },
+  );
+
   // POST /api/labs/:labId/veritastock/transfers/:batchId/accept — the
   // destination accepts a pending shipment. Stock lands at the destination
   // (the dest item is resolved or created per line, from the still-existing
