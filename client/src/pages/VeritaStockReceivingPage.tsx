@@ -9,7 +9,7 @@ import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Search, PackageCheck, QrCode, History, X, AlertTriangle, Clock } from "lucide-react";
+import { ArrowLeft, Search, PackageCheck, QrCode, History, X, AlertTriangle, Clock, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import BarcodeScannerModal from "@/components/BarcodeScannerModal";
 
@@ -36,6 +36,8 @@ interface Receipt {
   expected_date: string | null;
   received_date: string | null;
   note?: string | null;
+  document_url?: string | null;
+  document_label?: string | null;
   programmed_lead_time_days: number | null;
   actual_lead_time_days: number | null;
 }
@@ -83,6 +85,11 @@ export default function VeritaStockReceivingPage() {
   const [scanOpen, setScanOpen] = useState(false);
   const [receiveQ, setReceiveQ] = useState<Record<number, string>>({});
   const [receiveNote, setReceiveNote] = useState<Record<number, string>>({});
+  // Optional document attachment per item: a URL pointer to the PO / packing
+  // slip / invoice, plus a short label. URL only (no file upload), so the lab's
+  // document stays in its own SharePoint / Drive and VeritaStock stores the link.
+  const [receiveDocUrl, setReceiveDocUrl] = useState<Record<number, string>>({});
+  const [receiveDocLabel, setReceiveDocLabel] = useState<Record<number, string>>({});
   const [busyId, setBusyId] = useState<number | null>(null);
 
   const inventoryListUrl = activeLabId ? `${API_BASE}/api/labs/${activeLabId}/inventory` : `${API_BASE}/api/inventory`;
@@ -153,7 +160,12 @@ export default function VeritaStockReceivingPage() {
       const res = await fetch(`${API_BASE}/api/inventory/${item.id}/receive`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ received_qty: qty, note: (receiveNote[item.id] || "").trim() || undefined }),
+        body: JSON.stringify({
+          received_qty: qty,
+          note: (receiveNote[item.id] || "").trim() || undefined,
+          document_url: (receiveDocUrl[item.id] || "").trim() || undefined,
+          document_label: (receiveDocLabel[item.id] || "").trim() || undefined,
+        }),
       });
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
@@ -168,6 +180,8 @@ export default function VeritaStockReceivingPage() {
       });
       setReceiveQ((p) => { const n = { ...p }; delete n[item.id]; return n; });
       setReceiveNote((p) => { const n = { ...p }; delete n[item.id]; return n; });
+      setReceiveDocUrl((p) => { const n = { ...p }; delete n[item.id]; return n; });
+      setReceiveDocLabel((p) => { const n = { ...p }; delete n[item.id]; return n; });
       await load();
     } finally {
       setBusyId(null);
@@ -261,6 +275,31 @@ export default function VeritaStockReceivingPage() {
                         disabled={readOnly}
                         title="Optional: partial shipment, damaged, received out of temperature, etc."
                       />
+                      {/* Optional document link: paste a URL to the PO, packing
+                          slip, or invoice (SharePoint / Drive / etc). URL only,
+                          no file upload; the document stays in the lab's system. */}
+                      <Input
+                        type="url"
+                        className="w-40 h-7 mt-1 text-xs ml-auto"
+                        placeholder="Document URL (optional)"
+                        value={receiveDocUrl[it.id] ?? ""}
+                        onChange={(e) => setReceiveDocUrl((p) => ({ ...p, [it.id]: e.target.value }))}
+                        data-testid={`receiving-docurl-${it.id}`}
+                        disabled={readOnly}
+                        title="Optional: link to the PO, packing slip, or invoice for this delivery (URL only, no file upload)."
+                      />
+                      {(receiveDocUrl[it.id] || "").trim() && (
+                        <Input
+                          type="text"
+                          className="w-40 h-7 mt-1 text-xs ml-auto"
+                          placeholder="Document label (e.g. PO #1234)"
+                          value={receiveDocLabel[it.id] ?? ""}
+                          onChange={(e) => setReceiveDocLabel((p) => ({ ...p, [it.id]: e.target.value }))}
+                          data-testid={`receiving-doclabel-${it.id}`}
+                          disabled={readOnly}
+                          title="Optional label shown in the receipt history (defaults to 'Attached document')."
+                        />
+                      )}
                     </td>
                     <td className="px-3 py-2 text-right">
                       <Button size="sm" onClick={() => handleReceive(it)} disabled={readOnly || busyId === it.id} data-testid={`receiving-receive-${it.id}`} style={{ backgroundColor: "#01696F" }}>
@@ -327,12 +366,13 @@ export default function VeritaStockReceivingPage() {
                   <th className="px-3 py-2 font-medium sticky top-0 bg-muted z-10">Placed</th>
                   <th className="px-3 py-2 font-medium sticky top-0 bg-muted z-10 text-right">Programmed</th>
                   <th className="px-3 py-2 font-medium sticky top-0 bg-muted z-10 text-right">Actual lead</th>
+                  <th className="px-3 py-2 font-medium sticky top-0 bg-muted z-10">Document</th>
                   <th className="px-3 py-2 font-medium sticky top-0 bg-muted z-10">Note</th>
                 </tr>
               </thead>
               <tbody>
                 {receipts.length === 0 ? (
-                  <tr><td colSpan={8} className="px-3 py-6 text-center text-muted-foreground" data-testid="receipts-empty">No receipts logged yet. Receiving an order above records it here.</td></tr>
+                  <tr><td colSpan={9} className="px-3 py-6 text-center text-muted-foreground" data-testid="receipts-empty">No receipts logged yet. Receiving an order above records it here.</td></tr>
                 ) : receipts.map((r) => (
                   <tr key={r.id} className="border-b" data-testid={`receipt-row-${r.id}`}>
                     <td className="px-3 py-2">{r.received_date || "-"}</td>
@@ -343,6 +383,13 @@ export default function VeritaStockReceivingPage() {
                     <td className="px-3 py-2 text-right font-mono">{r.programmed_lead_time_days != null ? `${r.programmed_lead_time_days}d` : "-"}</td>
                     <td className={`px-3 py-2 text-right font-mono ${leadColor(r.actual_lead_time_days, r.programmed_lead_time_days)}`}>
                       {r.actual_lead_time_days != null ? `${r.actual_lead_time_days}d` : "-"}
+                    </td>
+                    <td className="px-3 py-2 text-xs">
+                      {r.document_url ? (
+                        <a href={r.document_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary underline underline-offset-2" data-testid={`receipt-doc-${r.id}`}>
+                          <FileText size={12} />{r.document_label || "Document"}
+                        </a>
+                      ) : <span className="text-muted-foreground">-</span>}
                     </td>
                     <td className="px-3 py-2 text-xs">{r.note || <span className="text-muted-foreground">-</span>}</td>
                   </tr>

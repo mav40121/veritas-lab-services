@@ -700,6 +700,9 @@ export default function VeritaStockInventoryPage() {
   // (defaults to the full open on-order qty).
   const [receiveTarget, setReceiveTarget] = useState<InventoryItem | null>(null);
   const [receiveQty, setReceiveQty] = useState<number>(0);
+  // Optional document link captured on receive (PO / packing slip / invoice).
+  // URL pointer only, mirroring the dedicated Receiving page.
+  const [receiveDocUrl, setReceiveDocUrl] = useState<string>("");
   // Write-off (waste capture) dialog: target item, qty, and reason code.
   const [writeOffTarget, setWriteOffTarget] = useState<InventoryItem | null>(null);
   const [writeOffQty, setWriteOffQty] = useState<number>(0);
@@ -1080,7 +1083,7 @@ export default function VeritaStockInventoryPage() {
       const res = await fetch(`${API_BASE}/api/inventory/${receiveTarget.id}/receive`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ received_qty: receiveQty }),
+        body: JSON.stringify({ received_qty: receiveQty, document_url: receiveDocUrl.trim() || undefined }),
       });
       if (res.ok) {
         toast({ title: "Stock received", description: `${receiveQty} ${receiveTarget.usage_unit}s moved into on-hand` });
@@ -1093,6 +1096,7 @@ export default function VeritaStockInventoryPage() {
       toast({ title: "Error", description: "Failed to receive stock", variant: "destructive" });
     }
     setReceiveTarget(null);
+    setReceiveDocUrl("");
   };
 
   // Write off (waste capture). Posts to the dedicated /write-off endpoint, which
@@ -2130,7 +2134,7 @@ export default function VeritaStockInventoryPage() {
 
       {/* Receive against PO. Moves received qty from on-order into on-hand via
           the dedicated /receive endpoint. Defaults to the full open PO. */}
-      <Dialog open={!!receiveTarget} onOpenChange={(o) => { if (!o) setReceiveTarget(null); }}>
+      <Dialog open={!!receiveTarget} onOpenChange={(o) => { if (!o) { setReceiveTarget(null); setReceiveDocUrl(""); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Receive stock</DialogTitle>
@@ -2158,8 +2162,21 @@ export default function VeritaStockInventoryPage() {
                   Moves into on-hand. Remaining stays on order. New on-hand: {((receiveTarget.quantity_on_hand || 0) + receiveQty).toLocaleString()} {receiveTarget.usage_unit}s.
                 </p>
               </div>
+              <div className="space-y-1.5">
+                <Label>Document link (optional)</Label>
+                <Input
+                  type="url"
+                  placeholder="https://... PO, packing slip, or invoice"
+                  value={receiveDocUrl}
+                  onChange={(e) => setReceiveDocUrl(e.target.value)}
+                  data-testid="receive-docurl-input"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Link to the order paperwork. URL only, no file upload; the document stays in your own system.
+                </p>
+              </div>
               <div className="flex justify-end gap-2 pt-1">
-                <Button variant="outline" onClick={() => setReceiveTarget(null)}>Cancel</Button>
+                <Button variant="outline" onClick={() => { setReceiveTarget(null); setReceiveDocUrl(""); }}>Cancel</Button>
                 <Button
                   onClick={handleReceive}
                   disabled={receiveQty <= 0 || receiveQty > (receiveTarget.on_order_qty || 0)}
