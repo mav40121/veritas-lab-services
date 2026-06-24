@@ -27,7 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Lock, Plus, Edit2, Trash2, AlertTriangle, Package, Clock, AlertCircle, RefreshCw,
-  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users, Building2, DollarSign, PackageCheck, PackageX, BarChart3, ScrollText,
+  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users, Building2, DollarSign, PackageCheck, PackageX, BarChart3, ScrollText, Layers,
 } from "lucide-react";
 import BarcodeScannerModal from "@/components/BarcodeScannerModal";
 import InventoryCountWorkflow, { type CountItem } from "@/components/InventoryCountWorkflow";
@@ -710,6 +710,18 @@ export default function VeritaStockInventoryPage() {
   const [writeOffTarget, setWriteOffTarget] = useState<InventoryItem | null>(null);
   const [writeOffQty, setWriteOffQty] = useState<number>(0);
   const [writeOffReason, setWriteOffReason] = useState<string>("expired");
+  // Lots dialog: shows a product's child lots (lot #, expiry, qty), oldest-first
+  // (FEFO order). Fetched on demand from the lots endpoint.
+  const [lotsTarget, setLotsTarget] = useState<InventoryItem | null>(null);
+  const [lotsData, setLotsData] = useState<Array<{ id: number; lot_number: string | null; expiration_date: string | null; quantity: number }>>([]);
+  const [lotsLoading, setLotsLoading] = useState(false);
+  const openLots = async (item: InventoryItem) => {
+    setLotsTarget(item); setLotsData([]); setLotsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/veritastock/items/${item.id}/lots`, { headers: authHeaders() });
+      if (res.ok) { const d = await res.json(); setLotsData(Array.isArray(d.lots) ? d.lots : []); }
+    } catch { /* leave empty */ } finally { setLotsLoading(false); }
+  };
 
   // Filters
   const [filterDept, setFilterDept] = useState("All");
@@ -2124,6 +2136,9 @@ export default function VeritaStockInventoryPage() {
                           <PackageX size={14} />
                         </Button>
                       )}
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" title="View lots: lot number and expiration of each batch on hand" onClick={() => openLots(item)} data-testid={`button-lots-${item.id}`}>
+                        <Layers size={13} />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditItem(item); setShowForm(true); }} disabled={readOnly}>
                         <Edit2 size={13} />
                       </Button>
@@ -2154,6 +2169,43 @@ export default function VeritaStockInventoryPage() {
         editItem={editItem}
         inventory={items}
       />
+
+      {/* Lots dialog: a product's child lots (lot # + expiration + qty), oldest-
+          expiration first. Stock depletes oldest-first (FEFO). */}
+      <Dialog open={!!lotsTarget} onOpenChange={(o) => { if (!o) setLotsTarget(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Layers size={16} /> Lots{lotsTarget ? `: ${lotsTarget.item_name}` : ""}</DialogTitle>
+          </DialogHeader>
+          {lotsLoading ? (
+            <div className="py-6 text-center text-sm text-muted-foreground">Loading lots...</div>
+          ) : lotsData.length === 0 ? (
+            <div className="py-6 text-center text-sm text-muted-foreground">No lots recorded for this product yet.</div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">Oldest expiration first. Stock is used and written off oldest-first (FEFO).</p>
+              <table className="w-full text-sm" data-testid="lots-table">
+                <thead>
+                  <tr className="text-left text-xs uppercase text-muted-foreground border-b">
+                    <th className="py-1.5 pr-3">Lot #</th>
+                    <th className="py-1.5 pr-3">Expires</th>
+                    <th className="py-1.5 text-right">On hand</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lotsData.map((l, i) => (
+                    <tr key={l.id} className="border-b last:border-0">
+                      <td className="py-1.5 pr-3 font-mono text-xs">{l.lot_number || <span className="text-muted-foreground">(no lot #)</span>}</td>
+                      <td className="py-1.5 pr-3">{l.expiration_date || <span className="text-muted-foreground">-</span>}{i === 0 && lotsData.length > 1 && <span className="ml-1.5 text-[10px] text-emerald-700">use first</span>}</td>
+                      <td className="py-1.5 text-right font-mono">{l.quantity.toLocaleString()} {lotsTarget?.usage_unit}s</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* parking-lot #29 Phase 3B: camera scanner modal.
           Reuses the existing API_BASE + authHeaders + activeLabId, and
