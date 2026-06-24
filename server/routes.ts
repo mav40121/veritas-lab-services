@@ -6272,7 +6272,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }
         // Default to the first granted location if none is flagged primary.
         for (const m of byUser.values()) if (m.defaultLocationId == null && m.locationIds.length) m.defaultLocationId = m.locationIds[0];
-        return res.json({ locations, owner, members: Array.from(byUser.values()) });
+        // Emit the client contract { labId, name } (resolveEnterpriseGroup uses
+        // { id, lab_name } internally; the grid keys checkboxes on labId + name).
+        return res.json({
+          locations: locations.map((l) => ({ labId: l.id, name: l.lab_name })),
+          owner,
+          members: Array.from(byUser.values()),
+        });
       } catch (err: any) {
         console.error("[veritastock/team] error:", err);
         return res.status(500).json({ error: err.message || "team_failed" });
