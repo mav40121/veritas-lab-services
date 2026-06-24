@@ -254,6 +254,39 @@ export function resetVeritaStockDemo(sqlite: any, now: Date = new Date()): { ok:
       summary.push({ lab_id: labId, items: DIST[labId].length, current_value: Math.round(curVal) });
     }
 
+    // Seed ONE pending Warehouse -> ED shipment so the demo's two-phase
+    // ship->accept beat (the destination Accepts/Rejects from the Incoming
+    // panel) is always present and self-heals every reset. Without this the
+    // hero batch had to be created by hand and vanished at the next reset.
+    // Mirrors the live transfer-batch send exactly: stock leaves the Warehouse
+    // source NOW (in transit, debited from on_hand) and lands at ED only when
+    // the destination Accepts. Matches the prior hand-made batch (BC sets + prep
+    // pads) so the rehearsed demo is unchanged. (All inventory_transfers were
+    // cleared above, so this is the only pending batch after a reset.)
+    const stockOwner = (sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(WAREHOUSE) as any)?.owner_user_id;
+    if (stockOwner != null) {
+      const PENDING_BATCH_ID = "demo-pending-wh-ed";
+      const initiator = (sqlite.prepare("SELECT email FROM users WHERE id = ?").get(stockOwner) as any)?.email || `user ${stockOwner}`;
+      // [itemKey, qty in usage units] — qty leaves the Warehouse on send.
+      const PENDING_LINES: Array<[string, number]> = [["BCSET", 3], ["PADS", 5]];
+      const insPending = sqlite.prepare(`
+        INSERT INTO inventory_transfers
+          (owner_user_id, from_lab_id, to_lab_id, from_item_id, to_item_id,
+           catalog_number, item_name, qty_usage_units, display_qty, display_unit,
+           status, batch_id, initiated_by_user_id, initiated_by_name, notes, created_at)
+        VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, NULL, ?)
+      `);
+      for (const [key, qty] of PENDING_LINES) {
+        const it = ITEMS[key];
+        const srcRow = sqlite.prepare("SELECT id, quantity_on_hand FROM inventory_items WHERE lab_id = ? AND item_name = ?").get(WAREHOUSE, it.name) as any;
+        if (!srcRow) continue;
+        // Stock leaves the source now (in transit), exactly like a live send.
+        sqlite.prepare("UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?")
+          .run(Math.max(0, srcRow.quantity_on_hand - qty), nowIso, srcRow.id);
+        insPending.run(stockOwner, WAREHOUSE, ED, srcRow.id, it.catalog_number, it.name, qty, qty, it.usage_unit, PENDING_BATCH_ID, stockOwner, initiator, nowIso);
+      }
+    }
+
     // Seed receipt history at the Warehouse so the lead-time drift flag shows
     // live. RESP (Abbott, programmed 21d) consistently takes ~28d -> SLOWER,
     // stockout-risk red flag. EDTA (Greiner, programmed 12d) arrives in ~7d ->
