@@ -808,6 +808,27 @@ export default function VeritaStockInventoryPage() {
     else setLoading(false);
   }, [isLoggedIn, hasPlanAccess, loadItems]);
 
+  // Incoming transfers awaiting acceptance at the ACTIVE location. The Accept /
+  // Reject panel lives on the Enterprise view, which is easy to miss, so we
+  // surface a live count as a toolbar badge + banner here on the main page.
+  // Counts distinct pending batches (shipments), matching the Enterprise panel.
+  const [incomingCount, setIncomingCount] = useState(0);
+  useEffect(() => {
+    if (!isLoggedIn || !hasPlanAccess || !activeLabId) { setIncomingCount(0); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/veritastock/transfers/incoming`, { headers: authHeaders() });
+        if (!res.ok) return;
+        const d = await res.json();
+        const rows = Array.isArray(d?.incoming) ? d.incoming : [];
+        const batches = new Set(rows.map((r: any) => r.batch_id ?? r.id));
+        if (!cancelled) setIncomingCount(batches.size);
+      } catch { /* network error: leave prior count */ }
+    })();
+    return () => { cancelled = true; };
+  }, [isLoggedIn, hasPlanAccess, activeLabId]);
+
   const handleSave = async (data: Partial<InventoryItem>) => {
     const isEdit = !!editItem;
     const url = isEdit ? `${API_BASE}/api/inventory/${editItem!.id}` : inventoryListUrl;
@@ -1422,6 +1443,25 @@ export default function VeritaStockInventoryPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
+      {/* Incoming-transfer banner: a shipment was sent TO this location and is
+          waiting to be accepted. Surfaced at the very top so the destination
+          user cannot miss where to go (the Accept/Reject panel is on the
+          Enterprise view, anchored at #incoming). */}
+      {incomingCount > 0 && activeLabId && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2.5" data-testid="incoming-transfers-banner">
+          <div className="flex items-center gap-2 text-sm text-emerald-900">
+            <PackageCheck size={16} className="text-emerald-600 shrink-0" />
+            <span>
+              <strong>{incomingCount}</strong> incoming transfer{incomingCount === 1 ? "" : "s"} waiting for you to accept at this location.
+            </span>
+          </div>
+          <Link href={`/labs/${activeLabId}/veritastock/enterprise#incoming`}>
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" data-testid="incoming-banner-review">
+              Review and accept
+            </Button>
+          </Link>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -1452,6 +1492,25 @@ export default function VeritaStockInventoryPage() {
           )}
         </div>
         <div className="flex flex-wrap gap-2 justify-end">
+          {/* Incoming transfers waiting to accept at this location. Always
+              present so the destination user learns where Accept/Reject lives
+              (it is on the Enterprise view); emphasized with a live count badge
+              when a shipment is pending. Fixes "hard to find where ED accepts". */}
+          <Link href={activeLabId ? `/labs/${activeLabId}/veritastock/enterprise#incoming` : "/veritastock/enterprise"}>
+            <Button
+              size="sm"
+              variant={incomingCount > 0 ? "default" : "outline"}
+              className={incomingCount > 0 ? "bg-emerald-600 hover:bg-emerald-700 text-white" : ""}
+              title="Transfers sent to this location that are waiting for you to Accept or Reject"
+              data-testid="incoming-transfers-button"
+            >
+              <PackageCheck size={14} className="mr-1.5" />
+              Incoming
+              {incomingCount > 0 && (
+                <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-white/90 px-1.5 text-xs font-semibold text-emerald-700" data-testid="incoming-count-badge">{incomingCount}</span>
+              )}
+            </Button>
+          </Link>
           {/* Vendor Directory entry point (PR 2 of vendor management).
               Director clicks here to manage vendor accounts, ordering
               channels, and contact tracks. The Order PDF auto-fills
