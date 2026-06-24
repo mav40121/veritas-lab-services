@@ -5,6 +5,7 @@ import type { Express } from "express";
 import crypto from "crypto";
 import { db } from "./db";
 import { logAudit } from "./audit";
+import { addLot, reconcileLots } from "./inventoryLots";
 import { resolveLegacyLabId } from "./labAccessGuard";
 import { DEMO_USER_EMAIL } from "./constants";
 import { applyLicenseToExcelJS } from "./licenseStamp";
@@ -1595,60 +1596,30 @@ export function registerVeritaBenchRoutes(
     // - A different lot/expiry -> land in an existing sibling lot-row for that
     //   exact lot+expiry, or create a new lot-row carrying the product's settings.
     const e = existing as any;
-    const curLot = (e.lot_number ?? "") || "";
-    const curExp = (e.expiration_date ?? "") || "";
     const existingOnHand = e.quantity_on_hand || 0;
-    const hasLotInfo = !!(recvLot || recvExp);
-    const sameAsCurrent = (recvLot ?? "") === curLot && (recvExp ?? "") === curExp;
-    const existingEmptyUnlotted = existingOnHand <= 0 && !curLot && !curExp;
-    const lumpOntoExisting = !hasLotInfo || sameAsCurrent || existingEmptyUnlotted;
-
-    let targetId = itemId;
-    let targetBefore = existingOnHand;
-    let splitLot = false;
+    // Nested lots (Phase 2): the received stock always lands on THIS item (no
+    // sibling rows). quantity_on_hand grows by recv and stays authoritative; the
+    // arriving lot is credited as a child lot (a new row only if its lot/expiry is
+    // new). The lot defaults to the item's current lot/expiry when none is given.
+    // reconcileLots then syncs the item's headline expiry to the earliest lot.
+    const lotForReceipt = recvLot ?? (e.lot_number ?? null);
+    const expForReceipt = recvExp ?? (e.expiration_date ?? null);
+    const targetId = itemId;
+    const targetBefore = existingOnHand;
+    const targetAfter = existingOnHand + recv;
+    let newLot = false;
     const tx = sqlite.transaction(() => {
-      if (lumpOntoExisting) {
-        const adoptLot = existingEmptyUnlotted && hasLotInfo ? recvLot : (e.lot_number ?? null);
-        const adoptExp = existingEmptyUnlotted && hasLotInfo ? recvExp : (e.expiration_date ?? null);
-        sqlite.prepare(
-          "UPDATE inventory_items SET quantity_on_hand = ?, on_order_qty = ?, on_order_expected_date = ?, on_order_placed_date = ?, lot_number = ?, expiration_date = ?, updated_at = ? WHERE id = ?"
-        ).run(existingOnHand + recv, newOnOrder, newExpected, newPlaced, adoptLot, adoptExp, nowIso, itemId);
-      } else {
-        splitLot = true;
-        // Fulfil the PO on the existing row; its on-hand is untouched.
-        sqlite.prepare(
-          "UPDATE inventory_items SET on_order_qty = ?, on_order_expected_date = ?, on_order_placed_date = ?, updated_at = ? WHERE id = ?"
-        ).run(newOnOrder, newExpected, newPlaced, nowIso, itemId);
-        const sib = sqlite.prepare(
-          `SELECT id, quantity_on_hand FROM inventory_items
-            WHERE lab_id IS ? AND account_id IS ? AND lower(trim(item_name)) = lower(trim(?))
-              AND COALESCE(lot_number,'') = ? AND COALESCE(expiration_date,'') = ?
-              AND COALESCE(status,'active') = 'active' AND id != ? LIMIT 1`
-        ).get(e.lab_id ?? null, e.account_id ?? null, e.item_name ?? "", recvLot ?? "", recvExp ?? "", itemId) as any;
-        if (sib) {
-          targetId = sib.id; targetBefore = sib.quantity_on_hand || 0;
-          sqlite.prepare("UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?").run(targetBefore + recv, nowIso, sib.id);
-        } else {
-          const r = sqlite.prepare(`
-            INSERT INTO inventory_items
-              (account_id, lab_id, item_name, catalog_number, lot_number, department, category, quantity_on_hand, reorder_point, unit, expiration_date, vendor, storage_location, status, burn_rate, order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, unit_cost, on_order_qty, created_at, updated_at)
-            VALUES (@account_id, @lab_id, @item_name, @catalog_number, @lot_number, @department, @category, @qty, @reorder_point, @unit, @exp, @vendor, @storage_location, 'active', @burn_rate, @order_unit, @usage_unit, @upo, @count_unit, @upcu, @lead, @safety, @desired, 0, @unit_cost, 0, @now, @now)
-          `).run({
-            account_id: e.account_id ?? null, lab_id: e.lab_id ?? null, item_name: e.item_name, catalog_number: e.catalog_number ?? null,
-            lot_number: recvLot, department: e.department ?? null, category: e.category ?? null, qty: recv, reorder_point: e.reorder_point ?? 5,
-            unit: e.unit ?? null, exp: recvExp, vendor: e.vendor ?? null, storage_location: e.storage_location ?? null,
-            burn_rate: e.burn_rate ?? 0, order_unit: e.order_unit ?? null, usage_unit: e.usage_unit ?? null, upo: e.units_per_order_unit ?? 1,
-            count_unit: e.count_unit ?? null, upcu: e.units_per_count_unit ?? 1, lead: e.lead_time_days ?? 5, safety: e.safety_stock_days ?? 3,
-            desired: e.desired_days_of_stock ?? 30, unit_cost: e.unit_cost ?? 0, now: nowIso,
-          });
-          targetId = Number(r.lastInsertRowid); targetBefore = 0;
-          // Give the new lot-row its own scannable barcode (VLS-<id>).
-          try { sqlite.prepare("UPDATE inventory_items SET barcode_value = 'VLS-' || printf('%08d', id) WHERE id = ? AND (barcode_value IS NULL OR barcode_value = '')").run(targetId); } catch {}
-        }
-      }
+      sqlite.prepare(
+        "UPDATE inventory_items SET quantity_on_hand = ?, on_order_qty = ?, on_order_expected_date = ?, on_order_placed_date = ?, updated_at = ? WHERE id = ?"
+      ).run(targetAfter, newOnOrder, newExpected, newPlaced, nowIso, itemId);
+      const had = sqlite.prepare(
+        "SELECT 1 FROM inventory_lots WHERE item_id = ? AND COALESCE(lot_number,'') = ? AND COALESCE(expiration_date,'') = ? LIMIT 1"
+      ).get(itemId, lotForReceipt ?? "", expForReceipt ?? "");
+      newLot = !had;
+      addLot(sqlite, { id: itemId, lab_id: e.lab_id, account_id: e.account_id }, lotForReceipt, expForReceipt, recv, nowIso);
+      reconcileLots(sqlite, itemId, nowIso);
     });
     tx();
-    const targetAfter = targetBefore + recv;
 
     // Log a permanent receipt for lead-time verification, recording the lot +
     // expiry that arrived. Never let a logging failure roll back the receive.
@@ -1679,7 +1650,7 @@ export function registerVeritaBenchRoutes(
       );
     } catch (err) { /* receipt logging is best-effort; receive already succeeded */ }
     try {
-      const lotStr = recvLot || recvExp ? ` [lot ${recvLot || "n/a"}${recvExp ? ` exp ${recvExp}` : ""}${splitLot ? ", new lot-row" : ""}]` : "";
+      const lotStr = recvLot || recvExp ? ` [lot ${recvLot || "n/a"}${recvExp ? ` exp ${recvExp}` : ""}${newLot ? ", new lot" : ""}]` : "";
       logAudit({
         userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritastock", action: "receive",
         entityType: "inventory_item", entityId: targetId,
@@ -1692,7 +1663,7 @@ export function registerVeritaBenchRoutes(
     const fresh = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(targetId);
     res.json({
       item: decorateInventoryItem(fresh),
-      split_lot: splitLot,
+      split_lot: newLot,
       target_item_id: targetId,
       receipt: {
         received_qty: recv,

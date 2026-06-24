@@ -60,6 +60,7 @@ function licenseCtxFromReq(req: any, productName?: string): LicenseContext {
   };
 }
 import { logAudit } from "./audit";
+import { reconcileLots } from "./inventoryLots";
 import { CLSI_COMPLIANCE_MATRIX_B64, SOFTWARE_VALIDATION_TEMPLATE_B64 } from "./downloadAssets";
 import { cliaAnalytes, ptCategoryLinks } from "./cliaAnalytes";
 import { hasCanonicalTea } from "./backfillAbsoluteFloor";
@@ -6429,11 +6430,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const sqlite = (db as any).$client;
         const itemId = Number(req.params.itemId);
         if (!Number.isFinite(itemId)) return res.status(400).json({ error: "Invalid item id" });
-        const item = sqlite.prepare("SELECT id, lab_id, item_name, quantity_on_hand FROM inventory_items WHERE id = ?").get(itemId) as any;
+        let item = sqlite.prepare("SELECT id, lab_id, item_name, quantity_on_hand FROM inventory_items WHERE id = ?").get(itemId) as any;
         if (!item) return res.status(404).json({ error: "Item not found" });
         if (Number(item.lab_id) !== Number(req.scope.labId)) {
           return res.status(403).json({ error: "Item is not in this location" });
         }
+        // Phase 2: sync the lot breakdown to the authoritative quantity_on_hand
+        // (FEFO) so any depletion done via write-off / adjust / transfer / edit
+        // since the last view is reflected here. Never changes quantity_on_hand.
+        try { reconcileLots(sqlite, itemId, new Date().toISOString()); } catch { /* best-effort */ }
+        item = sqlite.prepare("SELECT id, lab_id, item_name, quantity_on_hand FROM inventory_items WHERE id = ?").get(itemId) as any;
         const lots = sqlite.prepare(
           `SELECT id, lot_number, expiration_date, quantity, created_at
              FROM inventory_lots WHERE item_id = ?
