@@ -226,6 +226,17 @@ export default function VeritaStockEnterprisePage() {
     return Array.from(groups.values());
   }, [incoming]);
 
+  // When arriving via the main-page "Incoming" badge/banner (href ...#incoming),
+  // scroll the Accept/Reject panel into view once it has rendered, so the
+  // destination user lands directly on what they came to do.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.location.hash !== "#incoming") return;
+    if (incomingBatches.length === 0) return;
+    const el = document.getElementById("incoming");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [incomingBatches.length]);
+
   // Destination accepts (lands the stock) or rejects (returns it to source) a
   // whole pending shipment by its batch_id.
   async function decideBatch(batchId: string, action: "accept" | "reject") {
@@ -315,7 +326,7 @@ export default function VeritaStockEnterprisePage() {
       {/* Incoming transfers: pending shipments this enterprise must Accept
           (land the stock) or Reject (return it to the source). */}
       {incomingBatches.length > 0 && (
-        <Card className="mb-4 border-emerald-300 bg-emerald-50/40" data-testid="incoming-transfers">
+        <Card id="incoming" className="mb-4 border-emerald-300 bg-emerald-50/40 scroll-mt-20" data-testid="incoming-transfers">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <Truck size={15} className="text-emerald-600" />
