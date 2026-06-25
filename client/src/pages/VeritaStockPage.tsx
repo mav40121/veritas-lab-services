@@ -275,12 +275,22 @@ function findOlderLots(
   });
 }
 
-function ItemFormDialog({ open, onClose, onSave, editItem, inventory }: {
+// Consumption summary (Keystone Layer 2, Phase 2): actual draw-down for the
+// active location over a trailing window. Module-scoped so both VeritaStockPage
+// (the tile) and ItemFormDialog (the learned-burn advisor) can type it.
+interface ConsumptionSummary {
+  window_days: number; event_count: number; actual_threshold: number; is_actual: boolean;
+  actual_daily_value: number;
+  per_item: Record<string, { events: number; qty: number; learned_burn: number; value: number }>;
+}
+
+function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptionSummary }: {
   open: boolean;
   onClose: () => void;
   onSave: (data: Partial<InventoryItem>) => void;
   editItem: InventoryItem | null;
   inventory: InventoryItem[];
+  consumptionSummary: ConsumptionSummary | null;
 }) {
   const [form, setForm] = useState<Partial<InventoryItem>>({});
   // Safety-stock advisor selections (not persisted; advisory only).
@@ -548,6 +558,34 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory }: {
                 <div>Order-to Quantity: <strong>{calcOrderToQty} {usageUnit}s</strong></div>
               </div>
             )}
+            {/* Learned-burn advisor: suggests a burn rate from ACTUAL draw-down
+                (consumption ledger) for THIS item over the trailing window.
+                Advisory only — one-click Apply, never auto-overwrites. Shown only
+                when editing an item that has real consumption in the window. */}
+            {form.id != null && consumptionSummary?.per_item?.[String(form.id)] && consumptionSummary.per_item[String(form.id)].events >= 1 && (() => {
+              const lb = consumptionSummary.per_item[String(form.id)];
+              return (
+                <div className="mt-3 p-3 rounded-lg border border-dashed text-sm" style={{ borderColor: "#01696F55" }} data-testid="learned-burn-advisor">
+                  <div className="font-medium mb-1" style={{ color: "#01696F" }}>Learned Burn Advisor</div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs text-muted-foreground">
+                      Suggested: <strong className="text-foreground" data-testid="learned-burn-value">{lb.learned_burn}</strong>/day from actual usage ({lb.events} event{lb.events === 1 ? "" : "s"}, last {consumptionSummary.window_days}d). Current: {form.burn_rate ?? 0}.
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => setForm({ ...form, burn_rate: lb.learned_burn })}
+                      disabled={lb.learned_burn === (form.burn_rate ?? 0)}
+                      data-testid="apply-learned-burn"
+                    >
+                      Apply
+                    </Button>
+                  </div>
+                </div>
+              );
+            })()}
             {/* Safety-stock advisor: statistically-derived safety days
                 (Z x CV x sqrt(lead time)) the director can compare against the
                 flat value above and apply with one click. */}
@@ -857,6 +895,26 @@ export default function VeritaStockInventoryPage() {
     })();
     return () => { cancelled = true; };
   }, [isLoggedIn, hasPlanAccess, activeLabId]);
+
+  // Consumption summary (Keystone Layer 2, Phase 2): actual draw-down for the
+  // active location over a trailing window (type is module-scoped above). Drives
+  // the "actual vs estimated" turns / days-on-hand label and the per-item
+  // learned-burn advisor. Refetched when the item list reloads so a fresh
+  // write-off/adjust updates it.
+  const [consumptionSummary, setConsumptionSummary] = useState<ConsumptionSummary | null>(null);
+  useEffect(() => {
+    if (!isLoggedIn || !hasPlanAccess || !activeLabId) { setConsumptionSummary(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/veritastock/consumption-summary`, { headers: authHeaders() });
+        if (!res.ok) return;
+        const d = await res.json();
+        if (!cancelled) setConsumptionSummary(d);
+      } catch { /* leave prior summary */ }
+    })();
+    return () => { cancelled = true; };
+  }, [isLoggedIn, hasPlanAccess, activeLabId, items.length]);
 
   // Expired-but-still-on-shelf alert across EVERY location in the enterprise.
   // Items past their expiration date that still have quantity on hand should
@@ -2009,11 +2067,24 @@ export default function VeritaStockInventoryPage() {
             <div>
               <div className="text-xs text-muted-foreground uppercase tracking-wider" title="Total value of inventory on hand: sum of quantity times unit cost across this location.">$ on Hand</div>
               <div className="text-2xl font-bold font-mono" style={{ color: "#01696F" }}>${stats.valueOnHand.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
-              {stats.dailyUsageValue > 0 && stats.valueOnHand > 0 && (
-                <div className="text-[11px] font-mono text-muted-foreground" title="Inventory turns = annual consumption value / inventory value. Days on hand = inventory value / daily consumption value.">
-                  {((stats.dailyUsageValue * 365) / stats.valueOnHand).toFixed(1)}x turns/yr &middot; {Math.round(stats.valueOnHand / stats.dailyUsageValue)} days on hand
-                </div>
-              )}
+              {stats.valueOnHand > 0 && (() => {
+                // Use ACTUAL draw-down (consumption ledger) once the location has
+                // enough events in the window; otherwise the entered-burn estimate.
+                const useActual = !!(consumptionSummary?.is_actual && consumptionSummary.actual_daily_value > 0);
+                const dailyVal = useActual ? consumptionSummary!.actual_daily_value : stats.dailyUsageValue;
+                if (!(dailyVal > 0)) return null;
+                return (
+                  <div className="text-[11px] font-mono text-muted-foreground flex items-center gap-1.5" title="Inventory turns = annual consumption value / inventory value. Days on hand = inventory value / daily consumption value. 'Actual' uses real draw-down from the consumption ledger; 'estimated' uses entered burn rates.">
+                    <span>{((dailyVal * 365) / stats.valueOnHand).toFixed(1)}x turns/yr &middot; {Math.round(stats.valueOnHand / dailyVal)} days on hand</span>
+                    <span
+                      className={`px-1 rounded text-[9px] uppercase tracking-wide ${useActual ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" : "bg-muted text-muted-foreground"}`}
+                      data-testid="turns-basis"
+                    >
+                      {useActual ? "actual" : "estimated"}
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
           </CardContent>
         </Card>
@@ -2359,6 +2430,7 @@ export default function VeritaStockInventoryPage() {
         onSave={handleSave}
         editItem={editItem}
         inventory={items}
+        consumptionSummary={consumptionSummary}
       />
 
       {/* Lots dialog: a product's child lots (lot # + expiration + qty), oldest-
