@@ -1966,12 +1966,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const now = new Date().toISOString();
     const sel = sqlite.prepare("SELECT id, catalog_number FROM inventory_items WHERE id = ? AND lab_id = ?");
     const upd = sqlite.prepare("UPDATE inventory_items SET catalog_number = ?, updated_at = ? WHERE id = ?");
-    let updated = 0, skipped = 0, notFound = 0;
+    const clr = sqlite.prepare("UPDATE inventory_items SET catalog_number = NULL, updated_at = ? WHERE id = ?");
+    let updated = 0, skipped = 0, notFound = 0, cleared = 0;
     const results: any[] = [];
     try {
       sqlite.exec("BEGIN");
       for (const u of updates) {
         const itemId = Number(u?.id);
+        // clear mode: null out a provisional/incorrect catalog by id (lab-scoped).
+        // Used to undo an over-eager auto-match; only acts when a catalog is set.
+        if (u?.clear === true) {
+          if (!Number.isFinite(itemId)) { results.push({ id: u?.id, result: "bad_input" }); skipped++; continue; }
+          const cr = sel.get(itemId, Number(labId)) as any;
+          if (!cr) { results.push({ id: itemId, result: "not_found" }); notFound++; continue; }
+          const had = cr.catalog_number != null ? String(cr.catalog_number).trim() : "";
+          if (!had) { results.push({ id: itemId, result: "already_blank" }); skipped++; continue; }
+          clr.run(now, itemId);
+          results.push({ id: itemId, result: "cleared", was: had }); cleared++; continue;
+        }
         const cat = u?.catalog_number != null ? String(u.catalog_number).trim() : "";
         if (!Number.isFinite(itemId) || !cat) {
           results.push({ id: u?.id, result: "bad_input" }); skipped++; continue;
@@ -1992,8 +2004,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("[admin/enrich-inventory-catalog] failed:", err.message);
       return res.status(500).json({ error: err.message || "Enrich failed", updated: 0 });
     }
-    console.log(`[admin/enrich-inventory-catalog] lab_id=${labId}: updated ${updated}, skipped ${skipped}, notFound ${notFound}`);
-    res.json({ ok: true, updated, skipped, notFound, results });
+    console.log(`[admin/enrich-inventory-catalog] lab_id=${labId}: updated ${updated}, cleared ${cleared}, skipped ${skipped}, notFound ${notFound}`);
+    res.json({ ok: true, updated, cleared, skipped, notFound, results });
   });
 
   // Admin: update an existing lab's identity fields (lab_name, clia_number,
