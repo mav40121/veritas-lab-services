@@ -88,7 +88,7 @@ export default function ArticleEP26Page() {
             <strong>Reagent lot-to-lot verification is the study that confirms a new reagent lot produces results that agree with the lot it replaces, on real patient samples, before you use it to report patient results.</strong>
           </p>
           <p>
-            A new lot is a manufacturing change. Recalibration, a slightly different antibody, a new buffer, any of these can move your results enough to matter clinically while still passing your daily controls, because controls are a different matrix at a fixed concentration. The patient-safety rationale is direct: a lot-induced shift that goes undetected is reported on every patient until someone notices. CLIA requires laboratories to verify the new lot performs acceptably and to define and document the acceptance criteria (<a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">42 CFR §493.1253(b)(3) and §493.1255</a>). The regulation requires the act and the documented criteria; it leaves the protocol to the laboratory.
+            A new lot is a manufacturing change. Recalibration, a slightly different antibody, a new buffer, any of these can move your results enough to matter clinically while still passing your daily controls, because controls are a different matrix at a fixed concentration. The patient-safety rationale is direct: a lot-induced shift that goes undetected is reported on every patient until someone notices. CLIA requires laboratories to verify the new lot performs acceptably and to define and document the acceptance criteria (<a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">42 CFR §493.1255(b)(3)(i) and §493.1256</a>). The regulation requires the act and the documented criteria; it leaves the protocol to the laboratory.
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">What is CLSI EP26?</h2>
@@ -200,7 +200,7 @@ export default function ArticleEP26Page() {
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">References</div>
             <ol className="space-y-1.5 text-xs text-muted-foreground list-decimal list-inside">
               <li>Clinical and Laboratory Standards Institute. (2022). EP26, 2nd Edition: User Evaluation of Acceptability of a Reagent Lot Change. <a href="https://clsi.org/shop/standards/ep26/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">clsi.org</a></li>
-              <li>Code of Federal Regulations. (2024). Title 42, Part 493: Laboratory Requirements, §493.1253 and §493.1255. <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ecfr.gov</a></li>
+              <li>Code of Federal Regulations. (2024). Title 42, Part 493: Laboratory Requirements, §493.1255 and §493.1256. <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ecfr.gov</a></li>
               <li>Loh TP, et al. (2020). Recommendations for laboratory informatics specifications needed for the application of patient-based real-time quality control. Clinica Chimica Acta.</li>
             </ol>
           </div>
