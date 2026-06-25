@@ -1944,6 +1944,58 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, inserted, updated, errors });
   });
 
+  // Admin: enrich existing inventory rows with a catalog number by item id.
+  // Purpose-built for supply onboarding where the lab already has the item but
+  // entered it WITHOUT the manufacturer catalog number (so import-inventory,
+  // which matches by catalog, cannot reach it). This is a NARROW update: it
+  // touches ONLY catalog_number and ONLY when the row's catalog is currently
+  // blank. It never overwrites an existing catalog (those are surfaced as
+  // skipped for human review) and never touches quantity, category, burn, etc.
+  // That deliberately avoids the full-replace zeroing of PUT /api/inventory/:id.
+  // Body: { secret, labId, updates: [{ id, catalog_number }] }. Atomic.
+  app.post("/api/admin/enrich-inventory-catalog", (req, res) => {
+    const { secret, labId, updates } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!labId) return res.status(400).json({ error: "labId required" });
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json({ error: "updates must be a non-empty array" });
+    }
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id FROM labs WHERE id = ?").get(Number(labId)) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    const now = new Date().toISOString();
+    const sel = sqlite.prepare("SELECT id, catalog_number FROM inventory_items WHERE id = ? AND lab_id = ?");
+    const upd = sqlite.prepare("UPDATE inventory_items SET catalog_number = ?, updated_at = ? WHERE id = ?");
+    let updated = 0, skipped = 0, notFound = 0;
+    const results: any[] = [];
+    try {
+      sqlite.exec("BEGIN");
+      for (const u of updates) {
+        const itemId = Number(u?.id);
+        const cat = u?.catalog_number != null ? String(u.catalog_number).trim() : "";
+        if (!Number.isFinite(itemId) || !cat) {
+          results.push({ id: u?.id, result: "bad_input" }); skipped++; continue;
+        }
+        const row = sel.get(itemId, Number(labId)) as any;
+        if (!row) { results.push({ id: itemId, result: "not_found" }); notFound++; continue; }
+        const existingCat = row.catalog_number != null ? String(row.catalog_number).trim() : "";
+        if (existingCat && existingCat !== cat) {
+          results.push({ id: itemId, result: "skipped_has_catalog", existing: existingCat }); skipped++; continue;
+        }
+        if (existingCat === cat) { results.push({ id: itemId, result: "already_set" }); skipped++; continue; }
+        upd.run(cat, now, itemId);
+        results.push({ id: itemId, result: "updated", catalog_number: cat }); updated++;
+      }
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[admin/enrich-inventory-catalog] failed:", err.message);
+      return res.status(500).json({ error: err.message || "Enrich failed", updated: 0 });
+    }
+    console.log(`[admin/enrich-inventory-catalog] lab_id=${labId}: updated ${updated}, skipped ${skipped}, notFound ${notFound}`);
+    res.json({ ok: true, updated, skipped, notFound, results });
+  });
+
   // Admin: update an existing lab's identity fields (lab_name, clia_number,
   // accreditation flags). Built for replacing placeholders on comp-provisioned
   // labs before first report. Refuses to update name or CLIA if the
