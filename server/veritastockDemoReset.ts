@@ -366,6 +366,41 @@ export function resetVeritaStockDemo(sqlite: any, now: Date = new Date()): { ok:
         // user_id AND owner_user_id both = the demo owner (8 placeholders).
         insAudit.run(demoOwner, demoOwner, action, iid, label, before ? JSON.stringify(before) : null, after ? JSON.stringify(after) : null, at(d as number, hhmm as string));
       }
+
+      // Consumption ledger seed (Keystone Layer 2, Phase 2): backdated depletion
+      // events over the trailing window so the demo renders ACTUAL turns/days-on-
+      // hand (>= 5 events per location) and the learned-burn advisor. Clear first
+      // (demo data only; this function is hard-gated to the stock service). For
+      // most items seeded actual consumption ~ entered burn; ED's highest-burn
+      // item is the HERO at ~1.5x, so its Apply suggestion is a real correction.
+      try { sqlite.prepare(`DELETE FROM inventory_consumption_events WHERE lab_id IN (${DEMO_LABS.join(",")})`).run(); } catch {}
+      const insConsume = sqlite.prepare(`
+        INSERT INTO inventory_consumption_events
+          (item_id, lab_id, account_id, qty, unit_cost_at_event, reason, source_event_ref, occurred_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const CONSUME_REASONS = ["transfer_out", "adjust_down", "write_off"];
+      for (const labId of DEMO_LABS) {
+        const burnItems = (DIST[labId] || [])
+          .filter((line) => (line[2] as number) > 0)
+          .sort((a, b) => (b[2] as number) - (a[2] as number))
+          .slice(0, 4); // >= 5 events/location (4 items x 3 events, minus any missing)
+        for (let i = 0; i < burnItems.length; i++) {
+          const [key, , burn] = burnItems[i];
+          const it = ITEMS[key as string];
+          const iid = itemIdAt(labId, key as string);
+          if (iid == null) continue;
+          const isHero = labId === ED && i === 0; // ED's top-burn item = correction hero
+          const total = Math.max(1, Math.round((burn as number) * 60 * (isHero ? 1.5 : 1)));
+          const perEvent = Math.max(1, Math.round(total / 3));
+          for (let e = 0; e < 3; e++) {
+            const daysAgo = 50 - e * 18 - i * 2; // spread across the 60-day window
+            const occurred = `${isoPlusDays(now, -daysAgo)} 10:00:00`;
+            const reason = CONSUME_REASONS[(i + e) % CONSUME_REASONS.length];
+            insConsume.run(iid, labId, demoOwner, perEvent, it.unit_cost, reason, "demo-seed", occurred, nowIso);
+          }
+        }
+      }
     }
   });
   tx();

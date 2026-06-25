@@ -6227,6 +6227,60 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     },
   );
 
+  // GET /api/labs/:labId/veritastock/consumption-summary?window=60 — ACTUAL
+  // consumption for the ACTIVE location over a trailing window (Keystone Layer 2,
+  // Phase 2). Powers the "actual vs estimated" turns / days-on-hand labels and
+  // the per-item learned-burn advisor. >= ACTUAL_THRESHOLD events in the window
+  // means the location has enough real draw-down for its turns to read "actual".
+  app.get(
+    "/api/labs/:labId/veritastock/consumption-summary",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      try {
+        const sqlite = (db as any).$client;
+        const labId = req.scope.labId;
+        const ACTUAL_THRESHOLD = 5; // events in window for the location to read "actual"
+        const windowDays = Math.min(Math.max(Number(req.query.window) || 60, 1), 365);
+        const cutoff = new Date(Date.now() - windowDays * 86400000).toISOString();
+        const rows = sqlite.prepare(`
+          SELECT item_id,
+                 COUNT(*) AS events,
+                 COALESCE(SUM(qty), 0) AS qty,
+                 COALESCE(SUM(qty * COALESCE(unit_cost_at_event, 0)), 0) AS value
+            FROM inventory_consumption_events
+           WHERE lab_id = ? AND occurred_at >= ?
+           GROUP BY item_id
+        `).all(labId, cutoff) as any[];
+        let eventCount = 0, totalValue = 0;
+        const perItem: Record<string, any> = {};
+        for (const r of rows) {
+          eventCount += r.events;
+          totalValue += r.value;
+          // Learned burn = actual units depleted in the window / window days.
+          perItem[r.item_id] = {
+            events: r.events,
+            qty: r.qty,
+            learned_burn: Math.round((r.qty / windowDays) * 100) / 100,
+            value: Math.round(r.value * 100) / 100,
+          };
+        }
+        return res.json({
+          window_days: windowDays,
+          event_count: eventCount,
+          actual_threshold: ACTUAL_THRESHOLD,
+          is_actual: eventCount >= ACTUAL_THRESHOLD,
+          // Actual daily consumption VALUE = annualizable basis for "actual" turns.
+          actual_daily_value: Math.round((totalValue / windowDays) * 100) / 100,
+          per_item: perItem,
+        });
+      } catch (err: any) {
+        console.error("[veritastock/consumption-summary] error:", err);
+        return res.status(500).json({ error: err.message || "consumption_summary_failed" });
+      }
+    },
+  );
+
   // GET /api/labs/:labId/veritastock/transfers/incoming — pending shipments
   // bound for any location in this lab's enterprise group, so the destination
   // can Accept (land the stock) or Reject (return it). Grouped by batch_id on
