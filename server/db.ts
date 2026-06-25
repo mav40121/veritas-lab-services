@@ -3827,6 +3827,48 @@ sqlite.exec(`
   }
 }
 
+// inventory_consumption_events — append-only ledger of stock DEPLETIONS (the
+// Keystone Layer-2 usage ledger). One row per depletion: write-offs, finalized
+// outbound transfers (transfer_out, source side), and downward cycle-count
+// adjustments (adjust_down). Receive / transfer-in are replenishment and are
+// NOT logged here. Makes per-location burn / turns / days-on-hand learnable from
+// ACTUAL draw-down instead of entered estimates.
+//   INVARIANT: this table NEVER drives inventory_items.quantity_on_hand —
+//   on_hand stays the single source of truth; events are a side-effect record.
+//   HIPAA-free: qty + cost snapshot + reason + timestamps only (no patient /
+//   order / test identifiers). unit_cost_at_event snapshots cost at event time
+//   so historical consumption value is stable if unit_cost later changes.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS inventory_consumption_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id INTEGER NOT NULL,
+    lab_id INTEGER NOT NULL,
+    account_id INTEGER,
+    qty REAL NOT NULL,
+    unit_cost_at_event REAL,
+    reason TEXT NOT NULL,
+    source_event_ref TEXT,
+    occurred_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_consumption_lab_time ON inventory_consumption_events(lab_id, occurred_at)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_consumption_item_time ON inventory_consumption_events(item_id, occurred_at)`); } catch {}
+// Migration block per NEW DB TABLE RULE: idempotent ALTER guards.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(inventory_consumption_events)").all() as { name: string }[]).map((c) => c.name);
+  if (cols.length > 0) {
+    const required: Array<[string, string]> = [
+      ["item_id", "INTEGER"], ["lab_id", "INTEGER"], ["account_id", "INTEGER"],
+      ["qty", "REAL"], ["unit_cost_at_event", "REAL"], ["reason", "TEXT"],
+      ["source_event_ref", "TEXT"], ["occurred_at", "TEXT"], ["created_at", "TEXT"],
+    ];
+    for (const [c, t] of required) {
+      if (!cols.includes(c)) { try { sqlite.exec(`ALTER TABLE inventory_consumption_events ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+  }
+}
+
 // inventory_transfers — ledger of stock moved between two labs (locations)
 // in the same enterprise. One row per completed transfer. qty_usage_units
 // is the canonical amount moved (usage_units); display_qty/display_unit

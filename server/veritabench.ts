@@ -5,6 +5,7 @@ import type { Express } from "express";
 import crypto from "crypto";
 import { db } from "./db";
 import { logAudit } from "./audit";
+import { logConsumption } from "./consumptionLedger";
 import { addLot, reconcileLots } from "./inventoryLots";
 import { resolveLegacyLabId } from "./labAccessGuard";
 import { DEMO_USER_EMAIL } from "./constants";
@@ -1561,6 +1562,15 @@ export function registerVeritaBenchRoutes(
       });
     } catch { /* audit is best-effort */ }
 
+    // Consumption ledger: a DOWNWARD cycle-count correction is a depletion. The
+    // helper skips qty <= 0, so an upward / no-change adjustment records nothing.
+    // Side-effect only — on_hand was already set above; the ledger never touches it.
+    logConsumption({
+      itemId: Number(itemId), labId: (existing as any).lab_id, accountId: req.ownerUserId ?? req.userId,
+      qty: beforeQty - usageQty, unitCostAtEvent: (existing as any).unit_cost ?? null,
+      reason: "adjust_down", sourceEventRef: `adjust:${reason || "cycle_count"}`, occurredAt: nowIso,
+    });
+
     const fresh = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(itemId);
     res.json({
       item: decorateInventoryItem(fresh),
@@ -1831,6 +1841,14 @@ export function registerVeritaBenchRoutes(
         ipAddress: req.ip,
       });
     } catch { /* audit is best-effort */ }
+
+    // Consumption ledger: a write-off is a depletion. Side-effect only — on_hand
+    // was already moved in the transaction above; the ledger never touches it.
+    logConsumption({
+      itemId: Number(itemId), labId, accountId: req.ownerUserId ?? req.userId,
+      qty, unitCostAtEvent: unitCost, reason: "write_off",
+      sourceEventRef: `write_off:${reasonCode}`, occurredAt: nowIso,
+    });
 
     const fresh = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(itemId);
     res.json({
