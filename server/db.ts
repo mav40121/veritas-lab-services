@@ -3785,6 +3785,12 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_receipts_lab ON inventory_
     if (!iiColNames.includes("units_per_count_unit")) {
       try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN units_per_count_unit INTEGER DEFAULT 1"); } catch {}
     }
+    // Sage Intacct hand-off (optional): the customer's Intacct Item ID, only
+    // used when they carry inventory items in Intacct. Null = account-based
+    // line in the Intacct CSV export (uses the mapped GL account + item name).
+    if (!iiColNames.includes("intacct_item_id")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN intacct_item_id TEXT"); } catch {}
+    }
   }
 }
 
@@ -3794,6 +3800,32 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inventory_items_expiration ON 
 // because legacy rows without a barcode share NULL; the application layer
 // rejects duplicate barcode inserts via a per-account uniqueness check.
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inventory_barcode ON inventory_items(account_id, barcode_value)`); } catch {}
+
+// intacct_export_config — per-location (lab) Sage Intacct CSV export mapping.
+// One row per lab_id. config_json holds the whole tenant-specific config so a
+// template-version change (new header, extra dimension) is a config edit, not a
+// code change: { transaction_definition, gl_account, date_format,
+// dimensions: {location_id, department_id, ...},
+// template_columns: [{ header, source, placement }] }.
+// Absent row = the lab has not configured the Intacct export (button shows the
+// "set up" empty state). Lab-scoped to match stock_vendors / inventory_items.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS intacct_export_config (
+    lab_id INTEGER PRIMARY KEY,
+    config_json TEXT NOT NULL DEFAULT '{}',
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (lab_id) REFERENCES labs(id)
+  );
+`);
+// Migration block per NEW DB TABLE RULE: idempotent ALTER guards for any column
+// missing from an older boot.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(intacct_export_config)").all() as { name: string }[]).map((c) => c.name);
+  if (cols.length > 0) {
+    if (!cols.includes("config_json")) { try { sqlite.exec("ALTER TABLE intacct_export_config ADD COLUMN config_json TEXT NOT NULL DEFAULT '{}'"); } catch {} }
+    if (!cols.includes("updated_at")) { try { sqlite.exec("ALTER TABLE intacct_export_config ADD COLUMN updated_at TEXT"); } catch {} }
+  }
+}
 
 // inventory_transfers — ledger of stock moved between two labs (locations)
 // in the same enterprise. One row per completed transfer. qty_usage_units
@@ -3910,6 +3942,10 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_stock_vendors_lab ON stock_ven
       ["order_tracking_url", "TEXT"],
       ["notes", "TEXT"],
       ["status", "TEXT NOT NULL DEFAULT 'active'"],
+      // Sage Intacct hand-off: the customer's EXACT Intacct Vendor ID (case-
+      // sensitive), distinct from VeritaStock's own account_number label. Used
+      // only by the "Export for Sage Intacct" CSV; null until the customer sets it.
+      ["intacct_vendor_id", "TEXT"],
     ];
     for (const [c, t] of required) {
       if (!cols.includes(c)) {

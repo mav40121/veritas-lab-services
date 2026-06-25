@@ -5714,6 +5714,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       order_tracking_url: toNull(b.order_tracking_url),
       notes: toNull(b.notes),
       status: typeof b.status === "string" && ["active", "archived"].includes(b.status) ? b.status : "active",
+      // Sage Intacct hand-off: the customer's exact Intacct Vendor ID. Kept
+      // verbatim (case-sensitive) — do NOT trim casing; only blank -> null.
+      intacct_vendor_id: toNull(b.intacct_vendor_id),
     };
   }
 
@@ -6756,12 +6759,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           INSERT INTO stock_vendors
             (lab_id, name, account_number, po_number, ordering_pattern,
              ordering_email, ordering_phone, ordering_fax, ordering_portal_url,
-             order_tracking_url, notes, status, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+             order_tracking_url, notes, status, intacct_vendor_id, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
         `).run(
           labId, body.name, body.account_number, body.po_number, body.ordering_pattern,
           body.ordering_email, body.ordering_phone, body.ordering_fax, body.ordering_portal_url,
-          body.order_tracking_url, body.notes, body.status,
+          body.order_tracking_url, body.notes, body.status, body.intacct_vendor_id,
         );
         const created = sqlite.prepare("SELECT * FROM stock_vendors WHERE id = ?").get(r.lastInsertRowid);
         res.json(created);
@@ -6796,13 +6799,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
            SET name = ?, account_number = ?, po_number = ?, ordering_pattern = ?,
                ordering_email = ?, ordering_phone = ?, ordering_fax = ?,
                ordering_portal_url = ?, order_tracking_url = ?, notes = ?, status = ?,
-               updated_at = datetime('now')
+               intacct_vendor_id = ?, updated_at = datetime('now')
          WHERE id = ? AND lab_id = ?
       `).run(
         body.name, body.account_number, body.po_number, body.ordering_pattern,
         body.ordering_email, body.ordering_phone, body.ordering_fax,
         body.ordering_portal_url, body.order_tracking_url, body.notes, body.status,
-        Number(req.params.id), labId,
+        body.intacct_vendor_id, Number(req.params.id), labId,
       );
       const updated = sqlite.prepare("SELECT * FROM stock_vendors WHERE id = ?").get(Number(req.params.id));
       res.json(updated);

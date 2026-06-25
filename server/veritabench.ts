@@ -14,6 +14,7 @@ import { generateReorderListPDF, generateReorderListExcel, generateSnapOrderPDF,
 import { generateBarcodeLabelSheetPdf, type BarcodeLabelInput } from "./barcodeLabelPdf";
 import { generateInventoryCountExcel, type InventoryCountItem } from "./inventoryCountExcel";
 import { storePdfToken } from "./pdfTokens";
+import { buildIntacctCSV, preflightIntacct, type IntacctExportConfig, type VendorIdMap } from "./intacctExport";
 
 // PR 4 helper: builds a lower-cased-name keyed map of VendorRecordForPdf
 // from the lab's stock_vendors directory. The PDF renderer uses this to
@@ -53,6 +54,55 @@ function buildVendorRecordMap(labId: number | null): Map<string, VendorRecordFor
     });
   }
   return map;
+}
+
+// ── Sage Intacct export helpers ──────────────────────────────────────────────
+// Per-location (lab) Intacct export config, persisted as a JSON blob so a
+// template-version change is a config edit, not a code change. Empty object when
+// the lab has not configured the export (UI shows the "set up" empty state).
+function readIntacctConfig(labId: number): IntacctExportConfig {
+  const sqlite = (db as any).$client;
+  const row = sqlite.prepare("SELECT config_json FROM intacct_export_config WHERE lab_id = ?").get(labId) as any;
+  if (!row || !row.config_json) return {};
+  try { return JSON.parse(row.config_json) as IntacctExportConfig; } catch { return {}; }
+}
+
+// lower-cased vendor name -> the customer's Intacct Vendor ID (null when unset),
+// for resolving each reorder line's vendor to its exact Intacct ID.
+function buildIntacctVendorIdMap(labId: number): VendorIdMap {
+  const sqlite = (db as any).$client;
+  const rows = sqlite.prepare(
+    "SELECT name, intacct_vendor_id FROM stock_vendors WHERE lab_id = ? AND status = 'active'"
+  ).all(labId) as any[];
+  const map: VendorIdMap = new Map();
+  for (const r of rows) {
+    const raw = r.intacct_vendor_id;
+    const id = raw != null && String(raw).trim() !== "" ? String(raw) : null;
+    map.set(String(r.name).toLowerCase().trim(), id);
+  }
+  return map;
+}
+
+// Whitelist incoming config keys so a stray field can't be persisted. Values are
+// kept verbatim (Intacct master-data IDs are case-sensitive).
+function sanitizeIntacctConfig(input: any): IntacctExportConfig {
+  const i = input || {};
+  const out: IntacctExportConfig = {};
+  if (typeof i.transaction_definition === "string") out.transaction_definition = i.transaction_definition;
+  if (typeof i.gl_account === "string") out.gl_account = i.gl_account;
+  if (typeof i.date_format === "string") out.date_format = i.date_format;
+  if (i.dimensions && typeof i.dimensions === "object" && !Array.isArray(i.dimensions)) {
+    out.dimensions = {};
+    for (const [k, v] of Object.entries(i.dimensions)) {
+      if (typeof k === "string") out.dimensions[k] = v == null ? "" : String(v);
+    }
+  }
+  if (Array.isArray(i.template_columns)) {
+    out.template_columns = i.template_columns
+      .filter((c: any) => c && typeof c.header === "string" && typeof c.source === "string")
+      .map((c: any) => ({ header: c.header, source: c.source, ...(typeof c.placement === "string" ? { placement: c.placement } : {}) }));
+  }
+  return out;
 }
 
 function bencheLicenseCtx(req: any): LicenseContext {
@@ -1372,7 +1422,12 @@ export function registerVeritaBenchRoutes(
       if (resolveStatus === 403) return res.status(403).json({ error: "You don't have access to this item's lab" });
       return res.status(404).json({ error: "Item not found" });
     }
-    const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, barcode_value, unit_cost, on_order_qty, on_order_expected_date, on_order_placed_date } = req.body;
+    const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, barcode_value, unit_cost, on_order_qty, on_order_expected_date, on_order_placed_date, intacct_item_id } = req.body;
+    // Sage Intacct item id: preserve on omit (partial edit shouldn't wipe it);
+    // blank string clears it (back to account-based). Verbatim — no casing change.
+    const resolvedIntacctItemId = (intacct_item_id === undefined)
+      ? ((existing as any).intacct_item_id ?? null)
+      : (intacct_item_id === null || (typeof intacct_item_id === "string" && intacct_item_id.trim() === "") ? null : String(intacct_item_id));
     // unit_cost: when omitted/blank on a partial update, preserve the existing
     // price rather than zeroing it (zeroing would silently break valuation, ABC,
     // turns, and order-cost math for every edited item).
@@ -1426,9 +1481,9 @@ export function registerVeritaBenchRoutes(
       // resolveInventoryItemForMutation above, so the legacy `AND account_id = ?`
       // clause is no longer required and would mis-target seeded items.
       sqlite.prepare(`
-        UPDATE inventory_items SET item_name = ?, catalog_number = ?, lot_number = ?, department = ?, category = ?, quantity_on_hand = ?, unit = ?, expiration_date = ?, vendor = ?, storage_location = ?, notes = ?, status = ?, burn_rate = ?, order_unit = ?, usage_unit = ?, units_per_order_unit = ?, count_unit = ?, units_per_count_unit = ?, lead_time_days = ?, safety_stock_days = ?, desired_days_of_stock = ?, standing_order = ?, standing_order_review_date = ?, barcode_value = ?, unit_cost = ?, on_order_qty = ?, on_order_expected_date = ?, on_order_placed_date = ?, updated_at = ?
+        UPDATE inventory_items SET item_name = ?, catalog_number = ?, lot_number = ?, department = ?, category = ?, quantity_on_hand = ?, unit = ?, expiration_date = ?, vendor = ?, storage_location = ?, notes = ?, status = ?, burn_rate = ?, order_unit = ?, usage_unit = ?, units_per_order_unit = ?, count_unit = ?, units_per_count_unit = ?, lead_time_days = ?, safety_stock_days = ?, desired_days_of_stock = ?, standing_order = ?, standing_order_review_date = ?, barcode_value = ?, unit_cost = ?, on_order_qty = ?, on_order_expected_date = ?, on_order_placed_date = ?, intacct_item_id = ?, updated_at = ?
         WHERE id = ?
-      `).run(item_name ?? (existing as any).item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, notes ?? null, status ?? 'active', burn_rate ?? 0, order_unit ?? 'each', usage_unit ?? 'each', units_per_order_unit ?? 1, resolvedCountUnit, resolvedPackSize, lead_time_days ?? 5, safety_stock_days ?? 3, desired_days_of_stock ?? 30, standing_order ?? 0, standing_order_review_date ?? null, normalizedBarcode, resolvedUnitCost, resolvedOnOrderQty, resolvedOnOrderExpected, resolvedOnOrderPlaced, now, id);
+      `).run(item_name ?? (existing as any).item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, notes ?? null, status ?? 'active', burn_rate ?? 0, order_unit ?? 'each', usage_unit ?? 'each', units_per_order_unit ?? 1, resolvedCountUnit, resolvedPackSize, lead_time_days ?? 5, safety_stock_days ?? 3, desired_days_of_stock ?? 30, standing_order ?? 0, standing_order_review_date ?? null, normalizedBarcode, resolvedUnitCost, resolvedOnOrderQty, resolvedOnOrderExpected, resolvedOnOrderPlaced, resolvedIntacctItemId, now, id);
       const row = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(id);
       res.json(row);
     } catch (err: any) {
@@ -2384,6 +2439,93 @@ export function registerVeritaBenchRoutes(
       } catch (err: any) {
         console.error("Reorder Excel generation error (lab-scoped):", err.message);
         res.status(500).json({ error: "Excel generation failed", detail: err.message });
+      }
+    });
+
+    // GET /api/labs/:labId/veritastock/intacct-config — the saved Sage Intacct
+    // export config for this location, plus the vendors' Intacct-ID status the UI
+    // uses to show the "set up" empty state and a missing-ID list.
+    app.get("/api/labs/:labId/veritastock/intacct-config", authMiddleware, labScopeMiddleware, (req: any, res) => {
+      if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+      const labId = req.scope.labId;
+      const config = readIntacctConfig(labId);
+      const configured = !!(config.template_columns && config.template_columns.length > 0);
+      const vendors = sqlite.prepare(
+        "SELECT id, name, intacct_vendor_id FROM stock_vendors WHERE lab_id = ? AND status = 'active' ORDER BY name ASC"
+      ).all(labId);
+      res.json({ config, configured, vendors });
+    });
+
+    // PUT /api/labs/:labId/veritastock/intacct-config — save the export config
+    // (transaction definition, GL account, dimensions, date format, and the
+    // editable Intacct-header -> source column mapping). Config edit, not code.
+    app.put("/api/labs/:labId/veritastock/intacct-config", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+      if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+      const labId = req.scope.labId;
+      const config = sanitizeIntacctConfig(req.body?.config ?? req.body);
+      sqlite.prepare(`
+        INSERT INTO intacct_export_config (lab_id, config_json, updated_at)
+        VALUES (?, ?, datetime('now'))
+        ON CONFLICT(lab_id) DO UPDATE SET config_json = excluded.config_json, updated_at = datetime('now')
+      `).run(labId, JSON.stringify(config));
+      // Optional same-call per-vendor Intacct Vendor ID updates so all Sage
+      // Intacct setup saves from one dialog. Column-only update (NOT the full
+      // vendorBody full-replace), lab-scoped so a cross-lab vendor can't be touched.
+      const vendorIds = req.body?.vendor_ids;
+      if (vendorIds && typeof vendorIds === "object" && !Array.isArray(vendorIds)) {
+        const upd = sqlite.prepare("UPDATE stock_vendors SET intacct_vendor_id = ?, updated_at = datetime('now') WHERE id = ? AND lab_id = ?");
+        for (const [vid, raw] of Object.entries(vendorIds)) {
+          const id = Number(vid);
+          if (!Number.isFinite(id)) continue;
+          const val = (raw == null || String(raw).trim() === "") ? null : String(raw);
+          upd.run(val, id, labId);
+        }
+      }
+      res.json({ ok: true, config });
+    });
+
+    // POST /api/labs/:labId/inventory/reorder-list/intacct-csv — config-driven
+    // Sage Intacct purchasing CSV off the CURRENT reorder list (same decorated
+    // items the Order PDF/XLSX use), through the account's template_columns
+    // mapping so headers match the customer's import template exactly. Preflight
+    // blocks an incomplete file (missing Vendor IDs / transaction definition /
+    // dimensions) with a NAMED 409 rather than emitting something Intacct rejects.
+    app.post("/api/labs/:labId/inventory/reorder-list/intacct-csv", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+      if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+      try {
+        const labId = req.scope.labId;
+        const rows = sqlite.prepare(
+          "SELECT * FROM inventory_items WHERE lab_id = ? ORDER BY item_name ASC"
+        ).all(labId);
+        const decorated = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder);
+        const items = applyReorderFilters(decorated, req.query) as any[];
+        const config = readIntacctConfig(labId);
+        const vendorMap = buildIntacctVendorIdMap(labId);
+        const lines = items.map((it) => ({
+          item_name: it.item_name,
+          catalog_number: it.catalog_number ?? null,
+          vendor: it.vendor ?? null,
+          unit_cost: it.unit_cost ?? null,
+          suggested_order_packs: it.suggested_order_packs ?? 0,
+          delivered_qty: it.delivered_qty ?? 0,
+          order_unit: it.order_unit ?? null,
+          usage_unit: it.usage_unit ?? null,
+          intacct_item_id: it.intacct_item_id ?? null,
+        }));
+        const pf = preflightIntacct(lines, config, vendorMap);
+        if (!pf.ok) return res.status(409).json({ error: "intacct_preflight_failed", missing: pf.missing });
+        const csv = buildIntacctCSV(lines, config, vendorMap);
+        const labRow = sqlite.prepare("SELECT lab_name FROM labs WHERE id = ?").get(labId) as any;
+        const datestamp = new Date().toISOString().slice(0, 10);
+        const safeLab = (labRow?.lab_name || "Location").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
+        const filename = `SageIntacct_Purchasing_${safeLab}${reorderFilenameSuffix(req.query)}_${datestamp}.csv`;
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        res.setHeader("Content-Length", Buffer.byteLength(csv));
+        res.send(csv);
+      } catch (err: any) {
+        console.error("Intacct CSV export error (lab-scoped):", err.message);
+        res.status(500).json({ error: "Intacct CSV export failed", detail: err.message });
       }
     });
 

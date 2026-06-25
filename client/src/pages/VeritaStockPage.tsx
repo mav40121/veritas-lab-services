@@ -909,7 +909,7 @@ export default function VeritaStockInventoryPage() {
   // Acrobat's extension doesn't hijack a blob URL. The Excel flow streams
   // the xlsx inline because purchasing edits the file before sending and
   // the binary blob is exactly what they need to save.
-  const [generatingOrderDoc, setGeneratingOrderDoc] = useState<null | "pdf" | "excel" | "labels" | "count">(null);
+  const [generatingOrderDoc, setGeneratingOrderDoc] = useState<null | "pdf" | "excel" | "labels" | "count" | "intacct">(null);
   // Build the reorder URL with current client-side filters as query params
   // so the generated document only includes items the user can currently
   // see in the table. Status filter is intentionally omitted -- the reorder
@@ -917,7 +917,7 @@ export default function VeritaStockInventoryPage() {
   // an additional Status filter would either narrow further (e.g. "Expiring
   // Soon" intersected with reorder list) or duplicate the implicit filter.
   // Vendor is the most-requested scoping per John (San Carlos) 2026-05-21.
-  const buildReorderUrl = useCallback((kind: "pdf" | "excel") => {
+  const buildReorderUrl = useCallback((kind: "pdf" | "excel" | "intacct-csv") => {
     const base = activeLabId
       ? `${API_BASE}/api/labs/${activeLabId}/inventory/reorder-list/${kind}`
       : `${API_BASE}/api/inventory/reorder-list/${kind}`;
@@ -1020,6 +1020,155 @@ export default function VeritaStockInventoryPage() {
       toast({ title: "Order workbook downloaded", description: "Confirmed Qty + Notes columns are unlocked for purchasing." });
     } catch {
       toast({ title: "Could not generate Excel", description: "Network error", variant: "destructive" });
+    } finally {
+      setGeneratingOrderDoc(null);
+    }
+  };
+
+  // ── Export for Sage Intacct ──────────────────────────────────────────────
+  // A config-driven CSV off the current reorder list that matches the customer's
+  // Sage Intacct "Purchasing transactions" import template. The mapping (exact
+  // headers, vendor IDs, transaction definition, GL + dimensions) is stored
+  // per-location, so the controller uploads the file under Company > Setup >
+  // Import Data and Intacct creates the requisition without re-keying lines.
+  interface IntacctCol { header: string; source: string }
+  interface IntacctConfig {
+    transaction_definition?: string; gl_account?: string; date_format?: string;
+    dimensions?: Record<string, string>; template_columns?: IntacctCol[];
+  }
+  interface IntacctVendorRow { id: number; name: string; intacct_vendor_id: string | null }
+  const [intacctConfigured, setIntacctConfigured] = useState(false);
+  const [intacctVendorRows, setIntacctVendorRows] = useState<IntacctVendorRow[]>([]);
+  const [intacctSetupOpen, setIntacctSetupOpen] = useState(false);
+  const [intacctPreflight, setIntacctPreflight] = useState<string[] | null>(null);
+  const [savingIntacct, setSavingIntacct] = useState(false);
+  // Editable setup-form state (reset from the saved config when the dialog opens).
+  const [fTxnDef, setFTxnDef] = useState("");
+  const [fGl, setFGl] = useState("");
+  const [fDateFmt, setFDateFmt] = useState("MM/DD/YYYY");
+  const [fDims, setFDims] = useState<{ key: string; value: string }[]>([]);
+  const [fCols, setFCols] = useState<IntacctCol[]>([]);
+  const [fVendorIds, setFVendorIds] = useState<Record<number, string>>({});
+
+  const STARTER_COLS: IntacctCol[] = [
+    { header: "Vendor ID", source: "vendor_id" },
+    { header: "Transaction Definition", source: "transaction_definition" },
+    { header: "Transaction Date", source: "transaction_date" },
+    { header: "GL Account", source: "gl_account" },
+    { header: "Location ID", source: "dimension:location_id" },
+    { header: "Item Description", source: "item_name" },
+    { header: "Quantity", source: "order_qty" },
+    { header: "Unit Price", source: "unit_cost" },
+  ];
+  const INTACCT_SOURCES: { value: string; label: string }[] = [
+    { value: "vendor_id", label: "Vendor ID (Intacct)" },
+    { value: "vendor_name", label: "Vendor name" },
+    { value: "transaction_definition", label: "Transaction definition" },
+    { value: "transaction_date", label: "Transaction date" },
+    { value: "gl_account", label: "GL account" },
+    { value: "item_name", label: "Item name / description" },
+    { value: "catalog_number", label: "Catalog number" },
+    { value: "intacct_item_id", label: "Item ID (Intacct)" },
+    { value: "order_qty", label: "Order quantity (order units)" },
+    { value: "quantity_usage", label: "Quantity (usage units)" },
+    { value: "unit_cost", label: "Unit cost" },
+    { value: "extended_cost", label: "Extended cost" },
+    { value: "order_unit", label: "Order unit" },
+    { value: "usage_unit", label: "Usage unit" },
+    { value: "dimension:location_id", label: "Dimension: Location ID" },
+    { value: "dimension:department_id", label: "Dimension: Department ID" },
+  ];
+
+  const intacctConfigUrl = activeLabId
+    ? `${API_BASE}/api/labs/${activeLabId}/veritastock/intacct-config`
+    : null;
+
+  const loadIntacctConfig = useCallback(async () => {
+    if (!intacctConfigUrl) return;
+    try {
+      const res = await fetch(intacctConfigUrl, { headers: authHeaders() });
+      if (!res.ok) return;
+      const d = await res.json();
+      setIntacctConfigured(!!d.configured);
+      setIntacctVendorRows(Array.isArray(d.vendors) ? d.vendors : []);
+    } catch { /* leave defaults */ }
+  }, [intacctConfigUrl]);
+  useEffect(() => {
+    if (!isLoggedIn || !hasPlanAccess || !activeLabId) return;
+    loadIntacctConfig();
+  }, [isLoggedIn, hasPlanAccess, activeLabId, loadIntacctConfig]);
+
+  const openIntacctSetup = useCallback(async () => {
+    if (!intacctConfigUrl) return;
+    // Pull the current saved config + vendor list to seed the form.
+    let cfg: IntacctConfig = {};
+    let vendors: IntacctVendorRow[] = intacctVendorRows;
+    try {
+      const res = await fetch(intacctConfigUrl, { headers: authHeaders() });
+      if (res.ok) { const d = await res.json(); cfg = d.config || {}; vendors = Array.isArray(d.vendors) ? d.vendors : []; }
+    } catch { /* seed from defaults */ }
+    setIntacctVendorRows(vendors);
+    setFTxnDef(cfg.transaction_definition || "");
+    setFGl(cfg.gl_account || "");
+    setFDateFmt(cfg.date_format || "MM/DD/YYYY");
+    setFDims(cfg.dimensions ? Object.entries(cfg.dimensions).map(([key, value]) => ({ key, value: String(value) })) : [{ key: "location_id", value: "" }]);
+    setFCols(cfg.template_columns && cfg.template_columns.length ? cfg.template_columns.map(c => ({ ...c })) : STARTER_COLS.map(c => ({ ...c })));
+    const vmap: Record<number, string> = {};
+    for (const v of vendors) vmap[v.id] = v.intacct_vendor_id || "";
+    setFVendorIds(vmap);
+    setIntacctSetupOpen(true);
+  }, [intacctConfigUrl, intacctVendorRows]);
+
+  const saveIntacctSetup = async () => {
+    if (!intacctConfigUrl) return;
+    setSavingIntacct(true);
+    try {
+      const dimensions: Record<string, string> = {};
+      for (const d of fDims) { if (d.key.trim()) dimensions[d.key.trim()] = d.value; }
+      const template_columns = fCols.filter(c => c.header.trim() && c.source).map(c => ({ header: c.header, source: c.source }));
+      const config: IntacctConfig = { transaction_definition: fTxnDef.trim(), gl_account: fGl.trim(), date_format: fDateFmt, dimensions, template_columns };
+      const res = await fetch(intacctConfigUrl, {
+        method: "PUT",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ config, vendor_ids: fVendorIds }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); toast({ title: "Could not save Sage Intacct setup", description: e.error || `HTTP ${res.status}`, variant: "destructive" }); return; }
+      setIntacctSetupOpen(false);
+      await loadIntacctConfig();
+      toast({ title: "Sage Intacct export configured", description: "Use “Export for Sage Intacct” to download the purchasing CSV." });
+    } catch {
+      toast({ title: "Could not save Sage Intacct setup", description: "Network error", variant: "destructive" });
+    } finally {
+      setSavingIntacct(false);
+    }
+  };
+
+  const generateIntacctCsv = async () => {
+    if (!activeLabId) return;
+    if (!intacctConfigured) { openIntacctSetup(); return; }
+    if (!confirmNoDuplicateOrder()) return;
+    setGeneratingOrderDoc("intacct");
+    try {
+      const res = await fetch(buildReorderUrl("intacct-csv"), { method: "POST", headers: authHeaders() });
+      if (res.status === 409) {
+        const body = await res.json().catch(() => ({}));
+        setIntacctPreflight(Array.isArray(body.missing) && body.missing.length ? body.missing : ["The export is not ready. Open Sage Intacct setup and complete the required fields."]);
+        return;
+      }
+      if (!res.ok) { const e = await res.json().catch(() => ({})); toast({ title: "Could not export CSV", description: e.error || `HTTP ${res.status}`, variant: "destructive" }); return; }
+      const blob = await res.blob();
+      const cd = res.headers.get("Content-Disposition") || "";
+      const m = cd.match(/filename="?([^";]+)"?/i);
+      const datestamp = new Date().toISOString().slice(0, 10);
+      const filename = m?.[1] || `SageIntacct_Purchasing_${datestamp}.csv`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      toast({ title: "Sage Intacct CSV downloaded", description: "Upload under Company > Setup > Import Data to create the purchasing transaction." });
+    } catch {
+      toast({ title: "Could not export CSV", description: "Network error", variant: "destructive" });
     } finally {
       setGeneratingOrderDoc(null);
     }
@@ -1738,6 +1887,37 @@ export default function VeritaStockInventoryPage() {
             <FileSpreadsheet size={14} className="mr-1.5" />
             {generatingOrderDoc === "excel" ? "Generating..." : "Order XLSX"}
           </Button>
+          {/* Sage Intacct hand-off: config-driven purchasing CSV off the reorder
+              list. Unconfigured -> opens setup; configured -> exports (preflight
+              blocks an incomplete file with a named list). */}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={generateIntacctCsv}
+            disabled={generatingOrderDoc !== null || readOnly}
+            title={intacctConfigured
+              ? "Export the current reorder list as a Sage Intacct purchasing CSV"
+              : "Set up the Sage Intacct purchasing export"}
+            data-testid="export-intacct-csv-button"
+          >
+            <Building2 size={14} className="mr-1.5" />
+            {generatingOrderDoc === "intacct"
+              ? "Generating..."
+              : intacctConfigured ? "Export for Sage Intacct" : "Set up Sage Intacct"}
+          </Button>
+          {intacctConfigured && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="px-2"
+              onClick={openIntacctSetup}
+              disabled={readOnly}
+              title="Edit the Sage Intacct export mapping"
+              data-testid="intacct-setup-button"
+            >
+              <Edit2 size={13} />
+            </Button>
+          )}
           {/* parking-lot #29 Phase 3A: Avery 5160 barcode label sheet.
               Endpoint is at POST /api/inventory/labels/pdf. The scanner
               page lands in Phase 3B alongside the camera widget. */}
@@ -2408,6 +2588,139 @@ export default function VeritaStockInventoryPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Sage Intacct export setup: the per-location mapping that makes the CSV
+          match the customer's Purchasing import template exactly. Config edit,
+          not code change. */}
+      <Dialog open={intacctSetupOpen} onOpenChange={setIntacctSetupOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Sage Intacct export setup</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 text-sm">
+            <p className="text-muted-foreground">
+              Map your reorder list to your Sage Intacct Purchasing import template. Header
+              names and IDs must match your Intacct template and master data exactly. Upload the
+              exported file under Company &gt; Setup &gt; Import Data.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Transaction definition</Label>
+                <Input value={fTxnDef} onChange={(e) => setFTxnDef(e.target.value)} placeholder="e.g. Purchase Requisition" data-testid="intacct-txn-def" />
+              </div>
+              <div>
+                <Label className="text-xs">Date format</Label>
+                <Select value={fDateFmt} onValueChange={setFDateFmt}>
+                  <SelectTrigger data-testid="intacct-date-format"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="MM/DD/YYYY">MM/DD/YYYY</SelectItem>
+                    <SelectItem value="DD/MM/YYYY">DD/MM/YYYY</SelectItem>
+                    <SelectItem value="YYYY-MM-DD">YYYY-MM-DD</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="sm:col-span-2">
+                <Label className="text-xs">Default GL account</Label>
+                <Input value={fGl} onChange={(e) => setFGl(e.target.value)} placeholder="e.g. 5000" data-testid="intacct-gl-account" />
+                <p className="text-[11px] text-muted-foreground mt-1">Used on account-based lines (items with no Intacct Item ID).</p>
+              </div>
+            </div>
+
+            {/* Dimensions */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <Label className="text-xs font-semibold">Dimension defaults</Label>
+                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setFDims([...fDims, { key: "", value: "" }])}>
+                  <Plus size={12} className="mr-1" /> Add dimension
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {fDims.map((d, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Input className="flex-1" value={d.key} placeholder="key (e.g. location_id)" onChange={(e) => setFDims(fDims.map((x, j) => j === i ? { ...x, key: e.target.value } : x))} />
+                    <Input className="flex-1" value={d.value} placeholder="value (e.g. SC-ED)" onChange={(e) => setFDims(fDims.map((x, j) => j === i ? { ...x, value: e.target.value } : x))} data-testid={`intacct-dim-value-${i}`} />
+                    <Button size="sm" variant="ghost" className="px-2" onClick={() => setFDims(fDims.filter((_, j) => j !== i))}><Trash2 size={13} /></Button>
+                  </div>
+                ))}
+                {fDims.length === 0 && <p className="text-xs text-muted-foreground">No dimensions. Add Location/Department IDs your template requires.</p>}
+              </div>
+            </div>
+
+            {/* Template columns */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <Label className="text-xs font-semibold">Template columns (Intacct header &rarr; source)</Label>
+                <div className="flex gap-1">
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setFCols(STARTER_COLS.map(c => ({ ...c })))}>Load starter</Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setFCols([...fCols, { header: "", source: "item_name" }])}>
+                    <Plus size={12} className="mr-1" /> Add column
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {fCols.map((c, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Input className="flex-1" value={c.header} placeholder="Exact Intacct header" onChange={(e) => setFCols(fCols.map((x, j) => j === i ? { ...x, header: e.target.value } : x))} data-testid={`intacct-col-header-${i}`} />
+                    <Select value={c.source} onValueChange={(v) => setFCols(fCols.map((x, j) => j === i ? { ...x, source: v } : x))}>
+                      <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {INTACCT_SOURCES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Button size="sm" variant="ghost" className="px-2" onClick={() => setFCols(fCols.filter((_, j) => j !== i))}><Trash2 size={13} /></Button>
+                  </div>
+                ))}
+                {fCols.length === 0 && <p className="text-xs text-muted-foreground">No columns mapped. Add the headers from your Intacct template, in order.</p>}
+              </div>
+            </div>
+
+            {/* Vendor Intacct IDs */}
+            <div>
+              <Label className="text-xs font-semibold">Vendor Sage Intacct IDs</Label>
+              <p className="text-[11px] text-muted-foreground mb-1.5">Each must match an existing Intacct vendor record exactly (case-sensitive).</p>
+              <div className="space-y-2">
+                {intacctVendorRows.map((v) => (
+                  <div key={v.id} className="flex items-center gap-2">
+                    <span className="flex-1 text-xs truncate">{v.name}</span>
+                    <Input className="flex-1" value={fVendorIds[v.id] ?? ""} placeholder="Intacct Vendor ID" onChange={(e) => setFVendorIds({ ...fVendorIds, [v.id]: e.target.value })} data-testid={`intacct-vendor-id-${v.id}`} />
+                  </div>
+                ))}
+                {intacctVendorRows.length === 0 && <p className="text-xs text-muted-foreground">No vendors in the directory yet. Add vendors first.</p>}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setIntacctSetupOpen(false)}>Cancel</Button>
+              <Button onClick={saveIntacctSetup} disabled={savingIntacct} data-testid="intacct-save-button">
+                {savingIntacct ? "Saving..." : "Save setup"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Preflight block: the server refused to emit a file Intacct would reject;
+          show exactly what is missing. */}
+      <AlertDialog open={!!intacctPreflight} onOpenChange={(o) => { if (!o) setIntacctPreflight(null); }}>
+        <AlertDialogContent data-testid="intacct-preflight-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Finish Sage Intacct setup first</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="text-sm">
+                <p className="mb-2">The export was blocked so Sage Intacct will not reject the upload. Resolve:</p>
+                <ul className="list-disc pl-5 space-y-1">
+                  {(intacctPreflight || []).map((m, i) => <li key={i}>{m}</li>)}
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Close</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setIntacctPreflight(null); openIntacctSetup(); }}>Open setup</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
