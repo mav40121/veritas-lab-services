@@ -60,6 +60,7 @@ function licenseCtxFromReq(req: any, productName?: string): LicenseContext {
   };
 }
 import { logAudit } from "./audit";
+import { logConsumption } from "./consumptionLedger";
 import { reconcileLots } from "./inventoryLots";
 import { CLSI_COMPLIANCE_MATRIX_B64, SOFTWARE_VALIDATION_TEMPLATE_B64 } from "./downloadAssets";
 import { cliaAnalytes, ptCategoryLinks } from "./cliaAnalytes";
@@ -6175,6 +6176,57 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     },
   );
 
+  // GET /api/labs/:labId/veritastock/consumption-events — the depletion ledger
+  // (Keystone Layer 2). Owner-scoped read of recent consumption events across the
+  // enterprise's locations, joined to item + location names. Phase 2 builds the
+  // learned-burn advisor + actual turns on top of this. Optional filters:
+  // ?reason, ?since (YYYY-MM-DD), ?item_id, ?lab_id, ?limit.
+  app.get(
+    "/api/labs/:labId/veritastock/consumption-events",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      try {
+        const sqlite = (db as any).$client;
+        const labId = req.scope.labId;
+        const baseLab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+        const owner = baseLab?.owner_user_id;
+        if (owner == null) return res.status(404).json({ error: "Lab not found" });
+        // Scope by the owner's LOCATIONS (lab_id), not account_id, so enterprise
+        // multi-owner edge cases can't leak another owner's events.
+        const ownerLabIds = (sqlite.prepare("SELECT id FROM labs WHERE owner_user_id = ?").all(owner) as any[]).map((l) => l.id);
+        if (ownerLabIds.length === 0) return res.json({ events: [], count: 0, total_value: 0 });
+        const placeholders = ownerLabIds.map(() => "?").join(",");
+        const reason = (req.query.reason || "").toString().trim();
+        const since = (req.query.since || "").toString().trim();
+        const itemId = Number(req.query.item_id) || null;
+        const scopeLab = Number(req.query.lab_id) || null;
+        const limit = Math.min(Math.max(Number(req.query.limit) || 250, 1), 1000);
+        let sql = `
+          SELECT c.id, c.item_id, c.lab_id, c.qty, c.unit_cost_at_event, c.reason,
+                 c.source_event_ref, c.occurred_at, c.created_at,
+                 ii.item_name AS item_name, l.lab_name AS location_name
+            FROM inventory_consumption_events c
+            LEFT JOIN inventory_items ii ON ii.id = c.item_id
+            LEFT JOIN labs l ON l.id = c.lab_id
+           WHERE c.lab_id IN (${placeholders})`;
+        const params: any[] = [...ownerLabIds];
+        if (reason) { sql += ` AND c.reason = ?`; params.push(reason); }
+        if (since) { sql += ` AND c.occurred_at >= ?`; params.push(since); }
+        if (itemId) { sql += ` AND c.item_id = ?`; params.push(itemId); }
+        if (scopeLab) { sql += ` AND c.lab_id = ?`; params.push(scopeLab); }
+        sql += ` ORDER BY c.occurred_at DESC, c.id DESC LIMIT ?`;
+        params.push(limit);
+        const rows = sqlite.prepare(sql).all(...params) as any[];
+        const total_value = rows.reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.unit_cost_at_event) || 0), 0);
+        return res.json({ events: rows, count: rows.length, total_value: Math.round(total_value * 100) / 100 });
+      } catch (err: any) {
+        console.error("[veritastock/consumption-events] error:", err);
+        return res.status(500).json({ error: err.message || "consumption_events_failed" });
+      }
+    },
+  );
+
   // GET /api/labs/:labId/veritastock/transfers/incoming — pending shipments
   // bound for any location in this lab's enterprise group, so the destination
   // can Accept (land the stock) or Reject (return it). Grouped by batch_id on
@@ -6563,6 +6615,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               after: { quantity_on_hand: destAfter, transfer_id: t.id, batch_id: batchId, from_lab_id: t.from_lab_id, usage_qty: t.qty_usage_units, status: "accepted" },
               ipAddress: req.ip,
             });
+            // Consumption ledger: a FINALIZED outbound transfer is a depletion at
+            // the SOURCE location. The stock left the source on send; acceptance
+            // makes it permanent (a rejected send returns it and is never logged).
+            // The destination's transfer_in above is replenishment, NOT logged.
+            // Side-effect only — on_hand is untouched by the ledger.
+            if (t.from_item_id != null) {
+              logConsumption({
+                itemId: Number(t.from_item_id), labId: Number(t.from_lab_id),
+                accountId: t.owner_user_id ?? null, qty: t.qty_usage_units,
+                unitCostAtEvent: src?.unit_cost ?? null, reason: "transfer_out",
+                sourceEventRef: `transfer:${batchId}`, occurredAt: nowIso,
+              });
+            }
             out.push({ transfer_id: t.id, item_name: t.item_name, dest_item_id: destId, dest_after: destAfter });
           }
           return out;
