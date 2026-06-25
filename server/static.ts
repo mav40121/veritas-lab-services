@@ -31,6 +31,26 @@ function renderTeaLookupTable(): string {
   return `<h2>CLIA Total Allowable Error (TEa) by analyte</h2><p>Acceptable performance criteria from 42 CFR Part 493, Subpart I (CLIA proficiency testing final rule CMS-3355-F, effective July 11, 2024, implemented January 1, 2025).</p><table><thead><tr><th>Analyte</th><th>Acceptable performance (TEa)</th><th>Specialty</th><th>42 CFR section</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
+// Crawlable prerender body for /calculator (the VeritaBench Lab Productivity
+// Scorecard). The page is otherwise 100% JS-rendered, so Google left it
+// "Discovered, never crawled"; this emits real content for the noscript block.
+// Benchmark bands mirror client/src/pages/ProductivityCalculatorPage.tsx
+// BENCHMARKS (the source of truth); keep in sync if those bands change.
+function renderProductivityCalculatorContent(): string {
+  const bands = [
+    { group: "Community Hospital", volume: "200K to 500K billables/yr", low: "0.15", high: "0.22" },
+    { group: "Large Trauma Center", volume: "750K to 1.5M billables/yr", low: "0.09", high: "0.13" },
+    { group: "Reference Lab", volume: "2M+ billables/yr", low: "0.06", high: "0.09" },
+  ];
+  const rows = bands
+    .map(
+      (b) =>
+        `<tr><td>${escHtml(b.group)}</td><td>${escHtml(b.volume)}</td><td>${escHtml(b.low)} to ${escHtml(b.high)}</td></tr>`,
+    )
+    .join("");
+  return `<h2>Lab productivity benchmark ranges</h2><p>The VeritaBench Lab Productivity Scorecard computes one ratio, productive labor hours divided by billable tests, and scores it against the peer group for your lab's annual volume. A lower ratio means fewer labor hours per test, so a result below your peer band is outperforming, within the band is on target, and above the band points to a staffing or workflow savings opportunity.</p><p>Methodology: enter monthly productive hours (or estimate them from FTE count and a productive-time percentage) and monthly billable tests. The tool divides hours by tests, compares the ratio to the midpoint of your peer band, and converts any gap into productive hours, full-time-equivalent staff, and annual labor dollars at your hourly rate.</p><table><thead><tr><th>Peer group</th><th>Annual billable volume</th><th>Target ratio (productive hours per billable test)</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
 function getIndexHtml(distPath: string): string {
   if (!cachedIndexHtml) {
     let html = fs.readFileSync(path.resolve(distPath, "index.html"), "utf-8");
@@ -113,6 +133,8 @@ function injectSeoTags(html: string, routePath: string, meta: SEOMetadata): stri
   let noscriptInner = `<h1>${meta.title}</h1><p>${meta.description}</p><nav><a href="/">Home</a> | <a href="/veritaassure">VeritaAssure&#8482;</a> | <a href="/veritacheck">VeritaCheck&#8482;</a> | <a href="/veritascan">VeritaScan&#8482;</a> | <a href="/veritamap">VeritaMap&#8482;</a> | <a href="/pricing">Pricing</a> | <a href="/contact">Contact</a></nav>`;
   if (routePath === "/resources/clia-tea-lookup") {
     noscriptInner += renderTeaLookupTable();
+  } else if (routePath === "/calculator") {
+    noscriptInner += renderProductivityCalculatorContent();
   }
   html = html.replace('<div id="root"></div>', `<div id="root"><noscript>${noscriptInner}</noscript></div>`);
 
