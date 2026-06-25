@@ -196,13 +196,13 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     ],
   },
   "/resources/clia-tea-what-lab-directors-dont-know": {
-    title: "CLIA Total Allowable Error (TEa): 42 CFR §493 Guide",
-    description: "2025 CLIA total allowable error (TEa) values for chemistry, hematology, toxicology, and immunology, with 42 CFR §493 citations.",
+    title: "CLIA Total Allowable Error (TEa): 2026 Limits by Specialty",
+    description: "The current CLIA total allowable error (TEa) limits by specialty: chemistry, hematology, toxicology, and immunology, with 42 CFR §493 citations.",
     jsonLd: [{
       "@context": "https://schema.org",
       "@type": "Article",
       headline: "CLIA Allowable Error (TEa): What It Is, Where to Find It, and Why Most Lab Directors Don't Know About It",
-      description: "2025 CLIA total allowable error (TEa) values for chemistry, hematology, toxicology, and immunology, with 42 CFR §493 citations.",
+      description: "The current CLIA total allowable error (TEa) limits by specialty: chemistry, hematology, toxicology, and immunology, with 42 CFR §493 citations.",
       image: `${BASE_URL}/og-image.png`,
       author: {
         "@type": "Person",

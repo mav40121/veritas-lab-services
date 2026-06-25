@@ -39,7 +39,7 @@ const teaSampleTable = [
 ];
 
 export default function ArticleTeaPage() {
-    useSEO({ title: "CLIA Total Allowable Error (TEa): 42 CFR §493 Guide", description: "2025 CLIA total allowable error (TEa) values for chemistry, hematology, toxicology, and immunology, with 42 CFR §493 citations." });
+    useSEO({ title: "CLIA Total Allowable Error (TEa): 2026 Limits by Specialty", description: "The current CLIA total allowable error (TEa) limits by specialty: chemistry, hematology, toxicology, and immunology, with 42 CFR §493 citations." });
 return (
     <div className="min-h-screen bg-background">
 

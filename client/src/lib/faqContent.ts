@@ -77,7 +77,7 @@ export const CALVER_ARTICLE_FAQ: FaqQA[] = [
 export const EP26_ARTICLE_FAQ: FaqQA[] = [
   {
     q: "Is reagent lot verification required by CLIA?",
-    a: "Yes. CLIA requires laboratories to verify that a new reagent lot performs acceptably before reporting patient results from it, and to define and document the acceptance criteria (42 CFR §493.1253(b)(3) and §493.1255). The regulation requires the verification and the documented criteria; it does not prescribe the exact protocol or sample count, which the laboratory establishes with medical director or designee approval.",
+    a: "Yes. CLIA requires laboratories to verify that a new reagent lot performs acceptably before reporting patient results from it, and to define and document the acceptance criteria (42 CFR §493.1255(b)(3)(i) and §493.1256). The regulation requires the verification and the documented criteria; it does not prescribe the exact protocol or sample count, which the laboratory establishes with medical director or designee approval.",
   },
   {
     q: "How many samples does EP26 require?",
