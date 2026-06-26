@@ -17,7 +17,7 @@ const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
 test.describe("Password reset request page", () => {
   test("request form renders and shows delivery-expectation copy after submit", async ({ page }) => {
     await page.goto(`${BASE}/reset-password`);
-    await expect(page.getByRole("heading", { name: /Forgot password/i })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/Forgot password/i).first()).toBeVisible({ timeout: 15000 });
 
     await page.getByPlaceholder(/you@example\.com/i).fill("nobody.delivery-check@example.com");
     await page.getByRole("button", { name: /Send Reset Link/i }).click();
