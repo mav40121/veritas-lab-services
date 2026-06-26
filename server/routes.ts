@@ -3929,6 +3929,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, userId: uid });
   });
 
+  // Admin: generate a fresh password-reset link for a user (by id or email) and
+  // RETURN it without emailing. The self-serve forgot-password flow emails the
+  // link, which strict hospital/corporate gateways sometimes delay or
+  // quarantine. This lets the admin hand the user a working link directly, the
+  // same way pending-invite links are copied off the report. ADMIN_SECRET-gated.
+  // 72h expiry since it is relayed by hand (vs the 4h self-serve token).
+  app.post("/api/admin/generate-reset-link", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const { userId, email } = req.body || {};
+    if (!userId && !email) return res.status(400).json({ error: "userId or email required" });
+    const sqlite = (db as any).$client;
+    const user = userId
+      ? sqlite.prepare("SELECT id, email, name FROM users WHERE id = ?").get(Number(userId))
+      : sqlite.prepare("SELECT id, email, name FROM users WHERE lower(email) = lower(?)").get(String(email).trim());
+    if (!user) return res.status(404).json({ error: "User not found" });
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(); // 72 hours
+    sqlite.prepare("INSERT OR REPLACE INTO reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)").run(user.id, token, expiresAt);
+    const resetUrl = `${FRONTEND_URL}/reset-password?token=${token}`;
+    console.log(`[admin/generate-reset-link] user=${user.id} email=${user.email} expires=${expiresAt}`);
+    res.json({ ok: true, resetUrl, email: user.email, name: user.name, expiresAt });
+  });
+
   // Admin: delete a user by id (destructive, requires confirm=true)
   app.delete("/api/admin/users/:id", (req, res) => {
     const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
@@ -14878,7 +14902,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!user) return res.json({ ok: true });
 
     const token = crypto.randomBytes(32).toString("hex");
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+    const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(); // 4 hours (absorbs greylisting delay at strict hospital/corporate mail gateways)
     db.$client.prepare("INSERT OR REPLACE INTO reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)").run(user.id, token, expiresAt);
 
     const resetUrl = `${FRONTEND_URL}/reset-password?token=${token}`;

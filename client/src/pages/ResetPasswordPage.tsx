@@ -98,9 +98,9 @@ export default function ResetPasswordPage() {
             <div className="text-4xl mb-4">📧</div>
             <h2 className="font-semibold text-lg mb-2">Check your email</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              If an account exists for <strong>{email}</strong>, a password reset link has been sent. Check your inbox and spam folder.
+              If an account exists for <strong>{email}</strong>, a password reset link is on its way. It can take a few minutes to arrive, and on hospital or corporate email it may land in your spam or quarantine folder, so check there too.
             </p>
-            <p className="text-xs text-muted-foreground">The link expires in 1 hour.</p>
+            <p className="text-xs text-muted-foreground">The link is good for 4 hours. If it has expired by the time you find it, just request a new one and it should arrive faster.</p>
           </CardContent>
         </Card>
       </div>
