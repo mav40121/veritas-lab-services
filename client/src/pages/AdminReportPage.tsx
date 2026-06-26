@@ -215,6 +215,84 @@ const PLAN_OPTIONS = [
   { value: "lab",             label: "Lab" },
 ];
 
+// Self-contained tool: generate a fresh password-reset link for any user and
+// copy it, for when their mail system delays or quarantines the automatic reset
+// email. Mirrors the "Copy link" affordance on pending invites. Holds its own
+// state and takes the admin secret as a prop (keeps hooks out of the big page
+// component).
+function AdminResetLinkTool({ secret }: { secret: string }) {
+  const [query, setQuery] = useState("");
+  const [result, setResult] = useState<{ resetUrl: string; email: string; expiresAt: string } | null>(null);
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
+  const generate = async () => {
+    setErr(""); setResult(null);
+    const v = query.trim();
+    if (!v) { setErr("Enter an email address or user id."); return; }
+    setLoading(true);
+    try {
+      const body = /^\d+$/.test(v) ? { userId: Number(v) } : { email: v };
+      const res = await fetch("/api/admin/generate-reset-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-secret": secret || "" },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) { setErr(json.error || res.statusText); return; }
+      setResult({ resetUrl: json.resetUrl, email: json.email, expiresAt: json.expiresAt });
+    } catch (e: any) {
+      setErr(e?.message || String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <div className="bg-card rounded-lg shadow-sm border border-border overflow-hidden">
+      <div className="px-4 py-3 border-b border-border">
+        <h3 className="text-sm font-semibold text-foreground">Password reset link</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">Generate a fresh reset link for any user, for when their email system delays or quarantines the automatic reset email. Enter their email (or user id), copy the link, and send it to them. The link works for 72 hours.</p>
+      </div>
+      <div className="p-4 space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="text"
+            placeholder="user@lab.com or user id"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") generate(); }}
+            className="flex h-9 w-full max-w-xs rounded-md border border-border bg-background px-3 py-1 text-sm"
+          />
+          <button
+            type="button"
+            onClick={generate}
+            disabled={loading}
+            className="inline-flex h-9 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+          >
+            {loading ? "Generating…" : "Generate link"}
+          </button>
+        </div>
+        {err && <p className="text-xs text-red-600">{err}</p>}
+        {result && (
+          <div className="rounded border border-border bg-muted/40 p-3 text-xs space-y-1.5">
+            <div>Link for <strong>{result.email}</strong>, expires {new Date(result.expiresAt).toLocaleString()}:</div>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 break-all rounded border border-border bg-background px-2 py-1 text-[11px]">{result.resetUrl}</code>
+              <button
+                type="button"
+                className="whitespace-nowrap text-primary hover:underline"
+                onClick={() => navigator.clipboard.writeText(result.resetUrl).catch(() => {})}
+                title="Copy reset link to clipboard"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminReportPage() {
   const [secret, setSecret] = useState("");
   const [data, setData] = useState<ReportData | null>(null);
@@ -865,6 +943,9 @@ export default function AdminReportPage() {
             <div className={`text-2xl font-bold ${totalARR > 0 ? "text-green-600" : "text-muted-foreground"}`}>${totalARR.toLocaleString()}</div>
           </div>
         </div>
+
+        {/* Admin: generate a password reset link for a user (email-delivery fallback) */}
+        {data && secret && <AdminResetLinkTool secret={secret} />}
 
         {/* Pending invites section */}
         {data && data.pendingInvites && data.pendingInvites.length > 0 && (
