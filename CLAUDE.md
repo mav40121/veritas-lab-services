@@ -293,6 +293,7 @@ Apply to every task, not just large ones.
 **Published list pricing as of 2026-05-23 (MEDIUM scenario):**
 
 - Per Study: $25 one-time (`price_1TGXPo5dn6rqLgIxsnvNa2oi`)
+- Free trial: every new account is granted 2 free study credits (the standing VeritaCheck trial). On free/per_study plans, single studies AND Instrument Verifications each consume one credit and are blocked at 0 (402/403 `STUDY_CREDITS_EXHAUSTED`). Subscription plans and the demo `lab` are uncapped via the explicit `UNLIMITED_PLANS` allowlist. Gate lives in `server/studyCredits.ts`. Shipped 2026-06-27 (PR #875); this retired the prior unlimited-free single-study behavior. See the `project_veritacheck_free_study_credits` memory.
 - VeritaCheck Unlimited: **$299 first year, $499/yr after** (`price_1TaQXR5dn6rqLgIxsi2uMrxS` is the $499 base; coupon `VCFIRSTYEAR` auto-applies $200 off once for Y1)
 - Clinic: **$999/yr**, 2 active seats included, additional seats at $500/seat (`price_1TaQXR5dn6rqLgIxJVoI5Hsz` base, `price_1TaQXS5dn6rqLgIxLlLKs1Bv` add-on seat)
 - Community: **$2,125/yr**, 5 active seats included, additional seats at $425/seat (`price_1TaQXR5dn6rqLgIxHnDQt7fU` base, `price_1TaQXS5dn6rqLgIx38gjkn6t` add-on seat) — Most Popular
