@@ -153,6 +153,21 @@ const articles = [
   },
 ];
 
+// Newest article first. Derive a sortable key from each "Month YYYY" date string
+// (month names do not string-sort) so the newest post is always the featured/top
+// article and the list below it stays reverse-chronological, with no manual
+// reordering when a new article is added. Array.sort is stable, so same-month
+// articles keep their source order.
+const MONTH_INDEX: Record<string, number> = {
+  January: 0, February: 1, March: 2, April: 3, May: 4, June: 5,
+  July: 6, August: 7, September: 8, October: 9, November: 10, December: 11,
+};
+function publishKey(dateStr: string): number {
+  const [month, year] = dateStr.split(" ");
+  return Number(year) * 12 + (MONTH_INDEX[month] ?? 0);
+}
+const sortedArticles = [...articles].sort((a, b) => publishKey(b.date) - publishKey(a.date));
+
 const tools = [
   {
     slug: "clia-tea-lookup",
@@ -194,8 +209,8 @@ return (
 
         {/* Featured article */}
         <section>
-          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">Featured Article</div>
-          {articles.filter(a => a.featured).map(article => (
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">Latest Article</div>
+          {sortedArticles.slice(0, 1).map(article => (
             <Link key={article.slug} href={`/resources/${article.slug}`}>
               <Card className="border-primary/20 hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group">
                 <CardContent className="p-6 sm:p-8">
@@ -300,7 +315,7 @@ return (
         </section>
 
         {/* Second article */}
-        {articles.filter(a => !a.featured).map(article => (
+        {sortedArticles.slice(1).map(article => (
           <Link key={article.slug} href={`/resources/${article.slug}`}>
             <Card className="hover:border-primary/30 hover:shadow-sm transition-all cursor-pointer group">
               <CardContent className="p-5 sm:p-6">
