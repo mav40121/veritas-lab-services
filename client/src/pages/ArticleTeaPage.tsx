@@ -234,6 +234,11 @@ return (
             Now you know where it is. Use the lookup tool to find your analytes. Update your calibration verification templates. Cite the CFR in your study reports. When a surveyor asks how you determined your acceptability criteria, you'll have the answer.
           </p>
 
+          <p className="mt-8 text-[15px] leading-relaxed">
+            Related reading: total allowable error is also the anchor for designing quality control to each method. See{" "}
+            <Link href="/resources/quality-control-testing-into-compliance" className="text-primary font-medium hover:underline">when quality control stops working <ChevronRight size={13} className="inline" /></Link>.
+          </p>
+
           {/* Newsletter */}
           <NewsletterSignup variant="inline" source="article-tea" />
 

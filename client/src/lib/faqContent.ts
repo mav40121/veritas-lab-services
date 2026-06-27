@@ -101,6 +101,38 @@ export const EP26_ARTICLE_FAQ: FaqQA[] = [
   },
 ];
 
+// /resources/quality-control-testing-into-compliance
+export const QC_ARTICLE_FAQ: FaqQA[] = [
+  {
+    q: "What should you do when a quality control result is out of range?",
+    a: "Hold patient results from the affected run, then investigate for an assignable cause: control material integrity and expiration, reagent lot and expiration, calibration status, instrument maintenance and function, operator technique, and environmental conditions. If you find and correct one, document the cause and the corrective action and rerun controls to confirm the system is back in control before resuming patient testing. If no assignable cause is found, the result stands as a real signal, and the next steps are broader troubleshooting, recalibration, or manufacturer support. Final review rests with the medical director or designee.",
+  },
+  {
+    q: "Is it acceptable to repeat a control until it passes?",
+    a: "Only as part of a documented investigation. Rerunning a failed control to look for an assignable cause is sound practice. Repeating it to produce a passing number, with no investigation and no documented cause, is testing into compliance.",
+  },
+  {
+    q: "Should control limits come from the package insert or your own data?",
+    a: "From your own data. The insert range covers many laboratories, instruments, and reagent lots, so it is wider than any single laboratory's true imprecision and too wide to catch real shifts. Set limits from your own instrument's mean and standard deviation over a baseline period. CLSI C24 takes this position.",
+  },
+  {
+    q: "What is testing into compliance in a clinical laboratory?",
+    a: "Retesting or repeating a result until it falls in range without finding and documenting an assignable cause for the original failure. The principle comes from United States v. Barr Laboratories (1993): a laboratory may retest to investigate, but once no error is found it cannot keep testing until a passing value appears, and it cannot average passing retests with the original failing result.",
+  },
+  {
+    q: "What CFR requires corrective action when a control fails?",
+    a: "Two standards work together. 42 CFR §493.1256 requires control procedures and bars reporting patient results until controls meet the laboratory's criteria. 42 CFR §493.1282 requires documented corrective action when controls fail.",
+  },
+  {
+    q: "What are sigma metrics in laboratory quality control?",
+    a: "A method's sigma is its total allowable error, minus bias, divided by imprecision. High-sigma methods need little quality control; low-sigma methods need multirule designs and tighter review. Designing the quality control to each method's sigma is more protective than running one rule set across every analyte. The figures used to illustrate this are an example, not a universal rule.",
+  },
+  {
+    q: "Does a clean Levey-Jennings chart mean the quality control program is working?",
+    a: "Not necessarily. A real analytical system produces occasional outliers over many runs, so a long stretch with no exceptions can mean the limits are too wide or that failures are being repeated away. Treat a flawless chart as a reason to look closer, not a reason to move on.",
+  },
+];
+
 // /faq  (the main FAQ page, grouped by category)
 export const FAQ_CATEGORIES: FaqCategory[] = [
   {

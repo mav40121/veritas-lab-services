@@ -237,6 +237,11 @@ return (
             <li><strong>Reference current CLIA TEa criteria.</strong> These values update periodically. Always use the current <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Code of Federal Regulations</a>, not outdated reference cards.</li>
           </ol>
 
+          <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm leading-relaxed my-6">
+            Related reading: the own-instrument standard deviation you establish during verification is what sets defensible quality control limits. See{" "}
+            <Link href="/resources/quality-control-testing-into-compliance" className="text-primary font-medium hover:underline">when quality control stops working <ChevronRight size={13} className="inline" /></Link>.
+          </div>
+
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Frequently Asked Questions</h2>
 
           {CALVER_ARTICLE_FAQ.map(({ q, a }) => (
