@@ -9,6 +9,17 @@ import { teaData } from "@/lib/cliaTeaData";
 
 const articles = [
   {
+    slug: "quality-control-testing-into-compliance",
+    title: "When Quality Control Stops Working: The Out-of-Range Result You Are Supposed to Investigate",
+    summary: "A perfect QC chart is not the goal. The two ways laboratories quietly silence an out-of-range control, repeating until it passes and setting limits too wide, plus the deeper question of designing QC to each method's sigma. With the Barr testing-into-compliance line and the CLIA standards that govern corrective action.",
+    category: "Quality Control",
+    readTime: "11 min read",
+    author: "Michael Veri",
+    date: "June 2026",
+    tags: ["Quality Control", "Westgard Rules", "Levey-Jennings", "CLIA", "VeritaQC™"],
+    featured: false,
+  },
+  {
     slug: "cost-per-reportable-test-four-layer-framework",
     title: "What Your Tests Actually Cost: A Four-Layer CPRT Framework for Clinical Laboratories",
     summary: "Most labs answer the cost question with reagent cost alone. CLSI GP11-A defines a four-layer framework (reagents, labor, equipment, overhead) where each layer answers a different financial question. Here is how to match the layer to the question, how to compare configurations honestly, and what to do this quarter.",
