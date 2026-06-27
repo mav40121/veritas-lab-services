@@ -20,7 +20,7 @@ test.describe("QC testing-into-compliance resource page", () => {
     await expect(page.getByText(/When Quality Control Stops Working/i)).toBeVisible({ timeout: 20000 });
     await expect(page.getByText(/Key takeaways/i)).toBeVisible();
     await expect(page.getByText(/Method sigma/i)).toBeVisible();
-    await expect(page.getByText(/Frequently Asked Questions/i)).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Frequently Asked Questions/i })).toBeVisible();
     await expect(page.getByText(/Is it acceptable to repeat a control until it passes/i)).toBeVisible();
   });
 });
