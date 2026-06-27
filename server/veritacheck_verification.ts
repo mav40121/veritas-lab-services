@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { db } from "./db";
 import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
+import { resolveStudyAccess, consumeStudyCredit } from "./studyCredits";
 import { getCanonicalMDLs, getCanonicalMDLProvenance, computeSystematicErrorAtMDL } from "./canonicalMDLs";
 import {
   shouldRender as shouldRenderAmrCoverage,
@@ -1107,8 +1108,16 @@ export function registerVeritaCheckVerificationRoutes(
   // Shared verification-create body builder. Used by both legacy and
   // lab-scoped POST routes so the slot-creation logic doesn't drift.
   function createVerificationRow(req: any, res: any, labIdOrNull: number | null) {
-    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
+    // Free-study credit gate (server/studyCredits.ts). Subscription plans are
+    // uncapped; free/per_study accounts spend one free study credit per
+    // verification (pooled across the owner user and the lab).
+    const _vOwner = sqlite.prepare("SELECT plan, study_credits FROM users WHERE id = ?").get(userId) as any;
+    const _vLab = labIdOrNull != null ? sqlite.prepare("SELECT plan, study_credits FROM labs WHERE id = ?").get(labIdOrNull) as any : null;
+    const _vAccess = resolveStudyAccess({ labPlan: _vLab?.plan, ownerPlan: _vOwner?.plan, ownerCredits: _vOwner?.study_credits, labCredits: _vLab?.study_credits });
+    if (!_vAccess.unlimited && _vAccess.credits <= 0) {
+      return res.status(403).json({ error: "You have used your free studies. Upgrade to VeritaCheck™ to run more verifications.", code: "STUDY_CREDITS_EXHAUSTED" });
+    }
     const { instrument_name, manufacturer, trigger_type, map_instrument_id, elements, element_reasons } = req.body;
     if (!instrument_name || !trigger_type) {
       return res.status(400).json({ error: "instrument_name and trigger_type are required" });
@@ -1138,6 +1147,7 @@ export function registerVeritaCheckVerificationRoutes(
         VALUES (?,?,?,?,?)
       `).run(id, element, guidance?.protocol || null, now, now);
     }
+    if (!_vAccess.unlimited) consumeStudyCredit(sqlite, userId, labIdOrNull);
     res.json({ id, ok: true });
   }
 

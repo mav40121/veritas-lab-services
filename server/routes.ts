@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
+import { resolveStudyAccess, consumeStudyCredit, isUnlimitedPlan } from "./studyCredits";
 import { db, PLAN_SEATS, PLAN_VIEW_ONLY_SEATS, PLAN_PRICES, PLAN_BED_RANGES, suggestTierFromBeds } from "./db";
 import { computeUsageQty, validateTransfer, validateBatch, matchKey, countOnHand, scopeEnterpriseLocations } from "./enterpriseTransfer";
 import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice, getSeatPriceForTier, VC_UNLIMITED_FIRST_YEAR_COUPON, getViewOnlyAddOnConfig } from "./stripe";
@@ -9837,7 +9838,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       (parsed.data as any).teaIsPercentage !== 0,
       (parsed.data as any).cliaAbsoluteFloor ?? null
     );
+    // Free-study credit gate for the legacy (optional-auth) create path. Guests
+    // (no userId) are unaffected; authenticated free/per_study accounts consume
+    // credits (owner-level here, since lab context is out of scope on this route).
+    if (userId != null) {
+      const _lsOwner = storage.getUserById(userId);
+      const _lsAccess = resolveStudyAccess({ ownerPlan: _lsOwner?.plan, ownerCredits: (_lsOwner as any)?.studyCredits });
+      if (!_lsAccess.unlimited && _lsAccess.credits <= 0) {
+        return res.status(402).json({ error: "You have used your free studies. Upgrade to VeritaCheck Unlimited to run more.", code: "STUDY_CREDITS_EXHAUSTED" });
+      }
+    }
     const study = storage.createStudy({ ...parsed.data, status: verifiedStatus, userId, createdByUserId });
+    if (userId != null && !isUnlimitedPlan(storage.getUserById(userId)?.plan)) {
+      consumeStudyCredit((db as any).$client, userId, null);
+    }
 
     // Multi-Lab Tier 2 Phase 3 dual-write: stamp lab_id on every new row so
     // the transition window does not accumulate NULL lab_id studies. Picks
@@ -10135,6 +10149,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // owners it is their own id. Lab membership already established by
     // labScopeMiddleware; the user_id field stays denormalized for audit.
     const ownerUserId = req.ownerUserId ?? req.userId;
+    // Free-study credit gate (server/studyCredits.ts). Subscription plans are
+    // uncapped; free/per_study accounts get free study credits pooled across the
+    // owner user and the lab. Block when exhausted; consume one per study created.
+    const _scOwner = storage.getUserById(ownerUserId);
+    const _scAccess = resolveStudyAccess({
+      labPlan: req.scope?.lab?.plan,
+      ownerPlan: _scOwner?.plan,
+      ownerCredits: (_scOwner as any)?.studyCredits,
+      labCredits: req.scope?.lab?.study_credits,
+    });
+    if (!_scAccess.unlimited && _scAccess.credits <= 0) {
+      return res.status(402).json({ error: "You have used your free studies. Upgrade to VeritaCheck Unlimited to run more.", code: "STUDY_CREDITS_EXHAUSTED" });
+    }
     const study = storage.createStudy({
       ...parsed.data,
       status: verifiedStatus,
@@ -10143,6 +10170,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } as any);
     // Dual-write lab_id (drizzle schema may not yet include the column).
     (db as any).$client.prepare("UPDATE studies SET lab_id = ? WHERE id = ?").run(req.scope.labId, study.id);
+    if (!_scAccess.unlimited) consumeStudyCredit((db as any).$client, ownerUserId, req.scope.labId);
     try {
       autoCompleteVeritaScanItems({
         id: study.id, userId: ownerUserId, testName: study.testName,
