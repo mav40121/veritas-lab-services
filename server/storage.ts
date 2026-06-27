@@ -76,8 +76,11 @@ export interface IStorage {
 
 class DatabaseStorage implements IStorage {
   createUser(email: string, passwordHash: string, name: string): User {
+    // New accounts get 2 free study credits (the standing VeritaCheck trial).
+    // See server/studyCredits.ts (STUDY_CREDIT_FREE_GRANT). Subscription plans
+    // are uncapped; free/per_study consume credits per study created.
     return db.insert(users).values({
-      email, passwordHash, name, plan: "free", studyCredits: 0,
+      email, passwordHash, name, plan: "free", studyCredits: 2,
       createdAt: new Date().toISOString()
     }).returning().get();
   }
