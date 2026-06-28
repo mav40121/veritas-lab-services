@@ -5188,7 +5188,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // "Laboratory" / "Not on file" / CFR-only-no-accreditor-column.
     const row = (db as any).$client.prepare(`
       SELECT lm.id AS membership_id, lm.role AS role, lm.permissions_json AS permissions_json,
-             l.id AS lab_id, l.plan AS plan, l.subscription_status AS subscription_status,
+             l.id AS lab_id, l.plan AS plan, l.study_credits AS study_credits, l.subscription_status AS subscription_status,
              l.subscription_expires_at AS subscription_expires_at,
              l.plan_expires_at AS plan_expires_at, l.stripe_customer_id AS stripe_customer_id,
              l.lab_name AS lab_name, l.clia_number AS clia_number,
@@ -5212,6 +5212,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       lab: {
         id: row.lab_id,
         plan: row.plan,
+        // study_credits carried so credit-aware lab-scoped handlers (the
+        // VeritaCheck free-study gate in POST /api/labs/:labId/studies) can
+        // read the lab's pooled credits without a second query. Additive:
+        // no existing route reads this field.
+        study_credits: row.study_credits,
         subscription_status: row.subscription_status,
         subscription_expires_at: row.subscription_expires_at,
         plan_expires_at: row.plan_expires_at,

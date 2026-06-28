@@ -9,7 +9,8 @@
 //  - free / per_study consume credits, pooled across the owner user and the lab.
 //  - A new account (2 credits) can run exactly 2, then is blocked.
 
-import { resolveStudyAccess, isUnlimitedPlan, UNLIMITED_PLANS, STUDY_CREDIT_FREE_GRANT } from "../server/studyCredits";
+import Database from "better-sqlite3";
+import { resolveStudyAccess, isUnlimitedPlan, UNLIMITED_PLANS, STUDY_CREDIT_FREE_GRANT, consumeStudyCredit } from "../server/studyCredits";
 
 let pass = 0, fail = 0;
 function check(name: string, cond: boolean) {
@@ -44,6 +45,40 @@ check("lab plan 'free' + owner 'free', 0 credits -> blocked", (() => { const a =
 
 // 6. Demo lab safety: plan 'lab' is in the unlimited set.
 check("demo lab plan 'lab' is unlimited", UNLIMITED_PLANS.has("lab"));
+
+// 7. consumeStudyCredit against a REAL in-memory SQLite (exercises the actual
+// SQL: lab-first decrement, user fallback when the lab pool is empty, the
+// null-lab path, and the both-empty no-op that must never go negative).
+{
+  const sql: any = new Database(":memory:");
+  sql.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, study_credits INTEGER NOT NULL DEFAULT 0)");
+  sql.exec("CREATE TABLE labs  (id INTEGER PRIMARY KEY, study_credits INTEGER NOT NULL DEFAULT 0)");
+  const setU = (c: number) => sql.prepare("INSERT OR REPLACE INTO users (id, study_credits) VALUES (1, ?)").run(c);
+  const setL = (c: number) => sql.prepare("INSERT OR REPLACE INTO labs  (id, study_credits) VALUES (1, ?)").run(c);
+  const getU = () => (sql.prepare("SELECT study_credits c FROM users WHERE id=1").get() as any).c;
+  const getL = () => (sql.prepare("SELECT study_credits c FROM labs  WHERE id=1").get() as any).c;
+
+  // lab-first: when the lab pool has credits, decrement the LAB, leave the user alone.
+  setU(2); setL(2); consumeStudyCredit(sql, 1, 1);
+  check("consume lab-first: lab 2->1", getL() === 1);
+  check("consume lab-first: user untouched (stays 2)", getU() === 2);
+
+  // fallback: lab pool empty -> decrement the user instead.
+  setU(2); setL(0); consumeStudyCredit(sql, 1, 1);
+  check("consume fallback: lab stays 0", getL() === 0);
+  check("consume fallback: user 2->1", getU() === 1);
+
+  // null lab id -> user pool only.
+  setU(2); consumeStudyCredit(sql, 1, null);
+  check("consume null-lab: user 2->1", getU() === 1);
+
+  // both empty -> no-op, never negative (the gate is what blocks, not this).
+  setU(0); setL(0); consumeStudyCredit(sql, 1, 1);
+  check("consume both-empty: lab stays 0 (no negative)", getL() === 0);
+  check("consume both-empty: user stays 0 (no negative)", getU() === 0);
+
+  sql.close();
+}
 
 console.log(`\nVERIFY: ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
