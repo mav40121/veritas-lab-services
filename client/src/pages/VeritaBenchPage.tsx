@@ -5,6 +5,8 @@ import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useMemberships } from "@/hooks/useMemberships";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -85,6 +87,13 @@ export default function VeritaBenchPage() {
   const { user, isLoggedIn } = useAuth();
   const readOnly = useIsReadOnly("veritabench");
   const { toast } = useToast();
+  // Active lab for scoping ops data. /veritabench has no /labs/:id URL prefix, so
+  // useActiveLabId() is null here; fall back to the primary-lab membership (the
+  // lab the switcher last activated).
+  const activeLabIdFromUrl = useActiveLabId();
+  const { data: memberships } = useMemberships();
+  const labId = activeLabIdFromUrl ?? memberships?.find((m) => m.isPrimaryLab)?.labId ?? memberships?.[0]?.labId ?? null;
+  const labQ = labId != null ? `?labId=${labId}` : "";
   const [tab, setTab] = useState<"data" | "dashboard">("dashboard");
   const [months, setMonths] = useState<ProductivityMonth[]>([]);
   const [loading, setLoading] = useState(true);
@@ -108,7 +117,7 @@ export default function VeritaBenchPage() {
 
   async function loadData() {
     try {
-      const res = await fetch(`${API_BASE}/api/productivity`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/productivity${labQ}`, { headers: authHeaders() });
       if (res.ok) setMonths(await res.json());
     } catch {} finally { setLoading(false); }
   }
@@ -116,7 +125,7 @@ export default function VeritaBenchPage() {
   useEffect(() => {
     if (isLoggedIn && hasPlanAccess) loadData();
     else setLoading(false);
-  }, [isLoggedIn, hasPlanAccess]);
+  }, [isLoggedIn, hasPlanAccess, labId]);
 
   function openAdd() {
     setEditRow(null);
@@ -149,7 +158,7 @@ export default function VeritaBenchPage() {
   async function handleSave() {
     setSaving(true);
     try {
-      const res = await fetch(`${API_BASE}/api/productivity`, {
+      const res = await fetch(`${API_BASE}/api/productivity${labQ}`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -187,7 +196,7 @@ export default function VeritaBenchPage() {
 
   async function handleExport() {
     try {
-      const res = await fetch(`${API_BASE}/api/productivity/export`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/productivity/export${labQ}`, { headers: authHeaders() });
       if (res.ok) {
         const blob = await res.blob();
         saveAs(blob, `VeritaPace-Productivity_${new Date().toISOString().split("T")[0]}.xlsx`);

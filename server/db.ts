@@ -3430,6 +3430,75 @@ sqlite.exec(`
   }
 }
 
+// ── VeritaBench lab-scoping (operations leverage chain, Phase 1) ───────────────
+// productivity_months and staffing_studies were account-scoped. To let a System
+// owner hold isolated operations data per lab (and to tie a lab's productivity
+// month to its staffing study), add lab_id and scope reads/writes on it.
+//
+// productivity_months carries a table-level UNIQUE(account_id, year, month) that
+// would collide the instant one owner enters the same month for two labs. SQLite
+// cannot drop a table-level constraint, so rebuild the table ONCE (guarded on the
+// absence of lab_id) and replace the constraint with two PARTIAL unique indexes:
+// legacy null-lab rows keep (account, year, month) uniqueness; lab-tagged rows are
+// unique on (account, lab_id, year, month). No boot backfill (writes claim a
+// legacy row lazily; see veritabench.ts upsert).
+{
+  const pmCols2 = sqlite.prepare("PRAGMA table_info(productivity_months)").all() as { name: string }[];
+  if (pmCols2.length > 0 && !pmCols2.some((c) => c.name === "lab_id")) {
+    try {
+      sqlite.exec("BEGIN");
+      sqlite.exec(`
+        CREATE TABLE productivity_months_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          account_id INTEGER NOT NULL,
+          lab_id INTEGER,
+          year INTEGER NOT NULL,
+          month INTEGER NOT NULL,
+          billable_tests INTEGER,
+          productive_hours REAL,
+          non_productive_hours REAL,
+          overtime_hours REAL,
+          total_ftes REAL,
+          facility_type TEXT DEFAULT 'community',
+          notes TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now'))
+        )
+      `);
+      sqlite.exec(`
+        INSERT INTO productivity_months_new
+          (id, account_id, lab_id, year, month, billable_tests, productive_hours,
+           non_productive_hours, overtime_hours, total_ftes, facility_type, notes,
+           created_at, updated_at)
+        SELECT id, account_id, NULL, year, month, billable_tests, productive_hours,
+               non_productive_hours, overtime_hours, total_ftes, facility_type, notes,
+               created_at, updated_at
+        FROM productivity_months
+      `);
+      const oldN = (sqlite.prepare("SELECT COUNT(*) AS n FROM productivity_months").get() as { n: number }).n;
+      const newN = (sqlite.prepare("SELECT COUNT(*) AS n FROM productivity_months_new").get() as { n: number }).n;
+      if (oldN !== newN) throw new Error(`productivity_months rebuild row mismatch ${oldN} != ${newN}`);
+      sqlite.exec("DROP TABLE productivity_months");
+      sqlite.exec("ALTER TABLE productivity_months_new RENAME TO productivity_months");
+      sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_productivity_months_legacy ON productivity_months(account_id, year, month) WHERE lab_id IS NULL");
+      sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_productivity_months_lab ON productivity_months(account_id, lab_id, year, month) WHERE lab_id IS NOT NULL");
+      sqlite.exec("COMMIT");
+      console.log(`[migration] productivity_months rebuilt for lab-scoping (${newN} rows preserved)`);
+    } catch (e: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[migration] productivity_months lab-scope rebuild failed:", e.message);
+    }
+  }
+}
+{
+  const ssCols2 = sqlite.prepare("PRAGMA table_info(staffing_studies)").all() as { name: string }[];
+  if (ssCols2.length > 0 && !ssCols2.some((c) => c.name === "lab_id")) {
+    try { sqlite.exec("ALTER TABLE staffing_studies ADD COLUMN lab_id INTEGER"); } catch {}
+  }
+}
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_productivity_months_lab ON productivity_months(lab_id, year, month)"); } catch {}
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_staffing_studies_lab ON staffing_studies(lab_id)"); } catch {}
+
 // ── VeritaBench: Inventory Items ───────────────────────────────────────────────
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS inventory_items (
