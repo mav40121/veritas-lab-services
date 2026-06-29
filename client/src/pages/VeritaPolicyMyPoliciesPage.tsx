@@ -47,6 +47,7 @@ import {
   ShieldCheck,
   Clock,
   History,
+  Archive,
 } from "lucide-react";
 
 interface Manual {
@@ -597,6 +598,31 @@ export default function VeritaPolicyMyPoliciesPage() {
     onError: (err: any) =>
       toast({
         title: "Assign failed",
+        description: String(err?.message || err),
+        variant: "destructive",
+      }),
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: async (docId: number) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/labs/${activeLabId}/veritapolicy/documents/${docId}/archive`
+      );
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Policy archived",
+        description: "Removed from the active list. Signatures and audit trail are retained.",
+      });
+      queryClient.invalidateQueries({
+        queryKey: [`/api/labs/${activeLabId}/veritapolicy/documents`],
+      });
+    },
+    onError: (err: any) =>
+      toast({
+        title: "Archive failed",
         description: String(err?.message || err),
         variant: "destructive",
       }),
@@ -1195,6 +1221,23 @@ export default function VeritaPolicyMyPoliciesPage() {
                             onClick={() => downloadDoc(doc)}
                           >
                             <Download size={12} className="mr-1" /> Download
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-amber-700 hover:text-amber-800"
+                            title="Archive (retire from the active list)"
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Archive "${doc.title}"? It will be removed from the active list. Its signatures and audit trail are kept.`
+                                )
+                              ) {
+                                archiveMutation.mutate(doc.id);
+                              }
+                            }}
+                          >
+                            <Archive size={12} />
                           </Button>
                           {doc.status === "draft" && (
                             <>
@@ -1997,6 +2040,33 @@ export default function VeritaPolicyMyPoliciesPage() {
               <span className="font-medium">{assignDoc?.title}</span>. Each assignment is per
               version; if you upload a new version they will need to re-attest.
             </p>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">
+                {assignSelected.size} of {labMembers.length} selected
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  disabled={labMembers.length === 0}
+                  onClick={() => setAssignSelected(new Set(labMembers.map((m) => m.user_id)))}
+                >
+                  Select all
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  disabled={assignSelected.size === 0}
+                  onClick={() => setAssignSelected(new Set())}
+                >
+                  Clear
+                </Button>
+              </div>
+            </div>
             <div className="border rounded max-h-64 overflow-y-auto divide-y">
               {labMembers.length === 0 ? (
                 <div className="p-3 text-xs text-muted-foreground">No lab members yet.</div>

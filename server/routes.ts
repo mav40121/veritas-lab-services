@@ -29567,6 +29567,45 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   );
 
+  // POST /api/labs/:labId/veritapolicy/documents/:id/archive — soft-retire a
+  // policy. Stamps archived_at so it drops out of the active list (the list
+  // query already filters archived_at IS NULL) while keeping the document, its
+  // signatures, and the audit trail intact. This is the compliance-correct
+  // "make it go away" action, reversible and non-destructive.
+  app.post(
+    "/api/labs/:labId/veritapolicy/documents/:id/archive",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const doc = sqlite
+        .prepare("SELECT lab_id, title, archived_at FROM policy_documents WHERE id = ?")
+        .get(id) as { lab_id: number; title: string; archived_at: string | null } | undefined;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      if (doc.archived_at) return res.status(409).json({ error: "Already archived" });
+      sqlite
+        .prepare(
+          "UPDATE policy_documents SET archived_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
+        )
+        .run(id);
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        documentId: id,
+        userId: req.userId,
+        action: "archived",
+        details: { title: doc.title },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
+      res.json({ ok: true, archived: id });
+    }
+  );
+
   // ── Phase 8: surveyor public links ─────────────────────────────────────
   //
   // Lab owner / admin generates a signed read-only URL. Surveyor opens it
