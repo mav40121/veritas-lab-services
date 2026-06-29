@@ -80,9 +80,9 @@ const MODULES = [
   {
     href: "/veritapolicy",
     label: "VeritaPolicy™",
-    desc: "TJC Policy Compliance Tracker",
+    desc: "CLIA and Accreditor Policy Tracker",
     detail:
-      "Tracks all 88 TJC-required laboratory policies. Service line toggles auto-apply N/A. Policy library links one document to multiple requirements. Inspection-ready PDF report with readiness score.",
+      "Tracks the laboratory policies required under CLIA (42 CFR 493) and crosswalks each one to your accrediting body: CAP, COLA, TJC, or AABB. Service line toggles auto-apply N/A. The policy library links one document to multiple requirements. Inspection-ready PDF report with a readiness score.",
     badge: "New",
     badgeColor: "emerald",
     icon: Shield,
