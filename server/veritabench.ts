@@ -16,6 +16,7 @@ import { generateBarcodeLabelSheetPdf, type BarcodeLabelInput } from "./barcodeL
 import { generateInventoryCountExcel, type InventoryCountItem } from "./inventoryCountExcel";
 import { storePdfToken } from "./pdfTokens";
 import { buildIntacctCSV, preflightIntacct, type IntacctExportConfig, type VendorIdMap } from "./intacctExport";
+import { forecastFromGoal, chainGap, DEFAULT_HOURS_PER_FTE_YEAR } from "@shared/operationsForecast";
 
 // PR 4 helper: builds a lower-cased-name keyed map of VendorRecordForPdf
 // from the lab's stock_vendors directory. The PDF renderer uses this to
@@ -217,6 +218,59 @@ export function registerVeritaBenchRoutes(
     if (!row) return res.status(404).json({ error: "Entry not found" });
     sqlite.prepare("DELETE FROM productivity_months WHERE id = ?").run(id);
     res.json({ success: true });
+  });
+
+  // ── VeritaPace forecast from goal (operations leverage chain, Phase 2) ──────────
+  const computeTrailingAnnualVolume = (accountId: number, labId: number | null): number => {
+    const row: any = labId != null
+      ? sqlite.prepare("SELECT COALESCE(SUM(billable_tests),0) AS v FROM (SELECT billable_tests FROM productivity_months WHERE account_id = ? AND (lab_id = ? OR lab_id IS NULL) ORDER BY year DESC, month DESC LIMIT 12)").get(accountId, labId)
+      : sqlite.prepare("SELECT COALESCE(SUM(billable_tests),0) AS v FROM (SELECT billable_tests FROM productivity_months WHERE account_id = ? ORDER BY year DESC, month DESC LIMIT 12)").get(accountId);
+    return Number(row?.v ?? 0);
+  };
+  const buildForecastResponse = (accountId: number, labId: number | null) => {
+    const saved: any = labId != null
+      ? sqlite.prepare("SELECT * FROM productivity_forecasts WHERE account_id = ? AND lab_id = ?").get(accountId, labId)
+      : sqlite.prepare("SELECT * FROM productivity_forecasts WHERE account_id = ? AND lab_id IS NULL").get(accountId);
+    const trailingAnnualVolume = computeTrailingAnnualVolume(accountId, labId);
+    const hoursPerFteYear = saved?.hours_per_fte ?? DEFAULT_HOURS_PER_FTE_YEAR;
+    const annualVolume = saved?.forecast_annual_volume ?? trailingAnnualVolume;
+    const computed = saved?.goal_ratio != null
+      ? forecastFromGoal({ goalRatio: saved.goal_ratio, annualVolume, hoursPerFteYear })
+      : null;
+    const gap = computed && saved?.staffing_model_fte != null
+      ? chainGap({ annualVolume, fteBudget: computed.fteBudget, staffingModelFte: saved.staffing_model_fte, hoursPerFteYear })
+      : null;
+    return { saved: saved ?? null, trailingAnnualVolume, computed, gap };
+  };
+
+  app.get("/api/productivity/forecast", authMiddleware, (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    res.json(buildForecastResponse(accountId, resolveOpsLabId(req)));
+  });
+
+  app.post("/api/productivity/forecast", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const labId = resolveOpsLabId(req);
+    const { goal_ratio, forecast_annual_volume, hours_per_fte, staffing_model_fte, notes } = req.body;
+    const now = new Date().toISOString();
+    try {
+      const existing: any = labId != null
+        ? sqlite.prepare("SELECT id FROM productivity_forecasts WHERE account_id = ? AND lab_id = ?").get(accountId, labId)
+        : sqlite.prepare("SELECT id FROM productivity_forecasts WHERE account_id = ? AND lab_id IS NULL").get(accountId);
+      const hpf = hours_per_fte ?? DEFAULT_HOURS_PER_FTE_YEAR;
+      if (existing) {
+        sqlite.prepare("UPDATE productivity_forecasts SET goal_ratio = ?, forecast_annual_volume = ?, hours_per_fte = ?, staffing_model_fte = ?, notes = ?, updated_at = ? WHERE id = ?")
+          .run(goal_ratio ?? null, forecast_annual_volume ?? null, hpf, staffing_model_fte ?? null, notes ?? null, now, existing.id);
+      } else {
+        sqlite.prepare("INSERT INTO productivity_forecasts (account_id, lab_id, goal_ratio, forecast_annual_volume, hours_per_fte, staffing_model_fte, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+          .run(accountId, labId, goal_ratio ?? null, forecast_annual_volume ?? null, hpf, staffing_model_fte ?? null, notes ?? null, now, now);
+      }
+      res.json(buildForecastResponse(accountId, labId));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // GET /api/productivity/export - Excel export
