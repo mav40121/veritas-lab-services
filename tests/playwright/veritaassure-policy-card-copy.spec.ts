@@ -12,7 +12,7 @@ import { test, expect } from "@playwright/test";
 
 const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
 
-test.describe("VeritaAssure page — VeritaPolicy card is not TJC-only", () => {
+test.describe("VeritaAssure page - VeritaPolicy card is not TJC-only", () => {
   test("VeritaPolicy card reflects CLIA + multi-accreditor scope", async ({ page }) => {
     await page.goto(`${BASE}/veritaassure`);
     const body = page.locator("body");
