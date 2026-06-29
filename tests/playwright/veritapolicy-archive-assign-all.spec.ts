@@ -43,6 +43,10 @@ test.describe("VeritaPolicy #879 — archive + assign-to-all", () => {
     // Load the surface that carries the Archive button + the assign dialog.
     await page.goto(`${BASE}/veritapolicy-app`);
 
+    // The comprehension quiz was removed entirely; no policy row exposes a Quiz button.
+    const quizButtons = await page.locator("button", { hasText: /^Quiz$/ }).count();
+    expect(quizButtons).toBe(0);
+
     // Archive endpoint guard: a non-existent document id returns 404. This
     // proves the route is wired without mutating any real policy.
     const guardStatus = await page.evaluate(

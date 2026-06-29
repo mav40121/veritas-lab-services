@@ -11,7 +11,6 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { VeritaPolicyTabs } from "@/components/VeritaPolicyTabs";
-import { PolicyQuizAuthorDialog } from "@/components/PolicyQuizAuthorDialog";
 import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -185,7 +184,6 @@ function StatusBadge({ status }: { status: string }) {
 export default function VeritaPolicyMyPoliciesPage() {
   const { user } = useAuth();
   const activeLabId = useActiveLabId();
-  const [quizDoc, setQuizDoc] = useState<PolicyDocument | null>(null);
   const { toast } = useToast();
 
   const invalidateAll = () => {
@@ -1327,14 +1325,6 @@ export default function VeritaPolicyMyPoliciesPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => setQuizDoc(doc)}
-                                title="Build or edit the comprehension quiz for this policy"
-                              >
-                                Quiz
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
                                 onClick={() => openRecertify(doc)}
                                 title="Confirm this policy is still current; advances next review date"
                               >
@@ -1353,16 +1343,6 @@ export default function VeritaPolicyMyPoliciesPage() {
         ))
       )}
 
-      {/* ── Comprehension quiz authoring (PR 2, MediaLab #39) ─────────────── */}
-      <PolicyQuizAuthorDialog
-        labId={activeLabId}
-        documentId={quizDoc?.id ?? null}
-        documentTitle={quizDoc?.title}
-        open={!!quizDoc}
-        onOpenChange={(o) => {
-          if (!o) setQuizDoc(null);
-        }}
-      />
 
       {/* ── Upload modal ──────────────────────────────────────────────── */}
       <Dialog
