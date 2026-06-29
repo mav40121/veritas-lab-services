@@ -88,18 +88,23 @@ function useLabSwitcherState() {
     try {
       await apiRequest("POST", "/api/labs/me/default", { labId: m.labId });
     } catch {}
-    // Refresh memberships so isPrimaryLab reflects the new default; the
-    // chip and any downstream consumer that picks the active lab via
-    // memberships.find(m => m.isPrimaryLab) will pick up the change.
-    queryClient.invalidateQueries({ queryKey: ["/api/labs/me"] });
-    // Also refresh /api/auth/me so the user-level isSeatUser and
-    // seatPermissions state mirrors the new active lab. Without this,
-    // a user who just accepted a seat invite on a different lab still
-    // sees a stale isSeatUser=false until manual hard refresh, which
-    // makes the read-only resolver (useIsReadOnly) compute against the
-    // wrong seat row and silently disables edit affordances (see
-    // SCAHC Clarence Wesley trash button regression 2026-05-28).
-    queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+    // Refetch memberships + auth/me and AWAIT them before navigating, so the
+    // new active lab is fully settled first. These power:
+    //   - isPrimaryLab, which is how the active lab is resolved on any page
+    //     whose URL has no /labs/:id prefix (public/marketing pages, where the
+    //     switch does not rewrite the URL), and
+    //   - isSeatUser / seatPermissions, which the read-only resolver
+    //     (useIsReadOnly) reads (see SCAHC Clarence Wesley trash button
+    //     regression 2026-05-28).
+    // Previously these were fire-and-forget invalidations, so the FIRST nav
+    // click right after a switch resolved its lab id from the stale memberships
+    // cache (current = the old isPrimaryLab), landed on the previous lab, and
+    // errored; the second click worked once the refetch had landed. Awaiting
+    // the refetch closes that race.
+    await Promise.all([
+      queryClient.refetchQueries({ queryKey: ["/api/labs/me"] }),
+      queryClient.refetchQueries({ queryKey: ["/api/auth/me"] }),
+    ]);
     setLocation(withLabPrefix(location, m.labId));
   };
 
