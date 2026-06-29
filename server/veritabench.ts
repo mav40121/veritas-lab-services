@@ -153,12 +153,24 @@ export function registerVeritaBenchRoutes(
   // ═══════════════════════════════════════════════════════════════════════
 
   // GET /api/productivity - list all months for authenticated user's account
+  // Resolve the active lab for the ops routes (which have no labScopeMiddleware):
+  // from req.scope.labId if a lab-scoped path set it, else ?labId from the client
+  // (the VeritaBench pages send the active lab). null = no lab context (legacy /
+  // account-level view), which falls back to account-only scoping.
+  const resolveOpsLabId = (req: any): number | null => {
+    if (req.scope?.labId) return Number(req.scope.labId);
+    const q = req.query?.labId;
+    if (q != null && q !== "") { const n = Number(q); if (Number.isFinite(n) && n > 0) return n; }
+    return null;
+  };
+
   app.get("/api/productivity", authMiddleware, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
-    const rows = sqlite.prepare(
-      "SELECT * FROM productivity_months WHERE account_id = ? ORDER BY year DESC, month DESC"
-    ).all(accountId);
+    const labId = resolveOpsLabId(req);
+    const rows = labId != null
+      ? sqlite.prepare("SELECT * FROM productivity_months WHERE account_id = ? AND (lab_id = ? OR lab_id IS NULL) ORDER BY year DESC, month DESC").all(accountId, labId)
+      : sqlite.prepare("SELECT * FROM productivity_months WHERE account_id = ? ORDER BY year DESC, month DESC").all(accountId);
     res.json(rows);
   });
 
@@ -166,24 +178,30 @@ export function registerVeritaBenchRoutes(
   app.post("/api/productivity", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
+    const labId = resolveOpsLabId(req);
     const { year, month, billable_tests, productive_hours, non_productive_hours, overtime_hours, total_ftes, facility_type, notes } = req.body;
     if (!year || !month) return res.status(400).json({ error: "year and month are required" });
     const now = new Date().toISOString();
     try {
-      sqlite.prepare(`
-        INSERT INTO productivity_months (account_id, year, month, billable_tests, productive_hours, non_productive_hours, overtime_hours, total_ftes, facility_type, notes, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(account_id, year, month) DO UPDATE SET
-          billable_tests = excluded.billable_tests,
-          productive_hours = excluded.productive_hours,
-          non_productive_hours = excluded.non_productive_hours,
-          overtime_hours = excluded.overtime_hours,
-          total_ftes = excluded.total_ftes,
-          facility_type = excluded.facility_type,
-          notes = excluded.notes,
-          updated_at = excluded.updated_at
-      `).run(accountId, year, month, billable_tests ?? null, productive_hours ?? null, non_productive_hours ?? null, overtime_hours ?? null, total_ftes ?? null, facility_type ?? 'community', notes ?? null, now, now);
-      const row = sqlite.prepare("SELECT * FROM productivity_months WHERE account_id = ? AND year = ? AND month = ?").get(accountId, year, month);
+      // Upsert keyed on (account, lab, year, month). When lab-scoped, claim a
+      // legacy null-lab row for the same month if one exists (lazy migration) so a
+      // single-lab owner's history is not duplicated when first re-saved under a lab.
+      let target = labId != null
+        ? sqlite.prepare("SELECT id FROM productivity_months WHERE account_id = ? AND lab_id = ? AND year = ? AND month = ?").get(accountId, labId, year, month) as any
+        : sqlite.prepare("SELECT id FROM productivity_months WHERE account_id = ? AND lab_id IS NULL AND year = ? AND month = ?").get(accountId, year, month) as any;
+      if (!target && labId != null) {
+        target = sqlite.prepare("SELECT id FROM productivity_months WHERE account_id = ? AND lab_id IS NULL AND year = ? AND month = ?").get(accountId, year, month) as any;
+      }
+      if (target) {
+        sqlite.prepare(`UPDATE productivity_months SET lab_id = ?, billable_tests = ?, productive_hours = ?, non_productive_hours = ?, overtime_hours = ?, total_ftes = ?, facility_type = ?, notes = ?, updated_at = ? WHERE id = ?`)
+          .run(labId, billable_tests ?? null, productive_hours ?? null, non_productive_hours ?? null, overtime_hours ?? null, total_ftes ?? null, facility_type ?? 'community', notes ?? null, now, target.id);
+      } else {
+        sqlite.prepare(`INSERT INTO productivity_months (account_id, lab_id, year, month, billable_tests, productive_hours, non_productive_hours, overtime_hours, total_ftes, facility_type, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          .run(accountId, labId, year, month, billable_tests ?? null, productive_hours ?? null, non_productive_hours ?? null, overtime_hours ?? null, total_ftes ?? null, facility_type ?? 'community', notes ?? null, now, now);
+      }
+      const row = labId != null
+        ? sqlite.prepare("SELECT * FROM productivity_months WHERE account_id = ? AND lab_id = ? AND year = ? AND month = ?").get(accountId, labId, year, month)
+        : sqlite.prepare("SELECT * FROM productivity_months WHERE account_id = ? AND lab_id IS NULL AND year = ? AND month = ?").get(accountId, year, month);
       res.json(row);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -205,9 +223,10 @@ export function registerVeritaBenchRoutes(
   app.get("/api/productivity/export", authMiddleware, async (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
-    const rows = sqlite.prepare(
-      "SELECT * FROM productivity_months WHERE account_id = ? ORDER BY year ASC, month ASC"
-    ).all(accountId) as any[];
+    const labId = resolveOpsLabId(req);
+    const rows = (labId != null
+      ? sqlite.prepare("SELECT * FROM productivity_months WHERE account_id = ? AND (lab_id = ? OR lab_id IS NULL) ORDER BY year ASC, month ASC").all(accountId, labId)
+      : sqlite.prepare("SELECT * FROM productivity_months WHERE account_id = ? ORDER BY year ASC, month ASC").all(accountId)) as any[];
 
     try {
       const { default: ExcelJS } = await import("exceljs");
@@ -375,9 +394,10 @@ export function registerVeritaBenchRoutes(
   app.get("/api/staffing-studies", authMiddleware, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
-    const rows = sqlite.prepare(
-      "SELECT * FROM staffing_studies WHERE account_id = ? ORDER BY created_at DESC"
-    ).all(accountId);
+    const labId = resolveOpsLabId(req);
+    const rows = labId != null
+      ? sqlite.prepare("SELECT * FROM staffing_studies WHERE account_id = ? AND (lab_id = ? OR lab_id IS NULL) ORDER BY created_at DESC").all(accountId, labId)
+      : sqlite.prepare("SELECT * FROM staffing_studies WHERE account_id = ? ORDER BY created_at DESC").all(accountId);
     res.json(rows);
   });
 
@@ -389,9 +409,10 @@ export function registerVeritaBenchRoutes(
     if (!name) return res.status(400).json({ error: "name is required" });
     const now = new Date().toISOString();
     try {
+      const labId = resolveOpsLabId(req);
       const result = sqlite.prepare(
-        "INSERT INTO staffing_studies (account_id, name, department, start_date, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', ?, ?)"
-      ).run(accountId, name, department ?? "Core Lab", start_date ?? null, now, now);
+        "INSERT INTO staffing_studies (account_id, lab_id, name, department, start_date, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'active', ?, ?)"
+      ).run(accountId, labId, name, department ?? "Core Lab", start_date ?? null, now, now);
       const row = sqlite.prepare("SELECT * FROM staffing_studies WHERE id = ?").get(Number(result.lastInsertRowid));
       res.json(row);
     } catch (err: any) {

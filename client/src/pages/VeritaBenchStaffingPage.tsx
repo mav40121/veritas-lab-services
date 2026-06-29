@@ -4,6 +4,8 @@ import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useMemberships } from "@/hooks/useMemberships";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -614,9 +616,15 @@ export default function VeritaBenchStaffingPage() {
 
   const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "clinic", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
+  // Active lab for scoping staffing studies (see VeritaBenchPage for rationale).
+  const activeLabIdFromUrl = useActiveLabId();
+  const { data: memberships } = useMemberships();
+  const labId = activeLabIdFromUrl ?? memberships?.find((m) => m.isPrimaryLab)?.labId ?? memberships?.[0]?.labId ?? null;
+  const labQ = labId != null ? `?labId=${labId}` : "";
+
   async function loadStudies() {
     try {
-      const res = await fetch(`${API_BASE}/api/staffing-studies`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/api/staffing-studies${labQ}`, { headers: authHeaders() });
       if (res.ok) setStudies(await res.json());
     } catch {} finally { setLoading(false); }
   }
@@ -634,7 +642,7 @@ export default function VeritaBenchStaffingPage() {
   useEffect(() => {
     if (isLoggedIn && hasPlanAccess) loadStudies();
     else setLoading(false);
-  }, [isLoggedIn, hasPlanAccess]);
+  }, [isLoggedIn, hasPlanAccess, labId]);
 
   useEffect(() => {
     if (selectedStudy) loadStudyData(selectedStudy.id);
@@ -642,7 +650,7 @@ export default function VeritaBenchStaffingPage() {
 
   async function handleCreate(name: string, dept: string, startDate: string) {
     try {
-      const res = await fetch(`${API_BASE}/api/staffing-studies`, {
+      const res = await fetch(`${API_BASE}/api/staffing-studies${labQ}`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ name, department: dept, start_date: startDate || null }),
