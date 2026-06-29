@@ -7,6 +7,7 @@ import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useMemberships } from "@/hooks/useMemberships";
+import { forecastFromGoal, chainGap } from "@shared/operationsForecast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -113,6 +114,62 @@ export default function VeritaBenchPage() {
   const [fNotes, setFNotes] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
+  // Forecast from goal (operations leverage chain, Phase 2)
+  const [fcGoal, setFcGoal] = useState<string>("");
+  const [fcVolume, setFcVolume] = useState<string>("");
+  const [fcHoursPerFte, setFcHoursPerFte] = useState<string>("2080");
+  const [fcStaffFte, setFcStaffFte] = useState<string>("");
+  const [fcTrailing, setFcTrailing] = useState<number>(0);
+  const [fcSaving, setFcSaving] = useState(false);
+
+  const fcResult = useMemo(() => {
+    const goal = parseFloat(fcGoal);
+    const vol = parseFloat(fcVolume);
+    const hpf = parseFloat(fcHoursPerFte) || 2080;
+    if (!goal || !vol) return null;
+    const f = forecastFromGoal({ goalRatio: goal, annualVolume: vol, hoursPerFteYear: hpf });
+    const staff = parseFloat(fcStaffFte);
+    const gap = staff ? chainGap({ annualVolume: vol, fteBudget: f.fteBudget, staffingModelFte: staff, hoursPerFteYear: hpf }) : null;
+    return { f, gap };
+  }, [fcGoal, fcVolume, fcHoursPerFte, fcStaffFte]);
+
+  async function loadForecast() {
+    try {
+      const res = await fetch(`${API_BASE}/api/productivity/forecast${labQ}`, { headers: authHeaders() });
+      if (!res.ok) return;
+      const d = await res.json();
+      setFcTrailing(d.trailingAnnualVolume ?? 0);
+      const s = d.saved;
+      if (s) {
+        setFcGoal(s.goal_ratio != null ? String(s.goal_ratio) : "");
+        setFcVolume(s.forecast_annual_volume != null ? String(s.forecast_annual_volume) : (d.trailingAnnualVolume ? String(d.trailingAnnualVolume) : ""));
+        setFcHoursPerFte(s.hours_per_fte != null ? String(s.hours_per_fte) : "2080");
+        setFcStaffFte(s.staffing_model_fte != null ? String(s.staffing_model_fte) : "");
+      } else if (d.trailingAnnualVolume) {
+        setFcVolume(String(d.trailingAnnualVolume));
+      }
+    } catch {}
+  }
+
+  async function saveForecast() {
+    setFcSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/productivity/forecast${labQ}`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          goal_ratio: fcGoal ? parseFloat(fcGoal) : null,
+          forecast_annual_volume: fcVolume ? Math.round(parseFloat(fcVolume)) : null,
+          hours_per_fte: fcHoursPerFte ? Math.round(parseFloat(fcHoursPerFte)) : 2080,
+          staffing_model_fte: fcStaffFte ? parseFloat(fcStaffFte) : null,
+        }),
+      });
+      if (res.ok) { toast({ title: "Goal saved" }); }
+      else { const e = await res.json(); toast({ title: "Error", description: e.error, variant: "destructive" }); }
+    } catch { toast({ title: "Save failed", variant: "destructive" }); }
+    finally { setFcSaving(false); }
+  }
+
   const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "clinic", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
   async function loadData() {
@@ -123,7 +180,7 @@ export default function VeritaBenchPage() {
   }
 
   useEffect(() => {
-    if (isLoggedIn && hasPlanAccess) loadData();
+    if (isLoggedIn && hasPlanAccess) { loadData(); loadForecast(); }
     else setLoading(false);
   }, [isLoggedIn, hasPlanAccess, labId]);
 
@@ -446,6 +503,82 @@ export default function VeritaBenchPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Forecast from Goal (operations leverage chain) */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Forecast from Goal</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Productivity goal (productive hr / billable test)</Label>
+                    <Input type="number" step="0.001" value={fcGoal} onChange={e => setFcGoal(e.target.value)} placeholder="0.12" disabled={readOnly} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Forecasted annual volume (billable tests)</Label>
+                    <Input type="number" value={fcVolume} onChange={e => setFcVolume(e.target.value)} placeholder="450000" disabled={readOnly} />
+                    {fcTrailing > 0 && (
+                      <div className="text-xs text-muted-foreground">
+                        Trailing 12 months: {fcTrailing.toLocaleString()}
+                        <button type="button" className="text-[#01696F] underline ml-1" onClick={() => setFcVolume(String(fcTrailing))}>use</button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Hours per FTE / year</Label>
+                      <Input type="number" value={fcHoursPerFte} onChange={e => setFcHoursPerFte(e.target.value)} placeholder="2080" disabled={readOnly} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Staffing-model FTE need (optional)</Label>
+                      <Input type="number" step="0.1" value={fcStaffFte} onChange={e => setFcStaffFte(e.target.value)} placeholder="28.3" disabled={readOnly} />
+                    </div>
+                  </div>
+                  <Button size="sm" onClick={saveForecast} disabled={readOnly || fcSaving} style={{ backgroundColor: "#01696F" }}>
+                    {fcSaving ? "Saving..." : "Save goal"}
+                  </Button>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                  {fcResult ? (
+                    <>
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-sm text-muted-foreground">Hour allowance</span>
+                        <span className="font-mono font-semibold">
+                          {Math.round(fcResult.f.annualHourAllowance).toLocaleString()} / yr
+                          <span className="text-muted-foreground font-normal"> ({Math.round(fcResult.f.weeklyHourAllowance).toLocaleString()} / wk)</span>
+                        </span>
+                      </div>
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-sm text-muted-foreground">FTE budget</span>
+                        <span className="font-mono font-bold text-xl" style={{ color: "#01696F" }}>{fcResult.f.fteBudget.toFixed(1)} FTE</span>
+                      </div>
+                      {fcResult.gap && (
+                        <>
+                          <div className="flex items-baseline justify-between border-t pt-3">
+                            <span className="text-sm text-muted-foreground">vs staffing model {parseFloat(fcStaffFte).toFixed(1)} FTE</span>
+                            <span className="font-mono font-semibold" style={{ color: fcResult.gap.fteGap > 0 ? "#dc2626" : "#16a34a" }}>
+                              {fcResult.gap.fteGap > 0 ? "+" : ""}{fcResult.gap.fteGap.toFixed(1)} FTE gap
+                            </span>
+                          </div>
+                          <div className="flex items-baseline justify-between">
+                            <span className="text-sm text-muted-foreground">Projected productivity at model</span>
+                            <span className="font-mono font-semibold">{fcResult.gap.projectedProductivity.toFixed(3)}</span>
+                          </div>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">Enter a productivity goal and forecasted volume to see the budgeted hour allowance and FTE budget.</div>
+                  )}
+                  <div className="text-[10px] text-muted-foreground pt-2 border-t leading-snug">
+                    Method: goal x annual volume = hour allowance; allowance / hours per FTE = FTE budget.
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Chart */}
           {chartData.length > 1 && (

@@ -3499,6 +3499,35 @@ sqlite.exec(`
 try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_productivity_months_lab ON productivity_months(lab_id, year, month)"); } catch {}
 try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_staffing_studies_lab ON staffing_studies(lab_id)"); } catch {}
 
+// ── VeritaPace: Productivity Forecasts (leverage chain, Phase 2) ────────────────
+// One forecast row per lab: a productivity goal + a volume forecast drive the hour
+// allowance and FTE budget (forecastFromGoal). staffing_model_fte is hand-entered in
+// Phase 2 and will be computed from the staffing grid in Phase 3.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS productivity_forecasts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL,
+    lab_id INTEGER,
+    goal_ratio REAL,
+    forecast_annual_volume INTEGER,
+    hours_per_fte INTEGER DEFAULT 2080,
+    staffing_model_fte REAL,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+{
+  const pfCols = sqlite.prepare("PRAGMA table_info(productivity_forecasts)").all() as { name: string }[];
+  const have = pfCols.map((c) => c.name);
+  if (pfCols.length > 0) {
+    if (!have.includes("hours_per_fte")) { try { sqlite.exec("ALTER TABLE productivity_forecasts ADD COLUMN hours_per_fte INTEGER DEFAULT 2080"); } catch {} }
+    if (!have.includes("staffing_model_fte")) { try { sqlite.exec("ALTER TABLE productivity_forecasts ADD COLUMN staffing_model_fte REAL"); } catch {} }
+    if (!have.includes("notes")) { try { sqlite.exec("ALTER TABLE productivity_forecasts ADD COLUMN notes TEXT"); } catch {} }
+  }
+}
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_productivity_forecasts_lab ON productivity_forecasts(account_id, lab_id)"); } catch {}
+
 // ── VeritaBench: Inventory Items ───────────────────────────────────────────────
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS inventory_items (
