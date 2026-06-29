@@ -21,4 +21,14 @@ test.describe("VeritaAssure page - VeritaPolicy card is not TJC-only", () => {
     await expect(body).toContainText("CLIA and Accreditor Policy Tracker");
     await expect(body).toContainText("CAP, COLA, TJC, or AABB");
   });
+
+  test("page does not render retired tier prices (dead PRICING const removed)", async ({ page }) => {
+    await page.goto(`${BASE}/veritaassure`);
+    const body = page.locator("body");
+    // The page links out to /pricing and renders no inline prices. These
+    // retired tier numbers must never surface here.
+    for (const stale of ["$499/yr", "$1,999/yr", "$2,999/yr"]) {
+      await expect(body).not.toContainText(stale);
+    }
+  });
 });

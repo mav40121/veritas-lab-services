@@ -134,15 +134,6 @@ const MODULES = [
   },
 ];
 
-const PRICING = [
-  { tier: "Per Study", price: "$25", note: "One-time, VeritaCheck™ only" },
-  { tier: "VeritaCheck™ Unlimited", price: "$299/yr", note: "Single user, performance verification only" },
-  { tier: "Clinic", price: "$499/yr", note: "2 seats, small clinics and CoW labs" },
-  { tier: "Community", price: "$999/yr", note: "5 seats, community hospitals" },
-  { tier: "Hospital", price: "$1,999/yr", note: "15 seats, regional hospital labs" },
-  { tier: "Enterprise", price: "$2,999/yr", note: "25 seats, large hospitals and health systems" },
-];
-
 const DOWNLOADS = [
   {
     title: "VeritaCheck™ CLSI Compliance Matrix",
