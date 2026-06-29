@@ -28711,12 +28711,48 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ipAddress: req.ip,
         userAgent: req.headers["user-agent"] as string | undefined,
       });
+      // VeritaPolicy merge-field substitution for clean rendering. Fill OUR own
+      // <<TOKENS>> from lab identity + the approving signoff so library templates
+      // render with real values. Only our exact token strings are replaced, so a
+      // client's uploaded policy (which contains no such tokens) is unchanged.
+      const _meta = sqlite
+        .prepare(
+          `SELECT l.lab_name AS lab_name, l.clia_number AS clia_number,
+                  d.effective_date AS effective_date
+             FROM policy_documents d JOIN labs l ON l.id = d.lab_id
+            WHERE d.id = ?`
+        )
+        .get(id) as any;
+      const _dir = sqlite
+        .prepare(
+          `SELECT typed_signature FROM policy_signoffs
+            WHERE document_id = ? AND action = 'approved'
+            ORDER BY signed_at DESC LIMIT 1`
+        )
+        .get(id) as any;
+      const _escHtml = (s: string) =>
+        String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const _fillMap: Record<string, string> = {
+        LAB_NAME: _meta?.lab_name || "",
+        CLIA_NUMBER: _meta?.clia_number || "Not on file",
+        DIRECTOR_NAME: _dir?.typed_signature || "Medical Director or Designee",
+        EFFECTIVE_DATE: _meta?.effective_date || "Upon approval",
+      };
+      const fillPlaceholders = (html: string): string => {
+        let out = html;
+        for (const [k, v] of Object.entries(_fillMap)) {
+          const val = _escHtml(v);
+          // Raw form (HTML-format uploads) and mammoth-escaped form (DOCX).
+          out = out.split(`<<${k}>>`).join(val).split(`&lt;&lt;${k}&gt;&gt;`).join(val);
+        }
+        return out;
+      };
       if (row.file_format === "docx") {
         try {
           const rendered = await renderDocxToHtml(buffer);
           return res.json({
             format: "html",
-            html: rendered.html,
+            html: fillPlaceholders(rendered.html),
             messages: rendered.messages,
             tampered: !!tampered,
           });
@@ -28735,7 +28771,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // html
       res.json({
         format: "html",
-        html: buffer.toString("utf-8"),
+        html: fillPlaceholders(buffer.toString("utf-8")),
         messages: [],
         tampered: !!tampered,
       });
@@ -29164,6 +29200,57 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         userAgent: req.headers["user-agent"] as string | undefined,
       });
       res.json({ ok: true });
+    }
+  );
+
+  // DELETE /api/labs/:labId/veritapolicy/documents/:id — hard-delete a policy
+  // document and all of its children (versions, signoffs, attestations,
+  // reminders, quiz questions, staff-portal signatures, audit rows). A
+  // lab-level "policy_deleted" audit entry (document_id NULL) is written first
+  // and survives the cascade so the deletion itself remains in the trail.
+  app.delete(
+    "/api/labs/:labId/veritapolicy/documents/:id",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const doc = sqlite
+        .prepare("SELECT lab_id, title, status FROM policy_documents WHERE id = ?")
+        .get(id) as { lab_id: number; title: string; status: string } | undefined;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const childTables = [
+        "policy_quiz_questions",
+        "staff_portal_policy_signatures",
+        "policy_attestations",
+        "policy_review_reminders",
+        "policy_signoffs",
+        "policy_versions",
+      ];
+      const tx = sqlite.transaction(() => {
+        // Surviving deletion record (document_id NULL is not matched by the
+        // policy_audit_log cascade below).
+        writeAuditLog(sqlite, {
+          labId: req.scope.labId,
+          documentId: null,
+          userId: req.userId,
+          action: "policy_deleted",
+          details: { deleted_document_id: id, title: doc.title, prior_status: doc.status },
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"] as string | undefined,
+        });
+        for (const t of childTables) {
+          sqlite.prepare(`DELETE FROM ${t} WHERE document_id = ?`).run(id);
+        }
+        sqlite.prepare("DELETE FROM policy_audit_log WHERE document_id = ?").run(id);
+        sqlite.prepare("DELETE FROM policy_documents WHERE id = ?").run(id);
+      });
+      tx();
+      res.json({ ok: true, deleted: id, title: doc.title });
     }
   );
 
