@@ -82,7 +82,26 @@ export function buildLeverageReportHTML(d: LeverageReportData, ctx: LeverageRepo
     }
   }
 
-  const goalNotice = hasGoal ? "" : `<div style="margin:8px 0;padding:8px 10px;background:#FCEFE7;border-left:4px solid #964219;font-size:9pt;color:${DARK};">
+  // Grid-only: no saved goal, but a staffing model exists. Show the staffing side of
+  // the chain so a director who has built the shift grid but not yet entered a goal
+  // gets a useful report instead of an empty page.
+  if (!hasGoal && hasStaffing) {
+    const srcLabel = d.staffingSource === "grid" ? "Staffing-model FTE need (shift grid)" : "Staffing-model FTE need (entered)";
+    chain += chainRow(srcLabel, `${fmt1(d.staffingFte as number)} FTE`, { bold: true, color: TEAL });
+    if (d.staffingSource === "grid" && d.staffingWeeklyHours != null && d.staffingWeeklyHours > 0) {
+      chain += chainRow("Weekly staffed hours (shift grid)", `${fmtN(d.staffingWeeklyHours as number)} hr/wk`);
+      chain += chainRow("Hours per FTE / year (basis)", `${fmtN(d.hoursPerFte)} hr/yr`);
+    }
+  }
+
+  const chainLabel = hasGoal ? "The leverage chain" : hasStaffing ? "Staffing model" : "The leverage chain";
+
+  const goalNotice = hasGoal
+    ? ""
+    : hasStaffing
+    ? `<div style="margin:8px 0;padding:8px 10px;background:#FCEFE7;border-left:4px solid #964219;font-size:9pt;color:${DARK};">
+    A productivity goal is not set yet. The staffing model below is from your shift grid. Enter a goal and forecasted volume in VeritaPace to add the FTE budget and the gap against this model.</div>`
+    : `<div style="margin:8px 0;padding:8px 10px;background:#FCEFE7;border-left:4px solid #964219;font-size:9pt;color:${DARK};">
     No productivity goal and volume are set yet. Enter a goal and forecasted volume in VeritaPace to generate the full leverage chain.</div>`;
 
   // Narrative + trade-off, conditional on the gap.
@@ -104,11 +123,17 @@ export function buildLeverageReportHTML(d: LeverageReportData, ctx: LeverageRepo
     } else {
       interpretation = `At the ${(d.goalRatio as number).toFixed(3)} target on ${fmtN(d.annualVolume as number)} tests, the staffing model (${fmt1(d.staffingFte as number)} FTE) is essentially at the budget (${fmt1(d.fteBudget as number)} FTE). The lab is operating close to the productivity target with the current shift build.`;
     }
+  } else if (!hasGoal && hasStaffing) {
+    const basis = d.staffingSource === "grid" && d.staffingWeeklyHours != null && d.staffingWeeklyHours > 0
+      ? `based on ${fmtN(d.staffingWeeklyHours as number)} weekly staffed hours from the shift grid`
+      : "as currently entered for the lab";
+    interpretation = `The staffing model needs ${fmt1(d.staffingFte as number)} FTE ${basis}. This is the staffing side of the leverage chain. Enter a productivity goal and forecasted annual volume in VeritaPace to compute the FTE budget at that goal and the gap between the budget and this staffing model.`;
   }
 
+  const interpHeading = hasGoal ? "What the gap means" : "What this shows";
   const interpSection = interpretation ? `
     <div style="margin-top:14px;">
-      <div style="font-size:10pt;font-weight:700;color:${DEEP};border-bottom:1px solid #d2d7dc;padding-bottom:3px;margin-bottom:6px;">What the gap means</div>
+      <div style="font-size:10pt;font-weight:700;color:${DEEP};border-bottom:1px solid #d2d7dc;padding-bottom:3px;margin-bottom:6px;">${esc(interpHeading)}</div>
       <div style="font-size:9pt;color:${DARK};line-height:1.5;">${esc(interpretation)}</div>
     </div>` : "";
   const tradeoffSection = tradeoff ? `
@@ -140,7 +165,7 @@ export function buildLeverageReportHTML(d: LeverageReportData, ctx: LeverageRepo
     <div class="subtitle">Staffing and productivity forecast</div>
     ${goalNotice}
     <div class="chainbox">
-      <div class="chainlabel">The leverage chain</div>
+      <div class="chainlabel">${esc(chainLabel)}</div>
       <table class="chain">${chain || `<tr><td style="font-size:9pt;color:${MUTED};padding:4px 0;">Set a goal in VeritaPace to populate the chain.</td></tr>`}</table>
     </div>
     ${interpSection}
