@@ -17,6 +17,7 @@ import { generateInventoryCountExcel, type InventoryCountItem } from "./inventor
 import { storePdfToken } from "./pdfTokens";
 import { buildIntacctCSV, preflightIntacct, type IntacctExportConfig, type VendorIdMap } from "./intacctExport";
 import { forecastFromGoal, chainGap, staffingGridFte, DEFAULT_HOURS_PER_FTE_YEAR } from "@shared/operationsForecast";
+import { generateLeverageReportPDF, type LeverageReportData } from "./leverageReport";
 
 // PR 4 helper: builds a lower-cased-name keyed map of VendorRecordForPdf
 // from the lab's stock_vendors directory. The PDF renderer uses this to
@@ -317,6 +318,47 @@ export function registerVeritaBenchRoutes(
       res.json(buildGridResponse(accountId, labId));
     } catch (err: any) {
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── VeritaPace leverage report PDF (leverage chain, Phase 4) ────────────────────
+  // Reuses buildForecastResponse for every number (no new math), pulls lab identity,
+  // renders the one-page director-to-CFO report, and returns a one-time token the
+  // client GETs at /api/pdf/:token (same flow as the reorder PDF).
+  app.post("/api/productivity/leverage-report", authMiddleware, async (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const labId = resolveOpsLabId(req);
+    try {
+      const fc: any = buildForecastResponse(accountId, labId);
+      const userRow: any = sqlite.prepare("SELECT name, email, clia_lab_name, clia_number FROM users WHERE id = ?").get(accountId);
+      let labName: string | null = userRow?.clia_lab_name ?? null;
+      let cliaNumber: string | null = userRow?.clia_number ?? null;
+      const preparedBy: string | null = userRow?.name || userRow?.email || null;
+      const labRow: any = labId != null
+        ? sqlite.prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(labId)
+        : sqlite.prepare("SELECT lab_name, clia_number FROM labs WHERE owner_user_id = ? LIMIT 1").get(accountId);
+      if (labRow) { labName = labRow.lab_name || labName; cliaNumber = labRow.clia_number || cliaNumber; }
+      const data: LeverageReportData = {
+        goalRatio: fc.saved?.goal_ratio ?? null,
+        annualVolume: fc.computed?.annualVolume ?? fc.trailingAnnualVolume ?? null,
+        hoursPerFte: fc.saved?.hours_per_fte ?? DEFAULT_HOURS_PER_FTE_YEAR,
+        annualHourAllowance: fc.computed?.annualHourAllowance ?? null,
+        weeklyHourAllowance: fc.computed?.weeklyHourAllowance ?? null,
+        fteBudget: fc.computed?.fteBudget ?? null,
+        staffingFte: fc.staffingGrid?.source === "grid" ? fc.staffingGrid.fteNeed : (fc.saved?.staffing_model_fte ?? null),
+        staffingSource: fc.staffingGrid?.source ?? "none",
+        staffingWeeklyHours: fc.staffingGrid?.weeklyHours ?? null,
+        fteGap: fc.gap?.fteGap ?? null,
+        projectedProductivity: fc.gap?.projectedProductivity ?? null,
+      };
+      const pdfBuffer = await generateLeverageReportPDF(data, { labName, cliaNumber, preparedBy, date: new Date().toISOString().slice(0, 10) });
+      const filename = `VeritaPace_Leverage_Report_${new Date().toISOString().slice(0, 10)}.pdf`;
+      const token = storePdfToken(pdfBuffer, filename);
+      res.json({ token });
+    } catch (err: any) {
+      console.error("Leverage report PDF error:", err.message);
+      res.status(500).json({ error: "PDF generation failed", detail: err.message });
     }
   });
 

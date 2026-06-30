@@ -122,6 +122,7 @@ export default function VeritaBenchPage() {
   const [fcStaffFromGrid, setFcStaffFromGrid] = useState<boolean>(false);
   const [fcTrailing, setFcTrailing] = useState<number>(0);
   const [fcSaving, setFcSaving] = useState(false);
+  const [fcReportLoading, setFcReportLoading] = useState(false);
 
   const fcResult = useMemo(() => {
     const goal = parseFloat(fcGoal);
@@ -177,6 +178,24 @@ export default function VeritaBenchPage() {
       else { const e = await res.json(); toast({ title: "Error", description: e.error, variant: "destructive" }); }
     } catch { toast({ title: "Save failed", variant: "destructive" }); }
     finally { setFcSaving(false); }
+  }
+
+  async function generateReport() {
+    setFcReportLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/productivity/leverage-report${labQ}`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+      });
+      if (res.ok) {
+        const d = await res.json();
+        if (d.token) window.open(`${API_BASE}/api/pdf/${d.token}`, "_blank");
+      } else {
+        const e = await res.json();
+        toast({ title: "Report failed", description: e.error, variant: "destructive" });
+      }
+    } catch { toast({ title: "Report failed", variant: "destructive" }); }
+    finally { setFcReportLoading(false); }
   }
 
   const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "clinic", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
@@ -546,9 +565,14 @@ export default function VeritaBenchPage() {
                       {fcStaffFromGrid && <div className="text-[10px] text-[#01696F]">from staffing grid (VeritaShift)</div>}
                     </div>
                   </div>
-                  <Button size="sm" onClick={saveForecast} disabled={readOnly || fcSaving} style={{ backgroundColor: "#01696F" }}>
-                    {fcSaving ? "Saving..." : "Save goal"}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" onClick={saveForecast} disabled={readOnly || fcSaving} style={{ backgroundColor: "#01696F" }}>
+                      {fcSaving ? "Saving..." : "Save goal"}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={generateReport} disabled={fcReportLoading || !fcResult}>
+                      <FileDown size={14} className="mr-1" />{fcReportLoading ? "Generating..." : "CFO report"}
+                    </Button>
+                  </div>
                 </div>
                 <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
                   {fcResult ? (
