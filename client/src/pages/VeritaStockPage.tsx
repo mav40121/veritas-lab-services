@@ -1947,7 +1947,10 @@ export default function VeritaStockInventoryPage() {
           </Button>
           {/* Sage Intacct hand-off: config-driven purchasing CSV off the reorder
               list. Unconfigured -> opens setup; configured -> exports (preflight
-              blocks an incomplete file with a named list). */}
+              blocks an incomplete file with a named list). San-Carlos-specific
+              integration: gated to the standalone veritastock.com deployment
+              (onStock) so the lab suite never surfaces Sage to general customers. */}
+          {onStock && (<>
           <Button
             size="sm"
             variant="outline"
@@ -1976,6 +1979,7 @@ export default function VeritaStockInventoryPage() {
               <Edit2 size={13} />
             </Button>
           )}
+          </>)}
           {/* parking-lot #29 Phase 3A: Avery 5160 barcode label sheet.
               Endpoint is at POST /api/inventory/labels/pdf. The scanner
               page lands in Phase 3B alongside the camera widget. */}
