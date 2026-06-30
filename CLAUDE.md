@@ -436,6 +436,7 @@ Before pushing or deploying, confirm:
 - Keep commits focused: 2-3 changes max per commit.
 - For each new feature: open a PR, wait for the validate workflow to pass, request Michael's approval, then merge.
 - The validate workflow runs against the diff and against historical commits in the PR's range. If validate fails on a historical commit (e.g., a revert), do not "fix" the historical commit. Stop and ask Michael how to proceed; do not force-push or rewrite history without explicit approval.
+- SQUASH-MERGE SUBJECT RULE. On `gh pr merge --squash`, the squash commit's SUBJECT defaults to the PR title and its body concatenates the branch commits as `* TASK:` bullets. The Commit Message Gate ("validate") re-runs on the push to main and checks the squash commit for `^TASK:` / `^PLAN:` / `^Self-check:` at LINE START. A bulleted `* TASK:` does not match `^TASK:`, so a default squash subject fails the gate, turns main's check suite red, and Railway ("wait for CI") then SKIPS every deploy and freezes production on the last green build (see deploy-freeze-alert.yml). ALWAYS squash with an explicit compliant message: `gh pr merge <n> --squash --subject "TASK: <summary>" --body "$(printf 'PLAN:\n  1. ...\n\nSelf-check:\n  - ...')"`. After any merge, confirm the `validate` check is green on the new main tip before assuming the deploy will run.
 
 ---
 
