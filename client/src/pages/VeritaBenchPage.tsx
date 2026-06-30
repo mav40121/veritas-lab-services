@@ -119,6 +119,7 @@ export default function VeritaBenchPage() {
   const [fcVolume, setFcVolume] = useState<string>("");
   const [fcHoursPerFte, setFcHoursPerFte] = useState<string>("2080");
   const [fcStaffFte, setFcStaffFte] = useState<string>("");
+  const [fcStaffFromGrid, setFcStaffFromGrid] = useState<boolean>(false);
   const [fcTrailing, setFcTrailing] = useState<number>(0);
   const [fcSaving, setFcSaving] = useState(false);
 
@@ -147,6 +148,14 @@ export default function VeritaBenchPage() {
         setFcStaffFte(s.staffing_model_fte != null ? String(s.staffing_model_fte) : "");
       } else if (d.trailingAnnualVolume) {
         setFcVolume(String(d.trailingAnnualVolume));
+      }
+      // Phase 3: when the lab has a staffing grid, it drives the FTE need (overrides manual entry).
+      const grid = d.staffingGrid;
+      if (grid && grid.source === "grid" && grid.fteNeed > 0) {
+        setFcStaffFte(String(Number(grid.fteNeed.toFixed(2))));
+        setFcStaffFromGrid(true);
+      } else {
+        setFcStaffFromGrid(false);
       }
     } catch {}
   }
@@ -532,8 +541,9 @@ export default function VeritaBenchPage() {
                       <Input type="number" value={fcHoursPerFte} onChange={e => setFcHoursPerFte(e.target.value)} placeholder="2080" disabled={readOnly} />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">Staffing-model FTE need (optional)</Label>
-                      <Input type="number" step="0.1" value={fcStaffFte} onChange={e => setFcStaffFte(e.target.value)} placeholder="28.3" disabled={readOnly} />
+                      <Label className="text-xs">Staffing-model FTE need {fcStaffFromGrid ? "" : "(optional)"}</Label>
+                      <Input type="number" step="0.1" value={fcStaffFte} onChange={e => { setFcStaffFte(e.target.value); setFcStaffFromGrid(false); }} placeholder="28.3" disabled={readOnly} />
+                      {fcStaffFromGrid && <div className="text-[10px] text-[#01696F]">from staffing grid (VeritaShift)</div>}
                     </div>
                   </div>
                   <Button size="sm" onClick={saveForecast} disabled={readOnly || fcSaving} style={{ backgroundColor: "#01696F" }}>

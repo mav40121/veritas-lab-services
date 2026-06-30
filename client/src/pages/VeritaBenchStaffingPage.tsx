@@ -6,6 +6,7 @@ import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useMemberships } from "@/hooks/useMemberships";
+import { staffingGridFte } from "@shared/operationsForecast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -622,6 +623,50 @@ export default function VeritaBenchStaffingPage() {
   const labId = activeLabIdFromUrl ?? memberships?.find((m) => m.isPrimaryLab)?.labId ?? memberships?.[0]?.labId ?? null;
   const labQ = labId != null ? `?labId=${labId}` : "";
 
+  // Staffing grid (leverage chain, Phase 3): the shift build that produces the FTE need.
+  const [gridLines, setGridLines] = useState<Array<{ label: string; role: string; hours_per_shift: string; days_per_week: string; over_under: string }>>([]);
+  const [gridHoursPerFte, setGridHoursPerFte] = useState<number>(2080);
+  const [gridSaving, setGridSaving] = useState(false);
+  const gridComputed = useMemo(() => {
+    const lines = gridLines.map((l) => ({ hoursPerShift: parseFloat(l.hours_per_shift) || 0, daysPerWeek: parseFloat(l.days_per_week) || 0, overUnder: parseFloat(l.over_under) || 0 }));
+    return staffingGridFte(lines, gridHoursPerFte);
+  }, [gridLines, gridHoursPerFte]);
+  const updateGridLine = (i: number, field: string, val: string) => setGridLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, [field]: val } : l)));
+  const addGridLine = () => setGridLines((ls) => [...ls, { label: "", role: "", hours_per_shift: "", days_per_week: "", over_under: "" }]);
+  const removeGridLine = (i: number) => setGridLines((ls) => ls.filter((_, idx) => idx !== i));
+
+  async function loadGrid() {
+    try {
+      const res = await fetch(`${API_BASE}/api/staffing-grid${labQ}`, { headers: authHeaders() });
+      if (!res.ok) return;
+      const d = await res.json();
+      setGridHoursPerFte(d.hoursPerFteYear ?? 2080);
+      setGridLines((d.lines || []).map((l: any) => ({
+        label: l.label ?? "", role: l.role ?? "",
+        hours_per_shift: l.hours_per_shift != null ? String(l.hours_per_shift) : "",
+        days_per_week: l.days_per_week != null ? String(l.days_per_week) : "",
+        over_under: l.over_under != null ? String(l.over_under) : "",
+      })));
+    } catch {}
+  }
+
+  async function saveGrid() {
+    setGridSaving(true);
+    try {
+      const lines = gridLines
+        .filter((l) => l.label || l.hours_per_shift || l.days_per_week)
+        .map((l) => ({ label: l.label || null, role: l.role || null, hours_per_shift: l.hours_per_shift ? parseFloat(l.hours_per_shift) : 0, days_per_week: l.days_per_week ? parseFloat(l.days_per_week) : 0, over_under: l.over_under ? parseFloat(l.over_under) : 0 }));
+      const res = await fetch(`${API_BASE}/api/staffing-grid${labQ}`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ lines }),
+      });
+      if (res.ok) { const d = await res.json(); toast({ title: "Staffing grid saved", description: `Model FTE need: ${(d.fteNeed ?? 0).toFixed(1)} FTE` }); }
+      else { const e = await res.json(); toast({ title: "Error", description: e.error, variant: "destructive" }); }
+    } catch { toast({ title: "Save failed", variant: "destructive" }); }
+    finally { setGridSaving(false); }
+  }
+
   async function loadStudies() {
     try {
       const res = await fetch(`${API_BASE}/api/staffing-studies${labQ}`, { headers: authHeaders() });
@@ -640,7 +685,7 @@ export default function VeritaBenchStaffingPage() {
   }
 
   useEffect(() => {
-    if (isLoggedIn && hasPlanAccess) loadStudies();
+    if (isLoggedIn && hasPlanAccess) { loadStudies(); loadGrid(); }
     else setLoading(false);
   }, [isLoggedIn, hasPlanAccess, labId]);
 
@@ -788,6 +833,60 @@ export default function VeritaBenchStaffingPage() {
   // Study list view
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+      {/* Staffing Grid (leverage chain, Phase 3) */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-base">Staffing Grid</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground mb-3">
+            The shift build that produces the FTE need fed into the VeritaPace forecast. Hours per shift x days per week + adjustment = weekly hours; total / {(gridHoursPerFte / 52).toFixed(0)} hr per FTE.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-muted-foreground border-b">
+                  <th className="py-1 pr-2">Position</th>
+                  <th className="pr-2">Role</th>
+                  <th className="pr-2 text-right">Hr/shift</th>
+                  <th className="pr-2 text-right">Days/wk</th>
+                  <th className="pr-2 text-right">Adj</th>
+                  <th className="pr-2 text-right">Weekly</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {gridLines.map((l, i) => {
+                  const wk = (parseFloat(l.hours_per_shift) || 0) * (parseFloat(l.days_per_week) || 0) + (parseFloat(l.over_under) || 0);
+                  return (
+                    <tr key={i} className="border-b border-muted/60">
+                      <td className="py-1 pr-2"><Input className="h-8" value={l.label} onChange={e => updateGridLine(i, "label", e.target.value)} disabled={readOnly} placeholder="DS Tech" /></td>
+                      <td className="pr-2"><Input className="h-8 w-24" value={l.role} onChange={e => updateGridLine(i, "role", e.target.value)} disabled={readOnly} placeholder="Tech" /></td>
+                      <td className="pr-2"><Input className="h-8 w-16 text-right" type="number" value={l.hours_per_shift} onChange={e => updateGridLine(i, "hours_per_shift", e.target.value)} disabled={readOnly} /></td>
+                      <td className="pr-2"><Input className="h-8 w-16 text-right" type="number" value={l.days_per_week} onChange={e => updateGridLine(i, "days_per_week", e.target.value)} disabled={readOnly} /></td>
+                      <td className="pr-2"><Input className="h-8 w-16 text-right" type="number" value={l.over_under} onChange={e => updateGridLine(i, "over_under", e.target.value)} disabled={readOnly} /></td>
+                      <td className="pr-2 text-right font-mono">{wk || 0}</td>
+                      <td><Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeGridLine(i)} disabled={readOnly}><Trash2 size={13} /></Button></td>
+                    </tr>
+                  );
+                })}
+                {gridLines.length === 0 && (
+                  <tr><td colSpan={7} className="py-4 text-center text-xs text-muted-foreground">No positions yet. Add the shifts that staff the lab to compute the FTE need.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 mt-3">
+            <Button variant="outline" size="sm" onClick={addGridLine} disabled={readOnly}><Plus size={14} className="mr-1" />Add position</Button>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-muted-foreground">Total: <span className="font-mono font-semibold text-foreground">{gridComputed.weeklyHours.toLocaleString()} hr/wk</span></span>
+              <span className="text-sm">Model FTE need: <span className="font-mono font-bold" style={{ color: "#01696F" }}>{gridComputed.fteNeed.toFixed(1)} FTE</span></span>
+              <Button size="sm" onClick={saveGrid} disabled={readOnly || gridSaving} style={{ backgroundColor: "#01696F" }}>{gridSaving ? "Saving..." : "Save grid"}</Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <StudyListView
         studies={studies}
         onSelect={setSelectedStudy}

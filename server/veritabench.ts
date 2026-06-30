@@ -16,7 +16,7 @@ import { generateBarcodeLabelSheetPdf, type BarcodeLabelInput } from "./barcodeL
 import { generateInventoryCountExcel, type InventoryCountItem } from "./inventoryCountExcel";
 import { storePdfToken } from "./pdfTokens";
 import { buildIntacctCSV, preflightIntacct, type IntacctExportConfig, type VendorIdMap } from "./intacctExport";
-import { forecastFromGoal, chainGap, DEFAULT_HOURS_PER_FTE_YEAR } from "@shared/operationsForecast";
+import { forecastFromGoal, chainGap, staffingGridFte, DEFAULT_HOURS_PER_FTE_YEAR } from "@shared/operationsForecast";
 
 // PR 4 helper: builds a lower-cased-name keyed map of VendorRecordForPdf
 // from the lab's stock_vendors directory. The PDF renderer uses this to
@@ -237,10 +237,18 @@ export function registerVeritaBenchRoutes(
     const computed = saved?.goal_ratio != null
       ? forecastFromGoal({ goalRatio: saved.goal_ratio, annualVolume, hoursPerFteYear })
       : null;
-    const gap = computed && saved?.staffing_model_fte != null
-      ? chainGap({ annualVolume, fteBudget: computed.fteBudget, staffingModelFte: saved.staffing_model_fte, hoursPerFteYear })
+    // Staffing-grid FTE (Phase 3): when the lab has a shift grid, it drives the gap;
+    // otherwise fall back to the manually-entered staffing_model_fte.
+    const gridLines: any[] = labId != null
+      ? sqlite.prepare("SELECT hours_per_shift, days_per_week, over_under FROM staffing_grid_lines WHERE account_id = ? AND lab_id = ?").all(accountId, labId)
+      : sqlite.prepare("SELECT hours_per_shift, days_per_week, over_under FROM staffing_grid_lines WHERE account_id = ? AND lab_id IS NULL").all(accountId);
+    const grid = staffingGridFte(gridLines.map((l) => ({ hoursPerShift: l.hours_per_shift, daysPerWeek: l.days_per_week, overUnder: l.over_under })), hoursPerFteYear);
+    const staffingFte = gridLines.length > 0 ? grid.fteNeed : (saved?.staffing_model_fte ?? null);
+    const staffingSource = gridLines.length > 0 ? "grid" : (saved?.staffing_model_fte != null ? "manual" : "none");
+    const gap = computed && staffingFte != null
+      ? chainGap({ annualVolume, fteBudget: computed.fteBudget, staffingModelFte: staffingFte, hoursPerFteYear })
       : null;
-    return { saved: saved ?? null, trailingAnnualVolume, computed, gap };
+    return { saved: saved ?? null, trailingAnnualVolume, computed, gap, staffingGrid: { weeklyHours: grid.weeklyHours, fteNeed: grid.fteNeed, lineCount: gridLines.length, source: staffingSource } };
   };
 
   app.get("/api/productivity/forecast", authMiddleware, (req: any, res) => {
@@ -268,6 +276,45 @@ export function registerVeritaBenchRoutes(
           .run(accountId, labId, goal_ratio ?? null, forecast_annual_volume ?? null, hpf, staffing_model_fte ?? null, notes ?? null, now, now);
       }
       res.json(buildForecastResponse(accountId, labId));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── VeritaShift staffing grid (leverage chain, Phase 3) ─────────────────────────
+  const buildGridResponse = (accountId: number, labId: number | null) => {
+    const lines: any[] = labId != null
+      ? sqlite.prepare("SELECT * FROM staffing_grid_lines WHERE account_id = ? AND lab_id = ? ORDER BY sort_order, id").all(accountId, labId)
+      : sqlite.prepare("SELECT * FROM staffing_grid_lines WHERE account_id = ? AND lab_id IS NULL ORDER BY sort_order, id").all(accountId);
+    const fc: any = labId != null
+      ? sqlite.prepare("SELECT hours_per_fte FROM productivity_forecasts WHERE account_id = ? AND lab_id = ?").get(accountId, labId)
+      : sqlite.prepare("SELECT hours_per_fte FROM productivity_forecasts WHERE account_id = ? AND lab_id IS NULL").get(accountId);
+    const hoursPerFteYear = fc?.hours_per_fte ?? DEFAULT_HOURS_PER_FTE_YEAR;
+    const grid = staffingGridFte(lines.map((l) => ({ hoursPerShift: l.hours_per_shift, daysPerWeek: l.days_per_week, overUnder: l.over_under })), hoursPerFteYear);
+    return { lines, weeklyHours: grid.weeklyHours, fteNeed: grid.fteNeed, hoursPerFteYear };
+  };
+
+  app.get("/api/staffing-grid", authMiddleware, (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    res.json(buildGridResponse(accountId, resolveOpsLabId(req)));
+  });
+
+  app.post("/api/staffing-grid", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const labId = resolveOpsLabId(req);
+    const lines: any[] = Array.isArray(req.body?.lines) ? req.body.lines : [];
+    const now = new Date().toISOString();
+    try {
+      const tx = sqlite.transaction(() => {
+        if (labId != null) sqlite.prepare("DELETE FROM staffing_grid_lines WHERE account_id = ? AND lab_id = ?").run(accountId, labId);
+        else sqlite.prepare("DELETE FROM staffing_grid_lines WHERE account_id = ? AND lab_id IS NULL").run(accountId);
+        const ins = sqlite.prepare("INSERT INTO staffing_grid_lines (account_id, lab_id, label, role, hours_per_shift, days_per_week, over_under, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        lines.forEach((l, i) => ins.run(accountId, labId, l.label ?? null, l.role ?? null, Number(l.hours_per_shift) || 0, Number(l.days_per_week) || 0, Number(l.over_under) || 0, i, now, now));
+      });
+      tx();
+      res.json(buildGridResponse(accountId, labId));
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

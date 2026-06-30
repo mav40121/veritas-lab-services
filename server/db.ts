@@ -3528,6 +3528,36 @@ sqlite.exec(`
 }
 try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_productivity_forecasts_lab ON productivity_forecasts(account_id, lab_id)"); } catch {}
 
+// ── VeritaShift: Staffing Grid lines (leverage chain, Phase 3) ──────────────────
+// Lab-scoped shift grid (mirrors the LTSHealth Staff Management Tool "Staffing Grid"
+// sheet). Each line: hours_per_shift x days_per_week + over_under = weekly hours; the
+// sum / (hours_per_fte / 52) is the staffing-model FTE need fed into the forecast gap.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS staffing_grid_lines (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL,
+    lab_id INTEGER,
+    label TEXT,
+    role TEXT,
+    hours_per_shift REAL,
+    days_per_week REAL,
+    over_under REAL DEFAULT 0,
+    sort_order INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+{
+  const sglCols = sqlite.prepare("PRAGMA table_info(staffing_grid_lines)").all() as { name: string }[];
+  const have = sglCols.map((c) => c.name);
+  if (sglCols.length > 0) {
+    if (!have.includes("role")) { try { sqlite.exec("ALTER TABLE staffing_grid_lines ADD COLUMN role TEXT"); } catch {} }
+    if (!have.includes("over_under")) { try { sqlite.exec("ALTER TABLE staffing_grid_lines ADD COLUMN over_under REAL DEFAULT 0"); } catch {} }
+    if (!have.includes("sort_order")) { try { sqlite.exec("ALTER TABLE staffing_grid_lines ADD COLUMN sort_order INTEGER DEFAULT 0"); } catch {} }
+  }
+}
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_staffing_grid_lines_lab ON staffing_grid_lines(account_id, lab_id)"); } catch {}
+
 // ── VeritaBench: Inventory Items ───────────────────────────────────────────────
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS inventory_items (
