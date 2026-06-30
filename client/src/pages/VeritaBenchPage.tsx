@@ -569,9 +569,11 @@ export default function VeritaBenchPage() {
                     <Button size="sm" onClick={saveForecast} disabled={readOnly || fcSaving} style={{ backgroundColor: "#01696F" }}>
                       {fcSaving ? "Saving..." : "Save goal"}
                     </Button>
-                    <Button size="sm" variant="outline" onClick={generateReport} disabled={fcReportLoading || !fcResult}>
+                    {(fcResult || fcStaffFromGrid) && (
+                    <Button size="sm" variant="outline" onClick={generateReport} disabled={fcReportLoading}>
                       <FileDown size={14} className="mr-1" />{fcReportLoading ? "Generating..." : "CFO report"}
                     </Button>
+                    )}
                   </div>
                 </div>
                 <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
