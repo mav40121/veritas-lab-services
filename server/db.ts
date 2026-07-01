@@ -4926,7 +4926,16 @@ try { (sqlite.prepare(`PRAGMA table_info(pdf_tokens)`).all() as any[]); } catch 
 // without their own ensure() blocks. All current columns are defined in the
 // CREATE TABLE above; this anchor lets the audit script see migration was
 // considered. Add ensure() rows here if new columns are introduced.
-try { (sqlite.prepare(`PRAGMA table_info(backup_integrity_log)`).all() as any[]); } catch {}
+// backup_integrity_log.real_user_count: count of real (non-internal) users so
+// QA/Playwright account churn (qa-*@veritaslabservices.com) does not false-trip
+// the userCount integrity check. Legacy rows keep NULL, which backup.ts treats
+// as "no real-user baseline yet" (no false alarm on the first post-deploy run).
+try {
+  const biCols = (sqlite.prepare(`PRAGMA table_info(backup_integrity_log)`).all() as any[]).map((c: any) => c.name);
+  if (!biCols.includes("real_user_count")) {
+    sqlite.exec(`ALTER TABLE backup_integrity_log ADD COLUMN real_user_count INTEGER`);
+  }
+} catch {}
 try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as any[]); } catch {}
 
 // VeritaQC PRAGMA-guarded ALTER migration blocks per CLAUDE.md §8 NEW DB TABLE
