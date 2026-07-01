@@ -9,7 +9,7 @@ import { storage } from "./storage";
 import { resolveStudyAccess, consumeStudyCredit, isUnlimitedPlan } from "./studyCredits";
 import { db, PLAN_SEATS, PLAN_VIEW_ONLY_SEATS, PLAN_PRICES, PLAN_BED_RANGES, suggestTierFromBeds } from "./db";
 import { computeUsageQty, validateTransfer, validateBatch, matchKey, countOnHand, scopeEnterpriseLocations } from "./enterpriseTransfer";
-import { sendNewsletter, verifyUnsubscribeToken } from "./newsletter";
+import { sendNewsletter, verifyUnsubscribeToken, resolveRecipients } from "./newsletter";
 import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice, getSeatPriceForTier, VC_UNLIMITED_FIRST_YEAR_COUPON, getViewOnlyAddOnConfig } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
@@ -14951,15 +14951,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // per-recipient (the list is never exposed). Pass testTo to preview to a single
   // address first. postalAddress is required for the CAN-SPAM footer.
   app.post("/api/admin/newsletter/send", async (req: any, res) => {
-    const { secret, subject, bodyHtml, postalAddress, testTo } = req.body || {};
+    const { secret, subject, bodyHtml, postalAddress, testTo, dryRun } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
-    if (!subject || !bodyHtml) return res.status(400).json({ error: "subject and bodyHtml required" });
-    if (!postalAddress) return res.status(400).json({ error: "postalAddress required (CAN-SPAM footer)" });
-    const recipients: string[] = testTo
-      ? [String(testTo).toLowerCase().trim()]
+    // Owner (verilabguy@gmail.com) is auto-CC'd on the list send via resolveRecipients;
+    // a testTo preview stays single-recipient. dryRun returns the resolved recipient
+    // list without sending, so a send can be previewed with no email going out.
+    const activeEmails: string[] = testTo
+      ? []
       : ((db as any).$client.prepare(
           "SELECT email FROM newsletter_subscribers WHERE active = 1 ORDER BY subscribed_at ASC"
         ).all() as any[]).map((r) => r.email);
+    const recipients = resolveRecipients(activeEmails, testTo);
+    if (dryRun) {
+      return res.json({ ok: true, dryRun: true, recipientCount: recipients.length, recipients, test: !!testTo });
+    }
+    if (!subject || !bodyHtml) return res.status(400).json({ error: "subject and bodyHtml required" });
+    if (!postalAddress) return res.status(400).json({ error: "postalAddress required (CAN-SPAM footer)" });
     if (recipients.length === 0) {
       return res.json({ ok: true, sent: 0, failed: 0, recipientCount: 0, test: !!testTo });
     }
