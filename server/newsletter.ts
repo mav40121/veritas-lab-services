@@ -74,6 +74,18 @@ export function buildNewsletterHtml(opts: { bodyHtml: string; email: string; pos
 </body></html>`;
 }
 
+// Michael's standing instruction: he is CC'd on every real send so he sees the
+// live product. A testTo preview stays single-recipient (that is the point of a
+// preview), so the owner is only auto-added on the list send.
+export const OWNER_CC = "verilabguy@gmail.com";
+
+export function resolveRecipients(activeEmails: string[], testTo?: string | null): string[] {
+  if (testTo) return [String(testTo).toLowerCase().trim()];
+  const set = new Set(activeEmails.map((e) => String(e).toLowerCase().trim()).filter(Boolean));
+  set.add(OWNER_CC); // deduped: no double-send if the owner is also a subscriber
+  return [...set];
+}
+
 export interface NewsletterSendResult { sent: number; failed: number; errors: string[]; }
 
 export async function sendNewsletter(opts: {

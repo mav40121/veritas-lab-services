@@ -11,7 +11,7 @@
 
 process.env.JWT_SECRET = "test-secret-fixed-for-verify"; // deterministic tokens
 
-const { unsubscribeToken, verifyUnsubscribeToken, unsubscribeUrl, buildNewsletterHtml } =
+const { unsubscribeToken, verifyUnsubscribeToken, unsubscribeUrl, buildNewsletterHtml, resolveRecipients, OWNER_CC } =
   await import("../server/newsletter.ts");
 
 let fails = 0;
@@ -40,6 +40,17 @@ check("html includes an Unsubscribe link to this recipient's url", html.includes
 check("html includes the postal address (CAN-SPAM)", html.includes("123 Example St, Anytown, MA 01000"));
 check("html carries the newsletter brand", html.includes("The Lab Director's Briefing"));
 check("no em dash anywhere in the email", !html.includes("—"));
+
+// resolveRecipients: owner auto-CC on list send, single-recipient on testTo, deduped.
+const subs = ["karas.jackson@sysmex.com.au", "vanenkl@gmail.com", "postonconsulting@gmail.com"];
+const listRcpts = resolveRecipients(subs, null);
+check("list send includes all subscribers", subs.every((s) => listRcpts.includes(s)));
+check("list send auto-includes the owner CC", listRcpts.includes(OWNER_CC) && OWNER_CC === "verilabguy@gmail.com");
+check("list send count = subscribers + 1 owner", listRcpts.length === subs.length + 1);
+check("owner not double-added when already a subscriber", resolveRecipients([...subs, OWNER_CC], null).length === subs.length + 1);
+check("owner not double-added regardless of case", resolveRecipients([...subs, "VeriLabGuy@Gmail.com"], null).length === subs.length + 1);
+const testRcpts = resolveRecipients(subs, "preview@example.com");
+check("testTo preview is single-recipient (no owner CC)", testRcpts.length === 1 && testRcpts[0] === "preview@example.com");
 
 console.log(`\n${fails === 0 ? "ALL PASS" : fails + " FAILED"}`);
 process.exit(fails === 0 ? 0 : 1);
