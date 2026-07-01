@@ -126,7 +126,7 @@ function checkBackupIntegrity(gzippedFileBytes: number): { ok: boolean; checks: 
   const sqlite = (db as any).$client;
   const prior = sqlite
     .prepare(
-      "SELECT user_count, study_count, table_count FROM backup_integrity_log WHERE all_ok = 1 ORDER BY id DESC LIMIT 1",
+      "SELECT user_count, real_user_count, study_count, table_count FROM backup_integrity_log WHERE all_ok = 1 ORDER BY id DESC LIMIT 1",
     )
     .get() as any;
 
@@ -142,9 +142,20 @@ function checkBackupIntegrity(gzippedFileBytes: number): { ok: boolean; checks: 
   }
   const integrityOk = integrityResult === "ok";
 
-  // 3. User count: stable or increasing vs prior successful run
+  // 3. User count: stable or increasing vs prior successful run.
+  // The OK decision is based on REAL users only. Internal/test accounts live
+  // solely on Michael-owned domains (veritaslabservices.com, veritaslab.com);
+  // no external customer uses them. QA/Playwright accounts (qa-*@veritaslabservices.com)
+  // are created and torn down constantly, which used to false-trip this check
+  // (e.g. 32 -> 28) with no real customer loss. We keep the all-accounts total
+  // for continuity but gate the alert on the real-user count.
+  const REAL_USER_PREDICATE = "email NOT LIKE '%@veritaslabservices.com' AND email NOT LIKE '%@veritaslab.com'";
   const userCount = (sqlite.prepare("SELECT COUNT(*) as cnt FROM users").get() as any).cnt as number;
-  const userCountOk = userCount > 0 && (!prior || userCount >= prior.user_count);
+  const realUserCount = (sqlite.prepare(`SELECT COUNT(*) as cnt FROM users WHERE ${REAL_USER_PREDICATE}`).get() as any).cnt as number;
+  // Legacy rows have real_user_count = NULL; treat that as "no real-user baseline
+  // yet" so the first post-deploy run does not false-alarm on the population change.
+  const priorReal = prior?.real_user_count ?? null;
+  const userCountOk = realUserCount > 0 && (priorReal == null || realUserCount >= priorReal);
 
   // 4. Study count: stable or increasing vs prior successful run
   const studyCount = (sqlite.prepare("SELECT COUNT(*) as cnt FROM studies").get() as any).cnt as number;
@@ -157,7 +168,7 @@ function checkBackupIntegrity(gzippedFileBytes: number): { ok: boolean; checks: 
   const checks: Record<string, any> = {
     fileSize: { value: gzippedFileBytes, threshold: MIN_BACKUP_FILE_SIZE_BYTES, ok: fileSizeOk },
     sqliteIntegrity: { value: integrityResult, ok: integrityOk },
-    userCount: { value: userCount, prior: prior?.user_count ?? null, ok: userCountOk },
+    userCount: { value: realUserCount, totalAccounts: userCount, prior: priorReal, ok: userCountOk },
     studyCount: { value: studyCount, prior: prior?.study_count ?? null, ok: studyCountOk },
     tableCount: { value: tableCount, threshold: MIN_TABLE_COUNT, prior: prior?.table_count ?? null, ok: tableCountOk },
   };
@@ -166,10 +177,10 @@ function checkBackupIntegrity(gzippedFileBytes: number): { ok: boolean; checks: 
 
   sqlite
     .prepare(
-      `INSERT INTO backup_integrity_log (file_size_bytes, sqlite_integrity_check, user_count, study_count, table_count, all_ok, details_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO backup_integrity_log (file_size_bytes, sqlite_integrity_check, user_count, real_user_count, study_count, table_count, all_ok, details_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(gzippedFileBytes, integrityResult, userCount, studyCount, tableCount, allOk ? 1 : 0, JSON.stringify(checks));
+    .run(gzippedFileBytes, integrityResult, userCount, realUserCount, studyCount, tableCount, allOk ? 1 : 0, JSON.stringify(checks));
 
   return { ok: allOk, checks };
 }
