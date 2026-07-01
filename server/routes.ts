@@ -9,6 +9,7 @@ import { storage } from "./storage";
 import { resolveStudyAccess, consumeStudyCredit, isUnlimitedPlan } from "./studyCredits";
 import { db, PLAN_SEATS, PLAN_VIEW_ONLY_SEATS, PLAN_PRICES, PLAN_BED_RANGES, suggestTierFromBeds } from "./db";
 import { computeUsageQty, validateTransfer, validateBatch, matchKey, countOnHand, scopeEnterpriseLocations } from "./enterpriseTransfer";
+import { sendNewsletter, verifyUnsubscribeToken } from "./newsletter";
 import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice, getSeatPriceForTier, VC_UNLIMITED_FIRST_YEAR_COUPON, getViewOnlyAddOnConfig } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
@@ -14922,6 +14923,48 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch subscribers" });
     }
+  });
+
+  // Public one-click unsubscribe (CAN-SPAM). Stateless HMAC token over the email,
+  // so the link cannot be forged and no per-user token needs storing. Flips the
+  // subscriber to active = 0; the send path only targets active = 1.
+  app.get("/api/newsletter/unsubscribe", (req, res) => {
+    const email = String(req.query.e || "").toLowerCase().trim();
+    const token = String(req.query.t || "");
+    const okToken = !!email && verifyUnsubscribeToken(email, token);
+    if (okToken) {
+      try {
+        (db as any).$client.prepare(
+          "UPDATE newsletter_subscribers SET active = 0, unsubscribed_at = ? WHERE email = ?"
+        ).run(new Date().toISOString(), email);
+      } catch (e) { /* still show confirmation; nothing sensitive to leak */ }
+    }
+    const msg = okToken
+      ? "You have been unsubscribed. You will not receive further newsletters."
+      : "This unsubscribe link is invalid or expired. To unsubscribe, reply to any newsletter with \"unsubscribe\" in the subject line.";
+    res.set("Content-Type", "text/html").send(
+      `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Unsubscribe</title><style>body{font-family:Georgia,serif;color:#28251D;max-width:560px;margin:60px auto;padding:0 20px;line-height:1.6}h1{color:#01696F;font-size:20px}a{color:#01696F}</style></head><body><h1>The Lab Director's Briefing</h1><p>${msg}</p><p><a href="https://www.veritaslabservices.com">veritaslabservices.com</a></p></body></html>`
+    );
+  });
+
+  // Admin: send a newsletter campaign to active subscribers via Resend. Sends are
+  // per-recipient (the list is never exposed). Pass testTo to preview to a single
+  // address first. postalAddress is required for the CAN-SPAM footer.
+  app.post("/api/admin/newsletter/send", async (req: any, res) => {
+    const { secret, subject, bodyHtml, postalAddress, testTo } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!subject || !bodyHtml) return res.status(400).json({ error: "subject and bodyHtml required" });
+    if (!postalAddress) return res.status(400).json({ error: "postalAddress required (CAN-SPAM footer)" });
+    const recipients: string[] = testTo
+      ? [String(testTo).toLowerCase().trim()]
+      : ((db as any).$client.prepare(
+          "SELECT email FROM newsletter_subscribers WHERE active = 1 ORDER BY subscribed_at ASC"
+        ).all() as any[]).map((r) => r.email);
+    if (recipients.length === 0) {
+      return res.json({ ok: true, sent: 0, failed: 0, recipientCount: 0, test: !!testTo });
+    }
+    const result = await sendNewsletter({ subject, bodyHtml, recipients, postalAddress });
+    res.json({ ok: result.failed === 0, sent: result.sent, failed: result.failed, errors: result.errors, recipientCount: recipients.length, test: !!testTo });
   });
 
   // ── STRIPE ────────────────────────────────────────────────────────────────
