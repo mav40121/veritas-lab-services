@@ -389,6 +389,38 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
 };
 
+// AI answer engines and Google read Article.articleBody as the article's body
+// text. Our Article nodes carried headline + description but no articleBody, so
+// the substance sat only in the sibling FAQPage/HowTo nodes. This pass composes
+// an articleBody for every Article node from its own description plus the Q&A and
+// step text already present on the same page (imported verbatim from faqContent),
+// so the body signal is faithful to the rendered page with zero drift.
+function enrichArticleBodies(map: Record<string, SEOMetadata>): void {
+  for (const meta of Object.values(map)) {
+    const blocks = Array.isArray(meta.jsonLd) ? meta.jsonLd : meta.jsonLd ? [meta.jsonLd] : [];
+    const article = blocks.find((b) => (b as any)?.["@type"] === "Article") as any;
+    if (!article || article.articleBody) continue;
+    const parts: string[] = [];
+    if (typeof article.description === "string") parts.push(article.description);
+    const faq = blocks.find((b) => (b as any)?.["@type"] === "FAQPage") as any;
+    if (faq && Array.isArray(faq.mainEntity)) {
+      for (const q of faq.mainEntity) {
+        if (q?.name && q?.acceptedAnswer?.text) parts.push(`${q.name} ${q.acceptedAnswer.text}`);
+      }
+    }
+    const howto = blocks.find((b) => (b as any)?.["@type"] === "HowTo") as any;
+    if (howto && Array.isArray(howto.step)) {
+      for (const s of howto.step) {
+        const t = s?.name || s?.text;
+        if (t) parts.push(String(t));
+      }
+    }
+    const body = parts.join(" ").replace(/\s+/g, " ").trim();
+    if (body) article.articleBody = body;
+  }
+}
+enrichArticleBodies(seoMetadataMap);
+
 export function getBaseUrl(): string {
   return BASE_URL;
 }
