@@ -105,7 +105,7 @@ return (
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">What Pass or Fail Means</h2>
           <p>
-            There is no universal pass or fail cutoff that applies to all analytes. Your laboratory, or the instrument manufacturer, establishes the acceptable limits for slope, intercept, and bias. A slope of 1.00 and intercept of 0 would represent perfect agreement. In practice, acceptable limits are typically set at slope of 0.97 to 1.03, and bias at medical decision points within your laboratory's total allowable error specification. Document your acceptance criteria before running the study, not after.
+            There is no universal pass or fail cutoff that applies to all analytes. Your laboratory, or the instrument manufacturer, establishes the acceptable limits for slope, intercept, and bias. A slope of 1.00 and intercept of 0 would represent perfect agreement. In practice, acceptable limits are typically set at slope of 0.97 to 1.03, and bias at medical decision points within your laboratory's <Link href="/resources/clia-tea-what-lab-directors-dont-know" className="text-primary font-medium hover:underline">total allowable error</Link> specification. Document your acceptance criteria before running the study, not after.
           </p>
 
           <Callout type="warning">
