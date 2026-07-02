@@ -51,6 +51,27 @@ function renderProductivityCalculatorContent(): string {
   return `<h2>Lab productivity benchmark ranges</h2><p>The VeritaBench Lab Productivity Scorecard computes one ratio, productive labor hours divided by billable tests, and scores it against the peer group for your lab's annual volume. A lower ratio means fewer labor hours per test, so a result below your peer band is outperforming, within the band is on target, and above the band points to a staffing or workflow savings opportunity.</p><p>Methodology: enter monthly productive hours (or estimate them from FTE count and a productive-time percentage) and monthly billable tests. The tool divides hours by tests, compares the ratio to the midpoint of your peer band, and converts any gap into productive hours, full-time-equivalent staff, and annual labor dollars at your hourly rate.</p><table><thead><tr><th>Peer group</th><th>Annual billable volume</th><th>Target ratio (productive hours per billable test)</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
+// Crawlable prerender body for /pricing. The page is JS-rendered, so the tier
+// dollar figures were absent from the raw HTML that crawlers and AI answer
+// engines read (they do not run React), which made the pricing look "not
+// exposed / contact sales" even though the tiers are published. This emits the
+// published tiers as real text. Figures mirror client/src/pages/PricingPage.tsx
+// PLANS (the source of truth); keep in sync if those change.
+function renderPricingContent(): string {
+  const tiers = [
+    { plan: "Per Study", price: "$25 one-time", seats: "No account required", addl: "Single VeritaCheck study" },
+    { plan: "VeritaCheck Unlimited", price: "$299 first year, then $499/yr", seats: "Unlimited studies", addl: "" },
+    { plan: "Clinic", price: "$999/yr", seats: "2 active seats included", addl: "Additional seats $500 each" },
+    { plan: "Community (most popular)", price: "$2,125/yr", seats: "5 active seats included", addl: "Additional seats $425 each" },
+    { plan: "Hospital", price: "$4,995/yr", seats: "15 active seats included", addl: "Additional seats $333 each" },
+    { plan: "System", price: "Custom quote", seats: "Multi-lab, 16+ seats, SSO, BAA, or SLA", addl: "Contact sales" },
+  ];
+  const rows = tiers
+    .map((t) => `<tr><td>${escHtml(t.plan)}</td><td>${escHtml(t.price)}</td><td>${escHtml(t.seats)}</td><td>${escHtml(t.addl)}</td></tr>`)
+    .join("");
+  return `<h2>VeritaAssure&#8482; pricing</h2><p>Simple, published annual pricing for clinical laboratory compliance software. Your tier is set by the number of active (writer) seats you need; additional active seats above the included count are billed at that tier per-seat rate. Read-and-sign staff access is handled by the Staff Portal add-on, not per seat.</p><table><thead><tr><th>Plan</th><th>Price</th><th>Included seats</th><th>Additional seats</th></tr></thead><tbody>${rows}</tbody></table><p>Every new account includes 2 free VeritaCheck&#8482; study credits. System-tier pricing (more than one CLIA lab, 16 or more seats, or SSO, BAA, and SLA requirements) is a custom quote via info@veritaslabservices.com.</p>`;
+}
+
 function getIndexHtml(distPath: string): string {
   if (!cachedIndexHtml) {
     let html = fs.readFileSync(path.resolve(distPath, "index.html"), "utf-8");
@@ -135,6 +156,8 @@ function injectSeoTags(html: string, routePath: string, meta: SEOMetadata): stri
     noscriptInner += renderTeaLookupTable();
   } else if (routePath === "/calculator") {
     noscriptInner += renderProductivityCalculatorContent();
+  } else if (routePath === "/pricing") {
+    noscriptInner += renderPricingContent();
   }
   html = html.replace('<div id="root"></div>', `<div id="root"><noscript>${noscriptInner}</noscript></div>`);
 
