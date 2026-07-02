@@ -80,7 +80,7 @@ function licenseCtxFromReq(req: any, productName?: string): LicenseContext {
 import { logAudit } from "./audit";
 import { logConsumption } from "./consumptionLedger";
 import { reconcileLots } from "./inventoryLots";
-import { CLSI_COMPLIANCE_MATRIX_B64, SOFTWARE_VALIDATION_TEMPLATE_B64 } from "./downloadAssets";
+import { CLSI_COMPLIANCE_MATRIX_B64, SOFTWARE_VALIDATION_TEMPLATE_B64, SPECIMEN_TUBE_LABELING_GUIDE_B64 } from "./downloadAssets";
 import { cliaAnalytes, ptCategoryLinks } from "./cliaAnalytes";
 import { hasCanonicalTea } from "./backfillAbsoluteFloor";
 import { DEMO_USER_EMAIL } from "./constants";
@@ -4359,6 +4359,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const buf = Buffer.from(SOFTWARE_VALIDATION_TEMPLATE_B64, "base64");
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", 'attachment; filename="VeritaCheck_Software_Validation_Template.pdf"');
+    res.setHeader("Content-Length", buf.length);
+    res.send(buf);
+  });
+
+  app.get("/api/downloads/specimen-tube-labeling-guide", (_req, res) => {
+    const buf = Buffer.from(SPECIMEN_TUBE_LABELING_GUIDE_B64, "base64");
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", 'attachment; filename="Specimen_Tube_Labeling_Guide.pdf"');
     res.setHeader("Content-Length", buf.length);
     res.send(buf);
   });
