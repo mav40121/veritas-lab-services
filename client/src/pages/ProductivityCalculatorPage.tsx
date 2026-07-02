@@ -64,7 +64,7 @@ function GaugeBar({ ratio, low, high }: { ratio: number; low: number; high: numb
 }
 
 export default function ProductivityCalculatorPage() {
-  useSEO({ title: "VeritaBench\u2122 | Free Lab Productivity Scorecard | VeritaAssure\u2122", description: "Free VeritaBench\u2122 benchmarking tool. Enter monthly billable volume and paid hours to instantly score your lab's productivity against Clinic, Community, and Hospital peer groups." });
+  useSEO({ title: "VeritaBench\u2122 | Free Lab Productivity Scorecard | VeritaAssure\u2122", description: "Free VeritaBench\u2122 productivity tool. Enter monthly billable volume and paid hours to score your lab against community hospital, large trauma center, and reference lab peer benchmarks." });
   const [productiveHours, setProductiveHours] = useState<string>("");
   const [billableTests, setBillableTests] = useState<string>("");
   const [facilityType, setFacilityType] = useState<string>("community");

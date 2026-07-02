@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle2, ChevronRight, FlaskConical, AlertTriangle } from "lucide-react";
+import { CPRT_FAQ } from "@/lib/faqContent";
 
 function Callout({ children, type = "info" }: { children: React.ReactNode; type?: "info" | "warning" | "tip" }) {
   const styles = {
@@ -294,6 +295,15 @@ export default function ArticleCostPerReportablePage() {
             <p>
               The first study in your own laboratory will be slower than the second, and the second will be slower than the third. By the fifth, the framework starts to think for you, and the conversations between the laboratory and finance start to land on the right layer the first time.
             </p>
+          </Section>
+
+          <Section id="faq" title="Frequently Asked Questions">
+            {CPRT_FAQ.map(({ q, a }) => (
+              <div key={q} className="border-b border-border py-4 last:border-0">
+                <h3 className="font-semibold text-base mb-2">{q}</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">{a}</p>
+              </div>
+            ))}
           </Section>
 
           {/* References */}
