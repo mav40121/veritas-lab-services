@@ -21,6 +21,22 @@ import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
 
+// Express already URL-decodes route params before the handler runs, so
+// req.params.analyte for a request to ".../IG%25" arrives as "IG%". Calling
+// decodeURIComponent on it a second time throws "URIError: URI malformed"
+// because the trailing "%" is not valid percent-encoding. That crashed saving
+// VeritaMap values for every "%"-named analyte (IG%, BASO%, NEUT%, LYMPH%,
+// MONO%, EOS% and the rest of the CBC differential percentages). Decode
+// defensively: if the value is already decoded (or otherwise not valid
+// percent-encoding), return it unchanged instead of throwing.
+function safeDecodeParam(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 function licenseCtxFromReq(req: any, productName?: string): LicenseContext {
   // Prefer authenticated user identity. Falls back to a hashed IP for
   // anonymous/demo paths so the licensee field still distinguishes recipients
@@ -11735,7 +11751,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       UPDATE veritamap_tests SET active=?, last_cal_ver=?, last_method_comp=?,
         last_precision=?, last_sop_review=?, notes=?, updated_at=?
       WHERE map_id=? AND analyte=?
-    `).run(active, last_cal_ver ?? null, last_method_comp ?? null, last_precision ?? null, last_sop_review ?? null, notes ?? null, now, req.params.id, decodeURIComponent(req.params.analyte));
+    `).run(active, last_cal_ver ?? null, last_method_comp ?? null, last_precision ?? null, last_sop_review ?? null, notes ?? null, now, req.params.id, safeDecodeParam(req.params.analyte));
     (db as any).$client.prepare("UPDATE veritamap_maps SET updated_at = ? WHERE id = ?").run(now, req.params.id);
     res.json({ ok: true });
   });
@@ -11771,7 +11787,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put("/api/labs/:labId/veritamap/maps/:id/analyte-values/:analyte", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
     const mapId = Number(req.params.id);
-    const analyte = decodeURIComponent(req.params.analyte);
+    const analyte = safeDecodeParam(req.params.analyte);
     const lockErr = refLockConflict(mapId, analyte, req.body);
     if (lockErr) return res.status(409).json({ error: lockErr });
     const { ref_range_low, ref_range_high, critical_low, critical_high, units } = req.body;
@@ -11802,7 +11818,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/labs/:labId/veritamap/maps/:id/analyte-values/:analyte/mec-review", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
     const mapId = Number(req.params.id);
-    const analyte = decodeURIComponent(req.params.analyte);
+    const analyte = safeDecodeParam(req.params.analyte);
     const { reviewed_at, recorded_by } = req.body || {};
     if (!reviewed_at || !recorded_by?.trim()) {
       return res.status(400).json({ error: "reviewed_at (date) and recorded_by are required" });
@@ -11830,7 +11846,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/labs/:labId/veritamap/maps/:id/analyte-values/:analyte/attest-ref", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
     const mapId = Number(req.params.id);
-    const analyte = decodeURIComponent(req.params.analyte);
+    const analyte = safeDecodeParam(req.params.analyte);
     const { attested_by, attested_title } = req.body || {};
     if (!attested_by?.trim() || !attested_title?.trim()) {
       return res.status(400).json({ error: "attested_by and attested_title are required" });
@@ -11864,7 +11880,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(403).json({ error: "Only the lab owner or an admin can unlock an attested reference range" });
     }
     const mapId = Number(req.params.id);
-    const analyte = decodeURIComponent(req.params.analyte);
+    const analyte = safeDecodeParam(req.params.analyte);
     const row = (db as any).$client.prepare(
       "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?"
     ).get(mapId, analyte) as any;
@@ -11911,7 +11927,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
     const mapId = Number(req.params.id);
     const instrumentId = Number(req.params.instId);
-    const analyte = decodeURIComponent(req.params.analyte);
+    const analyte = safeDecodeParam(req.params.analyte);
     const lockErr = amrLockConflict(mapId, instrumentId, analyte, req.body);
     if (lockErr) return res.status(409).json({ error: lockErr });
     const { amr_low, amr_high } = req.body;
@@ -11936,7 +11952,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
     const mapId = Number(req.params.id);
     const instrumentId = Number(req.params.instId);
-    const analyte = decodeURIComponent(req.params.analyte);
+    const analyte = safeDecodeParam(req.params.analyte);
     const { attested_by, attested_title } = req.body || {};
     if (!attested_by?.trim() || !attested_title?.trim()) {
       return res.status(400).json({ error: "attested_by and attested_title are required" });
@@ -11968,7 +11984,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     const mapId = Number(req.params.id);
     const instrumentId = Number(req.params.instId);
-    const analyte = decodeURIComponent(req.params.analyte);
+    const analyte = safeDecodeParam(req.params.analyte);
     const row = (db as any).$client.prepare(
       "SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ?"
     ).get(mapId, instrumentId, analyte) as any;
@@ -12458,7 +12474,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       WHERE map_id=? AND analyte=?
     `).run(active, last_cal_ver ?? null, last_method_comp ?? null,
       last_precision ?? null, last_sop_review ?? null, notes ?? null, now,
-      req.params.id, decodeURIComponent(req.params.analyte));
+      req.params.id, safeDecodeParam(req.params.analyte));
     (db as any).$client.prepare("UPDATE veritamap_maps SET updated_at = ? WHERE id = ?").run(now, req.params.id);
     res.json({ ok: true });
   });
@@ -13403,12 +13419,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put("/api/veritamap/maps/:id/analyte-values/:analyte", authMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
     // Wave A4: enforce the 493.1253 attestation lock on the legacy PUT too.
     {
-      const lockErr = refLockConflict(Number(req.params.id), decodeURIComponent(req.params.analyte), req.body);
+      const lockErr = refLockConflict(Number(req.params.id), safeDecodeParam(req.params.analyte), req.body);
       if (lockErr) return res.status(409).json({ error: lockErr });
     }
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap\u2122 subscription required" });
     const mapId = Number(req.params.id);
-    const analyte = decodeURIComponent(req.params.analyte);
+    const analyte = safeDecodeParam(req.params.analyte);
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const map = userCanAccessMap(mapId, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
@@ -13446,7 +13462,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap\u2122 subscription required" });
     const mapId = Number(req.params.id);
     const instrumentId = Number(req.params.instId);
-    const analyte = decodeURIComponent(req.params.analyte);
+    const analyte = safeDecodeParam(req.params.analyte);
     // Wave A4: enforce the 493.1253 attestation lock on the legacy PUT too.
     {
       const lockErr = amrLockConflict(mapId, instrumentId, analyte, req.body);
