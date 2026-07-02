@@ -159,6 +159,19 @@ function injectSeoTags(html: string, routePath: string, meta: SEOMetadata): stri
   } else if (routePath === "/pricing") {
     noscriptInner += renderPricingContent();
   }
+  // If this route carries a FAQPage node, expose its Q&A in the noscript body so
+  // crawlers and AI answer engines read the questions and answers as page text,
+  // matching the on-page FAQ and the FAQPage JSON-LD (single source: faqContent).
+  const jsonLdBlocks = Array.isArray(meta.jsonLd) ? meta.jsonLd : meta.jsonLd ? [meta.jsonLd] : [];
+  const faqNode = jsonLdBlocks.find(
+    (b) => (b as Record<string, unknown>)?.["@type"] === "FAQPage",
+  ) as { mainEntity?: Array<{ name?: string; acceptedAnswer?: { text?: string } }> } | undefined;
+  if (faqNode && Array.isArray(faqNode.mainEntity)) {
+    const qa = faqNode.mainEntity
+      .map((q) => `<h3>${escHtml(q?.name ?? "")}</h3><p>${escHtml(q?.acceptedAnswer?.text ?? "")}</p>`)
+      .join("");
+    if (qa) noscriptInner += `<section><h2>Frequently Asked Questions</h2>${qa}</section>`;
+  }
   html = html.replace('<div id="root"></div>', `<div id="root"><noscript>${noscriptInner}</noscript></div>`);
 
   // Inject per-route JSON-LD (e.g. Article, FAQPage, DefinedTerm) when provided,

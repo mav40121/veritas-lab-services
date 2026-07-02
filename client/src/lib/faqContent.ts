@@ -133,6 +133,178 @@ export const QC_ARTICLE_FAQ: FaqQA[] = [
   },
 ];
 
+// /resources/clia-tea-lookup  (visible "Frequently Asked Questions")
+export const TEA_LOOKUP_FAQ: FaqQA[] = [
+  {
+    q: "What is CLIA total allowable error (TEa)?",
+    a: "The maximum permissible difference between a laboratory's result and the target value for an analyte, published as the proficiency testing acceptable performance criterion in 42 CFR Part 493, Subpart I.",
+  },
+  {
+    q: "Where do these TEa values come from?",
+    a: "The CLIA PT acceptance limits in 42 CFR §493.927 through §493.959, updated by the CLIA PT final rule (CMS-3355-F, effective July 11, 2024, implemented January 1, 2025).",
+  },
+  {
+    q: "Can I use CLIA TEa as my calibration verification acceptance criterion?",
+    a: "Many laboratories do, with medical director or designee approval, because it is a federally published, defensible threshold rather than a manufacturer claim.",
+  },
+  {
+    q: "What is the ADLM half-TEa recommendation?",
+    a: "ADLM suggests an internal goal at half of the CLIA TEa, giving a quality margin that keeps results well inside acceptable performance.",
+  },
+  {
+    q: "Is the lookup tool free?",
+    a: "Yes. It requires no login and covers every analyte in the table.",
+  },
+];
+
+// /resources/calibration-verification-requirements-clia  (visible "Frequently Asked Questions")
+export const CALVER_REQ_FAQ: FaqQA[] = [
+  {
+    q: "How often is calibration verification required under CLIA?",
+    a: "At least every six months for each non-waived quantitative test system, under 42 CFR §493.1255.",
+  },
+  {
+    q: "What events trigger it outside the six-month cycle?",
+    a: "A reagent lot change when the manufacturer specifies it, major instrument maintenance or repair that could affect performance, and QC results suggesting the calibration may have shifted. Document the trigger with the results.",
+  },
+  {
+    q: "Which tests require it?",
+    a: "All quantitative non-waived tests reported to patients: chemistry panels, hematology indices with a reportable range, coagulation, and quantitative immunoassays.",
+  },
+  {
+    q: "What must the record include?",
+    a: "Date, analyst, materials with lot numbers and concentrations, measured results per level, calculated recovery, and the pass/fail determination with criteria applied, reviewed by the medical director or designee.",
+  },
+  {
+    q: "What is the most common inspection finding?",
+    a: "Incomplete documentation, not the absence of the verification. Missing lot numbers, no pass/fail determination, or no record of who reviewed it.",
+  },
+];
+
+// /resources/how-to-perform-method-comparison-study  (visible "Frequently Asked Questions")
+export const METHODCOMP_FAQ: FaqQA[] = [
+  {
+    q: "When is a method comparison study required?",
+    a: "When placing a new analyzer into service, adding a new reagent system for an existing test, or demonstrating two instruments running the same analyte produce equivalent results.",
+  },
+  {
+    q: "How many specimens does it need?",
+    a: "A minimum of 40 patient specimens spanning the full analytical measurement range, deliberately collected at low, mid, and high concentrations.",
+  },
+  {
+    q: "Why patient specimens instead of QC material?",
+    a: "Fresh patient samples reflect the actual matrix the methods encounter in routine testing; QC materials do not.",
+  },
+  {
+    q: "What statistics does it use?",
+    a: "Slope, y-intercept, Pearson correlation coefficient, and bias at medical decision points. Deming or Passing-Bablok regression is preferred over ordinary least squares because it accounts for error in both methods.",
+  },
+  {
+    q: "How do you set pass or fail?",
+    a: "The laboratory or manufacturer sets acceptable limits for slope, intercept, and bias, defined before running the study, with bias at decision points within total allowable error. CLSI EP09-A3 is the reference protocol.",
+  },
+];
+
+// /resources/precision-verification-report-interpretation-guide  (visible "Frequently Asked Questions")
+export const PRECISION_FAQ: FaqQA[] = [
+  {
+    q: "Why is precision verification required?",
+    a: "42 CFR §493.1253 requires laboratories to verify performance specifications, including precision, before reporting patient results and after changes that could affect performance.",
+  },
+  {
+    q: "What do mean, SD, and CV mean on the report?",
+    a: "Mean is the average of replicates; standard deviation is how widely replicates spread around it; coefficient of variation is the SD as a percent of the mean, CV = (SD / mean) x 100.",
+  },
+  {
+    q: "How many replicates does it need?",
+    a: "CLSI EP15-A3 recommends at least 20 replicates for within-run precision and a 5-day by 5-replicate design for full within-laboratory precision. Fewer than 20 widens the confidence interval and weakens the estimate.",
+  },
+  {
+    q: "What do Pass, Fail, and Uncertain mean?",
+    a: "Against a vendor SD goal, Pass means the upper bound of the 95 percent confidence interval for the observed SD is below the goal; Fail means the lower bound exceeds it; Uncertain means the goal falls inside the interval and more replicates may be warranted.",
+  },
+  {
+    q: "What acceptance criterion should I use?",
+    a: "A fraction of the CLIA TEa is common, often the ADLM half-TEa convention, or the manufacturer's published within-run SD. Final acceptance rests with the medical director or designee.",
+  },
+];
+
+// /resources/tjc-laboratory-inspection-checklist-preparation  (visible "Frequently Asked Questions")
+export const TJC_INSPECTION_FAQ: FaqQA[] = [
+  {
+    q: "How does a TJC laboratory survey work?",
+    a: "It follows a tracer: the surveyor starts at a patient result and works backward through who ordered it, which analyzer ran it, its verification records, who performed it, their competency, and the proficiency testing record for that analyte.",
+  },
+  {
+    q: "What do surveyors trace most consistently?",
+    a: "Five areas: performance verification records, proficiency testing, competency assessments, test menu and instrument documentation, and current approved procedures.",
+  },
+  {
+    q: "How do you prepare for a Joint Commission laboratory survey?",
+    a: "Maintain documentation continuously, be able to retrieve any record in under two minutes, and run a mock survey about ninety days before the anticipated survey window using your actual documentation.",
+  },
+  {
+    q: "When should you run a mock survey?",
+    a: "About ninety days out, so any gap found can be corrected before it becomes a finding on the official report.",
+  },
+  {
+    q: "What is the most common survey pitfall?",
+    a: "\"We do it, we just do not document it.\" Without a record, a surveyor cannot distinguish a compliant laboratory from a non-compliant one.",
+  },
+];
+
+// /resources/cost-per-reportable-test-four-layer-framework  (visible "Frequently Asked Questions")
+export const CPRT_FAQ: FaqQA[] = [
+  {
+    q: "What is cost per reportable test (CPRT)?",
+    a: "The fully-considered cost of producing one reportable laboratory result, built up in four layers under the CLSI GP11-A framework.",
+  },
+  {
+    q: "What are the four CPRT layers?",
+    a: "Layer 1 is reagents and supplies; Layer 2 adds direct labor; Layer 3 adds equipment depreciation and maintenance; Layer 4 adds overhead. Each answers a different financial question.",
+  },
+  {
+    q: "Which layer for an insource vs send-out decision?",
+    a: "Usually Layer 2, reagents and supplies plus direct labor, when the analyzer is already on the floor.",
+  },
+  {
+    q: "Which layer justifies a new analyzer?",
+    a: "Layer 3, which adds equipment depreciation and maintenance across projected volume.",
+  },
+  {
+    q: "Which layer sets a charge-master price?",
+    a: "Layer 4, the fully loaded cost including overhead.",
+  },
+  {
+    q: "Does CLIA require CPRT?",
+    a: "No, but 42 CFR §493.1407 and §493.1445 make the laboratory director responsible for defending the laboratory's resource decisions.",
+  },
+];
+
+// /resources/manual-logs-why-most-labs-should-stop  (visible "Frequently Asked Questions")
+export const MANUAL_LOGS_FAQ: FaqQA[] = [
+  {
+    q: "Why do laboratories use manual logs?",
+    a: "Originally to solve a memory problem from an era of few computers: record the result at the bench before an interruption could distort it.",
+  },
+  {
+    q: "What is the hidden cost of a manual log?",
+    a: "It introduces a transcription error mode, a result miscopied from the log into the LIS, an error that cannot occur without the log.",
+  },
+  {
+    q: "Why is documented review of transcribed results required?",
+    a: "That review exists to catch the transcription error the log itself introduces; it is the administrative cost of the log's bench convenience.",
+  },
+  {
+    q: "What does direct entry from analyzer to LIS eliminate?",
+    a: "The transcription event and the associated review burden, and it shortens time to result availability.",
+  },
+  {
+    q: "When is a manual log still appropriate?",
+    a: "Narrow cases only: a waived test or instrument that does not interface with the LIS, or a send-out requiring a paper requisition for chain of custody.",
+  },
+];
+
 // /faq  (the main FAQ page, grouped by category)
 export const FAQ_CATEGORIES: FaqCategory[] = [
   {
