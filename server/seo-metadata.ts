@@ -51,6 +51,40 @@ function definedTermJsonLd(name: string, description: string, pagePath: string):
   };
 }
 
+// Article JSON-LD for a resource article. Mirrors the shape of the existing
+// hand-authored Article nodes (EP26, TEa, QC). articleBody is composed from the
+// article's own headline lede, key takeaways, and section headings, copied
+// verbatim from the rendered page, so the body signal is faithful with zero
+// drift and no fabricated content. Because articleBody is set here, the later
+// enrichArticleBodies() pass leaves these nodes untouched.
+function articleJsonLd(opts: {
+  headline: string;
+  description: string;
+  articleBody: string;
+  path: string;
+  datePublished: string;
+  dateModified?: string;
+}): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: opts.headline,
+    description: opts.description,
+    articleBody: opts.articleBody,
+    image: `${BASE_URL}/og-image.png`,
+    author: {
+      "@type": "Person",
+      name: "Michael Veri",
+      jobTitle: "Former Joint Commission Laboratory Surveyor",
+      url: `${BASE_URL}/team`,
+    },
+    publisher: { "@id": `${BASE_URL}/#organization` },
+    datePublished: opts.datePublished,
+    dateModified: opts.dateModified ?? opts.datePublished,
+    mainEntityOfPage: `${BASE_URL}${opts.path}`,
+  };
+}
+
 export const seoMetadataMap: Record<string, SEOMetadata> = {
   "/": {
     title: "VeritaAssure\u2122 Lab Compliance Software | Veritas Lab Services",
@@ -145,6 +179,13 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     title: "CLIA Calibration Verification and Method Comparison Guide | Veritas Lab Services",
     description: "A complete guide to CLIA calibration verification and method comparison requirements for clinical laboratories, including documentation and frequency requirements.",
     jsonLd: [
+      articleJsonLd({
+        headline: "CLIA Calibration Verification and Method Comparison: What Lab Managers Actually Need to Know",
+        description: "A complete guide to CLIA calibration verification and method comparison requirements for clinical laboratories, including documentation and frequency requirements.",
+        articleBody: "Most labs are spending money on kits they don't need, performing studies on instruments that don't require them, and missing a built-in 20-day compliance window that would eliminate deadline stress entirely. Here's how to fix all three. Calibration verification is an accuracy study: it measures correctness, not consistency. Correlation/method comparison studies are precision studies: they measure reproducibility across methods. Waived tests and factory-calibrated instruments do NOT require calibration verification. Both requirements can often be satisfied simultaneously using the same specimens. The compliance window is six months PLUS twenty days from the director sign-off date, not the data collection date. Sections: Why This Matters; Precision vs. Accuracy: The Foundation Everything Else Rests On; What Is Calibration Verification Under CLIA?; What Is a Correlation / Method Comparison Study?; The Efficiency Play: Run Both Studies Simultaneously; The Six-Month-Plus-Twenty-Day Rule: The Most Underused Compliance Tool; Designing an Efficient Compliance Program; Frequently Asked Questions; Conclusion.",
+        path: "/resources/clia-calibration-verification-method-comparison",
+        datePublished: "2026-04-30",
+      }),
       faqPageJsonLd(CALVER_ARTICLE_FAQ),
       definedTermJsonLd(
         "Calibration Verification",
@@ -278,26 +319,68 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   "/resources/how-veritaassure-trains-lab-leaders": {
     title: "How VeritaAssure\u2122 Trains Lab Leaders | Veritas Lab Services",
     description: "How VeritaAssure\u2122 helps laboratory leaders build compliance knowledge and stay current with CLIA, Joint Commission, and COLA requirements.",
+    jsonLd: articleJsonLd({
+      headline: "How VeritaAssure\u2122 Trains the Next Generation of Lab Leaders",
+      description: "How VeritaAssure\u2122 helps laboratory leaders build compliance knowledge and stay current with CLIA, Joint Commission, and COLA requirements.",
+      articleBody: "Most lab directors learn compliance the hard way: the first time a surveyor walks in and asks for documentation they don't have. There is no formal curriculum for laboratory leadership. You earn a degree in laboratory science, pass your boards, work the bench for years, and then one day you are handed keys to a department with CLIA obligations, accreditation requirements, and a staff looking to you for direction. Nobody teaches you how to manage a calibration verification program. Nobody explains what a surveyor actually looks for when they pull your competency records. You figure it out, sometimes with the help of a mentor, sometimes the hard way. VeritaAssure\u2122 was built to change that. Each VeritaAssure\u2122 module teaches the regulatory framework it operates within, not just how to fill out forms. New directors can build institutional knowledge in their first 90 days using a structured five-module path. Health systems can use VeritaAssure\u2122 as a shared training environment across multiple labs and supervisors. Lab Management 101 (the book) and VeritaAssure\u2122 (the software) form a complete leadership curriculum. The documentation produced during training is real and audit-ready, not a separate exercise. Sections: The Gap Between Bench Competence and Leadership Competence; Why Software Can Teach; The Curriculum Nobody Offers; Lab Management 101 and the Full Picture; A Practical Development Path; Built for the Leaders Who Come Next.",
+      path: "/resources/how-veritaassure-trains-lab-leaders",
+      datePublished: "2026-04-25",
+    }),
   },
   "/resources/calibration-verification-requirements-clia": {
     title: "Calibration Verification Requirements Under CLIA | Veritas Lab Services",
     description: "Detailed breakdown of CLIA calibration verification requirements including frequency, documentation, acceptable performance criteria, and common surveyor findings.",
+    jsonLd: articleJsonLd({
+      headline: "Calibration Verification Requirements Under CLIA: What Every Lab Director Needs to Know",
+      description: "Detailed breakdown of CLIA calibration verification requirements including frequency, documentation, acceptable performance criteria, and common surveyor findings.",
+      articleBody: "Calibration verification is one of the most consistently cited deficiencies in CLIA and CAP laboratory inspections. This article covers what the regulation requires and what your records need to show. Calibration verification must be performed at least every six months for all non-waived quantitative tests. Several events trigger out-of-cycle verification beyond the standard schedule. Documentation completeness is the most common inspection finding, not whether the verification was performed. VeritaCheck™ automates calculations, applies acceptance criteria, and generates inspector-ready PDF reports. Sections: What the Regulation Requires; When You Must Verify Beyond the Six-Month Cycle; What Analytes Require It; What Your Documentation Must Include; Common Inspection Findings; A More Efficient Approach.",
+      path: "/resources/calibration-verification-requirements-clia",
+      datePublished: "2026-04-25",
+    }),
   },
   "/resources/how-to-perform-method-comparison-study": {
     title: "How to Perform a Method Comparison Study for CLIA | Veritas Lab Services",
     description: "Step-by-step guide to performing a CLIA-compliant method comparison study, including sample requirements, statistical analysis, and acceptable bias thresholds.",
+    jsonLd: articleJsonLd({
+      headline: "How to Perform a Method Comparison Study in Your Clinical Laboratory",
+      description: "Step-by-step guide to performing a CLIA-compliant method comparison study, including sample requirements, statistical analysis, and acceptable bias thresholds.",
+      articleBody: "A method comparison study, also called a Correlation study, is required whenever your laboratory implements a new test method, adds a new instrument that performs an existing test, or needs to demonstrate equivalence between two instruments running the same analyte. Done correctly, it provides documented evidence that the new method produces results comparable to your existing method across the full analytical range. Done incorrectly or incompletely, it is a finding waiting to appear on your CAP or TJC inspection report. Method comparison is required when placing a new analyzer into service, adding a new reagent system, or comparing two instruments. Use a minimum of 40 patient specimens spanning the full analytical measurement range. Define your acceptance criteria before running the study, not after. VeritaCheck™ handles regression calculations and generates an inspector-ready report automatically. Sections: When a Method Comparison Is Required; Specimen Requirements; Running the Study; What Pass or Fail Means; Common Mistakes; Documentation for Your Inspection File.",
+      path: "/resources/how-to-perform-method-comparison-study",
+      datePublished: "2026-04-25",
+    }),
   },
   "/resources/tjc-laboratory-inspection-checklist-preparation": {
     title: "TJC Laboratory Inspection Checklist and Preparation Guide | Veritas Lab Services",
     description: "Prepare your clinical laboratory for a Joint Commission survey. Common findings, checklist items, and strategies from a former TJC laboratory surveyor.",
+    jsonLd: articleJsonLd({
+      headline: "Preparing for a TJC Laboratory Inspection: A Practical Checklist for Lab Directors",
+      description: "Prepare your clinical laboratory for a Joint Commission survey. Common findings, checklist items, and strategies from a former TJC laboratory surveyor.",
+      articleBody: "The laboratories that do well on TJC surveys are not the ones that scrambled the week before. They are the ones that maintain documentation continuously and can retrieve anything in under two minutes. A TJC laboratory survey does not begin with a checklist. It begins with a tracer, and the tracer starts at the patient. A surveyor follows a test result backward through your system: who ordered it, which analyzer ran it, what verification was on file for that analyzer, who performed the test, how their competency was documented, and where your proficiency testing record sits for that analyte. Every link in that chain either holds or does not. TJC surveys follow a tracer methodology, starting at the patient and working backward through your system. Five areas are traced most consistently: performance verification, proficiency testing, competency, instrument documentation, and procedures. Documentation is not paperwork, it is the evidence that your quality practices exist. Conduct a mock survey ninety days before your anticipated survey window. Sections: The Five Areas Surveyors Trace Most Consistently; How VeritaAssure™ Addresses Each Area; The 90-Day Rule.",
+      path: "/resources/tjc-laboratory-inspection-checklist-preparation",
+      datePublished: "2026-05-17",
+    }),
   },
   "/resources/how-to-validate-veritacheck-clia": {
     title: "How to Validate VeritaCheck\u2122 for CLIA Compliance | Veritas Lab Services",
     description: "Software validation documentation for VeritaCheck\u2122 under CLIA requirements. How to validate laboratory information systems and comply with 42 CFR 493.1252.",
+    jsonLd: articleJsonLd({
+      headline: "How to Validate VeritaCheck\u2122 for Your Clinical Laboratory: A Step-by-Step Guide for Lab Directors",
+      description: "Software validation documentation for VeritaCheck\u2122 under CLIA requirements. How to validate laboratory information systems and comply with 42 CFR 493.1252.",
+      articleBody: "If you are preparing to use VeritaCheck\u2122 in your clinical laboratory, your first question should be: do we have a validation record on file? For most regulated labs, the answer needs to be yes before you run a single study through any software tool. The good news is that validating VeritaCheck\u2122 is straightforward, and most labs can complete it in under two hours. Software validation is required under CLIA 42 CFR 493.1251 and CAP checklist item COM.01300. The appropriate framework is IQ/OQ/PQ: Installation Qualification, Operational Qualification, Performance Qualification. Most labs complete the full process in under two hours. A free Software Validation Record template is available at veritaslabservices.com. Sections: Why Software Validation Is Required; What Validating VeritaCheck\u2122 Actually Means; Step-by-Step Validation Process; The Software Validation Template; How Long Does It Take?; What to Keep on File.",
+      path: "/resources/how-to-validate-veritacheck-clia",
+      datePublished: "2026-05-17",
+    }),
   },
   "/resources/laboratory-inventory-management": {
     title: "Laboratory Inventory Management Best Practices | Veritas Lab Services",
     description: "Laboratory inventory management guide covering reagent tracking, expiration monitoring, and compliance documentation for CLIA and accreditation surveys.",
+    jsonLd: articleJsonLd({
+      headline: "Laboratory Inventory Management: Stop Guessing, Start Using the Math",
+      description: "Laboratory inventory management guide covering reagent tracking, expiration monitoring, and compliance documentation for CLIA and accreditation surveys.",
+      articleBody: "Most labs manage inventory by feel. They order when something looks low, stock extra because they are nervous, and scramble when a standing order misses a delivery. There is a better way - and the formulas are not complicated. The reorder point formula eliminates stockouts - it tells you exactly when to order, not when you feel like ordering. Burn rate is not static - it must be reviewed monthly or your reorder points become meaningless. Standing orders are a tool, not a strategy - they need quarterly review or they silently drift out of alignment. Safety stock is calculated, not guessed - 3 to 5 days covers most situations. Overstocking is not safe - it ties up budget and creates expiration risk. TJC and CLIA surveyors expect documented inventory processes - gut feel is not a documented process. Sections: Why This Is a Quality Issue, Not Just a Logistics Issue; The Core Concepts; The Reorder Point: When to Order; How Much to Order; Building the System: What Every Lab Needs; Quick Reference; Glossary.",
+      path: "/resources/laboratory-inventory-management",
+      datePublished: "2026-05-10",
+    }),
   },
   "/resources/clia-tea-lookup": {
     title: "CLIA TEa Lookup Tool | Total Allowable Error by Analyte | Veritas Lab Services",
@@ -374,18 +457,46 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   "/resources/manual-logs-why-most-labs-should-stop": {
     title: "Manual Logs: Why Most Labs Should Stop | Veritas Lab Services",
     description: "Most clinical labs still use paper or Excel logs for QC, maintenance, and competency. Why that fails CLIA, TJC, and CAP audits, and what to do instead.",
+    jsonLd: articleJsonLd({
+      headline: "Manual Logs: Why We Used Them, and Why Most Labs Should Stop",
+      description: "Most clinical labs still use paper or Excel logs for QC, maintenance, and competency. Why that fails CLIA, TJC, and CAP audits, and what to do instead.",
+      articleBody: "Manual logs are one of those things in the laboratory that everyone uses, nobody questions, and almost nobody could explain the original reason for. They are a fix for a problem most modern labs no longer have. Manual logs exist to solve a memory problem from an era when computers were scarce in the lab. Every time a result moves from the bench to a log to the computer, a new error mode is introduced: the transcription event. The 24-hour transcribed-result review requirement exists specifically to catch the errors the log itself creates. In a modern lab with a computer on every counter, direct entry from the analyzer to the LIS eliminates both the memory risk and the transcription risk. Removing the log removes the administrative review burden that comes with it. Sections: Why the manual log exists; The hidden cost of the log; What changed; What direct entry buys you; When the log still earns its place.",
+      path: "/resources/manual-logs-why-most-labs-should-stop",
+      datePublished: "2026-05-13",
+    }),
   },
   "/resources/precision-verification-report-interpretation-guide": {
     title: "Interpret EP15 Precision Reports | Veritas Lab Services",
     description: "How to interpret EP15-A3 precision verification reports for CLIA compliance: SD, CV, total imprecision, and what surveyors look for in your documentation.",
+    jsonLd: articleJsonLd({
+      headline: "Precision Verification Report Interpretation Guide",
+      description: "How to interpret EP15-A3 precision verification reports for CLIA compliance: SD, CV, total imprecision, and what surveyors look for in your documentation.",
+      articleBody: "How to read every field, table, and chart on a VeritaCheck precision verification report, and how each one maps to 42 CFR §493 and CLSI EP15-A3. Sections: Why precision verification is required; What the simple precision study does; Statistical definitions; Advanced (EP15) mode and ANOVA components; Precision verification goal modes; Pass, Fail, and Uncertain; Reading the VeritaCheck report; References.",
+      path: "/resources/precision-verification-report-interpretation-guide",
+      datePublished: "2026-05-20",
+    }),
   },
   "/resources/cost-per-reportable-test-four-layer-framework": {
     title: "CPRT Four-Layer Framework | Veritas Lab Services",
     description: "The CPRT four-layer framework (reagents, labor, equipment, overhead) built on CLSI GP11-A. How to use it for budget, capital, and contract negotiations.",
+    jsonLd: articleJsonLd({
+      headline: "What Your Tests Actually Cost: A Four-Layer CPRT Framework for Clinical Laboratories",
+      description: "The CPRT four-layer framework (reagents, labor, equipment, overhead) built on CLSI GP11-A. How to use it for budget, capital, and contract negotiations.",
+      articleBody: "The CLSI GP11-A four-layer framework for cost-per-reportable-test, which question each layer answers, the discipline required to compare two configurations honestly, and the moves a laboratory director can make this quarter. In twenty-three years of clinical laboratory work and more than two hundred surveys with The Joint Commission, the single most common pattern I have seen at the intersection of the lab director's office and the CFO's office is this. When finance asks what a test costs, the laboratory gives a number that does not match the question being asked. The number is usually right. The question being answered is the wrong one. The decision that follows is made on a wrong premise. The clinical laboratory industry has had a defensible framework for cost-per-reportable-test (CPRT) since the late 1990s, in the form of NCCLS document GP11-A, later continued under CLSI. The framework separates the cost of a single reportable result into four layers, each of which answers a different financial question. The framework is conceptually unchanged in the years since. It is also rarely operationalized inside the laboratories that need it most. This article walks through the four layers, the question each one answers, the discipline required to compare two configurations honestly, and the specific operational moves a laboratory director can make this quarter to put the framework in front of a finance team. Sections: 1. Why most laboratories cannot answer the cost question well; 2. The four-layer model from CLSI GP11-A; 3. Matching the layer to the question; 4. Worked example: sodium under two configurations; 5. What to do this quarter; 6. The CLIA context; 7. Closing: VeritaOps™ and the next step.",
+      path: "/resources/cost-per-reportable-test-four-layer-framework",
+      datePublished: "2026-05-28",
+    }),
   },
   "/resources/why-veritacheck-vs-legacy-verification": {
     title: "VeritaCheck\u2122 vs Legacy Verification | Veritas Lab Services",
     description: "How VeritaCheck\u2122 improves on legacy EP15, EP9, calibration verification, and method comparison workflows. CLIA-compliant PDF output, director sign-off.",
+    jsonLd: articleJsonLd({
+      headline: "Why VeritaCheck\u2122 vs. Legacy Verification Software",
+      description: "How VeritaCheck\u2122 improves on legacy EP15, EP9, calibration verification, and method comparison workflows. CLIA-compliant PDF output, director sign-off.",
+      articleBody: "A side-by-side comparison authored for lab directors evaluating a tool change. Four dimensions: cost, time-to-first-study, integration breadth, and compliance defensibility. Most clinical laboratories that run method verification studies today use a legacy desktop verification tool that has been the de facto standard for the better part of two decades. The tool works. It is also priced for an era before browser-based clinical software, structured to assume a single Windows workstation, and integrated only with itself. VeritaCheck\u2122 is a browser-based alternative that produces the same verification studies under the same CLSI EP standards, at a cost that is closer to a consumer SaaS subscription than a per-seat enterprise license, integrated into a broader VeritaAssure\u2122 platform that handles policy, mapping, competency, lab certificates, and cost-per-reportable-test in one login. This page lays out the four dimensions a lab director should compare before switching. Sections: When to switch.",
+      path: "/resources/why-veritacheck-vs-legacy-verification",
+      datePublished: "2026-06-14",
+    }),
   },
 };
 
