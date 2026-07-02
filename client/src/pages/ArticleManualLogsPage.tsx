@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle2, Clock, User } from "lucide-react";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
+import { MANUAL_LOGS_FAQ } from "@/lib/faqContent";
 
 export default function ArticleManualLogsPage() {
   useSEO({
@@ -154,6 +155,14 @@ export default function ArticleManualLogsPage() {
           <p className="italic text-muted-foreground text-center pt-4">
             Learn more at <Link href="/" className="text-primary hover:underline">veritaslabservices.com</Link>, your partner in clinical compliance.
           </p>
+
+          <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Frequently Asked Questions</h2>
+          {MANUAL_LOGS_FAQ.map(({ q, a }) => (
+            <div key={q} className="border-b border-border py-5 last:border-0">
+              <h3 className="font-semibold text-base mb-2">{q}</h3>
+              <p className="text-muted-foreground text-sm leading-relaxed">{a}</p>
+            </div>
+          ))}
 
           {/* Newsletter */}
           <NewsletterSignup variant="inline" source="article-manual-logs" />

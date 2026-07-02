@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle2, ChevronRight, FlaskConical, AlertTriangle } from "lucide-react";
+import { PRECISION_FAQ } from "@/lib/faqContent";
 
 function Callout({ children, type = "info" }: { children: React.ReactNode; type?: "info" | "warning" | "tip" }) {
   const styles = {
@@ -210,6 +211,15 @@ export default function ArticlePrecisionInterpretationPage() {
             <p><strong>Histogram.</strong> Frequency distribution of the observed values with a normal-curve overlay scaled to the modal bar. Vertical lines mark the observed mean and (when supplied) the target mean.</p>
             <p><strong>Vendor SD Verdict bar (when present).</strong> Vertical bar at the observed SD with horizontal fence whiskers at the 95 percent confidence interval bounds and a dashed goal line at the vendor SD. Color is green for Pass, amber for Uncertain, magenta-red for Fail.</p>
             <p><strong>Supporting Data and User Specifications.</strong> Study type, test name, adopted acceptance criterion, CFR reference, analyst, date, instrument, test methods, and (when populated) precision verification goal mode, within-run SD from vendor, target mean, target CV, units, control lot, reagent lot, and comment.</p>
+          </Section>
+
+          <Section id="faq" title="Frequently Asked Questions">
+            {PRECISION_FAQ.map(({ q, a }) => (
+              <div key={q} className="border-b border-border py-4 last:border-0">
+                <h3 className="font-semibold text-base mb-2">{q}</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">{a}</p>
+              </div>
+            ))}
           </Section>
 
           <Section id="references" title="References">
