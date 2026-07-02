@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ChevronRight, Clock, FlaskConical, User, Search, Download, Shield, CheckCircle2 } from "lucide-react";
+import { ChevronRight, Clock, FlaskConical, User, Search, Download, Shield, CheckCircle2, Tag } from "lucide-react";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
 import { teaData } from "@/lib/cliaTeaData";
 
@@ -260,6 +260,13 @@ return (
                 url: "/api/downloads/software-validation-template",
                 filename: "VeritaCheck_Software_Validation_Template.pdf",
                 icon: CheckCircle2,
+              },
+              {
+                title: "Specimen Tube Labeling Guide",
+                desc: "One-page visual guide to labeling specimen tubes the right way: the barcode-scannable 'best dressed' tube plus the eight most common errors that stall analyzers and slow turnaround. Print it and post it at every collection and accessioning station.",
+                url: "/api/downloads/specimen-tube-labeling-guide",
+                filename: "Specimen_Tube_Labeling_Guide.pdf",
+                icon: Tag,
               },
             ].map(({ title, desc, url, filename, icon: Icon }) => (
               <Card key={title} className="border-primary/20 hover:border-primary/40 hover:shadow-md transition-all group">
