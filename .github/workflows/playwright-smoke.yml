@@ -26,6 +26,16 @@ on:
       - main
   workflow_dispatch:
 
+# Serialize runs per ref and never cancel an in-progress run. Rapid back-to-back
+# merges to main can leave a main-branch run cancelled, which Railway's
+# "wait for CI" reads as a failed check suite and then SKIPS the deploy (the
+# overnight SEO batch, PRs #898-902, all skipped for exactly this reason).
+# cancel-in-progress:false makes each commit's run complete, so the suite goes
+# green and Railway ships instead of skipping.
+concurrency:
+  group: playwright-smoke-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   playwright-smoke:
     name: playwright-smoke
