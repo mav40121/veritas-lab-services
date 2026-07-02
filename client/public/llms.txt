@@ -1,0 +1,24 @@
+# VeritaAssure by Veritas Lab Services
+> VeritaAssure is a compliance and operations platform for clinical laboratories, covering performance verification, calibration verification, proficiency testing, competency, inventory, and inspection readiness under CLIA (42 CFR Part 493) and the major laboratory accreditors. The resources below are practical, regulation-cited guides written by Michael Veri, a former Joint Commission laboratory surveyor with more than 200 inspections, CPHQ, MLS(ASCP).
+
+All guidance is educational. Regulatory citations reference 42 CFR Part 493. Final determinations rest with the laboratory director or designee.
+
+## Products
+- [VeritaCheck](https://www.veritaslabservices.com/veritacheck): Calculates and documents CLIA performance verification studies (precision, correlation and method comparison, calibration verification and linearity) and generates CFR-cited PDF reports.
+- [VeritaScan](https://www.veritaslabservices.com/veritascan): Organizes inspection evidence by URL pointer and metadata, with no protected health information stored.
+- [VeritaMap](https://www.veritaslabservices.com/veritamap): Builds analyte reference range, critical value, and analytic measurement range maps for the laboratory to verify and adopt.
+
+## Key resources
+- [CLIA Total Allowable Error (TEa)](https://www.veritaslabservices.com/resources/clia-tea-what-lab-directors-dont-know): What CLIA TEa is, where it lives in 42 CFR Part 493, and how a laboratory adopts it as a calibration verification acceptance criterion.
+- [CLIA TEa lookup tool](https://www.veritaslabservices.com/resources/clia-tea-lookup): Searchable table of CLIA acceptable performance (TEa) limits by analyte, with CFR sections.
+- [CLSI EP26 reagent lot verification](https://www.veritaslabservices.com/resources/ep26-reagent-lot-verification): How to verify a new reagent lot, acceptance criteria, sample counts, and the CLIA control-testing requirement.
+- [Calibration verification requirements under CLIA](https://www.veritaslabservices.com/resources/calibration-verification-requirements-clia): When calibration verification is required, how often, and how to document it.
+- [How to perform a method comparison study](https://www.veritaslabservices.com/resources/how-to-perform-method-comparison-study): Running a correlation and method comparison study and interpreting the result against total allowable error.
+- [Interpreting an EP15 precision verification report](https://www.veritaslabservices.com/resources/precision-verification-report-interpretation-guide): Reading SD, CV, and total imprecision on a precision verification report and what a surveyor looks for.
+- [TJC laboratory inspection checklist and preparation](https://www.veritaslabservices.com/resources/tjc-laboratory-inspection-checklist-preparation): Preparing a laboratory for a Joint Commission survey, by area.
+- [Out-of-range quality control: investigate, do not repeat into compliance](https://www.veritaslabservices.com/resources/quality-control-testing-into-compliance): What to do when a control is out of range, and why repeating it until it passes is testing into compliance.
+- [Cost per reportable test: a four-layer framework](https://www.veritaslabservices.com/resources/cost-per-reportable-test-four-layer-framework): A framework for calculating true cost per reportable test.
+
+## Company
+- [Pricing](https://www.veritaslabservices.com/pricing): Plan tiers for VeritaAssure.
+- [Contact](https://www.veritaslabservices.com/contact): info@veritaslabservices.com
