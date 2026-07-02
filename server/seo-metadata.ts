@@ -388,7 +388,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/calculator": {
     title: "VeritaBench\u2122 | Free Lab Productivity Scorecard | VeritaAssure\u2122",
-    description: "Free VeritaBench\u2122 benchmarking tool. Enter monthly billable volume and paid hours to instantly score your lab's productivity against Clinic, Community, and Hospital peer groups.",
+    description: "Free VeritaBench\u2122 productivity tool. Enter monthly billable volume and paid hours to score your lab against community hospital, large trauma center, and reference lab peer benchmarks.",
   },
   "/veritabench": {
     title: "VeritaPace\u2122 | Monthly Lab Productivity Tracker | VeritaAssure\u2122",
