@@ -14,6 +14,13 @@ import { seoMetadataMap } from "../server/seo-metadata";
 import {
   TEA_ARTICLE_FAQ,
   CALVER_ARTICLE_FAQ,
+  TEA_LOOKUP_FAQ,
+  CALVER_REQ_FAQ,
+  METHODCOMP_FAQ,
+  PRECISION_FAQ,
+  TJC_INSPECTION_FAQ,
+  CPRT_FAQ,
+  MANUAL_LOGS_FAQ,
   FAQ_CATEGORIES,
   flattenFaq,
   type FaqQA,
@@ -97,6 +104,69 @@ assertSerializable(CALVER);
 // /faq: FAQPage from all categories
 assertFaqVerbatim(FAQ, flattenFaq(FAQ_CATEGORIES));
 assertSerializable(FAQ);
+
+// --- SEO agent Item A: 7 resource routes get FAQPage (+ DefinedTerm/HowTo) ---
+function assertHowTo(route: string) {
+  const bs = blocksFor(route);
+  const ht = bs.find((b) => b["@type"] === "HowTo");
+  check(`${route}: HowTo present`, !!ht);
+  check(`${route}: HowTo has >= 3 steps`, Array.isArray(ht?.step) && ht.step.length >= 3);
+}
+function assertArticle(route: string) {
+  check(`${route}: Article block present`, !!typeBlock(blocksFor(route), "Article"));
+}
+function assertNoEmDash(route: string) {
+  check(`${route}: no em dash in JSON-LD`, !JSON.stringify(blocksFor(route)).includes("—"));
+}
+
+const TEA_LOOKUP = "/resources/clia-tea-lookup";
+assertFaqVerbatim(TEA_LOOKUP, TEA_LOOKUP_FAQ);
+assertSerializable(TEA_LOOKUP);
+assertNoEmDash(TEA_LOOKUP);
+
+const CALVER_REQ = "/resources/calibration-verification-requirements-clia";
+assertArticle(CALVER_REQ);
+assertFaqVerbatim(CALVER_REQ, CALVER_REQ_FAQ);
+assertDefinedTerm(CALVER_REQ, "Calibration verification", CALVER_REQ);
+assertSerializable(CALVER_REQ);
+assertNoEmDash(CALVER_REQ);
+
+const METHODCOMP = "/resources/how-to-perform-method-comparison-study";
+assertArticle(METHODCOMP);
+assertFaqVerbatim(METHODCOMP, METHODCOMP_FAQ);
+assertHowTo(METHODCOMP);
+assertSerializable(METHODCOMP);
+assertNoEmDash(METHODCOMP);
+
+const PRECISION = "/resources/precision-verification-report-interpretation-guide";
+assertArticle(PRECISION);
+assertFaqVerbatim(PRECISION, PRECISION_FAQ);
+assertDefinedTerm(PRECISION, "Coefficient of variation", PRECISION);
+assertSerializable(PRECISION);
+assertNoEmDash(PRECISION);
+
+const TJC = "/resources/tjc-laboratory-inspection-checklist-preparation";
+assertArticle(TJC);
+assertFaqVerbatim(TJC, TJC_INSPECTION_FAQ);
+assertHowTo(TJC);
+assertDefinedTerm(TJC, "Tracer methodology", TJC);
+assertSerializable(TJC);
+assertNoEmDash(TJC);
+
+const CPRT = "/resources/cost-per-reportable-test-four-layer-framework";
+assertArticle(CPRT);
+assertFaqVerbatim(CPRT, CPRT_FAQ);
+assertDefinedTerm(CPRT, "Cost per reportable test", CPRT);
+assertHowTo(CPRT);
+assertSerializable(CPRT);
+assertNoEmDash(CPRT);
+
+const MANUAL_LOGS = "/resources/manual-logs-why-most-labs-should-stop";
+assertArticle(MANUAL_LOGS);
+assertFaqVerbatim(MANUAL_LOGS, MANUAL_LOGS_FAQ);
+assertDefinedTerm(MANUAL_LOGS, "Transcription event", MANUAL_LOGS);
+assertSerializable(MANUAL_LOGS);
+assertNoEmDash(MANUAL_LOGS);
 
 console.log("");
 console.log(`FAQ source counts: TEa=${TEA_ARTICLE_FAQ.length}, CalVer=${CALVER_ARTICLE_FAQ.length}, /faq=${flattenFaq(FAQ_CATEGORIES).length}`);

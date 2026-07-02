@@ -3,6 +3,13 @@ import {
   CALVER_ARTICLE_FAQ,
   EP26_ARTICLE_FAQ,
   QC_ARTICLE_FAQ,
+  TEA_LOOKUP_FAQ,
+  CALVER_REQ_FAQ,
+  METHODCOMP_FAQ,
+  PRECISION_FAQ,
+  TJC_INSPECTION_FAQ,
+  CPRT_FAQ,
+  MANUAL_LOGS_FAQ,
   FAQ_CATEGORIES,
   flattenFaq,
   type FaqQA,
@@ -530,6 +537,120 @@ function enrichArticleBodies(map: Record<string, SEOMetadata>): void {
     if (body) article.articleBody = body;
   }
 }
+// HowTo nodes composed from the approved FAQ text for the routes that warrant a
+// procedural block. Modeled on the EP26 HowTo shape.
+const methodComparisonHowTo: Record<string, unknown> = {
+  "@context": "https://schema.org",
+  "@type": "HowTo",
+  name: "How to perform a method comparison study in a clinical laboratory",
+  description: "Running a correlation and method comparison study under CLSI EP09-A3 and interpreting the result against total allowable error.",
+  step: [
+    { "@type": "HowToStep", name: "Confirm a study is required", text: "Run a method comparison when placing a new analyzer into service, adding a new reagent system for an existing test, or demonstrating that two instruments running the same analyte produce equivalent results." },
+    { "@type": "HowToStep", name: "Collect the specimens", text: "Use a minimum of 40 patient specimens spanning the full analytical measurement range, deliberately collected at low, mid, and high concentrations. Fresh patient samples reflect the actual matrix; QC materials do not." },
+    { "@type": "HowToStep", name: "Set acceptance criteria in advance", text: "Define acceptable limits for slope, intercept, and bias before running the study, with bias at medical decision points within total allowable error." },
+    { "@type": "HowToStep", name: "Run both methods and calculate the statistics", text: "Test each specimen on both methods and calculate slope, y-intercept, Pearson correlation coefficient, and bias at decision points using Deming or Passing-Bablok regression, which accounts for error in both methods." },
+    { "@type": "HowToStep", name: "Determine pass or fail and document", text: "Compare the results to the pre-defined criteria, record the determination for the inspection file, and have the medical director or designee review it. CLSI EP09-A3 is the reference protocol." },
+  ],
+};
+const tjcSurveyHowTo: Record<string, unknown> = {
+  "@context": "https://schema.org",
+  "@type": "HowTo",
+  name: "How to prepare for a Joint Commission laboratory survey",
+  description: "Preparing a clinical laboratory for a TJC tracer survey by maintaining documentation continuously and running a mock survey.",
+  step: [
+    { "@type": "HowToStep", name: "Maintain documentation continuously", text: "Keep records current as work happens rather than assembling them before a survey. Without a record, a surveyor cannot distinguish a compliant laboratory from a non-compliant one." },
+    { "@type": "HowToStep", name: "Make every record retrievable in under two minutes", text: "Organize performance verification, proficiency testing, competency, test menu and instrument documentation, and current approved procedures so any one can be produced quickly." },
+    { "@type": "HowToStep", name: "Run a mock survey about ninety days out", text: "Trace a patient result backward through your own documentation about ninety days before the anticipated survey window." },
+    { "@type": "HowToStep", name: "Correct gaps before they become findings", text: "Fix anything the mock survey surfaces while there is still time, so it does not appear on the official report." },
+  ],
+};
+const cprtHowTo: Record<string, unknown> = {
+  "@context": "https://schema.org",
+  "@type": "HowTo",
+  name: "How to apply the four-layer cost-per-reportable-test framework",
+  description: "Building cost per reportable test in four layers under CLSI GP11-A and matching each layer to the financial decision it answers.",
+  step: [
+    { "@type": "HowToStep", name: "Build Layer 1", text: "Total the reagents and supplies consumed per reportable result." },
+    { "@type": "HowToStep", name: "Add Layer 2 for insource versus send-out", text: "Add direct labor to reagents and supplies when the analyzer is already on the floor; this is usually the layer for an insource versus send-out decision." },
+    { "@type": "HowToStep", name: "Add Layer 3 to justify a new analyzer", text: "Add equipment depreciation and maintenance across projected volume when justifying a capital purchase." },
+    { "@type": "HowToStep", name: "Add Layer 4 to set a price", text: "Add overhead for the fully loaded cost when setting a charge-master price. 42 CFR §493.1407 and §493.1445 make the laboratory director responsible for defending these decisions." },
+  ],
+};
+
+// Resource routes whose visible FAQ (rendered from faqContent.ts) should also
+// emit FAQPage JSON-LD, plus any DefinedTerm/HowTo nodes for that route.
+const ROUTE_FAQ: Record<string, FaqQA[]> = {
+  "/resources/clia-tea-lookup": TEA_LOOKUP_FAQ,
+  "/resources/calibration-verification-requirements-clia": CALVER_REQ_FAQ,
+  "/resources/how-to-perform-method-comparison-study": METHODCOMP_FAQ,
+  "/resources/precision-verification-report-interpretation-guide": PRECISION_FAQ,
+  "/resources/tjc-laboratory-inspection-checklist-preparation": TJC_INSPECTION_FAQ,
+  "/resources/cost-per-reportable-test-four-layer-framework": CPRT_FAQ,
+  "/resources/manual-logs-why-most-labs-should-stop": MANUAL_LOGS_FAQ,
+};
+
+const ROUTE_EXTRA_JSONLD: Record<string, Record<string, unknown>[]> = {
+  "/resources/calibration-verification-requirements-clia": [
+    definedTermJsonLd(
+      "Calibration verification",
+      "Calibration verification is the CLIA process of confirming that an instrument's calibration has not drifted, by testing materials of known value across the reportable range. It is required at least every six months for each non-waived quantitative test system under 42 CFR §493.1255.",
+      "/resources/calibration-verification-requirements-clia",
+    ),
+  ],
+  "/resources/how-to-perform-method-comparison-study": [methodComparisonHowTo],
+  "/resources/precision-verification-report-interpretation-guide": [
+    definedTermJsonLd(
+      "Coefficient of variation",
+      "The coefficient of variation (CV) is the standard deviation expressed as a percent of the mean, CV = (SD / mean) x 100. It expresses imprecision on a common scale so a laboratory can compare it across analytes and concentration levels.",
+      "/resources/precision-verification-report-interpretation-guide",
+    ),
+  ],
+  "/resources/tjc-laboratory-inspection-checklist-preparation": [
+    tjcSurveyHowTo,
+    definedTermJsonLd(
+      "Tracer methodology",
+      "Tracer methodology is the survey technique in which a surveyor starts at a single patient result and works backward through the system that produced it: who ordered it, which analyzer ran it, its verification records, who performed it, their competency, and the proficiency testing record for that analyte.",
+      "/resources/tjc-laboratory-inspection-checklist-preparation",
+    ),
+  ],
+  "/resources/cost-per-reportable-test-four-layer-framework": [
+    definedTermJsonLd(
+      "Cost per reportable test",
+      "Cost per reportable test (CPRT) is the fully-considered cost of producing one reportable laboratory result, built up in four layers under the CLSI GP11-A framework: reagents and supplies, direct labor, equipment, and overhead.",
+      "/resources/cost-per-reportable-test-four-layer-framework",
+    ),
+    cprtHowTo,
+  ],
+  "/resources/manual-logs-why-most-labs-should-stop": [
+    definedTermJsonLd(
+      "Transcription event",
+      "A transcription event is the manual copying of a result from a bench log into the laboratory information system. It is an error mode that exists only because the intermediate log exists, and direct analyzer-to-LIS entry eliminates it.",
+      "/resources/manual-logs-why-most-labs-should-stop",
+    ),
+  ],
+};
+
+// Attach FAQPage (+ DefinedTerm/HowTo) nodes to each resource route that carries
+// a visible FAQ. Normalizes a lone Article object into an array. Idempotent:
+// skips a route that already has a FAQPage node.
+function attachRouteFaqAndTerms(map: Record<string, SEOMetadata>): void {
+  for (const [route, faq] of Object.entries(ROUTE_FAQ)) {
+    const meta = map[route];
+    if (!meta) continue;
+    const blocks: Record<string, unknown>[] = Array.isArray(meta.jsonLd)
+      ? meta.jsonLd
+      : meta.jsonLd
+        ? [meta.jsonLd]
+        : [];
+    if (!blocks.some((b) => (b as Record<string, unknown>)?.["@type"] === "FAQPage")) {
+      blocks.push(faqPageJsonLd(faq));
+    }
+    for (const extra of ROUTE_EXTRA_JSONLD[route] ?? []) blocks.push(extra);
+    meta.jsonLd = blocks;
+  }
+}
+
+attachRouteFaqAndTerms(seoMetadataMap);
 enrichArticleBodies(seoMetadataMap);
 
 export function getBaseUrl(): string {
