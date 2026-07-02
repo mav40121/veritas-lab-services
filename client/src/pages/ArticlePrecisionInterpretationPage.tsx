@@ -89,7 +89,7 @@ export default function ArticlePrecisionInterpretationPage() {
             <p>
               Federal regulation 42 CFR §493.1253 requires every laboratory performing non-waived testing to verify the performance specifications
               of each method before reporting patient results, and to re-verify whenever a change in reagent lot, instrument, or test system could
-              affect performance. Precision is one of the performance specifications a lab must verify; calibration verification, accuracy,
+              affect performance. Precision is one of the performance specifications a lab must verify; <Link href="/resources/calibration-verification-requirements-clia" className="text-primary font-medium hover:underline">calibration verification</Link>, accuracy,
               reportable range, and reference intervals are the others.
             </p>
             <p>

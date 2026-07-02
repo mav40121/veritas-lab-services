@@ -103,7 +103,7 @@ return (
 
           <h3 className="font-semibold text-lg mt-8 mb-2">Test Menu and Instrument Documentation</h3>
           <p>
-            You must be able to show which instruments perform which tests, the role of each instrument (primary, backup, satellite), and the performance verification history for each. This is frequently a gap in smaller labs that rely on memory rather than documentation.
+            You must be able to show which instruments perform which tests, the role of each instrument (primary, backup, satellite), and the <Link href="/resources/calibration-verification-requirements-clia" className="text-primary font-medium hover:underline">performance verification</Link> history for each. This is frequently a gap in smaller labs that rely on memory rather than documentation.
           </p>
 
           <h3 className="font-semibold text-lg mt-8 mb-2">Policies and Procedures</h3>
