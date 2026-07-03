@@ -691,6 +691,20 @@ sqlite.exec(`
   }
 }
 
+// staff_competency_schedules: add nys_six_month_due_at to any DB that predates the
+// NYS CLEP work. The column was added to the CREATE TABLE block only (db.ts ~528),
+// so on existing prod DBs `CREATE TABLE IF NOT EXISTS` is a no-op and the column
+// was never created; the VeritaStaff competency-schedule save/read paths that write
+// it (routes.ts, 7 sites) then threw "no such column: nys_six_month_due_at" -> 500.
+// Per the New DB Table Rule, ship the guarded, idempotent ALTER.
+{
+  const scsCols = sqlite.prepare("PRAGMA table_info(staff_competency_schedules)").all() as { name: string }[];
+  const scsColNames = scsCols.map((c) => c.name);
+  if (!scsColNames.includes("nys_six_month_due_at")) {
+    try { sqlite.exec("ALTER TABLE staff_competency_schedules ADD COLUMN nys_six_month_due_at TEXT"); } catch {}
+  }
+}
+
 // veritamap_test_correlations migration block (idempotent)
 // Per New DB Table Rule: every new CREATE TABLE ships with a PRAGMA-guarded ALTER block.
 // Adds sign-off audit columns to any DB that has an earlier version of the table.
