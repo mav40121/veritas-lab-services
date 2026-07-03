@@ -13728,9 +13728,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         updated_at = excluded.updated_at
     `);
     const tx = (db as any).$client.transaction((rows: any[]) => {
-      for (const r of rows) stmt.run(req.params.id, r.item_id, r.status || 'Not Assessed', r.notes || null, r.owner || null, r.due_date || null, now);
+      for (const r of rows) {
+        // Accept both camelCase (client sends itemId/dueDate) and snake_case,
+        // matching the legacy /api/veritascan/scans/:id/items twin. This lab-scoped
+        // route was missed when that fix landed, so lab-scoped users' item_id
+        // arrived undefined -> NOT NULL 500 on every save (Sentry, 2026-07-03).
+        const itemId = r.item_id ?? r.itemId;
+        if (itemId == null) continue; // skip a malformed row instead of aborting the whole batch
+        const dueDate = r.due_date ?? r.dueDate ?? null;
+        stmt.run(req.params.id, itemId, r.status || 'Not Assessed', r.notes || null, r.owner || null, dueDate, now);
+      }
     });
-    tx(items);
+    try {
+      tx(items);
+    } catch (e: any) {
+      return res.status(400).json({ error: "Failed to save items", detail: String(e?.message ?? e) });
+    }
     (db as any).$client.prepare("UPDATE veritascan_scans SET updated_at = ? WHERE id = ?").run(now, req.params.id);
     res.json({ ok: true, count: items.length });
   });
@@ -13800,11 +13813,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       for (const item of items) {
         // Accept both camelCase (client) and snake_case field names
         const itemId = item.item_id ?? item.itemId;
+        if (itemId == null) continue; // skip a malformed row instead of aborting the whole batch
         const dueDate = item.due_date ?? item.dueDate ?? null;
         stmt.run(req.params.id, itemId, item.status || 'Not Assessed', item.notes || null, item.owner || null, dueDate, now);
       }
     });
-    bulkUpdate(items);
+    try {
+      bulkUpdate(items);
+    } catch (e: any) {
+      return res.status(400).json({ error: "Failed to save items", detail: String(e?.message ?? e) });
+    }
     (db as any).$client.prepare("UPDATE veritascan_scans SET updated_at = ? WHERE id = ?").run(now, req.params.id);
     res.json({ ok: true, count: items.length });
   });
