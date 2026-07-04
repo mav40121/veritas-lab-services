@@ -562,14 +562,14 @@ export function registerVeritaTrackRoutes(
   app.post("/api/veritatrack/import-from-map", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
     if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
-    const ownerLabRow = sqlite.prepare(
-      "SELECT lab_id FROM users WHERE id = ?"
-    ).get(userId) as { lab_id: number | null } | undefined;
-    const ownerLabId = ownerLabRow?.lab_id ?? null;
-    const maps = ownerLabId != null
+    // Multi-lab fix: read the maps of the ACTIVE lab (X-Active-Lab-Id), not the
+    // owner's home users.lab_id. A multi-lab owner viewing Lab B used to import
+    // Lab A's analytes. Falls back to user_id only when no lab resolves (legacy).
+    const labId = resolveLegacyLabId(sqlite, req);
+    const maps = labId != null
       ? sqlite.prepare(
           "SELECT id, name FROM veritamap_maps WHERE lab_id = ? ORDER BY updated_at DESC"
-        ).all(ownerLabId) as Array<{ id: number; name: string }>
+        ).all(labId) as Array<{ id: number; name: string }>
       : sqlite.prepare(
           "SELECT id, name FROM veritamap_maps WHERE user_id = ? ORDER BY updated_at DESC"
         ).all(userId) as Array<{ id: number; name: string }>;
@@ -616,17 +616,17 @@ export function registerVeritaTrackRoutes(
       for (const fd of fieldDefs) {
         const taskName = `${fd.label} - ${test.analyte}`;
         const existing = sqlite.prepare(
-          "SELECT id FROM veritatrack_tasks WHERE user_id=? AND name=? AND active=1"
-        ).get(userId, taskName);
+          "SELECT id FROM veritatrack_tasks WHERE lab_id=? AND name=? AND active=1"
+        ).get(labId, taskName);
         if (existing) { skipped++; continue; }
         sqlite.prepare(
-          "INSERT INTO veritatrack_tasks (user_id,name,category,instrument,frequency,frequency_months,map_analyte,map_field,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)"
-        ).run(userId, taskName, fd.category, test.instrument_source || null, fd.frequency, fd.months, test.analyte, fd.field, now, now);
+          "INSERT INTO veritatrack_tasks (user_id,lab_id,name,category,instrument,frequency,frequency_months,map_analyte,map_field,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)"
+        ).run(userId, labId, taskName, fd.category, test.instrument_source || null, fd.frequency, fd.months, test.analyte, fd.field, now, now);
         // Seed initial sign-off from existing map date if present
         if (test[fd.field]) {
           const newTask = sqlite.prepare(
-            "SELECT id FROM veritatrack_tasks WHERE user_id=? AND name=? ORDER BY id DESC LIMIT 1"
-          ).get(userId, taskName) as any;
+            "SELECT id FROM veritatrack_tasks WHERE lab_id=? AND name=? ORDER BY id DESC LIMIT 1"
+          ).get(labId, taskName) as any;
           if (newTask) {
             sqlite.prepare(
               "INSERT INTO veritatrack_signoffs (task_id,user_id,completed_date,notes) VALUES (?,?,?,?)"
@@ -671,6 +671,10 @@ export function registerVeritaTrackRoutes(
   app.post("/api/veritatrack/seed-defaults", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
     if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
+    // Multi-lab fix: seed into the ACTIVE lab (X-Active-Lab-Id). Was user_id
+    // only, so seeded tasks got lab_id=NULL and never appeared in the lab's
+    // scoped list/dashboard on a multi-lab account.
+    const labId = resolveLegacyLabId(sqlite, req);
     const { categories } = req.body as { categories: string[] };
     if (!Array.isArray(categories) || categories.length === 0) {
       return res.status(400).json({ error: "categories array required" });
@@ -725,12 +729,12 @@ export function registerVeritaTrackRoutes(
       if (!tasks) continue;
       for (const t of tasks) {
         const existing = sqlite.prepare(
-          "SELECT id FROM veritatrack_tasks WHERE user_id=? AND name=? AND active=1"
-        ).get(userId, t.name);
+          "SELECT id FROM veritatrack_tasks WHERE lab_id=? AND name=? AND active=1"
+        ).get(labId, t.name);
         if (existing) { skipped++; continue; }
         sqlite.prepare(
-          "INSERT INTO veritatrack_tasks (user_id,name,category,frequency,frequency_months,created_at,updated_at) VALUES (?,?,?,?,?,?,?)"
-        ).run(userId, t.name, t.category, t.frequency, t.months, now, now);
+          "INSERT INTO veritatrack_tasks (user_id,lab_id,name,category,frequency,frequency_months,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)"
+        ).run(userId, labId, t.name, t.category, t.frequency, t.months, now, now);
         created++;
       }
     }
@@ -742,9 +746,13 @@ export function registerVeritaTrackRoutes(
   app.post("/api/veritatrack/export/excel", authMiddleware, async (req: any, res) => {
     if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
+    // Multi-lab fix: export the ACTIVE lab's tasks (X-Active-Lab-Id), not every
+    // task under user_id across all labs. A surveyor-facing export must never
+    // mix labs together.
+    const labId = resolveLegacyLabId(sqlite, req);
     const tasks = sqlite.prepare(
-      "SELECT * FROM veritatrack_tasks WHERE user_id = ? AND active = 1 ORDER BY category, name"
-    ).all(userId) as any[];
+      "SELECT * FROM veritatrack_tasks WHERE lab_id = ? AND active = 1 ORDER BY category, name"
+    ).all(labId) as any[];
 
     const { default: ExcelJS } = await import("exceljs");
     const wb = new ExcelJS.Workbook();
@@ -752,11 +760,17 @@ export function registerVeritaTrackRoutes(
     wb.created = new Date();
 
     // ===== Lab identity (Excel Export Standard) =====
+    // Prefer the ACTIVE lab's own identity; fall back to the lab owner's user
+    // record, then to the requesting user, so a multi-lab export is stamped
+    // with the lab it actually covers.
+    const labRow = sqlite.prepare(
+      "SELECT lab_name, clia_number, owner_user_id FROM labs WHERE id = ?"
+    ).get(labId) as any;
     const ownerRow = sqlite.prepare(
       "SELECT clia_lab_name, clia_number, name FROM users WHERE id = ?"
-    ).get(userId) as any;
-    const labName = ownerRow?.clia_lab_name || ownerRow?.name || "Laboratory";
-    const cliaNumber = ownerRow?.clia_number || "Not on file";
+    ).get(labRow?.owner_user_id ?? userId) as any;
+    const labName = labRow?.lab_name || ownerRow?.clia_lab_name || ownerRow?.name || "Laboratory";
+    const cliaNumber = labRow?.clia_number || ownerRow?.clia_number || "Not on file";
     const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || "veritaassure-export";
 
     // ===== About sheet (sheet 1) =====

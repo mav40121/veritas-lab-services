@@ -452,7 +452,7 @@ export default function VeritaMapLabwidePage() {
                       </td>
                       <td className="px-3 py-2">
                         <Link
-                          href={`/veritamap-app/${a.map_id}`}
+                          href={activeLabId ? `/labs/${activeLabId}/veritamap-app/${a.map_id}` : `/veritamap-app/${a.map_id}`}
                           className="text-primary hover:underline"
                           onClick={(e) => e.stopPropagation()}
                         >
