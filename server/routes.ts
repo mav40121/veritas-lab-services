@@ -25247,16 +25247,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // once the engine has been verified against real lab data.
   app.get("/api/veritapt/trends", authMiddleware, (req: any, res) => {
     if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
-    const dataUserId = req.ownerUserId ?? req.user.userId;
+    // Lab-scope the trend query via the active-lab resolver (X-Active-Lab-Id),
+    // the SAME resolver the events list read uses. Was WHERE user_id, which
+    // merged every lab a multi-lab owner belongs to into one trend set — this
+    // was the one PT read the 2026-06-09 Shape A sweep missed. A null lab
+    // (no active lab / legacy account with no membership) yields no rows.
+    const labId = resolveLegacyLabId(req);
     // Only graded events count. Pending events are skipped — they don't
     // affect state until the PT program sends the result.
     const events = (db as any).$client.prepare(
       `SELECT analyte, event_date, pass_fail
          FROM pt_events
-        WHERE user_id = ?
+        WHERE lab_id = ?
           AND pass_fail IN ('pass', 'fail')
         ORDER BY analyte ASC, event_date DESC`
-    ).all(dataUserId) as Array<{ analyte: string; event_date: string; pass_fail: string }>;
+    ).all(labId) as Array<{ analyte: string; event_date: string; pass_fail: string }>;
 
     // Group by analyte (already sorted within analyte by event_date DESC)
     const byAnalyte: Record<string, Array<{ event_date: string; pass_fail: string }>> = {};
@@ -25356,9 +25361,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ptLabName = userRow?.clia_lab_name || "";
         ptCliaNum = userRow?.clia_number || "";
       }
-      const enrollments = (db as any).$client.prepare("SELECT * FROM pt_enrollments WHERE user_id = ? AND status = 'active' ORDER BY enrollment_year DESC, analyte").all(userId);
-      const events = (db as any).$client.prepare("SELECT * FROM pt_events WHERE user_id = ? ORDER BY event_date DESC").all(userId);
-      const cas = (db as any).$client.prepare("SELECT ca.*, e.analyte, e.event_date FROM pt_corrective_actions ca JOIN pt_events e ON e.id = ca.event_id WHERE ca.user_id = ? ORDER BY ca.date_initiated DESC").all(userId);
+      // Lab-scope the PDF data to the ACTIVE lab (X-Active-Lab-Id), matching the
+      // lab identity already resolved above. These reads were WHERE user_id, so a
+      // multi-lab owner's PT PDF was stamped with one lab's CLIA yet contained
+      // every lab's enrollments/events/CAs. Same class as /summary and /trends.
+      const ptLabId = resolveLegacyLabId(req);
+      const enrollments = (db as any).$client.prepare("SELECT * FROM pt_enrollments WHERE lab_id = ? AND status = 'active' ORDER BY enrollment_year DESC, analyte").all(ptLabId);
+      const events = (db as any).$client.prepare("SELECT * FROM pt_events WHERE lab_id = ? ORDER BY event_date DESC").all(ptLabId);
+      const cas = (db as any).$client.prepare("SELECT ca.*, e.analyte, e.event_date FROM pt_corrective_actions ca JOIN pt_events e ON e.id = ca.event_id WHERE ca.lab_id = ? ORDER BY ca.date_initiated DESC").all(ptLabId);
       const currentYear = new Date().getFullYear().toString();
       const eventsThisYear = events.filter((e: any) => e.event_date?.startsWith(currentYear)).length;
       const gradedEvents = events.filter((e: any) => e.pass_fail === 'pass' || e.pass_fail === 'fail');
