@@ -2437,7 +2437,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT id, owner_user_id, seat_email, seat_user_id, status, lab_id, invite_token, permissions, invited_at FROM user_seats WHERE owner_user_id = ? AND seat_email = ?"
     ).get(labOwnerId, normalizedEmail);
     const inviteUrl = `https://www.veritaslabservices.com/join?token=${inviteToken}`;
-    console.log(`[admin/create-lab-invite] lab_id=${labId} (${lab.lab_name}) email=${normalizedEmail} token=${inviteToken} status=${newStatus}`);
+    // Do not log the invite token: it grants join access to the lab. Keep the
+    // rest of the line for operational debugging.
+    console.log(`[admin/create-lab-invite] lab_id=${labId} (${lab.lab_name}) email=${normalizedEmail} token=[redacted] status=${newStatus}`);
     res.json({
       ok: true,
       lab: { id: lab.id, name: lab.lab_name },
@@ -4774,14 +4776,55 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // --- Login rate limiter (in-memory; single-instance Railway deploy) ---
+  // Blocks brute-force / credential-stuffing by counting FAILED attempts per
+  // (client IP + email) in a rolling window. A successful login clears the
+  // counter, so a legitimate user who mistypes a few times is never locked out.
+  const LOGIN_RL_WINDOW_MS = 15 * 60 * 1000;
+  const LOGIN_RL_MAX_FAILURES = 10;
+  const loginFailures = new Map<string, { count: number; resetAt: number }>();
+  const loginRateKey = (r: any, email: string): string => {
+    const fwd = r.headers?.["x-forwarded-for"];
+    const ip =
+      (Array.isArray(fwd) ? fwd[0] : String(fwd || "").split(",")[0]).trim() ||
+      r.ip || r.socket?.remoteAddress || "unknown";
+    return `${ip}|${String(email || "").toLowerCase().trim()}`;
+  };
+  const checkLoginRate = (key: string): { blocked: boolean; retryAfterSec: number } => {
+    const now = Date.now();
+    const e = loginFailures.get(key);
+    if (!e) return { blocked: false, retryAfterSec: 0 };
+    if (e.resetAt <= now) { loginFailures.delete(key); return { blocked: false, retryAfterSec: 0 }; }
+    if (e.count >= LOGIN_RL_MAX_FAILURES) return { blocked: true, retryAfterSec: Math.ceil((e.resetAt - now) / 1000) };
+    return { blocked: false, retryAfterSec: 0 };
+  };
+  const recordLoginFailure = (key: string): void => {
+    const now = Date.now();
+    const e = loginFailures.get(key);
+    if (!e || e.resetAt <= now) { loginFailures.set(key, { count: 1, resetAt: now + LOGIN_RL_WINDOW_MS }); }
+    else { e.count += 1; }
+    if (loginFailures.size > 5000) {
+      for (const [k, v] of loginFailures) if (v.resetAt <= now) loginFailures.delete(k);
+    }
+  };
+  const clearLoginRate = (key: string): void => { loginFailures.delete(key); };
+
   app.post("/api/auth/login", async (req, res) => {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     const { email, password } = parsed.data;
+    const rlKey = loginRateKey(req, email);
+    const rl = checkLoginRate(rlKey);
+    if (rl.blocked) {
+      res.setHeader("Retry-After", String(rl.retryAfterSec));
+      return res.status(429).json({ error: "Too many login attempts. Please wait and try again." });
+    }
     const user = storage.getUserByEmail(email);
-    if (!user) return res.status(401).json({ error: "Invalid email or password" });
+    if (!user) { recordLoginFailure(rlKey); return res.status(401).json({ error: "Invalid email or password" }); }
     const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) return res.status(401).json({ error: "Invalid email or password" });
+    if (!valid) { recordLoginFailure(rlKey); return res.status(401).json({ error: "Invalid email or password" }); }
+    // Verified credentials: clear the failure counter for this IP+email.
+    clearLoginRate(rlKey);
 
     // Account audit trail: log every successful password authentication.
     // Captures even the "session conflict" path below, which still
