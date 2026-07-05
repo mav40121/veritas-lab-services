@@ -16273,7 +16273,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             const bdVar = Math.max(0, (msBetween - wrVar) / nPerDay);
             const bdSD = Math.sqrt(bdVar);
             betweenDayCV = mean !== 0 ? (bdSD / mean) * 100 : 0;
-            betweenRunCV = withinRunCV * 0.6; // 5x1 design: no separate run effect; render as a fraction of within-run for display
+            // EP15-A3 5-day x 1-run design: between-run is not separately
+            // estimable with a single run per day, so the nested ANOVA yields 0.
+            // This matches the client's ANOVA (client/src/lib/calculations.ts)
+            // and the on-screen table; the prior withinRunCV * 0.6 was a display
+            // heuristic with no EP15 basis. See scripts/verify-precision-betweenrun-parity.mjs.
+            betweenRunCV = 0;
             const totVar = wrVar + bdVar;
             totalCV = mean !== 0 ? (Math.sqrt(totVar) / mean) * 100 : 0;
           }
