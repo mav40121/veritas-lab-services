@@ -9,6 +9,17 @@ import { teaData } from "@/lib/cliaTeaData";
 
 const articles = [
   {
+    slug: "verifying-reference-intervals",
+    title: "Verifying Reference Intervals When You Cannot Establish Them: A Practical Guide for the Real-World Laboratory",
+    summary: "Most reference intervals were inherited, not verified. CLIA does not require most laboratories to establish reference intervals; it requires them to verify the ones they use are appropriate for their patients. The three tiers of establish, verify, and documented review, how to define reference individuals, the CLSI EP28-A3c 20-sample verification, and re-verifying when the method changes.",
+    category: "Reference Intervals",
+    readTime: "10 min read",
+    author: "Michael Veri",
+    date: "July 2026",
+    tags: ["Reference Intervals", "CLSI EP28-A3c", "CLIA", "Verification", "VeritaCheck™"],
+    featured: false,
+  },
+  {
     slug: "quality-control-testing-into-compliance",
     title: "When Quality Control Stops Working: The Out-of-Range Result You Are Supposed to Investigate",
     summary: "A perfect QC chart is not the goal. The two ways laboratories quietly silence an out-of-range control, repeating until it passes and setting limits too wide, plus the deeper question of designing QC to each method's sigma. With the Barr testing-into-compliance line and the CLIA standards that govern corrective action.",

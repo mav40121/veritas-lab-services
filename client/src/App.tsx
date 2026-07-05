@@ -41,6 +41,7 @@ const DemoCprtPage = lazy(() => import("@/pages/DemoCprtPage"));
 const DemoQcPage = lazy(() => import("@/pages/DemoQcPage"));
 const ResourcesPage = lazy(() => import("@/pages/ResourcesPage"));
 const ArticlePrecisionInterpretationPage = lazy(() => import("@/pages/ArticlePrecisionInterpretationPage"));
+const ArticleReferenceIntervalVerificationPage = lazy(() => import("@/pages/ArticleReferenceIntervalVerificationPage"));
 const ArticleQCTestingIntoCompliancePage = lazy(() => import("@/pages/ArticleQCTestingIntoCompliancePage"));
 const ArticleCostPerReportablePage = lazy(() => import("@/pages/ArticleCostPerReportablePage"));
 const ArticleWhyVeritaCheckPage = lazy(() => import("@/pages/ArticleWhyVeritaCheckPage"));
@@ -391,6 +392,7 @@ function AppContent() {
           <Route path="/resources/manual-logs-why-most-labs-should-stop" component={ArticleManualLogsPage} />
           <Route path="/resources/clia-tea-lookup" component={TeaLookupPage} />
           <Route path="/resources/precision-verification-report-interpretation-guide" component={ArticlePrecisionInterpretationPage} />
+          <Route path="/resources/verifying-reference-intervals" component={ArticleReferenceIntervalVerificationPage} />
           <Route path="/resources/quality-control-testing-into-compliance" component={ArticleQCTestingIntoCompliancePage} />
           <Route path="/resources/cost-per-reportable-test-four-layer-framework" component={ArticleCostPerReportablePage} />
           <Route path="/resources/why-veritacheck-vs-legacy-verification" component={ArticleWhyVeritaCheckPage} />
