@@ -201,6 +201,48 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
       ),
     ],
   },
+  "/resources/verifying-reference-intervals": {
+    title: "How to Verify Reference Intervals Under CLIA: A Practical Guide",
+    description: "CLIA requires most laboratories to verify, not establish, reference intervals. The three tiers of establish, verify, and documented review, how to define reference individuals, the CLSI EP28-A3c 20-sample verification, and re-verifying when the method changes.",
+    jsonLd: [
+      {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        headline: "Verifying Reference Intervals When You Cannot Establish Them: A Practical Guide for the Real-World Laboratory",
+        description: "CLIA requires most laboratories to verify, not establish, reference intervals. How to run the CLSI EP28-A3c 20-sample verification, defend a documented review when you cannot recruit 20, and re-verify when the method changes.",
+        image: `${BASE_URL}/og-image.png`,
+        author: {
+          "@type": "Person",
+          name: "Michael Veri",
+          jobTitle: "Former Joint Commission Laboratory Surveyor",
+          url: `${BASE_URL}/team`,
+        },
+        publisher: { "@id": `${BASE_URL}/#organization` },
+        datePublished: "2026-07-05",
+        dateModified: "2026-07-05",
+        mainEntityOfPage: `${BASE_URL}/resources/verifying-reference-intervals`,
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "HowTo",
+        name: "How to verify a reference interval under CLSI EP28-A3c",
+        description: "The 20-sample procedure for verifying that a manufacturer's or published reference interval is appropriate for your laboratory's patient population.",
+        step: [
+          { "@type": "HowToStep", name: "Define your reference individuals", text: "Set written inclusion and exclusion criteria before you begin: age range and sex distribution for the analyte, a health-status screen, medication and condition exclusions, and fasting status where required." },
+          { "@type": "HowToStep", name: "Test twenty reference individuals", text: "Measure twenty qualified reference individuals from your own patient population on your own method." },
+          { "@type": "HowToStep", name: "Compare against the proposed interval", text: "Count how many of the twenty results fall outside the reference interval you intend to adopt." },
+          { "@type": "HowToStep", name: "Apply the acceptance criterion", text: "If no more than two of the twenty fall outside, the interval is verified for your population. If three or more fall outside, test a second group of twenty." },
+          { "@type": "HowToStep", name: "Escalate on repeated failure", text: "If the second group also fails, adopt a different published interval or, occasionally, establish your own." },
+          { "@type": "HowToStep", name: "Re-verify when the method changes", text: "When the analyzer, platform, reagent formulation, or measurement principle changes, re-verify the interval; the prior verification no longer holds." },
+        ],
+      },
+      definedTermJsonLd(
+        "Reference Interval Verification",
+        "Reference interval verification is the process by which a clinical laboratory confirms that a manufacturer's or published reference interval is appropriate for its own patient population, most commonly by testing 20 reference individuals and accepting the interval if no more than two fall outside it, per CLSI EP28-A3c and 42 CFR 493.1253.",
+        "/resources/verifying-reference-intervals",
+      ),
+    ],
+  },
   "/resources/ep26-reagent-lot-verification": {
     title: "CLSI EP26 Reagent Lot Verification: Protocol and How-To Guide",
     description: "How clinical laboratories verify a new reagent lot under CLSI EP26 (2nd edition, 2022). The protocol, sample requirements, acceptance criteria, and documentation for lot-to-lot verification.",
