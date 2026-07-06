@@ -72,8 +72,18 @@ jobs:
       # 24 is a separate triage tracked outside this runner, so the full run is
       # report-only until then. Wire PW_TOKEN/PW_LAB_ID/etc as repo secrets to
       # exercise the authenticated paths.
+      # Its own step timeout, SHORTER than the 20-min job timeout. The ~24
+      # pre-existing failing specs each burn the 60s test timeout, and with
+      # retries the cumulative run can exceed the job timeout, which FAILS the
+      # whole job (continue-on-error covers a step's own non-zero exit, NOT a
+      # job-level timeout). A failed job reads to Railway's "wait for CI" as a
+      # failed suite and stalls the deploy. Bounding the step here means
+      # continue-on-error swallows a timed-out report and the job still goes
+      # green. --retries=0 (no value in re-running known failures for a report)
+      # and more workers keep the actual run well under the bound.
       - name: Run Playwright specs (reporting only)
         continue-on-error: true
+        timeout-minutes: 12
         env:
           CI: 'true'
           PW_BASE: ${{ secrets.PW_BASE || 'https://www.veritaslabservices.com' }}
@@ -82,7 +92,7 @@ jobs:
           PW_MAP_ID: ${{ secrets.PW_MAP_ID }}
           PW_FINDING_ID: ${{ secrets.PW_FINDING_ID }}
           PW_STUDY_ID: ${{ secrets.PW_STUDY_ID }}
-        run: npx playwright test
+        run: npx playwright test --retries=0 --workers=4
 
       - name: Upload report
         if: always()
