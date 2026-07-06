@@ -89,8 +89,18 @@ function studyMatchesInstrument(studyInstr: string, mapName: string, mapNick: st
 }
 
 type Study = { id: number; test_name: string; instrument: string; study_type: string; status: string; lifecycle_state: string };
-type Instrument = { id: number; instrument_name: string; nickname: string | null };
+type Instrument = { id: number; instrument_name: string; nickname: string | null; serial_number?: string | null };
 type Combo = { id: number; analyte: string; specialty: string; instrument_id: number; linearity_exempt_multical?: number; linearity_exempt_noncal?: number };
+
+// Display label that distinguishes two units of the same model. A lab can run
+// the same analyzer twice (e.g. two Ortho VITROS 5600 named Bonnie and Clyde);
+// those still need a method comparison between them, so the label carries the
+// nickname (or serial) to make the pair legible instead of collapsing to one name.
+function instLabel(i?: Instrument): string {
+  if (!i) return "(unknown)";
+  const extra = (i.nickname || "").trim() || (i.serial_number || "").trim();
+  return extra ? `${i.instrument_name} (${extra})` : i.instrument_name;
+}
 
 export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], studies: Study[]): CoverageResult {
   const instrById = new Map<number, Instrument>();
@@ -133,7 +143,7 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
       instrumentTestId: c.id,
       specialty: c.specialty,
       analyte: c.analyte,
-      instrument: instName || "(unknown)",
+      instrument: inst ? instLabel(inst) : "(unknown)",
       linearityExemptMultical: multical,
       linearityExemptNoncal: noncal,
       linearityRequired: !exempt,
@@ -145,13 +155,12 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
   }
 
   // Method comparisons: analytes running on 2+ instruments need a correlation.
+  // Count DISTINCT instrument_ids (two units of the same model still count as
+  // two, and both are shown via instLabel so the pair is legible).
   const instByAnalyte = new Map<string, Set<number>>();
-  const instNameByAnalyte = new Map<string, Set<string>>();
   for (const c of combos) {
-    if (!instByAnalyte.has(c.analyte)) { instByAnalyte.set(c.analyte, new Set()); instNameByAnalyte.set(c.analyte, new Set()); }
+    if (!instByAnalyte.has(c.analyte)) instByAnalyte.set(c.analyte, new Set());
     instByAnalyte.get(c.analyte)!.add(c.instrument_id);
-    const nm = instrById.get(c.instrument_id)?.instrument_name;
-    if (nm) instNameByAnalyte.get(c.analyte)!.add(nm);
   }
   const methodComparisons: MethodComparisonRow[] = [];
   let mcNeeded = 0, mcDone = 0;
@@ -162,7 +171,7 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
     if (mc) mcDone++;
     methodComparisons.push({
       analyte,
-      instruments: Array.from(instNameByAnalyte.get(analyte) || []).sort(),
+      instruments: Array.from(instIds).map((id) => instLabel(instrById.get(id))).sort(),
       hasStudy: !!mc,
       studyId: mc ? mc.id : null,
       verdict: mc ? (mc.status || "").toLowerCase() : "",
@@ -197,7 +206,7 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
 
 export function computeCoverageForLab(sqlite: any, labId: number): CoverageResult {
   const instruments = sqlite.prepare(
-    `SELECT i.id, i.instrument_name, i.nickname
+    `SELECT i.id, i.instrument_name, i.nickname, i.serial_number
      FROM veritamap_instruments i JOIN veritamap_maps m ON m.id = i.map_id
      WHERE m.lab_id = ?`
   ).all(labId) as Instrument[];
