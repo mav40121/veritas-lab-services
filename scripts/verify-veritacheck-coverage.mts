@@ -13,6 +13,7 @@ const instruments = [
   { id: 2, instrument_name: "Sysmex XN-1000", nickname: "R2-D2" },
   { id: 3, instrument_name: "Siemens CA-600", nickname: "Waluigi" },
   { id: 4, instrument_name: "Instrumentation Laboratory GEM Premier 5000", nickname: "Yoshi" },
+  { id: 5, instrument_name: "Ortho VITROS 5600", nickname: "Clyde" }, // second unit of the same model
 ];
 const combos = [
   { id: 10, analyte: "Vancomycin", specialty: "Toxicology", instrument_id: 1 },
@@ -21,6 +22,10 @@ const combos = [
   { id: 13, analyte: "A1C", specialty: "Endocrinology", instrument_id: 3, linearity_exempt_multical: 1 },
   { id: 14, analyte: "pH", specialty: "Electrolytes", instrument_id: 4, linearity_exempt_noncal: 1 },
   { id: 15, analyte: "Sodium", specialty: "Electrolytes", instrument_id: 1 },
+  // ALT runs on both Ortho VITROS 5600 units (Bonnie + Clyde) -> needs a
+  // method comparison between them; the two units must show distinctly.
+  { id: 16, analyte: "ALT", specialty: "General Chemistry", instrument_id: 1 },
+  { id: 17, analyte: "ALT", specialty: "General Chemistry", instrument_id: 5 },
 ];
 const studies = [
   { id: 100, test_name: "Vancomycin", instrument: "Bonnie, Ortho VITROS", study_type: "cal_ver", status: "pass", lifecycle_state: "finalized" },
@@ -30,6 +35,7 @@ const studies = [
 
 const r = computeCoverageFrom(instruments, combos, studies);
 const row = (id: number) => r.rows.find((x) => x.instrumentTestId === id);
+const mc = (analyte: string) => r.methodComparisons.find((x) => x.analyte === analyte);
 
 let pass = 0, fail = 0;
 const check = (name: string, got: any, want: any) => {
@@ -46,13 +52,15 @@ check("A1C exempt not counted as required", row(13)?.linearityRequired, false);
 check("pH on GEM flagged not-calibratable -> exempt", row(14)?.linearityStatus, "exempt");
 check("Sodium cal_ver exists but on wrong instrument -> review", row(15)?.linearityStatus, "review");
 check("covered row carries the study id", row(10)?.studyIds, [100]);
-check("summary linearityRequired (6 combos minus 2 exempt)", r.summary.linearityRequired, 4);
+check("row instrument label carries the nickname", row(10)?.instrument, "Ortho VITROS 5600 (Bonnie)");
+check("summary linearityRequired (8 combos minus 2 exempt)", r.summary.linearityRequired, 6);
 check("summary linearityCovered", r.summary.linearityCovered, 1);
 check("summary linearityReview", r.summary.linearityReview, 1);
-check("summary linearityMissing", r.summary.linearityMissing, 2);
+check("summary linearityMissing", r.summary.linearityMissing, 4);
 check("summary linearityExempt", r.summary.linearityExempt, 2);
-check("method comparisons needed (Glucose on 2 instruments)", r.summary.methodComparisonsNeeded, 1);
-check("method comparisons done (id101)", r.summary.methodComparisonsDone, 1);
+check("method comparisons needed (Glucose + ALT)", r.summary.methodComparisonsNeeded, 2);
+check("method comparisons done (id101 Glucose only)", r.summary.methodComparisonsDone, 1);
+check("ALT on two same-model units shows both distinctly", mc("ALT")?.instruments, ["Ortho VITROS 5600 (Bonnie)", "Ortho VITROS 5600 (Clyde)"]);
 check("empty map -> hasMap false", computeCoverageFrom([], [], []).hasMap, false);
 
 console.log(`\n${pass} passed, ${fail} failed`);
