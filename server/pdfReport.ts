@@ -4117,6 +4117,29 @@ function esc(s: string | null | undefined): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+// Prior approval (2026-07-06): an assessment item was actually scored if it
+// carries a pass flag, a date, initials, or evidence. A competency signed on
+// paper and entered as an overall determination has element rows that default
+// passed=0 with none of these; deriving PASS/FAIL there would print a false
+// per-element FAIL wall that contradicts the director's recorded verdict.
+// Mirrors the client derivation in client/src/pages/VeritaCompAppPage.tsx.
+function compItemWasScored(item: any): boolean {
+  return !!(item.passed || item.date_met || item.employee_initials || item.supervisor_initials || (item.evidence && String(item.evidence).trim()));
+}
+
+// Per-item verdict cell for the element detail tables. Scored items show
+// Pass/Fail as before; an item that was never individually scored shows
+// "Not recorded" so the detail pages stay consistent with the page-1 summary
+// for a paper/historical record. iconCheck/iconCross are hoisted functions.
+function compItemVerdictCell(item: any): string {
+  if (!compItemWasScored(item)) {
+    return `<td style="color:#888;font-style:italic;">Not recorded</td>`;
+  }
+  const cls = item.passed ? "pass-badge" : "fail-badge";
+  const label = item.passed ? iconCheck() + " Pass" : iconCross() + " Fail";
+  return `<td class="${cls}">${label}</td>`;
+}
+
 function buildCompetencyHTML(input: CompetencyPDFInput): string {
   const { assessment, items, methodGroups, checklistItems, labName, quizResults } = input;
   const elementDocuments: CompetencyElementDocument[] = input.elementDocuments || [];
@@ -4229,8 +4252,16 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
       const naKey = `el${el.num}_na` as string;
       const naJustKey = `el${el.num}_na_justification` as string;
       const isNa = elItems.length > 0 && elItems.every((i: any) => i[naKey]);
-      const allPass = !isNa && elItems.length > 0 && elItems.every((i: any) => i.passed);
-      const statusLabel = isNa ? "N/A" : elItems.length === 0 ? "N/A" : allPass ? "PASS" : "FAIL";
+      // Only score elements that were actually assessed; unscored elements
+      // mirror the overall recorded verdict instead of printing a FAIL wall.
+      const scoredItems = elItems.filter((i: any) => compItemWasScored(i));
+      const statusLabel = isNa
+        ? "N/A"
+        : elItems.length === 0
+          ? "N/A"
+          : scoredItems.length === 0
+            ? (assessment.status === "pass" ? "PASS" : assessment.status === "fail" ? "FAIL" : "N/A")
+            : (scoredItems.every((i: any) => i.passed) ? "PASS" : "FAIL");
       const statusColor = statusLabel === "PASS" ? "#437A22" : statusLabel === "FAIL" ? "#A12C7B" : "#888";
       const justification = isNa ? elItems.map((i: any) => i[naJustKey]).filter(Boolean).join("; ") : "";
       return `<tr>
@@ -4321,6 +4352,21 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
     </div>
   </div>`;
 
+  // Prior approval (2026-07-06). When a competency was signed on paper on an
+  // earlier date and entered into VeritaComp later, print the historical paper
+  // date, the in-system entry date, and the written documentation, so the
+  // record is surveyor-defensible about why the entry post-dates the signature.
+  // Rendered AFTER the acknowledgement block so it never displaces the
+  // signature off page 1 (PDF requirement: signature stays on page 1).
+  if (!input.blank && assessment.signed_on_paper_date) {
+    const enteredDate = assessment.completion_date ? String(assessment.completion_date).slice(0, 10) : "";
+    html += `<div style="margin:8px 24px 0 24px;padding:8px 12px;border:1px solid #e0e4e8;border-left:3px solid #01696F;border-radius:4px;background:#f8fafb;font-size:8pt;">
+      <div style="font-weight:700;color:#01696F;margin-bottom:2px;">Prior Approval</div>
+      <div>Signed on paper: <strong>${esc(assessment.signed_on_paper_date)}</strong>${enteredDate ? `. Entered in VeritaAssure™: <strong>${enteredDate}</strong>` : ""}.</div>
+      ${assessment.prior_approval_note ? `<div style="margin-top:3px;">Documentation: ${esc(assessment.prior_approval_note)}</div>` : ""}
+    </div>`;
+  }
+
   // ─── PAGES 2+ ───
 
   if (isTechnical) {
@@ -4334,7 +4380,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
         render: (item: any) => `<td>${esc(item.method_group_name || item.specimen_info || "")}</td>
           <td>${esc(item.el1_specimen_id || item.specimen_info || "")}</td>
           <td>${esc(item.el1_observer_initials || item.supervisor_initials || "")}</td>
-          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? iconCheck() + ' Pass' : iconCross() + ' Fail'}</td>`,
+          ${compItemVerdictCell(item)}`,
       },
       {
         num: 2,
@@ -4344,7 +4390,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
         render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
           <td style="word-break:break-word;white-space:normal;max-width:280px;font-size:7.5pt;line-height:1.4;">${esc(item.el2_evidence || item.evidence || "")}</td>
           <td>${esc(item.el2_date || item.date_met || "")}</td>
-          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? iconCheck() + ' Pass' : iconCross() + ' Fail'}</td>`,
+          ${compItemVerdictCell(item)}`,
       },
       {
         num: 3,
@@ -4353,7 +4399,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
         cols: ["Method Group", "Date Tech Ran QC", "Pass"],
         render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
           <td>${esc(item.el3_qc_date || item.date_met || "")}</td>
-          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? iconCheck() + ' Pass' : iconCross() + ' Fail'}</td>`,
+          ${compItemVerdictCell(item)}`,
       },
       {
         num: 4,
@@ -4363,7 +4409,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
         render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
           <td>${esc(item.el4_date_observed || item.date_met || "")}</td>
           <td>${esc(item.el4_observer_initials || item.supervisor_initials || "")}</td>
-          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? iconCheck() + ' Pass' : iconCross() + ' Fail'}</td>`,
+          ${compItemVerdictCell(item)}`,
       },
       {
         num: 5,
@@ -4374,7 +4420,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
           <td>${esc(item.el5_sample_type || "")}</td>
           <td>${esc(item.el5_sample_id || item.specimen_info || "")}</td>
           <td>${item.el5_acceptable ? "Yes" : item.el5_acceptable === 0 ? "No" : "-"}</td>
-          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? iconCheck() + ' Pass' : iconCross() + ' Fail'}</td>`,
+          ${compItemVerdictCell(item)}`,
       },
       {
         num: 6,
@@ -4385,7 +4431,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
           <td>${esc(item.el6_quiz_id || "")}</td>
           <td>${item.el6_score != null ? item.el6_score + "%" : "-"}</td>
           <td>${esc(item.el6_date_taken || "")}</td>
-          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? iconCheck() + ' Pass' : iconCross() + ' Fail'}</td>`,
+          ${compItemVerdictCell(item)}`,
       },
     ];
 
@@ -4525,7 +4571,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
           <td>${esc(item.waived_evidence || item.evidence || "")}</td>
           <td>${esc(item.waived_date || item.date_met || "")}</td>
           <td>${esc(item.waived_initials || item.supervisor_initials || "")}</td>
-          <td class="${item.passed ? 'pass-badge' : 'fail-badge'}">${item.passed ? iconCheck() + ' Pass' : iconCross() + ' Fail'}</td>
+          ${compItemVerdictCell(item)}
         </tr>`;
       }
     }
