@@ -4129,6 +4129,23 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inv_transfers_from ON inventor
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inv_transfers_to ON inventory_transfers(to_lab_id, created_at DESC)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inv_transfers_owner ON inventory_transfers(owner_user_id, created_at DESC)`); } catch {}
 
+// VeritaCheck Coverage (2026-07-06): per-analyte-x-instrument linearity exemption
+// flags. A method calibrated with 3+ levels spanning the AMR verifies linearity
+// through the calibration itself, and an analyzer that cannot be operator-
+// calibrated (e.g. the GEM Premier 5000 blood-gas analyzer) has no linearity to
+// verify; either case drops Cal Ver / Linearity from the required set in the
+// Coverage view. PRAGMA table_info + guarded ALTER per the NEW DB TABLE RULE.
+{
+  const vitCols = (sqlite.prepare("PRAGMA table_info(veritamap_instrument_tests)").all() as { name: string }[]).map((c) => c.name);
+  if (vitCols.length > 0) {
+    const ensureVit = (col: string, sql: string) => {
+      if (!vitCols.includes(col)) { try { sqlite.exec(sql); vitCols.push(col); } catch {} }
+    };
+    ensureVit("linearity_exempt_multical", "ALTER TABLE veritamap_instrument_tests ADD COLUMN linearity_exempt_multical INTEGER NOT NULL DEFAULT 0");
+    ensureVit("linearity_exempt_noncal", "ALTER TABLE veritamap_instrument_tests ADD COLUMN linearity_exempt_noncal INTEGER NOT NULL DEFAULT 0");
+  }
+}
+
 // VeritaStock vendor management (2026-06-07): the lab's vendor directory.
 // One row per (lab, vendor) — each lab has its own account numbers,
 // PO numbers, sales reps, and contracted ordering pattern, so the table
