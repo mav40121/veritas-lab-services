@@ -26,6 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -1453,6 +1454,18 @@ function OverviewTab({ program }: { program: Program & { employees: Employee[]; 
 
 // ── Assessments Tab ──────────────────────────────────────────────────
 
+// Local calendar date (YYYY-MM-DD) in the browser's timezone. Used as the
+// default "Date signed" in the Sign & Complete dialog and to decide when a
+// sign is back-dated (which requires written documentation). Deliberately not
+// UTC: a lab in Phoenix signing at 8pm must still see today's date, not
+// tomorrow's UTC date. When the picked date equals this value the client
+// sends no signed_on_paper_date, so the server treats it as a normal same-day
+// sign regardless of the server's own UTC clock.
+function localTodayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function AssessmentsTab({ program, onNewAssessment }: { program: Program & { assessments: Assessment[] }; onNewAssessment: () => void }) {
   const qc = useQueryClient();
   const activeLabId = useActiveLabId();
@@ -1472,6 +1485,13 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
   // Wave J PR J3 (2026-06-06): audit trail dialog. Same shape as the
   // prior-year target — id + employee name carry through to the dialog header.
   const [auditTarget, setAuditTarget] = useState<{ id: number; employeeName: string } | null>(null);
+  // Prior approval (2026-07-06): Sign & Complete opens a dialog so a competency
+  // signed on paper on an earlier date can be entered now. When the picked
+  // date is not today, written documentation is required (server enforces it
+  // too). null = closed.
+  const [signTarget, setSignTarget] = useState<{ id: number; employeeName: string; assessmentDate: string } | null>(null);
+  const [signDate, setSignDate] = useState("");
+  const [signDoc, setSignDoc] = useState("");
 
   const downloadPdf = async (assessmentId: number) => {
     // Lab-scoped URL when activeLabId is set, so lab MEMBERS (not just the
@@ -1511,17 +1531,29 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
   // Sign & Complete: stamp completion_date + lock the assessment. Customer-
   // blockers wave 2026-06-05 (item #4). Once locked, the assessment row in
   // the list shows the completion badge and edits are refused server-side.
-  const signComplete = async (id: number) => {
+  //
+  // Prior approval (2026-07-06): when signedOnPaperDate is an earlier date, the
+  // paper date + written documentation are sent so the server records the
+  // historical sign date (completion_date still marks the in-system entry). A
+  // same-day sign sends neither field, so a normal sign is unchanged and the
+  // server never spuriously demands documentation across a timezone boundary.
+  const signComplete = async (id: number, signedOnPaperDate: string, documentation: string) => {
+    const backDated = !!signedOnPaperDate && signedOnPaperDate !== localTodayISO();
+    const body = backDated
+      ? { signed_on_paper_date: signedOnPaperDate, documentation: documentation.trim() }
+      : {};
     const res = await fetch(`${API_BASE}/api/competency/assessments/${id}/sign`, {
       method: "POST",
-      headers: authHeaders(),
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       toast({ title: "Sign failed", description: err.error || `HTTP ${res.status}`, variant: "destructive" });
       return;
     }
-    toast({ title: "Assessment signed and locked" });
+    toast({ title: backDated ? "Prior approval signed and locked" : "Assessment signed and locked" });
+    setSignTarget(null); setSignDate(""); setSignDoc("");
     qc.invalidateQueries({ queryKey: [programDetailKey] });
   };
 
@@ -1609,7 +1641,7 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {(a as any).locked !== 1 && (
-                    <Button variant="outline" size="sm" className="h-8 px-2" title="Sign and lock this assessment" onClick={() => signComplete(a.id)}>
+                    <Button variant="outline" size="sm" className="h-8 px-2" title="Sign and lock this assessment" onClick={() => { setSignTarget({ id: a.id, employeeName: a.employee_name, assessmentDate: a.assessment_date }); setSignDate(localTodayISO()); setSignDoc(""); }}>
                       Sign & Complete
                     </Button>
                   )}
@@ -1683,8 +1715,21 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
                           { num: 6, name: "Problem-Solving Assessment (Quiz)" },
                         ].map(el => {
                           const elItems = (a.items || []).filter((i: AssessmentItem) => (i.method_number) === el.num);
-                          const allPass = elItems.length > 0 && elItems.every((i: AssessmentItem) => i.passed);
-                          const statusLabel = elItems.length === 0 ? "N/A" : allPass ? "PASS" : "FAIL";
+                          // Prior approval / historical records may carry element rows
+                          // that were never individually scored (every item defaults
+                          // passed=0). Deriving FAIL there contradicts the director's
+                          // recorded verdict and produced a false "fail across the
+                          // board" wall. Only score elements that were actually
+                          // assessed (a pass flag, an initial, a date, or evidence);
+                          // for unscored elements, mirror the overall status.
+                          const scoredItems = elItems.filter((i: AssessmentItem) =>
+                            !!i.passed || !!i.date_met || !!i.employee_initials || !!i.supervisor_initials || !!(i.evidence && String(i.evidence).trim())
+                          );
+                          const statusLabel = elItems.length === 0
+                            ? "N/A"
+                            : scoredItems.length === 0
+                              ? (a.status === "pass" ? "PASS" : a.status === "fail" ? "FAIL" : "N/A")
+                              : (scoredItems.every((i: AssessmentItem) => i.passed) ? "PASS" : "FAIL");
                           return (
                             <tr key={el.num} className="border-b border-border/50">
                               <td className="py-1 pr-2">{el.num}</td>
@@ -1751,6 +1796,53 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
         employeeName={auditTarget?.employeeName ?? ""}
         programName={program.name}
       />
+      {/* Prior approval (2026-07-06): Sign & Complete dialog. Defaults to
+          today. Setting an earlier "Date signed" records a competency signed
+          on paper before it was entered, and requires written documentation. */}
+      <Dialog open={signTarget !== null} onOpenChange={(v) => { if (!v) { setSignTarget(null); setSignDate(""); setSignDoc(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Sign &amp; Complete</DialogTitle></DialogHeader>
+          {signTarget && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Signing locks {signTarget.employeeName}&apos;s {signTarget.assessmentDate} assessment. Edits after signing require an owner or admin to unlock.
+              </p>
+              <div>
+                <Label className="text-xs">Date signed</Label>
+                <Input type="date" value={signDate} max={localTodayISO()} onChange={(e) => setSignDate(e.target.value)} data-testid="input-sign-date" />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Defaults to today. If this competency was signed on paper earlier and is being entered now, set the actual date it was signed.
+                </p>
+              </div>
+              {!!signDate && signDate !== localTodayISO() && (
+                <div>
+                  <Label className="text-xs">Written documentation <span className="text-red-600">(required)</span></Label>
+                  <Textarea
+                    value={signDoc}
+                    onChange={(e) => setSignDoc(e.target.value)}
+                    rows={3}
+                    placeholder="Why is this being entered after the date it was signed? For example: signed on paper 1/27, transcribed into VeritaComp today. Attach the paper record under Linked documents."
+                    data-testid="input-sign-documentation"
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    A signed date earlier than today is a prior approval. The reason is stored on the record and shown in the audit trail.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setSignTarget(null); setSignDate(""); setSignDoc(""); }}>Cancel</Button>
+            <Button
+              disabled={!signTarget || (!!signDate && signDate !== localTodayISO() && !signDoc.trim())}
+              onClick={() => signTarget && signComplete(signTarget.id, signDate, signDoc)}
+              data-testid="button-confirm-sign"
+            >
+              Sign &amp; Complete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
