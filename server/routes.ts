@@ -15,6 +15,7 @@ import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
+import { computeCoverageForLab } from "./veritacheckCoverage";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard";
@@ -12249,6 +12250,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
        ORDER BY m.name, i.instrument_name, i.id`
     ).all(req.scope.labId);
     res.json(instruments);
+  });
+
+  // GET /api/labs/:labId/veritacheck/coverage
+  //
+  // Cross-references the lab's VeritaMap (every active analyte x instrument they
+  // run) against their studies, so a director can see what verification is
+  // covered vs missing at a glance. Read-only; no subscription gate beyond the
+  // lab scope (a lab that can see its studies can see its coverage).
+  app.get("/api/labs/:labId/veritacheck/coverage", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    try {
+      const result = computeCoverageForLab((db as any).$client, req.scope.labId);
+      res.json(result);
+    } catch (e: any) {
+      console.error("[veritacheck/coverage] error:", e?.message);
+      res.status(500).json({ error: "Failed to compute coverage" });
+    }
   });
 
   // Get all instruments for a map
