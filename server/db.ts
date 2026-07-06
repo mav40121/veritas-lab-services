@@ -1293,6 +1293,13 @@ const newCompAsmtCols: [string, string][] = [
   // No DB constraint on values; the UI does autocomplete via a distinct-
   // values query so a lab settles into ~5-10 stable folder names organically.
   ["folder", "TEXT"],
+  // Prior approval (2026-07-06): a competency signed on paper on an earlier
+  // date and entered into the system later. signed_on_paper_date holds the
+  // historical paper date; completion_date stays the true in-system entry
+  // timestamp, so the audit trail keeps both. prior_approval_note is the
+  // written documentation required whenever the paper date is not today.
+  ["signed_on_paper_date", "TEXT"],
+  ["prior_approval_note", "TEXT"],
 ];
 for (const [col, colType] of newCompAsmtCols) {
   if (!compAsmtCols.includes(col)) {
