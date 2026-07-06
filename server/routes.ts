@@ -12283,6 +12283,93 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ instrumentTestId, linearityExemptMultical: multical, linearityExemptNoncal: noncal });
   });
 
+  // GET /api/labs/:labId/veritacheck/coverage/export
+  //
+  // Downloadable xlsx of the Coverage view: a summary sheet, the method
+  // comparisons, and the cal-ver/linearity coverage. Excel Standard styling.
+  app.get("/api/labs/:labId/veritacheck/coverage/export", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    try {
+      const result = computeCoverageForLab((db as any).$client, req.scope.labId);
+      const lab = (db as any).$client.prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
+      const labName = lab?.lab_name || "Clinical Laboratory";
+      const clia = lab?.clia_number || "Not on file";
+      const identity = `${labName}    CLIA: ${clia}`;
+      const { default: ExcelJS } = await import("exceljs");
+      const TEAL = "FF01696F", WHITE = "FFFFFFFF", ALT = "FFEBF3F8", TEXT = "FF28251D", SECTION = "FFE6F2F2";
+      const GREEN = "FF437A22", RED = "FFA12C7B", AMBER = "FF964219", GRAY = "FF7A7974";
+      const wb = new ExcelJS.Workbook();
+      const thin = { style: "thin" as const, color: { argb: "FFD0D0D0" } };
+      const border = { top: thin, bottom: thin, left: thin, right: thin };
+      const mkHeader = (ws: any, headers: string[], widths: number[]) => {
+        ws.columns = headers.map((h, i) => ({ header: h, key: String(i), width: widths[i] }));
+        const hr = ws.getRow(1);
+        hr.height = 20;
+        hr.eachCell((c: any) => { c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TEAL } }; c.font = { name: "Calibri", size: 11, bold: true, color: { argb: WHITE } }; c.border = border; c.alignment = { vertical: "middle" }; });
+        ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headers.length } };
+        ws.views = [{ state: "frozen", ySplit: 1, xSplit: 1 }];
+        ws.pageSetup = { ...(ws.pageSetup || {}) };
+        ws.headerFooter = { oddHeader: `&R${identity}`, oddFooter: `&L${identity}` };
+      };
+      const dataRow = (ws: any, vals: any[], i: number, colors: Record<number, string> = {}) => {
+        const r = ws.addRow(vals);
+        r.eachCell((c: any, col: number) => {
+          c.font = { name: "Calibri", size: 10, color: { argb: colors[col] || TEXT }, bold: !!colors[col] };
+          c.alignment = { vertical: "middle", wrapText: true };
+          c.border = border;
+          if (i % 2 === 1) c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ALT } };
+        });
+      };
+      const statusColor = (s: string, failed: boolean) => failed ? RED : s === "covered" ? GREEN : s === "review" ? AMBER : s === "missing" ? RED : GRAY;
+
+      // Summary
+      const sm = wb.addWorksheet("Summary");
+      sm.getColumn(1).width = 40; sm.getColumn(2).width = 16;
+      sm.mergeCells("A1:B1"); const t = sm.getCell("A1");
+      t.value = `${labName}   CLIA ${clia}   VeritaCheck Coverage`; t.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TEAL } };
+      t.font = { name: "Calibri", size: 12, bold: true, color: { argb: WHITE } }; sm.getRow(1).height = 24;
+      const s = result.summary;
+      const kv: [string, any][] = [
+        ["Method comparisons done", `${s.methodComparisonsDone} of ${s.methodComparisonsNeeded}`],
+        ["Method comparisons missing", s.methodComparisonsNeeded - s.methodComparisonsDone],
+        ["Cal Ver / Linearity covered", `${s.linearityCovered} of ${s.linearityRequired}`],
+        ["Cal Ver / Linearity missing", s.linearityMissing],
+        ["Cal Ver / Linearity to review", s.linearityReview],
+        ["Linearity not required (exempt)", s.linearityExempt],
+        ["Analyte x instrument combos", s.combos],
+        ["Instruments", s.instruments],
+        ["Studies on file", s.studies],
+      ];
+      kv.forEach(([k, v], i) => { const r = sm.addRow([k, v]); r.eachCell((c: any) => { c.font = { name: "Calibri", size: 10, color: { argb: TEXT } }; c.border = border; if (i % 2 === 1) c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ALT } }; }); });
+
+      // Method comparisons
+      const mcs = wb.addWorksheet("Method Comparisons");
+      mkHeader(mcs, ["Analyte", "Instruments", "Study", "Verdict", "Signed"], [30, 46, 12, 12, 10]);
+      result.methodComparisons.forEach((m, i) => {
+        const failed = /fail/i.test(m.verdict);
+        dataRow(mcs, [m.analyte, m.instruments.join("; "), m.hasStudy ? `#${m.studyId}` : "Missing", (m.verdict || "").toUpperCase(), m.signed ? "Yes" : ""], i, { 3: m.hasStudy ? (failed ? RED : GREEN) : RED });
+      });
+
+      // Cal Ver / Linearity
+      const cov = wb.addWorksheet("Cal Ver Linearity");
+      mkHeader(cov, ["Specialty", "Analyte", "Instrument", "Status", "Study", "Verdict", "3+ calibrators", "Not calibratable"], [18, 26, 30, 14, 12, 10, 14, 16]);
+      result.rows.forEach((r, i) => {
+        const failed = r.linearityStatus === "covered" && /fail/i.test(r.verdict);
+        const label = failed ? "FAILED" : r.linearityStatus === "covered" ? "Covered" : r.linearityStatus === "review" ? "Review" : r.linearityStatus === "missing" ? "Missing" : "Not required";
+        dataRow(cov, [r.specialty, r.analyte, r.instrument, label, r.studyIds.map((x) => `#${x}`).join(", "), (r.verdict || "").toUpperCase(), r.linearityExemptMultical ? "Yes" : "", r.linearityExemptNoncal ? "Yes" : ""], i, { 4: statusColor(r.linearityStatus, failed) });
+      });
+
+      const buf = await wb.xlsx.writeBuffer();
+      const date = new Date().toISOString().split("T")[0];
+      const safe = labName.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="VeritaCheck_Coverage_${safe}_${date}.xlsx"`);
+      res.send(Buffer.from(buf));
+    } catch (e: any) {
+      console.error("[veritacheck/coverage/export] error:", e?.message);
+      res.status(500).json({ error: "Coverage export failed" });
+    }
+  });
+
   // Get all instruments for a map
   app.get("/api/veritamap/maps/:id/instruments", authMiddleware, (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user.userId;
