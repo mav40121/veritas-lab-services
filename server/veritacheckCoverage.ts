@@ -1,28 +1,37 @@
 // server/veritacheckCoverage.ts
 //
-// VeritaCheck Coverage: cross-references a lab's VeritaMap (what they need to
-// verify) against their studies (what they have). Powers the Coverage page and
-// GET /api/labs/:labId/veritacheck/coverage.
+// VeritaCheck Coverage: cross-references a lab's VeritaMap (what verification is
+// required) against their studies (what they have). Powers the Coverage page
+// and GET /api/labs/:labId/veritacheck/coverage.
 //
-// "Need" = every active analyte-by-instrument combination in the lab's map(s).
-// "Have" = the lab's non-archived studies. A combo is COVERED when a study
-// matches the analyte AND that instrument, REVIEW when a study exists for the
-// analyte but not clearly on that instrument (nickname or naming mismatch that
-// a human should confirm), and MISSING when there is no study for the analyte.
+// Two recurring requirements are modeled:
+//   1. Method comparison: an analyte reported off 2+ instruments needs the
+//      instruments correlated (biannual instrument comparison).
+//   2. Cal Ver / Linearity: per analyte x instrument, verifies the reportable
+//      range, UNLESS the method is exempt. Two exemptions (per the lab director):
+//        - 3+ calibrators: a calibration spanning the AMR verifies linearity
+//          through the calibration itself, so no separate study is required.
+//        - Not calibratable: an analyzer with no operator calibration (e.g. the
+//          GEM Premier 5000 blood-gas analyzer) has no linearity to verify.
+//      Either exemption drops the combo from the required cal-ver set.
 //
 // Instrument matching uses the map's registered nickname first (the map knows
 // "Bonnie" is the Ortho VITROS 5600), then falls back to model-token overlap.
 
-export type CoverageStatus = "covered" | "review" | "missing";
+export type LinearityStatus = "covered" | "review" | "missing" | "exempt";
+
 export interface CoverageRow {
+  instrumentTestId: number;
   specialty: string;
   analyte: string;
   instrument: string;
-  status: CoverageStatus;
+  linearityExemptMultical: boolean;
+  linearityExemptNoncal: boolean;
+  linearityRequired: boolean;
+  linearityStatus: LinearityStatus;
   studyIds: number[];
-  studyTypes: string[];
-  verdicts: string[];
-  signed: "yes" | "no" | "partial" | "";
+  verdict: string;
+  signed: boolean;
 }
 export interface MethodComparisonRow {
   analyte: string;
@@ -36,20 +45,23 @@ export interface CoverageResult {
   hasMap: boolean;
   summary: {
     combos: number;
-    covered: number;
-    review: number;
-    missing: number;
     instruments: number;
     analytes: number;
     studies: number;
+    linearityRequired: number;
+    linearityCovered: number;
+    linearityReview: number;
+    linearityMissing: number;
+    linearityExempt: number;
     methodComparisonsNeeded: number;
     methodComparisonsDone: number;
-    bySpecialty: { specialty: string; combos: number; covered: number; review: number; missing: number }[];
+    bySpecialty: { specialty: string; combos: number; required: number; covered: number; review: number; missing: number; exempt: number }[];
   };
   rows: CoverageRow[];
   methodComparisons: MethodComparisonRow[];
 }
 
+const LINEARITY_TYPES = new Set(["cal_ver", "linearity"]);
 const STOP = new Set(["s", "n", "sn", "the", "method", "test", "manual", "system", "analyzer", "laboratory", "instrumentation"]);
 
 function instrTokens(s: string): Set<string> {
@@ -65,8 +77,6 @@ function analyteMatch(a: string, b: string): boolean {
   if (na === nb) return true;
   return na.length >= 4 && nb.length >= 4 && (na.includes(nb) || nb.includes(na));
 }
-// A study's free-text instrument matches a map instrument when it contains the
-// registered nickname, or shares >=60% of the model's significant tokens.
 function studyMatchesInstrument(studyInstr: string, mapName: string, mapNick: string | null): boolean {
   const si = (studyInstr || "").toLowerCase();
   const nick = (mapNick || "").trim().toLowerCase();
@@ -80,45 +90,57 @@ function studyMatchesInstrument(studyInstr: string, mapName: string, mapNick: st
 
 type Study = { id: number; test_name: string; instrument: string; study_type: string; status: string; lifecycle_state: string };
 type Instrument = { id: number; instrument_name: string; nickname: string | null };
-type Combo = { analyte: string; specialty: string; instrument_id: number };
+type Combo = { id: number; analyte: string; specialty: string; instrument_id: number; linearity_exempt_multical?: number; linearity_exempt_noncal?: number };
 
 export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], studies: Study[]): CoverageResult {
   const instrById = new Map<number, Instrument>();
   for (const i of instruments) instrById.set(i.id, i);
 
-  const signedOf = (matched: Study[]): CoverageRow["signed"] => {
-    if (!matched.length) return "";
-    const fin = matched.filter((s) => s.lifecycle_state === "finalized").length;
-    return fin === matched.length ? "yes" : fin > 0 ? "partial" : "no";
-  };
-
   const rows: CoverageRow[] = [];
-  const bySpec = new Map<string, { combos: number; covered: number; review: number; missing: number }>();
-  let covered = 0, review = 0, missing = 0;
+  const bySpec = new Map<string, { combos: number; required: number; covered: number; review: number; missing: number; exempt: number }>();
+  let linRequired = 0, linCovered = 0, linReview = 0, linMissing = 0, linExempt = 0;
 
   for (const c of combos) {
     const inst = instrById.get(c.instrument_id);
     const instName = inst?.instrument_name || "";
-    const cands = studies.filter((s) => analyteMatch(s.test_name, c.analyte));
-    const onInst = inst ? cands.filter((s) => studyMatchesInstrument(s.instrument, instName, inst.nickname)) : [];
-    let status: CoverageStatus; let matched: Study[];
-    if (onInst.length) { status = "covered"; matched = onInst; }
-    else if (cands.length) { status = "review"; matched = cands; }
+    const multical = !!c.linearity_exempt_multical;
+    const noncal = !!c.linearity_exempt_noncal;
+    const exempt = multical || noncal;
+
+    // Only cal-ver / linearity studies count toward the linearity requirement.
+    const linCands = studies.filter((s) => LINEARITY_TYPES.has(s.study_type) && analyteMatch(s.test_name, c.analyte));
+    const onInst = inst ? linCands.filter((s) => studyMatchesInstrument(s.instrument, instName, inst.nickname)) : [];
+
+    let status: LinearityStatus; let matched: Study[];
+    if (exempt) { status = "exempt"; matched = onInst; }
+    else if (onInst.length) { status = "covered"; matched = onInst; }
+    else if (linCands.length) { status = "review"; matched = linCands; }
     else { status = "missing"; matched = []; }
 
-    if (status === "covered") covered++; else if (status === "review") review++; else missing++;
-    const sp = bySpec.get(c.specialty) || { combos: 0, covered: 0, review: 0, missing: 0 };
-    sp.combos++; (sp as any)[status]++; bySpec.set(c.specialty, sp);
+    if (status !== "exempt") linRequired++;
+    if (status === "covered") linCovered++;
+    else if (status === "review") linReview++;
+    else if (status === "missing") linMissing++;
+    else linExempt++;
+
+    const sp = bySpec.get(c.specialty) || { combos: 0, required: 0, covered: 0, review: 0, missing: 0, exempt: 0 };
+    sp.combos++;
+    if (status !== "exempt") sp.required++;
+    (sp as any)[status]++;
+    bySpec.set(c.specialty, sp);
 
     rows.push({
+      instrumentTestId: c.id,
       specialty: c.specialty,
       analyte: c.analyte,
       instrument: instName || "(unknown)",
-      status,
+      linearityExemptMultical: multical,
+      linearityExemptNoncal: noncal,
+      linearityRequired: !exempt,
+      linearityStatus: status,
       studyIds: matched.slice(0, 8).map((s) => s.id),
-      studyTypes: Array.from(new Set(matched.map((s) => s.study_type))).sort(),
-      verdicts: Array.from(new Set(matched.map((s) => (s.status || "").toLowerCase()).filter(Boolean))).sort(),
-      signed: signedOf(matched),
+      verdict: Array.from(new Set(matched.map((s) => (s.status || "").toLowerCase()).filter(Boolean))).sort().join(", "),
+      signed: matched.length > 0 && matched.every((s) => s.lifecycle_state === "finalized"),
     });
   }
 
@@ -149,17 +171,21 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
   }
   methodComparisons.sort((a, b) => a.analyte.localeCompare(b.analyte));
 
-  const statusOrder: Record<CoverageStatus, number> = { missing: 0, review: 1, covered: 2 };
-  rows.sort((a, b) => a.specialty.localeCompare(b.specialty) || statusOrder[a.status] - statusOrder[b.status] || a.analyte.localeCompare(b.analyte));
+  const statusOrder: Record<LinearityStatus, number> = { missing: 0, review: 1, covered: 2, exempt: 3 };
+  rows.sort((a, b) => a.specialty.localeCompare(b.specialty) || statusOrder[a.linearityStatus] - statusOrder[b.linearityStatus] || a.analyte.localeCompare(b.analyte));
 
   return {
     hasMap: combos.length > 0,
     summary: {
       combos: combos.length,
-      covered, review, missing,
       instruments: instruments.length,
       analytes: instByAnalyte.size,
       studies: studies.length,
+      linearityRequired: linRequired,
+      linearityCovered: linCovered,
+      linearityReview: linReview,
+      linearityMissing: linMissing,
+      linearityExempt: linExempt,
       methodComparisonsNeeded: mcNeeded,
       methodComparisonsDone: mcDone,
       bySpecialty: Array.from(bySpec.entries()).map(([specialty, v]) => ({ specialty, ...v })).sort((a, b) => a.specialty.localeCompare(b.specialty)),
@@ -169,7 +195,6 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
   };
 }
 
-// DB-backed entry point used by the route. `sqlite` is the better-sqlite3 client.
 export function computeCoverageForLab(sqlite: any, labId: number): CoverageResult {
   const instruments = sqlite.prepare(
     `SELECT i.id, i.instrument_name, i.nickname
@@ -177,7 +202,8 @@ export function computeCoverageForLab(sqlite: any, labId: number): CoverageResul
      WHERE m.lab_id = ?`
   ).all(labId) as Instrument[];
   const combos = sqlite.prepare(
-    `SELECT it.analyte, it.specialty, it.instrument_id
+    `SELECT it.id, it.analyte, it.specialty, it.instrument_id,
+            it.linearity_exempt_multical, it.linearity_exempt_noncal
      FROM veritamap_instrument_tests it JOIN veritamap_maps m ON m.id = it.map_id
      WHERE m.lab_id = ? AND (it.active = 1 OR it.active IS NULL)`
   ).all(labId) as Combo[];
@@ -186,4 +212,19 @@ export function computeCoverageForLab(sqlite: any, labId: number): CoverageResul
      FROM studies WHERE lab_id = ? AND archived_at IS NULL`
   ).all(labId) as Study[];
   return computeCoverageFrom(instruments, combos, studies);
+}
+
+// Sets the two linearity-exemption flags on one instrument_test, scoped to the
+// lab (the test must belong to a map owned by this lab). Returns false when the
+// test is not found in the lab.
+export function setLinearityExemption(sqlite: any, labId: number, instrumentTestId: number, multical: boolean, noncal: boolean): boolean {
+  const owns = sqlite.prepare(
+    `SELECT it.id FROM veritamap_instrument_tests it JOIN veritamap_maps m ON m.id = it.map_id
+     WHERE it.id = ? AND m.lab_id = ?`
+  ).get(instrumentTestId, labId);
+  if (!owns) return false;
+  sqlite.prepare(
+    "UPDATE veritamap_instrument_tests SET linearity_exempt_multical = ?, linearity_exempt_noncal = ? WHERE id = ?"
+  ).run(multical ? 1 : 0, noncal ? 1 : 0, instrumentTestId);
+  return true;
 }

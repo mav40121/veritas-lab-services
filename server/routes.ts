@@ -15,7 +15,7 @@ import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
-import { computeCoverageForLab } from "./veritacheckCoverage";
+import { computeCoverageForLab, setLinearityExemption } from "./veritacheckCoverage";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard";
@@ -12266,6 +12266,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("[veritacheck/coverage] error:", e?.message);
       res.status(500).json({ error: "Failed to compute coverage" });
     }
+  });
+
+  // PATCH /api/labs/:labId/veritacheck/coverage/exemption
+  //
+  // Sets the two Cal Ver / Linearity exemption flags on one analyte x instrument
+  // (VeritaMap test): 3+ calibrators, or not calibratable. Either drops the
+  // combo from the required linearity set on the Coverage page.
+  app.patch("/api/labs/:labId/veritacheck/coverage/exemption", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritamap"), (req: any, res) => {
+    const instrumentTestId = Number(req.body?.instrumentTestId);
+    if (!Number.isFinite(instrumentTestId) || instrumentTestId <= 0) return res.status(400).json({ error: "instrumentTestId required" });
+    const multical = !!req.body?.multical;
+    const noncal = !!req.body?.noncal;
+    const ok = setLinearityExemption((db as any).$client, req.scope.labId, instrumentTestId, multical, noncal);
+    if (!ok) return res.status(404).json({ error: "Test not found in this lab" });
+    res.json({ instrumentTestId, linearityExemptMultical: multical, linearityExemptNoncal: noncal });
   });
 
   // Get all instruments for a map
