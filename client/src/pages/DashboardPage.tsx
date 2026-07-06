@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Study } from "@shared/schema";
-import { PlusCircle, FileText, Trash2, CheckCircle2, XCircle, FlaskConical, Download, Edit2, FileEdit, Archive, GitBranch } from "lucide-react";
+import { PlusCircle, FileText, Trash2, CheckCircle2, XCircle, FlaskConical, Download, Edit2, FileEdit, Archive, GitBranch, FolderOpen } from "lucide-react";
+import { AddToSignoffGroup } from "@/components/AddToSignoffGroup";
 import { useToast } from "@/hooks/use-toast";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -143,6 +144,12 @@ export default function Dashboard() {
             <Link href={labRoute("/dashboard/verifications")}>
               <FileText size={13} />
               Instrument Verification Packages
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-1">
+            <Link href={labRoute("/veritacheck/signoff-groups")}>
+              <FolderOpen size={13} />
+              Sign-off Groups
             </Link>
           </Button>
           {readOnly ? (
@@ -314,6 +321,14 @@ export default function Dashboard() {
                       {isDraft ? <><Edit2 size={13} className="mr-1" />Continue</> : <><FileText size={13} className="mr-1" />View</>}
                     </Link>
                   </Button>
+                  {labId && !isDraft && (study as any).lifecycle_state !== "finalized" && !(study as any).archived_at && (
+                    <AddToSignoffGroup
+                      studyId={study.id}
+                      labId={labId}
+                      currentGroupId={(study as any).signoff_group_id ?? null}
+                      listUrl={listUrl}
+                    />
+                  )}
                   {!isDraft && (
                     <Button asChild variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-edit-${study.id}`} title="Edit study">
                       <Link href={editPath}>

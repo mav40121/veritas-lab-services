@@ -23,6 +23,7 @@ const TeamPage = lazy(() => import("@/pages/TeamPage"));
 const VeritaCheckPage = lazy(() => import("@/pages/VeritaCheckPage"));
 const StudyResultsPage = lazy(() => import("@/pages/StudyResultsPage"));
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
+const VeritaCheckSignoffGroupsPage = lazy(() => import("@/pages/VeritaCheckSignoffGroupsPage"));
 const ContactPage = lazy(() => import("@/pages/ContactPage"));
 const LoginPage = lazy(() => import("@/pages/LoginPage"));
 const NotFound = lazy(() => import("@/pages/not-found"));
@@ -352,6 +353,7 @@ function AppContent() {
           <Route path="/book/scoping-call" component={BookScopingCallPage} />
           <Route path="/admin/scheduling" component={AdminSchedulingPage} />
           <Route path="/team" component={TeamPage} />
+          <Route path="/veritacheck/signoff-groups">{wrapLegacy(VeritaCheckSignoffGroupsPage)}</Route>
           <Route path="/veritacheck">{wrapLegacy(VeritaCheckPage)}</Route>
           <Route path="/study/new">{wrapLegacy(VeritaCheckPage)}</Route>
           <Route path="/study/:id/edit">{wrapLegacy(VeritaCheckPage)}</Route>
@@ -488,6 +490,7 @@ function AppContent() {
           <Route path="/labs/:labId/veritapolicy-app" component={VeritaPolicyAppPage} />
           <Route path="/labs/:labId/veritapolicy-app/my-policies" component={VeritaPolicyMyPoliciesPage} />
           <Route path="/labs/:labId/veritapolicy-app/compliance" component={VeritaPolicyCompliancePage} />
+          <Route path="/labs/:labId/veritacheck/signoff-groups" component={VeritaCheckSignoffGroupsPage} />
           <Route path="/labs/:labId/veritacheck" component={VeritaCheckPage} />
           <Route path="/labs/:labId/veritacheck/cumsum" component={CumsumPage} />
           <Route path="/labs/:labId/veritastock" component={VeritaStockPage} />
