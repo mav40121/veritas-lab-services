@@ -20544,9 +20544,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(req.params.id, req.scope.labId);
     if (!owns) return res.status(404).json({ error: "Assessment not found in this lab" });
     const rows = (db as any).$client.prepare(
+      // actor_lab dropped 2026-07-06: users has no lab_name column (it lives on
+      // labs), so selecting u.lab_name threw SqliteError and 500'd the Audit
+      // dialog on prod (Sentry: no such column: u.lab_name, lab 2 assessment
+      // 167). u.name is the actor's display name; the dialog renders email.
       `SELECT al.id, al.user_id, al.module, al.action, al.entity_type, al.entity_label,
               al.before_json, al.after_json, al.ip_address, al.created_at,
-              u.email AS actor_email, u.lab_name AS actor_lab
+              u.email AS actor_email, u.name AS actor_name
        FROM audit_log al
        LEFT JOIN users u ON al.user_id = u.id
        WHERE al.module = 'veritacomp'
