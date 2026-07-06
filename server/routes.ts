@@ -10559,6 +10559,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   //
   // Both endpoints have lab-scoped variants.
 
+  // Core finalize writes, shared by the single-study finalize and the batch
+  // Sign-off Group sign so the two can never diverge. Writes the per-study
+  // finalized signature + timestamp + signer and, for an amendment, archives
+  // the superseded original. Caller owns validation and the response.
+  function finalizeStudyRowInPlace(userId: number, studyRow: any, signature: string, now: string) {
+    (db as any).$client.prepare(`
+      UPDATE studies SET lifecycle_state = 'finalized',
+        finalized_at = ?, finalized_by_user_id = ?, finalized_signature = ?
+      WHERE id = ?
+    `).run(now, userId, signature, studyRow.id);
+    // 2026-06-15: signing off an amendment auto-archives the original it
+    // supersedes (the row amends_study_id points to), so the active list shows
+    // only the current valid result while the superseded original is retained
+    // and linked. Only archives the parent if it is not already archived.
+    if (studyRow.amends_study_id) {
+      (db as any).$client.prepare(
+        "UPDATE studies SET archived_at = ?, archived_by_user_id = ?, archive_reason = ? WHERE id = ? AND archived_at IS NULL"
+      ).run(now, userId, `Superseded by amendment #${studyRow.id}`, studyRow.amends_study_id);
+    }
+  }
+
   function applyStudyFinalize(req: any, res: any, studyRow: any) {
     if (!studyRow) return res.status(404).json({ error: "Study not found" });
     if (studyRow.lifecycle_state === 'finalized') {
@@ -10567,20 +10588,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const signature = typeof req.body?.signature === "string" ? req.body.signature.trim() : "";
     if (!signature) return res.status(400).json({ error: "signature required" });
     const now = new Date().toISOString();
-    (db as any).$client.prepare(`
-      UPDATE studies SET lifecycle_state = 'finalized',
-        finalized_at = ?, finalized_by_user_id = ?, finalized_signature = ?
-      WHERE id = ?
-    `).run(now, req.userId, signature, studyRow.id);
-    // 2026-06-15: signing off an amendment auto-archives the original it
-    // supersedes (the row amends_study_id points to), so the active list shows
-    // only the current valid result while the superseded original is retained
-    // and linked. Only archives the parent if it is not already archived.
-    if (studyRow.amends_study_id) {
-      (db as any).$client.prepare(
-        "UPDATE studies SET archived_at = ?, archived_by_user_id = ?, archive_reason = ? WHERE id = ? AND archived_at IS NULL"
-      ).run(now, req.userId, `Superseded by amendment #${studyRow.id}`, studyRow.amends_study_id);
-    }
+    finalizeStudyRowInPlace(req.userId, studyRow, signature, now);
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyRow.id);
     res.json(updated);
   }
@@ -10704,6 +10712,116 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     storage.deleteStudy(studyId);
     res.json({ success: true });
   });
+
+  // ── VeritaCheck Sign-off Groups (Phase 1) ───────────────────────────────────
+  // A named group that draft studies are added to as they become ready, then
+  // signed together. The mass sign reuses finalizeStudyRowInPlace, so each study
+  // still gets its own finalized signature + audit record; the group is an
+  // organizing wrapper, not a shortcut around the per-study evidence. Lab-scoped;
+  // mutations require write access + the veritacheck module.
+  {
+    const sfgDb = (db as any).$client;
+    app.post("/api/labs/:labId/veritacheck/signoff-groups", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+      const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+      if (!name) return res.status(400).json({ error: "name required" });
+      const dueDate = typeof req.body?.due_date === "string" && req.body.due_date.trim() ? req.body.due_date.trim() : null;
+      const now = new Date().toISOString();
+      const r = sfgDb.prepare(
+        "INSERT INTO study_signoff_groups (lab_id, name, due_date, status, created_by_user_id, created_at) VALUES (?,?,?,'open',?,?)"
+      ).run(req.scope.labId, name, dueDate, req.userId, now);
+      res.json(sfgDb.prepare("SELECT * FROM study_signoff_groups WHERE id = ?").get(r.lastInsertRowid));
+    });
+
+    app.get("/api/labs/:labId/veritacheck/signoff-groups", authMiddleware, labScopeMiddleware, (req: any, res) => {
+      const groups = sfgDb.prepare(
+        "SELECT * FROM study_signoff_groups WHERE lab_id = ? ORDER BY (status='open') DESC, created_at DESC"
+      ).all(req.scope.labId) as any[];
+      const withCounts = groups.map((g: any) => {
+        const rows = sfgDb.prepare(
+          "SELECT lifecycle_state FROM studies WHERE signoff_group_id = ? AND lab_id = ? AND archived_at IS NULL"
+        ).all(g.id, req.scope.labId) as any[];
+        const total = rows.length;
+        const finalized = rows.filter((r: any) => r.lifecycle_state === 'finalized').length;
+        return { ...g, total, finalized, draft: total - finalized };
+      });
+      res.json(withCounts);
+    });
+
+    app.get("/api/labs/:labId/veritacheck/signoff-groups/:id", authMiddleware, labScopeMiddleware, (req: any, res) => {
+      const group = sfgDb.prepare("SELECT * FROM study_signoff_groups WHERE id = ? AND lab_id = ?").get(parseInt(req.params.id), req.scope.labId) as any;
+      if (!group) return res.status(404).json({ error: "Group not found" });
+      const members = sfgDb.prepare(
+        "SELECT id, test_name, instrument, study_type, date, analyst, lifecycle_state, status FROM studies WHERE signoff_group_id = ? AND lab_id = ? AND archived_at IS NULL ORDER BY date DESC, id DESC"
+      ).all(group.id, req.scope.labId) as any[];
+      res.json({ ...group, members });
+    });
+
+    // Assign studies to the group as they become ready. Only draft, non-archived
+    // studies in this lab that are not already in another group are eligible;
+    // ineligible ids are returned in `skipped` with a reason rather than failing
+    // the whole call.
+    app.post("/api/labs/:labId/veritacheck/signoff-groups/:id/studies", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+      const groupId = parseInt(req.params.id);
+      const group = sfgDb.prepare("SELECT * FROM study_signoff_groups WHERE id = ? AND lab_id = ?").get(groupId, req.scope.labId) as any;
+      if (!group) return res.status(404).json({ error: "Group not found" });
+      if (group.status !== 'open') return res.status(409).json({ error: "Group is already signed; cannot add studies." });
+      const ids = Array.isArray(req.body?.studyIds) ? req.body.studyIds.map((x: any) => parseInt(x)).filter((n: number) => Number.isFinite(n)) : [];
+      if (ids.length === 0) return res.status(400).json({ error: "studyIds array required" });
+      const added: number[] = [];
+      const skipped: Array<{ id: number; reason: string }> = [];
+      const tx = sfgDb.transaction((studyIds: number[]) => {
+        for (const sid of studyIds) {
+          const s = sfgDb.prepare("SELECT id, lifecycle_state, archived_at, signoff_group_id FROM studies WHERE id = ? AND lab_id = ?").get(sid, req.scope.labId) as any;
+          if (!s) { skipped.push({ id: sid, reason: "not found in this lab" }); continue; }
+          if (s.archived_at) { skipped.push({ id: sid, reason: "archived" }); continue; }
+          if (s.lifecycle_state === 'finalized') { skipped.push({ id: sid, reason: "already finalized" }); continue; }
+          if (s.signoff_group_id && s.signoff_group_id !== groupId) { skipped.push({ id: sid, reason: "already in another group" }); continue; }
+          sfgDb.prepare("UPDATE studies SET signoff_group_id = ? WHERE id = ?").run(groupId, sid);
+          added.push(sid);
+        }
+      });
+      tx(ids);
+      res.json({ ok: true, added, skipped });
+    });
+
+    app.delete("/api/labs/:labId/veritacheck/signoff-groups/:id/studies/:studyId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+      const groupId = parseInt(req.params.id);
+      const group = sfgDb.prepare("SELECT * FROM study_signoff_groups WHERE id = ? AND lab_id = ?").get(groupId, req.scope.labId) as any;
+      if (!group) return res.status(404).json({ error: "Group not found" });
+      if (group.status !== 'open') return res.status(409).json({ error: "Group is already signed; cannot remove studies." });
+      const r = sfgDb.prepare("UPDATE studies SET signoff_group_id = NULL WHERE id = ? AND lab_id = ? AND signoff_group_id = ?").run(parseInt(req.params.studyId), req.scope.labId, groupId);
+      if (r.changes === 0) return res.status(404).json({ error: "Study not in this group" });
+      res.json({ ok: true });
+    });
+
+    // The mass Sign and Lock. Finalizes every draft member in one transaction
+    // using the shared per-study finalize; already-finalized members are skipped,
+    // not re-signed. A signature is required, exactly as for a single study.
+    app.post("/api/labs/:labId/veritacheck/signoff-groups/:id/sign", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+      const groupId = parseInt(req.params.id);
+      const group = sfgDb.prepare("SELECT * FROM study_signoff_groups WHERE id = ? AND lab_id = ?").get(groupId, req.scope.labId) as any;
+      if (!group) return res.status(404).json({ error: "Group not found" });
+      if (group.status === 'signed') return res.status(409).json({ error: "Group is already signed." });
+      const signature = typeof req.body?.signature === "string" ? req.body.signature.trim() : "";
+      if (!signature) return res.status(400).json({ error: "signature required" });
+      const members = sfgDb.prepare(
+        "SELECT * FROM studies WHERE signoff_group_id = ? AND lab_id = ? AND archived_at IS NULL"
+      ).all(groupId, req.scope.labId) as any[];
+      if (members.length === 0) return res.status(400).json({ error: "No studies in this group to sign." });
+      const now = new Date().toISOString();
+      let signed = 0, skipped = 0;
+      const tx = sfgDb.transaction(() => {
+        for (const s of members) {
+          if (s.lifecycle_state === 'finalized') { skipped++; continue; }
+          finalizeStudyRowInPlace(req.userId, s, signature, now);
+          signed++;
+        }
+        sfgDb.prepare("UPDATE study_signoff_groups SET status = 'signed', signed_at = ?, signed_by_user_id = ? WHERE id = ?").run(now, req.userId, groupId);
+      });
+      tx();
+      res.json({ ok: true, groupId, signed, skipped, total: members.length });
+    });
+  }
 
   console.log('[routes] Route registration checkpoint: studies+auth routes OK, registering PDF and remaining routes...');
 

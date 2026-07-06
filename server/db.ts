@@ -1663,6 +1663,47 @@ try { sqlite.exec("ALTER TABLE studies ADD COLUMN amr_units TEXT"); } catch {}
 // legacy data with no censored=true flag is unaffected.
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN censoring_policy TEXT NOT NULL DEFAULT 'exclude'"); } catch {}
 
+// 2026-07-05: VeritaCheck Sign-off Groups (Phase 1). A named group that draft
+// studies are assigned to as they become ready, then signed together in one
+// action. The group is an organizing wrapper only; every study keeps its own
+// per-study finalized signature + audit record (see applyStudyFinalize /
+// finalizeStudyRowInPlace). New table plus a guarded ALTER for the study->group
+// association. CREATE TABLE alone is a no-op on the existing production DB, so
+// the studies column needs its own ALTER.
+try {
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS study_signoff_groups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lab_id INTEGER,
+      name TEXT NOT NULL,
+      due_date TEXT,
+      status TEXT NOT NULL DEFAULT 'open',
+      created_by_user_id INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      signed_at TEXT,
+      signed_by_user_id INTEGER
+    )
+  `);
+} catch {}
+// Guarded ALTERs so a live DB that already has an older/partial version of the
+// table backfills any missing column (New DB Table Rule: CREATE TABLE alone is a
+// no-op on an existing table). On a fresh install every column already exists, so
+// these no-op. id is the PRIMARY KEY and always present.
+{
+  const sgCols = (sqlite.prepare("PRAGMA table_info(study_signoff_groups)").all() as any[]).map((c: any) => c.name);
+  if (!sgCols.includes("lab_id")) { try { sqlite.exec("ALTER TABLE study_signoff_groups ADD COLUMN lab_id INTEGER"); } catch {} }
+  if (!sgCols.includes("name")) { try { sqlite.exec("ALTER TABLE study_signoff_groups ADD COLUMN name TEXT"); } catch {} }
+  if (!sgCols.includes("due_date")) { try { sqlite.exec("ALTER TABLE study_signoff_groups ADD COLUMN due_date TEXT"); } catch {} }
+  if (!sgCols.includes("status")) { try { sqlite.exec("ALTER TABLE study_signoff_groups ADD COLUMN status TEXT DEFAULT 'open'"); } catch {} }
+  if (!sgCols.includes("created_by_user_id")) { try { sqlite.exec("ALTER TABLE study_signoff_groups ADD COLUMN created_by_user_id INTEGER"); } catch {} }
+  if (!sgCols.includes("created_at")) { try { sqlite.exec("ALTER TABLE study_signoff_groups ADD COLUMN created_at TEXT"); } catch {} }
+  if (!sgCols.includes("signed_at")) { try { sqlite.exec("ALTER TABLE study_signoff_groups ADD COLUMN signed_at TEXT"); } catch {} }
+  if (!sgCols.includes("signed_by_user_id")) { try { sqlite.exec("ALTER TABLE study_signoff_groups ADD COLUMN signed_by_user_id INTEGER"); } catch {} }
+}
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_signoff_groups_lab ON study_signoff_groups(lab_id)"); } catch {}
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN signoff_group_id INTEGER"); } catch {}
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_studies_signoff_group ON studies(signoff_group_id)"); } catch {}
+
 // ─────────────────────────────────────────────────────────────────────────────────
 // Labs table — normalized lab identity (CLIA, name, accreditation flags)
 // Migrated from per-user columns to shared lab entity so seats inherit and
