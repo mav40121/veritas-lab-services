@@ -19574,13 +19574,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!assessment || assessment.user_id !== dataUserId) return res.status(404).json({ error: "Assessment not found" });
     if (assessment.locked === 1) return res.status(409).json({ error: "Assessment is already signed and locked" });
     const now = new Date().toISOString();
+    const todayDate = now.slice(0, 10);
+    // Prior approval: a competency that was signed on paper on an earlier date
+    // and is being entered into the system now. The historical paper date goes
+    // in signed_on_paper_date; completion_date stays the true in-system entry
+    // timestamp so the audit trail keeps both. Written documentation is REQUIRED
+    // whenever the paper date is not today.
+    const signedOnPaperRaw = typeof req.body?.signed_on_paper_date === "string" ? req.body.signed_on_paper_date.trim() : "";
+    const isBackDated = !!signedOnPaperRaw && signedOnPaperRaw.slice(0, 10) !== todayDate;
+    const documentation = typeof req.body?.documentation === "string" ? req.body.documentation.trim() : "";
+    if (isBackDated && !documentation) {
+      return res.status(400).json({ error: "Written documentation is required when the signed date is not today." });
+    }
+    const signedOnPaper = isBackDated ? signedOnPaperRaw.slice(0, 10) : null;
+    const priorNote = isBackDated ? documentation : null;
     (db as any).$client.prepare(
-      "UPDATE competency_assessments SET completion_date = ?, final_signed_by_user_id = ?, locked = 1 WHERE id = ?"
-    ).run(now, req.userId, req.params.id);
+      "UPDATE competency_assessments SET completion_date = ?, final_signed_by_user_id = ?, locked = 1, signed_on_paper_date = ?, prior_approval_note = ? WHERE id = ?"
+    ).run(now, req.userId, signedOnPaper, priorNote, req.params.id);
     // Wave J PR J3 (2026-06-06): instrument the sign action so the
     // surveyor-facing "when was this signed off and by whom" question
     // gets a real answer from the audit_log later. before/after capture
-    // the lock transition so the dialog can render the diff cleanly.
+    // the lock transition (and the prior-approval fields) so the dialog can
+    // render the diff cleanly.
     logAudit({
       userId: req.userId,
       ownerUserId: req.ownerUserId ?? req.userId,
@@ -19588,12 +19603,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       action: "update",
       entityType: "assessment",
       entityId: String(req.params.id),
-      entityLabel: "Sign and Complete",
-      before: { locked: 0, completion_date: null, final_signed_by_user_id: null },
-      after: { locked: 1, completion_date: now, final_signed_by_user_id: req.userId },
+      entityLabel: signedOnPaper ? "Sign and Complete (prior approval)" : "Sign and Complete",
+      before: { locked: 0, completion_date: null, final_signed_by_user_id: null, signed_on_paper_date: null, prior_approval_note: null },
+      after: { locked: 1, completion_date: now, final_signed_by_user_id: req.userId, signed_on_paper_date: signedOnPaper, prior_approval_note: priorNote },
       ipAddress: req.ip,
     });
-    res.json({ ok: true, locked: true, completion_date: now, final_signed_by_user_id: req.userId });
+    res.json({ ok: true, locked: true, completion_date: now, final_signed_by_user_id: req.userId, signed_on_paper_date: signedOnPaper, prior_approval_note: priorNote });
   });
 
   // Unlock: clears locked + completion_date so the supervisor can correct
@@ -19618,7 +19633,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!assessment || assessment.lab_id !== req.scope.labId) return res.status(404).json({ error: "Assessment not found" });
     if (assessment.locked !== 1) return res.status(409).json({ error: "Assessment is not currently locked" });
     sqlite.prepare(
-      "UPDATE competency_assessments SET locked = 0, completion_date = NULL, final_signed_by_user_id = NULL WHERE id = ?"
+      "UPDATE competency_assessments SET locked = 0, completion_date = NULL, final_signed_by_user_id = NULL, signed_on_paper_date = NULL, prior_approval_note = NULL WHERE id = ?"
     ).run(req.params.id);
     // Wave J PR J3: instrument unlock. Owner/admin only per the existing
     // gate above; capturing this in the audit log keeps the trail honest
