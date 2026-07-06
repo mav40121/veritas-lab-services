@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Study } from "@shared/schema";
-import { PlusCircle, FileText, Trash2, CheckCircle2, XCircle, FlaskConical, Download, Edit2, FileEdit, Archive, GitBranch, FolderOpen } from "lucide-react";
+import { PlusCircle, FileText, Trash2, CheckCircle2, XCircle, FlaskConical, Download, Edit2, FileEdit, Archive, GitBranch, FolderOpen, ListChecks } from "lucide-react";
 import { AddToSignoffGroup } from "@/components/AddToSignoffGroup";
 import { useToast } from "@/hooks/use-toast";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
@@ -150,6 +150,12 @@ export default function Dashboard() {
             <Link href={labRoute("/veritacheck/signoff-groups")}>
               <FolderOpen size={13} />
               Sign-off Groups
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-1">
+            <Link href={labRoute("/veritacheck/coverage")}>
+              <ListChecks size={13} />
+              Coverage
             </Link>
           </Button>
           {readOnly ? (
