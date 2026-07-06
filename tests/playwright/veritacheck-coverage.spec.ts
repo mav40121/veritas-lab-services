@@ -43,5 +43,7 @@ test.describe("VeritaCheck Coverage", () => {
 
     await page.goto(`${BASE}/labs/${labId}/veritacheck/coverage`);
     await expect(page.getByRole("heading", { name: /Coverage/i })).toBeVisible();
+    // Refinements PR: the downloadable report button is present.
+    await expect(page.getByRole("button", { name: /Download report/i })).toBeVisible();
   });
 });

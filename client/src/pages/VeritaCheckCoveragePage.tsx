@@ -1,16 +1,18 @@
 import { useMemo, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { useSEO } from "@/hooks/useSEO";
-import { ChevronLeft, ListChecks, GitCompare } from "lucide-react";
+import { authHeaders } from "@/lib/auth";
+import { ChevronLeft, ListChecks, GitCompare, Download } from "lucide-react";
 
 type LinearityStatus = "covered" | "review" | "missing" | "exempt";
 type CoverageRow = {
@@ -42,6 +44,17 @@ function statusBadge(s: LinearityStatus) {
   return <Badge variant="outline" className={`text-[10px] ${map[s]}`}>{label}</Badge>;
 }
 
+const isFail = (verdict: string) => /fail/i.test(verdict || "");
+
+// A row is "covered" when a study exists, but a study that FAILED did not verify
+// the method, so it must not read as green. Flag it as Failed instead.
+function linearityBadge(r: CoverageRow) {
+  if (r.linearityStatus === "covered" && isFail(r.verdict)) {
+    return <Badge variant="outline" className="text-[10px] border-red-500/40 text-red-600">Failed</Badge>;
+  }
+  return statusBadge(r.linearityStatus);
+}
+
 function Tile({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "good" | "warn" | "bad" }) {
   const c = tone === "good" ? "text-emerald-600" : tone === "warn" ? "text-amber-600" : tone === "bad" ? "text-red-600" : "text-foreground";
   return (
@@ -57,9 +70,30 @@ export default function VeritaCheckCoveragePage() {
   useSEO({ title: "Coverage | VeritaCheck", description: "See what verification your map requires versus the studies you have." });
   const { toast } = useToast();
   const labRoute = useLabRoute();
+  const [, navigate] = useLocation();
   const labId = useActiveLabId();
   const [specialty, setSpecialty] = useState("all");
-  const [status, setStatus] = useState("attention"); // attention = missing + review
+  const [status, setStatus] = useState("attention"); // attention = missing + review + covered-but-failed
+  const openStudy = (id?: number | null) => { if (id) navigate(labRoute(`/study/${id}/results`)); };
+  const [exporting, setExporting] = useState(false);
+  const downloadReport = async () => {
+    if (exporting || !coverageUrl) return;
+    setExporting(true);
+    try {
+      const res = await fetch(`${coverageUrl}/export`, { headers: authHeaders() });
+      if (!res.ok) { toast({ title: "Coverage export failed", variant: "destructive" }); return; }
+      const cd = res.headers.get("Content-Disposition") || "";
+      const m = /filename="([^"]+)"/.exec(cd);
+      const filename = m ? m[1] : `VeritaCheck_Coverage_${new Date().toISOString().split("T")[0]}.xlsx`;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch { toast({ title: "Coverage export failed", variant: "destructive" }); }
+    finally { setExporting(false); }
+  };
 
   const coverageUrl = labId ? `/api/labs/${labId}/veritacheck/coverage` : null;
   const { data, isLoading } = useQuery<Coverage>({ queryKey: [coverageUrl], enabled: !!coverageUrl });
@@ -81,7 +115,7 @@ export default function VeritaCheckCoveragePage() {
   const rows = useMemo(() => {
     let r = data?.rows || [];
     if (specialty !== "all") r = r.filter((x) => x.specialty === specialty);
-    if (status === "attention") r = r.filter((x) => x.linearityStatus === "missing" || x.linearityStatus === "review");
+    if (status === "attention") r = r.filter((x) => x.linearityStatus === "missing" || x.linearityStatus === "review" || (x.linearityStatus === "covered" && isFail(x.verdict)));
     else if (status !== "all") r = r.filter((x) => x.linearityStatus === status);
     return r;
   }, [data, specialty, status]);
@@ -107,7 +141,12 @@ export default function VeritaCheckCoveragePage() {
       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
         <Link href={labRoute("/dashboard")} className="hover:text-primary inline-flex items-center gap-1"><ChevronLeft size={14} />My Studies</Link>
       </div>
-      <h1 className="font-serif text-2xl font-bold mb-1">Coverage</h1>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <h1 className="font-serif text-2xl font-bold mb-1">Coverage</h1>
+        <Button variant="outline" size="sm" onClick={downloadReport} disabled={exporting} data-testid="button-coverage-export">
+          <Download size={14} className="mr-2" />{exporting ? "Preparing..." : "Download report"}
+        </Button>
+      </div>
       <p className="text-sm text-muted-foreground mb-6">
         What your VeritaMap requires versus the studies you have. {s.analytes} analytes across {s.instruments} instruments; {s.studies} studies on file.
       </p>
@@ -134,11 +173,11 @@ export default function VeritaCheckCoveragePage() {
             </tr></thead>
             <tbody>
               {data.methodComparisons.filter((m) => !m.hasStudy).concat(data.methodComparisons.filter((m) => m.hasStudy)).map((m) => (
-                <tr key={m.analyte} className="border-b border-border/60">
+                <tr key={m.analyte} className={`border-b border-border/60 ${m.hasStudy ? "cursor-pointer hover:bg-muted/40" : ""}`} onClick={() => openStudy(m.studyId)} title={m.hasStudy ? "Open study" : undefined}>
                   <td className="py-2 px-3">{m.analyte}</td>
                   <td className="py-2 px-3 text-muted-foreground text-xs">{m.instruments.join(", ")}</td>
                   <td className="py-2 px-3">{m.hasStudy
-                    ? <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">#{m.studyId}{m.signed ? " signed" : ""}</Badge>
+                    ? <Badge variant="outline" className={`text-[10px] ${isFail(m.verdict) ? "border-red-500/40 text-red-600" : "border-emerald-500/40 text-emerald-600"}`}>#{m.studyId}{isFail(m.verdict) ? " FAIL" : m.signed ? " signed" : ""}</Badge>
                     : <Badge variant="outline" className="text-[10px] border-red-500/40 text-red-600">Missing</Badge>}</td>
                   <td className="py-2 px-3 text-xs uppercase text-muted-foreground">{m.verdict}</td>
                 </tr>
@@ -188,15 +227,15 @@ export default function VeritaCheckCoveragePage() {
             <tbody>
               {rows.length === 0 && <tr><td colSpan={6} className="py-6 text-center text-muted-foreground text-sm">Nothing matches this filter.</td></tr>}
               {rows.map((r) => (
-                <tr key={r.instrumentTestId} className="border-b border-border/60" data-testid={`cov-row-${r.instrumentTestId}`}>
+                <tr key={r.instrumentTestId} className={`border-b border-border/60 ${r.studyIds.length ? "cursor-pointer hover:bg-muted/40" : ""}`} data-testid={`cov-row-${r.instrumentTestId}`} onClick={() => openStudy(r.studyIds[0])} title={r.studyIds.length ? "Open study" : undefined}>
                   <td className="py-2 px-3">{r.analyte}</td>
                   <td className="py-2 px-3 text-muted-foreground text-xs">{r.instrument}</td>
-                  <td className="py-2 px-3">{statusBadge(r.linearityStatus)}</td>
+                  <td className="py-2 px-3">{linearityBadge(r)}</td>
                   <td className="py-2 px-3 text-xs text-muted-foreground">{r.studyIds.length ? r.studyIds.map((i) => `#${i}`).join(", ") : ""}</td>
-                  <td className="py-2 px-3 text-center">
+                  <td className="py-2 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                     <Checkbox checked={r.linearityExemptMultical} onCheckedChange={(v) => setExempt(r, "multical", !!v)} data-testid={`cov-multical-${r.instrumentTestId}`} />
                   </td>
-                  <td className="py-2 px-3 text-center">
+                  <td className="py-2 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                     <Checkbox checked={r.linearityExemptNoncal} onCheckedChange={(v) => setExempt(r, "noncal", !!v)} data-testid={`cov-noncal-${r.instrumentTestId}`} />
                   </td>
                 </tr>
