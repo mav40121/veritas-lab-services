@@ -47,10 +47,12 @@ function statusBadge(s: LinearityStatus) {
 const isFail = (verdict: string) => /fail/i.test(verdict || "");
 
 // A row is "covered" when a study exists, but a study that FAILED did not verify
-// the method, so it must not read as green. Flag it as Failed instead.
+// the method, so it must not read as green. A documented failure is a SOLID red
+// chip (heavier alarm); "Missing" (no study on file at all) stays a hollow red
+// OUTLINE (a gap to fill), so the two never read as the same badge.
 function linearityBadge(r: CoverageRow) {
   if (r.linearityStatus === "covered" && isFail(r.verdict)) {
-    return <Badge variant="outline" className="text-[10px] border-red-500/40 text-red-600">Failed</Badge>;
+    return <Badge variant="destructive" className="text-[10px]">Failed</Badge>;
   }
   return statusBadge(r.linearityStatus);
 }
@@ -177,7 +179,9 @@ export default function VeritaCheckCoveragePage() {
                   <td className="py-2 px-3">{m.analyte}</td>
                   <td className="py-2 px-3 text-muted-foreground text-xs">{m.instruments.join(", ")}</td>
                   <td className="py-2 px-3">{m.hasStudy
-                    ? <Badge variant="outline" className={`text-[10px] ${isFail(m.verdict) ? "border-red-500/40 text-red-600" : "border-emerald-500/40 text-emerald-600"}`}>#{m.studyId}{isFail(m.verdict) ? " FAIL" : m.signed ? " signed" : ""}</Badge>
+                    ? (isFail(m.verdict)
+                        ? <Badge variant="destructive" className="text-[10px]">#{m.studyId} FAIL</Badge>
+                        : <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">#{m.studyId}{m.signed ? " signed" : ""}</Badge>)
                     : <Badge variant="outline" className="text-[10px] border-red-500/40 text-red-600">Missing</Badge>}</td>
                   <td className="py-2 px-3 text-xs uppercase text-muted-foreground">{m.verdict}</td>
                 </tr>

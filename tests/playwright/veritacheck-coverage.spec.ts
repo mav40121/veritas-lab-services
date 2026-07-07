@@ -45,5 +45,17 @@ test.describe("VeritaCheck Coverage", () => {
     await expect(page.getByRole("heading", { name: /Coverage/i })).toBeVisible();
     // Refinements PR: the downloadable report button is present.
     await expect(page.getByRole("button", { name: /Download report/i })).toBeVisible();
+
+    // Badge-distinction PR: "Missing" (no study) and "Failed"/"FAIL" (study on
+    // file, verdict FAIL) must not render as the same chip. Missing is a hollow
+    // red OUTLINE; a documented failure is a SOLID red (destructive) chip. When
+    // both states are present, assert they carry different background treatments.
+    const missingBadge = page.locator('div', { hasText: /^Missing$/ }).last();
+    const failBadge = page.locator('div').filter({ hasText: /\bFAIL(ED)?\b/ }).last();
+    if ((await missingBadge.count()) > 0 && (await failBadge.count()) > 0) {
+      const missingBg = await missingBadge.evaluate((el) => getComputedStyle(el).backgroundColor);
+      const failBg = await failBadge.evaluate((el) => getComputedStyle(el).backgroundColor);
+      expect(missingBg).not.toBe(failBg); // solid destructive vs transparent outline
+    }
   });
 });
