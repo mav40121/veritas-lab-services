@@ -46,6 +46,14 @@ test.describe("VeritaCheck Coverage", () => {
     // Refinements PR: the downloadable report button is present.
     await expect(page.getByRole("button", { name: /Download report/i })).toBeVisible();
 
+    // Sort PR: the Cal Ver / Linearity table can be sorted by Instrument (and
+    // Analyte / Status). The sortable header renders and clicking it re-orders
+    // without error (first data-cell text may change).
+    const sortInstrument = page.getByTestId("cov-sort-instrument");
+    await expect(sortInstrument).toBeVisible();
+    await sortInstrument.click();
+    await expect(page.getByTestId("cov-sort-analyte")).toBeVisible();
+
     // Badge-distinction PR: "Missing" (no study) and "Failed"/"FAIL" (study on
     // file, verdict FAIL) must not render as the same chip. Missing is a hollow
     // red OUTLINE; a documented failure is a SOLID red (destructive) chip. When

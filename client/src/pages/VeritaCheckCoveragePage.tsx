@@ -12,7 +12,7 @@ import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { useSEO } from "@/hooks/useSEO";
 import { authHeaders } from "@/lib/auth";
-import { ChevronLeft, ListChecks, GitCompare, Download } from "lucide-react";
+import { ChevronLeft, ListChecks, GitCompare, Download, ArrowUpDown } from "lucide-react";
 
 type LinearityStatus = "covered" | "review" | "missing" | "exempt";
 type CoverageRow = {
@@ -57,6 +57,22 @@ function linearityBadge(r: CoverageRow) {
   return statusBadge(r.linearityStatus);
 }
 
+type SortKey = "analyte" | "instrument" | "status";
+type SortState = { key: SortKey | null; dir: "asc" | "desc" };
+
+// Clickable column header for the Cal Ver / Linearity table. Click to sort, click
+// again to reverse. Instrument sort is the main ask (group a lab's rows by analyzer).
+function SortTh({ label, k, sort, setSort }: { label: string; k: SortKey; sort: SortState; setSort: (u: (s: SortState) => SortState) => void }) {
+  const active = sort.key === k;
+  return (
+    <th className="py-2 px-3 font-medium">
+      <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => setSort((s) => (s.key === k ? { key: k, dir: s.dir === "asc" ? "desc" : "asc" } : { key: k, dir: "asc" }))} data-testid={`cov-sort-${k}`}>
+        {label}<ArrowUpDown size={11} className={active ? "text-foreground" : "opacity-40"} />
+      </button>
+    </th>
+  );
+}
+
 function Tile({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "good" | "warn" | "bad" }) {
   const c = tone === "good" ? "text-emerald-600" : tone === "warn" ? "text-amber-600" : tone === "bad" ? "text-red-600" : "text-foreground";
   return (
@@ -76,6 +92,7 @@ export default function VeritaCheckCoveragePage() {
   const labId = useActiveLabId();
   const [specialty, setSpecialty] = useState("all");
   const [status, setStatus] = useState("attention"); // attention = missing + review + covered-but-failed
+  const [sort, setSort] = useState<SortState>({ key: null, dir: "asc" }); // null = server order (specialty, status, analyte)
   const openStudy = (id?: number | null) => { if (id) navigate(labRoute(`/study/${id}/results`)); };
   const [exporting, setExporting] = useState(false);
   const downloadReport = async () => {
@@ -119,8 +136,18 @@ export default function VeritaCheckCoveragePage() {
     if (specialty !== "all") r = r.filter((x) => x.specialty === specialty);
     if (status === "attention") r = r.filter((x) => x.linearityStatus === "missing" || x.linearityStatus === "review" || (x.linearityStatus === "covered" && isFail(x.verdict)));
     else if (status !== "all") r = r.filter((x) => x.linearityStatus === status);
+    if (sort.key) {
+      const rank: Record<string, number> = { missing: 0, review: 1, covered: 2, exempt: 3 };
+      r = r.slice().sort((a, b) => {
+        let c = 0;
+        if (sort.key === "instrument") c = (a.instrument || "").localeCompare(b.instrument || "") || a.analyte.localeCompare(b.analyte);
+        else if (sort.key === "analyte") c = a.analyte.localeCompare(b.analyte);
+        else c = (rank[a.linearityStatus] ?? 9) - (rank[b.linearityStatus] ?? 9) || a.analyte.localeCompare(b.analyte);
+        return sort.dir === "asc" ? c : -c;
+      });
+    }
     return r;
-  }, [data, specialty, status]);
+  }, [data, specialty, status, sort]);
 
   if (!labId) {
     return <div className="max-w-2xl mx-auto px-4 py-16 text-center text-muted-foreground">Pick a lab in the NavBar switcher to view coverage.</div>;
@@ -224,8 +251,10 @@ export default function VeritaCheckCoveragePage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="text-left text-xs text-muted-foreground border-b border-border">
-              <th className="py-2 px-3 font-medium">Analyte</th><th className="py-2 px-3 font-medium">Instrument</th>
-              <th className="py-2 px-3 font-medium">Status</th><th className="py-2 px-3 font-medium">Study</th>
+              <SortTh label="Analyte" k="analyte" sort={sort} setSort={setSort} />
+              <SortTh label="Instrument" k="instrument" sort={sort} setSort={setSort} />
+              <SortTh label="Status" k="status" sort={sort} setSort={setSort} />
+              <th className="py-2 px-3 font-medium">Study</th>
               <th className="py-2 px-3 font-medium text-center">3+ cal</th><th className="py-2 px-3 font-medium text-center">Not calibratable</th>
             </tr></thead>
             <tbody>
