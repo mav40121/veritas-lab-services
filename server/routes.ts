@@ -12691,13 +12691,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const now = new Date().toISOString();
     const activeAnalytes = new Set(rows.map((r: any) => r.analyte));
 
-    // 1. Insert any newly-active analyte that doesn't have a row yet
-    //    (preserves existing date/notes/active state for analytes that are
-    //     already present and still backed).
+    // 1. Upsert one row per analyte. Insert newly-active analytes; for analytes
+    //    already present, UPDATE the derived fields (specialty, complexity,
+    //    instrument_source) so a later complexity correction on the instrument
+    //    propagates. The prior INSERT OR IGNORE silently kept the stale
+    //    complexity, which left WAIVED tox drugs on San Carlos long after they
+    //    were corrected to MODERATE on the build page. Dates/notes/active are
+    //    preserved (never in the ON CONFLICT SET list, so a map-level toggle-off
+    //    survives). When an analyte runs on instruments of differing complexity,
+    //    the highest wins (HIGH > MODERATE > WAIVED) so a test that is HIGH on
+    //    any instrument is never downgraded.
+    const COMPLEXITY_RANK: Record<string, number> = { WAIVED: 0, MODERATE: 1, HIGH: 2 };
+    const byAnalyte = new Map<string, { analyte: string; specialty: string; complexity: string; instrument_name: string }>();
+    for (const r of rows as any[]) {
+      const cx = String(r.complexity || "").toUpperCase();
+      const prev = byAnalyte.get(r.analyte);
+      if (!prev || (COMPLEXITY_RANK[cx] ?? -1) > (COMPLEXITY_RANK[String(prev.complexity).toUpperCase()] ?? -1)) {
+        byAnalyte.set(r.analyte, { analyte: r.analyte, specialty: r.specialty, complexity: r.complexity, instrument_name: r.instrument_name });
+      }
+    }
+    const upsertRows = Array.from(byAnalyte.values());
     const insertStmt = (db as any).$client.prepare(`
-      INSERT OR IGNORE INTO veritamap_tests
+      INSERT INTO veritamap_tests
         (map_id, analyte, specialty, complexity, active, instrument_source, updated_at)
       VALUES (?, ?, ?, ?, 1, ?, ?)
+      ON CONFLICT(map_id, analyte) DO UPDATE SET
+        specialty = excluded.specialty,
+        complexity = excluded.complexity,
+        instrument_source = excluded.instrument_source,
+        updated_at = excluded.updated_at
     `);
 
     // 2. Delete any veritamap_tests row that is no longer backed by an
@@ -12741,7 +12763,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         deleteAmrValStmt.run(mapId, a);
       }
     });
-    bulk(rows, orphanAnalytes);
+    bulk(upsertRows, orphanAnalytes);
 
     if (orphanAnalytes.length > 0) {
       console.log(`[VeritaMap] rebuildMapTests removed ${orphanAnalytes.length} orphan analyte(s) from map ${mapId}: ${orphanAnalytes.slice(0, 10).join(', ')}${orphanAnalytes.length > 10 ? '…' : ''}`);
@@ -26661,6 +26683,48 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   //
   // Audit: emits an admin audit_log entry on apply with
   // before_json / after_json describing the change.
+  // One-time (idempotent) resync of veritamap_tests.complexity from the
+  // authoritative veritamap_instrument_tests. Fixes rows that drifted while
+  // rebuildMapTests used INSERT OR IGNORE (never updated complexity on existing
+  // rows), e.g. San Carlos MEDTOX drugs stuck on WAIVED after correction to
+  // MODERATE. Touches ONLY complexity + updated_at; no deletes, no other fields.
+  // Max complexity per analyte wins (HIGH > MODERATE > WAIVED). Pass
+  // { dryRun: true } to preview the diff without writing.
+  app.post("/api/admin/veritamap/resync-complexity", (req, res) => {
+    const { secret, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const sqlite = (db as any).$client;
+    const RANK: Record<string, number> = { WAIVED: 0, MODERATE: 1, HIGH: 2 };
+    const tests = sqlite.prepare(
+      "SELECT id, map_id, analyte, complexity FROM veritamap_tests WHERE active = 1"
+    ).all() as Array<{ id: number; map_id: number; analyte: string; complexity: string }>;
+    const instStmt = sqlite.prepare(
+      "SELECT complexity FROM veritamap_instrument_tests WHERE map_id = ? AND lower(analyte) = lower(?) AND active = 1"
+    );
+    const changes: Array<{ id: number; map_id: number; analyte: string; from: string; to: string }> = [];
+    for (const t of tests) {
+      const inst = instStmt.all(t.map_id, t.analyte) as Array<{ complexity: string }>;
+      if (inst.length === 0) continue; // no instrument backing -> leave as-is
+      let best = ""; let bestRank = -1;
+      for (const i of inst) {
+        const cx = String(i.complexity || "").toUpperCase();
+        const rk = RANK[cx] ?? -1;
+        if (rk > bestRank) { bestRank = rk; best = cx; }
+      }
+      const cur = String(t.complexity || "").toUpperCase();
+      if (best && best !== cur) changes.push({ id: t.id, map_id: t.map_id, analyte: t.analyte, from: cur, to: best });
+    }
+    if (!dryRun && changes.length > 0) {
+      const upd = sqlite.prepare("UPDATE veritamap_tests SET complexity = ?, updated_at = ? WHERE id = ?");
+      const now = new Date().toISOString();
+      const apply = sqlite.transaction((rows: typeof changes) => {
+        for (const ch of rows) upd.run(ch.to, now, ch.id);
+      });
+      apply(changes);
+    }
+    res.json({ ok: true, dryRun: !!dryRun, changed: changes.length, changes });
+  });
+
   app.post("/api/admin/move-map-to-lab", (req, res) => {
     const { secret, sourceMapId, destLabId, confirm } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
