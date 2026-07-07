@@ -1639,6 +1639,12 @@ try { sqlite.exec("ALTER TABLE studies ADD COLUMN archived_at TEXT"); } catch {}
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN archived_by_user_id INTEGER"); } catch {}
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN archive_reason TEXT"); } catch {}
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN result_units TEXT"); } catch {}
+// 2026-07-07: VeritaCheck Coverage "Align" (Phase 2). When a study's name does
+// not match any VeritaMap analyte, the director can explicitly align it to the
+// analyte it satisfies. This stores that map analyte string; Coverage then
+// credits the study to that analyte without renaming it (the study keeps its own
+// title on its report). NULL/'' = not aligned. Additive + idempotent.
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN coverage_analyte TEXT"); } catch {}
 
 // 2026-06-15: VeritaCheck Phase 2 (close the orphan-creation hole). Excluding a
 // data point now recomputes and persists the verdict in place, so a documented

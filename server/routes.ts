@@ -15,7 +15,7 @@ import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
-import { computeCoverageForLab, setLinearityExemption } from "./veritacheckCoverage";
+import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte } from "./veritacheckCoverage";
 import { auditVeritamapConsistency } from "./veritamapConsistency";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
@@ -12313,6 +12313,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const ok = setLinearityExemption((db as any).$client, req.scope.labId, instrumentTestId, multical, noncal);
     if (!ok) return res.status(404).json({ error: "Test not found in this lab" });
     res.json({ instrumentTestId, linearityExemptMultical: multical, linearityExemptNoncal: noncal });
+  });
+
+  // POST /api/labs/:labId/veritacheck/coverage/align
+  //
+  // Aligns a study whose name does not match any VeritaMap analyte to the analyte
+  // it satisfies (Coverage "Unaligned studies" panel, Phase 2). Keeps the study's
+  // own name; Coverage then credits it to that analyte. Send analyte:"" to clear.
+  // Gated on veritamap (not veritacheck) to match the exemption toggle on the
+  // same Coverage page: one write permission governs every action on the page.
+  app.post("/api/labs/:labId/veritacheck/coverage/align", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritamap"), (req: any, res) => {
+    const studyId = Number(req.body?.studyId);
+    if (!Number.isFinite(studyId) || studyId <= 0) return res.status(400).json({ error: "studyId required" });
+    const analyte = typeof req.body?.analyte === "string" ? req.body.analyte : "";
+    const result = alignStudyToAnalyte((db as any).$client, req.scope.labId, studyId, analyte);
+    if (!result.ok) {
+      if (result.reason === "unknown_analyte") return res.status(400).json({ error: "Analyte is not on this lab's VeritaMap" });
+      return res.status(404).json({ error: "Study not found in this lab" });
+    }
+    res.json({ studyId, coverageAnalyte: (analyte || "").trim() });
   });
 
   // GET /api/labs/:labId/veritacheck/coverage/export
