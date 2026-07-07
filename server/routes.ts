@@ -26702,6 +26702,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(auditVeritamapConsistency((db as any).$client));
   });
 
+  // One-time hygiene: delete veritamap_* child rows whose parent map was deleted
+  // (FK cascade gap left orphaned instruments/instrument_tests behind). Deletes
+  // ONLY rows whose map_id is absent from veritamap_maps; nothing on a live map
+  // is touched. Children-first order. { dryRun: true } previews counts.
+  app.post("/api/admin/veritamap/purge-orphan-maps", (req, res) => {
+    const { secret, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const sqlite = (db as any).$client;
+    const childTables = ["veritamap_instrument_tests", "veritamap_tests", "veritamap_analyte_values", "veritamap_amr_values", "veritamap_instruments"];
+    const orphanRows: Record<string, number> = {};
+    for (const t of childTables) {
+      orphanRows[t] = sqlite.prepare("SELECT COUNT(*) AS n FROM " + t + " WHERE map_id NOT IN (SELECT id FROM veritamap_maps)").get().n;
+    }
+    const total = Object.values(orphanRows).reduce((a, b) => a + b, 0);
+    if (!dryRun && total > 0) {
+      const purge = sqlite.transaction(() => {
+        for (const t of childTables) {
+          sqlite.prepare("DELETE FROM " + t + " WHERE map_id NOT IN (SELECT id FROM veritamap_maps)").run();
+        }
+      });
+      purge();
+    }
+    res.json({ ok: true, dryRun: !!dryRun, orphanRows, total });
+  });
+
   app.post("/api/admin/veritamap/resync-complexity", (req, res) => {
     const { secret, dryRun } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
