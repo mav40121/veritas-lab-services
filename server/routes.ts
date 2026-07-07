@@ -115,7 +115,9 @@ import { insertStudySchema, insertContactSchema, registerSchema, loginSchema, ty
 // ── Server-side pass/fail recomputation ─────────────────────────────────────
 // Mirrors the client calculation logic so the stored status is always correct.
 // Each study type has its own pass/fail rule derived from the raw dataPoints.
-function computeStudyStatus(studyType: string, dataPointsJson: string, instrumentsJson: string, cliaAllowableError: number, teaIsPercentage: boolean = true, cliaAbsoluteFloor: number | null = null): "pass" | "fail" {
+import { isCensored, censorValueForMath, type CensoringPolicy } from "@shared/censoring";
+
+function computeStudyStatus(studyType: string, dataPointsJson: string, instrumentsJson: string, cliaAllowableError: number, teaIsPercentage: boolean = true, cliaAbsoluteFloor: number | null = null, censoringPolicy: CensoringPolicy = "exclude"): "pass" | "fail" {
   try {
     let rawData = safeJsonParse(dataPointsJson, null);
     const instrumentNames: string[] = safeJsonParse(instrumentsJson, []);
@@ -128,7 +130,31 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
     // pass/fail. Object-shaped types (lot_to_lot, qualitative, sensitivity) can
     // never carry exclusions (the exclusion endpoint rejects non-flat-arrays),
     // so they are unaffected.
-    if (Array.isArray(rawData)) rawData = rawData.filter((p: any) => !(p && p.excluded));
+    // Resolve censored instrument values through the study's censoring policy so
+    // the stored verdict matches the detail page (which applies the same policy).
+    // Without this, a censored point (a {censored,...} object) fell through as a
+    // non-numeric value -> NaN -> counted as a per-point FAIL, so a passing study
+    // with below-detection points was stored FAIL (San Carlos D-dimer #616,
+    // PROBNP2 #478). Covers instrumentValues-shaped types (method_comparison,
+    // cal_ver, carryover, accuracy_bias).
+    const resolveVal = (v: any): number | null => {
+      if (v === null || v === undefined) return null;
+      if (typeof v === "number") return Number.isFinite(v) ? v : null;
+      if (isCensored(v)) return censorValueForMath(v, censoringPolicy);
+      return typeof v.value === "number" && Number.isFinite(v.value) ? v.value : null;
+    };
+    if (Array.isArray(rawData)) {
+      rawData = rawData
+        .filter((p: any) => !(p && p.excluded))
+        .map((p: any) => {
+          if (p && p.instrumentValues && typeof p.instrumentValues === "object") {
+            const iv: Record<string, number | null> = {};
+            for (const k of Object.keys(p.instrumentValues)) iv[k] = resolveVal(p.instrumentValues[k]);
+            return { ...p, instrumentValues: iv };
+          }
+          return p;
+        });
+    }
 
     // Sensitivity (EP17-A2) — dataPoints is the wrapper {input, results} that
     // VeritaCheckPage.tsx persists; trust the pre-computed results.overallPass.
@@ -533,7 +559,7 @@ export function recomputeAllStudyStatuses(): void {
     // cascading-write footgun. Exclusion-driven verdict changes happen only
     // through the controlled exclusion endpoint, which captures that decision.
     if (dataPointsHaveExclusions(study.dataPoints)) continue;
-    const computed = computeStudyStatus(study.studyType, study.dataPoints, study.instruments, study.cliaAllowableError, (study as any).teaIsPercentage !== 0, (study as any).cliaAbsoluteFloor ?? null);
+    const computed = computeStudyStatus(study.studyType, study.dataPoints, study.instruments, study.cliaAllowableError, (study as any).teaIsPercentage !== 0, (study as any).cliaAbsoluteFloor ?? null, (study as any).censoringPolicy ?? "exclude");
     if (computed !== study.status) {
       storage.updateStudyStatus(study.id, computed);
       // Also update the result column (not in drizzle schema, added via ALTER TABLE)
@@ -9911,7 +9937,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       parsed.data.instruments,
       parsed.data.cliaAllowableError,
       (parsed.data as any).teaIsPercentage !== 0,
-      (parsed.data as any).cliaAbsoluteFloor ?? null
+      (parsed.data as any).cliaAbsoluteFloor ?? null,
+      (parsed.data as any).censoringPolicy ?? "exclude"
     );
     // Free-study credit gate for the legacy (optional-auth) create path. Guests
     // (no userId) are unaffected; authenticated free/per_study accounts consume
@@ -10021,7 +10048,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       payload.instruments,
       payload.cliaAllowableError,
       (payload as any).teaIsPercentage !== 0,
-      (payload as any).cliaAbsoluteFloor ?? null
+      (payload as any).cliaAbsoluteFloor ?? null,
+      (payload as any).censoringPolicy ?? "exclude"
     );
 
     (db as any).$client.prepare(`
@@ -10218,7 +10246,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       parsed.data.instruments,
       parsed.data.cliaAllowableError,
       (parsed.data as any).teaIsPercentage !== 0,
-      (parsed.data as any).cliaAbsoluteFloor ?? null
+      (parsed.data as any).cliaAbsoluteFloor ?? null,
+      (parsed.data as any).censoringPolicy ?? "exclude"
     );
     // Determine the owning user_id: for seat users this is the owner; for
     // owners it is their own id. Lab membership already established by
@@ -10301,7 +10330,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       payload.instruments,
       payload.cliaAllowableError,
       (payload as any).teaIsPercentage !== 0,
-      (payload as any).cliaAbsoluteFloor ?? null
+      (payload as any).cliaAbsoluteFloor ?? null,
+      (payload as any).censoringPolicy ?? "exclude"
     );
 
     (db as any).$client.prepare(`
@@ -10404,6 +10434,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         studyRow.clia_allowable_error,
         studyRow.tea_is_percentage !== 0,
         studyRow.clia_absolute_floor ?? null,
+        studyRow.censoring_policy ?? "exclude",
       );
       flipFailToPass = cur === "fail" && newStatus === "pass";
     }
@@ -26700,6 +26731,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
     res.json(auditVeritamapConsistency((db as any).$client));
+  });
+
+  // Targeted admin correction of a study's display name (test_name). Fixes a typo
+  // that breaks VeritaCheck Coverage analyte matching (e.g. "Cannabinoides (THC)"
+  // -> "Cannabinoids (THC)"). id-scoped; returns before/after.
+  app.post("/api/admin/studies/rename", (req, res) => {
+    const { secret, studyId, testName } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    if (!Number.isFinite(Number(studyId)) || typeof testName !== "string" || !testName.trim()) {
+      return res.status(400).json({ error: "studyId and non-empty testName required" });
+    }
+    const sqlite = (db as any).$client;
+    const before = sqlite.prepare("SELECT id, test_name FROM studies WHERE id = ?").get(Number(studyId));
+    if (!before) return res.status(404).json({ error: `study ${studyId} not found` });
+    sqlite.prepare("UPDATE studies SET test_name = ? WHERE id = ?").run(testName.trim(), Number(studyId));
+    const after = sqlite.prepare("SELECT id, test_name FROM studies WHERE id = ?").get(Number(studyId));
+    res.json({ ok: true, before, after });
   });
 
   // One-time hygiene: delete veritamap_* child rows whose parent map was deleted
