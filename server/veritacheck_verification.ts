@@ -1182,7 +1182,10 @@ export function registerVeritaCheckVerificationRoutes(
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
         sets.push(`${key} = ?`);
-        vals.push(typeof req.body[key] === "object" ? JSON.stringify(req.body[key]) : req.body[key]);
+        // `typeof null === "object"` in JS, so JSON.stringify(null) => the string
+        // "null". Guard null explicitly so { study_id: null } (Unlink) and
+        // { passed: null } (Redo) clear to SQL NULL instead of writing "null".
+        vals.push(req.body[key] !== null && typeof req.body[key] === "object" ? JSON.stringify(req.body[key]) : req.body[key]);
       }
     }
     if (sets.length === 0) return res.status(400).json({ error: "No valid fields" });
@@ -1489,7 +1492,10 @@ export function registerVeritaCheckVerificationRoutes(
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
         sets.push(`${key} = ?`);
-        vals.push(typeof req.body[key] === "object" ? JSON.stringify(req.body[key]) : req.body[key]);
+        // `typeof null === "object"` in JS, so JSON.stringify(null) => the string
+        // "null". Guard null explicitly so { study_id: null } (Unlink) and
+        // { passed: null } (Redo) clear to SQL NULL instead of writing "null".
+        vals.push(req.body[key] !== null && typeof req.body[key] === "object" ? JSON.stringify(req.body[key]) : req.body[key]);
       }
     }
     if (sets.length === 0) return res.status(400).json({ error: "No valid fields" });
