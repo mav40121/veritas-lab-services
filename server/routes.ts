@@ -16,6 +16,7 @@ import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
 import { computeCoverageForLab, setLinearityExemption } from "./veritacheckCoverage";
+import { auditVeritamapConsistency } from "./veritamapConsistency";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard";
@@ -26690,6 +26691,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // MODERATE. Touches ONLY complexity + updated_at; no deletes, no other fields.
   // Max complexity per analyte wins (HIGH > MODERATE > WAIVED). Pass
   // { dryRun: true } to preview the diff without writing.
+  // Read-only fleet-wide consistency audit: re-derives veritamap_tests from
+  // veritamap_instrument_tests across every live map and reports divergence
+  // (complexity, specialty, orphan rows, missing analytes). Powers the nightly
+  // guard's on-demand path. { ok:true, totalIssues:0 } means the compliance
+  // view + Excel match the instrument source of truth everywhere.
+  app.get("/api/admin/veritamap/consistency-audit", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    res.json(auditVeritamapConsistency((db as any).$client));
+  });
+
   app.post("/api/admin/veritamap/resync-complexity", (req, res) => {
     const { secret, dryRun } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });

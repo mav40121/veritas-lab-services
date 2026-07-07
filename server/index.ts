@@ -312,6 +312,32 @@ app.use((req, res, next) => {
     console.error("[backup] Scheduler setup error:", err.message);
   }
 
+  // Schedule nightly VeritaMap consistency check at 04:30 UTC (after the 04:00
+  // backup). Read-only: re-derives the compliance view (veritamap_tests) from
+  // the instrument source of truth and emails info@ if anything has drifted, so
+  // a stale complexity/specialty row can never hide until a survey. Standing
+  // guard for the 2026-07-07 San Carlos incident (frozen INSERT OR IGNORE row).
+  try {
+    const { runNightlyVeritamapConsistency } = await import("./veritamapConsistency");
+    const scheduleConsistency = () => {
+      const now = new Date();
+      const next = new Date(now);
+      next.setUTCHours(4, 30, 0, 0);
+      if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
+      const msUntil = next.getTime() - now.getTime();
+      setTimeout(() => {
+        runNightlyVeritamapConsistency().catch((err) => console.error("[veritamap-consistency] Run failed:", err?.message || err));
+        setInterval(() => {
+          runNightlyVeritamapConsistency().catch((err) => console.error("[veritamap-consistency] Run failed:", err?.message || err));
+        }, 24 * 60 * 60 * 1000);
+      }, msUntil);
+      console.log(`[veritamap-consistency] Nightly check scheduled in ${Math.round(msUntil / 60000)} minutes`);
+    };
+    scheduleConsistency();
+  } catch (err: any) {
+    console.error("[veritamap-consistency] Scheduler setup error:", err.message);
+  }
+
   // Nightly VeritaStock demo reset at 07:00 UTC (midnight America/Phoenix).
   // Restores the five San Carlos locations to the canonical baseline so the
   // self-serve demo self-heals each night. ONLY scheduled on the VeritaStock
