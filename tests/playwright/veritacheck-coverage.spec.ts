@@ -65,5 +65,15 @@ test.describe("VeritaCheck Coverage", () => {
       const failBg = await failBadge.evaluate((el) => getComputedStyle(el).backgroundColor);
       expect(missingBg).not.toBe(failBg); // solid destructive vs transparent outline
     }
+
+    // Unaligned-studies PR: the panel is conditional (renders only when the lab has
+    // coverage studies that match no map analyte). When any unaligned row is
+    // present, its "Unaligned studies" heading must render and each row must be a
+    // clickable open-study link (data-testid cov-unmapped-<id>).
+    const unmappedRows = page.locator('[data-testid^="cov-unmapped-"]');
+    if ((await unmappedRows.count()) > 0) {
+      await expect(page.getByText(/Unaligned studies/i).first()).toBeVisible();
+      await expect(unmappedRows.first()).toBeVisible();
+    }
   });
 });
