@@ -1502,7 +1502,18 @@ export function registerVeritaCheckVerificationRoutes(
     sets.push("updated_at = ?");
     vals.push(new Date().toISOString());
     vals.push(req.params.studySlotId);
-    sqlite.prepare(`UPDATE veritacheck_verification_studies SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
+    try {
+      sqlite.prepare(`UPDATE veritacheck_verification_studies SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
+    } catch (e: any) {
+      // A linked study or analyte can be deleted out from under a slot; setting
+      // study_id/analyte_id to that now-dangling id trips the FK constraint.
+      // Return a clean 409 instead of a 500 (which pages Sentry) so the UI can
+      // tell the director to refresh. Unlink (study_id: null) is unaffected.
+      if (/FOREIGN KEY/i.test(String(e?.message || ""))) {
+        return res.status(409).json({ error: "That study or analyte no longer exists (it may have been deleted). Refresh the page and try again." });
+      }
+      throw e;
+    }
     res.json({ ok: true });
   });
 

@@ -376,6 +376,7 @@ You do NOT ask Michael to paste operational secrets in chat. He does not type `A
 - GitHub PAT: stored as `GITHUB_TOKEN` in Railway env. Use `gh` / `git` via the `github` credential preset; no manual paste.
 - Live site: https://www.veritaslabservices.com (apex 301s to www; print QC requires the www. form).
 - Admin endpoints: `GET /api/admin/backup-db?secret=$ADMIN_SECRET`, `POST /api/admin/set-plan` with `{secret, userId, plan}`. Read `ADMIN_SECRET` from Railway env at use time.
+- VeritaMap consistency admin endpoints (ADMIN_SECRET-gated; all support `{dryRun:true}` where they mutate): `GET /api/admin/veritamap/consistency-audit` (read-only, reports veritamap_tests vs instrument_tests divergence across live maps; the nightly guard's on-demand path), `POST /api/admin/veritamap/resync-complexity` (re-derive veritamap_tests.complexity = max instrument_tests complexity per analyte), `POST /api/admin/veritamap/purge-orphan-maps` (delete veritamap_* child rows whose parent map was deleted). See `reference_veritamap_complexity_stores` memory.
 - Resend: `RESEND_API_KEY` in Railway env; production transactional email is wired to it.
 - Stripe: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` in Railway env.
 - JWT: `JWT_SECRET` in Railway env.
