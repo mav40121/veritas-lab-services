@@ -74,6 +74,11 @@ test.describe("VeritaCheck Coverage", () => {
     if ((await unmappedRows.count()) > 0) {
       await expect(page.getByText(/Unaligned studies/i).first()).toBeVisible();
       await expect(unmappedRows.first()).toBeVisible();
+      // Align PR (Phase 2): a not-yet-aligned row exposes an "Align to…" picker.
+      // Non-mutating: assert the control renders (the align round-trip is driven
+      // out-of-band so this smoke test does not write to prod data).
+      const alignSelect = page.locator('[data-testid^="cov-align-select-"]').first();
+      if ((await alignSelect.count()) > 0) await expect(alignSelect).toBeVisible();
     }
   });
 });

@@ -49,6 +49,9 @@ export interface UnmappedStudy {
   date: string;
   verdict: string;
   signed: boolean;
+  // Director's explicit alignment: the map analyte this study is credited to,
+  // set via the Align action (keeps the study's own name). "" = not yet aligned.
+  coverageAnalyte: string;
 }
 export interface CoverageResult {
   hasMap: boolean;
@@ -98,7 +101,16 @@ function studyMatchesInstrument(studyInstr: string, mapName: string, mapNick: st
   return common / mt.size >= 0.6;
 }
 
-type Study = { id: number; test_name: string; instrument: string; study_type: string; status: string; lifecycle_state: string; date?: string };
+type Study = { id: number; test_name: string; instrument: string; study_type: string; status: string; lifecycle_state: string; date?: string; coverage_analyte?: string | null };
+
+// A study counts toward a map analyte when its name matches (the automatic path)
+// OR the director has explicitly aligned it to that analyte (coverage_analyte).
+// The override keeps the study's own name; it only supplies the analyte identity
+// the strict name matcher could not infer. Instrument matching still applies
+// downstream, so an aligned study credits only its own instrument's combos.
+function matchesAnalyte(s: Study, analyte: string): boolean {
+  return (!!s.coverage_analyte && s.coverage_analyte === analyte) || analyteMatch(s.test_name, analyte);
+}
 type Instrument = { id: number; instrument_name: string; nickname: string | null; serial_number?: string | null };
 type Combo = { id: number; analyte: string; specialty: string; instrument_id: number; linearity_exempt_multical?: number; linearity_exempt_noncal?: number };
 
@@ -128,7 +140,7 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
     const exempt = multical || noncal;
 
     // Only cal-ver / linearity studies count toward the linearity requirement.
-    const linCands = studies.filter((s) => LINEARITY_TYPES.has(s.study_type) && analyteMatch(s.test_name, c.analyte));
+    const linCands = studies.filter((s) => LINEARITY_TYPES.has(s.study_type) && matchesAnalyte(s, c.analyte));
     const onInst = inst ? linCands.filter((s) => studyMatchesInstrument(s.instrument, instName, inst.nickname)) : [];
 
     let status: LinearityStatus; let matched: Study[];
@@ -177,7 +189,7 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
   for (const [analyte, instIds] of instByAnalyte) {
     if (instIds.size < 2) continue;
     mcNeeded++;
-    const mc = studies.find((s) => s.study_type === "method_comparison" && analyteMatch(s.test_name, analyte)) || null;
+    const mc = studies.find((s) => s.study_type === "method_comparison" && matchesAnalyte(s, analyte)) || null;
     if (mc) mcDone++;
     methodComparisons.push({
       analyte,
@@ -198,6 +210,9 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
   // Usually a naming-convention gap (e.g. study "AST" vs map "Aspartate
   // aminotransferase (AST) (SGOT)") or a typo. Surfaced so the director can align
   // them instead of the work going uncounted.
+  // The list is by study NAME not matching (a stable property), so an aligned
+  // study stays visible here with its target shown, giving the director a handle
+  // to change or clear the alignment. Unaligned rows sort first.
   const COVERAGE_STUDY_TYPES = new Set(["method_comparison", "correlation", "cal_ver", "linearity"]);
   const mapAnalytes = combos.map((c) => c.analyte);
   const unmappedStudies: UnmappedStudy[] = studies
@@ -210,8 +225,9 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
       date: s.date || "",
       verdict: (s.status || "").toLowerCase(),
       signed: s.lifecycle_state === "finalized",
+      coverageAnalyte: s.coverage_analyte || "",
     }))
-    .sort((a, b) => a.testName.localeCompare(b.testName));
+    .sort((a, b) => (a.coverageAnalyte ? 1 : 0) - (b.coverageAnalyte ? 1 : 0) || a.testName.localeCompare(b.testName));
 
   return {
     hasMap: combos.length > 0,
@@ -248,7 +264,7 @@ export function computeCoverageForLab(sqlite: any, labId: number): CoverageResul
      WHERE m.lab_id = ? AND (it.active = 1 OR it.active IS NULL)`
   ).all(labId) as Combo[];
   const studies = sqlite.prepare(
-    `SELECT id, test_name, instrument, study_type, status, lifecycle_state, date
+    `SELECT id, test_name, instrument, study_type, status, lifecycle_state, date, coverage_analyte
      FROM studies WHERE lab_id = ? AND archived_at IS NULL`
   ).all(labId) as Study[];
   return computeCoverageFrom(instruments, combos, studies);
@@ -267,4 +283,30 @@ export function setLinearityExemption(sqlite: any, labId: number, instrumentTest
     "UPDATE veritamap_instrument_tests SET linearity_exempt_multical = ?, linearity_exempt_noncal = ? WHERE id = ?"
   ).run(multical ? 1 : 0, noncal ? 1 : 0, instrumentTestId);
   return true;
+}
+
+// Aligns one study to a map analyte (or clears it when analyte is empty). Both
+// the study and the analyte are validated against THIS lab: the study must
+// belong to the lab, and a non-empty analyte must be a real analyte on the lab's
+// VeritaMap (so a typo or a foreign analyte cannot be stored). This keeps the
+// study's name; Coverage credits it to the analyte via matchesAnalyte.
+export function alignStudyToAnalyte(
+  sqlite: any,
+  labId: number,
+  studyId: number,
+  analyte: string,
+): { ok: boolean; reason?: "study_not_found" | "unknown_analyte" } {
+  const owns = sqlite.prepare("SELECT id FROM studies WHERE id = ? AND lab_id = ?").get(studyId, labId);
+  if (!owns) return { ok: false, reason: "study_not_found" };
+  const clean = (analyte || "").trim();
+  if (clean) {
+    const known = sqlite.prepare(
+      `SELECT 1 FROM veritamap_instrument_tests it JOIN veritamap_maps m ON m.id = it.map_id
+       WHERE m.lab_id = ? AND it.analyte = ? AND (it.active = 1 OR it.active IS NULL) LIMIT 1`
+    ).get(labId, clean);
+    if (!known) return { ok: false, reason: "unknown_analyte" };
+  }
+  sqlite.prepare("UPDATE studies SET coverage_analyte = ? WHERE id = ? AND lab_id = ?")
+    .run(clean || null, studyId, labId);
+  return { ok: true };
 }

@@ -78,8 +78,37 @@ check("non-coverage study type (precision #104) excluded from unaligned", usIds.
 check("unaligned #103 carries verdict/signed/date", { verdict: us.find((x) => x.id === 103)?.verdict, signed: us.find((x) => x.id === 103)?.signed, date: us.find((x) => x.id === 103)?.date }, { verdict: "pass", signed: true, date: "2026-05-01" });
 check("unaligned #105 failing + unsigned", { verdict: us.find((x) => x.id === 105)?.verdict, signed: us.find((x) => x.id === 105)?.signed }, { verdict: "fail", signed: false });
 check("unaligned does not inflate coverage counts (covered still 1)", r.summary.linearityCovered, 1);
+check("unaligned #103 has empty coverageAnalyte (not yet aligned)", us.find((x) => x.id === 103)?.coverageAnalyte, "");
 check("empty map -> hasMap false", computeCoverageFrom([], [], []).hasMap, false);
 check("empty map -> unmappedStudies empty", computeCoverageFrom([], [], []).unmappedStudies, []);
+
+// --- Align (coverage_analyte override) --------------------------------------
+// A study whose NAME cannot be matched ("HGB" vs "Hemoglobin") is credited once
+// the director aligns it (coverage_analyte = the exact map analyte). Instrument
+// matching still applies, so a wrong-instrument alignment reads "review".
+const aInstr = [{ id: 1, instrument_name: "Sysmex XN-1000", nickname: "R2-D2" }];
+const aCombos = [{ id: 20, analyte: "Hemoglobin", specialty: "Hematology", instrument_id: 1 }];
+const aStudy = { id: 200, test_name: "HGB", instrument: "R2-D2, Sysmex XN-1000", study_type: "cal_ver", status: "pass", lifecycle_state: "finalized", date: "2026-05-20" };
+const row20 = (res: any) => res.rows.find((x: any) => x.instrumentTestId === 20);
+
+const preAlign = computeCoverageFrom(aInstr, aCombos, [aStudy]);
+check("pre-align: HGB name does not match Hemoglobin -> combo missing", row20(preAlign)?.linearityStatus, "missing");
+check("pre-align: HGB listed unaligned with empty coverageAnalyte", preAlign.unmappedStudies.find((u) => u.id === 200)?.coverageAnalyte, "");
+
+const postAlign = computeCoverageFrom(aInstr, aCombos, [{ ...aStudy, coverage_analyte: "Hemoglobin" }]);
+check("post-align: aligned study covers the Hemoglobin combo", row20(postAlign)?.linearityStatus, "covered");
+check("post-align: covered row carries study 200", row20(postAlign)?.studyIds, [200]);
+check("post-align: HGB still listed (name still unmatched) with coverageAnalyte set", postAlign.unmappedStudies.find((u) => u.id === 200)?.coverageAnalyte, "Hemoglobin");
+
+const wrongInstr = computeCoverageFrom(aInstr, aCombos, [{ ...aStudy, instrument: "Bonnie, Ortho VITROS 5600", coverage_analyte: "Hemoglobin" }]);
+check("align on the wrong instrument -> review, not covered", row20(wrongInstr)?.linearityStatus, "review");
+
+// Method comparison credited by an aligned study.
+const mcInstr = [{ id: 1, instrument_name: "Sysmex XN-1000", nickname: "R2-D2" }, { id: 2, instrument_name: "Sysmex XN-450", nickname: "BB-8" }];
+const mcCombos = [{ id: 30, analyte: "Platelet Count", specialty: "Hematology", instrument_id: 1 }, { id: 31, analyte: "Platelet Count", specialty: "Hematology", instrument_id: 2 }];
+const mcStudy = { id: 300, test_name: "PLT", instrument: "R2-D2, BB-8", study_type: "method_comparison", status: "pass", lifecycle_state: "draft", coverage_analyte: "Platelet Count" };
+const mcRes = computeCoverageFrom(mcInstr, mcCombos, [mcStudy]);
+check("aligned method_comparison credits the MC (done 1/1)", { needed: mcRes.summary.methodComparisonsNeeded, done: mcRes.summary.methodComparisonsDone }, { needed: 1, done: 1 });
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

@@ -21,7 +21,7 @@ type CoverageRow = {
   linearityStatus: LinearityStatus; studyIds: number[]; verdict: string; signed: boolean;
 };
 type MethodComparisonRow = { analyte: string; instruments: string[]; hasStudy: boolean; studyId: number | null; verdict: string; signed: boolean };
-type UnmappedStudy = { id: number; testName: string; studyType: string; instrument: string; date: string; verdict: string; signed: boolean };
+type UnmappedStudy = { id: number; testName: string; studyType: string; instrument: string; date: string; verdict: string; signed: boolean; coverageAnalyte: string };
 type Coverage = {
   hasMap: boolean;
   summary: {
@@ -139,6 +139,24 @@ export default function VeritaCheckCoveragePage() {
       multical: which === "multical" ? checked : r.linearityExemptMultical,
       noncal: which === "noncal" ? checked : r.linearityExemptNoncal,
     });
+
+  // Align a study (whose name matches no map analyte) to the analyte it satisfies,
+  // or clear it (analyte ""). Coverage then credits it without renaming the study.
+  const alignMut = useMutation({
+    mutationFn: (b: { studyId: number; analyte: string }) => apiRequest("POST", `${coverageUrl}/align`, b),
+    onSuccess: (_r, b) => {
+      queryClient.invalidateQueries({ queryKey: [coverageUrl] });
+      toast({ title: b.analyte ? `Aligned to ${b.analyte}` : "Alignment cleared" });
+    },
+    onError: () => toast({ title: "Could not align the study", variant: "destructive" }),
+  });
+  // Distinct map analytes the director can align a study to (from the coverage rows
+  // and method comparisons), sorted for the dropdown.
+  const mapAnalyteOptions = useMemo(
+    () => Array.from(new Set([...(data?.rows || []).map((r) => r.analyte), ...(data?.methodComparisons || []).map((m) => m.analyte)])).sort((a, b) => a.localeCompare(b)),
+    [data],
+  );
+  const unalignedCount = useMemo(() => (data?.unmappedStudies || []).filter((u) => !u.coverageAnalyte).length, [data]);
 
   const specialties = useMemo(() => Array.from(new Set((data?.rows || []).map((r) => r.specialty))).sort(), [data]);
   const rows = useMemo(() => {
@@ -293,10 +311,10 @@ export default function VeritaCheckCoveragePage() {
         <>
           <div className="flex items-center gap-2 mb-2 mt-8">
             <Unlink size={16} className="text-primary" />
-            <h2 className="font-semibold">Unaligned studies ({data.unmappedStudies.length})</h2>
+            <h2 className="font-semibold">Unaligned studies ({unalignedCount}{unalignedCount !== data.unmappedStudies.length ? ` of ${data.unmappedStudies.length}` : ""})</h2>
           </div>
           <p className="text-xs text-muted-foreground mb-3">
-            Verification studies on file whose name does not match any analyte on this lab's VeritaMap, so they are not credited to a coverage row above and the required point still reads Missing. Usually a naming difference (a study titled "AST" versus the map's "Aspartate aminotransferase (AST)") or a typo. Rename the study to match the map analyte so the point reads Covered.
+            Verification studies on file whose name does not match any analyte on this lab's VeritaMap, so they are not credited to a coverage row above and the required point still reads Missing. Usually a naming difference (a study titled "AST" versus the map's "Aspartate aminotransferase (AST)") or a typo. Pick the map analyte each study satisfies to align it. The study keeps its own name; Coverage then credits it.
           </p>
           <Card className="mb-8"><CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -304,18 +322,33 @@ export default function VeritaCheckCoveragePage() {
                 <thead><tr className="text-left text-xs text-muted-foreground border-b border-border">
                   <th className="py-2 px-3 font-medium">Study</th><th className="py-2 px-3 font-medium">Type</th>
                   <th className="py-2 px-3 font-medium">Instrument</th><th className="py-2 px-3 font-medium">Date</th>
-                  <th className="py-2 px-3 font-medium">Verdict</th>
+                  <th className="py-2 px-3 font-medium">Verdict</th><th className="py-2 px-3 font-medium">Align to map analyte</th>
                 </tr></thead>
                 <tbody>
                   {data.unmappedStudies.map((u) => (
-                    <tr key={u.id} className="border-b border-border/60 cursor-pointer hover:bg-muted/40" data-testid={`cov-unmapped-${u.id}`} onClick={() => openStudy(u.id)} title="Open study">
-                      <td className="py-2 px-3">{u.testName}</td>
+                    <tr key={u.id} className={`border-b border-border/60 ${u.coverageAnalyte ? "bg-emerald-500/5" : ""}`} data-testid={`cov-unmapped-${u.id}`}>
+                      <td className="py-2 px-3 cursor-pointer hover:underline" onClick={() => openStudy(u.id)} title="Open study">{u.testName}</td>
                       <td className="py-2 px-3 text-muted-foreground text-xs">{unmappedTypeLabel(u.studyType)}</td>
                       <td className="py-2 px-3 text-muted-foreground text-xs">{u.instrument}</td>
                       <td className="py-2 px-3 text-muted-foreground text-xs">{u.date}</td>
                       <td className="py-2 px-3">{isFail(u.verdict)
                         ? <Badge variant="destructive" className="text-[10px]">#{u.id} FAIL</Badge>
                         : <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">#{u.id}{u.signed ? " signed" : ""}</Badge>}</td>
+                      <td className="py-2 px-3">
+                        {u.coverageAnalyte ? (
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">Aligned → {u.coverageAnalyte}</Badge>
+                            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" data-testid={`cov-align-clear-${u.id}`} disabled={alignMut.isPending} onClick={() => alignMut.mutate({ studyId: u.id, analyte: "" })}>Clear</Button>
+                          </div>
+                        ) : (
+                          <Select value="" onValueChange={(v) => alignMut.mutate({ studyId: u.id, analyte: v })}>
+                            <SelectTrigger className="h-8 w-[240px] text-xs" data-testid={`cov-align-select-${u.id}`}><SelectValue placeholder="Align to…" /></SelectTrigger>
+                            <SelectContent className="max-h-72">
+                              {mapAnalyteOptions.map((a) => <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
