@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -119,6 +120,10 @@ export function VerificationAnalytesPanel({ verificationId }: { verificationId: 
   const [form, setForm] = useState<AnalyteFormState>(emptyFormState());
   const [signing, setSigning] = useState<VerificationAnalyte | null>(null);
   const [signature, setSignature] = useState("");
+  // FDA-cleared analyte menu for this verification's linked VeritaMap instrument.
+  // Empty when the verification predates the map_instrument_id link -> the Add
+  // dialog falls back to free-text only.
+  const [mapAnalytes, setMapAnalytes] = useState<{ analyte: string; specialty: string; complexity: string }[]>([]);
 
   async function reload() {
     setLoading(true);
@@ -137,6 +142,18 @@ export function VerificationAnalytesPanel({ verificationId }: { verificationId: 
   }
 
   useEffect(() => { reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [verificationId]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch(`${API_BASE}/api/veritacheck/verifications/${verificationId}/map-analytes`, { headers: authHeaders() });
+        if (!r.ok) return;
+        const body = await r.json();
+        setMapAnalytes(Array.isArray(body?.analytes) ? body.analytes : []);
+      } catch { /* leave empty -> free-text only */ }
+    })();
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [verificationId]);
 
   function startAdd() {
     setForm(emptyFormState());
@@ -358,6 +375,29 @@ export function VerificationAnalytesPanel({ verificationId }: { verificationId: 
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
+            {adding && (() => {
+              const taken = new Set(analytes.map((a) => a.analyte_name.trim().toLowerCase()));
+              const options = mapAnalytes.filter((m) => !taken.has(m.analyte.trim().toLowerCase()));
+              if (options.length === 0) return null;
+              return (
+                <div>
+                  <Label className="text-xs">Instrument test menu (FDA-cleared)</Label>
+                  <Select value="" onValueChange={(val) => setForm((f) => ({ ...f, analyte_name: val }))}>
+                    <SelectTrigger data-testid="analyte-menu-select">
+                      <SelectValue placeholder="Select an analyte from this instrument..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {options.map((m) => (
+                        <SelectItem key={m.analyte} value={m.analyte}>
+                          {m.analyte}{m.complexity ? ` (${m.complexity})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground mt-1">Or type a custom analyte below.</p>
+                </div>
+              );
+            })()}
             <div>
               <Label htmlFor="ana-name" className="text-xs">Analyte name</Label>
               <Input id="ana-name" value={form.analyte_name} onChange={(e) => setForm({ ...form, analyte_name: e.target.value })} placeholder="e.g. Glucose, ALT, Hemoglobin" data-testid="analyte-name-input" />

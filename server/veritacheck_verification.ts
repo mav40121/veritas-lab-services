@@ -1506,6 +1506,29 @@ export function registerVeritaCheckVerificationRoutes(
     res.json({ ok: true });
   });
 
+  // GET the FDA-cleared analyte menu for this verification's linked instrument.
+  // Powers the Analytes-tab picker so directors select from the instrument's
+  // real VeritaMap test menu instead of free-typing. Returns [] when the
+  // verification predates the map_instrument_id link (older rows), so the panel
+  // gracefully falls back to the free-text field.
+  app.get("/api/veritacheck/verifications/:id/map-analytes", authMiddleware, (req: any, res) => {
+    if (!hasVeritaCheckAccess(req.user)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
+    const { row: v, status } = resolveRowForMutation<any>((db as any).$client, "veritacheck_verifications", req.params.id, req);
+    if (!v) {
+      if (status === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
+      return res.status(404).json({ error: "Not found" });
+    }
+    const mapInstrumentId = v.map_instrument_id;
+    if (!mapInstrumentId) return res.json({ analytes: [] });
+    const rows = sqlite.prepare(`
+      SELECT DISTINCT analyte, specialty, complexity
+      FROM veritamap_instrument_tests
+      WHERE instrument_id = ? AND active = 1
+      ORDER BY analyte
+    `).all(mapInstrumentId) as Array<{ analyte: string; specialty: string; complexity: string }>;
+    res.json({ analytes: rows });
+  });
+
   // GET suggested existing studies for a verification (match by instrument name)
   // Shape A guard on the parent; suggestions list stays scoped to the user
   // (their studies catalogue is the source of "what could be linked").
