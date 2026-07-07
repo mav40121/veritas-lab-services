@@ -41,6 +41,15 @@ export interface MethodComparisonRow {
   verdict: string;
   signed: boolean;
 }
+export interface UnmappedStudy {
+  id: number;
+  testName: string;
+  studyType: string;
+  instrument: string;
+  date: string;
+  verdict: string;
+  signed: boolean;
+}
 export interface CoverageResult {
   hasMap: boolean;
   summary: {
@@ -59,6 +68,7 @@ export interface CoverageResult {
   };
   rows: CoverageRow[];
   methodComparisons: MethodComparisonRow[];
+  unmappedStudies: UnmappedStudy[];
 }
 
 const LINEARITY_TYPES = new Set(["cal_ver", "linearity"]);
@@ -88,7 +98,7 @@ function studyMatchesInstrument(studyInstr: string, mapName: string, mapNick: st
   return common / mt.size >= 0.6;
 }
 
-type Study = { id: number; test_name: string; instrument: string; study_type: string; status: string; lifecycle_state: string };
+type Study = { id: number; test_name: string; instrument: string; study_type: string; status: string; lifecycle_state: string; date?: string };
 type Instrument = { id: number; instrument_name: string; nickname: string | null; serial_number?: string | null };
 type Combo = { id: number; analyte: string; specialty: string; instrument_id: number; linearity_exempt_multical?: number; linearity_exempt_noncal?: number };
 
@@ -183,6 +193,26 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
   const statusOrder: Record<LinearityStatus, number> = { missing: 0, review: 1, covered: 2, exempt: 3 };
   rows.sort((a, b) => a.specialty.localeCompare(b.specialty) || statusOrder[a.linearityStatus] - statusOrder[b.linearityStatus] || a.analyte.localeCompare(b.analyte));
 
+  // Verification studies on file whose name matches NO map analyte, so they are
+  // credited to no coverage row and the required point still reads "Missing".
+  // Usually a naming-convention gap (e.g. study "AST" vs map "Aspartate
+  // aminotransferase (AST) (SGOT)") or a typo. Surfaced so the director can align
+  // them instead of the work going uncounted.
+  const COVERAGE_STUDY_TYPES = new Set(["method_comparison", "correlation", "cal_ver", "linearity"]);
+  const mapAnalytes = combos.map((c) => c.analyte);
+  const unmappedStudies: UnmappedStudy[] = studies
+    .filter((s) => COVERAGE_STUDY_TYPES.has(s.study_type) && !mapAnalytes.some((a) => analyteMatch(s.test_name, a)))
+    .map((s) => ({
+      id: s.id,
+      testName: s.test_name,
+      studyType: s.study_type,
+      instrument: s.instrument || "",
+      date: s.date || "",
+      verdict: (s.status || "").toLowerCase(),
+      signed: s.lifecycle_state === "finalized",
+    }))
+    .sort((a, b) => a.testName.localeCompare(b.testName));
+
   return {
     hasMap: combos.length > 0,
     summary: {
@@ -201,6 +231,7 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
     },
     rows,
     methodComparisons,
+    unmappedStudies,
   };
 }
 
@@ -217,7 +248,7 @@ export function computeCoverageForLab(sqlite: any, labId: number): CoverageResul
      WHERE m.lab_id = ? AND (it.active = 1 OR it.active IS NULL)`
   ).all(labId) as Combo[];
   const studies = sqlite.prepare(
-    `SELECT id, test_name, instrument, study_type, status, lifecycle_state
+    `SELECT id, test_name, instrument, study_type, status, lifecycle_state, date
      FROM studies WHERE lab_id = ? AND archived_at IS NULL`
   ).all(labId) as Study[];
   return computeCoverageFrom(instruments, combos, studies);

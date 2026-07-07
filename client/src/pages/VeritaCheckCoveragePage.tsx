@@ -12,7 +12,7 @@ import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { useSEO } from "@/hooks/useSEO";
 import { authHeaders } from "@/lib/auth";
-import { ChevronLeft, ListChecks, GitCompare, Download, ArrowUpDown } from "lucide-react";
+import { ChevronLeft, ListChecks, GitCompare, Download, ArrowUpDown, Unlink } from "lucide-react";
 
 type LinearityStatus = "covered" | "review" | "missing" | "exempt";
 type CoverageRow = {
@@ -21,6 +21,7 @@ type CoverageRow = {
   linearityStatus: LinearityStatus; studyIds: number[]; verdict: string; signed: boolean;
 };
 type MethodComparisonRow = { analyte: string; instruments: string[]; hasStudy: boolean; studyId: number | null; verdict: string; signed: boolean };
+type UnmappedStudy = { id: number; testName: string; studyType: string; instrument: string; date: string; verdict: string; signed: boolean };
 type Coverage = {
   hasMap: boolean;
   summary: {
@@ -31,6 +32,7 @@ type Coverage = {
   };
   rows: CoverageRow[];
   methodComparisons: MethodComparisonRow[];
+  unmappedStudies: UnmappedStudy[];
 };
 
 function statusBadge(s: LinearityStatus) {
@@ -45,6 +47,14 @@ function statusBadge(s: LinearityStatus) {
 }
 
 const isFail = (verdict: string) => /fail/i.test(verdict || "");
+
+const UNMAPPED_TYPE_LABEL: Record<string, string> = {
+  method_comparison: "Correlation / Method Comparison",
+  correlation: "Correlation / Method Comparison",
+  cal_ver: "Calibration Verification / Linearity",
+  linearity: "Calibration Verification / Linearity",
+};
+const unmappedTypeLabel = (t: string) => UNMAPPED_TYPE_LABEL[t] || t;
 
 // A row is "covered" when a study exists, but a study that FAILED did not verify
 // the method, so it must not read as green. A documented failure is a SOLID red
@@ -277,6 +287,43 @@ export default function VeritaCheckCoveragePage() {
           </table>
         </div>
       </CardContent></Card>
+
+      {/* Unaligned studies — verification work on file that matches no map analyte */}
+      {(data.unmappedStudies?.length ?? 0) > 0 && (
+        <>
+          <div className="flex items-center gap-2 mb-2 mt-8">
+            <Unlink size={16} className="text-primary" />
+            <h2 className="font-semibold">Unaligned studies ({data.unmappedStudies.length})</h2>
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">
+            Verification studies on file whose name does not match any analyte on this lab's VeritaMap, so they are not credited to a coverage row above and the required point still reads Missing. Usually a naming difference (a study titled "AST" versus the map's "Aspartate aminotransferase (AST)") or a typo. Rename the study to match the map analyte so the point reads Covered.
+          </p>
+          <Card className="mb-8"><CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="text-left text-xs text-muted-foreground border-b border-border">
+                  <th className="py-2 px-3 font-medium">Study</th><th className="py-2 px-3 font-medium">Type</th>
+                  <th className="py-2 px-3 font-medium">Instrument</th><th className="py-2 px-3 font-medium">Date</th>
+                  <th className="py-2 px-3 font-medium">Verdict</th>
+                </tr></thead>
+                <tbody>
+                  {data.unmappedStudies.map((u) => (
+                    <tr key={u.id} className="border-b border-border/60 cursor-pointer hover:bg-muted/40" data-testid={`cov-unmapped-${u.id}`} onClick={() => openStudy(u.id)} title="Open study">
+                      <td className="py-2 px-3">{u.testName}</td>
+                      <td className="py-2 px-3 text-muted-foreground text-xs">{unmappedTypeLabel(u.studyType)}</td>
+                      <td className="py-2 px-3 text-muted-foreground text-xs">{u.instrument}</td>
+                      <td className="py-2 px-3 text-muted-foreground text-xs">{u.date}</td>
+                      <td className="py-2 px-3">{isFail(u.verdict)
+                        ? <Badge variant="destructive" className="text-[10px]">#{u.id} FAIL</Badge>
+                        : <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">#{u.id}{u.signed ? " signed" : ""}</Badge>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent></Card>
+        </>
+      )}
     </div>
   );
 }
