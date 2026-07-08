@@ -323,6 +323,24 @@ export function presetCorroboratesName(presetLabel: string, testName: string): b
   return aliasesForPresetLabel(presetLabel).some((a) => a.trim().toLowerCase() === tnLc || analyteMatch(a, tn));
 }
 
+// True when a just-saved study still has no coverage attribution the system can
+// stand behind: it is a coverage-relevant type, has no coverage_analyte, and its
+// name matches no active map analyte. The client uses this to fire the Phase 2
+// soft challenge (pick the map point, or "not on our map yet"). Name-matched or
+// already-attributed studies, and non-coverage types, return false (no prompt).
+const ATTRIBUTABLE_TYPES = new Set(["method_comparison", "correlation", "cal_ver", "linearity"]);
+export function studyNeedsAttribution(sqlite: any, labId: number, studyType: string, testName: string, coverageAnalyte: string | null): boolean {
+  if (!labId) return false;
+  if (!ATTRIBUTABLE_TYPES.has(studyType)) return false;
+  if (coverageAnalyte && String(coverageAnalyte).trim()) return false;
+  const mapAnalytes = (sqlite.prepare(
+    `SELECT DISTINCT it.analyte FROM veritamap_instrument_tests it JOIN veritamap_maps m ON m.id = it.map_id
+     WHERE m.lab_id = ? AND (it.active = 1 OR it.active IS NULL)`
+  ).all(labId) as Array<{ analyte: string }>).map((r) => r.analyte).filter(Boolean);
+  if (mapAnalytes.length === 0) return false; // no map yet -> nothing to attribute to
+  return !mapAnalytes.some((a) => analyteMatch(testName, a));
+}
+
 // DB-backed wrapper: pulls the lab's active map analytes and resolves the preset.
 export function resolvePresetMapAnalyte(sqlite: any, labId: number, presetLabel: string): string | null {
   if (!presetLabel) return null;

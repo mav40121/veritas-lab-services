@@ -15,7 +15,7 @@ import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
-import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName } from "./veritacheckCoverage";
+import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution } from "./veritacheckCoverage";
 import { auditVeritamapConsistency } from "./veritamapConsistency";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
@@ -10100,8 +10100,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       verifiedStatus, studyId,
     );
     autoAttributeCoverageAnalyte(studyId, payload.cliaPresetLabel);
-    const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId);
-    res.json(updated);
+    const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId) as any;
+    res.json({ ...updated, needsCoverageAttribution: studyNeedsAttribution((db as any).$client, updated?.lab_id, updated?.study_type, updated?.test_name, updated?.coverage_analyte ?? null) });
   });
 
   app.delete("/api/studies/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
@@ -10156,6 +10156,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Frozen at write time. NULL on legacy rows = render the old
       // value-only TEa line (no parenthetical).
       cliaPresetLabel: row.clia_preset_label,
+      // Director's explicit Coverage attribution (Phase 1/2 allocation work).
+      coverageAnalyte: row.coverage_analyte,
       instrumentMeta: row.instrument_meta,
       // Phase 1 simple-precision parity fields (added 2026-05-20). Mapped
       // from snake_case DB columns to camelCase so the client + PDF
@@ -10309,7 +10311,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (err: any) {
       console.warn('[veritascan-bridge] auto-complete failed:', err?.message);
     }
-    res.json({ ...study, lab_id: req.scope.labId });
+    // Phase 2 challenge hint: read coverage_analyte AFTER auto-attribution so a
+    // silently-attributed study does not prompt.
+    const _ca = ((db as any).$client.prepare("SELECT coverage_analyte FROM studies WHERE id = ?").get(study.id) as any)?.coverage_analyte ?? null;
+    res.json({ ...study, lab_id: req.scope.labId, needsCoverageAttribution: studyNeedsAttribution((db as any).$client, req.scope.labId, study.studyType, study.testName, _ca) });
   });
 
   // PUT /api/labs/:labId/studies/:id — lab-scoped update for the edit-existing
@@ -10382,8 +10387,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       verifiedStatus, studyId,
     );
     autoAttributeCoverageAnalyte(studyId, payload.cliaPresetLabel);
-    const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId);
-    res.json(updated);
+    const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId) as any;
+    res.json({ ...updated, needsCoverageAttribution: studyNeedsAttribution((db as any).$client, updated?.lab_id, updated?.study_type, updated?.test_name, updated?.coverage_analyte ?? null) });
   });
 
   // ── 2026-06-09 Per-point exclusion (Michael L feedback) ─────────────
