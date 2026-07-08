@@ -18,7 +18,7 @@
 // Instrument matching uses the map's registered nickname first (the map knows
 // "Bonnie" is the Ortho VITROS 5600), then falls back to model-token overlap.
 
-import { aliasesForPresetLabel } from "@shared/presetAnalytes";
+import { aliasesForPresetLabel, presetKeyForLabel } from "@shared/presetAnalytes";
 
 export type LinearityStatus = "covered" | "review" | "missing" | "exempt";
 
@@ -304,6 +304,23 @@ export function resolvePresetAnalyteFrom(mapAnalytes: string[], presetLabel: str
   if (exact.length > 1) return null;
   const fuzzy = Array.from(new Set(mapAnalytes.filter((a) => aliases.some((al) => analyteMatch(al, a)))));
   return fuzzy.length === 1 ? fuzzy[0] : null;
+}
+
+// Safety gate against a STALE/DEFAULT preset. The study-create form defaults the
+// TEa dropdown to index 0 (ALT/SGPT), and studies get saved without changing it
+// (e.g. toxicology drug screens with no canonical TEa), so clia_preset_label is
+// an unreliable identity on its own — auto-attributing from it alone would credit
+// a Buprenorphine study to ALT. We only trust the preset when the study's OWN
+// test_name corroborates it: the name slugs to the same preset key, or matches a
+// preset alias by exact-lc/paren-stripping. A name that clearly names a different
+// analyte (Buprenorphine vs ALT) fails this and the study falls to the challenge.
+export function presetCorroboratesName(presetLabel: string, testName: string): boolean {
+  const tn = (testName || "").trim();
+  if (!tn) return false;
+  const key = presetKeyForLabel(presetLabel);
+  if (key && key === presetKeyForLabel(tn)) return true;
+  const tnLc = tn.toLowerCase();
+  return aliasesForPresetLabel(presetLabel).some((a) => a.trim().toLowerCase() === tnLc || analyteMatch(a, tn));
 }
 
 // DB-backed wrapper: pulls the lab's active map analytes and resolves the preset.

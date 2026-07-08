@@ -10,7 +10,7 @@
 // MUST NOT auto-resolve (Total T4 -> Free T4, Total Cholesterol, hCG).
 // Run: npx tsx scripts/verify-preset-analyte-resolution.mjs
 
-import { resolvePresetAnalyteFrom } from "../server/veritacheckCoverage.ts";
+import { resolvePresetAnalyteFrom, presetCorroboratesName } from "../server/veritacheckCoverage.ts";
 
 // San Carlos (lab 2) active map analytes — the subset relevant to the presets,
 // with every collision sibling included so the exact-preference logic is tested.
@@ -103,6 +103,32 @@ check("hCG (±18% or ±3 mIU/mL)", null);         // urine/serum/qual variants -
 check("T4, Thyroxine (±20% or ±1.0 mcg/dL)", null); // total T4 must NOT map to Free T4
 check("Testosterone (±30% or ±20 ng/dL)", null);    // not on San Carlos map
 check("Custom lab-defined goal", null);             // custom TEa -> no preset identity
+
+// ── Corroboration gate: the study's own name must back the preset, so a stale
+// default (index-0 ALT/SGPT) on an unrelated test does NOT auto-attribute. ──
+const corrob = (label, name, want) => {
+  const got = presetCorroboratesName(label, name);
+  const ok = got === want;
+  console.log(`${ok ? "PASS" : "FAIL"}  corroborate("${name}" vs preset "${label.split(" (")[0]}") = ${got}${ok ? "" : `  (want ${want})`}`);
+  ok ? pass++ : fail++;
+};
+// Legit: name backs the preset -> corroborated.
+corrob("AST (±15% or ±6 U/L)", "AST", true);
+corrob("ALT/SGPT (±15% or ±6 U/L)", "ALT/SGPT", true);
+corrob("CK (±20%)", "CK", true);
+corrob("Erythrocyte Count / RBC (±4%)", "ERYTHROCYTE COUNT (RBC)", true);
+corrob("Bilirubin, Total (±20% or ±0.4 mg/dL)", "TOTAL BILIRUBIN", true);
+corrob("Total Protein (±8%)", "TOTAL PROTEIN", true);
+corrob("Glucose (±8% or ±6 mg/dL)", "Glucose", true);
+// The San Carlos stale-default hazard: preset frozen as ALT/SGPT on tox screens.
+corrob("ALT/SGPT (±15% or ±6 U/L)", "BUPRENORPHINE (BUP)", false);
+corrob("ALT/SGPT (±15% or ±6 U/L)", "OXYCODONE (OXY)", false);
+corrob("ALT/SGPT (±15% or ±6 U/L)", "BETA-HYDROXYBUTYRATE (BHB)", false);
+corrob("ALT/SGPT (±15% or ±6 U/L)", "BENZODIAZEPINES (BZO)", false);
+corrob("ALT/SGPT (±15% or ±6 U/L)", "PHENCYCLIDINE (PCP)", false);
+// Wrong preset for a real analyte is also rejected.
+corrob("Glucose (±8% or ±6 mg/dL)", "AST", false);
+corrob("AST (±15% or ±6 U/L)", "", false);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

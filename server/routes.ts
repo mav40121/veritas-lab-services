@@ -15,7 +15,7 @@ import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
-import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte } from "./veritacheckCoverage";
+import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName } from "./veritacheckCoverage";
 import { auditVeritamapConsistency } from "./veritamapConsistency";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
@@ -9826,9 +9826,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       if (!presetLabel || !studyId) return;
       const sqlite = (db as any).$client;
-      const row = sqlite.prepare("SELECT lab_id, coverage_analyte FROM studies WHERE id = ?").get(studyId) as any;
+      const row = sqlite.prepare("SELECT lab_id, coverage_analyte, test_name FROM studies WHERE id = ?").get(studyId) as any;
       if (!row || !row.lab_id) return;
       if (row.coverage_analyte && String(row.coverage_analyte).trim()) return;
+      // Guard against a stale/default preset (index-0 ALT/SGPT on an unrelated
+      // test): only trust the preset when the study's own name corroborates it.
+      if (!presetCorroboratesName(presetLabel, row.test_name)) return;
       const analyte = resolvePresetMapAnalyte(sqlite, row.lab_id, presetLabel);
       if (analyte) sqlite.prepare("UPDATE studies SET coverage_analyte = ? WHERE id = ?").run(analyte, studyId);
     } catch (e: any) {
