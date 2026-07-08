@@ -571,6 +571,13 @@ export default function VeritaCheckPage() {
   // restores the user's prior selection rather than dropping them at the default (ALT/SGPT).
   const prevAnalytePresetRef = useRef(0);
   const [customClia, setCustomClia] = useState(0.15);
+  // Dual-criterion custom TEa: an optional absolute floor + unit the lab enters
+  // alongside the percent goal, evaluated as "pass if within the greater of the
+  // two". Needed for low-count analytes (eos/baso) where a bare percent is
+  // statistically wrong. Presets already carry absoluteFloor/absoluteUnit; these
+  // two fields give the CUSTOM path the same capability. Null floor = percent-only.
+  const [customAbsFloor, setCustomAbsFloor] = useState<number | null>(null);
+  const [customAbsUnit, setCustomAbsUnit] = useState("");
   const [numLevels, setNumLevels] = useState(DEFAULT_LEVELS);
   const [dataPoints, setDataPoints] = useState<EntryDataPoint[]>(makeEmptyPoints(["Instrument 1", "Instrument 2"], DEFAULT_LEVELS));
 
@@ -599,6 +606,12 @@ export default function VeritaCheckPage() {
       }
       const tea = editStudy.clia_allowable_error ?? editStudy.cliaAllowableError;
       if (typeof tea === "number") setCustomClia(tea);
+      // Rehydrate a saved dual-criterion floor so re-saving a lab-defined study
+      // preserves it (mirrors the customClia restore above).
+      const savedAbsFloor = editStudy.clia_absolute_floor ?? editStudy.cliaAbsoluteFloor;
+      if (typeof savedAbsFloor === "number") setCustomAbsFloor(savedAbsFloor);
+      const savedAbsUnit = editStudy.clia_absolute_unit ?? editStudy.cliaAbsoluteUnit;
+      if (typeof savedAbsUnit === "string" && savedAbsUnit) setCustomAbsUnit(savedAbsUnit);
       // Carryover-specific rehydration. The generic Array.isArray() guard
       // above skips because carryover's data_points is an OBJECT shape
       // { specimens, units }. Without this block, reopening a saved carryover
@@ -1373,8 +1386,16 @@ export default function VeritaCheckPage() {
   const cliaValue = CLIA_PRESETS[cliaPreset].value !== 0 ? CLIA_PRESETS[cliaPreset].value : customClia;
   const teaIsPercentage = (CLIA_PRESETS[cliaPreset] as any).isPercentage !== false;
   const teaUnit = (CLIA_PRESETS[cliaPreset] as any).unit || '%';
-  const cliaAbsoluteFloor: number | null = (CLIA_PRESETS[cliaPreset] as any).absoluteFloor ?? null;
-  const cliaAbsoluteUnit: string | null = (CLIA_PRESETS[cliaPreset] as any).absoluteUnit ?? null;
+  const isCustomTea = cliaPreset === CLIA_PRESETS.length - 1;
+  // A custom absolute floor only "counts" when it is a positive number; empty or
+  // zero resolves to null (a 0 floor would make max(pct, 0) pass everything).
+  const customAbsFloorResolved: number | null = (isCustomTea && customAbsFloor != null && customAbsFloor > 0) ? customAbsFloor : null;
+  const cliaAbsoluteFloor: number | null = isCustomTea
+    ? customAbsFloorResolved
+    : ((CLIA_PRESETS[cliaPreset] as any).absoluteFloor ?? null);
+  const cliaAbsoluteUnit: string | null = isCustomTea
+    ? (customAbsFloorResolved != null ? (customAbsUnit.trim() || null) : null)
+    : ((CLIA_PRESETS[cliaPreset] as any).absoluteUnit ?? null);
   // The picked CLIA preset label, frozen at study-save time. Travels with the
   // study so the report (PDF and on-screen) can show
   // "CLIA TEa: 8% or 5 mm Hg (pCO2, Blood Gas Analyzer)" and any
@@ -1891,8 +1912,10 @@ export default function VeritaCheckPage() {
       // the server evaluator + screen render + PDF can apply
       // max(percent_allowance, absolute_floor) at every level.
       const presetIsPercentage = (selectedPreset as any)?.isPercentage !== false;
-      const presetAbsFloor: number | null = presetIsPercentage ? ((selectedPreset as any)?.absoluteFloor ?? null) : null;
-      const presetAbsUnit: string | null = presetIsPercentage ? ((selectedPreset as any)?.absoluteUnit ?? null) : null;
+      // cliaAbsoluteFloor/Unit already fold in the custom (lab-defined) dual
+      // criterion; for a preset they equal selectedPreset's own floor/unit.
+      const presetAbsFloor: number | null = presetIsPercentage ? cliaAbsoluteFloor : null;
+      const presetAbsUnit: string | null = presetIsPercentage ? cliaAbsoluteUnit : null;
       const FP_EPS = 1e-9;
       const builtLevels = abLevels.map(lv => {
         const reps = (abRunData[lv.name] || []).filter(v => v !== undefined && v !== null && !isNaN(v));
@@ -1978,8 +2001,10 @@ export default function VeritaCheckPage() {
       const selectedPreset = CLIA_PRESETS[cliaPreset];
       const tea = selectedPreset?.value && selectedPreset.value !== 0 ? selectedPreset.value : customClia;
       const presetIsPercentage = (selectedPreset as any)?.isPercentage !== false;
-      const presetAbsFloor: number | null = presetIsPercentage ? ((selectedPreset as any)?.absoluteFloor ?? null) : null;
-      const presetAbsUnit: string | null = presetIsPercentage ? ((selectedPreset as any)?.absoluteUnit ?? null) : null;
+      // cliaAbsoluteFloor/Unit already fold in the custom (lab-defined) dual
+      // criterion; for a preset they equal selectedPreset's own floor/unit.
+      const presetAbsFloor: number | null = presetIsPercentage ? cliaAbsoluteFloor : null;
+      const presetAbsUnit: string | null = presetIsPercentage ? cliaAbsoluteUnit : null;
       const FP_EPS = 1e-9;
       const builtLevels = linLevels.map(lv => {
         const reps = (linRunData[lv.name] || []).filter(v => v !== undefined && v !== null && !isNaN(v));
@@ -2123,8 +2148,10 @@ export default function VeritaCheckPage() {
       const selectedPreset = CLIA_PRESETS[cliaPreset];
       const tea = selectedPreset?.value && selectedPreset.value !== 0 ? selectedPreset.value : customClia;
       const presetIsPercentage = (selectedPreset as any)?.isPercentage !== false;
-      const presetAbsFloor: number | null = presetIsPercentage ? ((selectedPreset as any)?.absoluteFloor ?? null) : null;
-      const presetAbsUnit: string | null = presetIsPercentage ? ((selectedPreset as any)?.absoluteUnit ?? null) : null;
+      // cliaAbsoluteFloor/Unit already fold in the custom (lab-defined) dual
+      // criterion; for a preset they equal selectedPreset's own floor/unit.
+      const presetAbsFloor: number | null = presetIsPercentage ? cliaAbsoluteFloor : null;
+      const presetAbsUnit: string | null = presetIsPercentage ? cliaAbsoluteUnit : null;
       const FP_EPS = 1e-9;
       const builtLevels = rrLevels.map(lv => {
         const reps = (rrRunData[lv.name] || []).filter(v => v !== undefined && v !== null && !isNaN(v));
@@ -2992,9 +3019,37 @@ return (
                           </Label>
                         </div>
                         {customMode && (
-                          <div className="flex items-center gap-2">
-                            <Input type="number" step="0.005" min="0.01" max="0.5" value={customClia} onChange={e => setCustomClia(parseFloat(e.target.value) || 0.15)} className="max-w-[120px]" />
-                            <span className="text-sm text-muted-foreground">= {(customClia * 100).toFixed(1)}% allowable error</span>
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <Input type="number" step="0.005" min="0.01" max="0.5" value={customClia} onChange={e => setCustomClia(parseFloat(e.target.value) || 0.15)} className="max-w-[120px]" data-testid="custom-tea-percent" />
+                              <span className="text-sm text-muted-foreground">= {(customClia * 100).toFixed(1)}% allowable error</span>
+                            </div>
+                            {/* Dual criterion: optional absolute floor + unit. At low concentrations
+                                (eos/baso) the absolute allowance governs; a point passes if it is
+                                within the GREATER of the percent or the absolute allowance. */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm text-muted-foreground">or &plusmn;</span>
+                              <Input
+                                type="number" step="any" min="0"
+                                placeholder="absolute"
+                                value={customAbsFloor ?? ""}
+                                onChange={e => { const v = e.target.value.trim(); setCustomAbsFloor(v === "" ? null : (Number.isFinite(parseFloat(v)) ? parseFloat(v) : null)); }}
+                                className="max-w-[110px]"
+                                data-testid="custom-tea-abs-floor"
+                              />
+                              <Input
+                                type="text"
+                                placeholder="units (e.g. x10^9/L)"
+                                value={customAbsUnit}
+                                onChange={e => setCustomAbsUnit(e.target.value)}
+                                className="max-w-[170px]"
+                                data-testid="custom-tea-abs-unit"
+                              />
+                              <span className="text-xs text-muted-foreground">optional; pass if within the greater</span>
+                            </div>
+                            {customAbsFloor != null && customAbsFloor > 0 && !customAbsUnit.trim() && (
+                              <p className="text-xs text-amber-600 dark:text-amber-400" data-testid="custom-tea-unit-warn">Enter units for the absolute floor (e.g. x10^9/L, %, mg/dL) so the report reads correctly.</p>
+                            )}
                           </div>
                         )}
                       </>
@@ -3002,7 +3057,7 @@ return (
                   })()}
                   {CLIA_PRESETS[cliaPreset].cfr && <p className="text-xs text-muted-foreground">Reference: {CLIA_PRESETS[cliaPreset].cfr}</p>}
                   <div className="rounded-md bg-primary/5 border border-primary/20 p-3">
-                    <p className="text-xs text-primary font-medium">Active TEa: {teaIsPercentage ? `\u00B1${(cliaValue * 100).toFixed(1)}%` : `\u00B1${cliaValue} ${teaUnit}`}{cliaAbsoluteFloor != null ? ` or \u00B1${cliaAbsoluteFloor} ${cliaAbsoluteUnit} (greater)` : ''}</p>
+                    <p className="text-xs text-primary font-medium">Active TEa: {teaIsPercentage ? `\u00B1${(cliaValue * 100).toFixed(1)}%` : `\u00B1${cliaValue} ${teaUnit}`}{cliaAbsoluteFloor != null ? ` or \u00B1${cliaAbsoluteFloor}${cliaAbsoluteUnit ? ' ' + cliaAbsoluteUnit : ''} (greater)` : ''}</p>
                   </div>
                 </CardContent>
               </Card>
