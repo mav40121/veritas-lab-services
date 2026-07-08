@@ -110,5 +110,28 @@ const mcStudy = { id: 300, test_name: "PLT", instrument: "R2-D2, BB-8", study_ty
 const mcRes = computeCoverageFrom(mcInstr, mcCombos, [mcStudy]);
 check("aligned method_comparison credits the MC (done 1/1)", { needed: mcRes.summary.methodComparisonsNeeded, done: mcRes.summary.methodComparisonsDone }, { needed: 1, done: 1 });
 
+// --- Linearity exemptions: waived + other (the new Coverage columns) ----------
+// Four exemption reasons all drop the combo from required (status "exempt"); a
+// blank/whitespace "Other" reason must NOT exempt.
+const eInstr = [{ id: 1, instrument_name: "Abbott ID NOW", nickname: null }];
+const eCombo = (id: number, extra: any) => ({ id, analyte: `A${id}`, specialty: "Micro", instrument_id: 1, ...extra });
+const eRes = computeCoverageFrom(eInstr, [
+  eCombo(40, {}),                                              // no exemption -> missing (required)
+  eCombo(41, { linearity_exempt_multical: 1 }),               // 3+ cal -> exempt
+  eCombo(42, { linearity_exempt_noncal: 1 }),                 // not calibratable -> exempt
+  eCombo(43, { linearity_exempt_waived: 1 }),                 // waived -> exempt
+  eCombo(44, { linearity_exempt_other: "Reference lab performs" }), // other reason -> exempt
+  eCombo(45, { linearity_exempt_other: "   " }),              // blank reason -> NOT exempt
+], []);
+const eRow = (id: number) => eRes.rows.find((x: any) => x.instrumentTestId === id);
+check("no exemption -> required (missing)", eRow(40)?.linearityStatus, "missing");
+check("3+ cal -> exempt", eRow(41)?.linearityStatus, "exempt");
+check("not calibratable -> exempt", eRow(42)?.linearityStatus, "exempt");
+check("waived -> exempt", eRow(43)?.linearityStatus, "exempt");
+check("other reason -> exempt, reason surfaced", { status: eRow(44)?.linearityStatus, other: eRow(44)?.linearityExemptOther }, { status: "exempt", other: "Reference lab performs" });
+check("blank other reason -> NOT exempt (missing)", eRow(45)?.linearityStatus, "missing");
+check("waived flag surfaced on the row", eRow(43)?.linearityExemptWaived, true);
+check("exempt count = 4 of 6, required = 2", { exempt: eRes.summary.linearityExempt, required: eRes.summary.linearityRequired }, { exempt: 4, required: 2 });
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

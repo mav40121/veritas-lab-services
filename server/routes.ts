@@ -12342,9 +12342,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!Number.isFinite(instrumentTestId) || instrumentTestId <= 0) return res.status(400).json({ error: "instrumentTestId required" });
     const multical = !!req.body?.multical;
     const noncal = !!req.body?.noncal;
-    const ok = setLinearityExemption((db as any).$client, req.scope.labId, instrumentTestId, multical, noncal);
+    const waived = !!req.body?.waived;
+    const otherReason = typeof req.body?.otherReason === "string" ? req.body.otherReason : "";
+    const ok = setLinearityExemption((db as any).$client, req.scope.labId, instrumentTestId, multical, noncal, waived, otherReason);
     if (!ok) return res.status(404).json({ error: "Test not found in this lab" });
-    res.json({ instrumentTestId, linearityExemptMultical: multical, linearityExemptNoncal: noncal });
+    res.json({ instrumentTestId, linearityExemptMultical: multical, linearityExemptNoncal: noncal, linearityExemptWaived: waived, linearityExemptOther: otherReason.trim() });
   });
 
   // POST /api/labs/:labId/veritacheck/coverage/align

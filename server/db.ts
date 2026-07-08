@@ -4149,6 +4149,13 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inv_transfers_owner ON invento
     };
     ensureVit("linearity_exempt_multical", "ALTER TABLE veritamap_instrument_tests ADD COLUMN linearity_exempt_multical INTEGER NOT NULL DEFAULT 0");
     ensureVit("linearity_exempt_noncal", "ALTER TABLE veritamap_instrument_tests ADD COLUMN linearity_exempt_noncal INTEGER NOT NULL DEFAULT 0");
+    // 2026-07-08: two more Cal Ver / Linearity exemption paths on the Coverage
+    // table. "Waived (not required)" for CLIA-waived / qualitative analytes that
+    // have no linearity to verify (ID NOW, blood culture, BD MAX, blood bank),
+    // and a free-text "Other" reason so any non-standard exemption is documented
+    // for a surveyor. Any of the four exemptions drops the combo from required.
+    ensureVit("linearity_exempt_waived", "ALTER TABLE veritamap_instrument_tests ADD COLUMN linearity_exempt_waived INTEGER NOT NULL DEFAULT 0");
+    ensureVit("linearity_exempt_other", "ALTER TABLE veritamap_instrument_tests ADD COLUMN linearity_exempt_other TEXT");
   }
 }
 
