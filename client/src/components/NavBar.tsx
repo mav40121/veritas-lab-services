@@ -132,12 +132,12 @@ export function NavBar() {
             inventory and the cross-location roll-up. Without this the host is a
             dead end after login. */}
         {onStockHost && isLoggedIn && (
-          <nav className="hidden min-[1560px]:flex items-center gap-0.5">
-            <Link href={labRoute("/veritastock")} className={cn("px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+          <nav className="hidden min-[1536px]:flex items-center gap-0.5">
+            <Link href={labRoute("/veritastock")} className={cn("px-2 py-1.5 rounded-md text-sm font-medium transition-colors",
               location === labRoute("/veritastock") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
               Inventory
             </Link>
-            <Link href={labRoute("/veritastock/enterprise")} className={cn("px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+            <Link href={labRoute("/veritastock/enterprise")} className={cn("px-2 py-1.5 rounded-md text-sm font-medium transition-colors",
               location === labRoute("/veritastock/enterprise") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
               All Locations
             </Link>
@@ -146,22 +146,22 @@ export function NavBar() {
 
         {/* Desktop nav (suppressed on the VeritaStock inventory host) */}
         {!onStockHost && (
-        <nav className="hidden min-[1560px]:flex items-center gap-0.5">
+        <nav className="hidden min-[1536px]:flex items-center gap-0.5">
 
           {/* Home */}
-          <Link href="/" className={cn("px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+          <Link href="/" className={cn("px-2 py-1.5 rounded-md text-sm font-medium transition-colors",
             isActive("/") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
             Home
           </Link>
 
           {/* Consulting (route stays /services; only the displayed label changes) */}
-          <Link href="/services" className={cn("px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+          <Link href="/services" className={cn("px-2 py-1.5 rounded-md text-sm font-medium transition-colors",
             isActive("/services") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
             Consulting
           </Link>
 
           {/* Plans (route stays /pricing; only the displayed label changes) */}
-          <Link href="/pricing" className={cn("px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+          <Link href="/pricing" className={cn("px-2 py-1.5 rounded-md text-sm font-medium transition-colors",
             isActive("/pricing") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
             Plans
           </Link>
@@ -170,7 +170,7 @@ export function NavBar() {
           <Link
             href="/veritaassure"
             className={cn(
-              "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+              "flex items-center gap-1 px-2 py-1.5 rounded-md text-sm font-medium transition-colors",
               ["/veritaassure","/veritacheck","/veritacheck/cumsum","/veritascan","/veritamap","/veritatrack","/veritatrack-app","/veritacomp","/veritastaff","/veritapt","/veritalab","/veritapolicy","/veritaqc-app","/veritaresponse","/book"].some(p => location === p || location.startsWith(p + "/"))
                 ? "text-foreground bg-secondary"
                 : "text-muted-foreground hover:text-foreground hover:bg-secondary"
@@ -184,7 +184,7 @@ export function NavBar() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className={cn(
-                "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                "flex items-center gap-1 px-2 py-1.5 rounded-md text-sm font-medium transition-colors",
                 ["/resources","/faq","/book","/study-guide","/roadmap","/getting-started"].some(p => location.startsWith(p))
                   ? "text-foreground bg-secondary"
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary"
@@ -251,7 +251,7 @@ export function NavBar() {
           <Link
             href="/operations"
             className={cn(
-              "flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+              "flex items-center gap-1 px-2 py-1.5 rounded-md text-sm font-medium transition-colors",
               ["/operations","/veritabench","/veritabench/staffing","/veritabench/pi","/veritastock","/veritaops-app","/calculator"].some(p => location === p || location.startsWith(p + "/"))
                 ? "text-foreground bg-secondary"
                 : "text-muted-foreground hover:text-foreground hover:bg-secondary"
@@ -262,12 +262,12 @@ export function NavBar() {
           </Link>
 
           {/* Live Demo */}
-          <Link href="/demo" className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20">
+          <Link href="/demo" className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-sm font-medium transition-colors bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20">
             <Play size={11} /> Live Demo
           </Link>
 
           {/* Contact */}
-          <Link href="/contact" className={cn("px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+          <Link href="/contact" className={cn("px-2 py-1.5 rounded-md text-sm font-medium transition-colors",
             isActive("/contact") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
             Contact
           </Link>
@@ -295,7 +295,7 @@ export function NavBar() {
           {isLoggedIn ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="hidden min-[1560px]:flex gap-1.5">
+                <Button variant="outline" size="sm" className="hidden min-[1536px]:flex gap-1.5">
                   <User size={13} />
                   {user?.name.split(" ")[0]}
                   <ChevronDown size={12} />
@@ -313,7 +313,7 @@ export function NavBar() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <Button asChild size="sm" variant="outline" className="hidden min-[1560px]:flex">
+            <Button asChild size="sm" variant="outline" className="hidden min-[1536px]:flex">
               <Link href="/login">Sign in</Link>
             </Button>
           )}
@@ -324,13 +324,13 @@ export function NavBar() {
               -> /dashboard). */}
 
           {!onStockHost && (
-          <Button asChild size="sm" className="hidden min-[1560px]:flex bg-primary hover:bg-primary/90 text-primary-foreground font-medium">
+          <Button asChild size="sm" className="hidden min-[1536px]:flex bg-primary hover:bg-primary/90 text-primary-foreground font-medium">
             <Link href="/veritacheck">Run a Study</Link>
           </Button>
           )}
 
           {/* Mobile menu toggle */}
-          <Button variant="ghost" size="icon" className="min-[1560px]:hidden w-8 h-8" onClick={() => mobileOpen ? closeMobile() : setMobileOpen(true)}>
+          <Button variant="ghost" size="icon" className="min-[1536px]:hidden w-8 h-8" data-testid="nav-hamburger" onClick={() => mobileOpen ? closeMobile() : setMobileOpen(true)}>
             {mobileOpen ? <X size={18} /> : <Menu size={18} />}
           </Button>
         </div>
@@ -341,7 +341,7 @@ export function NavBar() {
           the bottom CTAs off-screen. */}
       {mobileOpen && (
         <div
-          className="min-[1560px]:hidden border-t border-border bg-card flex flex-col overflow-y-auto"
+          className="min-[1536px]:hidden border-t border-border bg-card flex flex-col overflow-y-auto"
           style={{ maxHeight: "calc(100vh - 4rem)" }}
         >
           <div className="px-4 py-3 flex flex-col gap-1">
@@ -354,7 +354,7 @@ export function NavBar() {
             ))}
 
             {/* 2026-06-08: mobile lab switcher. The desktop dropdown
-                (LabSwitcher above) is "hidden min-[1560px]:flex" so iPhone Safari
+                (LabSwitcher above) is "hidden min-[1536px]:flex" so iPhone Safari
                 users had no way to switch labs. This inline list mirrors
                 the dropdown's content and closes the drawer after a
                 successful switch. Renders null when the user has fewer
@@ -463,7 +463,7 @@ function MobileGroup({
         <div className="ml-4 mt-0.5 mb-1 flex flex-col gap-0.5 border-l border-border pl-2">
           {links.map(({ href, label: linkLabel }) => (
             <Link key={href} href={href} onClick={onLinkClick}
-              className="px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+              className="px-2 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
               {linkLabel}
             </Link>
           ))}

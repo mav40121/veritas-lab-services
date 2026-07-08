@@ -124,7 +124,7 @@ export function LabSwitcher() {
         <Button
           variant="outline"
           size="sm"
-          className="hidden lg:flex gap-1.5 max-w-[260px]"
+          className="hidden lg:flex gap-1.5 max-w-[200px]"
           title={`Active lab: ${labLabel(current)}${current.cliaNumber ? ` / CLIA ${current.cliaNumber}` : ""}`}
         >
           <Building2 size={13} className="text-primary shrink-0" />
