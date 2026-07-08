@@ -15,7 +15,7 @@ import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
-import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte } from "./veritacheckCoverage";
+import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte } from "./veritacheckCoverage";
 import { auditVeritamapConsistency } from "./veritamapConsistency";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
@@ -9815,6 +9815,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(study);
   });
 
+  // Allocation at time of running the assay (Phase 1): when a study is saved with
+  // a canonical CLIA preset (clia_preset_label present), auto-resolve it to the
+  // lab's VeritaMap analyte and stamp coverage_analyte, so the study self-attributes
+  // on the Coverage page instead of needing after-the-fact alignment. Never
+  // overrides an existing coverage_analyte (a manual alignment wins), and only
+  // sets when the preset resolves to exactly one map analyte (else it falls to the
+  // Phase 2 custom/challenge path). Best-effort: wrapped so it can't fail a save.
+  function autoAttributeCoverageAnalyte(studyId: number, presetLabel: string | null | undefined): void {
+    try {
+      if (!presetLabel || !studyId) return;
+      const sqlite = (db as any).$client;
+      const row = sqlite.prepare("SELECT lab_id, coverage_analyte FROM studies WHERE id = ?").get(studyId) as any;
+      if (!row || !row.lab_id) return;
+      if (row.coverage_analyte && String(row.coverage_analyte).trim()) return;
+      const analyte = resolvePresetMapAnalyte(sqlite, row.lab_id, presetLabel);
+      if (analyte) sqlite.prepare("UPDATE studies SET coverage_analyte = ? WHERE id = ?").run(analyte, studyId);
+    } catch (e: any) {
+      console.warn("[autoAttributeCoverageAnalyte]", e?.message);
+    }
+  }
+
   app.post("/api/studies", (req, res) => {
     // Drafts skip strict insertStudySchema validation since the user may not
     // have filled all required fields yet (data_points, instruments, etc.).
@@ -10075,6 +10096,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       typeof payload.instruments === 'string' ? payload.instruments : JSON.stringify(payload.instruments),
       verifiedStatus, studyId,
     );
+    autoAttributeCoverageAnalyte(studyId, payload.cliaPresetLabel);
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId);
     res.json(updated);
   });
@@ -10274,6 +10296,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } as any);
     // Dual-write lab_id (drizzle schema may not yet include the column).
     (db as any).$client.prepare("UPDATE studies SET lab_id = ? WHERE id = ?").run(req.scope.labId, study.id);
+    autoAttributeCoverageAnalyte(study.id, (parsed.data as any).cliaPresetLabel);
     if (!_scAccess.unlimited) consumeStudyCredit((db as any).$client, ownerUserId, req.scope.labId);
     try {
       autoCompleteVeritaScanItems({
@@ -10355,6 +10378,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       typeof payload.instruments === 'string' ? payload.instruments : JSON.stringify(payload.instruments),
       verifiedStatus, studyId,
     );
+    autoAttributeCoverageAnalyte(studyId, payload.cliaPresetLabel);
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId);
     res.json(updated);
   });
