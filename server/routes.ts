@@ -26829,6 +26829,51 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, dryRun: !!dryRun, changed: changes.length, changes });
   });
 
+  // Surgically add ONE analyte to the instruments of a lab's map, matched by
+  // instrument-name substring. Unlike the build page (which full-replaces an
+  // instrument's whole test list), this is a targeted INSERT OR IGNORE per
+  // instrument, so it cannot drop existing analytes. To avoid guessing the
+  // specialty/complexity, pass copyFromAnalyte = an existing analyte on the same
+  // instrument and this mirrors its specialty + complexity. dryRun previews.
+  app.post("/api/admin/veritamap/add-analyte", (req, res) => {
+    const { secret, labId, instrumentNameLike, analyte, copyFromAnalyte, specialty, complexity, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    if (!Number.isFinite(Number(labId)) || !analyte || !instrumentNameLike) {
+      return res.status(400).json({ error: "labId, analyte, instrumentNameLike required" });
+    }
+    const sqlite = (db as any).$client;
+    const maps = sqlite.prepare("SELECT id FROM veritamap_maps WHERE lab_id = ?").all(Number(labId)) as Array<{ id: number }>;
+    if (maps.length === 0) return res.status(404).json({ error: `no map for lab ${labId}` });
+    if (maps.length > 1) return res.status(400).json({ error: `lab ${labId} has ${maps.length} maps; ambiguous`, mapIds: maps.map((m) => m.id) });
+    const mapId = maps[0].id;
+    const instruments = sqlite.prepare(
+      "SELECT id, instrument_name, nickname FROM veritamap_instruments WHERE map_id = ? AND instrument_name LIKE ?"
+    ).all(mapId, `%${instrumentNameLike}%`) as Array<{ id: number; instrument_name: string; nickname: string | null }>;
+    if (instruments.length === 0) return res.status(400).json({ error: `no instruments on map ${mapId} match "${instrumentNameLike}"` });
+
+    const findExisting = sqlite.prepare("SELECT id, specialty, complexity FROM veritamap_instrument_tests WHERE instrument_id = ? AND lower(analyte) = lower(?)");
+    const findCopy = sqlite.prepare("SELECT specialty, complexity FROM veritamap_instrument_tests WHERE instrument_id = ? AND lower(analyte) = lower(?) AND active = 1");
+    const ins = sqlite.prepare("INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, 1)");
+
+    const results: any[] = [];
+    let inserted = 0;
+    for (const inst of instruments) {
+      const already = findExisting.get(inst.id, analyte) as any;
+      if (already) { results.push({ instrumentId: inst.id, instrument: inst.instrument_name, action: "skipped-exists" }); continue; }
+      let sp = specialty, cx = complexity;
+      if (copyFromAnalyte) {
+        const src = findCopy.get(inst.id, copyFromAnalyte) as any;
+        if (!src) { results.push({ instrumentId: inst.id, instrument: inst.instrument_name, action: "error-copyfrom-not-found" }); continue; }
+        sp = src.specialty; cx = src.complexity;
+      }
+      if (!sp || !cx) { results.push({ instrumentId: inst.id, instrument: inst.instrument_name, action: "error-missing-specialty-or-complexity" }); continue; }
+      if (!dryRun) { ins.run(inst.id, mapId, analyte, sp, cx, 1); inserted++; }
+      results.push({ instrumentId: inst.id, instrument: inst.instrument_name, action: dryRun ? "would-insert" : "inserted", specialty: sp, complexity: cx });
+    }
+    if (!dryRun && inserted > 0) rebuildMapTests(mapId);
+    res.json({ ok: true, dryRun: !!dryRun, mapId, analyte, inserted, results });
+  });
+
   app.post("/api/admin/move-map-to-lab", (req, res) => {
     const { secret, sourceMapId, destLabId, confirm } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
