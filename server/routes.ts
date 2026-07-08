@@ -26853,7 +26853,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const findExisting = sqlite.prepare("SELECT id, specialty, complexity FROM veritamap_instrument_tests WHERE instrument_id = ? AND lower(analyte) = lower(?)");
     const findCopy = sqlite.prepare("SELECT specialty, complexity FROM veritamap_instrument_tests WHERE instrument_id = ? AND lower(analyte) = lower(?) AND active = 1");
-    const ins = sqlite.prepare("INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, 1)");
+    const ins = sqlite.prepare("INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)");
 
     const results: any[] = [];
     let inserted = 0;
