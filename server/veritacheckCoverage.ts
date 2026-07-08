@@ -18,6 +18,8 @@
 // Instrument matching uses the map's registered nickname first (the map knows
 // "Bonnie" is the Ortho VITROS 5600), then falls back to model-token overlap.
 
+import { aliasesForPresetLabel } from "@shared/presetAnalytes";
+
 export type LinearityStatus = "covered" | "review" | "missing" | "exempt";
 
 export interface CoverageRow {
@@ -283,6 +285,35 @@ export function setLinearityExemption(sqlite: any, labId: number, instrumentTest
     "UPDATE veritamap_instrument_tests SET linearity_exempt_multical = ?, linearity_exempt_noncal = ? WHERE id = ?"
   ).run(multical ? 1 : 0, noncal ? 1 : 0, instrumentTestId);
   return true;
+}
+
+// Resolves a CLIA preset (its frozen label) to the single VeritaMap analyte it
+// identifies, given the lab's active map-analyte names. Exact case-insensitive
+// equality wins first (so "RBC" picks map "RBC", not "RBC (urine micro)", and
+// "Creatinine" picks serum "Creatinine", not "Creatinine, urine"); otherwise the
+// paren-stripping fuzzy matcher must land on exactly ONE analyte. Anything
+// ambiguous or unmatched returns null (no guess) so the study falls to the
+// custom/challenge path. Pure + testable.
+export function resolvePresetAnalyteFrom(mapAnalytes: string[], presetLabel: string): string | null {
+  const aliases = aliasesForPresetLabel(presetLabel);
+  if (!aliases.length) return null;
+  const lc = (s: string) => (s || "").trim().toLowerCase();
+  const aliasLc = new Set(aliases.map(lc));
+  const exact = Array.from(new Set(mapAnalytes.filter((a) => aliasLc.has(lc(a)))));
+  if (exact.length === 1) return exact[0];
+  if (exact.length > 1) return null;
+  const fuzzy = Array.from(new Set(mapAnalytes.filter((a) => aliases.some((al) => analyteMatch(al, a)))));
+  return fuzzy.length === 1 ? fuzzy[0] : null;
+}
+
+// DB-backed wrapper: pulls the lab's active map analytes and resolves the preset.
+export function resolvePresetMapAnalyte(sqlite: any, labId: number, presetLabel: string): string | null {
+  if (!presetLabel) return null;
+  const mapAnalytes = (sqlite.prepare(
+    `SELECT DISTINCT it.analyte FROM veritamap_instrument_tests it JOIN veritamap_maps m ON m.id = it.map_id
+     WHERE m.lab_id = ? AND (it.active = 1 OR it.active IS NULL)`
+  ).all(labId) as Array<{ analyte: string }>).map((r) => r.analyte).filter(Boolean);
+  return resolvePresetAnalyteFrom(mapAnalytes, presetLabel);
 }
 
 // Aligns one study to a map analyte (or clears it when analyte is empty). Both
