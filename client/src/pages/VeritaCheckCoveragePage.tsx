@@ -83,6 +83,23 @@ function SortTh({ label, k, sort, setSort }: { label: string; k: SortKey; sort: 
   );
 }
 
+// The Method-comparisons table has its own columns (Analyte / Instruments /
+// Study / Verdict) and its own sort state, independent of the Cal Ver table above
+// so clicking one never reorders the other. Distinct testid prefix (cov-mc-sort-)
+// keeps the two header sets from colliding in the DOM.
+type McSortKey = "analyte" | "instruments" | "study" | "verdict";
+type McSortState = { key: McSortKey | null; dir: "asc" | "desc" };
+function McSortTh({ label, k, sort, setSort, className }: { label: string; k: McSortKey; sort: McSortState; setSort: (u: (s: McSortState) => McSortState) => void; className?: string }) {
+  const active = sort.key === k;
+  return (
+    <th className={`py-2 px-3 font-medium ${className || ""}`}>
+      <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => setSort((s) => (s.key === k ? { key: k, dir: s.dir === "asc" ? "desc" : "asc" } : { key: k, dir: "asc" }))} data-testid={`cov-mc-sort-${k}`}>
+        {label}<ArrowUpDown size={11} className={active ? "text-foreground" : "opacity-40"} />
+      </button>
+    </th>
+  );
+}
+
 function Tile({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "good" | "warn" | "bad" }) {
   const c = tone === "good" ? "text-emerald-600" : tone === "warn" ? "text-amber-600" : tone === "bad" ? "text-red-600" : "text-foreground";
   return (
@@ -103,6 +120,7 @@ export default function VeritaCheckCoveragePage() {
   const [specialty, setSpecialty] = useState("all");
   const [status, setStatus] = useState("attention"); // attention = missing + review + covered-but-failed
   const [sort, setSort] = useState<SortState>({ key: null, dir: "asc" }); // null = server order (specialty, status, analyte)
+  const [mcSort, setMcSort] = useState<McSortState>({ key: null, dir: "asc" }); // null = default order (missing first, then studies on file)
   const openStudy = (id?: number | null) => { if (id) navigate(labRoute(`/study/${id}/results`)); };
   const [exporting, setExporting] = useState(false);
   const downloadReport = async () => {
@@ -183,6 +201,28 @@ export default function VeritaCheckCoveragePage() {
     return r;
   }, [data, specialty, status, sort]);
 
+  const mcRows = useMemo(() => {
+    const base = data?.methodComparisons || [];
+    // Default (unsorted) order: gaps first, then studies on file — the original layout.
+    if (!mcSort.key) return base.filter((m) => !m.hasStudy).concat(base.filter((m) => m.hasStudy));
+    // Study column sorts by state: missing (0) < documented FAIL (1) < study on file (2).
+    const studyRank = (m: MethodComparisonRow) => (!m.hasStudy ? 0 : isFail(m.verdict) ? 1 : 2);
+    const val = (m: MethodComparisonRow): string | number => {
+      switch (mcSort.key) {
+        case "instruments": return m.instruments.join(", ").toLowerCase();
+        case "study": return studyRank(m);
+        case "verdict": return (m.verdict || "").toLowerCase();
+        default: return m.analyte.toLowerCase();
+      }
+    };
+    return base.slice().sort((a, b) => {
+      const va = val(a), vb = val(b);
+      let c = typeof va === "number" && typeof vb === "number" ? va - vb : String(va).localeCompare(String(vb));
+      if (c === 0) c = a.analyte.localeCompare(b.analyte); // stable tiebreak by analyte
+      return mcSort.dir === "asc" ? c : -c;
+    });
+  }, [data, mcSort]);
+
   if (!labId) {
     return <div className="max-w-2xl mx-auto px-4 py-16 text-center text-muted-foreground">Pick a lab in the NavBar switcher to view coverage.</div>;
   }
@@ -231,11 +271,13 @@ export default function VeritaCheckCoveragePage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="text-left text-xs text-muted-foreground border-b border-border">
-              <th className="py-2 px-3 font-medium">Analyte</th><th className="py-2 px-3 font-medium">Instruments</th>
-              <th className="py-2 px-3 font-medium">Study</th><th className="py-2 px-3 font-medium">Verdict</th>
+              <McSortTh label="Analyte" k="analyte" sort={mcSort} setSort={setMcSort} />
+              <McSortTh label="Instruments" k="instruments" sort={mcSort} setSort={setMcSort} />
+              <McSortTh label="Study" k="study" sort={mcSort} setSort={setMcSort} />
+              <McSortTh label="Verdict" k="verdict" sort={mcSort} setSort={setMcSort} />
             </tr></thead>
             <tbody>
-              {data.methodComparisons.filter((m) => !m.hasStudy).concat(data.methodComparisons.filter((m) => m.hasStudy)).map((m) => (
+              {mcRows.map((m) => (
                 <tr key={m.analyte} className={`border-b border-border/60 ${m.hasStudy ? "cursor-pointer hover:bg-muted/40" : ""}`} onClick={() => openStudy(m.studyId)} title={m.hasStudy ? "Open study" : undefined}>
                   <td className="py-2 px-3">{m.analyte}</td>
                   <td className="py-2 px-3 text-muted-foreground text-xs">{m.instruments.join(", ")}</td>
