@@ -54,6 +54,16 @@ test.describe("VeritaCheck Coverage", () => {
     await sortInstrument.click();
     await expect(page.getByTestId("cov-sort-analyte")).toBeVisible();
 
+    // Exemption columns PR: the Cal Ver table now offers four exemption paths.
+    // The "Waived (not rqd)" header + a per-row Waived checkbox and "Other" reason
+    // input render. Non-mutating (no toggle/type).
+    await expect(page.getByText("Waived (not rqd)").first()).toBeVisible();
+    const waivedBox = page.locator('[data-testid^="cov-waived-"]').first();
+    if ((await waivedBox.count()) > 0) {
+      await expect(waivedBox).toBeVisible();
+      await expect(page.locator('[data-testid^="cov-other-"]').first()).toBeVisible();
+    }
+
     // Badge-distinction PR: "Missing" (no study) and "Failed"/"FAIL" (study on
     // file, verdict FAIL) must not render as the same chip. Missing is a hollow
     // red OUTLINE; a documented failure is a SOLID red (destructive) chip. When

@@ -29,6 +29,8 @@ export interface CoverageRow {
   instrument: string;
   linearityExemptMultical: boolean;
   linearityExemptNoncal: boolean;
+  linearityExemptWaived: boolean;
+  linearityExemptOther: string;
   linearityRequired: boolean;
   linearityStatus: LinearityStatus;
   studyIds: number[];
@@ -114,7 +116,7 @@ function matchesAnalyte(s: Study, analyte: string): boolean {
   return (!!s.coverage_analyte && s.coverage_analyte === analyte) || analyteMatch(s.test_name, analyte);
 }
 type Instrument = { id: number; instrument_name: string; nickname: string | null; serial_number?: string | null };
-type Combo = { id: number; analyte: string; specialty: string; instrument_id: number; linearity_exempt_multical?: number; linearity_exempt_noncal?: number };
+type Combo = { id: number; analyte: string; specialty: string; instrument_id: number; linearity_exempt_multical?: number; linearity_exempt_noncal?: number; linearity_exempt_waived?: number; linearity_exempt_other?: string | null };
 
 // Display label that distinguishes two units of the same model. A lab can run
 // the same analyzer twice (e.g. two Ortho VITROS 5600 named Bonnie and Clyde);
@@ -139,7 +141,9 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
     const instName = inst?.instrument_name || "";
     const multical = !!c.linearity_exempt_multical;
     const noncal = !!c.linearity_exempt_noncal;
-    const exempt = multical || noncal;
+    const waived = !!c.linearity_exempt_waived;
+    const other = (c.linearity_exempt_other || "").trim();
+    const exempt = multical || noncal || waived || !!other;
 
     // Only cal-ver / linearity studies count toward the linearity requirement.
     const linCands = studies.filter((s) => LINEARITY_TYPES.has(s.study_type) && matchesAnalyte(s, c.analyte));
@@ -170,6 +174,8 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
       instrument: inst ? instLabel(inst) : "(unknown)",
       linearityExemptMultical: multical,
       linearityExemptNoncal: noncal,
+      linearityExemptWaived: waived,
+      linearityExemptOther: other,
       linearityRequired: !exempt,
       linearityStatus: status,
       studyIds: matched.slice(0, 8).map((s) => s.id),
@@ -261,7 +267,8 @@ export function computeCoverageForLab(sqlite: any, labId: number): CoverageResul
   ).all(labId) as Instrument[];
   const combos = sqlite.prepare(
     `SELECT it.id, it.analyte, it.specialty, it.instrument_id,
-            it.linearity_exempt_multical, it.linearity_exempt_noncal
+            it.linearity_exempt_multical, it.linearity_exempt_noncal,
+            it.linearity_exempt_waived, it.linearity_exempt_other
      FROM veritamap_instrument_tests it JOIN veritamap_maps m ON m.id = it.map_id
      WHERE m.lab_id = ? AND (it.active = 1 OR it.active IS NULL)`
   ).all(labId) as Combo[];
@@ -272,18 +279,20 @@ export function computeCoverageForLab(sqlite: any, labId: number): CoverageResul
   return computeCoverageFrom(instruments, combos, studies);
 }
 
-// Sets the two linearity-exemption flags on one instrument_test, scoped to the
+// Sets the four linearity-exemption fields on one instrument_test, scoped to the
 // lab (the test must belong to a map owned by this lab). Returns false when the
-// test is not found in the lab.
-export function setLinearityExemption(sqlite: any, labId: number, instrumentTestId: number, multical: boolean, noncal: boolean): boolean {
+// test is not found in the lab. "other" is trimmed; empty -> stored NULL so a
+// blank reason never counts as an exemption.
+export function setLinearityExemption(sqlite: any, labId: number, instrumentTestId: number, multical: boolean, noncal: boolean, waived: boolean, other: string): boolean {
   const owns = sqlite.prepare(
     `SELECT it.id FROM veritamap_instrument_tests it JOIN veritamap_maps m ON m.id = it.map_id
      WHERE it.id = ? AND m.lab_id = ?`
   ).get(instrumentTestId, labId);
   if (!owns) return false;
+  const otherClean = (other || "").trim();
   sqlite.prepare(
-    "UPDATE veritamap_instrument_tests SET linearity_exempt_multical = ?, linearity_exempt_noncal = ? WHERE id = ?"
-  ).run(multical ? 1 : 0, noncal ? 1 : 0, instrumentTestId);
+    "UPDATE veritamap_instrument_tests SET linearity_exempt_multical = ?, linearity_exempt_noncal = ?, linearity_exempt_waived = ?, linearity_exempt_other = ? WHERE id = ?"
+  ).run(multical ? 1 : 0, noncal ? 1 : 0, waived ? 1 : 0, otherClean || null, instrumentTestId);
   return true;
 }
 

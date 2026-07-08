@@ -17,7 +17,7 @@ import { ChevronLeft, ListChecks, GitCompare, Download, ArrowUpDown, Unlink } fr
 type LinearityStatus = "covered" | "review" | "missing" | "exempt";
 type CoverageRow = {
   instrumentTestId: number; specialty: string; analyte: string; instrument: string;
-  linearityExemptMultical: boolean; linearityExemptNoncal: boolean; linearityRequired: boolean;
+  linearityExemptMultical: boolean; linearityExemptNoncal: boolean; linearityExemptWaived: boolean; linearityExemptOther: string; linearityRequired: boolean;
   linearityStatus: LinearityStatus; studyIds: number[]; verdict: string; signed: boolean;
 };
 type MethodComparisonRow = { analyte: string; instruments: string[]; hasStudy: boolean; studyId: number | null; verdict: string; signed: boolean };
@@ -128,17 +128,23 @@ export default function VeritaCheckCoveragePage() {
   const { data, isLoading } = useQuery<Coverage>({ queryKey: [coverageUrl], enabled: !!coverageUrl });
 
   const exemptMut = useMutation({
-    mutationFn: (b: { instrumentTestId: number; multical: boolean; noncal: boolean }) =>
+    mutationFn: (b: { instrumentTestId: number; multical: boolean; noncal: boolean; waived: boolean; otherReason: string }) =>
       apiRequest("PATCH", `${coverageUrl}/exemption`, b),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [coverageUrl] }),
     onError: () => toast({ title: "Could not update the exemption", variant: "destructive" }),
   });
-  const setExempt = (r: CoverageRow, which: "multical" | "noncal", checked: boolean) =>
+  // Send the full exemption state on every change; the caller supplies one changed
+  // field and the rest come from the row so a checkbox toggle never wipes another.
+  const applyExempt = (r: CoverageRow, patch: Partial<{ multical: boolean; noncal: boolean; waived: boolean; otherReason: string }>) =>
     exemptMut.mutate({
       instrumentTestId: r.instrumentTestId,
-      multical: which === "multical" ? checked : r.linearityExemptMultical,
-      noncal: which === "noncal" ? checked : r.linearityExemptNoncal,
+      multical: patch.multical ?? r.linearityExemptMultical,
+      noncal: patch.noncal ?? r.linearityExemptNoncal,
+      waived: patch.waived ?? r.linearityExemptWaived,
+      otherReason: patch.otherReason ?? r.linearityExemptOther,
     });
+  const setExempt = (r: CoverageRow, which: "multical" | "noncal" | "waived", checked: boolean) =>
+    applyExempt(r, { [which]: checked });
 
   // Align a study (whose name matches no map analyte) to the analyte it satisfies,
   // or clear it (analyte ""). Coverage then credits it without renaming the study.
@@ -211,7 +217,7 @@ export default function VeritaCheckCoveragePage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
         <Tile label="Method comparisons needed" value={`${s.methodComparisonsDone}/${s.methodComparisonsNeeded}`} sub={mcMissing ? `${mcMissing} missing` : "all done"} tone={mcMissing ? "bad" : "good"} />
         <Tile label="Cal Ver / Linearity required" value={`${s.linearityCovered}/${s.linearityRequired}`} sub={`${s.linearityMissing} missing, ${s.linearityReview} to review`} tone={s.linearityMissing ? "bad" : "good"} />
-        <Tile label="Linearity not required" value={String(s.linearityExempt)} sub="3+ calibrators or not calibratable" />
+        <Tile label="Linearity not required" value={String(s.linearityExempt)} sub="3+ cal, not calibratable, waived, or other" />
         <Tile label="Analyte x instrument combos" value={String(s.combos)} sub={`${s.instruments} instruments`} />
       </div>
 
@@ -252,7 +258,7 @@ export default function VeritaCheckCoveragePage() {
         <h2 className="font-semibold">Cal Ver / Linearity by analyte and instrument</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-3">
-        Required per analyte and instrument, unless the method uses 3 or more calibrators (the calibration verifies the range) or the analyzer cannot be calibrated (e.g. a blood-gas analyzer). Check the box to drop it from the required set.
+        Required per analyte and instrument, unless the method uses 3 or more calibrators (the calibration verifies the range), the analyzer cannot be calibrated (e.g. a blood-gas analyzer), the test is CLIA-waived or qualitative (no linearity to verify), or another documented reason applies. Check a box, or type an "Other" reason, to drop it from the required set.
       </p>
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <Select value={specialty} onValueChange={setSpecialty}>
@@ -284,9 +290,10 @@ export default function VeritaCheckCoveragePage() {
               <SortTh label="Status" k="status" sort={sort} setSort={setSort} />
               <th className="py-2 px-3 font-medium">Study</th>
               <th className="py-2 px-3 font-medium text-center">3+ cal</th><th className="py-2 px-3 font-medium text-center">Not calibratable</th>
+              <th className="py-2 px-3 font-medium text-center">Waived (not rqd)</th><th className="py-2 px-3 font-medium">Other</th>
             </tr></thead>
             <tbody>
-              {rows.length === 0 && <tr><td colSpan={6} className="py-6 text-center text-muted-foreground text-sm">Nothing matches this filter.</td></tr>}
+              {rows.length === 0 && <tr><td colSpan={8} className="py-6 text-center text-muted-foreground text-sm">Nothing matches this filter.</td></tr>}
               {rows.map((r) => (
                 <tr key={r.instrumentTestId} className={`border-b border-border/60 ${r.studyIds.length ? "cursor-pointer hover:bg-muted/40" : ""}`} data-testid={`cov-row-${r.instrumentTestId}`} onClick={() => openStudy(r.studyIds[0])} title={r.studyIds.length ? "Open study" : undefined}>
                   <td className="py-2 px-3">{r.analyte}</td>
@@ -298,6 +305,21 @@ export default function VeritaCheckCoveragePage() {
                   </td>
                   <td className="py-2 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                     <Checkbox checked={r.linearityExemptNoncal} onCheckedChange={(v) => setExempt(r, "noncal", !!v)} data-testid={`cov-noncal-${r.instrumentTestId}`} />
+                  </td>
+                  <td className="py-2 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                    <Checkbox checked={r.linearityExemptWaived} onCheckedChange={(v) => setExempt(r, "waived", !!v)} data-testid={`cov-waived-${r.instrumentTestId}`} />
+                  </td>
+                  <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="text"
+                      key={`other-${r.instrumentTestId}-${r.linearityExemptOther}`}
+                      defaultValue={r.linearityExemptOther}
+                      placeholder="reason…"
+                      data-testid={`cov-other-${r.instrumentTestId}`}
+                      className="h-7 w-36 rounded border border-border bg-background px-2 text-xs"
+                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                      onBlur={(e) => { const v = e.target.value.trim(); if (v !== (r.linearityExemptOther || "")) applyExempt(r, { otherReason: v }); }}
+                    />
                   </td>
                 </tr>
               ))}
