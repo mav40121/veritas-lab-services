@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XCircle, LayoutDashboard, BookOpen, ChevronRight, Shield, Info, HelpCircle, Upload, AlertTriangle, FileSpreadsheet, ClipboardCheck, Activity, Tag } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { CoverageAttributionDialog } from "@/components/CoverageAttributionDialog";
 import CLIALookupModal from "@/components/CLIALookupModal";
 import { VeritaQcImportModal, type VeritaQcImportPayload } from "@/components/VeritaQcImportModal";
 import { VeritaQcBulkImportModal, type VeritaQcBulkImportPayload } from "@/components/VeritaQcBulkImportModal";
@@ -1517,6 +1518,10 @@ export default function VeritaCheckPage() {
   // still land on the right lab.
   const activeLabId = useActiveLabId();
 
+  // Phase 2 allocation: after a save the server flags studies it could not
+  // confidently attribute to a map point; we hold navigation and soft-prompt.
+  const [attributionPrompt, setAttributionPrompt] = useState<{ studyId: number; testName: string; onDone: () => void } | null>(null);
+
   const saveMutation = useMutation({
     mutationFn: async (study: InsertStudy) => {
       // Attach linked VeritaMap instrument metadata
@@ -1592,11 +1597,21 @@ export default function VeritaCheckPage() {
       const resultsBase = activeLabId
         ? `/labs/${activeLabId}/study/${data.id}/results`
         : `/study/${data.id}/results`;
-      if (verificationId && verificationElement && verificationSlot) {
-        navigate(`${resultsBase}?verificationId=${verificationId}&element=${verificationElement}&slotId=${verificationSlot}&studyPassed=${data.status === "pass" ? "1" : "0"}`);
-      } else {
-        navigate(resultsBase);
+      const goToResults = () => {
+        if (verificationId && verificationElement && verificationSlot) {
+          navigate(`${resultsBase}?verificationId=${verificationId}&element=${verificationElement}&slotId=${verificationSlot}&studyPassed=${data.status === "pass" ? "1" : "0"}`);
+        } else {
+          navigate(resultsBase);
+        }
+      };
+      // Allocation challenge (Phase 2): if the server could not attribute this
+      // study to a map point, prompt for it before navigating. Non-blocking —
+      // "not on our map yet" or dismiss simply proceeds to results.
+      if (data.needsCoverageAttribution && data.id && activeLabId && !(verificationId && verificationElement && verificationSlot)) {
+        setAttributionPrompt({ studyId: data.id, testName: data.testName ?? data.test_name ?? testName, onDone: goToResults });
+        return;
       }
+      goToResults();
     },
     onError: (err: any) => {
       const msg = err?.message || "Failed to save study";
@@ -4751,6 +4766,20 @@ return (
             </AlertDescription>
           </Alert>
         </section>
+      )}
+      {/* Allocation challenge (Phase 2): soft-prompt to attribute an unmatched study. */}
+      {attributionPrompt && activeLabId && (
+        <CoverageAttributionDialog
+          open={!!attributionPrompt}
+          labId={activeLabId}
+          studyId={attributionPrompt.studyId}
+          testName={attributionPrompt.testName}
+          onClose={() => {
+            const done = attributionPrompt.onDone;
+            setAttributionPrompt(null);
+            done?.();
+          }}
+        />
       )}
       {/* CSV Import Modal */}
       <Dialog open={csvModalOpen} onOpenChange={(open) => { if (!open) { setCsvModalOpen(false); resetCsvState(); } }}>

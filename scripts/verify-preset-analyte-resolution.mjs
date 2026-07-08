@@ -10,7 +10,7 @@
 // MUST NOT auto-resolve (Total T4 -> Free T4, Total Cholesterol, hCG).
 // Run: npx tsx scripts/verify-preset-analyte-resolution.mjs
 
-import { resolvePresetAnalyteFrom, presetCorroboratesName } from "../server/veritacheckCoverage.ts";
+import { resolvePresetAnalyteFrom, presetCorroboratesName, studyNeedsAttribution } from "../server/veritacheckCoverage.ts";
 
 // San Carlos (lab 2) active map analytes — the subset relevant to the presets,
 // with every collision sibling included so the exact-preference logic is tested.
@@ -129,6 +129,31 @@ corrob("ALT/SGPT (±15% or ±6 U/L)", "PHENCYCLIDINE (PCP)", false);
 // Wrong preset for a real analyte is also rejected.
 corrob("Glucose (±8% or ±6 mg/dL)", "AST", false);
 corrob("AST (±15% or ±6 U/L)", "", false);
+
+// ── studyNeedsAttribution: fires the Phase 2 challenge only for a coverage-
+// relevant, unattributed, name-unmatched study. Fake sqlite returns SC analytes. ──
+const fakeDb = (analytes) => ({ prepare: () => ({ all: () => analytes.map((a) => ({ analyte: a })) }) });
+const db = fakeDb(SC);
+const needs = (name, type, cov, want, note) => {
+  const got = studyNeedsAttribution(db, 2, type, name, cov);
+  const ok = got === want;
+  console.log(`${ok ? "PASS" : "FAIL"}  needsAttribution("${name}", ${type}, cov=${JSON.stringify(cov)}) = ${got}  ${note}${ok ? "" : `  (want ${want})`}`);
+  ok ? pass++ : fail++;
+};
+needs("AST", "method_comparison", null, true, "unmatched name -> prompt");
+needs("ERYTHROCYTE COUNT (RBC)", "cal_ver", null, true, "unmatched name -> prompt");
+needs("Glucose", "method_comparison", null, false, "name matches map -> no prompt");
+needs("AST", "method_comparison", "Aspartate aminotransferase (AST) (SGOT)", false, "already attributed -> no prompt");
+needs("Widget", "precision", null, false, "non-coverage type -> no prompt");
+needs("Widget", "qc_range", null, false, "non-coverage type -> no prompt");
+// Empty map -> nothing to attribute to.
+const gotEmpty = studyNeedsAttribution(fakeDb([]), 2, "method_comparison", "AST", null);
+console.log(`${gotEmpty === false ? "PASS" : "FAIL"}  needsAttribution with empty map = ${gotEmpty}  (want false)`);
+gotEmpty === false ? pass++ : fail++;
+// No lab -> false.
+const gotNoLab = studyNeedsAttribution(db, 0, "method_comparison", "AST", null);
+console.log(`${gotNoLab === false ? "PASS" : "FAIL"}  needsAttribution with no labId = ${gotNoLab}  (want false)`);
+gotNoLab === false ? pass++ : fail++;
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
