@@ -4231,7 +4231,7 @@ function compItemVerdictCell(item: any): string {
   return `<td class="${cls}">${label}</td>`;
 }
 
-function buildCompetencyHTML(input: CompetencyPDFInput): string {
+export function buildCompetencyHTML(input: CompetencyPDFInput): string {
   const { assessment, items, methodGroups, checklistItems, labName, quizResults } = input;
   const elementDocuments: CompetencyElementDocument[] = input.elementDocuments || [];
   const dateStr = assessment.assessment_date || new Date().toISOString().split("T")[0];
@@ -4703,9 +4703,12 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
   }
 
   // ─── EVALUATOR SIGN-OFF ───
-  const evalName = esc(assessment.evaluator_name) || "M. Veri";
-  const evalTitle = esc(assessment.evaluator_title) || "Technical Consultant";
-  const evalInitials = esc(assessment.evaluator_initials) || "MV";
+  // 2026-07-09: fall back to an empty (fill-in) line, never a person's identity.
+  // The prior "M. Veri" / "MV" defaults stamped Michael's name as the evaluator
+  // on any other lab's record whose evaluator_name was blank.
+  const evalName = esc(assessment.evaluator_name) || "";
+  const evalTitle = esc(assessment.evaluator_title) || "";
+  const evalInitials = esc(assessment.evaluator_initials) || "";
   const signOffDate = assessment.assessment_date || dateStr;
   html += `<div class="page-break"></div>`;
   html += `<div class="section">
@@ -4714,7 +4717,7 @@ function buildCompetencyHTML(input: CompetencyPDFInput): string {
       <div style="font-size:9pt;font-weight:700;color:#01696F;margin-bottom:10px;text-align:center;">COMPETENCY ASSESSMENT COMPLETION</div>
       <div style="font-size:8.5pt;margin-bottom:12px;text-align:center;">All required elements have been assessed and documented above.</div>
       <div style="text-align:center;margin-bottom:14px;">
-        <span style="font-size:10pt;font-weight:800;color:#437A22;letter-spacing:1px;">Overall Determination: PASS</span>
+        <span style="font-size:10pt;font-weight:800;color:${input.blank ? "#444" : passColor};letter-spacing:1px;">Overall Determination: ${input.blank ? "____________" : passLabel}</span>
       </div>
       <div style="font-size:8pt;margin-bottom:6px;font-weight:600;">Evaluator Certification:</div>
       <div style="font-size:7.5pt;font-style:italic;line-height:1.6;margin-bottom:14px;color:#333;">
