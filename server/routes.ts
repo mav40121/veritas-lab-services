@@ -26840,6 +26840,66 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, dryRun: !!dryRun, orphanRows, total });
   });
 
+  // Purge an EMPTY orphan lab (e.g. a phantom lab left by a botched provisioning
+  // path, like the one created when a fresh separate owner is provisioned). Safe
+  // by construction: it refuses any lab that has members or ANY lab-scoped data.
+  // The labs<->users FK is circular (labs.owner_user_id -> users.id and
+  // users.lab_id/default_lab_id -> labs.id), so it nulls the owner's back-pointers
+  // first, removes any seats scoped to the lab, then deletes the lab row. It does
+  // NOT delete the owner user; if the owner is also an orphan, call
+  // DELETE /api/admin/users/:id afterwards.
+  app.post("/api/admin/purge-orphan-lab", (req, res) => {
+    const { secret, labId, confirm } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const id = Number(labId);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: "invalid labId" });
+    if (confirm !== true) return res.status(400).json({ error: "missing confirm:true (destructive action)" });
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id, lab_name, clia_number, owner_user_id FROM labs WHERE id = ?").get(id);
+    if (!lab) return res.status(404).json({ error: "lab not found", labId: id });
+
+    // Enumerate every table with an FK -> labs so the emptiness check stays
+    // self-maintaining as new lab-scoped tables are added. `users` is handled
+    // specially (its lab_id/default_lab_id are back-pointers we null, not data).
+    const fkTables: Array<{ table: string; col: string }> = [];
+    const allTables = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>;
+    for (const { name } of allTables) {
+      const fks = sqlite.prepare(`PRAGMA foreign_key_list('${name}')`).all() as Array<any>;
+      for (const fk of fks) if (fk.table === "labs") fkTables.push({ table: name, col: fk.from });
+    }
+    const blockers: Record<string, number> = {};
+    for (const { table, col } of fkTables) {
+      if (table === "users") {
+        // Only the owner's own back-pointer is allowed; any OTHER user pointing
+        // here means this is not an orphan and we must not touch it.
+        const n = sqlite.prepare(`SELECT COUNT(*) AS n FROM users WHERE ${col} = ? AND id <> ?`).get(id, lab.owner_user_id).n;
+        if (n) blockers[`users.${col}`] = n;
+      } else {
+        const n = sqlite.prepare(`SELECT COUNT(*) AS n FROM '${table}' WHERE ${col} = ?`).get(id).n;
+        if (n) blockers[`${table}.${col}`] = n;
+      }
+    }
+    const memberCount = sqlite.prepare("SELECT COUNT(*) AS n FROM lab_members WHERE lab_id = ?").get(id).n;
+    const seatsForLab = sqlite.prepare("SELECT COUNT(*) AS n FROM user_seats WHERE lab_id = ?").get(id).n;
+    if (Object.keys(blockers).length > 0 || memberCount > 0) {
+      return res.status(409).json({
+        error: "refusing to purge: lab is not empty",
+        labId: id, labName: lab.lab_name, ownerUserId: lab.owner_user_id,
+        memberCount, blockers, seatsForLab,
+      });
+    }
+
+    const purge = sqlite.transaction(() => {
+      sqlite.prepare("UPDATE users SET lab_id = NULL WHERE lab_id = ?").run(id);
+      sqlite.prepare("UPDATE users SET default_lab_id = NULL WHERE default_lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM user_seats WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM labs WHERE id = ?").run(id);
+    });
+    purge();
+    console.log(`[ADMIN] Orphan lab purged: id=${id} name=${lab.lab_name} owner=${lab.owner_user_id} seatsCleared=${seatsForLab} at=${new Date().toISOString()}`);
+    res.json({ purged: true, labId: id, labName: lab.lab_name, ownerUserId: lab.owner_user_id, seatsCleared: seatsForLab });
+  });
+
   app.post("/api/admin/veritamap/resync-complexity", (req, res) => {
     const { secret, dryRun } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
