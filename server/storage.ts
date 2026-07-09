@@ -146,6 +146,7 @@ class DatabaseStorage implements IStorage {
       // Direct children
       del("user_sessions");
       del("user_seats", "owner_user_id");
+      del("lab_members"); // a user's lab memberships die with the user (FK -> users)
       del("reset_tokens");
       del("studies");
       del("invoice_requests");
