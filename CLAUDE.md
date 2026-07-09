@@ -285,6 +285,7 @@ Apply to every task, not just large ones.
 5. Self-check before reporting complete: list at least three potential errors, gaps, or edge cases. Revise if any are real.
 6. Separate reasoning from the final answer.
 7. Uncertainty: if unsure, say so explicitly. Never fabricate pricing, org names, regulatory citations, or statistics.
+8. Source of truth: read the actual file, API response, or schema before asserting how the code, prod, or DB behaves — never from memory, a summary, or a tool's cached index (a glob/search can miss a real file, e.g. when run from the wrong directory; confirm by reading the path). Validate SQL against a real snapshot via `scripts/audit-sql-columns.mjs`, never a fresh `db.ts` boot. Full rule in STANDING_REQUIREMENTS.md.
 
 ---
 
