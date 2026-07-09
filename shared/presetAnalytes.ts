@@ -96,3 +96,53 @@ export const PRESET_ANALYTE_ALIASES: Record<string, string[]> = {
 export function aliasesForPresetLabel(label: string): string[] {
   return PRESET_ANALYTE_ALIASES[presetKeyForLabel(label)] || [];
 }
+
+// Synonym groups used ONLY by the coverage name-matcher (analytesShareGroup),
+// never by preset -> analyte resolution above. These carry the identities the
+// preset table does not: the CBC 5-part differential and the RBC/platelet
+// indices, where the map commonly stores a short code (EO#, EO%, MCV) while a
+// study is named in full ("Eosinophils", "Mean corpuscular volume"). The bare
+// Sysmex-style codes normalize to the same token, so the absolute (#) and
+// percent (%) points share one group: one differential correlation credits both
+// (they are the same measurand reported two ways).
+export const ANALYTE_SYNONYM_GROUPS: Record<string, string[]> = {
+  eosinophils: ["EO#", "EO%", "Eosinophils", "Absolute eosinophils", "Eosinophil count"],
+  basophils: ["BA#", "BA%", "Basophils", "Absolute basophils", "Basophil count"],
+  neutrophils: ["NE#", "NE%", "Neutrophils", "Absolute neutrophils", "Neutrophil count"],
+  lymphocytes: ["LY#", "LY%", "Lymphocytes", "Absolute lymphocytes", "Lymphocyte count"],
+  monocytes: ["MO#", "MO%", "Monocytes", "Absolute monocytes", "Monocyte count"],
+  immature_granulocytes: ["IG#", "IG%", "Immature granulocytes"],
+  mcv: ["MCV", "Mean corpuscular volume"],
+  mch: ["MCH", "Mean corpuscular hemoglobin"],
+  mchc: ["MCHC", "Mean corpuscular hemoglobin concentration"],
+  rdw: ["RDW", "Red cell distribution width", "Red blood cell distribution width"],
+  mpv: ["MPV", "Mean platelet volume"],
+};
+
+// Normalized alias token -> group slug, built once from BOTH the preset aliases
+// (so "HGB" ~ "Hemoglobin" comes for free) and the synonym-only groups above.
+// Normalization mirrors the coverage matcher: strip parentheticals, drop every
+// non-alphanumeric, lowercase. "EO#"/"EO%" -> "eo"; "Mean corpuscular volume" ->
+// "meancorpuscularvolume".
+const _normSyn = (s: string) => String(s || "").toLowerCase().replace(/\([^)]*\)/g, "").replace(/[^a-z0-9]/g, "");
+let _synIndex: Map<string, string> | null = null;
+function synIndex(): Map<string, string> {
+  if (_synIndex) return _synIndex;
+  const idx = new Map<string, string>();
+  for (const [slug, aliases] of [...Object.entries(PRESET_ANALYTE_ALIASES), ...Object.entries(ANALYTE_SYNONYM_GROUPS)]) {
+    for (const a of aliases) { const k = _normSyn(a); if (k) idx.set(k, slug); }
+  }
+  _synIndex = idx;
+  return idx;
+}
+
+// True when two analyte labels resolve to the SAME curated synonym group (e.g.
+// "HGB" and "Hemoglobin"; "EO#"/"EO%" and "Eosinophils"). Only curated groups
+// match, so this cannot introduce a fuzzy false positive. The coverage matcher
+// falls through to this so a spelled-out study credits an abbreviated map point.
+export function analytesShareGroup(a: string, b: string): boolean {
+  const idx = synIndex();
+  const ga = idx.get(_normSyn(a));
+  const gb = idx.get(_normSyn(b));
+  return !!ga && ga === gb;
+}
