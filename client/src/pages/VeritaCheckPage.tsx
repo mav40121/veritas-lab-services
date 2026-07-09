@@ -17,6 +17,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XCircle, LayoutDashboard, BookOpen, ChevronRight, Shield, Info, HelpCircle, Upload, AlertTriangle, FileSpreadsheet, ClipboardCheck, Activity, Tag } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { CoverageAttributionDialog } from "@/components/CoverageAttributionDialog";
+import ManualDifferentialForm from "@/components/ManualDifferentialForm";
 import CLIALookupModal from "@/components/CLIALookupModal";
 import { VeritaQcImportModal, type VeritaQcImportPayload } from "@/components/VeritaQcImportModal";
 import { VeritaQcBulkImportModal, type VeritaQcBulkImportPayload } from "@/components/VeritaQcBulkImportModal";
@@ -467,7 +468,7 @@ export default function VeritaCheckPage() {
   const initialStudyType = rawInitialStudyType;
   const initialInstruments = prePopInst1 && prePopInst2 ? [prePopInst1, prePopInst2] : prePopInst1 ? [prePopInst1, "Instrument 2"] : ["Instrument 1", "Instrument 2"];
 
-  const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval" | "sensitivity" | "carryover" | "accuracy_bias" | "linearity" | "reportable_range">(initialStudyType);
+  const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval" | "sensitivity" | "carryover" | "accuracy_bias" | "linearity" | "reportable_range" | "manual_diff">(initialStudyType);
   const [instrumentNames, setInstrumentNames] = useState<string[]>(initialInstruments);
   interface LabInstrument { id: number; instrument_name: string; serial_number?: string | null; nickname?: string | null; role?: string; category?: string; map_id?: number; map_name?: string }
   const [veritaMapInstruments, setVeritaMapInstruments] = useState<LabInstrument[]>([]);
@@ -2640,6 +2641,7 @@ return (
                           <SelectItem value="accuracy_bias">Accuracy / Bias: Single Instrument vs Target (CLSI EP15-A3)</SelectItem>
                           <SelectItem value="linearity">Linearity (CLSI EP06)</SelectItem>
                           <SelectItem value="reportable_range">Reportable Range / AMR Verification (CLIA §493.1255)</SelectItem>
+                          <SelectItem value="manual_diff">Manual Differential (Rümke 95% CI, CLSI H20)</SelectItem>
                         </SelectContent>
                       </Select>
                       {studyType === "cal_ver" && (
@@ -2941,7 +2943,7 @@ return (
                 </Card>
               )}
 
-              {studyType !== "sensitivity" && (
+              {studyType !== "sensitivity" && studyType !== "manual_diff" && (
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-base">{studyType === "precision" ? "Adopted Precision Acceptance Criterion (CV%)" : "Adopted Acceptance Criterion (TEa)"}</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
@@ -3094,6 +3096,9 @@ return (
                   </TooltipProvider>
                 )}
               </div>
+              {studyType === "manual_diff" && (
+                <ManualDifferentialForm testName={testName} analyst={analyst} date={date} saving={saveMutation.isPending} onSave={(s) => saveMutation.mutate(s)} />
+              )}
               {studyType === "lot_to_lot" ? (
                 <Card>
                   <CardHeader className="pb-3"><CardTitle className="text-base">Reagent Lot Verification (CLSI EP26) Data Entry</CardTitle></CardHeader>
@@ -4667,6 +4672,7 @@ return (
               tech does not have to guess why the Generate button is
               disabled. Renders only when the button is disabled for a
               non-pending reason. */}
+          {studyType !== "manual_diff" && (<>
           {(() => {
             const minLevels = studyType === "ref_interval" ? 20
               : studyType === "sensitivity" ? 5
@@ -4731,6 +4737,7 @@ return (
               </Button>
             </div>
           </div>
+          </>)}
         </div>
       </section>
 
