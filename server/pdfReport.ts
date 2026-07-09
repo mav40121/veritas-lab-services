@@ -16,6 +16,7 @@ import {
   type LicenseContext,
 } from "./licenseStamp";
 import { hasCanonicalTea } from "./backfillAbsoluteFloor";
+import { evaluateManualDiff } from "./rumke";
 
 // HTML-escape user-provided strings before they land in the rendered
 // PDF body. Used for customLabel and any other field that originates
@@ -737,7 +738,7 @@ function supportingPageHTML(study: Study, instrumentNames: string[]): string {
   const presetLabel: string | null = (study as any).cliaPresetLabel ?? null;
   const teaStrWithPreset = presetLabel ? `${teaStr} (${presetLabel})` : teaStr;
   const specs: any[][] = [
-    ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification (CLSI EP06)" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (CLSI EP26)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (CLSI EP17-A2)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias: Single Instrument vs Target (CLSI EP15-A3)" : study.studyType === "linearity" ? "Linearity (CLSI EP06)" : study.studyType === "reportable_range" ? "Reportable Range (CLIA §493.1255)" : "Method Comparison: Multi-Instrument Correlation (CLSI EP09 + EP15-A3)"],
+    ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification (CLSI EP06)" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (CLSI EP26)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (CLSI EP17-A2)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias: Single Instrument vs Target (CLSI EP15-A3)" : study.studyType === "linearity" ? "Linearity (CLSI EP06)" : study.studyType === "reportable_range" ? "Reportable Range (CLIA §493.1255)" : study.studyType === "manual_diff" ? "Manual Differential (Rümke 95% CI, CLSI H20)" : "Method Comparison: Multi-Instrument Correlation (CLSI EP09 + EP15-A3)"],
     ["Test Name", study.testName],
     [criterionRowLabel, teaStrWithPreset],
     [cfrReferenceLabel, cfrReferenceValue],
@@ -2424,6 +2425,87 @@ function buildAccuracyBiasHTML(study: Study, results: any): string {
   </body></html>`;
 }
 
+// Manual Differential (Rümke / CLSI H20). dataPoints is the input object
+// { cellsCounted, referenceSource, classes:[{name, manualCount, referencePct}] }.
+// Recomputes the per-class binomial 95% CI + verdict via the shared evaluator so
+// the PDF is authoritative. Acceptance: each cell class is within limits when the
+// reference (automated) percentage falls inside the exact binomial (Rümke) 95%
+// CI of the manual count; overall passes when every class is within.
+function buildManualDiffHTML(study: Study): string {
+  let input: any = {};
+  try { input = typeof (study as any).dataPoints === "string" ? JSON.parse((study as any).dataPoints) : ((study as any).dataPoints || {}); } catch {}
+  const res = evaluateManualDiff({
+    cellsCounted: Number(input.cellsCounted) || 0,
+    referenceSource: input.referenceSource || "",
+    classes: Array.isArray(input.classes) ? input.classes : [],
+  });
+  const N = res.cellsCounted;
+  const refSrc = res.referenceSource || "the automated differential";
+  const overallPass = res.overallPass;
+  const passClass = overallPass ? "pass" : "fail";
+  const verdictText = overallPass ? "Meets Rümke 95% confidence limits" : "Exceeds Rümke 95% confidence limits";
+  const exceededNames = res.classes.filter(c => !c.within).map(c => c.name).join(", ");
+
+  // Parallel PASS / FAIL sentence structure per the regulatory-language rule;
+  // only "meets" vs "does not meet" changes. No directive language on a fail.
+  const cliaStatement = overallPass
+    ? `<b>The manual differential comparison meets the acceptance criteria per 42 CFR §493.1281 and CLSI H20: every cell class fell within the Rümke 95% confidence limits for a ${N}-cell count.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>The manual differential comparison does not meet the acceptance criteria per 42 CFR §493.1281 and CLSI H20: ${exceededNames} exceeded the Rümke 95% confidence limits for a ${N}-cell count.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+
+  const narrativeSummary = `Manual differential compared against ${refSrc}. ${N} cells counted. Each cell class was judged acceptable when the reference percentage fell within the exact binomial (Rümke) 95% confidence interval of the manual count, per CLSI H20. The interval widens for low-frequency classes and narrows as more cells are counted, which is why a fixed percentage tolerance is not applied.`;
+
+  const dataRows = res.classes.map((c, i) => {
+    const pfClass = c.within ? "pass" : "fail";
+    const label = c.within ? "Within" : "Exceeds";
+    const refTxt = Number.isFinite(c.referencePct) ? sf(c.referencePct, 1) + "%" : "-";
+    return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
+      <td>${c.name}</td>
+      <td class="text-right">${c.manualCount} / ${N}</td>
+      <td class="text-right">${sf(c.manualPct, 1)}%</td>
+      <td class="text-right">${refTxt}</td>
+      <td class="text-right">${sf(c.ciLoPct, 1)} to ${sf(c.ciHiPct, 1)}%</td>
+      <td class="text-right ${pfClass}">${label}</td>
+    </tr>`;
+  }).join("");
+
+  const summaryStats = `
+    <div class="key-stats">
+      <div class="stat-item"><div class="stat-label">Reference Method</div><div class="stat-value">${refSrc}</div></div>
+      <div class="stat-item"><div class="stat-label">Cells Counted</div><div class="stat-value">${N}</div></div>
+      <div class="stat-item"><div class="stat-label">Cell Classes</div><div class="stat-value">${res.classes.length}</div></div>
+      <div class="stat-item"><div class="stat-label">Acceptance</div><div class="stat-value">Rümke 95% CI (CLSI H20)</div></div>
+      <div class="stat-item"><div class="stat-label">Result</div><div class="stat-value ${passClass}">${verdictText}</div></div>
+    </div>`;
+
+  const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
+    <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
+    <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${narrativeSummary} ${cliaStatement}</p>
+  </div>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck™ - Manual Differential (Rümke) - ${study.testName}</title><style>${CSS}</style></head><body>
+  ${footerHTML()}
+  ${headerHTML(study, (study as any)._cliaNumber)}
+  <div class="verdict-banner ${passClass}">${overallPass ? "✔" : "✘"} ${verdictText}</div>
+  ${summaryStats}
+  ${narrative}
+  ${directorReviewHTML(study)}
+  <div class="page-break"></div>
+  <div class="section-heading">Per-Cell-Class Results: Rümke 95% Confidence Limits</div>
+  <p style="font-size:8pt;color:#666;margin:0 0 8px;">CLSI H20: the acceptable variation in a differential percentage is the binomial sampling error at the number of cells counted (Rümke's confidence limits). Each cell class is acceptable when the reference percentage falls within the exact binomial 95% confidence interval of the manual count.</p>
+  <table>
+    <thead><tr>
+      <th>Cell class</th>
+      <th class="text-right">Manual (x / N)</th>
+      <th class="text-right">Manual %</th>
+      <th class="text-right">Reference %</th>
+      <th class="text-right">Rümke 95% CI</th>
+      <th class="text-right">Result</th>
+    </tr></thead>
+    <tbody>${dataRows}</tbody>
+  </table>
+  </body></html>`;
+}
+
 // CLSI EP06 verification: linearity of the analytical measurement range via
 // OLS regression of per-level measured-mean vs assigned target. Results shape
 // matches what StudyResultsPage computes + handleSubmit persists. Acceptance:
@@ -3714,6 +3796,8 @@ export async function generatePDFBuffer(study: Study, results: any, cliaNumber?:
     ? buildLinearityHTML(study, results)
     : study.studyType === "reportable_range"
     ? buildReportableRangeHTML(study, results)
+    : study.studyType === "manual_diff"
+    ? buildManualDiffHTML(study)
     : isQualResult
     ? buildQualitativeHTML(study, results)
     : isSemiQuantResult
