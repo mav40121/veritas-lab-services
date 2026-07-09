@@ -20594,8 +20594,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const { quizId, assessmentId, employeeId, answers } = req.body;
     if (!quizId || !employeeId || !Array.isArray(answers)) return res.status(400).json({ error: "quizId, employeeId, and answers array required" });
-    const quiz = (db as any).$client.prepare("SELECT * FROM competency_quizzes WHERE id = ?").get(quizId) as any;
+    // Cross-tenant guard (2026-07-09 security review). quizId/assessmentId/
+    // employeeId arrive straight from the request body. Without scoping each to a
+    // lab the caller can access, any VeritaComp writer could forge graded
+    // competency evidence into another lab's assessment by guessing sequential
+    // ids. Mirror the userCanAccessLabRow guard already used by the sibling
+    // assign route (routes.ts ~20462).
+    const quiz = userCanAccessLabRow('competency_quizzes', quizId, req) as any;
     if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+    const employee = userCanAccessLabRow('competency_employees', employeeId, req) as any;
+    if (!employee) return res.status(404).json({ error: "Employee not found" });
+    let assessmentLabId: number | null = null;
+    if (assessmentId) {
+      const assn = (db as any).$client.prepare("SELECT program_id FROM competency_assessments WHERE id = ?").get(assessmentId) as any;
+      const program = assn ? userCanAccessLabRow('competency_programs', assn.program_id, req) : null;
+      if (!program) return res.status(404).json({ error: "Assessment not found" });
+      assessmentLabId = (program as any).lab_id ?? null;
+    }
+    // Defense in depth for a multi-lab owner: quiz, employee, and assessment must
+    // all belong to one lab, so a lab-A quiz cannot be attached to a lab-B record.
+    const labIds = [quiz.lab_id, employee.lab_id, assessmentLabId].filter((x: any) => x != null);
+    if (new Set(labIds).size > 1) return res.status(400).json({ error: "Quiz, employee, and assessment must belong to the same lab" });
     const questions = JSON.parse(quiz.questions || "[]");
     // Score
     let correct = 0;
@@ -20632,6 +20651,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // GET /api/veritacomp/assessments/:id/quiz-results
   app.get("/api/veritacomp/assessments/:id/quiz-results", authMiddleware, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
+    // Cross-tenant guard (2026-07-09 security review): only return results for an
+    // assessment whose program is in a lab the caller can access, else the graded
+    // quiz history of any lab could be read by guessing an assessment id.
+    const scopeAssn = (db as any).$client.prepare("SELECT program_id FROM competency_assessments WHERE id = ?").get(req.params.id) as any;
+    if (!scopeAssn || !userCanAccessLabRow('competency_programs', scopeAssn.program_id, req)) {
+      return res.status(404).json({ error: "Assessment not found" });
+    }
     const results = (db as any).$client.prepare(
       `SELECT qr.*, q.method_group_name, q.questions as quiz_questions
        FROM competency_quiz_results qr
