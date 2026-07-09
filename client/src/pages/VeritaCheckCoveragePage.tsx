@@ -181,6 +181,49 @@ export default function VeritaCheckCoveragePage() {
     [data],
   );
   const unalignedCount = useMemo(() => (data?.unmappedStudies || []).filter((u) => !u.coverageAnalyte).length, [data]);
+  // Split the name-mismatch studies into a "still needs alignment" queue and an
+  // "already aligned" set so an aligned study drops out of the to-do list but
+  // stays reviewable (and clearable) under a collapsed section.
+  const needAlignStudies = useMemo(() => (data?.unmappedStudies || []).filter((u) => !u.coverageAnalyte), [data]);
+  const alignedStudies = useMemo(() => (data?.unmappedStudies || []).filter((u) => u.coverageAnalyte), [data]);
+  const renderUnmappedRow = (u: any) => (
+    <tr key={u.id} className={`border-b border-border/60 ${u.coverageAnalyte ? "bg-emerald-500/5" : ""}`} data-testid={`cov-unmapped-${u.id}`}>
+      <td className="py-2 px-3 cursor-pointer hover:underline" onClick={() => openStudy(u.id)} title="Open study">{u.testName}</td>
+      <td className="py-2 px-3 text-muted-foreground text-xs">{unmappedTypeLabel(u.studyType)}</td>
+      <td className="py-2 px-3 text-muted-foreground text-xs">{u.instrument}</td>
+      <td className="py-2 px-3 text-muted-foreground text-xs">{u.date}</td>
+      <td className="py-2 px-3">{isFail(u.verdict)
+        ? <Badge variant="destructive" className="text-[10px]">#{u.id} FAIL</Badge>
+        : <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">#{u.id}{u.signed ? " signed" : ""}</Badge>}</td>
+      <td className="py-2 px-3">
+        {u.coverageAnalyte ? (
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">Aligned &rarr; {u.coverageAnalyte}</Badge>
+            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" data-testid={`cov-align-clear-${u.id}`} disabled={alignMut.isPending} onClick={() => alignMut.mutate({ studyId: u.id, analyte: "" })}>Clear</Button>
+          </div>
+        ) : (
+          <Select value="" onValueChange={(v) => alignMut.mutate({ studyId: u.id, analyte: v })}>
+            <SelectTrigger className="h-8 w-[240px] text-xs" data-testid={`cov-align-select-${u.id}`}><SelectValue placeholder="Align to…" /></SelectTrigger>
+            <SelectContent className="max-h-72">
+              {mapAnalyteOptions.map((a: any) => <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
+      </td>
+    </tr>
+  );
+  const renderUnmappedTable = (rows: any[]) => (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead><tr className="text-left text-xs text-muted-foreground border-b border-border">
+          <th className="py-2 px-3 font-medium">Study</th><th className="py-2 px-3 font-medium">Type</th>
+          <th className="py-2 px-3 font-medium">Instrument</th><th className="py-2 px-3 font-medium">Date</th>
+          <th className="py-2 px-3 font-medium">Verdict</th><th className="py-2 px-3 font-medium">Align to map analyte</th>
+        </tr></thead>
+        <tbody>{rows.map(renderUnmappedRow)}</tbody>
+      </table>
+    </div>
+  );
 
   const specialties = useMemo(() => Array.from(new Set((data?.rows || []).map((r) => r.specialty))).sort(), [data]);
   const rows = useMemo(() => {
@@ -370,55 +413,36 @@ export default function VeritaCheckCoveragePage() {
         </div>
       </CardContent></Card>
 
-      {/* Unaligned studies — verification work on file that matches no map analyte */}
+      {/* Studies to align: verification work on file that matches no map analyte by name */}
       {(data.unmappedStudies?.length ?? 0) > 0 && (
         <>
           <div className="flex items-center gap-2 mb-2 mt-8">
             <Unlink size={16} className="text-primary" />
-            <h2 className="font-semibold">Unaligned studies ({unalignedCount}{unalignedCount !== data.unmappedStudies.length ? ` of ${data.unmappedStudies.length}` : ""})</h2>
+            <h2 className="font-semibold">Studies to align</h2>
+            <Badge variant="outline" className={`text-[10px] ${unalignedCount > 0 ? "border-amber-500/40 text-amber-600" : "border-emerald-500/40 text-emerald-600"}`}>
+              {unalignedCount > 0 ? `${unalignedCount} need${unalignedCount === 1 ? "s" : ""} alignment` : "All aligned"}
+            </Badge>
           </div>
           <p className="text-xs text-muted-foreground mb-3">
-            Verification studies on file whose name does not match any analyte on this lab's VeritaMap, so they are not credited to a coverage row above and the required point still reads Missing. Usually a naming difference (a study titled "AST" versus the map's "Aspartate aminotransferase (AST)") or a typo. Pick the map analyte each study satisfies to align it. The study keeps its own name; Coverage then credits it.
+            These verification studies don't match a VeritaMap analyte by name (for example, a study titled "AST" versus the map's "Aspartate aminotransferase (AST)"), so Coverage can't credit them automatically. Align each to the analyte it satisfies; the study keeps its own name and Coverage credits it once the instrument also matches.
           </p>
-          <Card className="mb-8"><CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead><tr className="text-left text-xs text-muted-foreground border-b border-border">
-                  <th className="py-2 px-3 font-medium">Study</th><th className="py-2 px-3 font-medium">Type</th>
-                  <th className="py-2 px-3 font-medium">Instrument</th><th className="py-2 px-3 font-medium">Date</th>
-                  <th className="py-2 px-3 font-medium">Verdict</th><th className="py-2 px-3 font-medium">Align to map analyte</th>
-                </tr></thead>
-                <tbody>
-                  {data.unmappedStudies.map((u) => (
-                    <tr key={u.id} className={`border-b border-border/60 ${u.coverageAnalyte ? "bg-emerald-500/5" : ""}`} data-testid={`cov-unmapped-${u.id}`}>
-                      <td className="py-2 px-3 cursor-pointer hover:underline" onClick={() => openStudy(u.id)} title="Open study">{u.testName}</td>
-                      <td className="py-2 px-3 text-muted-foreground text-xs">{unmappedTypeLabel(u.studyType)}</td>
-                      <td className="py-2 px-3 text-muted-foreground text-xs">{u.instrument}</td>
-                      <td className="py-2 px-3 text-muted-foreground text-xs">{u.date}</td>
-                      <td className="py-2 px-3">{isFail(u.verdict)
-                        ? <Badge variant="destructive" className="text-[10px]">#{u.id} FAIL</Badge>
-                        : <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">#{u.id}{u.signed ? " signed" : ""}</Badge>}</td>
-                      <td className="py-2 px-3">
-                        {u.coverageAnalyte ? (
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">Aligned → {u.coverageAnalyte}</Badge>
-                            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" data-testid={`cov-align-clear-${u.id}`} disabled={alignMut.isPending} onClick={() => alignMut.mutate({ studyId: u.id, analyte: "" })}>Clear</Button>
-                          </div>
-                        ) : (
-                          <Select value="" onValueChange={(v) => alignMut.mutate({ studyId: u.id, analyte: v })}>
-                            <SelectTrigger className="h-8 w-[240px] text-xs" data-testid={`cov-align-select-${u.id}`}><SelectValue placeholder="Align to…" /></SelectTrigger>
-                            <SelectContent className="max-h-72">
-                              {mapAnalyteOptions.map((a) => <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent></Card>
+          {needAlignStudies.length > 0 && (
+            <Card className="mb-4"><CardContent className="p-0">
+              {renderUnmappedTable(needAlignStudies)}
+            </CardContent></Card>
+          )}
+          {alignedStudies.length > 0 && (
+            <details className="mb-8">
+              <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground mb-2">
+                {needAlignStudies.length > 0
+                  ? `Show ${alignedStudies.length} aligned stud${alignedStudies.length === 1 ? "y" : "ies"}`
+                  : `${alignedStudies.length} aligned stud${alignedStudies.length === 1 ? "y" : "ies"} (review or clear)`}
+              </summary>
+              <Card className="mt-2"><CardContent className="p-0">
+                {renderUnmappedTable(alignedStudies)}
+              </CardContent></Card>
+            </details>
+          )}
         </>
       )}
     </div>
