@@ -13,7 +13,7 @@ const services = [
   { icon: BarChart3, title: "Productivity Analysis", desc: "Expert on-site assessment of workflows, staffing, and resources using industry benchmarks. Actionable reports with data-driven recommendations." },
   { icon: BookOpen, title: "Educational Webinars", desc: "Facility webinars on blood administration, QC/QA, delegation of authority, and lab survey preparation, tailored to your team's needs." },
   { icon: Award, title: "Interim Lab Director", desc: "Experienced interim Lab Administrative Directors who ensure uninterrupted operations and regulatory compliance during leadership transitions." },
-  { icon: FlaskConical, title: "VeritaCheck™ - Lab Study Platform", desc: "Our web-based EP evaluation tool, automated calibration verification and method comparison with CLIA-compliant PDF reports.", link: "/veritacheck", linkLabel: "Try VeritaCheck™ Free" },
+  { icon: FlaskConical, title: "VeritaCheck™ - Lab Study Platform", desc: "The performance-verification module of your compliance platform: automated Calibration Verification / Linearity, Correlation / Method Comparison, and precision studies with surveyor-ready, CFR-cited PDF reports.", link: "/veritacheck", linkLabel: "Try VeritaCheck™ Free" },
 ];
 
 const stats = [

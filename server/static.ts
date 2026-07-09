@@ -72,6 +72,16 @@ function renderPricingContent(): string {
   return `<h2>VeritaAssure&#8482; pricing</h2><p>Simple, published annual pricing for clinical laboratory compliance software. Your tier is set by the number of active (writer) seats you need; additional active seats above the included count are billed at that tier per-seat rate. Read-and-sign staff access is handled by the Staff Portal add-on, not per seat.</p><table><thead><tr><th>Plan</th><th>Price</th><th>Included seats</th><th>Additional seats</th></tr></thead><tbody>${rows}</tbody></table><p>Every new account includes 2 free VeritaCheck&#8482; study credits. System-tier pricing (more than one CLIA lab, 16 or more seats, or SSO, BAA, and SLA requirements) is a custom quote via info@veritaslabservices.com.</p>`;
 }
 
+// Crawlable prerender body for /veritacheck. The page is JS-rendered, so its
+// feature detail (study types, CLSI methods, CFR criteria) was absent from the
+// raw HTML crawlers and AI answer engines read. This emits the positioning and
+// capabilities as real text: VeritaCheck is the performance-verification module
+// of the VeritaAssure platform, not a standalone "EP evaluation tool". Copy
+// mirrors the VeritaCheck SoftwareApplication featureList in client/index.html.
+function renderVeritaCheckContent(): string {
+  return `<h2>VeritaCheck&#8482; performance verification</h2><p>VeritaCheck&#8482; is the performance-verification module of the VeritaAssure&#8482; compliance platform, built by a former Joint Commission laboratory surveyor. It runs the studies a clinical laboratory needs to verify performance specifications under 42 CFR Part 493 and generates surveyor-ready, CFR-cited PDF reports with a laboratory director or designee signature block on page 1.</p><p>Study types: Calibration Verification / Linearity (reportable range and analytical measurement range), Correlation / Method Comparison with Deming regression, precision per CLSI EP15, lot-to-lot comparison per CLSI EP26, reference interval verification, and qualitative and sensitivity studies. Each quantitative study applies the 42 CFR Part 493 total allowable error criteria automatically and cites the specialty-specific CFR section in the narrative.</p><p>Every report carries the regulatory determination, the statistical appendix, the CLIA number, and the director signature block. Studies are stored and retrievable for the next inspection. VeritaCheck&#8482; is one module of VeritaAssure&#8482;, which also manages inspection readiness, proficiency testing, competency, and test-menu mapping.</p>`;
+}
+
 function getIndexHtml(distPath: string): string {
   if (!cachedIndexHtml) {
     let html = fs.readFileSync(path.resolve(distPath, "index.html"), "utf-8");
@@ -158,6 +168,8 @@ function injectSeoTags(html: string, routePath: string, meta: SEOMetadata): stri
     noscriptInner += renderProductivityCalculatorContent();
   } else if (routePath === "/pricing") {
     noscriptInner += renderPricingContent();
+  } else if (routePath === "/veritacheck") {
+    noscriptInner += renderVeritaCheckContent();
   }
   // If this route carries a FAQPage node, expose its Q&A in the noscript body so
   // crawlers and AI answer engines read the questions and answers as page text,

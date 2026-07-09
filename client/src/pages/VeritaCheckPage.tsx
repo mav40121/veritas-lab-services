@@ -2461,7 +2461,7 @@ export default function VeritaCheckPage() {
     saveMutation.mutate(study);
   };
 
-    useSEO({ title: "VeritaCheck™ | CLIA Performance Verification Software for Clinical Labs", description: "Run EP studies for accuracy, precision, reportable range, and reference ranges. Generates director-signed, survey-ready verification documentation." });
+    useSEO({ title: "VeritaCheck™ Performance Verification | CLIA Calibration Verification and Method Comparison", description: "Run CLIA Calibration Verification / Linearity, Correlation / Method Comparison, and CLSI EP15 precision studies, and generate surveyor-ready, CFR-cited PDF reports, inside the VeritaAssure compliance platform. Built by a former Joint Commission surveyor." });
 return (
     <div>
       {activeLabId ? (
