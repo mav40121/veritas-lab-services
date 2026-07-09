@@ -10,7 +10,7 @@
 //
 // Run: npx tsx scripts/verify-rumke.mts
 
-import { clopperPearson, evaluateManualDiff } from "../server/rumke.ts";
+import { clopperPearson, evaluateManualDiff } from "../shared/rumke.ts";
 
 let pass = 0;
 let fail = 0;
