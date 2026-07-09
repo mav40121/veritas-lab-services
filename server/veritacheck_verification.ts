@@ -1247,6 +1247,10 @@ export function registerVeritaCheckVerificationRoutes(
       if (parentStatus === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
       return res.status(404).json({ error: "Not found" });
     }
+    // Cross-lab guard: the unit must belong to THIS verification, not just any
+    // verification (parent guard above only proves the verification is ours).
+    const unit = sqlite.prepare("SELECT id FROM veritacheck_verification_instruments WHERE id = ? AND verification_id = ?").get(req.params.unitId, req.params.id);
+    if (!unit) return res.status(404).json({ error: "Instrument unit not found on this verification" });
     const allowed = ["serial_number","model","location","director_name","director_title","approved_date"];
     const sets: string[] = [];
     const vals: any[] = [];
@@ -1268,7 +1272,9 @@ export function registerVeritaCheckVerificationRoutes(
       if (parentStatus === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
       return res.status(404).json({ error: "Not found" });
     }
-    sqlite.prepare("DELETE FROM veritacheck_verification_instruments WHERE id = ?").run(req.params.unitId);
+    const delUnit = sqlite.prepare("SELECT id FROM veritacheck_verification_instruments WHERE id = ? AND verification_id = ?").get(req.params.unitId, req.params.id);
+    if (!delUnit) return res.status(404).json({ error: "Instrument unit not found on this verification" });
+    sqlite.prepare("DELETE FROM veritacheck_verification_instruments WHERE id = ? AND verification_id = ?").run(req.params.unitId, req.params.id);
     res.json({ ok: true });
   });
 
@@ -1486,6 +1492,10 @@ export function registerVeritaCheckVerificationRoutes(
       if (parentStatus === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
       return res.status(404).json({ error: "Not found" });
     }
+    // Cross-lab guard: the study slot must belong to THIS verification. Without
+    // it, a writer could flip another lab's pass/fail verdict by primary key.
+    const slot = sqlite.prepare("SELECT id FROM veritacheck_verification_studies WHERE id = ? AND verification_id = ?").get(req.params.studySlotId, req.params.id);
+    if (!slot) return res.status(404).json({ error: "Study slot not found on this verification" });
     const allowed = ["study_id","analyte","sample_count","clsi_protocol","design_rationale","result_summary","passed","analyte_id","scope"];
     const sets: string[] = [];
     const vals: any[] = [];
