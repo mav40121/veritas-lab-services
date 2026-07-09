@@ -260,14 +260,14 @@ export default function LoginPage() {
       const tier = TIER_OPTIONS.find(t => t.id === selectedTier);
       return {
         name: selectedHospital.name,
-        sub: `${selectedHospital.state} - ${selectedHospital.beds} beds - ${tier?.label || selectedTier} Plan - $${tier?.price || 0}/yr - ${tier?.seats || 0} seats`,
+        sub: `${selectedHospital.state} - ${selectedHospital.beds} beds - ${tier?.label || selectedTier} Plan - ${tier?.seats || 0} seats`,
       };
     }
     const tier = TIER_OPTIONS.find(t => t.id === selectedTier);
     const lt = LAB_TYPE_OPTIONS.find(l => l.id === labType);
     return {
       name: lt?.label || "Laboratory",
-      sub: tier ? `${tier.label} Plan - $${tier.price}/yr - ${tier.seats} seats` : "Plan not selected",
+      sub: tier ? `${tier.label} Plan - ${tier.seats} seats` : "Plan not selected",
     };
   }
 
@@ -444,11 +444,11 @@ export default function LoginPage() {
                         <p className="font-semibold text-sm">{selectedHospital.name}</p>
                         <p className="text-xs text-muted-foreground">{selectedHospital.state} - {selectedHospital.beds} licensed beds</p>
                         <div className="mt-2 pt-2 border-t border-emerald-200 dark:border-emerald-700">
-                          <p className="text-xs text-muted-foreground mb-0.5">Recommended plan:</p>
+                          <p className="text-xs text-muted-foreground mb-0.5">Recommended size:</p>
                           <p className="font-semibold text-primary">
-                            {selectedHospital.tierLabel} - ${selectedHospital.tierPrice}/yr
+                            {selectedHospital.tierLabel}
                           </p>
-                          <p className="text-xs text-muted-foreground">{selectedHospital.tierSeats} seats included</p>
+                          <p className="text-xs text-muted-foreground">{selectedHospital.tierSeats} seats included. No charge to start; you are only billed if you later choose to subscribe.</p>
                         </div>
                         <div className="flex gap-2 pt-1">
                           <Button onClick={handleConfirmHospital} className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground text-sm">
@@ -491,8 +491,8 @@ export default function LoginPage() {
                 {regStep === "self-select" && (
                   <div className="space-y-3">
                     <div className="text-center mb-1">
-                      <p className="text-sm font-medium">Step 2: Choose your plan</p>
-                      <p className="text-xs text-muted-foreground">Cancel anytime. CLIA number required at checkout.</p>
+                      <p className="text-sm font-medium">Step 2: Pick the size that fits your lab</p>
+                      <p className="text-xs text-muted-foreground">This just sizes your workspace. No charge and no card required; you are only billed if you later choose to subscribe.</p>
                     </div>
                     <div className="space-y-2">
                       {TIER_OPTIONS.map(t => (
@@ -502,12 +502,9 @@ export default function LoginPage() {
                           onClick={() => handleTierSelect(t.id)}
                           className={`w-full text-left border rounded-lg px-4 py-3 transition-colors hover:border-primary hover:bg-primary/5 ${selectedTier === t.id ? "border-primary bg-primary/5" : ""}`}
                         >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-sm font-semibold">{t.label}</p>
-                              <p className="text-xs text-muted-foreground">{t.desc} • {t.seats} seats</p>
-                            </div>
-                            <p className="text-sm font-semibold text-primary shrink-0 ml-3">${t.price}/yr</p>
+                          <div>
+                            <p className="text-sm font-semibold">{t.label}</p>
+                            <p className="text-xs text-muted-foreground">{t.desc} • {t.seats} seats included</p>
                           </div>
                         </button>
                       ))}
