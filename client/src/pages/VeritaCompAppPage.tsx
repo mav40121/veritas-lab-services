@@ -1521,10 +1521,19 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
     const deleteUrl = activeLabId
       ? `${API_BASE}/api/labs/${activeLabId}/competency/assessments/${id}`
       : `${API_BASE}/api/competency/assessments/${id}`;
-    await fetch(deleteUrl, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
+    // Never invalidate (and let the row look deleted) on a rejected DELETE: a
+    // locked assessment 409s and a foreign id 404s. Surface it. (Review 2026-07-09.)
+    try {
+      const res = await fetch(deleteUrl, { method: "DELETE", headers: authHeaders() });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "Delete failed", description: err.error || `HTTP ${res.status}`, variant: "destructive" });
+        return;
+      }
+    } catch {
+      toast({ title: "Delete failed", description: "Network error. Nothing was deleted.", variant: "destructive" });
+      return;
+    }
     qc.invalidateQueries({ queryKey: [programDetailKey] });
   };
 
@@ -1998,6 +2007,7 @@ function AssessmentDocumentsDialog({ assessmentId, onClose }: { assessmentId: nu
 
 function EmployeesTab({ employees, programId }: { employees: Employee[]; programId: number }) {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const activeLabId = useActiveLabId();
   // Wave (cleanup): lab-scoped queryKey so mutations actually invalidate the
   // useQuery in ProgramDetailView (~line 1126). The unscoped form was a no-op
@@ -2042,10 +2052,17 @@ function EmployeesTab({ employees, programId }: { employees: Employee[]; program
     const deleteUrl = activeLabId
       ? `${API_BASE}/api/labs/${activeLabId}/competency/employees/${id}`
       : `${API_BASE}/api/competency/employees/${id}`;
-    await fetch(deleteUrl, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
+    try {
+      const res = await fetch(deleteUrl, { method: "DELETE", headers: authHeaders() });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "Could not deactivate", description: err.error || `HTTP ${res.status}`, variant: "destructive" });
+        return;
+      }
+    } catch {
+      toast({ title: "Could not deactivate", description: "Network error. No change was made.", variant: "destructive" });
+      return;
+    }
     qc.invalidateQueries({ queryKey: [programDetailKey] });
   };
 
@@ -2147,6 +2164,7 @@ function EmployeesTab({ employees, programId }: { employees: Employee[]; program
 
 function SettingsTab({ program }: { program: Program }) {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const activeLabId = useActiveLabId();
   // Wave (cleanup): lab-scoped detail queryKey for invalidation after PUT.
   const programDetailKey = activeLabId
@@ -2160,13 +2178,23 @@ function SettingsTab({ program }: { program: Program }) {
     const putUrl = activeLabId
       ? `${API_BASE}/api/labs/${activeLabId}/competency/programs/${program.id}`
       : `${API_BASE}/api/competency/programs/${program.id}`;
-    await fetch(putUrl, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ name }),
-    });
-    qc.invalidateQueries({ queryKey: [programDetailKey] });
-    setSaving(false);
+    try {
+      const res = await fetch(putUrl, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "Save failed", description: err.error || `HTTP ${res.status}`, variant: "destructive" });
+        return;
+      }
+      qc.invalidateQueries({ queryKey: [programDetailKey] });
+    } catch {
+      toast({ title: "Save failed", description: "Network error. Nothing was saved.", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
