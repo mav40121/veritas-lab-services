@@ -18,22 +18,21 @@ import { injectAuth } from "./_auth";
 const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
 const TOKEN = process.env.PW_TOKEN || "";
 const LAB_ID = process.env.PW_LAB_ID || "2";
-const DRIVE = process.env.PW_MD_DRIVE === "1";
-
 test.describe("VeritaCheck Manual Differential (Rümke) form", () => {
   test("pick Manual Differential -> live CI + save", async ({ page }) => {
-    if (!DRIVE || !TOKEN) {
-      test.skip(true, "Form not wired yet (Phase 3a) or no PW_TOKEN — enable with PW_MD_DRIVE=1 after Phase 3b.");
+    if (!TOKEN) {
+      test.skip(true, "No PW_TOKEN provided (compile-only gate run).");
       return;
     }
     await injectAuth(page, BASE, TOKEN);
     await page.goto(`${BASE}/labs/${LAB_ID}/study/new`, { waitUntil: "domcontentloaded" });
 
-    // Choose the Manual Differential study type from the picker.
+    // Choose the Manual Differential study type from the picker (Setup tab).
     await page.getByTestId("select-study-type").click();
     await page.getByRole("option", { name: /Manual Differential/i }).click();
 
-    // The self-contained form renders.
+    // The cell-class grid lives on the Data Entry tab (same as every study type).
+    await page.getByRole("tab", { name: /Data Entry/i }).click();
     await expect(page.getByTestId("manual-diff-form")).toBeVisible();
 
     // Enter an eosinophil count that makes the reference exceed its Rümke limit.
