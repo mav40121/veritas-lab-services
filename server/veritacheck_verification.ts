@@ -3,6 +3,7 @@ import { db } from "./db";
 import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
 import { resolveStudyAccess, consumeStudyCredit } from "./studyCredits";
 import { getCanonicalMDLs, getCanonicalMDLProvenance, computeSystematicErrorAtMDL } from "./canonicalMDLs";
+import { teaAllowanceAt } from "./teaAllowance";
 import {
   shouldRender as shouldRenderAmrCoverage,
   computeAmrCoverage,
@@ -320,7 +321,23 @@ function renderStudyAppendix(slot: any, teal: string): string {
     if (slot.studyType === "cal_ver") {
       // dp = [{ level, assignedValue?, expectedValue?, instrumentValues: {name: value} }]
       if (!Array.isArray(dp)) return "";
-      const teaPct = (slot.studyTea ?? 0) * 100;
+      // 2026-07-09: dual-criterion TEa envelope, evaluated PER INSTRUMENT reading,
+      // matching the authoritative computeStudyStatus verdict (routes.ts cal_ver,
+      // ~lines 185-205). The prior code computed a percent-only band on the MEAN
+      // recovery, which (a) ignored clia_absolute_floor, (b) mis-scaled an
+      // absolute TEa as a percent (tea 3 -> "300%", everything passed), and
+      // (c) hid a single out-of-range instrument behind the mean. See
+      // server/teaAllowance.ts. Percent unless tea_is_percentage is explicitly 0.
+      const teaIsPct = slot.studyTeaIsPct !== 0;
+      const tea = Number(slot.studyTea ?? 0);
+      const absFloor = slot.studyAbsFloor ?? null;
+      const teaUnit = slot.studyTeaUnit || "";
+      const CAL_FP_EPS = 1e-9;
+      const teaLabel = tea <= 0
+        ? "TEa not on file"
+        : teaIsPct
+          ? `TEa +/-${(tea * 100).toFixed(1)}%${(absFloor ?? 0) > 0 ? `, floor +/-${absFloor}${teaUnit ? " " + teaUnit : ""}` : ""}`
+          : `TEa +/-${tea}${teaUnit ? " " + teaUnit : ""}`;
       // 2026-06-09 (overnight session 4/11): honor per-level exclusion
       // from PR #693/#694 dialog. Same shape as precision.
       const includedDp = (dp as any[]).filter((p: any) => p && p.excluded !== true);
@@ -340,8 +357,10 @@ function renderStudyAppendix(slot: any, teal: string): string {
         if (vals.length === 0) return `<tr><td>${p.level}</td><td>${assigned}</td><td colspan="3" style="color:#6b7280">No values</td></tr>`;
         const mean = (vals as number[]).reduce((a, b) => a + b, 0) / vals.length;
         const pctRecovery = assigned !== 0 ? (mean / assigned) * 100 : 100;
-        const pctDiff = Math.abs(pctRecovery - 100);
-        const pass = teaPct > 0 ? pctDiff <= teaPct : true;
+        // Per-instrument dual-criterion envelope at the assigned value; a level
+        // fails if ANY single reading exceeds it (matches computeStudyStatus).
+        const allowance = teaAllowanceAt(assigned, tea, teaIsPct, absFloor);
+        const pass = tea > 0 ? (vals as number[]).every(v => Math.abs(v - assigned) <= allowance + CAL_FP_EPS) : true;
         return `<tr>
           <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0">${p.level}</td>
           <td style="padding:4px 8px;border-bottom:1px solid #f0f0f0;text-align:right">${assigned}</td>
@@ -357,10 +376,11 @@ function renderStudyAppendix(slot: any, teal: string): string {
             <th style="padding:4px 8px;text-align:right">Assigned</th>
             <th style="padding:4px 8px;text-align:right">Mean Measured</th>
             <th style="padding:4px 8px;text-align:right">% Recovery</th>
-            <th style="padding:4px 8px;text-align:center">Verdict (TEa +/-${teaPct.toFixed(1)}%)</th>
+            <th style="padding:4px 8px;text-align:center">Verdict (${teaLabel})</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
+        <div style="font-size:10px;color:#6b7280;margin-top:4px">Verdict evaluates each instrument reading against the CLIA total allowable error envelope at the assigned value; a level fails if any single reading exceeds allowance.</div>
         ${excludedDpCount > 0 ? `<div style="font-size:10px;color:#6b7280;margin-top:4px"><strong>${excludedDpCount} level(s) excluded by director.</strong> See data_points audit trail.</div>` : ""}`;
       // AMR coverage already filters excluded via extractValuesForCoverage; passing dp is safe.
       const amrBlock = renderAmrCoverageBlock(slot, slot.studyType, dp, undefined, "full");
@@ -474,12 +494,20 @@ function renderStudyAppendix(slot: any, teal: string): string {
       const mdlsToUse = userMDLs.length > 0
         ? userMDLs.map((m) => ({ mdl: m, label: "Director-specified" }))
         : canonicalMDLs;
-      const teaFraction = Number(slot.studyTea ?? 0);
+      // 2026-07-09: dual-criterion TEa envelope at each medical decision level,
+      // matching teaAllowanceAt / computeStudyStatus. Percent of the MDL vs the
+      // absolute floor when tea_is_percentage; the flat absolute TEa when
+      // tea_is_percentage == 0. Prior code computed studyTea * MDL for every
+      // case, which mis-scaled an absolute TEa (e.g. 3 mmol/L -> 3*MDL, far too
+      // lax) and ignored clia_absolute_floor. Percent unless explicitly 0.
+      const mcTeaIsPct = slot.studyTeaIsPct !== 0;
+      const mcTea = Number(slot.studyTea ?? 0);
+      const mcAbsFloor = slot.studyAbsFloor ?? null;
       let seBlock = "";
       if (mdlsToUse.length > 0) {
         const seRows = mdlsToUse.map((m) => {
           const se = computeSystematicErrorAtMDL(slope, intercept, m.mdl);
-          const teaAbsAtMDL = teaFraction > 0 ? teaFraction * m.mdl : 0;
+          const teaAbsAtMDL = mcTea > 0 ? teaAllowanceAt(m.mdl, mcTea, mcTeaIsPct, mcAbsFloor) : 0;
           const verdict = teaAbsAtMDL > 0
             ? (se.se_abs <= teaAbsAtMDL ? "meets" : "does not meet")
             : "no TEa on file";
