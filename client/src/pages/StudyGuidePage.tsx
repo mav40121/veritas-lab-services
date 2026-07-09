@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, ExternalLink, ChevronRight, FlaskConical, BarChart2, Activity, Repeat, Beaker, Droplets, Sigma, Shuffle, Lock, Filter, Target, Package, CheckSquare } from "lucide-react";
+import { BookOpen, ExternalLink, ChevronRight, FlaskConical, BarChart2, Activity, Repeat, Beaker, Droplets, Sigma, Shuffle, Lock, Filter, Target, Package, CheckSquare, Microscope } from "lucide-react";
 
 // ─── External reference links ─────────────────────────────────────────────────
 const REFS = {
@@ -88,6 +88,16 @@ const REFS = {
     label: "CLSI EP28-A3c - Defining, Establishing, and Verifying Reference Intervals in the Clinical Laboratory",
     url: "https://clsi.org/standards/products/method-evaluation/documents/ep28/",
     source: "CLSI",
+  },
+  clsiH20: {
+    label: "CLSI H20 - Reference Leukocyte (WBC) Differential Count and Evaluation of Instrumental Methods",
+    url: "https://clsi.org/standards/products/hematology/documents/h20/",
+    source: "CLSI",
+  },
+  cfr4931281: {
+    label: "42 CFR §493.1281 - Comparison of test results",
+    url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1281",
+    source: "eCFR",
   },
   clsiOverview: {
     label: "CLSI EP Documents - Verifying Performance Claims (Overview)",
@@ -240,7 +250,7 @@ export default function StudyGuidePage() {
           <h1 className="font-serif text-4xl font-bold mb-3">Which study does your lab need?</h1>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
             CLIA requires non-waived laboratories to verify and document instrument performance on a defined schedule.
-            This guide explains the ten study types supported by VeritaCheck™, what they are, when CLIA requires them, and how VeritaCheck™ automates each one.
+            This guide explains the eleven study types supported by VeritaCheck™, what they are, when CLIA requires them, and how VeritaCheck™ automates each one.
           </p>
           <p className="text-xs text-muted-foreground mt-4 max-w-2xl">
             All regulatory citations are drawn directly from{" "}
@@ -397,11 +407,17 @@ export default function StudyGuidePage() {
                   <td className="py-3 px-4">At new instrument introduction; after major maintenance affecting sample path</td>
                   <td className="py-3 px-4">42 CFR §493.1253(b)(1); CLSI EP10-A3</td>
                 </tr>
-                <tr className="hover:bg-muted/20 transition-colors">
+                <tr className="border-b border-border hover:bg-muted/20 transition-colors">
                   <td className="py-3 px-4 font-medium text-primary">Multi-Analyte Coagulation Verification</td>
                   <td className="py-3 px-4 text-muted-foreground">Are all analytes on my coagulation analyzer performing within specification?</td>
                   <td className="py-3 px-4">At verification; each analyte assessed individually</td>
                   <td className="py-3 px-4">42 CFR §493.1255</td>
+                </tr>
+                <tr className="hover:bg-muted/20 transition-colors">
+                  <td className="py-3 px-4 font-medium text-primary">Manual Differential (Rümke, CLSI H20)</td>
+                  <td className="py-3 px-4 text-muted-foreground">Does my manual WBC differential agree with the analyzer differential, within the statistical limits of the number of cells counted?</td>
+                  <td className="py-3 px-4">At least every 6 months where manual and automated differentials are both used; at competency assessment</td>
+                  <td className="py-3 px-4"><a href={REFS.cfr4931281.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.1281</a>; CLSI H20</td>
                 </tr>
               </tbody>
             </table>
@@ -669,6 +685,31 @@ export default function StudyGuidePage() {
             ]}
             ctaStudyType="coag_multi"
           />
+
+          <StudyCard
+            icon={<Microscope size={22} className="text-white" />}
+            color="bg-[#9d174d]"
+            badge="Hematology / Manual Method"
+            title="Manual Differential (Rümke, CLSI H20)"
+            subtitle="Confirm a manual WBC differential agrees with the analyzer, within the statistics of the count"
+            what="A manual differential comparison confirms that a technologist's manual WBC differential agrees with the automated (analyzer) differential on the same specimen. Because a differential is a proportion counted from a finite number of cells, the acceptable variation is not a fixed percentage: it is the binomial sampling error at the number of cells counted, described by Rümke's confidence limits and standardized in CLSI H20. A low-frequency class such as basophils has a wide acceptable interval; a high-frequency class such as neutrophils has a narrow one. This is why a flat tolerance (for example plus or minus 5 percent on every class) is statistically wrong for a manual differential."
+            howIt="You enter the number of cells counted (typically 100 or 200) and, for each cell class, the manual count and the reference (automated) percentage. VeritaCheck™ computes the exact binomial (Rümke) 95 percent confidence interval of each manual count and judges the class acceptable when the reference percentage falls inside that interval. The interval widens for low-frequency classes and narrows as more cells are counted, so a single percentage tolerance is never applied. Each class shows a within or exceeds badge live as you enter data, and the overall study passes only when every class falls within its Rümke limits. The report cites 42 CFR §493.1281 and CLSI H20, tabulates each class with its manual count, manual percent, reference percent, and Rümke 95 percent interval, and carries the director signature on page 1."
+            when={[
+              "When comparing manual and automated differentials on the same specimen, at least every 6 months where both methods are used (42 CFR §493.1281)",
+              "When a technologist's manual differential competency is assessed",
+              "When the analyzer flags a specimen for manual review and the manual result must be reconciled with the instrument",
+              "When adding a new hematology analyzer or a new manual reviewer to the workflow",
+            ]}
+            frequency="At least every 6 months where manual and automated differentials are both used; at competency assessment"
+            regulation="42 CFR §493.1281 (comparison of test results); CLSI H20 is the methodology standard"
+            passFail="Each cell class is acceptable when the reference (automated) percentage falls within the exact binomial (Rümke) 95 percent confidence interval of the manual count at the number of cells counted. The overall study passes only when every class falls within its Rümke limits. Because the limits come from binomial sampling error, low-frequency classes (basophils, eosinophils) receive a wider allowance and high-frequency classes a tighter one. Your laboratory director or designee makes the final acceptability determination."
+            refs={[
+              REFS.clsiH20,
+              REFS.cfr4931281,
+              REFS.cliaVerificationBrochure,
+            ]}
+            ctaStudyType="manual_diff"
+          />
         </div>
       </section>
 
@@ -695,7 +736,7 @@ export default function StudyGuidePage() {
       <section className="section-padding border-t border-border">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="font-serif text-2xl font-bold mb-3">Ready to run a study?</h2>
-          <p className="text-muted-foreground mb-6">VeritaCheck™ automates all ten study types, no desktop software, no spreadsheets. Generate a CLIA-compliant PDF report in minutes.</p>
+          <p className="text-muted-foreground mb-6">VeritaCheck™ automates all eleven study types, no desktop software, no spreadsheets. Generate a CLIA-compliant PDF report in minutes.</p>
           <Link href="/veritacheck" className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 rounded-lg font-semibold text-sm transition-colors">
             <FlaskConical size={16} />
             Open VeritaCheck{"\u2122"}
