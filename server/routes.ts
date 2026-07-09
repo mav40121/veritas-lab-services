@@ -11861,10 +11861,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // DELETE instrument (cascade tests + AMR + rebuild)
   app.delete("/api/labs/:labId/veritamap/maps/:id/instruments/:instId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
     const delInstr = (db as any).$client.prepare("SELECT * FROM veritamap_instruments WHERE id = ? AND map_id = ?").get(req.params.instId, req.params.id) as any;
+    if (!delInstr) return res.status(404).json({ error: "Instrument not found on this map" });
     const delInstTests = (db as any).$client.prepare("SELECT * FROM veritamap_instrument_tests WHERE instrument_id = ?").all(req.params.instId);
     logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritamap", action: "delete", entityType: "instrument", entityId: req.params.instId, entityLabel: delInstr?.instrument_name, before: { instrument: delInstr, tests: delInstTests }, ipAddress: req.ip });
     (db as any).$client.prepare("DELETE FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ?").run(req.params.id, req.params.instId);
-    (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ?").run(req.params.instId);
+    (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ?").run(req.params.instId, req.params.id);
     // Deleting an instrument leaves cross-module VeritaStaff rows whose
     // instrument_id FK is NOT NULL (staff_employee_instruments assignment links
     // + staff_duty_change_events reassessment triggers). Both are moot once the
@@ -11909,6 +11910,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const { tests } = req.body;
       if (!Array.isArray(tests)) return res.status(400).json({ error: "tests array required" });
+      // Cross-tenant guard: the instrument must belong to THIS map. requireMapInActiveLab proved
+      // the map is in the active lab; without this an in-lab writer could pass another lab's
+      // instrument id and wipe/overwrite its test menu (unscoped DELETE by instrument_id below).
+      const scopedInst = (db as any).$client.prepare("SELECT id FROM veritamap_instruments WHERE id = ? AND map_id = ?").get(req.params.instId, req.params.id);
+      if (!scopedInst) return res.status(404).json({ error: "Instrument not found on this map" });
       const ownerId = labOwnerUserId(req);
       if (!hasMapAccess(req.user, req.scope?.lab)) {
         const seatUserIds = ((db as any).$client.prepare("SELECT seat_user_id FROM user_seats WHERE owner_user_id = ? AND status = 'active' AND seat_user_id IS NOT NULL").all(ownerId) as any[]).map((r: any) => Number(r.seat_user_id));
@@ -11923,7 +11929,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const beforeTests = (db as any).$client.prepare("SELECT analyte, specialty, complexity, active FROM veritamap_instrument_tests WHERE instrument_id = ?").all(req.params.instId);
       const instrRow = (db as any).$client.prepare("SELECT instrument_name FROM veritamap_instruments WHERE id = ?").get(req.params.instId) as any;
       logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritamap", action: beforeTests.length === 0 ? "create" : "update", entityType: "instrument_tests", entityId: req.params.instId, entityLabel: instrRow?.instrument_name ?? `instrument_${req.params.instId}`, before: beforeTests, after: tests, ipAddress: req.ip });
-      (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ?").run(req.params.instId);
+      (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ?").run(req.params.instId, req.params.id);
       const stmt = (db as any).$client.prepare("INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)");
       const bulk = (db as any).$client.transaction((tests: any[]) => {
         for (const t of tests) {
@@ -12534,12 +12540,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const map = userCanAccessMap(req.params.id, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const delInstr = (db as any).$client.prepare("SELECT * FROM veritamap_instruments WHERE id = ? AND map_id = ?").get(req.params.instId, req.params.id) as any;
+    if (!delInstr) return res.status(404).json({ error: "Instrument not found on this map" });
     const delInstTests = (db as any).$client.prepare("SELECT * FROM veritamap_instrument_tests WHERE instrument_id = ?").all(req.params.instId);
     logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritamap", action: "delete", entityType: "instrument", entityId: req.params.instId, entityLabel: delInstr?.instrument_name, before: { instrument: delInstr, tests: delInstTests }, ipAddress: req.ip });
     // Remove any AMR values keyed to this instrument so they cannot resurface
     // on a re-added instrument with the same id space.
     (db as any).$client.prepare("DELETE FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ?").run(req.params.id, req.params.instId);
-    (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ?").run(req.params.instId);
+    (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ?").run(req.params.instId, req.params.id);
     // Clear cross-module VeritaStaff FK rows (NOT NULL instrument_id) so the
     // instrument delete can't 500; evidence (competency_assessments) is
     // untouched. See the lab-scoped handler above for the full rationale.
@@ -12632,6 +12639,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!map) return res.status(404).json({ error: "Map not found" });
       const { tests } = req.body; // [{ analyte, specialty, complexity, active }]
       if (!Array.isArray(tests)) return res.status(400).json({ error: "tests array required" });
+      // Cross-tenant guard: the instrument must belong to THIS map (userCanAccessMap only
+      // validated the map). Without this an in-lab writer could pass another lab's instrument
+      // id and wipe/overwrite its test menu (unscoped DELETE by instrument_id below).
+      const scopedInst = (db as any).$client.prepare("SELECT id FROM veritamap_instruments WHERE id = ? AND map_id = ?").get(req.params.instId, req.params.id);
+      if (!scopedInst) return res.status(404).json({ error: "Instrument not found on this map" });
       console.log(`[VeritaMap] Saving ${tests.length} tests for instrument ${req.params.instId} on map ${req.params.id}`);
       // Freemium limit: 10 active analytes LAB-WIDE (across all maps owned by
       // the owner + every active seat user) for unpaid, non-grandfathered
@@ -12680,7 +12692,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ipAddress: req.ip,
       });
       // Replace all tests for this instrument
-      (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ?").run(req.params.instId);
+      (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ?").run(req.params.instId, req.params.id);
       const stmt = (db as any).$client.prepare(
         "INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)"
       );
