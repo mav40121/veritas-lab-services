@@ -17,7 +17,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { AlertTriangle, CheckCircle2, Lock, FlaskConical } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Lock, FlaskConical, LineChart } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 
@@ -471,6 +471,27 @@ export default function VeritaQCAppPage() {
           "File the PDF in your QC binder or attach to your LIS record. Records retained per 42 CFR 493.1105.",
         ]}
       />
+
+      {/* CUMSUM is a supplementary QC method (relocated here from the VeritaCheck top nav
+          on 2026-07-08). The tracker/route/PDF are unchanged; this is just its correct home
+          alongside the daily Westgard review. */}
+      <Card className="mb-6 border-dashed">
+        <CardContent className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 mb-0.5">
+              <LineChart className="h-4 w-4 text-primary" />
+              <span className="font-semibold text-sm">CUMSUM monitoring</span>
+              <Badge variant="outline" className="text-[10px]">Advanced</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground max-w-2xl">
+              Cumulative-sum tracking for sustained small shifts, e.g. PTT heparin sensitivity across reagent lot changes. A supplementary method to the daily Westgard review above.
+            </p>
+          </div>
+          <Button asChild variant="outline" size="sm" className="shrink-0" data-testid="veritaqc-cumsum-link">
+            <Link href={`/labs/${activeLabId}/veritacheck/cumsum`}>Open CUMSUM</Link>
+          </Button>
+        </CardContent>
+      </Card>
 
       {loadingLots ? (
         <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">Loading control lots...</CardContent></Card>
