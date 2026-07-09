@@ -27,7 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Lock, Plus, Edit2, Trash2, AlertTriangle, Package, Clock, AlertCircle, RefreshCw,
-  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users, Building2, DollarSign, PackageCheck, PackageX, BarChart3, ScrollText, Layers,
+  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users, Building2, DollarSign, PackageCheck, PackageX, BarChart3, ScrollText, Layers, Barcode,
 } from "lucide-react";
 import BarcodeScannerModal from "@/components/BarcodeScannerModal";
 import InventoryCountWorkflow, { type CountItem } from "@/components/InventoryCountWorkflow";
@@ -1238,6 +1238,37 @@ export default function VeritaStockInventoryPage() {
   // the item has not been bound yet, so a freshly added item still prints
   // a scannable label. This is the print-barcodes action, not an
   // only-the-unbound action.
+  const [printingLabelId, setPrintingLabelId] = useState<number | null>(null);
+  // Print a SINGLE item's Code 128 barcode label, using the same Avery 5160
+  // endpoint as the full sheet but scoped to one item id (the backend already
+  // accepts { itemIds }). Lets a lab label a freshly added item without
+  // printing the whole sheet.
+  const printItemLabel = async (item: InventoryItem) => {
+    setPrintingLabelId(item.id);
+    try {
+      const url = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/inventory/labels/pdf`
+        : `${API_BASE}/api/inventory/labels/pdf`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ itemIds: [item.id] }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "Could not generate label", description: err.error || `HTTP ${res.status}`, variant: "destructive" });
+        return;
+      }
+      const { token } = await res.json();
+      window.open(`${API_BASE}/api/pdf/${token}`, "_blank");
+      toast({ title: `Barcode label for ${item.item_name}`, description: "Print on Avery 5160 label stock (30 per sheet)." });
+    } catch {
+      toast({ title: "Could not generate label", description: "Network error", variant: "destructive" });
+    } finally {
+      setPrintingLabelId(null);
+    }
+  };
+
   const generateLabelsPdf = async () => {
     setGeneratingOrderDoc("labels");
     try {
@@ -2402,6 +2433,9 @@ export default function VeritaStockInventoryPage() {
                           <PackageX size={14} />
                         </Button>
                       )}
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" title="Print this item's barcode label (Code 128, Avery 5160)" onClick={() => printItemLabel(item)} disabled={printingLabelId === item.id} data-testid={`button-print-label-${item.id}`}>
+                        <Barcode size={13} />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" title="View lots: lot number and expiration of each batch on hand" onClick={() => openLots(item)} data-testid={`button-lots-${item.id}`}>
                         <Layers size={13} />
                       </Button>
