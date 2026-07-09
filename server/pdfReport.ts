@@ -689,8 +689,14 @@ function headerHTML(study: Study, cliaNumber?: string): string {
     multi_analyte_coag: "Multi-Analyte Lot Comparison (Coag)",
     sensitivity: "Sensitivity Verification (EP17)",
     manual_diff: "Manual Differential (Rümke 95% CI, CLSI H20)",
+    linearity: "Calibration Verification / Linearity (CLSI EP06)",
+    reportable_range: "Reportable Range Verification (CLSI EP06)",
+    accuracy_bias: "Accuracy / Bias (CLSI EP15-A3)",
+    carryover: "Carryover (CLSI EP10-A3)",
   };
-  const typeLabel = typeLabelMap[study.studyType] || "Correlation / Method Comparison";
+  // Neutral fallback so a future unmapped study type is never silently mislabeled
+  // as "Correlation / Method Comparison" (the recurring header bug, e.g. manual_diff).
+  const typeLabel = typeLabelMap[study.studyType] || "VeritaCheck Verification Study";
   const cliaLine = cliaNumber ? `<div style="font-size:8pt;color:#555;margin-top:2px;">CLIA: ${cliaNumber}</div>` : `<div style="font-size:8pt;color:#999;margin-top:2px;">CLIA: Not on file - enter your CLIA number in account settings</div>`;
   const labName = (study as any)._labName;
   const labLine = labName ? `<div style="font-size:8.5pt;font-weight:600;color:#28251D;margin-top:1px;">${labName}</div>` : "";
@@ -1499,7 +1505,7 @@ function buildQualitativeHTML(study: Study, results: any): string {
 
   const narrative = overallPass
     ? `The qualitative method comparison for ${study.testName} demonstrated ${sf(pctAgreement, 1)}% overall agreement between ${primaryName} and ${compName} across ${totalSamples} samples. Cohen's kappa of ${sf(kappa, 3)} indicates "${kappaInterp}" agreement beyond chance. ${categories.length === 2 ? `Sensitivity was ${sf(sensitivity * 100, 1)}% and specificity was ${sf(specificity * 100, 1)}%. ` : ''}These results meet the acceptance threshold of ≥${passThreshold}% agreement. <b>Final approval and clinical determination must be made by the laboratory director or designee.</b>`
-    : `The qualitative method comparison for ${study.testName} showed ${sf(pctAgreement, 1)}% overall agreement between ${primaryName} and ${compName} across ${totalSamples} samples. Cohen's kappa of ${sf(kappa, 3)} indicates "${kappaInterp}" agreement beyond chance. ${categories.length === 2 ? `Sensitivity was ${sf(sensitivity * 100, 1)}% and specificity was ${sf(specificity * 100, 1)}%. ` : ''}These results do not meet the acceptance threshold of ≥${passThreshold}% agreement. <b>Investigation and corrective action are recommended. Final approval and clinical determination must be made by the laboratory director or designee.</b>`;
+    : `The qualitative method comparison for ${study.testName} showed ${sf(pctAgreement, 1)}% overall agreement between ${primaryName} and ${compName} across ${totalSamples} samples. Cohen's kappa of ${sf(kappa, 3)} indicates "${kappaInterp}" agreement beyond chance. ${categories.length === 2 ? `Sensitivity was ${sf(sensitivity * 100, 1)}% and specificity was ${sf(specificity * 100, 1)}%. ` : ''}These results do not meet the acceptance threshold of ≥${passThreshold}% agreement. <b>Final approval and clinical determination must be made by the laboratory director or designee.</b>`;
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Qualitative Method Comparison - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
@@ -1596,7 +1602,7 @@ function buildSemiQuantHTML(study: Study, results: any): string {
 
   const narrative = overallPass
     ? `The semi-quantitative method comparison for ${study.testName} demonstrated ${sf(pctExact, 1)}% exact agreement and ${sf(pctWithinOne, 1)}% agreement within \u00B11 grade between ${primaryName} and ${compName} across ${totalSamples} samples. The weighted kappa of ${sf(wKappa, 3)} indicates "${wKappaInterp}" ordinal agreement. The maximum discrepancy observed was ${maxDiscrep} grade${maxDiscrep !== 1 ? 's' : ''}. These results meet the acceptance threshold of \u2265${passThreshold}% within \u00B11 grade. <b>Final approval and clinical determination must be made by the laboratory director or designee.</b>`
-    : `The semi-quantitative method comparison for ${study.testName} showed ${sf(pctExact, 1)}% exact agreement and ${sf(pctWithinOne, 1)}% agreement within \u00B11 grade between ${primaryName} and ${compName} across ${totalSamples} samples. The weighted kappa of ${sf(wKappa, 3)} indicates "${wKappaInterp}" ordinal agreement. The maximum discrepancy was ${maxDiscrep} grade${maxDiscrep !== 1 ? 's' : ''}. These results do not meet the acceptance threshold of \u2265${passThreshold}% within \u00B11 grade. <b>Investigation and corrective action are recommended. Final approval and clinical determination must be made by the laboratory director or designee.</b>`;
+    : `The semi-quantitative method comparison for ${study.testName} showed ${sf(pctExact, 1)}% exact agreement and ${sf(pctWithinOne, 1)}% agreement within \u00B11 grade between ${primaryName} and ${compName} across ${totalSamples} samples. The weighted kappa of ${sf(wKappa, 3)} indicates "${wKappaInterp}" ordinal agreement. The maximum discrepancy was ${maxDiscrep} grade${maxDiscrep !== 1 ? 's' : ''}. These results do not meet the acceptance threshold of \u2265${passThreshold}% within \u00B11 grade. <b>Final approval and clinical determination must be made by the laboratory director or designee.</b>`;
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Semi-Quantitative Method Comparison - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
