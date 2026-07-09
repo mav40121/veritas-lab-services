@@ -1551,7 +1551,12 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
     const body = backDated
       ? { signed_on_paper_date: signedOnPaperDate, documentation: documentation.trim() }
       : {};
-    const res = await fetch(`${API_BASE}/api/competency/assessments/${id}/sign`, {
+    // Lab-scoped sign so a multi-lab owner signs within the ACTIVE lab, not by
+    // a stale id that the legacy user_id-scoped route would accept in any lab.
+    const signUrl = activeLabId
+      ? `${API_BASE}/api/labs/${activeLabId}/competency/assessments/${id}/sign`
+      : `${API_BASE}/api/competency/assessments/${id}/sign`;
+    const res = await fetch(signUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify(body),

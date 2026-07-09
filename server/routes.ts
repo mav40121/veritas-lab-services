@@ -20075,6 +20075,49 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // Lab-scoped sign twin (2026-07-09 security review). The legacy
+  // /api/competency/assessments/:id/sign gates on the program's user_id, so a
+  // multi-lab owner could sign an assessment in a lab other than the active one
+  // by a stale id. This pins the program to req.scope.labId. Mirrors the
+  // delete/unlock twins above; the client's signComplete now calls this path.
+  app.post("/api/labs/:labId/competency/assessments/:id/sign", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const sqlite = (db as any).$client;
+    const assessment = sqlite.prepare(
+      `SELECT a.id, a.locked, p.lab_id FROM competency_assessments a
+       JOIN competency_programs p ON a.program_id = p.id
+       WHERE a.id = ? AND p.lab_id = ?`
+    ).get(req.params.id, req.scope.labId) as any;
+    if (!assessment) return res.status(404).json({ error: "Assessment not found" });
+    if (assessment.locked === 1) return res.status(409).json({ error: "Assessment is already signed and locked" });
+    const now = new Date().toISOString();
+    const todayDate = now.slice(0, 10);
+    const signedOnPaperRaw = typeof req.body?.signed_on_paper_date === "string" ? req.body.signed_on_paper_date.trim() : "";
+    const isBackDated = !!signedOnPaperRaw && signedOnPaperRaw.slice(0, 10) !== todayDate;
+    const documentation = typeof req.body?.documentation === "string" ? req.body.documentation.trim() : "";
+    if (isBackDated && !documentation) {
+      return res.status(400).json({ error: "Written documentation is required when the signed date is not today." });
+    }
+    const signedOnPaper = isBackDated ? signedOnPaperRaw.slice(0, 10) : null;
+    const priorNote = isBackDated ? documentation : null;
+    sqlite.prepare(
+      "UPDATE competency_assessments SET completion_date = ?, final_signed_by_user_id = ?, locked = 1, signed_on_paper_date = ?, prior_approval_note = ? WHERE id = ?"
+    ).run(now, req.userId, signedOnPaper, priorNote, req.params.id);
+    logAudit({
+      userId: req.userId,
+      ownerUserId: req.ownerUserId ?? req.userId,
+      module: "veritacomp",
+      action: "update",
+      entityType: "assessment",
+      entityId: String(req.params.id),
+      entityLabel: signedOnPaper ? "Sign and Complete (prior approval)" : "Sign and Complete",
+      before: { locked: 0, completion_date: null, final_signed_by_user_id: null, signed_on_paper_date: null, prior_approval_note: null },
+      after: { locked: 1, completion_date: now, final_signed_by_user_id: req.userId, signed_on_paper_date: signedOnPaper, prior_approval_note: priorNote },
+      ipAddress: req.ip,
+    });
+    res.json({ ok: true, locked: true, completion_date: now, final_signed_by_user_id: req.userId, signed_on_paper_date: signedOnPaper, prior_approval_note: priorNote });
+  });
+
   // ── DOCUMENT LINKERS (PR C, customer-blockers wave 2026-06-05) ─────────
   //
   // URL-pointer architecture only (locked memory: VeritaScan 2026-06-02).
