@@ -26893,6 +26893,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       sqlite.prepare("UPDATE users SET lab_id = NULL WHERE lab_id = ?").run(id);
       sqlite.prepare("UPDATE users SET default_lab_id = NULL WHERE default_lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM user_seats WHERE lab_id = ?").run(id);
+      // Defensive: clear every lab-scoped child of labs before deleting the lab.
+      // These are all no-ops here (the 409 guard above rejects any non-empty lab),
+      // but they make this DELETE FROM labs safe by construction and keep the
+      // delete-cascade audit (scripts/audit-delete-cascades.mjs) strict for labs
+      // with no blanket allowlist exemption. Literal statements (not a loop) so
+      // the static audit can see each child clear. Ordered children-before-their-
+      // in-set parents. Every child references labs via lab_id.
+      sqlite.prepare("DELETE FROM qc_corrective_actions WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM qc_results WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM qc_period_reviews WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM qc_control_lots WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM qc_rule_settings WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM veritaqc_import_mappings WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM stock_vendor_contacts WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM stock_vendors WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM staff_duty_change_events WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM staff_position_descriptions WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM policy_quiz_questions WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM intacct_export_config WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM lab_audit_log WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM lab_members WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM labs WHERE id = ?").run(id);
     });
     purge();
