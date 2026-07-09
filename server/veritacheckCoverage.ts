@@ -18,7 +18,7 @@
 // Instrument matching uses the map's registered nickname first (the map knows
 // "Bonnie" is the Ortho VITROS 5600), then falls back to model-token overlap.
 
-import { aliasesForPresetLabel, presetKeyForLabel } from "@shared/presetAnalytes";
+import { aliasesForPresetLabel, presetKeyForLabel, analytesShareGroup } from "@shared/presetAnalytes";
 
 export type LinearityStatus = "covered" | "review" | "missing" | "exempt";
 
@@ -92,7 +92,11 @@ function analyteMatch(a: string, b: string): boolean {
   const na = normAnalyte(a), nb = normAnalyte(b);
   if (!na || !nb) return false;
   if (na === nb) return true;
-  return na.length >= 4 && nb.length >= 4 && (na.includes(nb) || nb.includes(na));
+  if (na.length >= 4 && nb.length >= 4 && (na.includes(nb) || nb.includes(na))) return true;
+  // Curated synonyms bridge spelled-out study names to abbreviated map codes the
+  // string matcher can't reach (e.g. "Eosinophils" -> "EO#"/"EO%", "Hemoglobin"
+  // -> "HGB"). Only curated groups match, so no fuzzy false positives. 2026-07-09.
+  return analytesShareGroup(a, b);
 }
 function studyMatchesInstrument(studyInstr: string, mapName: string, mapNick: string | null): boolean {
   const si = (studyInstr || "").toLowerCase();
