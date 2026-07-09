@@ -614,6 +614,7 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
   const [activeTab, setActiveTab] = useState<"elements" | "analytes" | "units" | "director">("elements");
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState("");
+  const [toastError, setToastError] = useState(false);
   // Wave A3.2-UI: count of verifications on the parent instrument so the
   // Survey Bundle button can tell the user how many filings will land in
   // the combined PDF before they click. Stays null until the preview
@@ -638,7 +639,7 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
     enabled: !!verification,
   });
 
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
+  const showToast = (msg: string, isError = false) => { setToast(msg); setToastError(isError); setTimeout(() => setToast(""), isError ? 5000 : 3000); };
 
   // Wave A3.2-UI (2026-06-07): probe the survey-bundle preview to populate
   // bundleCount. Only runs when both activeLabId and the verification's
@@ -672,44 +673,73 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
     return () => { cancelled = true; };
   }, [activeLabId, verificationMapInstrumentId]);
 
-  const patchStudy = async (studySlotId: number, payload: object) => {
+  // Returns true only when the write actually succeeded, so callers that clear a
+  // "dirty" flag do so only on success. (Review finding 2026-07-09: writes that
+  // failed still flashed a green "Saved" and cleared the unsaved indicator.)
+  const patchStudy = async (studySlotId: number, payload: object): Promise<boolean> => {
     setSaving(true);
-    await fetch(`${API_BASE}/api/veritacheck/verifications/${id}/studies/${studySlotId}`, {
-      method: "PATCH",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    await refetch();
-    setSaving(false);
-    showToast("Saved");
+    try {
+      const r = await fetch(`${API_BASE}/api/veritacheck/verifications/${id}/studies/${studySlotId}`, {
+        method: "PATCH",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!r.ok) { showToast(`Save failed (HTTP ${r.status}). Nothing was saved.`, true); return false; }
+      await refetch();
+      showToast("Saved");
+      return true;
+    } catch {
+      showToast("Save failed (network error). Nothing was saved.", true);
+      return false;
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const patchVerification = async (payload: object) => {
+  const patchVerification = async (payload: object): Promise<boolean> => {
     setSaving(true);
-    await fetch(`${API_BASE}/api/veritacheck/verifications/${id}`, {
-      method: "PATCH",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    await refetch();
-    setSaving(false);
-    showToast("Saved");
+    try {
+      const r = await fetch(`${API_BASE}/api/veritacheck/verifications/${id}`, {
+        method: "PATCH",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!r.ok) { showToast(`Save failed (HTTP ${r.status}). Nothing was saved.`, true); return false; }
+      await refetch();
+      showToast("Saved");
+      return true;
+    } catch {
+      showToast("Save failed (network error). Nothing was saved.", true);
+      return false;
+    } finally {
+      setSaving(false);
+    }
   };
 
   const addUnit = async () => {
     const serial = prompt("Serial number:");
     if (!serial?.trim()) return;
-    await fetch(`${API_BASE}/api/veritacheck/verifications/${id}/instruments`, {
-      method: "POST",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ serial_number: serial.trim() }),
-    });
-    await refetch();
+    try {
+      const r = await fetch(`${API_BASE}/api/veritacheck/verifications/${id}/instruments`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ serial_number: serial.trim() }),
+      });
+      if (!r.ok) { showToast(`Could not add instrument (HTTP ${r.status}).`, true); return; }
+      await refetch();
+    } catch {
+      showToast("Could not add instrument (network error).", true);
+    }
   };
 
   const deleteUnit = async (unitId: number) => {
-    await fetch(`${API_BASE}/api/veritacheck/verifications/${id}/instruments/${unitId}`, { method: "DELETE", headers: authHeaders() });
-    await refetch();
+    try {
+      const r = await fetch(`${API_BASE}/api/veritacheck/verifications/${id}/instruments/${unitId}`, { method: "DELETE", headers: authHeaders() });
+      if (!r.ok) { showToast(`Could not remove instrument (HTTP ${r.status}).`, true); return; }
+      await refetch();
+    } catch {
+      showToast("Could not remove instrument (network error).", true);
+    }
   };
 
   if (isLoading || !verification) return <div className="text-sm text-muted-foreground">Loading...</div>;
@@ -894,7 +924,7 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
       )}
 
       {toast && (
-        <div className="fixed bottom-6 right-6 bg-emerald-600 text-white text-sm px-4 py-2 rounded-lg shadow-lg z-50">
+        <div className={`fixed bottom-6 right-6 text-white text-sm px-4 py-2 rounded-lg shadow-lg z-50 ${toastError ? "bg-rose-600" : "bg-emerald-600"}`}>
           {toast}
         </div>
       )}
@@ -1043,15 +1073,23 @@ function UnitCard({ unit, verificationId, onSaved, onDeleted }: { unit: Instrume
   const [directorTitle, setDirectorTitle] = useState(unit.director_title || "");
   const [approvedDate, setApprovedDate] = useState(unit.approved_date || "");
   const [dirty, setDirty] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const save = async () => {
-    await fetch(`${API_BASE}/api/veritacheck/verifications/${verificationId}/instruments/${unit.id}`, {
-      method: "PATCH",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ director_name: directorName, director_title: directorTitle, approved_date: approvedDate }),
-    });
-    setDirty(false);
-    onSaved();
+    try {
+      const r = await fetch(`${API_BASE}/api/veritacheck/verifications/${verificationId}/instruments/${unit.id}`, {
+        method: "PATCH",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ director_name: directorName, director_title: directorTitle, approved_date: approvedDate }),
+      });
+      // Keep dirty and surface the error on a rejected write; do not look saved.
+      if (!r.ok) { setSaveError(`Save failed (HTTP ${r.status}). Nothing was saved.`); return; }
+      setSaveError("");
+      setDirty(false);
+      onSaved();
+    } catch {
+      setSaveError("Save failed (network error). Nothing was saved.");
+    }
   };
 
   return (
@@ -1088,14 +1126,19 @@ function UnitCard({ unit, verificationId, onSaved, onDeleted }: { unit: Instrume
             <Input type="date" value={approvedDate} onChange={e => { setApprovedDate(e.target.value); setDirty(true); }} className="h-8 text-xs" />
           </div>
         </div>
-        {dirty && <Button size="sm" className="h-7 text-xs mt-3" onClick={save}>Save</Button>}
+        {dirty && (
+          <div className="mt-3 flex items-center gap-2">
+            <Button size="sm" className="h-7 text-xs" onClick={save}>Save</Button>
+            {saveError && <span className="text-xs text-rose-600">{saveError}</span>}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
 
 // ── Director approval card ────────────────────────────────────────────────────
-function DirectorApprovalCard({ verification, onSave }: { verification: Verification; onSave: (payload: object) => void }) {
+function DirectorApprovalCard({ verification, onSave }: { verification: Verification; onSave: (payload: object) => Promise<boolean> }) {
   const [name, setName] = useState(verification.director_name || "");
   const [title, setTitle] = useState(verification.director_title || "");
   const [date, setDate] = useState(verification.approved_date || "");
@@ -1125,7 +1168,7 @@ function DirectorApprovalCard({ verification, onSave }: { verification: Verifica
         </div>
         <p className="text-xs text-muted-foreground">Signature line will appear on the PDF cover page.</p>
         {dirty && (
-          <Button size="sm" className="gap-1" onClick={() => { onSave({ director_name: name, director_title: title, approved_date: date }); setDirty(false); }}>
+          <Button size="sm" className="gap-1" onClick={async () => { const ok = await onSave({ director_name: name, director_title: title, approved_date: date }); if (ok) setDirty(false); }}>
             <CheckCircle2 size={13} /> Save Approval Info
           </Button>
         )}
@@ -1135,7 +1178,7 @@ function DirectorApprovalCard({ verification, onSave }: { verification: Verifica
 }
 
 // ── Remediation card ──────────────────────────────────────────────────────────
-function RemediationCard({ verification, onSave }: { verification: Verification; onSave: (notes: string) => void }) {
+function RemediationCard({ verification, onSave }: { verification: Verification; onSave: (notes: string) => Promise<boolean> }) {
   const [notes, setNotes] = useState(verification.remediation_notes || "");
   const [dirty, setDirty] = useState(false);
 
@@ -1154,7 +1197,7 @@ function RemediationCard({ verification, onSave }: { verification: Verification;
           placeholder="Describe the failure, root cause investigation, corrective action taken, and re-verification outcome. Include dates."
           className="text-xs h-24 resize-none"
         />
-        {dirty && <Button size="sm" className="h-7 text-xs mt-2" onClick={() => { onSave(notes); setDirty(false); }}>Save</Button>}
+        {dirty && <Button size="sm" className="h-7 text-xs mt-2" onClick={async () => { const ok = await onSave(notes); if (ok) setDirty(false); }}>Save</Button>}
       </CardContent>
     </Card>
   );
