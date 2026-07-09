@@ -92,7 +92,7 @@ const LAYER_NOTES: { layer: string; title: string; question: string; example: st
 
 export default function DemoCprtPage() {
   useSEO({
-    title: "VeritaOps™ CPRT Demo — Cost Per Reportable Test",
+    title: "VeritaOps™ CPRT Demo: Cost Per Reportable Test",
     description:
       "Live demonstration of four-layer cost-per-reportable-test calculation. CLSI GP11-A conceptual model. Built for clinical lab directors and CFOs.",
   });

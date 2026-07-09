@@ -166,7 +166,7 @@ function severityChip(severity: "warning" | "rejection") {
 
 export default function DemoQcPage() {
   useSEO({
-    title: "VeritaQC™ Demo — Westgard QC + Monthly Attestation",
+    title: "VeritaQC™ Demo: Westgard QC + Monthly Attestation",
     description:
       "Live walkthrough of VeritaQC: daily QC entry, Westgard rule evaluation, corrective action capture, and monthly review attestation. Phase 1 preview.",
   });
