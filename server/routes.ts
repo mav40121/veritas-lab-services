@@ -16,6 +16,7 @@ import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
 import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution } from "./veritacheckCoverage";
+import { evaluateManualDiff } from "./rumke";
 import { auditVeritamapConsistency } from "./veritamapConsistency";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
@@ -168,6 +169,17 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
       }
       // Wrapper-less or malformed: cannot verify, fail-safe.
       return "fail";
+    }
+
+    // Manual differential (Rümke / CLSI H20) — dataPoints is the INPUT object
+    // { cellsCounted, referenceSource, classes:[{name, manualCount, referencePct}] }.
+    // Recompute the verdict from the input via the binomial evaluator so the
+    // stored status is always authoritative (a class passes when the reference %
+    // falls within the manual count's binomial 95% CI; overall passes when all do).
+    if (studyType === "manual_diff") {
+      const input: any = rawData;
+      if (!input || typeof input !== "object" || !Array.isArray(input.classes) || input.classes.length === 0) return "fail";
+      return evaluateManualDiff(input).overallPass ? "pass" : "fail";
     }
 
     if (studyType === "cal_ver") {
