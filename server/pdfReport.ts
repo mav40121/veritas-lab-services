@@ -688,6 +688,7 @@ function headerHTML(study: Study, cliaNumber?: string): string {
     qc_range: "QC Lot Verification (CLSI C24-Ed4)",
     multi_analyte_coag: "Multi-Analyte Lot Comparison (Coag)",
     sensitivity: "Sensitivity Verification (EP17)",
+    manual_diff: "Manual Differential (Rümke 95% CI, CLSI H20)",
   };
   const typeLabel = typeLabelMap[study.studyType] || "Correlation / Method Comparison";
   const cliaLine = cliaNumber ? `<div style="font-size:8pt;color:#555;margin-top:2px;">CLIA: ${cliaNumber}</div>` : `<div style="font-size:8pt;color:#999;margin-top:2px;">CLIA: Not on file - enter your CLIA number in account settings</div>`;
