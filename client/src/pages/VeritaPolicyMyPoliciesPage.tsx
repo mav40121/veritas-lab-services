@@ -907,7 +907,10 @@ export default function VeritaPolicyMyPoliciesPage() {
       manualName: name,
       docs: byManual.get(name)!,
     }));
-  }, [documents, manuals]);
+    // Depend on filteredDocs (which itself tracks documents + searchQ) so the
+    // grouped table re-filters as the user types; [documents, manuals] alone
+    // left `grouped` stale and the search box did nothing.
+  }, [filteredDocs, manuals]);
 
   if (!activeLabId) {
     return (
@@ -1910,7 +1913,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                 value={newVersionSummary}
                 onChange={(e) => setNewVersionSummary(e.target.value)}
                 rows={2}
-                placeholder="e.g., Updated critical value list per Mayo Q2 2026."
+                placeholder="e.g., Updated critical value list per MEC review Q2 2026."
               />
             </div>
           </div>

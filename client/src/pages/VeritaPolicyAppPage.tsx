@@ -37,7 +37,7 @@ const CHOICE_LABEL: Record<string, string> = {
   CLIA: "CLIA",
 };
 
-// Master List policy row -- mirrors the polished 96-row Excel.
+// Master List policy row -- mirrors the polished 58-row Excel.
 interface MasterPolicy {
   policy_id: string;
   policy_name: string;
@@ -462,9 +462,9 @@ export default function VeritaPolicyAppPage() {
       <ModuleHowToCard
         moduleKey="veritapolicy"
         moduleName="VeritaPolicy™"
-        whatItDoes="VeritaPolicy is a 96-policy master list keyed to the CFR plus the citation set for your accrediting body (TJC, CAP, COLA, or AABB). For each policy, the lab maps its own existing policy manual entry, marks status (Not Started, In Progress, Complete, or N/A), and watches the live readiness score update. Use it as the crosswalk between what your binder already covers and what every regulation expects."
+        whatItDoes={`VeritaPolicy is a ${policies.length || 58}-policy master list keyed to the CFR plus the citation set for your accrediting body (TJC, CAP, COLA, or AABB). For each policy, the lab maps its own existing policy manual entry, marks status (Not Started, In Progress, Complete, or N/A), and watches the live readiness score update. Use it as the crosswalk between what your binder already covers and what every regulation expects.`}
         howToUse={[
-          "Browse the 96-row master list; expand any row to read the description, citations, and notes.",
+          `Browse the ${policies.length || 58}-row master list; expand any row to read the description, citations, and notes.`,
           "In each row, enter the name of the policy in your manual that addresses it under 'Our Policy Name'.",
           "Click the status badge to cycle Not Started → In Progress → Complete; mark N/A for policies your lab does not need.",
           "Watch the readiness score update live as you map your binder against the master list.",
