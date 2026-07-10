@@ -82,6 +82,20 @@ function renderVeritaCheckContent(): string {
   return `<h2>VeritaCheck&#8482; performance verification</h2><p>VeritaCheck&#8482; is the performance-verification module of the VeritaAssure&#8482; compliance platform, built by a former Joint Commission laboratory surveyor. It runs the studies a clinical laboratory needs to verify performance specifications under 42 CFR Part 493 and generates surveyor-ready, CFR-cited PDF reports with a laboratory director or designee signature block on page 1.</p><p>Study types: Calibration Verification / Linearity (reportable range and analytical measurement range), Correlation / Method Comparison with Deming regression, precision per CLSI EP15, lot-to-lot comparison per CLSI EP26, reference interval verification, and qualitative and sensitivity studies. Each quantitative study applies the 42 CFR Part 493 total allowable error criteria automatically and cites the specialty-specific CFR section in the narrative.</p><p>Every report carries the regulatory determination, the statistical appendix, the CLIA number, and the director signature block. Studies are stored and retrievable for the next inspection. VeritaCheck&#8482; is one module of VeritaAssure&#8482;, which also manages inspection readiness, proficiency testing, competency, and test-menu mapping.</p>`;
 }
 
+// Crawlable prerender bodies for the JS-rendered product pages (same pattern as
+// /veritacheck): the raw HTML was a ~310-char shell, so crawlers and AI answer
+// engines saw no feature detail. Copy mirrors each page's own content and the
+// SoftwareApplication featureList in client/index.html.
+function renderVeritaScanContent(): string {
+  return `<h2>VeritaScan&#8482; inspection readiness</h2><p>VeritaScan&#8482; is a laboratory self-inspection and compliance audit tool. It presents 168 compliance questions across 10 laboratory domains, lab administration, facility and safety, quality management, test management, proficiency testing, instrument and equipment, procedure manual, quality control, competency assessment, and blood bank / transfusion service, each triple-mapped to the current TJC standards, the CAP checklist requirement, and the specific 42 CFR Part 493 section. A live dashboard scores readiness by domain, findings are tracked with owner assignment and due dates (Compliant, Needs Attention, Immediate Action, or N/A), and results export to share with the medical director or designee. Built by a former Joint Commission laboratory surveyor with more than 200 facility inspections. Included in the Clinic plan and above.</p>`;
+}
+function renderVeritaMapContent(): string {
+  return `<h2>VeritaMap&#8482; test-menu regulatory map</h2><p>VeritaMap&#8482; is the master regulatory map for a laboratory's test menu. For every test the laboratory performs, VeritaMap&#8482; documents the CLIA complexity, proficiency testing enrollment, competency assignment, linearity and correlation requirements, quality control obligations and IQCP status, reference range source, and SOP location, each mapped to the exact 42 CFR Part 493 and TJC standard that requires it. Laboratories can filter by specialty, sort by complexity to surface every high-complexity test, and track review cycles with Last Verified and Verified By columns. The regulatory-gap column links directly to VeritaScan&#8482; findings, so menu-level gaps connect to the self-inspection. Free for up to 4 instruments and 10 analytes; included in the Clinic plan and above. Built by a former Joint Commission laboratory surveyor with more than 200 facility inspections.</p>`;
+}
+function renderVeritaCompContent(): string {
+  return `<h2>VeritaComp&#8482; competency assessment</h2><p>VeritaComp&#8482; manages laboratory competency assessment across all three types in one system: technical competency (the six CLIA-required assessment methods per method group for non-waived testing staff, semiannual in year one and annual thereafter), waived testing competency (two of four methods per test), and non-technical competency for phlebotomy, specimen processing, LIS, and other non-testing duties. It integrates with VeritaMap&#8482; to auto-import instruments and suggest method groups, and with VeritaScan&#8482; so completed assessments auto-check the competency domain of the self-inspection. Each employee carries an assessment history with due-date tracking and remediation plans, and every completed assessment generates a PDF with the medical director or designee signature on page 1. Whether the laboratory is accredited by TJC, CAP, or COLA, or operates under CLIA only, VeritaComp&#8482; provides the documentation framework surveyors expect. Built by a former Joint Commission laboratory surveyor with more than 200 facility inspections.</p>`;
+}
+
 function getIndexHtml(distPath: string): string {
   if (!cachedIndexHtml) {
     let html = fs.readFileSync(path.resolve(distPath, "index.html"), "utf-8");
@@ -170,6 +184,12 @@ function injectSeoTags(html: string, routePath: string, meta: SEOMetadata): stri
     noscriptInner += renderPricingContent();
   } else if (routePath === "/veritacheck") {
     noscriptInner += renderVeritaCheckContent();
+  } else if (routePath === "/veritascan") {
+    noscriptInner += renderVeritaScanContent();
+  } else if (routePath === "/veritamap") {
+    noscriptInner += renderVeritaMapContent();
+  } else if (routePath === "/veritacomp") {
+    noscriptInner += renderVeritaCompContent();
   }
   // If this route carries a FAQPage node, expose its Q&A in the noscript body so
   // crawlers and AI answer engines read the questions and answers as page text,
