@@ -38,7 +38,7 @@ const MODULES = [
     label: "VeritaScan™",
     desc: "Inspection Readiness",
     detail:
-      "168 compliance items across 10 domains aligned to TJC and CAP standards. Know exactly where you stand before a surveyor arrives. Executive summary and full PDF export.",
+      "173 compliance items across 10 domains aligned to TJC and CAP standards. Know exactly where you stand before a surveyor arrives. Executive summary and full PDF export.",
     badge: "Live",
     badgeColor: "emerald",
     icon: ClipboardCheck,

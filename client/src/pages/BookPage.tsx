@@ -238,7 +238,7 @@ return (
                   {[
                     { name: "VeritaMap™", desc: "Build your test menu map and learn every regulatory obligation your lab carries." },
                     { name: "VeritaCheck™", desc: "Run EP studies with guided methodology that teaches the science behind each calculation." },
-                    { name: "VeritaScan™", desc: "Walk 168 compliance items and learn how a surveyor thinks." },
+                    { name: "VeritaScan™", desc: "Walk 173 compliance items and learn how a surveyor thinks." },
                     { name: "VeritaComp™", desc: "Build competency programs that teach the six CLIA elements by doing them." },
                   ].map(({ name, desc }) => (
                     <div key={name} className="flex items-start gap-2.5 text-sm">

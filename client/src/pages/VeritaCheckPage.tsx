@@ -247,7 +247,7 @@ const featureTooltips: Record<string, string> = {
   // Professional
   "Everything in Starter": "Includes all features from the Starter plan.",
   "VeritaMap™ regulatory mapping": "Build your complete test menu map. The intelligence engine identifies every correlation study and calibration verification your instruments require under 42 CFR Part 493.",
-  "VeritaScan™ self-inspection audit": "168-item inspection readiness tracker across 10 compliance domains. Studies completed in VeritaCheck™ automatically check off corresponding items.",
+  "VeritaScan™ self-inspection audit": "173-item inspection readiness tracker across 10 compliance domains. Studies completed in VeritaCheck™ automatically check off corresponding items.",
   "Priority support": "Dedicated email support with same-day responses during business hours.",
   // Lab
   "Everything in Professional": "Includes all features from the Professional plan.",

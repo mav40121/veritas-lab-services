@@ -69,5 +69,30 @@ ok("no 'const total = 168' left", !/const total = 168;/.test(routes));
 ok("no 'items.length || 168' fallback", !/items\.length \|\| 168/.test(routes));
 ok("Excel About walks 173 compliance questions", /walks 173 compliance questions/.test(routes) && !/walks 168 compliance questions/.test(routes));
 
+// 6. index.html JSON-LD advertises 173, and NO count-context 168 survives anywhere
+// in client/ or server/. The first pass was source-scoped and missed index.html
+// plus several marketing files (faq, demo, roadmap, book, etc.); the live /veritascan
+// curl caught it, so the guard now walks the whole tree instead of a hand-list.
+const indexHtml = read("client/index.html");
+ok("index.html JSON-LD advertises 173-item + 173 compliance questions",
+  /173-item TJC-standard/.test(indexHtml) && /173 compliance questions/.test(indexHtml));
+
+const STALE = /168[ -]?(item|compliance|standard|checklist|inspection|readiness|Item|Compliance|Items)|totalItems *= *168|total *= *168/;
+function walk(dir, acc = []) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (["node_modules", ".git", "dist", "build"].includes(e.name)) continue;
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) walk(p, acc);
+    else if (/\.(ts|tsx|html)$/.test(e.name)) acc.push(p);
+  }
+  return acc;
+}
+const offenders = [path.join(ROOT, "client"), path.join(ROOT, "server")]
+  .flatMap((r) => walk(r))
+  .filter((f) => STALE.test(fs.readFileSync(f, "utf8")))
+  .map((f) => path.relative(ROOT, f));
+ok(`no stale count-context 168 anywhere in client/ or server/ (offenders: ${offenders.join(", ") || "none"})`,
+  offenders.length === 0);
+
 console.log(fails === 0 ? "\n=== VERITASCAN ITEM COUNT: PASS ===" : `\n=== ${fails} FAIL ===`);
 process.exit(fails === 0 ? 0 : 1);

@@ -108,7 +108,7 @@ export default function DemoLabPage() {
   }
 
   // Scan stats
-  const totalItems = 168;
+  const totalItems = 173; // full checklist size; keep in sync with SCAN_ITEMS in client/src/lib/veritaScanData.ts
   const assessedItems = Object.values(scanItemMap).filter((i: any) => i.status !== "Not Assessed").length;
   const compliantItems = Object.values(scanItemMap).filter((i: any) => i.status === "Compliant").length;
   const readinessPct = Math.round((compliantItems / totalItems) * 100);
@@ -776,7 +776,7 @@ export default function DemoLabPage() {
                   Riverside Regional's inspection readiness checklist has been completed across all major TJC and CAP domains.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                  VeritaScan&#8482; walks through 168 standards drawn from TJC and CAP requirements, tracks completion status by domain, and flags items that need attention before a surveyor arrives. The checklist exports to Excel for documentation and evidence gathering. Below is Riverside Regional's current readiness snapshot.
+                  VeritaScan&#8482; walks through 173 standards drawn from TJC and CAP requirements, tracks completion status by domain, and flags items that need attention before a surveyor arrives. The checklist exports to Excel for documentation and evidence gathering. Below is Riverside Regional's current readiness snapshot.
                 </p>
               </div>
               {scan ? (
