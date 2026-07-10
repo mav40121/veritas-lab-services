@@ -1,0 +1,55 @@
+name: IndexNow on sitemap change
+
+# SEO/GEO package item 2, part B. When a push to main changes
+# client/public/sitemap.xml, submit ONLY the URLs that actually changed (a new
+# <loc>, or one whose <lastmod> moved) to IndexNow, so Bing / Yandex / Seznam /
+# Naver / Yep re-crawl in hours instead of on their own schedule. We never ping
+# the whole sitemap (wasteful and rate-limit-prone), and only content URLs are in
+# the sitemap to begin with (the generator excludes app/auth routes).
+#
+# The IndexNow key is public by design (served at /<key>.txt), so no secret is
+# needed. Google does not use IndexNow; it still discovers via the sitemap.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'client/public/sitemap.xml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: indexnow-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  indexnow:
+    name: indexnow
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (need the previous commit to diff the sitemap)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Compute changed URLs
+        id: changed
+        run: |
+          git show HEAD~1:client/public/sitemap.xml > /tmp/old-sitemap.xml 2>/dev/null || : > /tmp/old-sitemap.xml
+          node scripts/sitemap-changed-urls.mjs /tmp/old-sitemap.xml client/public/sitemap.xml > /tmp/changed-urls.txt
+          COUNT=$(grep -c . /tmp/changed-urls.txt || true)
+          echo "count=${COUNT:-0}" >> "$GITHUB_OUTPUT"
+          echo "Changed URLs (${COUNT:-0}):"
+          cat /tmp/changed-urls.txt || true
+
+      - name: Submit changed URLs to IndexNow
+        if: steps.changed.outputs.count != '0'
+        run: xargs -r -a /tmp/changed-urls.txt npx --yes tsx scripts/ping-indexnow.mts
