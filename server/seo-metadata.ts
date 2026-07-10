@@ -152,7 +152,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/veritascan": {
     title: "VeritaScan™ | Laboratory Inspection Readiness Checklist Software",
-    description: "168-item TJC-standard inspection checklist for clinical laboratories. Track your readiness, identify gaps, and walk into every survey prepared.",
+    description: "173-item TJC-standard inspection checklist for clinical laboratories. Track your readiness, identify gaps, and walk into every survey prepared.",
   },
   "/veritamap": {
     title: "VeritaMap™ | Clinical Laboratory Test Menu Mapping Software",
