@@ -11,6 +11,7 @@
 // mandate. No em-dashes; "auto-verification" not "auto-validation".
 
 import { getBrowser } from "./pdfReport";
+import { stampPdfAuthor } from "./pdfMeta";
 
 const TEAL = "#01696F";
 const DEEP = "#0A3A3D";
@@ -202,7 +203,7 @@ export async function generateLeverageReportPDF(d: LeverageReportData, ctx: Leve
       footerTemplate: FOOTER_TEMPLATE,
       margin: { top: "14mm", right: "16mm", bottom: "18mm", left: "16mm" },
     });
-    return Buffer.from(pdfBuffer);
+    return stampPdfAuthor(pdfBuffer);
   } finally {
     await page.close();
   }

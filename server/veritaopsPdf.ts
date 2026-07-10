@@ -8,6 +8,7 @@
 // Services". The About paragraph at the bottom of every report cites it
 // so a reader can verify the methodology against the source document.
 import { getBrowser } from "./pdfReport";
+import { stampPdfAuthor } from "./pdfMeta";
 
 export interface CprtStudyForPdf {
   id: number;
@@ -217,7 +218,7 @@ export async function generateCprtPdf(study: CprtStudyForPdf, ctx: CprtLabContex
       footerTemplate: FOOTER_TEMPLATE,
       margin: { top: "14mm", right: "15mm", bottom: "20mm", left: "15mm" },
     });
-    return Buffer.from(pdfBuffer as ArrayBuffer);
+    return stampPdfAuthor(pdfBuffer);
   } finally {
     await page.close();
   }

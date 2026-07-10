@@ -7,6 +7,7 @@
  */
 
 import puppeteer from "puppeteer";
+import { stampPdfAuthor } from "./pdfMeta";
 
 export interface MonthlyReviewLot {
   id: number;
@@ -309,7 +310,7 @@ export async function renderMonthlyReviewPDF(payload: MonthlyReviewPayload): Pro
       footerTemplate: FOOTER_TEMPLATE,
       margin: { top: "16mm", right: "14mm", bottom: "22mm", left: "14mm" },
     });
-    return Buffer.from(buf);
+    return stampPdfAuthor(buf);
   } finally {
     await page.close();
   }

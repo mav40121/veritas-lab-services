@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { stampPdfAuthor } from "./pdfMeta";
 import { db } from "./db";
 import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
 import { resolveStudyAccess, consumeStudyCredit } from "./studyCredits";
@@ -1651,7 +1652,7 @@ export function registerVeritaCheckVerificationRoutes(
       await browser.close();
       const filename = `VeritaCheck_Verification_${v.instrument_name.replace(/[^a-zA-Z0-9]/g, "_")}_${new Date().toISOString().split("T")[0]}.pdf`;
       res.set({ "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${filename}"` });
-      res.send(Buffer.from(pdf));
+      res.send(await stampPdfAuthor(pdf));
     } catch (err: any) {
       res.status(500).json({ error: "PDF generation failed", detail: err.message });
     }
@@ -1853,7 +1854,7 @@ export function registerVeritaCheckVerificationRoutes(
         const safeName = instRow.instrument_name.replace(/[^a-zA-Z0-9]/g, "_");
         const filename = `VeritaCheck_SurveyBundle_${safeName}_${new Date().toISOString().split("T")[0]}.pdf`;
         res.set({ "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${filename}"` });
-        res.send(Buffer.from(pdf));
+        res.send(await stampPdfAuthor(pdf));
       } catch (err: any) {
         res.status(500).json({ error: "PDF generation failed", detail: err.message });
       }
