@@ -147,8 +147,8 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     description: "See what is coming next for VeritaAssure\u2122. Upcoming features for clinical laboratory compliance, quality management, and accreditation readiness.",
   },
   "/veritacheck": {
-    title: "VeritaCheck\u2122 | CLIA Performance Verification Software for Clinical Labs",
-    description: "Run EP studies for accuracy, precision, reportable range, and reference ranges. Generates director-signed, survey-ready verification documentation.",
+    title: "VeritaCheck\u2122 Performance Verification | CLIA Calibration Verification and Method Comparison",
+    description: "Run CLIA Calibration Verification / Linearity, Correlation / Method Comparison, and CLSI EP15 precision studies, and generate surveyor-ready, CFR-cited PDF reports, inside the VeritaAssure compliance platform. Built by a former Joint Commission surveyor.",
   },
   "/veritascan": {
     title: "VeritaScan™ | Laboratory Inspection Readiness Checklist Software",
