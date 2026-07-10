@@ -1291,7 +1291,7 @@ export default function DemoLabPage() {
             <div className="space-y-5">
               <div className="border-l-4 border-[#006064] pl-5 mb-2">
                 <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
-                  96 CFR-anchored laboratory policies, ready to adopt.
+                  58 CFR-anchored laboratory policies, ready to adopt.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
                   VeritaPolicy&#8482; ships generic, CFR-anchored policy templates the lab can adopt directly. Each template opens with the verbatim eCFR text, then the lab's standing rule in plain CFR voice. Service-line toggles auto-apply N/A. Inspection-ready PDF report with readiness score.
@@ -1300,7 +1300,7 @@ export default function DemoLabPage() {
               <Card>
                 <CardContent className="py-5">
                   <ul className="space-y-2 text-sm">
-                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>96 generic policy templates spanning Leadership, Specimen Management, Testing, Personnel, Quality, Information Systems, Safety, and Specialty Services.</span></li>
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>58 generic policy templates spanning Leadership, Specimen Management, Testing, Results, Personnel, Quality, Information Systems, Safety, and Specialty Services.</span></li>
                     <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Each template carries verbatim eCFR text plus the lab's standing rule. No accreditor checklist text reproduced (copyright-safe).</span></li>
                     <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Token placeholders ({"<<LAB_NAME>>"}, {"<<CLIA_NUMBER>>"}, {"<<DIRECTOR_NAME>>"}) replaced with your lab's identity at download time.</span></li>
                     <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Inspection-ready PDF report with readiness score by section.</span></li>
