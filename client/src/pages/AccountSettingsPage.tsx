@@ -71,9 +71,9 @@ function planToPriceType(plan: string | undefined | null): string | null {
 // charged. Used by goToCheckout() to fire the analytics event with the correct
 // item_name and value at the moment the Stripe session is created.
 const PRICE_TYPE_GA4: Record<string, { item_name: string; price: number }> = {
-  waived:           { item_name: "Clinic",        price: 499 },
-  community:        { item_name: "Community",     price: 999 },
-  hospital:         { item_name: "Hospital",      price: 1999 },
+  waived:           { item_name: "Clinic",        price: 999 },
+  community:        { item_name: "Community",     price: 2125 },
+  hospital:         { item_name: "Hospital",      price: 4995 },
   large_hospital:   { item_name: "Enterprise",    price: 2999 },
   veritacheck_only: { item_name: "VeritaCheck Unlimited", price: 299 },
 };

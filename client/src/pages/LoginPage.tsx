@@ -28,10 +28,10 @@ interface HospitalResult {
 
 // Tier definitions for self-selection
 const TIER_OPTIONS = [
-  { id: "clinic",     label: "Clinic",     price: 499,  seats: 2,  desc: "Certificate of Waiver labs and small clinics" },
-  { id: "community",  label: "Community",  price: 999,  seats: 5,  desc: "Community hospitals and independent labs" },
-  { id: "hospital",   label: "Hospital",   price: 1999, seats: 15, desc: "Regional and acute care hospital labs" },
-  { id: "enterprise", label: "Enterprise", price: 2999, seats: 25, desc: "Large hospitals, health systems, and reference labs" },
+  { id: "clinic",     label: "Clinic",     price: 999,  seats: 2,  desc: "Certificate of Waiver labs and small clinics" },
+  { id: "community",  label: "Community",  price: 2125, seats: 5,  desc: "Community hospitals and independent labs" },
+  { id: "hospital",   label: "Hospital",   price: 4995, seats: 15, desc: "Regional and acute care hospital labs" },
+  { id: "enterprise", label: "System",     price: 0,    seats: 25, desc: "Large hospitals, health systems, and reference labs (custom quote)" },
 ];
 const TIER_UNIT = "yr";
 
