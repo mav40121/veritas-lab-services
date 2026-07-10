@@ -588,7 +588,7 @@ export function recomputeAllStudyStatuses(): void {
 }
 import { autoCompleteVeritaScanItems } from "./integrations";
 import {
-  MAYO_CRITICAL_VALUES, UNITS_LOOKUP, REFERENCE_RANGES, AMR_LOOKUP,
+  UNITS_LOOKUP, REFERENCE_RANGES, AMR_LOOKUP,
   CFR_MAP as VERITAMAP_CFR_MAP, getComplianceStatus, lookupAnalyte, INSTRUCTIONS_CONTENT,
 } from "./veritamapData";
 // Phase 3.6 (2026-05-03): Authoritative server-side reference for VeritaScan items.
@@ -12137,8 +12137,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── Wave A4: VeritaMap provenance (MEC review + 493.1253 attestation) ────
   // POST mec-review: record that the Medical Executive Committee reviewed and
-  // adopted the critical values for this analyte. Mayo Clinic Laboratories
-  // values are a STARTING POINT; the MEC owns the final values. We store the
+  // adopted the critical values for this analyte. The MEC owns the final
+  // values. We store the
   // review date and who recorded it; the values themselves live in
   // critical_low/critical_high (entered via the normal PUT).
   app.post("/api/labs/:labId/veritamap/maps/:id/analyte-values/:analyte/mec-review", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
@@ -13617,7 +13617,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "Analyte", "Instruments", "Serial Number", "Department", "Specialty", "Complexity",
         "Number of Instruments", "CFR Section", "Correlation Required",
         "Units of Measure", "Reference Range Low", "Reference Range High",
-        "Critical Low (Mayo Clinic Laboratories starting point)", "Critical High (Mayo Clinic Laboratories starting point)",
+        "Critical Low", "Critical High",
         "MEC Reviewed/Approved",
         "AMR Low", "AMR High (per instrument)",
         "Reference Range Attestation (42 CFR 493.1253)", "AMR Attestation (42 CFR 493.1253, per instrument)",
@@ -13668,8 +13668,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           return `${inst.instrument_name}: ${lo} - ${hi}`;
         }).join("; ");
 
-        // Wave A4 provenance columns. MEC owns the final critical values
-        // (Mayo Clinic Laboratories values are a starting point); reference
+        // Wave A4 provenance columns. MEC owns the final critical values;
+        // reference
         // range and AMR carry the director-or-designee attestation per
         // 42 CFR 493.1253 once recorded.
         const mecCell = av?.mec_reviewed_at
@@ -13829,7 +13829,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         headerRow.getCell(col).note = labNote;
       }
       // Wave A4 provenance header notes.
-      headerRow.getCell(15).note = "Critical values from Mayo Clinic Laboratories are a STARTING POINT. The Medical Executive Committee reviews and adopts the facility's critical values; this column records that review.";
+      headerRow.getCell(15).note = "The Medical Executive Committee reviews and adopts the facility's critical values; this column records those values.";
       const attestNote = "Reference ranges and AMR are verified by the laboratory per 42 CFR 493.1253. This column records the medical director or designee attestation that locks the value in VeritaMap.";
       headerRow.getCell(18).note = attestNote;
       headerRow.getCell(19).note = attestNote;

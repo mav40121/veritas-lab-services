@@ -205,7 +205,7 @@ A clean grep is a required step in the QC checklist, not optional. Visual inspec
 
 ### VeritaMap rules
 
-- Critical values labeled "Critical Low (Mayo Clinic Laboratories)" and "Critical High (Mayo Clinic Laboratories)".
+- Critical values: lab-entered only, labeled plainly "Critical Low" / "Critical High" (blank until the lab records its MEC-adopted thresholds; a "MEC Reviewed/Approved" column records the adoption). The prior Mayo Clinic Laboratories starting-point layer was removed 2026-07-10 (it never worked as intended); a Mayo reference link now lives only in the VeritaMap Resources tab. Do not re-introduce a Mayo (or any vendor) critical-value default.
 - Reference ranges: BLANK — the lab enters their own verified values per CLIA 493.1253. Never pre-populate.
 - AMR: BLANK — same reason.
 - Freeze pane at C2 specifically (columns A=Analyte and B=Instruments stay visible).
