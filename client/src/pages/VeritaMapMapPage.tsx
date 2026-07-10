@@ -111,7 +111,7 @@ interface AnalyteValues {
   critical_low?: string | null;
   critical_high?: string | null;
   units?: string | null;
-  // Wave A4 provenance: MEC review of critical values (Mayo Clinic
+  // Wave A4 provenance: MEC review of critical values (MEC
   // Laboratories values are a starting point; the MEC owns the final values)
   // and director-or-designee attestation per 42 CFR 493.1253, which locks
   // the reference range until an owner/admin unlocks it.
@@ -2421,11 +2421,11 @@ export default function VeritaMapMapPage() {
       <ModuleHowToCard
         moduleKey="veritamap"
         moduleName="VeritaMap™"
-        whatItDoes="VeritaMap is where you build your facility's test menu. Pick the instruments your lab runs, toggle the tests you actually perform on each, and the menu becomes the source of truth that feeds VeritaCheck (study setup), VeritaComp (competency programs), VeritaPT (PT coverage), and VeritaTrack (regulatory calendar). The menu also captures CLIA complexity, specialty, FDA classification, suggested critical values (from Mayo Clinic Laboratories, for your MEC to review and adopt), and fields for the reference intervals and AMR your lab will verify and enter per 42 CFR 493.1253."
+        whatItDoes="VeritaMap is where you build your facility's test menu. Pick the instruments your lab runs, toggle the tests you actually perform on each, and the menu becomes the source of truth that feeds VeritaCheck (study setup), VeritaComp (competency programs), VeritaPT (PT coverage), and VeritaTrack (regulatory calendar). The menu also captures CLIA complexity, specialty, FDA classification, and fields for the critical values, reference intervals, and AMR your lab will verify and enter per 42 CFR 493.1253."
         howToUse={[
           "Add the instruments your lab runs from the database of 190+ FDA-cleared analyzers.",
           "Toggle the tests you actually perform on each instrument; CLIA complexity, specialty, and FDA classification populate automatically.",
-          "Review the Mayo Clinic Laboratories starting-point critical values with your Medical Executive Committee; record the MEC-adopted values.",
+          "Record your facility's MEC-adopted critical values for each analyte, if your lab chooses to track them here.",
           "Enter your verified reference intervals and AMR per 42 CFR 493.1253.",
           "Other Verita modules read from this menu automatically; update here whenever you add or retire a test."
         ]}
