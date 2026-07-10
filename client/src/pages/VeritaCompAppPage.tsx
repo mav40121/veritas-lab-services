@@ -2731,6 +2731,18 @@ function NewAssessmentDialog({
         </DialogHeader>
 
         <div className="space-y-5">
+          {activeEmployees.length === 0 && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 text-sm text-amber-900 dark:text-amber-200">
+              <p className="font-semibold">No active employees in this lab</p>
+              <p className="text-xs mt-1">Add staff on the <strong>Employees</strong> tab before creating an assessment. You cannot save an assessment without an employee to assess.</p>
+            </div>
+          )}
+          {program.type === "technical" && (program.methodGroups?.length ?? 0) === 0 && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 text-sm text-amber-900 dark:text-amber-200">
+              <p className="font-semibold">This program has no method groups</p>
+              <p className="text-xs mt-1">A technical assessment needs at least one method group. Use <strong>Rebuild from VeritaMap (lab-wide)</strong> on the Overview tab to seed method groups from your maps, then reopen this dialog.</p>
+            </div>
+          )}
           {/* ── Assessment Header ── */}
           <div className="border border-border rounded-lg p-4 space-y-3">
             <div className="text-sm font-semibold">Assessment Header</div>
@@ -3408,7 +3420,7 @@ function NewAssessmentDialog({
             <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
             <Button
               size="sm"
-              disabled={!employeeId || creating || (program.type === "waived" && waivedMethods.length < 2)}
+              disabled={!employeeId || creating || (program.type === "waived" && waivedMethods.length < 2) || (program.type === "technical" && (program.methodGroups?.length ?? 0) === 0)}
               onClick={handleCreate}
             >
               {creating ? "Saving..." : "Save Assessment"}
