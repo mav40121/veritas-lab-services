@@ -1,3 +1,4 @@
+import { useState, type FormEvent, type CSSProperties } from "react";
 import { useLocation } from "wouter";
 import { SampleReportsSection } from "@/components/SampleReportsSection";
 
@@ -56,8 +57,49 @@ const modules = [
   },
 ];
 
+const inputStyle: CSSProperties = {
+  width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: "14px",
+  border: "1px solid #cbd5e0", borderRadius: "8px", outline: "none", fontFamily: "inherit",
+};
+const labelStyle: CSSProperties = {
+  display: "block", fontSize: "13px", fontWeight: 600, color: "#2d3748", marginBottom: "5px",
+};
+
 export default function DemoSelectorPage() {
   const [, setLocation] = useLocation();
+
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", organization: "", phone: "", message: "" });
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [errMsg, setErrMsg] = useState("");
+  const set = (key: keyof typeof form) => (e: { target: { value: string } }) =>
+    setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  async function submitDemoRequest(e: FormEvent) {
+    e.preventDefault();
+    if (form.name.trim().length < 2 || !form.email.includes("@")) {
+      setStatus("error");
+      setErrMsg("Please enter your name and a valid email address.");
+      return;
+    }
+    setStatus("sending");
+    setErrMsg("");
+    try {
+      const res = await fetch("/api/request-demo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(typeof j.error === "string" ? j.error : "Something went wrong.");
+      }
+      setStatus("sent");
+    } catch (err: any) {
+      setStatus("error");
+      setErrMsg(err?.message || "Could not send. Please email info@veritaslabservices.com.");
+    }
+  }
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8fafb" }}>
@@ -107,6 +149,18 @@ export default function DemoSelectorPage() {
         >
           Built by a lab operations consultant. Choose your path below.
         </p>
+        <div style={{ marginTop: "28px" }}>
+          <button
+            onClick={() => { setShowForm(true); setStatus("idle"); setErrMsg(""); }}
+            style={{
+              background: "#ffffff", color: "#01696F", border: "none", borderRadius: "10px",
+              padding: "13px 30px", fontSize: "16px", fontWeight: 700, cursor: "pointer",
+              boxShadow: "0 3px 14px rgba(0,0,0,0.18)",
+            }}
+          >
+            Request a live demo
+          </button>
+        </div>
       </div>
 
       {/* Cards */}
@@ -251,6 +305,77 @@ export default function DemoSelectorPage() {
           Questions? <a href="mailto:info@veritaslabservices.com" style={{ color: "#01696F" }}>info@veritaslabservices.com</a>
         </p>
       </div>
+
+      {/* Request a live demo modal */}
+      {showForm && (
+        <div
+          onClick={() => setShowForm(false)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", zIndex: 100 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: "#ffffff", borderRadius: "16px", maxWidth: "480px", width: "100%", padding: "28px", boxShadow: "0 12px 48px rgba(0,0,0,0.24)", maxHeight: "90vh", overflowY: "auto" }}
+          >
+            {status === "sent" ? (
+              <div style={{ textAlign: "center", padding: "12px 0" }}>
+                <h2 style={{ fontSize: "20px", fontWeight: 700, color: "#01696F", margin: "0 0 10px" }}>Thanks, we will be in touch</h2>
+                <p style={{ fontSize: "14px", color: "#4a5568", lineHeight: 1.6, margin: "0 0 20px" }}>
+                  Your request reached the team at info@veritaslabservices.com. We will reply to schedule a live walkthrough.
+                </p>
+                <button
+                  onClick={() => { setShowForm(false); setForm({ name: "", email: "", organization: "", phone: "", message: "" }); setStatus("idle"); }}
+                  style={{ background: "#01696F", color: "#fff", border: "none", borderRadius: "8px", padding: "11px 24px", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}
+                >
+                  Close
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={submitDemoRequest}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "6px" }}>
+                  <h2 style={{ fontSize: "20px", fontWeight: 700, color: "#1a1a1a", margin: 0 }}>Request a live demo</h2>
+                  <button type="button" onClick={() => setShowForm(false)} aria-label="Close" style={{ background: "none", border: "none", fontSize: "24px", lineHeight: 1, color: "#a0aec0", cursor: "pointer" }}>&times;</button>
+                </div>
+                <p style={{ fontSize: "13px", color: "#718096", margin: "0 0 18px", lineHeight: 1.5 }}>
+                  Tell us a little about your lab and we will schedule a walkthrough.
+                </p>
+                <div style={{ marginBottom: "14px" }}>
+                  <label style={labelStyle}>Name *</label>
+                  <input type="text" value={form.name} onChange={set("name")} style={inputStyle} autoComplete="name" />
+                </div>
+                <div style={{ marginBottom: "14px" }}>
+                  <label style={labelStyle}>Work email *</label>
+                  <input type="email" value={form.email} onChange={set("email")} style={inputStyle} autoComplete="email" />
+                </div>
+                <div style={{ marginBottom: "14px" }}>
+                  <label style={labelStyle}>Lab or organization</label>
+                  <input type="text" value={form.organization} onChange={set("organization")} style={inputStyle} autoComplete="organization" />
+                </div>
+                <div style={{ marginBottom: "14px" }}>
+                  <label style={labelStyle}>Phone</label>
+                  <input type="tel" value={form.phone} onChange={set("phone")} style={inputStyle} autoComplete="tel" />
+                </div>
+                <div style={{ marginBottom: "16px" }}>
+                  <label style={labelStyle}>Anything specific you would like to see?</label>
+                  <textarea value={form.message} onChange={set("message")} rows={3} style={{ ...inputStyle, resize: "vertical" }} />
+                </div>
+                {status === "error" && (
+                  <p style={{ color: "#c53030", fontSize: "13px", margin: "0 0 12px" }}>{errMsg}</p>
+                )}
+                <button
+                  type="submit"
+                  disabled={status === "sending"}
+                  style={{ width: "100%", background: "#01696F", color: "#fff", border: "none", borderRadius: "9px", padding: "13px", fontSize: "15px", fontWeight: 700, cursor: status === "sending" ? "default" : "pointer", opacity: status === "sending" ? 0.7 : 1 }}
+                >
+                  {status === "sending" ? "Sending..." : "Send request"}
+                </button>
+                <p style={{ fontSize: "12px", color: "#a0aec0", textAlign: "center", margin: "12px 0 0" }}>
+                  Or email <a href="mailto:info@veritaslabservices.com" style={{ color: "#01696F" }}>info@veritaslabservices.com</a>
+                </p>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

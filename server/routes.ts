@@ -11059,6 +11059,80 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ success: true });
   });
 
+  // POST /api/request-demo — public "Request a live demo" form on /demo. Emails
+  // info@veritaslabservices.com (a FIXED recipient, not user-controlled, so this
+  // cannot be used as an open relay) and best-effort stores the lead in
+  // contact_messages so it survives a Resend outage. No auth, no PHI.
+  app.post("/api/request-demo", async (req: any, res) => {
+    const esc = (s: any) =>
+      String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const { name, email, organization, phone, message } = req.body || {};
+    if (!name || typeof name !== "string" || name.trim().length < 2) {
+      return res.status(400).json({ error: "Name is required" });
+    }
+    if (!email || typeof email !== "string" || !email.includes("@")) {
+      return res.status(400).json({ error: "A valid email is required" });
+    }
+
+    const cleanName = name.trim();
+    const cleanEmail = email.toLowerCase().trim();
+    const org = organization ? String(organization).trim() : "";
+    const ph = phone ? String(phone).trim() : "";
+    const note = message ? String(message).trim() : "";
+
+    // Durable backup in contact_messages ({name,email,message} shape).
+    try {
+      const parts = [
+        "Live demo request (from /demo)",
+        org ? `Organization: ${org}` : null,
+        ph ? `Phone: ${ph}` : null,
+        note ? `Notes: ${note}` : null,
+      ].filter(Boolean).join("\n");
+      storage.createContactMessage({ name: cleanName, email: cleanEmail, message: parts });
+    } catch (err: any) {
+      console.error("[request-demo] store failed:", err?.message);
+    }
+
+    // Notify info@ via Resend (best-effort; the lead is already stored above).
+    if (process.env.RESEND_API_KEY) {
+      try {
+        await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${process.env.RESEND_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: "VeritaAssure™ <info@veritaslabservices.com>",
+            to: "info@veritaslabservices.com",
+            reply_to: cleanEmail,
+            subject: `New live demo request: ${cleanName}${org ? " (" + org + ")" : ""}`,
+            html: `
+              <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
+                <h2 style="color:#01696F">New live demo request</h2>
+                <table style="border-collapse:collapse;width:100%;font-size:14px">
+                  <tr><td style="padding:6px 8px;color:#666;width:160px">Name</td><td style="padding:6px 8px"><strong>${esc(cleanName)}</strong></td></tr>
+                  <tr><td style="padding:6px 8px;color:#666">Email</td><td style="padding:6px 8px"><a href="mailto:${esc(cleanEmail)}">${esc(cleanEmail)}</a></td></tr>
+                  ${org ? `<tr><td style="padding:6px 8px;color:#666">Organization</td><td style="padding:6px 8px">${esc(org)}</td></tr>` : ""}
+                  ${ph ? `<tr><td style="padding:6px 8px;color:#666">Phone</td><td style="padding:6px 8px">${esc(ph)}</td></tr>` : ""}
+                  ${note ? `<tr><td style="padding:6px 8px;color:#666;vertical-align:top">Notes</td><td style="padding:6px 8px;white-space:pre-wrap">${esc(note)}</td></tr>` : ""}
+                </table>
+                <p style="color:#888;font-size:12px;margin-top:24px">Sent from the live demo request form on /demo.</p>
+              </div>
+            `,
+          }),
+        });
+      } catch (err: any) {
+        console.error("[request-demo] Resend failed:", err?.message);
+      }
+    } else {
+      console.warn("[request-demo] RESEND_API_KEY not set; email skipped");
+    }
+
+    res.json({ ok: true });
+  });
+
   // POST /api/founding-lab/apply — public application form for the Founding
   // Lab Program. No auth (prospects don't have accounts yet), no PHI. Stores
   // the application row, emails Michael via Resend. Michael reviews and
