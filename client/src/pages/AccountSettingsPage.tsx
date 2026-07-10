@@ -387,6 +387,35 @@ export default function AccountSettingsPage() {
     onError: (err: Error) => toast({ title: err.message || "Failed to save settings", variant: "destructive" }),
   });
 
+  // NYS CLEP Phase-0: jurisdiction confirm. Resolve the lab to act on (active
+  // lab, else the account home lab). Only owner/admin may set it; a NYS lab is
+  // dual, so NYS-CLEP requires a national accreditor already selected.
+  const jurisLab = memberships?.find(m => m.labId === activeLabId)
+    ?? memberships?.find(m => m.isAccountHomeLab)
+    ?? memberships?.[0];
+  const canSetJurisdiction = !!jurisLab && (jurisLab.role === "owner" || jurisLab.role === "admin");
+  const hasNationalAccreditor = !!(jurisLab && (jurisLab.accreditationTjc || jurisLab.accreditationCap || jurisLab.accreditationCola));
+  const jurisdictionMutation = useMutation({
+    mutationFn: async (regime: "CLIA" | "NYS-CLEP") => {
+      if (!jurisLab) throw new Error("No lab selected");
+      const res = await fetch(`${API_BASE}/api/labs/${jurisLab.labId}/jurisdiction`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ regime }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update jurisdiction");
+      }
+      return res.json();
+    },
+    onSuccess: (_d, regime) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/labs/me"] });
+      toast({ title: regime === "NYS-CLEP" ? "Jurisdiction set to NYS DOH / CLEP" : "Jurisdiction set to CLIA" });
+    },
+    onError: (err: Error) => toast({ title: err.message || "Failed to update jurisdiction", variant: "destructive" }),
+  });
+
   if (!isLoggedIn) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-20 text-center">
@@ -532,6 +561,56 @@ export default function AccountSettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      {jurisLab && (
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="text-base">Laboratory Jurisdiction</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            New York laboratories are regulated by NYS DOH / CLEP (10 NYCRR Part 58), not by CLIA. A New York lab is dual: CLEP plus a national accreditor (TJC, CAP, or COLA). This setting affects only a New York lab; it never changes anything for a CLIA lab.
+          </p>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="font-medium">Current:</span>
+            {jurisLab.primaryRegime === "NYS-CLEP" ? (
+              <span className="inline-flex items-center px-2 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-400 font-medium">
+                NYS DOH / CLEP{jurisLab.accreditationTjc ? " + TJC" : jurisLab.accreditationCap ? " + CAP" : jurisLab.accreditationCola ? " + COLA" : ""}
+              </span>
+            ) : (
+              <span className="inline-flex items-center px-2 py-0.5 rounded bg-muted font-medium">CLIA (federal)</span>
+            )}
+          </div>
+          {jurisLab.primaryRegime !== "NYS-CLEP" && jurisLab.nysSuggested && (
+            <p className="text-sm bg-blue-500/10 text-blue-800 dark:text-blue-300 rounded-md px-3 py-2">
+              This lab appears to be in New York. Confirm NYS jurisdiction to enable New York specific requirements.
+            </p>
+          )}
+          {jurisLab.primaryRegime !== "NYS-CLEP" && !hasNationalAccreditor && (
+            <p className="text-sm text-muted-foreground">
+              Select a national accreditor (TJC, CAP, or COLA) above before setting this lab to NYS DOH / CLEP.
+            </p>
+          )}
+          {canSetJurisdiction ? (
+            jurisLab.primaryRegime !== "NYS-CLEP" ? (
+              <Button
+                onClick={() => jurisdictionMutation.mutate("NYS-CLEP")}
+                disabled={jurisdictionMutation.isPending || !hasNationalAccreditor}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              >
+                {jurisdictionMutation.isPending ? "Saving..." : "Confirm NYS DOH / CLEP jurisdiction"}
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={() => jurisdictionMutation.mutate("CLIA")} disabled={jurisdictionMutation.isPending}>
+                {jurisdictionMutation.isPending ? "Saving..." : "Revert to CLIA"}
+              </Button>
+            )
+          ) : (
+            <p className="text-sm text-muted-foreground">Only the laboratory director or designee (owner or admin) can set jurisdiction.</p>
+          )}
+        </CardContent>
+      </Card>
+      )}
 
       <Card className="mt-6">
         <CardHeader>

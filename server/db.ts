@@ -1923,6 +1923,16 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
   ensure("study_credits",              "ALTER TABLE labs ADD COLUMN study_credits INTEGER DEFAULT 0");
   ensure("has_completed_onboarding",   "ALTER TABLE labs ADD COLUMN has_completed_onboarding INTEGER DEFAULT 0");
   ensure("preferred_pt_vendor",        "ALTER TABLE labs ADD COLUMN preferred_pt_vendor TEXT");
+  // NYS CLEP Phase-0 (2026-07-10): per-lab jurisdiction regime. NY is a
+  // CLIA-exempt state; a NY lab is DUAL — NYS DOH/CLEP for state jurisdiction
+  // PLUS a national accreditor (the existing accreditation_* booleans). These
+  // columns carry ONLY the NYS half; the accreditor overlay is unchanged.
+  // Default CLIA/none so every existing lab is untouched (pure ALTER+DEFAULT,
+  // no cascading writes). Director-attested via nys_confirmed_by/_at.
+  ensure("primary_regime",   "ALTER TABLE labs ADD COLUMN primary_regime TEXT NOT NULL DEFAULT 'CLIA'");   // CLIA | NYS-CLEP
+  ensure("nys_permit_type",  "ALTER TABLE labs ADD COLUMN nys_permit_type TEXT NOT NULL DEFAULT 'none'");  // none | in-state | out-of-state
+  ensure("nys_confirmed_by", "ALTER TABLE labs ADD COLUMN nys_confirmed_by INTEGER");
+  ensure("nys_confirmed_at", "ALTER TABLE labs ADD COLUMN nys_confirmed_at TEXT");
   // Wave K1 (2026-06-07): Inventory PIN. Shared 6-digit code that grants
   // a scoped JWT (subject = inv:lab_<id>) good only for reading the
   // inventory_items list and adjusting quantity_on_hand. Hashed at rest

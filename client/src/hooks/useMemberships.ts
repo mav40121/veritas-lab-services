@@ -33,6 +33,13 @@ export interface Membership {
   // access (cert renewals can take months and freezing the app on an
   // expired CLIA would punish the lab for a CMS lag).
   cliaCertExpirationDate: string | null;
+  // NYS CLEP Phase-0: governing regime. 'CLIA' (default) or 'NYS-CLEP' for a
+  // New York (CLIA-exempt) lab, which is DUAL: CLEP plus its national accreditor
+  // (the accreditation* flags above). nysSuggested is a soft hint (owner's
+  // physical state is NY) that never auto-applies. Optional for deploy skew.
+  primaryRegime?: "CLIA" | "NYS-CLEP";
+  nysPermitType?: "none" | "in-state" | "out-of-state";
+  nysSuggested?: boolean;
 }
 
 // Resolve the set of accreditors a lab is allowed to file findings under.
