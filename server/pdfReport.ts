@@ -7,6 +7,7 @@
  */
 
 import puppeteer from "puppeteer";
+import { stampPdfAuthor } from "./pdfMeta";
 import type { Study } from "@shared/schema";
 import { existsSync as _teaExistsSync, readFileSync as _teaReadFileSync } from "fs";
 import { resolve as _teaResolve } from "path";
@@ -3756,7 +3757,7 @@ export async function generateCumsumPDF(tracker: any, entries: any[], currentSpe
       footerTemplate: stamped.footerTemplate,
       margin: { top: "14mm", right: "15mm", bottom: "20mm", left: "15mm" },
     });
-    return Buffer.from(pdfBuffer);
+    return stampPdfAuthor(pdfBuffer);
   } finally {
     await page.close();
   }
@@ -3824,7 +3825,7 @@ export async function generatePDFBuffer(study: Study, results: any, cliaNumber?:
       footerTemplate: stamped.footerTemplate,
       margin: { top: "14mm", right: "15mm", bottom: "20mm", left: "15mm" },
     });
-    return Buffer.from(pdfBuffer);
+    return stampPdfAuthor(pdfBuffer);
   } finally {
     await page.close();
   }
@@ -4137,7 +4138,7 @@ export async function generateVeritaScanPDF(data: VeritaScanPDFData, type: "exec
       footerTemplate: stamped.footerTemplate,
       margin: { top: "14mm", right: "15mm", bottom: "20mm", left: "15mm" },
     });
-    return Buffer.from(pdfBuffer);
+    return stampPdfAuthor(pdfBuffer);
   } finally {
     await page.close();
   }
@@ -4825,7 +4826,7 @@ export async function generateCompetencyPDF(input: CompetencyPDFInput, licenseCt
       footerTemplate: stamped.footerTemplate,
       margin: { top: "14mm", right: "15mm", bottom: "20mm", left: "15mm" },
     });
-    return Buffer.from(pdfBuffer);
+    return stampPdfAuthor(pdfBuffer);
   } finally {
     await page.close();
   }
@@ -5078,7 +5079,7 @@ export async function generateCMS209PDF(input: CMS209Input, licenseCtx?: Partial
       footerTemplate: stamped.footerTemplate,
       margin: { top: "10mm", right: "12mm", bottom: "14mm", left: "12mm" },
     });
-    return Buffer.from(pdfBuffer);
+    return stampPdfAuthor(pdfBuffer);
   } finally {
     await page.close();
   }
@@ -5224,7 +5225,7 @@ export async function generateVeritaPTPDF(data: VeritaPTPDFData, licenseCtx?: Pa
       footerTemplate: stamped.footerTemplate,
       margin: { top: "14mm", right: "15mm", bottom: "16mm", left: "15mm" },
     });
-    return Buffer.from(pdfBuffer);
+    return stampPdfAuthor(pdfBuffer);
   } finally {
     await page.close();
   }
@@ -5675,7 +5676,7 @@ export async function generateVeritaPolicyPDF(input: VeritaPolicyPDFInput, licen
       footerTemplate: stamped.footerTemplate,
       margin: { top: "14mm", right: "15mm", bottom: "16mm", left: "15mm" },
     });
-    return Buffer.from(pdfBuffer);
+    return stampPdfAuthor(pdfBuffer);
   } finally {
     await page.close();
   }
@@ -5872,7 +5873,7 @@ export async function generateCms2567PDF(input: Cms2567Input, licenseCtx?: Parti
       footerTemplate: stamped.footerTemplate,
       margin: { top: "14mm", right: "15mm", bottom: "16mm", left: "15mm" },
     });
-    return Buffer.from(pdfBuffer);
+    return stampPdfAuthor(pdfBuffer);
   } finally {
     await page.close();
   }
@@ -6059,7 +6060,7 @@ export async function generateCapResponsePDF(input: Cms2567Input, licenseCtx?: P
       footerTemplate: stamped.footerTemplate,
       margin: { top: "14mm", right: "15mm", bottom: "16mm", left: "15mm" },
     });
-    return Buffer.from(pdfBuffer);
+    return stampPdfAuthor(pdfBuffer);
   } finally {
     await page.close();
   }
@@ -6251,7 +6252,7 @@ export async function generateTjcEscPDF(input: Cms2567Input, licenseCtx?: Partia
       footerTemplate: stamped.footerTemplate,
       margin: { top: "14mm", right: "15mm", bottom: "16mm", left: "15mm" },
     });
-    return Buffer.from(pdfBuffer);
+    return stampPdfAuthor(pdfBuffer);
   } finally {
     await page.close();
   }
@@ -6437,7 +6438,7 @@ export async function generateColaResponsePDF(input: Cms2567Input, licenseCtx?: 
       footerTemplate: stamped.footerTemplate,
       margin: { top: "14mm", right: "15mm", bottom: "16mm", left: "15mm" },
     });
-    return Buffer.from(pdfBuffer);
+    return stampPdfAuthor(pdfBuffer);
   } finally {
     await page.close();
   }
@@ -6632,7 +6633,7 @@ export async function generateAabbNerPDF(input: Cms2567Input, licenseCtx?: Parti
       footerTemplate: stamped.footerTemplate,
       margin: { top: "14mm", right: "15mm", bottom: "16mm", left: "15mm" },
     });
-    return Buffer.from(pdfBuffer);
+    return stampPdfAuthor(pdfBuffer);
   } finally {
     await page.close();
   }
