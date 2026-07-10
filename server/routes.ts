@@ -27912,23 +27912,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put('/api/veritapolicy/settings', authMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
     const sqlite = db.$client;
     const userId = req.ownerUserId;
+    // Phase 3.3: settings are keyed by lab_id. This account-level legacy route
+    // resolves the owner's home lab and upserts lab-scoped (superseded by the
+    // /api/labs/:labId/veritapolicy/settings route the app now uses).
+    const labRow = sqlite.prepare("SELECT lab_id FROM users WHERE id = ?").get(userId) as any;
+    const labId = labRow?.lab_id ?? null;
+    if (labId == null) {
+      return res.status(400).json({ error: "No lab is associated with your account. Select a lab first." });
+    }
     const { is_independent, setup_complete, accreditation_body } = req.body;
     sqlite.prepare(`
-      INSERT INTO veritapolicy_settings (user_id, is_independent, setup_complete, accreditation_body, updated_at)
-      VALUES (?, ?, ?, ?, datetime('now'))
-      ON CONFLICT(user_id) DO UPDATE SET
+      INSERT INTO veritapolicy_settings (user_id, lab_id, is_independent, setup_complete, accreditation_body, updated_at)
+      VALUES (?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(lab_id) DO UPDATE SET
         is_independent = excluded.is_independent,
         setup_complete = excluded.setup_complete,
         accreditation_body = excluded.accreditation_body,
         updated_at = excluded.updated_at
-    `).run(userId, is_independent?1:0, setup_complete?1:0, accreditation_body || 'tjc');
-    // Multi-Lab Tier 2 Phase 3.2 dual-write: stamp lab_id from the user's
-    // lab so the row is reachable by lab-scoped queries (Phase 3.2b).
-    try {
-      sqlite.prepare(
-        "UPDATE veritapolicy_settings SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE user_id = ? AND lab_id IS NULL"
-      ).run(userId, userId);
-    } catch {}
+    `).run(userId, labId, is_independent?1:0, setup_complete?1:0, accreditation_body || 'tjc');
     res.json({ ok: true });
   });
 
@@ -28239,11 +28240,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const sqlite = db.$client;
     const userId = req.ownerUserId;
     const policyId = String(req.params.policyId);
+    // Phase 3.3: master_status is keyed by (lab_id, policy_id). This account-level
+    // legacy route resolves the owner's home lab and upserts lab-scoped
+    // (superseded by /api/labs/:labId/veritapolicy/master-list/:policyId).
+    const labRow = sqlite.prepare("SELECT lab_id FROM users WHERE id = ?").get(userId) as any;
+    const labId = labRow?.lab_id ?? null;
+    if (labId == null) {
+      return res.status(400).json({ error: "No lab is associated with your account. Select a lab first." });
+    }
     const { status, is_na, na_reason, our_policy_name, notes } = req.body || {};
     sqlite.prepare(`
-      INSERT INTO veritapolicy_master_status (user_id, policy_id, status, is_na, na_reason, our_policy_name, notes, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-      ON CONFLICT(user_id, policy_id) DO UPDATE SET
+      INSERT INTO veritapolicy_master_status (user_id, lab_id, policy_id, status, is_na, na_reason, our_policy_name, notes, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(lab_id, policy_id) DO UPDATE SET
         status          = COALESCE(excluded.status, status),
         is_na           = COALESCE(excluded.is_na, is_na),
         na_reason       = COALESCE(excluded.na_reason, na_reason),
@@ -28251,19 +28260,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         notes           = COALESCE(excluded.notes, notes),
         updated_at      = excluded.updated_at
     `).run(
-      userId, policyId,
+      userId, labId, policyId,
       status || 'not_started',
       typeof is_na === 'boolean' ? (is_na ? 1 : 0) : 0,
       na_reason ?? null,
       our_policy_name ?? null,
       notes ?? null,
     );
-    // Phase 3.2 dual-write lab_id.
-    try {
-      sqlite.prepare(
-        "UPDATE veritapolicy_master_status SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE user_id = ? AND policy_id = ? AND lab_id IS NULL"
-      ).run(userId, userId, policyId);
-    } catch {}
     res.json({ ok: true });
   });
 
@@ -28567,8 +28570,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     sqlite.prepare(`
       INSERT INTO veritapolicy_settings (user_id, lab_id, is_independent, setup_complete, accreditation_body, updated_at)
       VALUES (?, ?, ?, ?, ?, datetime('now'))
-      ON CONFLICT(user_id) DO UPDATE SET
-        lab_id = excluded.lab_id,
+      ON CONFLICT(lab_id) DO UPDATE SET
         is_independent = excluded.is_independent,
         setup_complete = excluded.setup_complete,
         accreditation_body = excluded.accreditation_body,
@@ -28626,8 +28628,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     sqlite.prepare(`
       INSERT INTO veritapolicy_master_status (user_id, lab_id, policy_id, status, is_na, na_reason, our_policy_name, notes, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-      ON CONFLICT(user_id, policy_id) DO UPDATE SET
-        lab_id          = excluded.lab_id,
+      ON CONFLICT(lab_id, policy_id) DO UPDATE SET
         status          = COALESCE(excluded.status, status),
         is_na           = COALESCE(excluded.is_na, is_na),
         na_reason       = COALESCE(excluded.na_reason, na_reason),
