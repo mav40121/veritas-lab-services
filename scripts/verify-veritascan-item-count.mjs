@@ -69,5 +69,12 @@ ok("no 'const total = 168' left", !/const total = 168;/.test(routes));
 ok("no 'items.length || 168' fallback", !/items\.length \|\| 168/.test(routes));
 ok("Excel About walks 173 compliance questions", /walks 173 compliance questions/.test(routes) && !/walks 168 compliance questions/.test(routes));
 
+// 6. The static HTML shell's JSON-LD structured data must also be 173 (this is
+// where the first pass missed an instance; the live curl caught it).
+const indexHtml = read("client/index.html");
+ok("index.html JSON-LD has no stale 168 anywhere", !/168/.test(indexHtml));
+ok("index.html JSON-LD advertises 173-item + 173 compliance questions",
+  /173-item TJC-standard/.test(indexHtml) && /173 compliance questions/.test(indexHtml));
+
 console.log(fails === 0 ? "\n=== VERITASCAN ITEM COUNT: PASS ===" : `\n=== ${fails} FAIL ===`);
 process.exit(fails === 0 ? 0 : 1);
