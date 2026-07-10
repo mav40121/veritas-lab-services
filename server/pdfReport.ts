@@ -5210,12 +5210,29 @@ function buildVeritaPTPDFHTML(data: VeritaPTPDFData): string {
   </body></html>`;
 }
 
+// Running footer for the VeritaPT proficiency-testing report. Same class of fix
+// as VeritaPolicy: the generator passed "" here, so the running footer held only
+// the license band (no brand line, no page numbers, nothing on overflow pages).
+// The in-body .footer-note is KEPT (it carries the required "Final approval..."
+// determination line + attribution); this adds the per-page CLAUDE.md Sec 5
+// footer. Hyphen (not em-dash) matches FOOTER_TEMPLATE + Sec 3.
+const VERITAPT_FOOTER_TEMPLATE = `
+<div style="width:100%;padding:0 15mm;box-sizing:border-box;font-family:Helvetica,Arial,sans-serif">
+  <div style="border-top:1px solid #d2d7dc;padding-top:3px">
+    <div style="font-size:6px;color:#a0a0a0;line-height:1.4">VeritaPT&trade; tracks proficiency-testing performance. Results require interpretation by a licensed medical director or designee and do not constitute medical advice.</div>
+    <div style="display:flex;justify-content:space-between;font-size:7px;color:#646e78;margin-top:2px">
+      <span>VeritaAssure&trade; | VeritaPT&trade; | Confidential - For Internal Lab Use Only</span>
+      <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
+    </div>
+  </div>
+</div>`;
+
 export async function generateVeritaPTPDF(data: VeritaPTPDFData, licenseCtx?: Partial<LicenseContext> | null): Promise<Buffer> {
   const html = buildVeritaPTPDFHTML(data);
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    const stamped = applyLicenseToPuppeteer(html, "", licenseCtx);
+    const stamped = applyLicenseToPuppeteer(html, VERITAPT_FOOTER_TEMPLATE, licenseCtx);
     await page.setContent(stamped.html, { waitUntil: "networkidle0" });
     const pdfBuffer = await page.pdf({
       format: "Letter",
