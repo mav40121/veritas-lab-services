@@ -28393,7 +28393,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       aboutSection('How to use this workbook');
       aboutBody('The Master List tab contains the policies most clinical laboratories need to meet federal regulations and accrediting body standards. Use the column filters at the top of each column to narrow by Section, Subspecialty, Service Line, or other fields.');
-      aboutBody('Sections: Sections organize policies by where they live in laboratory operations \u2014 Specimen Management, Testing, Results, Quality, Personnel, Safety, Information Systems, Leadership, and Specialty Services.');
+      aboutBody('Sections: Sections organize policies by where they live in laboratory operations: Specimen Management, Testing, Results, Quality, Personnel, Safety, Information Systems, Leadership, and Specialty Services.');
       aboutBody('Service line: Service Line marks rows that apply only when a specific service is offered. Most rows show "all" because they apply to every laboratory regardless of service mix. Specialty Services rows show their specific line (blood_bank, microbiology, molecular, anatomic_pathology, etc.) so they can be filtered out when a service is not offered.');
       aboutBody(`Citations: This workbook shows the CFR column plus the column for the accrediting body on file for this lab: ${aoLabel}. Each citation cell shows the most-relevant standards for that policy, capped at five per accrediting body.`);
       aboutBody('Notes: Notes describe where the supporting documentation typically lives, which VeritaPolicy or VeritaCheck module helps draft it, conditional applicability, and role consolidation rules.');
@@ -28417,7 +28417,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       aboutBlank();
 
       aboutSection('Coverage gaps');
-      aboutBody('Every laboratory operates in a slightly different context. If your laboratory identifies content not covered here that should be \u2014 a state-specific requirement, a specialty (histocompatibility, cytogenetics, embryology, public-health), or a policy class your operation needs \u2014 please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.');
+      aboutBody('Every laboratory operates in a slightly different context. If your laboratory identifies content not covered here, such as a state-specific requirement, a specialty (histocompatibility, cytogenetics, embryology, public-health), or a policy class your operation needs, please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.');
 
       about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaPolicy Master List&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
       about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
@@ -29086,7 +29086,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       aboutBlank();
       aboutSection('How to use this workbook');
       aboutBody('The Master List tab contains the policies most clinical laboratories need to meet federal regulations and accrediting body standards. Use the column filters at the top of each column to narrow by Section, Subspecialty, Service Line, or other fields.');
-      aboutBody('Sections: Sections organize policies by where they live in laboratory operations — Specimen Management, Testing, Results, Quality, Personnel, Safety, Information Systems, Leadership, and Specialty Services.');
+      aboutBody('Sections: Sections organize policies by where they live in laboratory operations: Specimen Management, Testing, Results, Quality, Personnel, Safety, Information Systems, Leadership, and Specialty Services.');
       aboutBody('Service line: Service Line marks rows that apply only when a specific service is offered. Most rows show "all" because they apply to every laboratory regardless of service mix. Specialty Services rows show their specific line (blood_bank, microbiology, molecular, anatomic_pathology, etc.) so they can be filtered out when a service is not offered.');
       aboutBody(`Citations: This workbook shows the CFR column plus the column for the accrediting body on file for this lab: ${aoLabel}. Each citation cell shows the most-relevant standards for that policy, capped at five per accrediting body.`);
       aboutBody('Notes: Notes describe where the supporting documentation typically lives, which VeritaPolicy or VeritaCheck module helps draft it, conditional applicability, and role consolidation rules.');
@@ -29106,7 +29106,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       aboutBody('Citations are derived from the VeritaAssure master citation index, which crosswalks 42 CFR 493 (CLIA), 21 CFR 600 series (FDA blood and tissue), 29 CFR 1910 (OSHA), 10 CFR 20 (NRC), and 45 CFR 164 (HIPAA Security Rule) against the published standards of TJC, CAP, COLA, and AABB.');
       aboutBlank();
       aboutSection('Coverage gaps');
-      aboutBody('Every laboratory operates in a slightly different context. If your laboratory identifies content not covered here that should be — a state-specific requirement, a specialty (histocompatibility, cytogenetics, embryology, public-health), or a policy class your operation needs — please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.');
+      aboutBody('Every laboratory operates in a slightly different context. If your laboratory identifies content not covered here, such as a state-specific requirement, a specialty (histocompatibility, cytogenetics, embryology, public-health), or a policy class your operation needs, please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.');
 
       about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaPolicy Master List&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
       about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
@@ -30150,7 +30150,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           `UPDATE policy_documents
              SET title = COALESCE(?, title),
                  description = COALESCE(?, description),
-                 manual_id = COALESCE(?, manual_id),
+                 manual_id = CASE WHEN ? = 1 THEN ? ELSE manual_id END,
                  review_interval_months = COALESCE(?, review_interval_months),
                  updated_at = datetime('now')
            WHERE id = ?`
@@ -30158,6 +30158,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         .run(
           title ? String(title).trim() : null,
           description !== undefined ? description : null,
+          // manual_id: a provided null clears the manual (move to Unassigned);
+          // COALESCE could not distinguish "clear" from "not sent" so the move
+          // silently no-op'd. The flag param preserves it only when omitted.
+          manualId !== undefined ? 1 : 0,
           manualId !== undefined ? (manualId === null ? null : Number(manualId)) : null,
           reviewIntervalMonths !== undefined ? Number(reviewIntervalMonths) : null,
           id
