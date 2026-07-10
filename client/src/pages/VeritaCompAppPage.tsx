@@ -230,14 +230,8 @@ const DEPARTMENTS = [
   "Manual Procedures", "Other",
 ];
 
-const CLIA_METHODS = [
-  "Direct observations of routine patient test performance (including specimen collection/handling/processing/testing)",
-  "Monitoring recording and reporting of test results (including critical result reporting)",
-  "Review of intermediate results, QC records, PT results, and preventive maintenance records",
-  "Direct observation of instrument maintenance function checks and calibration",
-  "Test performance (blind specimens, internal blind samples, external PT samples)",
-  "Evaluation of problem-solving skills",
-];
+// CLIA_METHODS removed 2026-07-09: unused dead constant that still carried the
+// pre-fix Element-3 wording ("review of QC records") the app moved away from.
 
 const WAIVED_METHODS = [
   "Blind specimen testing",
@@ -1950,7 +1944,7 @@ function AssessmentDocumentsDialog({ assessmentId, onClose }: { assessmentId: nu
             <DialogTitle>Linked Documents</DialogTitle>
           </DialogHeader>
           <p className="text-xs text-muted-foreground">
-            Link evidence per CLIA element. Quiz scans, observation notes, QC records — anything a surveyor would ask to see. VeritaAssure stores only the URL; your file stays in your SharePoint, Drive, or other lab-controlled storage.
+            Link evidence per CLIA element. Quiz scans, observation notes, QC records: anything a surveyor would ask to see. VeritaAssure stores only the URL; your file stays in your SharePoint, Drive, or other lab-controlled storage.
           </p>
           <div className="space-y-4 pt-2">
             {[1, 2, 3, 4, 5, 6].map(n => {
@@ -2000,7 +1994,7 @@ function AssessmentDocumentsDialog({ assessmentId, onClose }: { assessmentId: nu
       <DocumentLinkDialog
         open={linkElement !== null}
         onOpenChange={(v) => { if (!v) setLinkElement(null); }}
-        title={linkElement !== null ? `Link Document — Element ${linkElement}` : "Link Document"}
+        title={linkElement !== null ? `Link Document: Element ${linkElement}` : "Link Document"}
         docTypes={COMP_DOC_TYPES}
         onSubmit={createDoc}
       />
