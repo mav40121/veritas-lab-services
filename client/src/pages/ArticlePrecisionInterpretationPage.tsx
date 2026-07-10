@@ -137,7 +137,7 @@ export default function ArticlePrecisionInterpretationPage() {
 
           <Section id="advanced" title="Advanced (EP15) mode and ANOVA components">
             <p>
-              When the data is collected across a structured design — typically 5 days of 5 replicates each — VeritaCheck’s advanced mode uses analysis of variance to decompose the total observed variability into three components:
+              When the data is collected across a structured design, typically 5 days of 5 replicates each, VeritaCheck’s advanced mode uses analysis of variance to decompose the total observed variability into three components:
             </p>
             <p><strong>Within-run SD.</strong> Variability among replicates measured back-to-back in the same run, on the same day, by the same operator. This is the tightest layer.</p>
             <p><strong>Between-run SD.</strong> Variability added when multiple runs are performed within a day. Captures small drifts in calibration or environment that accumulate between runs.</p>
@@ -224,16 +224,16 @@ export default function ArticlePrecisionInterpretationPage() {
 
           <Section id="references" title="References">
             <p>
-              <strong>42 CFR Part 493 Subpart I — Proficiency Testing Programs for Nonwaived Testing.</strong> Federal regulation establishing the PT acceptance criteria the laboratory must satisfy and the performance specifications it must verify before reporting patient results.
+              <strong>42 CFR Part 493 Subpart I: Proficiency Testing Programs for Nonwaived Testing.</strong> Federal regulation establishing the PT acceptance criteria the laboratory must satisfy and the performance specifications it must verify before reporting patient results.
             </p>
             <p>
-              <strong>42 CFR §493.1253 — Establishment and verification of performance specifications.</strong> The CFR provision requiring labs to verify accuracy, precision, reportable range, and reference intervals before patient testing.
+              <strong>42 CFR §493.1253: Establishment and verification of performance specifications.</strong> The CFR provision requiring labs to verify accuracy, precision, reportable range, and reference intervals before patient testing.
             </p>
             <p>
-              <strong>CLSI EP15-A3 — User Verification of Precision and Estimation of Bias; Approved Guideline.</strong> Published by the Clinical and Laboratory Standards Institute. The procedural standard most laboratories adopt for the verification activity, including the 5-day × 5-replicate design referenced in advanced mode.
+              <strong>CLSI EP15-A3: User Verification of Precision and Estimation of Bias; Approved Guideline.</strong> Published by the Clinical and Laboratory Standards Institute. The procedural standard most laboratories adopt for the verification activity, including the 5-day × 5-replicate design referenced in advanced mode.
             </p>
             <p>
-              <strong>ADLM — Association for Diagnostic and Laboratory Medicine.</strong> Professional society whose published recommendations on splitting allowable total error into systematic and random error budgets inform the "ADLM internal goal" surfaced alongside the CLIA TEa in VeritaCheck narratives.
+              <strong>ADLM: Association for Diagnostic and Laboratory Medicine.</strong> Professional society whose published recommendations on splitting allowable total error into systematic and random error budgets inform the "ADLM internal goal" surfaced alongside the CLIA TEa in VeritaCheck narratives.
             </p>
             <p>
               Standards bodies own their respective documents; VeritaCheck references them by identifier only and does not reproduce their content.
