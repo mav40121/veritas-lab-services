@@ -22,6 +22,7 @@
 import { useEffect, useRef, useState } from "react";
 import DOMPurify from "dompurify";
 import InventoryCountWorkflow, { type CountItem } from "@/components/InventoryCountWorkflow";
+import { clearAuth } from "@/lib/auth";
 
 // 2026-06-09 PR2: shared DOMPurify config (mirrors VeritaCompAppPage).
 // Lets quiz prompts marked question_format='html' render inline tables,
@@ -125,7 +126,11 @@ export default function StaffPortalPage() {
   }, []);
 
   function signOut() {
-    try { localStorage.removeItem("auth_token"); } catch { /* noop */ }
+    // The portal auth-unified onto the regular localStorage token ("veritas_token",
+    // read at line ~87). The old code removed "auth_token" — a key that does not
+    // exist — so Sign out was a no-op and the session survived on a shared device.
+    // clearAuth() removes the real token + user (lib/auth TOKEN_KEY/USER_KEY).
+    try { clearAuth(); } catch { /* noop */ }
     window.location.href = "/login";
   }
 
