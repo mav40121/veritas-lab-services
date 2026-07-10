@@ -220,6 +220,9 @@ export async function generateVeritascanLibraryExcel(
     sort: false, autoFilter: true, pivotTables: false,
   });
 
+  // Open on the About sheet (sheet 0) per the customer-facing workbook standard.
+  wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
+                firstSheet: 0, activeTab: 0, visibility: "visible" }];
   const buf = await wb.xlsx.writeBuffer();
   return Buffer.from(buf as any);
 }

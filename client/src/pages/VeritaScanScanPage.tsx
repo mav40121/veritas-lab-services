@@ -7,6 +7,7 @@ import { authHeaders } from "@/lib/auth";
 import { downloadPdfToken } from "@/lib/utils";
 import { saveAs } from "file-saver";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -602,6 +603,7 @@ export default function VeritaScanScanPage() {
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirtyRef = useRef(false);
+  const { toast } = useToast();
 
   // Lab-scoped URLs for scan-by-id and items. When activeLabId is set, the
   // server enforces "this scan belongs to this lab" via WHERE lab_id = ? so
@@ -685,7 +687,10 @@ export default function VeritaScanScanPage() {
       dirtyRef.current = false;
       setTimeout(() => setSaveStatus("idle"), 2500);
     },
-    onError: () => setSaveStatus("idle"),
+    onError: () => {
+      setSaveStatus("idle");
+      toast({ title: "Changes not saved", description: "The save was rejected; your last edits are not stored. Try again.", variant: "destructive" });
+    },
   });
 
   const scheduleAutoSave = useCallback(

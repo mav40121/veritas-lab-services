@@ -248,7 +248,7 @@ export default function VeritaScanDocumentLibraryPage() {
         <div>
           <h1 className="text-2xl font-bold">VeritaScan™ Evidence Library</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Link external documents that satisfy your accreditation checklists. URLs only — files stay in your SharePoint, Drive, OneDrive, or network share.
+            Link external documents that satisfy your accreditation checklists. URLs only. Files stay in your SharePoint, Drive, OneDrive, or network share.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -346,7 +346,17 @@ export default function VeritaScanDocumentLibraryPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {docs.length === 0 && (
+                    {docsQuery.isLoading && (
+                      <tr><td colSpan={9} className="text-center py-8 text-sm text-muted-foreground">
+                        Loading documents...
+                      </td></tr>
+                    )}
+                    {docsQuery.isError && !docsQuery.isLoading && (
+                      <tr><td colSpan={9} className="text-center py-8 text-sm text-red-600 dark:text-red-400">
+                        Could not load documents. Check your connection and retry.
+                      </td></tr>
+                    )}
+                    {!docsQuery.isLoading && !docsQuery.isError && docs.length === 0 && (
                       <tr><td colSpan={9} className="text-center py-8 text-sm text-muted-foreground">
                         No documents yet. Click <strong>Add Document</strong> to link your first one.
                       </td></tr>
