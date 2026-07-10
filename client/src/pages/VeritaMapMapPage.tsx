@@ -1579,6 +1579,8 @@ function TestRow({ test, onChange, onRowMount, analyteValues, amrValues, onSaveA
                       });
                     }
                   }
+                } catch {
+                  setAutosaveStatus("error");
                 } finally {
                   setSaving(false);
                 }
@@ -1918,23 +1920,33 @@ export default function VeritaMapMapPage() {
 
   // Save analyte values (ref range, critical values, units)
   const handleSaveAnalyteValues = useCallback(async (analyte: string, values: AnalyteValues) => {
-    await fetch(`${API_BASE}${mapApiBase}/analyte-values/${encodeURIComponent(analyte)}`, {
+    const res = await fetch(`${API_BASE}${mapApiBase}/analyte-values/${encodeURIComponent(analyte)}`, {
       method: "PUT",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify(values),
     });
+    if (!res.ok) {
+      const msg = await res.json().then((d: any) => d?.error).catch(() => null);
+      toast({ title: "Critical values not saved", description: msg || "Server error. Please try again.", variant: "destructive" });
+      throw new Error(msg || `analyte-values save failed (${res.status})`);
+    }
     setAnalyteValuesMap(prev => ({ ...prev, [analyte]: values }));
-  }, [mapId, mapApiBase]);
+  }, [mapId, mapApiBase, toast]);
 
   // Save AMR values (per instrument)
   const handleSaveAmrValues = useCallback(async (analyte: string, instrumentId: number, values: { amr_low: string; amr_high: string }) => {
-    await fetch(`${API_BASE}${mapApiBase}/amr-values/${instrumentId}/${encodeURIComponent(analyte)}`, {
+    const res = await fetch(`${API_BASE}${mapApiBase}/amr-values/${instrumentId}/${encodeURIComponent(analyte)}`, {
       method: "PUT",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify(values),
     });
+    if (!res.ok) {
+      const msg = await res.json().then((d: any) => d?.error).catch(() => null);
+      toast({ title: "AMR not saved", description: msg || "Server error. Please try again.", variant: "destructive" });
+      throw new Error(msg || `amr-values save failed (${res.status})`);
+    }
     setAmrValuesMap(prev => ({ ...prev, [`${instrumentId}::${analyte}`]: { ...prev[`${instrumentId}::${analyte}`], ...values } }));
-  }, [mapId, mapApiBase]);
+  }, [mapId, mapApiBase, toast]);
 
   // Wave A4 provenance actions: MEC review on critical values, 493.1253
   // attestation + unlock on ref range and per-instrument AMR. Lab-scoped
