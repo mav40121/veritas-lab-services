@@ -1118,7 +1118,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     waived: "Clinic",
     community: "Community",
     hospital: "Hospital",
-    large_hospital: "Enterprise",
+    large_hospital: "System",
     veritacheck_only: "VeritaCheck\u2122 Unlimited",
     annual: "Annual (Legacy)",
     starter: "Starter (Legacy)",
@@ -24169,16 +24169,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     if (certType.includes("waiv")) {
       tier = "waived";
-      base_price = 499;
+      base_price = 999;
     } else if (labData.specialty_count >= 16) {
       tier = "large_hospital";
-      base_price = 2999;
+      base_price = 0;   // System: custom quote, no fixed self-serve price
     } else if (labData.specialty_count >= 9) {
       tier = "hospital";
-      base_price = 1999;
+      base_price = 4995;
     } else {
       tier = "community";
-      base_price = 999;
+      base_price = 2125;
     }
 
     res.json({
@@ -24281,10 +24281,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(req.userId) as { active_count: number; view_only_count: number } | undefined;
     const currentActive = (seatBreakdown?.active_count ?? 0) + 1 /* owner counts as active */;
     const currentViewOnly = seatBreakdown?.view_only_count ?? 0;
-    const nextTier = userPlan === "clinic" ? { label: "Community", price: 999, seats: 5, plan: "community" }
-      : userPlan === "community" ? { label: "Hospital", price: 1999, seats: 15, plan: "hospital" }
-      : userPlan === "hospital" ? { label: "Enterprise", price: 2999, seats: 25, plan: "enterprise" }
-      : null;
+    const nextTier = userPlan === "clinic" ? { label: "Community", price: 2125, seats: 5, plan: "community" }
+      : userPlan === "community" ? { label: "Hospital", price: 4995, seats: 15, plan: "hospital" }
+      : null; // hospital's next step is System (custom quote), not a self-serve upsell
     if (seatType === "active" && currentActive + 1 > maxActiveSeats) {
       return res.status(402).json({
         error: "seat_limit_reached",
