@@ -6,19 +6,31 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Link } from "wouter";
 import { CheckCircle2, Shield, ExternalLink, ChevronRight, ClipboardList, AlertTriangle, FlaskConical } from "lucide-react";
 import { useLabRoute } from "@/hooks/useLabRoute";
+import { SCAN_ITEMS, DOMAINS as SCAN_DOMAINS } from "@/lib/veritaScanData";
 
-const DOMAINS = [
-  { num: "I",    label: "Lab Administration",         items: 16, desc: "CLIA certificate, director qualifications, personnel files, org structure, delegation" },
-  { num: "II",   label: "Facility & Safety",           items: 18, desc: "BBP, Chemical Hygiene Plan, PPE, sharps, biohazardous waste, eyewash, BSC certification" },
-  { num: "III",  label: "Quality Management",          items: 15, desc: "QM program, QA meetings, quality indicators, corrective action, RCA, complaint management" },
-  { num: "IV",   label: "Test Management",             items: 18, desc: "Ordering, specimen collection, patient ID, critical values, corrected reports, record retention" },
-  { num: "V",    label: "Proficiency Testing",         items: 13, desc: "Enrollment, sample handling, rotation, failure response, alternative assessment, PT prohibition policy" },
-  { num: "VI",   label: "Instrument & Equipment",      items: 15, desc: "PM schedules, calibration, calibration verification, reagent lot verification, temperature monitoring" },
-  { num: "VII",  label: "Procedure Manual",            items: 22, desc: "Completeness, bench accessibility, biennial review, required SOP elements, change control" },
-  { num: "VIII", label: "Quality Control",             items: 19, desc: "QC program, frequency, OOC response, Levey-Jennings charts, IQCP, POCT, reflexive QC" },
-  { num: "IX",   label: "Competency Assessment",       items: 16, desc: "All 6 CLIA methods, initial and annual frequency, documentation, remediation, high-complexity supervision" },
-  { num: "X",    label: "Blood Bank / Transfusion Svc",items: 16, desc: "Pre-transfusion testing, patient ID, compatibility testing, transfusion reaction workup, FDA reporting" },
-];
+const TOTAL_ITEMS = SCAN_ITEMS.length;
+const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+// One-line summary per real domain, authored from the actual checklist content
+// in veritaScanData.ts. Item counts are computed from the data so the marketing
+// page always matches the product and can never drift.
+const DOMAIN_DESC: Record<string, string> = {
+  "Quality Systems & QC": "QC policy and frequency, Levey-Jennings review, Westgard rules, critical values, delta checks, and the quality management program.",
+  "Calibration & Verification": "Calibration verification, reportable range, method comparison, precision, and accuracy verification of performance specifications.",
+  "Proficiency Testing": "PT enrollment, sample handling, timely submission, director review, failure root cause, alternative assessment, and the referral prohibition.",
+  "Personnel & Competency": "Director and testing-personnel qualifications, initial and annual competency using the six CLIA elements, delegation, and training records.",
+  "Test Management & Procedures": "Procedure manual and biennial SOP review, requisition and report elements, specimen labeling, record retention, LDT validation, and interface checks.",
+  "Equipment & Maintenance": "Preventive maintenance, function checks, temperature monitoring, reagent lot acceptance, and equipment repair validation.",
+  "Safety & Environment": "Bloodborne pathogen and chemical hygiene plans, SDS, PPE, biohazard waste, eyewash, and safety inspections.",
+  "Blood Bank & Transfusion": "ABO/Rh and compatibility testing, antibody screen, issue verification, transfusion reaction workup, FDA reporting, and blood product storage.",
+  "Point of Care Testing": "POCT oversight, operator training and competency, QC, device maintenance, connectivity validation, and operator lockout.",
+  "Leadership & Governance": "Director policy sign-off, accreditation reportable events, CLIA certificate, corrective action log, and the annual self-assessment.",
+};
+const DOMAIN_CARDS = SCAN_DOMAINS.map((label, i) => ({
+  num: ROMAN[i] ?? String(i + 1),
+  label,
+  items: SCAN_ITEMS.filter((it) => it.domain === label).length,
+  desc: DOMAIN_DESC[label] ?? "",
+}));
 
 const STANDARDS = [
   { name: "TJC Standards", desc: "Every question maps to the exact QSA Standard and Element of Performance" },
@@ -27,12 +39,12 @@ const STANDARDS = [
 ];
 
 const FEATURES = [
-  "168 compliance questions across 10 laboratory domains",
+  `${TOTAL_ITEMS} compliance questions across ${SCAN_DOMAINS.length} laboratory domains`,
   "Triple-mapped to TJC standards, CAP checklists, and 42 CFR §493",
   "Live compliance dashboard with real-time scores by domain",
   "Status tracking: Compliant / Needs Attention / Immediate Action / N/A",
   "Finding documentation fields with owner assignment and due dates",
-  "Blood bank / transfusion service coverage (Domain X)",
+  "Blood bank / transfusion service coverage included",
   "Written by a 4-year TJC surveyor with 200+ facility inspections",
   "Exportable: share with medical director or designee, CNO, or consulting team",
 ];
@@ -42,7 +54,7 @@ const FEATURES = [
 export default function VeritaScanPage() {
     const labRoute = useLabRoute();
     const { isLoggedIn } = useAuth();
-    useSEO({ title: "VeritaScan™ | Laboratory Inspection Readiness Checklist Software", description: "168-item TJC-standard inspection checklist for clinical laboratories. Track your readiness, identify gaps, and walk into every survey prepared." });
+    useSEO({ title: "VeritaScan™ | Laboratory Inspection Readiness Checklist Software", description: `${TOTAL_ITEMS}-item TJC-standard inspection checklist for clinical laboratories. Track your readiness, identify gaps, and walk into every survey prepared.` });
 return (
     <div>
       {/* Hero */}
@@ -65,7 +77,7 @@ return (
                 </p>
               </div>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                168 compliance questions. Triple-mapped to TJC standards, CAP checklists, and 42 CFR Part 493. Built by a former TJC laboratory surveyor who has conducted inspections at more than 200 facilities.
+                {TOTAL_ITEMS} compliance questions. Triple-mapped to TJC standards, CAP checklists, and 42 CFR Part 493. Built by a former TJC laboratory surveyor who has conducted inspections at more than 200 facilities.
               </p>
 
               {/* Pricing - public visitors only */}
@@ -99,7 +111,7 @@ return (
                   <div className="text-sm text-white/70 text-center mb-4">Self-Inspection &<br />Compliance Audit Tool</div>
                   <div className="w-12 h-0.5 bg-white/40 mb-4" />
                   <div className="text-xs text-white/60 text-center">TJC · CAP · 42 CFR §493</div>
-                  <div className="text-xs text-white/60 text-center mt-1">168 Compliance Items</div>
+                  <div className="text-xs text-white/60 text-center mt-1">{TOTAL_ITEMS} Compliance Items</div>
                 </div>
                 <div className="absolute -bottom-2 -right-2 w-64 h-80 bg-black/20 rounded-lg -z-10" />
               </div>
@@ -118,7 +130,7 @@ return (
                 Every non-waived laboratory in the United States operates under the same fundamental anxiety: the survey is coming. Whether it arrives from The Joint Commission, the College of American Pathologists, or CMS directly, the inspector will walk through your laboratory domain by domain, standard by standard, and they will find what you haven't looked for.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                VeritaScan™ gives laboratory directors, quality managers, and compliance consultants the same structured lens a surveyor uses, before the surveyor arrives. Each of the 168 compliance questions is mapped to the specific TJC Standard and Element of Performance, the corresponding CAP checklist requirement number, and the applicable 42 CFR Part 493 regulation. This makes VeritaScan™ more than a checklist. It is a roadmap for understanding why each item is required and exactly where to look when you need to verify it.
+                VeritaScan™ gives laboratory directors, quality managers, and compliance consultants the same structured lens a surveyor uses, before the surveyor arrives. Each of the {TOTAL_ITEMS} compliance questions is mapped to the specific TJC Standard and Element of Performance, the corresponding CAP checklist requirement number, and the applicable 42 CFR Part 493 regulation. This makes VeritaScan™ more than a checklist. It is a roadmap for understanding why each item is required and exactly where to look when you need to verify it.
               </p>
               <p className="text-muted-foreground leading-relaxed">
                 The compliance dashboard updates in real time as you complete your assessment. IMMEDIATE ACTION findings are flagged separately so the highest-priority gaps are never buried in a list of lower-risk items. The result is a document you can take to your medical director or designee, your CNO, or your accreditation body as evidence of proactive self-assessment.
@@ -167,10 +179,10 @@ return (
       {/* 10 domains */}
       <section className="section-padding border-b border-border">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <h2 className="font-serif text-3xl font-bold mb-2">10 Domains, 168 Items</h2>
+          <h2 className="font-serif text-3xl font-bold mb-2">{SCAN_DOMAINS.length} Domains, {TOTAL_ITEMS} Items</h2>
           <p className="text-muted-foreground mb-8">Every domain a surveyor will inspect. No gaps.</p>
           <div className="grid sm:grid-cols-2 gap-4">
-            {DOMAINS.map((d, i) => (
+            {DOMAIN_CARDS.map((d, i) => (
               <div key={i} className="border border-border rounded-xl p-4 bg-card hover:bg-muted/20 transition-colors">
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
@@ -230,11 +242,11 @@ return (
                   <span className="text-4xl font-bold">Included</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  Included in all VeritaAssure&#8482; plans (starting at $499/yr). Full web access to all 168 checklist items across 10 domains, with Excel export included.
+                  Included in all VeritaAssure&#8482; plans (starting at $499/yr). Full web access to all {TOTAL_ITEMS} checklist items across {SCAN_DOMAINS.length} domains, with Excel export included.
                 </p>
                 <ul className="space-y-2 mb-6">
                   {[
-                    "All 168 items across 10 domains",
+                    `All ${TOTAL_ITEMS} items across ${SCAN_DOMAINS.length} domains`,
                     "Assign owner and due dates per item",
                     "Auto-save progress",
                     "PDF reports (executive summary + full detail)",

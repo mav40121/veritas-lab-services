@@ -14004,7 +14004,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const items = (db as any).$client.prepare(
         "SELECT status FROM veritascan_items WHERE scan_id = ?"
       ).all(s.id);
-      const total = items.length || 168;
+      const total = items.length || 173;
       const notAssessed = items.filter((i: any) => i.status === 'Not Assessed').length;
       const assessed = items.length - notAssessed;
       const compliant = items.filter((i: any) => i.status === 'Compliant').length;
@@ -14094,7 +14094,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const items = (db as any).$client.prepare(
         "SELECT status FROM veritascan_items WHERE scan_id = ?"
       ).all(s.id);
-      const total = items.length || 168;
+      const total = items.length || 173;
       const notAssessed = items.filter((i: any) => i.status === 'Not Assessed').length;
       const assessed = items.length - notAssessed;
       const compliant = items.filter((i: any) => i.status === 'Compliant').length;
@@ -15061,7 +15061,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ? xlsxSelected.map(a => a.label.replace(/ (Standard|Requirement|Criterion)$/, "")).join(", ")
         : "none on file (CFR-only view)";
       aboutSection("About this product");
-      aboutBody(`This workbook is the row-by-row record of a VeritaScan self-assessment. It walks 168 compliance questions across the operational domains of a clinical laboratory and records, for each question, the lab's self-assessed status, the owner accountable for it, the due date for follow-up, and the lab's notes. Citations columns reflect the accreditation bodies on file for this lab: ${accreditorList}.`);
+      aboutBody(`This workbook is the row-by-row record of a VeritaScan self-assessment. It walks 173 compliance questions across the operational domains of a clinical laboratory and records, for each question, the lab's self-assessed status, the owner accountable for it, the due date for follow-up, and the lab's notes. Citations columns reflect the accreditation bodies on file for this lab: ${accreditorList}.`);
       aboutBlank();
       aboutSection("How to use this workbook");
       aboutBody("The VeritaScan tab lists every compliance question. Use the auto-filter on the header row to narrow by domain or status. The Status column is color-coded: green for Pass/Compliant/Current, amber for Due Soon/Pending, magenta for Fail/Overdue/Non-Compliant, gray for N/A or Not Assessed. Owner and Due Date capture remediation accountability; Notes capture the lab's own context for each item.");
@@ -16384,7 +16384,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const items = (db as any).$client.prepare(
           "SELECT item_id, status, notes, owner, due_date, completion_source, completion_link, completion_note FROM veritascan_items WHERE scan_id = ?"
         ).all(s.id);
-        const total = 168;
+        const total = 173; // full checklist size; keep in sync with SCAN_ITEMS in client/src/lib/veritaScanData.ts
         const assessed = items.filter((i: any) => i.status !== 'Not Assessed').length;
         const compliant = items.filter((i: any) => i.status === 'Compliant').length;
         return { ...s, items, total, assessed, compliant };
@@ -16422,7 +16422,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (scan) {
         const items = (db as any).$client.prepare("SELECT status FROM veritascan_items WHERE scan_id = ?").all(scan.id);
         const assessed = items.filter((i: any) => i.status !== "Not Assessed").length;
-        scanPct = Math.round((assessed / 168) * 100);
+        scanPct = Math.round((assessed / 173) * 100);
       }
       const employeeCount = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM competency_employees WHERE user_id = ?").get(userId)?.cnt || 0;
       const map = (db as any).$client.prepare("SELECT id FROM veritamap_maps WHERE user_id = ?").get(userId);
@@ -17259,15 +17259,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/demo/scan", (_req, res) => {
     try {
       const userId = getDemoUserId();
-      if (!userId) return res.json({ items: [], total: 168 });
+      if (!userId) return res.json({ items: [], total: 173 });
 
       const scan = (db as any).$client.prepare("SELECT * FROM veritascan_scans WHERE user_id = ?").get(userId);
-      if (!scan) return res.json({ items: [], total: 168 });
+      if (!scan) return res.json({ items: [], total: 173 });
 
       const items = (db as any).$client.prepare(
         "SELECT item_id, status, notes, owner, due_date, completion_source, completion_link, completion_note FROM veritascan_items WHERE scan_id = ?"
       ).all(scan.id);
-      const total = 168;
+      const total = 173; // full checklist size; keep in sync with SCAN_ITEMS in client/src/lib/veritaScanData.ts
       const assessed = items.filter((i: any) => i.status !== "Not Assessed").length;
       const compliant = items.filter((i: any) => i.status === "Compliant").length;
       res.json({ ...scan, items, total, assessed, compliant });

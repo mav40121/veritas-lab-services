@@ -223,7 +223,7 @@ export default function VeritaScanAppPage() {
       <ModuleHowToCard
         moduleKey="veritascan"
         moduleName="VeritaScan™"
-        whatItDoes="VeritaScan walks 168 inspection-readiness items across 10 domains aligned to TJC and CAP standards. Item-by-item status (compliant, needs attention, not applicable), evidence attachment, executive summary, full PDF export for internal-use distribution."
+        whatItDoes={`VeritaScan walks ${SCAN_ITEMS.length} inspection-readiness items across 10 domains aligned to TJC and CAP standards. Item-by-item status (compliant, needs attention, not applicable), evidence attachment, executive summary, full PDF export for internal-use distribution.`}
         howToUse={[
           "Pick a new scan and walk through items domain by domain.",
           "Mark each item compliant, needs attention, or not applicable; attach evidence (policies, completed forms, training records) as you go.",
