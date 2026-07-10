@@ -5071,6 +5071,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         l.accreditation_tjc,
         l.accreditation_cola,
         l.accreditation_aabb,
+        l.primary_regime,
+        l.nys_permit_type,
+        (SELECT sl.lab_address_state FROM staff_labs sl
+          WHERE sl.user_id = l.owner_user_id ORDER BY sl.id DESC LIMIT 1) AS owner_state,
         (SELECT lc.expiration_date
            FROM lab_certificates lc
           WHERE lc.lab_id = l.id
@@ -5109,12 +5113,63 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       accreditationTjc: !!m.accreditation_tjc,
       accreditationCola: !!m.accreditation_cola,
       accreditationAabb: !!m.accreditation_aabb,
+      // NYS CLEP Phase-0: jurisdiction regime (default CLIA). nysSuggested is a
+      // soft hint (owner's physical state is NY) that never auto-applies.
+      primaryRegime: m.primary_regime || 'CLIA',
+      nysPermitType: m.nys_permit_type || 'none',
+      nysSuggested: m.primary_regime !== 'NYS-CLEP' && String(m.owner_state || '').toUpperCase() === 'NY',
       lastActiveAt: m.last_active_at,
       plan: m.plan,
       subscriptionStatus: m.subscription_status,
       subscriptionExpiresAt: m.subscription_expires_at,
       cliaCertExpirationDate: m.clia_cert_expiration_date || null,
     })));
+  });
+
+  // POST /api/labs/:labId/jurisdiction — NYS CLEP Phase-0. The laboratory
+  // director or designee (owner/admin) confirms the lab's governing regime.
+  // NY is CLIA-exempt: a NY lab is DUAL (NYS DOH/CLEP + a national accreditor),
+  // so NYS-CLEP is rejected unless the lab already claims TJC/CAP/COLA. Reverting
+  // to CLIA clears the NYS fields. Director-attested via nys_confirmed_by/_at.
+  app.post("/api/labs/:labId/jurisdiction", authMiddleware, (req: any, res) => {
+    const labId = Number(req.params.labId);
+    if (!Number.isInteger(labId)) return res.status(400).json({ error: "Invalid lab id" });
+    const lab = (db as any).$client.prepare(
+      "SELECT id, owner_user_id, accreditation_cap, accreditation_tjc, accreditation_cola, primary_regime FROM labs WHERE id = ?"
+    ).get(labId) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    const isOwner = Number(lab.owner_user_id) === Number(req.ownerUserId ?? req.userId);
+    const adminMember = (db as any).$client.prepare(
+      "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' AND role IN ('owner','admin') LIMIT 1"
+    ).get(labId, req.userId);
+    if (!isOwner && !adminMember) {
+      return res.status(403).json({ error: "Only the laboratory director or designee (owner or admin) can set jurisdiction." });
+    }
+    const regime = String(req.body?.regime || "").toUpperCase() === "NYS-CLEP" ? "NYS-CLEP" : "CLIA";
+    const now = new Date().toISOString();
+    if (regime === "NYS-CLEP") {
+      const hasAccreditor = !!(lab.accreditation_tjc || lab.accreditation_cap || lab.accreditation_cola);
+      if (!hasAccreditor) {
+        return res.status(400).json({ error: "A New York laboratory is dual: NYS DOH / CLEP plus a national accreditor. Set the lab's accreditor (TJC, CAP, or COLA) before confirming NYS-CLEP jurisdiction." });
+      }
+      const permit = ["in-state", "out-of-state"].includes(req.body?.permit_type) ? req.body.permit_type : "in-state";
+      (db as any).$client.prepare(
+        "UPDATE labs SET primary_regime = 'NYS-CLEP', nys_permit_type = ?, nys_confirmed_by = ?, nys_confirmed_at = ?, updated_at = ? WHERE id = ?"
+      ).run(permit, req.userId, now, now, labId);
+    } else {
+      (db as any).$client.prepare(
+        "UPDATE labs SET primary_regime = 'CLIA', nys_permit_type = 'none', nys_confirmed_by = NULL, nys_confirmed_at = NULL, updated_at = ? WHERE id = ?"
+      ).run(now, labId);
+    }
+    try {
+      (db as any).$client.prepare(
+        "INSERT INTO lab_audit_log (lab_id, changed_by_user_id, field_name, old_value, new_value, changed_at) VALUES (?, ?, 'primary_regime', ?, ?, ?)"
+      ).run(labId, req.userId, lab.primary_regime || "CLIA", regime, now);
+    } catch {}
+    const updated = (db as any).$client.prepare(
+      "SELECT primary_regime, nys_permit_type, nys_confirmed_by, nys_confirmed_at FROM labs WHERE id = ?"
+    ).get(labId);
+    res.json({ ok: true, ...updated });
   });
 
   // POST /api/labs/me/default { labId } — set the user's default_lab_id.

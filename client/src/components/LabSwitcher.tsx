@@ -190,6 +190,14 @@ export function LabSwitcher() {
                       </span>
                     );
                   })()}
+                  {m.primaryRegime === "NYS-CLEP" && (
+                    <span
+                      className="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-medium bg-blue-500/10 text-blue-700 dark:text-blue-400"
+                      title="This lab operates under New York State DOH / CLEP jurisdiction (10 NYCRR Part 58), in addition to its national accreditor."
+                    >
+                      NYS DOH / CLEP{m.accreditationTjc ? " + TJC" : m.accreditationCap ? " + CAP" : m.accreditationCola ? " + COLA" : ""}
+                    </span>
+                  )}
                   {m.role && m.role !== "owner" && (
                     <span className="inline-flex items-center px-1 py-0.5 rounded bg-muted text-[10px] font-medium text-foreground">{m.role}</span>
                   )}
@@ -276,6 +284,14 @@ export function LabSwitcherMobile({ onAfterSwitch }: { onAfterSwitch?: () => voi
                       )}
                     >
                       {cert.expired ? `CLIA expired ${cert.ymd}` : `active through ${cert.ymd}`}
+                    </span>
+                  )}
+                  {m.primaryRegime === "NYS-CLEP" && (
+                    <span
+                      className="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-medium bg-blue-500/10 text-blue-700 dark:text-blue-400"
+                      title="This lab operates under New York State DOH / CLEP jurisdiction (10 NYCRR Part 58), in addition to its national accreditor."
+                    >
+                      NYS DOH / CLEP{m.accreditationTjc ? " + TJC" : m.accreditationCap ? " + CAP" : m.accreditationCola ? " + COLA" : ""}
                     </span>
                   )}
                   {m.role && m.role !== "owner" && (
