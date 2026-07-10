@@ -94,7 +94,7 @@ export function autoCompleteVeritaScanItems(study: {
 
 /**
  * Find VeritaScan item IDs that match a given study type and analyte.
- * Uses the 168-item checklist structure.
+ * Uses the 173-item checklist structure.
  */
 function findMatchingScanItemIds(keywords: string[], analyte: string, studyType: string): number[] {
   // Calibration & Verification domain items (21-38) — match by keyword

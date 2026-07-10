@@ -106,7 +106,7 @@ return (
           </p>
 
           <p>
-            <strong>VeritaScan™ teaches the survey mindset.</strong> Walking through 168 compliance items across 10 domains teaches a new director how a surveyor thinks. They learn what "Quality Systems" means in a regulatory context. They learn that personnel competency has specific elements required by CLIA, and that equipment maintenance records are a separate compliance domain from calibration verification. This is the mental model that takes years to build through direct survey experience. VeritaScan™ makes it visible on day one.
+            <strong>VeritaScan™ teaches the survey mindset.</strong> Walking through 173 compliance items across 10 domains teaches a new director how a surveyor thinks. They learn what "Quality Systems" means in a regulatory context. They learn that personnel competency has specific elements required by CLIA, and that equipment maintenance records are a separate compliance domain from calibration verification. This is the mental model that takes years to build through direct survey experience. VeritaScan™ makes it visible on day one.
           </p>
 
           <p>

@@ -31,7 +31,7 @@ const completedItems: RoadmapItem[] = [
   {
     title: "VeritaScan™ - Inspection Readiness Checklist",
     description:
-      "168-item checklist covering the most commonly cited TJC and CAP standards. Walks through every major inspection domain, tracks completion status, and exports results to Excel. Built for pre-survey walkthroughs and ongoing readiness monitoring.",
+      "173-item checklist covering the most commonly cited TJC and CAP standards. Walks through every major inspection domain, tracks completion status, and exports results to Excel. Built for pre-survey walkthroughs and ongoing readiness monitoring.",
   },
   {
     title: "VeritaLab™ - Certificate and Accreditation Tracking",

@@ -341,7 +341,7 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "What is VeritaScan\u2122?",
-        a: "VeritaScan\u2122 is a 168-item inspection readiness self-assessment across 10 compliance domains, triple-mapped to The Joint Commission standards, CAP checklists, and 42 CFR Part 493. Studies completed in VeritaCheck\u2122 automatically check off corresponding items, so your inspection readiness is always current. Built by a former TJC laboratory surveyor with 200+ facility inspections. Includes an executive summary export.",
+        a: "VeritaScan\u2122 is a 173-item inspection readiness self-assessment across 10 compliance domains, triple-mapped to The Joint Commission standards, CAP checklists, and 42 CFR Part 493. Studies completed in VeritaCheck\u2122 automatically check off corresponding items, so your inspection readiness is always current. Built by a former TJC laboratory surveyor with 200+ facility inspections. Includes an executive summary export.",
       },
       {
         q: "What is VeritaTrack\u2122?",
