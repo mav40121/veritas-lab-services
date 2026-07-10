@@ -19773,6 +19773,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Update assessment
+  // Legacy user_id-scoped competency routes (PUT/DELETE/sign below) accept any
+  // assessment in the owner's account by id. For a single-lab account that is
+  // unambiguous, but a multi-lab account could act on the wrong lab by a stale id.
+  // The lab-scoped /api/labs/:labId/competency/assessments/:id twins are the safe
+  // path; the client uses them whenever a lab is active and falls back to these
+  // only when it is not. So: reject the legacy route when the account manages more
+  // than one lab, forcing the caller to specify the lab. Fail-open on a count error
+  // (the owner check already passed); single-lab accounts are unaffected.
+  const accountLabCount = (ownerId: number): number => {
+    try {
+      return Number(((db as any).$client.prepare("SELECT COUNT(*) AS n FROM labs WHERE owner_user_id = ?").get(ownerId) as any)?.n ?? 0);
+    } catch { return 0; }
+  };
   app.put("/api/competency/assessments/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
@@ -19782,6 +19795,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
        WHERE a.id = ?`
     ).get(req.params.id) as any;
     if (!assessment || assessment.user_id !== dataUserId) return res.status(404).json({ error: "Assessment not found" });
+    if (accountLabCount(dataUserId) > 1) return res.status(409).json({ error: "This account manages multiple labs. Open the lab first so this change is scoped to the correct one, then retry.", multiLab: true });
     // Locked assessments cannot be edited. The customer must POST to
     // /:id/unlock first (owner / admin only). This is the enforcement
     // behind the "Sign & Complete" workflow that closes out the cycle.
@@ -19871,6 +19885,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
        WHERE a.id = ?`
     ).get(req.params.id);
     if (!assessment || assessment.user_id !== dataUserId) return res.status(404).json({ error: "Assessment not found" });
+    if (accountLabCount(dataUserId) > 1) return res.status(409).json({ error: "This account manages multiple labs. Open the lab first so this change is scoped to the correct one, then retry.", multiLab: true });
     const delAssessment = (db as any).$client.prepare("SELECT * FROM competency_assessments WHERE id = ?").get(req.params.id) as any;
     const delAssessItems = (db as any).$client.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(req.params.id);
     logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "delete", entityType: "assessment", entityId: req.params.id, entityLabel: delAssessment ? `${delAssessment.employee_name} - ${delAssessment.program_name}` : undefined, before: { assessment: delAssessment, items: delAssessItems }, ipAddress: req.ip });
@@ -19896,6 +19911,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
        WHERE a.id = ?`
     ).get(req.params.id) as any;
     if (!assessment || assessment.user_id !== dataUserId) return res.status(404).json({ error: "Assessment not found" });
+    if (accountLabCount(dataUserId) > 1) return res.status(409).json({ error: "This account manages multiple labs. Open the lab first so this change is scoped to the correct one, then retry.", multiLab: true });
     if (assessment.locked === 1) return res.status(409).json({ error: "Assessment is already signed and locked" });
     const now = new Date().toISOString();
     const todayDate = now.slice(0, 10);
