@@ -339,24 +339,24 @@ export default function DemoSelectorPage() {
                   Tell us a little about your lab and we will schedule a walkthrough.
                 </p>
                 <div style={{ marginBottom: "14px" }}>
-                  <label style={labelStyle}>Name *</label>
-                  <input type="text" value={form.name} onChange={set("name")} style={inputStyle} autoComplete="name" />
+                  <label htmlFor="ld-name" style={labelStyle}>Name *</label>
+                  <input id="ld-name" type="text" value={form.name} onChange={set("name")} style={inputStyle} autoComplete="name" />
                 </div>
                 <div style={{ marginBottom: "14px" }}>
-                  <label style={labelStyle}>Work email *</label>
-                  <input type="email" value={form.email} onChange={set("email")} style={inputStyle} autoComplete="email" />
+                  <label htmlFor="ld-email" style={labelStyle}>Work email *</label>
+                  <input id="ld-email" type="email" value={form.email} onChange={set("email")} style={inputStyle} autoComplete="email" />
                 </div>
                 <div style={{ marginBottom: "14px" }}>
-                  <label style={labelStyle}>Lab or organization</label>
-                  <input type="text" value={form.organization} onChange={set("organization")} style={inputStyle} autoComplete="organization" />
+                  <label htmlFor="ld-org" style={labelStyle}>Lab or organization</label>
+                  <input id="ld-org" type="text" value={form.organization} onChange={set("organization")} style={inputStyle} autoComplete="organization" />
                 </div>
                 <div style={{ marginBottom: "14px" }}>
-                  <label style={labelStyle}>Phone</label>
-                  <input type="tel" value={form.phone} onChange={set("phone")} style={inputStyle} autoComplete="tel" />
+                  <label htmlFor="ld-phone" style={labelStyle}>Phone</label>
+                  <input id="ld-phone" type="tel" value={form.phone} onChange={set("phone")} style={inputStyle} autoComplete="tel" />
                 </div>
                 <div style={{ marginBottom: "16px" }}>
-                  <label style={labelStyle}>Anything specific you would like to see?</label>
-                  <textarea value={form.message} onChange={set("message")} rows={3} style={{ ...inputStyle, resize: "vertical" }} />
+                  <label htmlFor="ld-message" style={labelStyle}>Anything specific you would like to see?</label>
+                  <textarea id="ld-message" value={form.message} onChange={set("message")} rows={3} style={{ ...inputStyle, resize: "vertical" }} />
                 </div>
                 {status === "error" && (
                   <p style={{ color: "#c53030", fontSize: "13px", margin: "0 0 12px" }}>{errMsg}</p>
