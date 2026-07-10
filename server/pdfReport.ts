@@ -5609,7 +5609,6 @@ h2.report-subtitle { font-size: 10pt; font-weight: 400; color: #555; margin-bott
     </div>
   </div>
 
-  <div class="footer-line">VeritaAssure&#8482; | VeritaPolicy&#8482; | Confidential - For Internal Lab Use Only</div>
 </div>
 
 <!-- PAGE 2+: Requirements by Chapter -->
@@ -5625,7 +5624,6 @@ h2.report-subtitle { font-size: 10pt; font-weight: 400; color: #555; margin-bott
 
   ${chapterSections}
 
-  <div class="footer-line">VeritaAssure&#8482; | VeritaPolicy&#8482; | Confidential - For Internal Lab Use Only</div>
 </div>
 
 <!-- FINAL PAGE: Policy Library -->
@@ -5654,19 +5652,35 @@ h2.report-subtitle { font-size: 10pt; font-weight: 400; color: #555; margin-bott
     <tbody>${policyRows}</tbody>
   </table>
 
-  <div class="footer-line">VeritaAssure&#8482; | VeritaPolicy&#8482; | Confidential - For Internal Lab Use Only</div>
 </div>
 
 </body>
 </html>`;
 }
 
+// Running footer for the VeritaPolicy readiness PDF. Mirrors FOOTER_TEMPLATE but
+// names the VeritaPolicy module and carries "Page X of Y" so EVERY page (incl.
+// requirements-table overflow pages) gets the CLAUDE.md Sec 5 footer. Previously
+// the generator passed "" here, so the running footer held only the license band
+// (no brand line, no page numbers); the only brand text was 3 in-body .footer-line
+// divs that never paginated. Hyphen (not em-dash) matches FOOTER_TEMPLATE + Sec 3.
+const VERITAPOLICY_FOOTER_TEMPLATE = `
+<div style="width:100%;padding:0 15mm;box-sizing:border-box;font-family:Helvetica,Arial,sans-serif">
+  <div style="border-top:1px solid #d2d7dc;padding-top:3px">
+    <div style="font-size:6px;color:#a0a0a0;line-height:1.4">VeritaPolicy&trade; organizes accreditation policy requirements. It does not constitute legal or regulatory advice; the laboratory director or designee is responsible for final policy adoption.</div>
+    <div style="display:flex;justify-content:space-between;font-size:7px;color:#646e78;margin-top:2px">
+      <span>VeritaAssure&trade; | VeritaPolicy&trade; | Confidential - For Internal Lab Use Only</span>
+      <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
+    </div>
+  </div>
+</div>`;
+
 export async function generateVeritaPolicyPDF(input: VeritaPolicyPDFInput, licenseCtx?: Partial<LicenseContext> | null): Promise<Buffer> {
   const html = buildVeritaPolicyPDFHTML(input);
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    const stamped = applyLicenseToPuppeteer(html, "", licenseCtx);
+    const stamped = applyLicenseToPuppeteer(html, VERITAPOLICY_FOOTER_TEMPLATE, licenseCtx);
     await page.setContent(stamped.html, { waitUntil: "networkidle0" });
     const pdfBuffer = await page.pdf({
       format: "Letter",
