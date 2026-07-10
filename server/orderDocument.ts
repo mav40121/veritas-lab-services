@@ -13,6 +13,7 @@
 // consumes an array of already-decorated items. Single source of truth.
 
 import { getBrowser } from "./pdfReport";
+import { stampPdfAuthor } from "./pdfMeta";
 
 // On the dedicated VeritaStock deployment, suppress CLIA on the order documents:
 // VeritaStock is an inventory product, not a CLIA-regulated compliance tool, so
@@ -665,7 +666,7 @@ export async function generateReorderListPDF(items: ReorderItem[], ctx: ReorderL
       footerTemplate: FOOTER_TEMPLATE,
       margin: { top: "14mm", right: "15mm", bottom: "20mm", left: "15mm" },
     });
-    return Buffer.from(pdfBuffer);
+    return stampPdfAuthor(pdfBuffer);
   } finally {
     await page.close();
   }
@@ -864,7 +865,7 @@ export async function generateSnapOrderPDF(items: SnapOrderItem[], ctx: ReorderL
       footerTemplate: FOOTER_TEMPLATE,
       margin: { top: "14mm", right: "15mm", bottom: "20mm", left: "15mm" },
     });
-    return Buffer.from(pdfBuffer);
+    return stampPdfAuthor(pdfBuffer);
   } finally {
     await page.close();
   }

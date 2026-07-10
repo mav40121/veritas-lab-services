@@ -9,6 +9,7 @@
 // software" rather than naming any specific competing product.
 
 import { getBrowser } from "./pdfReport";
+import { stampPdfAuthor } from "./pdfMeta";
 
 const TEAL = "#01696F";
 const TEAL_TINT = "#E6F2F2";
@@ -114,7 +115,7 @@ export async function generateWhyVeritaCheckPdf(): Promise<Buffer> {
       footerTemplate: FOOTER_TEMPLATE,
       margin: { top: "0mm", right: "0mm", bottom: "14mm", left: "0mm" },
     });
-    return Buffer.from(pdfBuffer as ArrayBuffer);
+    return stampPdfAuthor(pdfBuffer);
   } finally {
     await page.close();
   }

@@ -25,6 +25,7 @@
 // burning a 30-label sheet of test prints.
 
 import bwipjs from "bwip-js/node";
+import { stampPdfAuthor } from "./pdfMeta";
 import { getBrowser } from "./pdfReport";
 
 // The standalone VeritaStock product carries no CLIA on its labels.
@@ -174,7 +175,7 @@ ${sheetsHtml.join("\n")}
       printBackground: true,
       margin: { top: "0", right: "0", bottom: "0", left: "0" },
     });
-    return Buffer.from(pdf);
+    return stampPdfAuthor(pdf);
   } finally {
     await page.close();
   }

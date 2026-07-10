@@ -12,6 +12,7 @@
 // Per CLAUDE.md section 3, no em dashes in the rendered output.
 
 import { getBrowser } from "./pdfReport";
+import { stampPdfAuthor } from "./pdfMeta";
 
 export interface Cms116DraftForPdf {
   sections: {
@@ -484,7 +485,7 @@ export async function generateCms116Pdf(draft: Cms116DraftForPdf, ctx: Cms116Lab
       footerTemplate: FOOTER_TEMPLATE,
       margin: { top: "14mm", right: "14mm", bottom: "18mm", left: "14mm" },
     });
-    return Buffer.from(pdfBuffer as ArrayBuffer);
+    return stampPdfAuthor(pdfBuffer);
   } finally {
     await page.close();
   }
