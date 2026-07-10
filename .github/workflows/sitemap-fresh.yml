@@ -1,0 +1,41 @@
+name: Sitemap freshness
+
+# CI staleness gate for the durable sitemap (SEO/GEO package item 2, part A).
+# Fails a PR if a public route in server/seo-metadata.ts (seoMetadataMap) is
+# missing from client/public/sitemap.xml, or if an app/auth route leaked into it.
+# The fix is always: `node scripts/build-sitemap.mjs --write` then commit the
+# regenerated sitemap. This is what makes a new public route "auto-appear"
+# instead of being silently dropped from search-engine discovery.
+#
+# To block merges: Settings -> Branches -> main -> Branch protection ->
+# Require status checks -> select "sitemap".
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'client/src/App.tsx'
+      - 'server/seo-metadata.ts'
+      - 'client/public/sitemap.xml'
+      - 'scripts/build-sitemap.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sitemap:
+    name: sitemap
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check sitemap completeness (no npm install needed; node builtins only)
+        run: node scripts/build-sitemap.mjs --check
