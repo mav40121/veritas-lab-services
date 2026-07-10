@@ -2669,6 +2669,115 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritapolicy_lab_artifacts_lab
   }
 }
 
+// Multi-Lab Tier 2 — Phase 3.3 (VeritaPolicy): re-key veritapolicy_master_status
+// and veritapolicy_settings from user_id to lab_id. Phase 3.2 added the lab_id
+// column + backfill; this recreates the two legacy tables so the UNIQUE routing
+// key is lab-scoped. The prior UNIQUE(user_id, policy_id) / UNIQUE(user_id)
+// forced ONE shared row per OWNER across all their labs, so a multi-lab owner
+// marking a policy in one lab silently overwrote and re-attributed the other
+// lab's row (cross-lab data loss). Verified against a prod snapshot: 12 master +
+// 3 settings rows, 0 lab_id-key collisions, copy is lossless. Idempotent: each
+// table rebuilds only while its old user_id UNIQUE index is still present, and
+// each rebuild is transaction- and catch-wrapped so it can never crash boot.
+// The three consolidation blocks above are stale-guarded no-ops post-consolidation
+// and catch-wrapped, so their legacy ON CONFLICT(user_id, policy_id) is never
+// reached; backfillVeritapolicySeatsOnStartup uses UPDATE/DELETE only. See the
+// project_site_module_audit memory (VeritaPolicy HIGH #1/#2).
+{
+  const uniqueIndexOn = (table: string, cols: string[]): string | null => {
+    try {
+      const idxList = sqlite.prepare(`PRAGMA index_list(${table})`).all() as any[];
+      for (const idx of idxList) {
+        if (!idx.unique) continue;
+        const info = sqlite.prepare(`PRAGMA index_info(${idx.name})`).all() as any[];
+        const names = info.map((x: any) => x.name);
+        if (names.length === cols.length && cols.every((c, k) => names[k] === c)) return idx.name;
+      }
+    } catch {}
+    return null;
+  };
+
+  // veritapolicy_master_status -> UNIQUE(lab_id, policy_id)
+  try {
+    if (uniqueIndexOn("veritapolicy_master_status", ["user_id", "policy_id"])) {
+      sqlite.exec("BEGIN");
+      sqlite.exec(`
+        CREATE TABLE veritapolicy_master_status_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          lab_id INTEGER REFERENCES labs(id),
+          policy_id TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'not_started',
+          is_na INTEGER NOT NULL DEFAULT 0,
+          na_reason TEXT,
+          our_policy_name TEXT,
+          notes TEXT,
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(lab_id, policy_id)
+        )
+      `);
+      // Copy every column; most-recent-wins on any (lab_id, policy_id) collision.
+      // Rows with NULL lab_id (no home lab) are preserved (NULLs never collide).
+      sqlite.exec(`
+        INSERT OR IGNORE INTO veritapolicy_master_status_new
+          (user_id, lab_id, policy_id, status, is_na, na_reason, our_policy_name, notes, updated_at)
+        SELECT user_id, lab_id, policy_id, status, is_na, na_reason, our_policy_name, notes, updated_at
+        FROM veritapolicy_master_status ORDER BY updated_at DESC
+      `);
+      sqlite.exec("DROP TABLE veritapolicy_master_status");
+      sqlite.exec("ALTER TABLE veritapolicy_master_status_new RENAME TO veritapolicy_master_status");
+      sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritapolicy_master_status_lab ON veritapolicy_master_status(lab_id)");
+      sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritapolicy_master_user ON veritapolicy_master_status(user_id, policy_id)");
+      sqlite.exec("COMMIT");
+      console.log("[migration] Phase 3.3: rebuilt veritapolicy_master_status with UNIQUE(lab_id, policy_id)");
+    }
+  } catch (err: any) {
+    try { sqlite.exec("ROLLBACK"); } catch {}
+    console.warn("[migration] Phase 3.3 master_status rebuild failed (non-fatal):", err?.message);
+  }
+
+  // veritapolicy_settings -> UNIQUE(lab_id)
+  try {
+    if (uniqueIndexOn("veritapolicy_settings", ["user_id"])) {
+      sqlite.exec("BEGIN");
+      sqlite.exec(`
+        CREATE TABLE veritapolicy_settings_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          lab_id INTEGER REFERENCES labs(id),
+          has_blood_bank INTEGER NOT NULL DEFAULT 1,
+          has_transplant INTEGER NOT NULL DEFAULT 0,
+          has_microbiology INTEGER NOT NULL DEFAULT 1,
+          has_maternal_serum INTEGER NOT NULL DEFAULT 0,
+          is_independent INTEGER NOT NULL DEFAULT 0,
+          waived_only INTEGER NOT NULL DEFAULT 0,
+          setup_complete INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          accreditation_body TEXT NOT NULL DEFAULT 'tjc',
+          UNIQUE(lab_id)
+        )
+      `);
+      sqlite.exec(`
+        INSERT OR IGNORE INTO veritapolicy_settings_new
+          (user_id, lab_id, has_blood_bank, has_transplant, has_microbiology, has_maternal_serum,
+           is_independent, waived_only, setup_complete, created_at, updated_at, accreditation_body)
+        SELECT user_id, lab_id, has_blood_bank, has_transplant, has_microbiology, has_maternal_serum,
+           is_independent, waived_only, setup_complete, created_at, updated_at, accreditation_body
+        FROM veritapolicy_settings ORDER BY updated_at DESC
+      `);
+      sqlite.exec("DROP TABLE veritapolicy_settings");
+      sqlite.exec("ALTER TABLE veritapolicy_settings_new RENAME TO veritapolicy_settings");
+      sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritapolicy_settings_lab ON veritapolicy_settings(lab_id)");
+      sqlite.exec("COMMIT");
+      console.log("[migration] Phase 3.3: rebuilt veritapolicy_settings with UNIQUE(lab_id)");
+    }
+  } catch (err: any) {
+    try { sqlite.exec("ROLLBACK"); } catch {}
+    console.warn("[migration] Phase 3.3 settings rebuild failed (non-fatal):", err?.message);
+  }
+}
+
 // VeritaTrack -- regulatory compliance calendar
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS veritatrack_tasks (
