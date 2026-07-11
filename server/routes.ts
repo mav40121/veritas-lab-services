@@ -25172,12 +25172,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           }
           const insertResult = sqlite.prepare(
             `INSERT INTO lab_certificates (
-               user_id, cert_type, cert_name, cert_number, issuing_body,
+               user_id, lab_id, cert_type, cert_name, cert_number, issuing_body,
                issued_date, expiration_date, lab_director, notes,
                is_auto_populated, is_active, created_at, updated_at
-             ) VALUES (?, 'clia', 'CLIA Certificate', ?, ?, ?, ?, ?, ?, 1, 1, ?, ?)`
+             ) VALUES (?, ?, 'clia', 'CLIA Certificate', ?, ?, ?, ?, ?, ?, 1, 1, ?, ?)`
           ).run(
             Number(lab.owner_user_id),
+            labId,
             cliaNumber,
             'Centers for Medicare and Medicaid Services (CMS)',
             issuedDate,
@@ -25392,9 +25393,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/veritalab/certificates/excel", authMiddleware, async (req: any, res) => {
     if (!hasLabCertAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
 
-    const certs = (db as any).$client.prepare(
-      "SELECT * FROM lab_certificates WHERE user_id = ? AND is_active = 1 ORDER BY expiration_date ASC"
-    ).all(req.userId) as any[];
+    // Multi-lab: honor the active-lab header exactly as the client's roster
+    // list/edit/delete already do (activeLabId ? lab-scoped : legacy). Without
+    // a header this is a single-lab owner and the legacy user_id scope is
+    // unchanged (no regression for NULL-lab_id legacy certs). With an
+    // ACCESSIBLE header lab, scope to lab_id so a multi-lab owner's export
+    // matches the per-lab roster instead of bleeding every lab's certs into
+    // one workbook under the wrong lab identity.
+    const activeHdr = req?.headers?.["x-active-lab-id"];
+    const activeLabIdReq = activeHdr && Number(activeHdr) > 0 ? Number(activeHdr) : null;
+    const activeLabRow = activeLabIdReq ? resolveActiveLabForRequest(req.userId, req) : null;
+    const scopedLab = activeLabRow && Number(activeLabRow.id) === activeLabIdReq ? activeLabRow : null;
+    const certs = (scopedLab
+      ? (db as any).$client.prepare(
+          "SELECT * FROM lab_certificates WHERE lab_id = ? AND is_active = 1 ORDER BY expiration_date ASC"
+        ).all(scopedLab.id)
+      : (db as any).$client.prepare(
+          "SELECT * FROM lab_certificates WHERE user_id = ? AND is_active = 1 ORDER BY expiration_date ASC"
+        ).all(req.userId)) as any[];
 
     try {
       const { default: ExcelJS } = await import("exceljs");
@@ -25403,9 +25419,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       wb.created = new Date();
 
       // ===== Lab identity (Excel Export Standard) =====
+      // When lab-scoped (multi-lab owner with an accessible active lab), the
+      // identity comes from the live labs row so the About sheet + page
+      // header/footer carry THAT lab's name/CLIA, not the owner's default lab.
       const ownerUserLc = storage.getUserById(req.userId);
-      const labName = (ownerUserLc as any)?.cliaLabName || (ownerUserLc as any)?.clia_lab_name || ownerUserLc?.name || "Laboratory";
-      const cliaNumber = (ownerUserLc as any)?.cliaNumber || (ownerUserLc as any)?.clia_number || "Not on file";
+      const labName = scopedLab
+        ? (scopedLab.lab_name || "Laboratory")
+        : ((ownerUserLc as any)?.cliaLabName || (ownerUserLc as any)?.clia_lab_name || ownerUserLc?.name || "Laboratory");
+      const cliaNumber = scopedLab
+        ? (scopedLab.clia_number || "Not on file")
+        : ((ownerUserLc as any)?.cliaNumber || (ownerUserLc as any)?.clia_number || "Not on file");
       const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || "veritaassure-export";
 
       // ===== About sheet (sheet 1) =====
