@@ -108,6 +108,7 @@ export default function VeritaLabAppPage() {
 
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [certsError, setCertsError] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editCert, setEditCert] = useState<Certificate | null>(null);
 
@@ -126,6 +127,7 @@ export default function VeritaLabAppPage() {
   const [docCertId, setDocCertId] = useState<number | null>(null);
   const [documents, setDocuments] = useState<CertDocument[]>([]);
   const [docLoading, setDocLoading] = useState(false);
+  const [docError, setDocError] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
@@ -139,14 +141,18 @@ export default function VeritaLabAppPage() {
     : `${API_BASE}/api/veritalab/certificates`;
 
   async function loadCertificates() {
+    setCertsError(false);
     try {
       const res = await fetch(certsListUrl, { headers: authHeaders() });
-      if (res.ok) {
-        const data = await res.json();
-        setCertificates(data);
-      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setCertificates(data);
     } catch (err) {
+      // A failed load must NOT masquerade as an empty roster: surface a
+      // distinct error state so a director with certs never sees "No
+      // certificates yet" (and re-adds duplicates) on a transient failure.
       console.error("Failed to load certificates:", err);
+      setCertsError(true);
     } finally {
       setLoading(false);
     }
@@ -260,11 +266,18 @@ export default function VeritaLabAppPage() {
     setDocCertId(certId);
     setShowDocModal(true);
     setDocLoading(true);
+    // Reset the previously-viewed cert's documents up front. Without this, a
+    // failed fetch leaves the prior cert's documents rendered under THIS
+    // cert's modal, and Download/Delete would act on the wrong cert's doc IDs.
+    setDocuments([]);
+    setDocError(false);
     try {
       const res = await fetch(`${API_BASE}/api/veritalab/certificates/${certId}/documents`, { headers: authHeaders() });
-      if (res.ok) setDocuments(await res.json());
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setDocuments(await res.json());
     } catch (err) {
       console.error("Failed to load documents:", err);
+      setDocError(true);
     } finally {
       setDocLoading(false);
     }
@@ -440,8 +453,24 @@ export default function VeritaLabAppPage() {
           <div className="text-center py-12 text-muted-foreground">Loading certificates...</div>
         )}
 
+        {/* Error state: a failed load must not read as an empty roster */}
+        {!loading && certsError && (
+          <Card className="border-dashed border-destructive/40">
+            <CardContent className="p-12 text-center">
+              <AlertTriangle size={40} className="text-destructive mx-auto mb-4" />
+              <h3 className="font-semibold text-lg mb-2">Couldn't load certificates</h3>
+              <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                Something went wrong loading your certificate roster. This does not mean your certificates were removed. Check your connection and try again.
+              </p>
+              <Button onClick={() => { setLoading(true); loadCertificates(); }} variant="outline">
+                Retry
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Empty state */}
-        {!loading && certificates.length === 0 && (
+        {!loading && !certsError && certificates.length === 0 && (
           <Card className="border-dashed">
             <CardContent className="p-12 text-center">
               <Award size={40} className="text-muted-foreground mx-auto mb-4" />
@@ -654,6 +683,11 @@ export default function VeritaLabAppPage() {
 
             {docLoading ? (
               <div className="text-center py-8 text-muted-foreground">Loading documents...</div>
+            ) : docError ? (
+              <div className="text-center py-8">
+                <AlertTriangle size={32} className="text-destructive mx-auto mb-3" />
+                <p className="text-muted-foreground text-sm mb-4">Couldn't load documents for this certificate. Close and reopen to retry.</p>
+              </div>
             ) : documents.length === 0 ? (
               <div className="text-center py-8">
                 <FileText size={32} className="text-muted-foreground mx-auto mb-3" />
