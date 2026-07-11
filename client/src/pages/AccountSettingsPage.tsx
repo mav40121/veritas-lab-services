@@ -571,19 +571,9 @@ export default function AccountSettingsPage() {
           <p className="text-sm text-muted-foreground">
             New York laboratories are regulated by NYS DOH / CLEP (10 NYCRR Part 58), not by CLIA. A New York lab is dual: CLEP plus a national accreditor (TJC, CAP, or COLA). This setting affects only a New York lab; it never changes anything for a CLIA lab.
           </p>
-          <div className="flex items-center gap-2 text-sm">
-            <span className="font-medium">Current:</span>
-            {jurisLab.primaryRegime === "NYS-CLEP" ? (
-              <span className="inline-flex items-center px-2 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-400 font-medium">
-                NYS DOH / CLEP{jurisLab.accreditationTjc ? " + TJC" : jurisLab.accreditationCap ? " + CAP" : jurisLab.accreditationCola ? " + COLA" : ""}
-              </span>
-            ) : (
-              <span className="inline-flex items-center px-2 py-0.5 rounded bg-muted font-medium">CLIA (federal)</span>
-            )}
-          </div>
           {jurisLab.primaryRegime !== "NYS-CLEP" && jurisLab.nysSuggested && (
             <p className="text-sm bg-blue-500/10 text-blue-800 dark:text-blue-300 rounded-md px-3 py-2">
-              This lab appears to be in New York. Confirm NYS jurisdiction to enable New York specific requirements.
+              This lab appears to be in New York. Switch to NYS DOH / CLEP to enable New York specific requirements.
             </p>
           )}
           {jurisLab.primaryRegime !== "NYS-CLEP" && !hasNationalAccreditor && (
@@ -591,21 +581,51 @@ export default function AccountSettingsPage() {
               Select a national accreditor (TJC, CAP, or COLA) above before setting this lab to NYS DOH / CLEP.
             </p>
           )}
-          {canSetJurisdiction ? (
-            jurisLab.primaryRegime !== "NYS-CLEP" ? (
-              <Button
-                onClick={() => jurisdictionMutation.mutate("NYS-CLEP")}
-                disabled={jurisdictionMutation.isPending || !hasNationalAccreditor}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground"
-              >
-                {jurisdictionMutation.isPending ? "Saving..." : "Confirm NYS DOH / CLEP jurisdiction"}
-              </Button>
-            ) : (
-              <Button variant="outline" onClick={() => jurisdictionMutation.mutate("CLIA")} disabled={jurisdictionMutation.isPending}>
-                {jurisdictionMutation.isPending ? "Saving..." : "Revert to CLIA"}
-              </Button>
-            )
-          ) : (
+          {/* Two-state segmented control: active regime highlighted; switching
+              opens a confirm dialog (jurisdiction re-frames the lab's compliance
+              context). The NYS segment stays gated on a national accreditor, and
+              the whole control is read-only unless the user can set jurisdiction. */}
+          {(() => {
+            const isClep = jurisLab.primaryRegime === "NYS-CLEP";
+            const accSuffix = jurisLab.accreditationTjc ? " + TJC" : jurisLab.accreditationCap ? " + CAP" : jurisLab.accreditationCola ? " + COLA" : "";
+            const seg = "px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+            return (
+              <div className="inline-flex rounded-md border border-input overflow-hidden" role="group" aria-label="Laboratory jurisdiction">
+                {/* CLIA (federal) */}
+                {!isClep ? (
+                  <span className={`${seg} bg-primary text-primary-foreground`} aria-current="true">CLIA (federal)</span>
+                ) : canSetJurisdiction ? (
+                  <ConfirmDialog
+                    title="Switch jurisdiction to CLIA?"
+                    message="This lab will be regulated under CLIA (federal), and New York specific requirements will be turned off. You can switch back to NYS DOH / CLEP at any time."
+                    confirmLabel="Switch to CLIA"
+                    onConfirm={() => jurisdictionMutation.mutate("CLIA")}
+                  >
+                    <button type="button" disabled={jurisdictionMutation.isPending} className={`${seg} bg-background text-muted-foreground hover:bg-muted`}>CLIA (federal)</button>
+                  </ConfirmDialog>
+                ) : (
+                  <span className={`${seg} bg-background text-muted-foreground`}>CLIA (federal)</span>
+                )}
+                <div className="w-px bg-input" aria-hidden="true" />
+                {/* NYS DOH / CLEP */}
+                {isClep ? (
+                  <span className={`${seg} bg-blue-600 text-white`} aria-current="true">{`NYS DOH / CLEP${accSuffix}`}</span>
+                ) : canSetJurisdiction && hasNationalAccreditor ? (
+                  <ConfirmDialog
+                    title="Switch jurisdiction to NYS DOH / CLEP?"
+                    message="This lab will be regulated under New York State DOH / CLEP (10 NYCRR Part 58); CLIA oversight no longer applies, and New York specific requirements are enabled. You can revert to CLIA at any time."
+                    confirmLabel="Switch to NYS DOH / CLEP"
+                    onConfirm={() => jurisdictionMutation.mutate("NYS-CLEP")}
+                  >
+                    <button type="button" disabled={jurisdictionMutation.isPending} className={`${seg} bg-background text-muted-foreground hover:bg-muted`}>NYS DOH / CLEP</button>
+                  </ConfirmDialog>
+                ) : (
+                  <span className={`${seg} bg-background text-muted-foreground/60 cursor-not-allowed`} title={!hasNationalAccreditor ? "Select a national accreditor first" : undefined}>NYS DOH / CLEP</span>
+                )}
+              </div>
+            );
+          })()}
+          {!canSetJurisdiction && (
             <p className="text-sm text-muted-foreground">Only the laboratory director or designee (owner or admin) can set jurisdiction.</p>
           )}
         </CardContent>
