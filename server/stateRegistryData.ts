@@ -59,6 +59,16 @@ const EXEMPT_NOTE = 'CMS-recognized exempt state per 42 CFR 493.551: the state l
 // Note shown on every CLIA-only row so the lab understands the default.
 const CLIA_ONLY_NOTE = 'No separate state laboratory license is required. The federal CLIA certificate from CMS is the operating credential. Confirm with the state regulatory agency at lab startup or before scope expansion.';
 
+// States that separately license clinical laboratory PERSONNEL (distinct from
+// facility licensure), per the ASCLS personnel-licensure list. A CLIA-only
+// facility in one of these states still faces a personnel-license obligation.
+// (CA, FL, NY, RI are handled on their own hand-written rows.)
+const PERSONNEL_LICENSE_STATES = new Set<string>(['GA', 'HI', 'LA', 'MT', 'ND', 'NV', 'TN', 'WV']);
+const PERSONNEL_LICENSE_NOTE = ' This state separately licenses clinical laboratory PERSONNEL, a distinct requirement from facility licensure. Verify current personnel-license categories with the state agency.';
+// Rows re-verified against authoritative sources on 2026-07-11 (the Florida
+// facility-licensure repeal and the personnel-license states).
+const VERIFIED_2026_07_11 = '2026-07-11';
+
 const NEEDS_VERIFICATION_NOTE = 'Laboratory licensure scheme not confirmed at authoring. Verify directly with the state regulatory agency before treating this row as canonical.';
 
 const CLIA_SOURCE = '42 CFR Part 493 (Clinical Laboratory Improvement Amendments of 1988); CMS State Agency Operating Manual.';
@@ -90,16 +100,16 @@ export const STATE_REGISTRY_SEED: StateRegistryRow[] = [
   {
     state_code: 'FL',
     state_name: 'Florida',
-    licensure_required: 'yes',
-    authority_name: 'Agency for Health Care Administration (AHCA), Bureau of Health Facility Regulation',
+    licensure_required: 'no',
+    authority_name: null,
     authority_url: null,
-    application_form_name: 'Clinical Laboratory License Application',
+    application_form_name: null,
     application_form_url: null,
-    fee_description: 'Biennial license fee tied to specialty / subspecialty count; consult AHCA for current schedule.',
-    renewal_cadence: 'biennial',
-    notes: 'Florida licenses the clinical laboratory directly; personnel licensure is separate.',
-    source_citation: 'Florida Statutes Chapter 483 (Clinical, Public Health, Public Health Laboratories).',
-    last_verified: TODAY,
+    fee_description: null,
+    renewal_cadence: null,
+    notes: 'Florida repealed clinical laboratory FACILITY licensure effective July 1, 2018 (SB 622 repealed Fla. Stat. Ch. 483 Part I); the facility now operates on the federal CLIA certificate. Florida still licenses individual laboratory PERSONNEL who perform or report results, under Fla. Stat. Ch. 483 Part III (Florida Board of Clinical Laboratory Personnel, Ch. 64B3 F.A.C.). Verify current personnel-license categories with the Board.',
+    source_citation: 'SB 622 (2018) repealed Fla. Stat. Ch. 483 Part I (facility licensure); personnel licensure remains under Fla. Stat. Ch. 483 Part III (Florida Board of Clinical Laboratory Personnel).',
+    last_verified: VERIFIED_2026_07_11,
   },
   {
     state_code: 'MA',
@@ -323,8 +333,8 @@ export const STATE_REGISTRY_SEED: StateRegistryRow[] = [
     application_form_url: null,
     fee_description: 'Federal CLIA biennial certificate fee scaled by certificate type and annual test volume; per the CMS published CLIA fee schedule.',
     renewal_cadence: 'biennial',
-    notes: CLIA_ONLY_NOTE,
+    notes: PERSONNEL_LICENSE_STATES.has(code) ? CLIA_ONLY_NOTE + PERSONNEL_LICENSE_NOTE : CLIA_ONLY_NOTE,
     source_citation: CLIA_SOURCE,
-    last_verified: TODAY,
+    last_verified: PERSONNEL_LICENSE_STATES.has(code) ? VERIFIED_2026_07_11 : TODAY,
   })),
 ];
