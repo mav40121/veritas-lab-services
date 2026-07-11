@@ -89,7 +89,7 @@ interface SectionVII {
 }
 
 interface SectionVIII {
-  // Specialty / subspecialty checkboxes (non-waived testing per 42 CFR 493.5)
+  // Specialty / subspecialty checkboxes (categories per 42 CFR 493.2 / Subpart I)
   histocompatibility: boolean;
   micro_bacteriology: boolean;
   micro_mycobacteriology: boolean;
@@ -493,7 +493,7 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
           <AccordionTrigger className="text-left font-medium">VIII. Non-Waived Testing (Specialty / Subspecialty)</AccordionTrigger>
           <AccordionContent className="pt-2">
             <p className="text-xs text-muted-foreground mb-3">
-              Check every specialty and subspecialty the lab performs. Mirrors the categories in 42 CFR 493.5.
+              Check every specialty and subspecialty the lab performs. Mirrors the categories in 42 CFR 493.2 and Subpart I.
             </p>
             <div className="grid sm:grid-cols-2 gap-y-1 gap-x-6 text-sm">
               <CheckGroup label="Histocompatibility" items={[
@@ -588,7 +588,7 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
               <AlertTriangle size={14} className="shrink-0 mt-0.5" />
               <span>
                 CMS requires a wet ink signature on the printed CMS-116. This field captures the
-                director's name and date for the draft only; the printed PDF (Phase 4) carries
+                director's name and date for the draft only; the printed PDF carries
                 the signature block the director signs by hand before mailing.
               </span>
             </div>
@@ -609,7 +609,7 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
         <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <CheckCircle2 size={14} className="text-emerald-600" />
-            Draft autosaves when you click Save. PDF generation lands in Phase 4.
+            Draft autosaves when you click Save. Use Download PDF to generate the CMS-116 for wet-ink signature.
           </div>
           <Button size="sm" onClick={handleSave} disabled={saving || isReadOnly} className="bg-primary hover:bg-primary/90">
             <Save size={14} className="mr-1.5" />

@@ -71,7 +71,7 @@ const MODULES = [
     label: "VeritaLab™",
     desc: "Certificate and Accreditation Tracking",
     detail:
-      "Track CLIA, CAP, TJC, COLA, state licenses, and lab director credentials. Advance email reminders at 90, 60, and 30 days before expiration. Document archive for certificate PDFs.",
+      "Track CLIA, CAP, TJC, COLA, state licenses, and lab director credentials. Advance email reminders at 9 months, 6 months, 3 months, 30 days, and at expiration. Document archive for certificate PDFs.",
     badge: "New",
     badgeColor: "emerald",
     icon: FileText,

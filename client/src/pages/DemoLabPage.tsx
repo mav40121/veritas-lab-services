@@ -1264,15 +1264,15 @@ export default function DemoLabPage() {
                   Riverside Regional never misses a certificate renewal.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                  VeritaLab&#8482; tracks CLIA, CAP, TJC, COLA, state laboratory licenses, and lab director credentials with advance email reminders at 90, 60, and 30 days before expiration. Document archive holds every certificate PDF.
+                  VeritaLab&#8482; tracks CLIA, CAP, TJC, COLA, state laboratory licenses, and lab director credentials with advance email reminders at 9 months, 6 months, 3 months, 30 days, and at expiration. Document archive holds every certificate PDF.
                 </p>
               </div>
               <Card>
                 <CardContent className="py-5">
                   <ul className="space-y-2 text-sm">
                     <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Certificate inventory: CLIA, CAP, TJC, COLA, state licenses, lab director licenses, board certifications.</span></li>
-                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Auto-populated CLIA from your CMS-116 application.</span></li>
-                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Advance email reminders at 90, 60, and 30 days before expiration.</span></li>
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Auto-populated CLIA from your CLIA verification at signup.</span></li>
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Advance email reminders at 9 months, 6 months, 3 months, 30 days, and at expiration.</span></li>
                     <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Document archive: upload and retain certificate PDFs against each cert.</span></li>
                   </ul>
                 </CardContent>
