@@ -25479,7 +25479,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       };
       const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
       aboutSection("About this product");
-      aboutBody("This workbook is a register of the laboratory's certificates and licenses on file in VeritaLab \u2014 CLIA certificate, CAP/TJC accreditation certificates, state laboratory licenses, lab director licenses, and any other regulatory credentials the lab has uploaded. Each row shows what the certificate covers, when it was issued, when it expires, and how many days remain until expiration.");
+      aboutBody("This workbook is a register of the laboratory's certificates and licenses on file in VeritaLab: CLIA certificate, CAP/TJC accreditation certificates, state laboratory licenses, lab director licenses, and any other regulatory credentials the lab has uploaded. Each row shows what the certificate covers, when it was issued, when it expires, and how many days remain until expiration.");
       aboutBlank();
       aboutSection("How to use this workbook");
       aboutBody("The Certificates tab lists every active certificate. The Status column is calculated from today's date and the Expiration Date: green for Current (more than 90 days), amber for Expiring (31-90 days) or Expires Soon (1-30 days), magenta for Expired. Filter by Status to surface anything needing renewal action; sort by Expiration Date to see what is closest to lapsing. The Documents Count column shows how many supporting files are attached to each certificate inside VeritaLab itself.");

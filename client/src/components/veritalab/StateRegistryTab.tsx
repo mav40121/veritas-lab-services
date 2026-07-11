@@ -136,9 +136,7 @@ export function StateRegistryTab() {
           <MapPin size={40} className="text-muted-foreground mx-auto mb-4" />
           <h3 className="font-semibold text-lg mb-2">State registry is empty</h3>
           <p className="text-muted-foreground text-sm max-w-lg mx-auto">
-            The per-state licensure catalog has not been seeded on this environment yet. An administrator can run the seed via
-            <code className="mx-1 px-1.5 py-0.5 rounded bg-muted text-xs">POST /api/admin/seed-state-registry</code>
-            to populate this table.
+            The per-state licensure catalog is being finalized for this environment. Contact info@veritaslabservices.com and we will enable it for your lab.
           </p>
         </CardContent>
       </Card>
