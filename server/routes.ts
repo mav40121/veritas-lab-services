@@ -21675,8 +21675,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // otherwise Express matches "template" as the :id param.
   app.get("/api/staff/employees/template", authMiddleware, async (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
+    // Resolve the ACTIVE lab (X-Active-Lab-Id header, access-validated) so a
+    // multi-lab owner's import targets the lab they are viewing, not an
+    // arbitrary staff_labs row. Falls back to the owner's staff_labs row when
+    // there is no active-lab header (single-lab / legacy page).
+    const activeLab = resolveActiveLabForRequest(req.userId, req);
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const lab = (db as any).$client.prepare("SELECT lab_name FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+    const lab = (activeLab
+      ? (db as any).$client.prepare("SELECT lab_name FROM staff_labs WHERE tier2_lab_id = ?").get(activeLab.id)
+      : (db as any).$client.prepare("SELECT lab_name FROM staff_labs WHERE user_id = ?").get(dataUserId)) as any;
     try {
       const { buildStaffImportWorkbook } = await import("./staffBulkImport");
       const buf = await buildStaffImportWorkbook({ labName: lab?.lab_name });
@@ -23739,8 +23746,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     })(),
     async (req: any, res) => {
       if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
+      // Active-lab aware (X-Active-Lab-Id): multi-lab imports preview against the
+      // lab being viewed, not an arbitrary staff_labs row. See the template route.
+      const activeLab = resolveActiveLabForRequest(req.userId, req);
       const dataUserId = req.ownerUserId ?? req.user.userId;
-      const lab = (db as any).$client.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+      const lab = (activeLab
+        ? (db as any).$client.prepare("SELECT id FROM staff_labs WHERE tier2_lab_id = ?").get(activeLab.id)
+        : (db as any).$client.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(dataUserId)) as any;
       if (!lab) return res.status(400).json({ error: "Set up your lab first" });
       if (!req.file?.buffer) return res.status(400).json({ error: "No file uploaded" });
       try {
@@ -23776,8 +23788,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     })(),
     async (req: any, res) => {
       if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
+      // Active-lab aware (X-Active-Lab-Id): multi-lab imports COMMIT to the lab
+      // being viewed, not an arbitrary staff_labs row. See the template route.
+      const activeLab = resolveActiveLabForRequest(req.userId, req);
       const dataUserId = req.ownerUserId ?? req.user.userId;
-      const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+      const lab = (activeLab
+        ? (db as any).$client.prepare("SELECT * FROM staff_labs WHERE tier2_lab_id = ?").get(activeLab.id)
+        : (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId)) as any;
       if (!lab) return res.status(400).json({ error: "Set up your lab first" });
       if (!req.file?.buffer) return res.status(400).json({ error: "No file uploaded" });
       try {
@@ -23825,8 +23842,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           return { sixMonthDue, nysSixMonthDue };
         };
 
+        // tier2_lab_id is REQUIRED: the lab-scoped roster reads WHERE tier2_lab_id,
+        // so a bulk INSERT that omits it makes the imported employee invisible in
+        // the app. lab.tier2_lab_id comes from the resolved (active) staff_labs row.
         const insertEmpStmt = sqlite.prepare(
-          "INSERT INTO staff_employees (lab_id, user_id, last_name, first_name, middle_initial, title, hire_date, qualifications_text, highest_complexity, performs_testing, can_adjust_inventory, can_view_audit, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+          "INSERT INTO staff_employees (lab_id, tier2_lab_id, user_id, last_name, first_name, middle_initial, title, hire_date, qualifications_text, highest_complexity, performs_testing, can_adjust_inventory, can_view_audit, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         );
         const updateEmpStmt = sqlite.prepare(
           "UPDATE staff_employees SET last_name=?, first_name=?, middle_initial=?, title=?, hire_date=?, qualifications_text=?, highest_complexity=?, performs_testing=?, can_adjust_inventory=?, can_view_audit=?, updated_at=? WHERE id=? AND lab_id=?"
@@ -23846,7 +23866,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             const p = r.parsed;
             if (r.willInsert) {
               const result = insertEmpStmt.run(
-                lab.id, dataUserId, p.lastName, p.firstName,
+                lab.id, lab.tier2_lab_id, dataUserId, p.lastName, p.firstName,
                 p.middleInitial ? p.middleInitial.charAt(0) : null,
                 p.title, p.hireDate, p.qualificationsText, p.highestComplexity, p.performsTesting,
                 p.canAdjustInventory, p.canViewAudit,
