@@ -99,7 +99,7 @@ export async function buildStaffImportWorkbook(opts: { labName?: string }): Prom
   const inst = wb.addWorksheet("Instructions", { properties: { defaultColWidth: 90 } });
   inst.getColumn(1).width = 110;
   const lines: { text: string; bold?: boolean; size?: number; color?: string }[] = [
-    { text: `VeritaStaff\u2122 Bulk Import Template${opts.labName ? "  -  " + opts.labName : ""}`, bold: true, size: 16, color: "FF1F4E78" },
+    { text: `VeritaStaff\u2122 Bulk Import Template${opts.labName ? "  -  " + opts.labName : ""}`, bold: true, size: 16, color: "FF01696F" },
     { text: "" },
     { text: "How to use this template", bold: true, size: 12 },
     { text: "1. Open the Roster tab and fill in one row per employee." },
@@ -169,7 +169,7 @@ export async function buildStaffImportWorkbook(opts: { labName?: string }): Prom
   headerRow.height = 36;
   headerRow.eachCell((c) => {
     c.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
-    c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F4E78" } };
+    c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
     c.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
     c.border = { top: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" }, bottom: { style: "thin" } };
   });

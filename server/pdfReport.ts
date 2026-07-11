@@ -4940,19 +4940,19 @@ function buildCMS209HTML(input: CMS209Input): string {
   const check = (v: boolean) => v ? "X" : "";
   const dataRows = rows.map(r => `
     <tr>
-      <td>${r.lastName}</td>
-      <td>${r.firstName}</td>
-      <td class="ctr">${r.mi}</td>
+      <td>${esc(r.lastName)}</td>
+      <td>${esc(r.firstName)}</td>
+      <td class="ctr">${esc(r.mi)}</td>
       <td class="ctr">${check(r.ld)}</td>
       <td class="ctr">${check(r.cc)}</td>
-      <td class="ctr">${r.tc}</td>
-      <td class="ctr">${r.ts}</td>
+      <td class="ctr">${esc(r.tc)}</td>
+      <td class="ctr">${esc(r.ts)}</td>
       <td class="ctr">${check(r.gs)}</td>
       <td class="ctr">${check(r.tp)}</td>
       <td class="ctr">${check(r.ctGs)}</td>
       <td class="ctr">${check(r.ct)}</td>
-      <td class="ctr">${r.mh}</td>
-      <td class="quals">${r.quals}</td>
+      <td class="ctr">${esc(r.mh)}</td>
+      <td class="quals">${esc(r.quals)}</td>
     </tr>`).join("");
 
   // Add empty rows to fill at least 20 total
@@ -5002,9 +5002,9 @@ function buildCMS209HTML(input: CMS209Input): string {
       <div class="form-subtitle">CENTERS FOR MEDICARE &amp; MEDICAID SERVICES / LABORATORY PERSONNEL REPORT</div>
 
       <div class="lab-info">
-        <div class="field"><span class="label">Laboratory Name:</span> ${lab.lab_name}</div>
-        <div class="field"><span class="label">CLIA Number:</span> ${lab.clia_number}</div>
-        <div class="field"><span class="label">Address:</span> ${address}</div>
+        <div class="field"><span class="label">Laboratory Name:</span> ${esc(lab.lab_name)}</div>
+        <div class="field"><span class="label">CLIA Number:</span> ${esc(lab.clia_number)}</div>
+        <div class="field"><span class="label">Address:</span> ${esc(address)}</div>
       </div>
     </div>
 
