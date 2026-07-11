@@ -588,7 +588,7 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
               <AlertTriangle size={14} className="shrink-0 mt-0.5" />
               <span>
                 CMS requires a wet ink signature on the printed CMS-116. This field captures the
-                director's name and date for the draft only; the printed PDF (Phase 4) carries
+                director's name and date for the draft only; the printed PDF carries
                 the signature block the director signs by hand before mailing.
               </span>
             </div>
@@ -609,7 +609,7 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
         <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <CheckCircle2 size={14} className="text-emerald-600" />
-            Draft autosaves when you click Save. PDF generation lands in Phase 4.
+            Draft autosaves when you click Save. Use Download PDF to generate the CMS-116 for wet-ink signature.
           </div>
           <Button size="sm" onClick={handleSave} disabled={saving || isReadOnly} className="bg-primary hover:bg-primary/90">
             <Save size={14} className="mr-1.5" />
