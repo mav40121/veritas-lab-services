@@ -46,12 +46,14 @@ export function CredentialExpirationTile({ className = "" }: { className?: strin
   const activeLabId = useActiveLabId();
   const labRoute = useLabRoute();
   const url = activeLabId ? `/api/labs/${activeLabId}/staff/credentials-dashboard-stats` : null;
-  const { data, isLoading } = useQuery<CredentialStats>({
+  const { data, isLoading, isError } = useQuery<CredentialStats>({
     queryKey: [url ?? "no-cred-dashboard-stats"],
     queryFn: async () => {
       if (!url) return { expired: 0, expiring30: 0, expiring60: 0, current: 0, total: 0, percentCurrent: 100, expiringSample: [] };
       const r = await fetch(`${API_BASE}${url}`, { headers: authHeaders() });
-      if (!r.ok) return { expired: 0, expiring30: 0, expiring60: 0, current: 0, total: 0, percentCurrent: 100, expiringSample: [] };
+      // Throw (not return zeros) so a broken endpoint surfaces as isError and a
+      // distinct message, instead of a vanished tile that looks like "all current".
+      if (!r.ok) throw new Error("credential dashboard stats unavailable");
       return r.json();
     },
     enabled: !!url,
@@ -59,6 +61,14 @@ export function CredentialExpirationTile({ className = "" }: { className?: strin
 
   if (!activeLabId) return null;
   if (isLoading) return null;
+  if (isError) return (
+    <Card className={className}>
+      <CardContent className="py-4 text-sm text-muted-foreground flex items-center gap-2">
+        <AlertTriangle size={16} className="text-amber-600" />
+        Credential status is unavailable right now. Refresh to retry.
+      </CardContent>
+    </Card>
+  );
   // Only render the tile if the lab has linked at least one credential with
   // an expiration_date. Otherwise the customer sees a tile screaming
   // "0 credentials" which is technically correct but useless noise.

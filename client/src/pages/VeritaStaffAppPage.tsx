@@ -200,7 +200,7 @@ export default function VeritaStaffAppPage() {
   });
 
   // Fetch employees
-  const { data: employees = [], isLoading: empLoading } = useQuery<Employee[]>({
+  const { data: employees = [], isLoading: empLoading, isError: empError } = useQuery<Employee[]>({
     queryKey: [empKey],
     enabled: !!hasAccess && !!lab,
   });
@@ -413,6 +413,14 @@ export default function VeritaStaffAppPage() {
       {/* Employee List */}
       {empLoading ? (
         <p className="text-muted-foreground">Loading employees...</p>
+      ) : empError ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <AlertTriangle size={40} className="text-amber-600 mx-auto mb-4" />
+            <h3 className="font-semibold text-lg mb-2">Could not load employees</h3>
+            <p className="text-sm text-muted-foreground">The roster failed to load. Refresh the page to retry. Your staff data has not been changed.</p>
+          </CardContent>
+        </Card>
       ) : employees.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
