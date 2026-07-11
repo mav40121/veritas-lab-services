@@ -34,12 +34,14 @@ export function CompetencyStatusTile({ className = "" }: { className?: string })
   const activeLabId = useActiveLabId();
   const labRoute = useLabRoute();
   const url = activeLabId ? `/api/labs/${activeLabId}/competency/dashboard-stats` : null;
-  const { data, isLoading } = useQuery<CompetencyStats>({
+  const { data, isLoading, isError } = useQuery<CompetencyStats>({
     queryKey: [url ?? "no-comp-dashboard-stats"],
     queryFn: async () => {
       if (!url) return { overdue: 0, dueSoon30: 0, dueSoon90: 0, compliant: 0, total: 0, percentCompliant: 100, overdueSample: [] };
       const r = await fetch(`${API_BASE}${url}`, { headers: authHeaders() });
-      if (!r.ok) return { overdue: 0, dueSoon30: 0, dueSoon90: 0, compliant: 0, total: 0, percentCompliant: 100, overdueSample: [] };
+      // Throw (not return zeros) so a broken endpoint surfaces as isError and a
+      // distinct message, instead of a vanished tile that looks like "nobody overdue".
+      if (!r.ok) throw new Error("competency dashboard stats unavailable");
       return r.json();
     },
     enabled: !!url,
@@ -47,6 +49,14 @@ export function CompetencyStatusTile({ className = "" }: { className?: string })
 
   if (!activeLabId) return null;
   if (isLoading) return null;
+  if (isError) return (
+    <Card className={className}>
+      <CardContent className="py-4 text-sm text-muted-foreground flex items-center gap-2">
+        <AlertTriangle size={16} className="text-amber-600" />
+        Competency status is unavailable right now. Refresh to retry.
+      </CardContent>
+    </Card>
+  );
   if (!data || data.total === 0) return null;
 
   const stats = [
