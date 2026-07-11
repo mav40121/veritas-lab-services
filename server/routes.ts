@@ -21978,12 +21978,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const ownerUserId = req.scope.lab?.owner_user_id ?? req.userId;
     const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE tier2_lab_id = ?").get(tier2LabId) as any;
     if (!lab) return res.status(400).json({ error: "Set up your lab first" });
-    const { lastName, firstName, middleInitial, title, titleCode, hireDate, qualificationsText, qualificationsVerifiedAt, qualificationsVerifiedBy, highestComplexity, performsTesting, roles } = req.body;
+    const { lastName, firstName, middleInitial, title, titleCode, hireDate, qualificationsText, qualificationsVerifiedAt, qualificationsVerifiedBy, highestComplexity, performsTesting, roles, canAdjustInventory, canViewAudit } = req.body;
     if (!lastName?.trim() || !firstName?.trim()) return res.status(400).json({ error: "Name required" });
     const now = new Date().toISOString();
+    // can_adjust_inventory / can_view_audit are the Staff Portal access grants
+    // (EmployeeDialog always sends both). The lab-scoped handlers previously
+    // omitted them, so on a multi-lab account (which always routes here) the
+    // grant silently no-op'd. Persist them, matching the legacy + bulk paths.
     const result = (db as any).$client.prepare(
-      "INSERT INTO staff_employees (lab_id, tier2_lab_id, user_id, last_name, first_name, middle_initial, title, title_code, hire_date, qualifications_text, qualifications_verified_at, qualifications_verified_by, highest_complexity, performs_testing, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-    ).run(lab.id, tier2LabId, ownerUserId, lastName.trim(), firstName.trim(), middleInitial || null, title || null, titleCode || null, hireDate || null, qualificationsText || null, qualificationsVerifiedAt || null, qualificationsVerifiedBy || null, highestComplexity || 'H', performsTesting ? 1 : 0, 'active', now, now);
+      "INSERT INTO staff_employees (lab_id, tier2_lab_id, user_id, last_name, first_name, middle_initial, title, title_code, hire_date, qualifications_text, qualifications_verified_at, qualifications_verified_by, highest_complexity, performs_testing, can_adjust_inventory, can_view_audit, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    ).run(lab.id, tier2LabId, ownerUserId, lastName.trim(), firstName.trim(), middleInitial || null, title || null, titleCode || null, hireDate || null, qualificationsText || null, qualificationsVerifiedAt || null, qualificationsVerifiedBy || null, highestComplexity || 'H', performsTesting ? 1 : 0, canAdjustInventory ? 1 : 0, canViewAudit ? 1 : 0, 'active', now, now);
     const empId = result.lastInsertRowid;
     if (Array.isArray(roles)) {
       const roleStmt = (db as any).$client.prepare("INSERT INTO staff_roles (employee_id, lab_id, tier2_lab_id, role, specialty_number) VALUES (?,?,?,?,?)");
@@ -22036,10 +22040,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT * FROM staff_employees WHERE id = ? AND tier2_lab_id = ?"
     ).get(req.params.id, tier2LabId) as any;
     if (!emp) return res.status(404).json({ error: "Employee not found" });
-    const { lastName, firstName, middleInitial, title, titleCode, hireDate, qualificationsText, qualificationsVerifiedAt, qualificationsVerifiedBy, highestComplexity, performsTesting, roles } = req.body;
+    const { lastName, firstName, middleInitial, title, titleCode, hireDate, qualificationsText, qualificationsVerifiedAt, qualificationsVerifiedBy, highestComplexity, performsTesting, roles, canAdjustInventory, canViewAudit } = req.body;
     const now = new Date().toISOString();
+    // Persist the Staff Portal access grants (can_adjust_inventory/can_view_audit).
+    // The lab-scoped PUT previously omitted them, so a multi-lab director toggling
+    // access saw "Employee updated" while the grant never wrote. Matches legacy PUT.
     (db as any).$client.prepare(
-      "UPDATE staff_employees SET last_name=?, first_name=?, middle_initial=?, title=?, title_code=?, hire_date=?, qualifications_text=?, qualifications_verified_at=?, qualifications_verified_by=?, highest_complexity=?, performs_testing=?, updated_at=? WHERE id=?"
+      "UPDATE staff_employees SET last_name=?, first_name=?, middle_initial=?, title=?, title_code=?, hire_date=?, qualifications_text=?, qualifications_verified_at=?, qualifications_verified_by=?, highest_complexity=?, performs_testing=?, can_adjust_inventory=?, can_view_audit=?, updated_at=? WHERE id=?"
     ).run(
       lastName?.trim() || emp.last_name, firstName?.trim() || emp.first_name,
       middleInitial !== undefined ? middleInitial : emp.middle_initial,
@@ -22051,6 +22058,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       qualificationsVerifiedBy !== undefined ? qualificationsVerifiedBy : emp.qualifications_verified_by,
       highestComplexity || emp.highest_complexity,
       performsTesting !== undefined ? (performsTesting ? 1 : 0) : emp.performs_testing,
+      canAdjustInventory !== undefined ? (canAdjustInventory ? 1 : 0) : (emp.can_adjust_inventory ?? 0),
+      canViewAudit !== undefined ? (canViewAudit ? 1 : 0) : (emp.can_view_audit ?? 0),
       now, req.params.id
     );
     if (Array.isArray(roles)) {
