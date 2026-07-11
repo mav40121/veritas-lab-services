@@ -21992,47 +21992,55 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // (EmployeeDialog always sends both). The lab-scoped handlers previously
     // omitted them, so on a multi-lab account (which always routes here) the
     // grant silently no-op'd. Persist them, matching the legacy + bulk paths.
-    const result = (db as any).$client.prepare(
-      "INSERT INTO staff_employees (lab_id, tier2_lab_id, user_id, last_name, first_name, middle_initial, title, title_code, hire_date, qualifications_text, qualifications_verified_at, qualifications_verified_by, highest_complexity, performs_testing, can_adjust_inventory, can_view_audit, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-    ).run(lab.id, tier2LabId, ownerUserId, lastName.trim(), firstName.trim(), middleInitial || null, title || null, titleCode || null, hireDate || null, qualificationsText || null, qualificationsVerifiedAt || null, qualificationsVerifiedBy || null, highestComplexity || 'H', performsTesting ? 1 : 0, canAdjustInventory ? 1 : 0, canViewAudit ? 1 : 0, 'active', now, now);
-    const empId = result.lastInsertRowid;
-    if (Array.isArray(roles)) {
-      const roleStmt = (db as any).$client.prepare("INSERT INTO staff_roles (employee_id, lab_id, tier2_lab_id, role, specialty_number) VALUES (?,?,?,?,?)");
-      for (const r of roles) roleStmt.run(empId, lab.id, tier2LabId, r.role, r.specialtyNumber || null);
-    }
-    if (performsTesting) {
-      const accreditor = lab.accreditation_body;
-      const includesTJCorCAP = ["TJC", "CAP"].includes(accreditor);
-      const includesNYS = lab.includes_nys === 1;
-      const hire = hireDate ? new Date(hireDate) : new Date();
-      let sixMonthDue: string | null = null;
-      let nysSixMonthDue: string | null = null;
-      if (includesTJCorCAP && !includesNYS) {
-        sixMonthDue = null;
-      } else {
-        const sixFromHire = new Date(hire);
-        sixFromHire.setMonth(sixFromHire.getMonth() + 6);
-        sixMonthDue = sixFromHire.toISOString().split('T')[0];
+    // Atomic: employee row + roles + competency schedule + milestone back-fill
+    // all commit together, so a mid-sequence throw cannot leave a half-written
+    // employee (e.g. a row with no roles). ensureCompetencyScheduleMilestones
+    // uses plain prepared statements (no nested transaction), so this is safe.
+    const sqlite = (db as any).$client;
+    const empId = sqlite.transaction(() => {
+      const result = sqlite.prepare(
+        "INSERT INTO staff_employees (lab_id, tier2_lab_id, user_id, last_name, first_name, middle_initial, title, title_code, hire_date, qualifications_text, qualifications_verified_at, qualifications_verified_by, highest_complexity, performs_testing, can_adjust_inventory, can_view_audit, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+      ).run(lab.id, tier2LabId, ownerUserId, lastName.trim(), firstName.trim(), middleInitial || null, title || null, titleCode || null, hireDate || null, qualificationsText || null, qualificationsVerifiedAt || null, qualificationsVerifiedBy || null, highestComplexity || 'H', performsTesting ? 1 : 0, canAdjustInventory ? 1 : 0, canViewAudit ? 1 : 0, 'active', now, now);
+      const id = result.lastInsertRowid;
+      if (Array.isArray(roles)) {
+        const roleStmt = sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, tier2_lab_id, role, specialty_number) VALUES (?,?,?,?,?)");
+        for (const r of roles) roleStmt.run(id, lab.id, tier2LabId, r.role, r.specialtyNumber || null);
       }
-      if (includesNYS) {
-        const nysSix = new Date(hire);
-        nysSix.setMonth(nysSix.getMonth() + 6);
-        nysSixMonthDue = nysSix.toISOString().split('T')[0];
+      if (performsTesting) {
+        const accreditor = lab.accreditation_body;
+        const includesTJCorCAP = ["TJC", "CAP"].includes(accreditor);
+        const includesNYS = lab.includes_nys === 1;
+        const hire = hireDate ? new Date(hireDate) : new Date();
+        let sixMonthDue: string | null = null;
+        let nysSixMonthDue: string | null = null;
+        if (includesTJCorCAP && !includesNYS) {
+          sixMonthDue = null;
+        } else {
+          const sixFromHire = new Date(hire);
+          sixFromHire.setMonth(sixFromHire.getMonth() + 6);
+          sixMonthDue = sixFromHire.toISOString().split('T')[0];
+        }
+        if (includesNYS) {
+          const nysSix = new Date(hire);
+          nysSix.setMonth(nysSix.getMonth() + 6);
+          nysSixMonthDue = nysSix.toISOString().split('T')[0];
+        }
+        if (includesTJCorCAP && includesNYS) {
+          const sixFromHire = new Date(hire);
+          sixFromHire.setMonth(sixFromHire.getMonth() + 6);
+          sixMonthDue = sixFromHire.toISOString().split('T')[0];
+        }
+        sqlite.prepare(
+          "INSERT INTO staff_competency_schedules (employee_id, lab_id, six_month_due_at, nys_six_month_due_at) VALUES (?,?,?,?)"
+        ).run(id, lab.id, sixMonthDue, nysSixMonthDue);
       }
-      if (includesTJCorCAP && includesNYS) {
-        const sixFromHire = new Date(hire);
-        sixFromHire.setMonth(sixFromHire.getMonth() + 6);
-        sixMonthDue = sixFromHire.toISOString().split('T')[0];
+      // PR E3: layer first_annual_due_at + annual_due_at + back-fill six_month
+      // on top of whatever the accreditor-specific block above already wrote.
+      if (performsTesting && hireDate) {
+        ensureCompetencyScheduleMilestones(id, lab.id, hireDate);
       }
-      (db as any).$client.prepare(
-        "INSERT INTO staff_competency_schedules (employee_id, lab_id, six_month_due_at, nys_six_month_due_at) VALUES (?,?,?,?)"
-      ).run(empId, lab.id, sixMonthDue, nysSixMonthDue);
-    }
-    // PR E3: layer first_annual_due_at + annual_due_at + back-fill six_month
-    // on top of whatever the accreditor-specific block above already wrote.
-    if (performsTesting && hireDate) {
-      ensureCompetencyScheduleMilestones(empId, lab.id, hireDate);
-    }
+      return id;
+    })();
     const emp = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ?").get(empId);
     const empRoles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(empId);
     const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(empId);
@@ -22052,35 +22060,42 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Persist the Staff Portal access grants (can_adjust_inventory/can_view_audit).
     // The lab-scoped PUT previously omitted them, so a multi-lab director toggling
     // access saw "Employee updated" while the grant never wrote. Matches legacy PUT.
-    (db as any).$client.prepare(
-      "UPDATE staff_employees SET last_name=?, first_name=?, middle_initial=?, title=?, title_code=?, hire_date=?, qualifications_text=?, qualifications_verified_at=?, qualifications_verified_by=?, highest_complexity=?, performs_testing=?, can_adjust_inventory=?, can_view_audit=?, updated_at=? WHERE id=?"
-    ).run(
-      lastName?.trim() || emp.last_name, firstName?.trim() || emp.first_name,
-      middleInitial !== undefined ? middleInitial : emp.middle_initial,
-      title !== undefined ? title : emp.title,
-      titleCode !== undefined ? titleCode : emp.title_code,
-      hireDate !== undefined ? hireDate : emp.hire_date,
-      qualificationsText !== undefined ? qualificationsText : emp.qualifications_text,
-      qualificationsVerifiedAt !== undefined ? qualificationsVerifiedAt : emp.qualifications_verified_at,
-      qualificationsVerifiedBy !== undefined ? qualificationsVerifiedBy : emp.qualifications_verified_by,
-      highestComplexity || emp.highest_complexity,
-      performsTesting !== undefined ? (performsTesting ? 1 : 0) : emp.performs_testing,
-      canAdjustInventory !== undefined ? (canAdjustInventory ? 1 : 0) : (emp.can_adjust_inventory ?? 0),
-      canViewAudit !== undefined ? (canViewAudit ? 1 : 0) : (emp.can_view_audit ?? 0),
-      now, req.params.id
-    );
-    if (Array.isArray(roles)) {
-      (db as any).$client.prepare("DELETE FROM staff_roles WHERE employee_id = ?").run(req.params.id);
-      const roleStmt = (db as any).$client.prepare("INSERT INTO staff_roles (employee_id, lab_id, tier2_lab_id, role, specialty_number) VALUES (?,?,?,?,?)");
-      for (const r of roles) roleStmt.run(req.params.id, emp.lab_id, tier2LabId, r.role, r.specialtyNumber || null);
-    }
-    // PR E3: ensure milestones populate when hire_date is now present and
-    // performs_testing is on. Same idempotent helper used at POST time.
-    const effectivePerformsTesting = performsTesting !== undefined ? !!performsTesting : !!emp.performs_testing;
-    const effectiveHireDate = hireDate !== undefined ? hireDate : emp.hire_date;
-    if (effectivePerformsTesting && effectiveHireDate) {
-      ensureCompetencyScheduleMilestones(Number(req.params.id), emp.lab_id, effectiveHireDate);
-    }
+    // Atomic: the employee UPDATE, the roles DELETE + re-insert, and the
+    // milestone back-fill commit together. Without this, a throw between the
+    // DELETE and the re-insert (e.g. a bad specialty_number) left the employee
+    // with ZERO roles. ensureCompetencyScheduleMilestones has no nested txn.
+    const sqlite = (db as any).$client;
+    sqlite.transaction(() => {
+      sqlite.prepare(
+        "UPDATE staff_employees SET last_name=?, first_name=?, middle_initial=?, title=?, title_code=?, hire_date=?, qualifications_text=?, qualifications_verified_at=?, qualifications_verified_by=?, highest_complexity=?, performs_testing=?, can_adjust_inventory=?, can_view_audit=?, updated_at=? WHERE id=?"
+      ).run(
+        lastName?.trim() || emp.last_name, firstName?.trim() || emp.first_name,
+        middleInitial !== undefined ? middleInitial : emp.middle_initial,
+        title !== undefined ? title : emp.title,
+        titleCode !== undefined ? titleCode : emp.title_code,
+        hireDate !== undefined ? hireDate : emp.hire_date,
+        qualificationsText !== undefined ? qualificationsText : emp.qualifications_text,
+        qualificationsVerifiedAt !== undefined ? qualificationsVerifiedAt : emp.qualifications_verified_at,
+        qualificationsVerifiedBy !== undefined ? qualificationsVerifiedBy : emp.qualifications_verified_by,
+        highestComplexity || emp.highest_complexity,
+        performsTesting !== undefined ? (performsTesting ? 1 : 0) : emp.performs_testing,
+        canAdjustInventory !== undefined ? (canAdjustInventory ? 1 : 0) : (emp.can_adjust_inventory ?? 0),
+        canViewAudit !== undefined ? (canViewAudit ? 1 : 0) : (emp.can_view_audit ?? 0),
+        now, req.params.id
+      );
+      if (Array.isArray(roles)) {
+        sqlite.prepare("DELETE FROM staff_roles WHERE employee_id = ?").run(req.params.id);
+        const roleStmt = sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, tier2_lab_id, role, specialty_number) VALUES (?,?,?,?,?)");
+        for (const r of roles) roleStmt.run(req.params.id, emp.lab_id, tier2LabId, r.role, r.specialtyNumber || null);
+      }
+      // PR E3: ensure milestones populate when hire_date is now present and
+      // performs_testing is on. Same idempotent helper used at POST time.
+      const effectivePerformsTesting = performsTesting !== undefined ? !!performsTesting : !!emp.performs_testing;
+      const effectiveHireDate = hireDate !== undefined ? hireDate : emp.hire_date;
+      if (effectivePerformsTesting && effectiveHireDate) {
+        ensureCompetencyScheduleMilestones(Number(req.params.id), emp.lab_id, effectiveHireDate);
+      }
+    })();
     const updated = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ?").get(req.params.id);
     const updRoles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(req.params.id);
     const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(req.params.id);
