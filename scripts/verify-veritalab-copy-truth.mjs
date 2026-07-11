@@ -57,5 +57,12 @@ ok("#7 demo no longer claims CLIA is auto-populated 'from your CMS-116 applicati
 ok("#7 demo attributes CLIA auto-populate to the signup CLIA verification",
   /Auto-populated CLIA from your CLIA verification at signup/.test(demo));
 
+// #9 specialty/subspecialty CFR citation corrected (493.5 = complexity categories;
+// specialty/subspecialty are 493.2 / Subpart I)
+ok("#9 rendered specialty section no longer cites the wrong 42 CFR 493.5",
+  !/Mirrors the categories in 42 CFR 493\.5\b/.test(cms));
+ok("#9 rendered specialty section cites 42 CFR 493.2 / Subpart I",
+  /Mirrors the categories in 42 CFR 493\.2 and Subpart I/.test(cms));
+
 console.log(fails === 0 ? "\n=== VERITALAB COPY TRUTH: PASS ===" : `\n=== ${fails} FAIL ===`);
 process.exit(fails === 0 ? 0 : 1);

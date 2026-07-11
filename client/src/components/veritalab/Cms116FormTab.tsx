@@ -89,7 +89,7 @@ interface SectionVII {
 }
 
 interface SectionVIII {
-  // Specialty / subspecialty checkboxes (non-waived testing per 42 CFR 493.5)
+  // Specialty / subspecialty checkboxes (categories per 42 CFR 493.2 / Subpart I)
   histocompatibility: boolean;
   micro_bacteriology: boolean;
   micro_mycobacteriology: boolean;
@@ -493,7 +493,7 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
           <AccordionTrigger className="text-left font-medium">VIII. Non-Waived Testing (Specialty / Subspecialty)</AccordionTrigger>
           <AccordionContent className="pt-2">
             <p className="text-xs text-muted-foreground mb-3">
-              Check every specialty and subspecialty the lab performs. Mirrors the categories in 42 CFR 493.5.
+              Check every specialty and subspecialty the lab performs. Mirrors the categories in 42 CFR 493.2 and Subpart I.
             </p>
             <div className="grid sm:grid-cols-2 gap-y-1 gap-x-6 text-sm">
               <CheckGroup label="Histocompatibility" items={[
