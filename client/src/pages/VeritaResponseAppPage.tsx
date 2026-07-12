@@ -37,6 +37,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
 
 type Accreditor = "CAP" | "TJC" | "COLA" | "CMS" | "AABB" | "Other";
 type FindingStatus = "open" | "drafting" | "submitted" | "accepted" | "rejected_resubmit" | "closed";
@@ -84,8 +85,10 @@ export default function VeritaResponseAppPage() {
   const [, navigate] = useLocation();
   const [findings, setFindings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
 
   // New finding form state
   // Default to CMS because every lab holds CLIA so CMS is always in the
@@ -124,28 +127,39 @@ export default function VeritaResponseAppPage() {
     setLoading(true);
     try {
       const res = await fetch(`${findingsApi}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(`Failed to load findings (${res.status})`);
       const data = await res.json();
       setFindings(Array.isArray(data) ? data : []);
+      setLoadError(false);
     } catch {
-      // silent fail
+      // Audit #2: a failed load must NOT read as an empty board. Flag the error
+      // so the list renders a distinct error state instead of "No findings yet".
+      // Keep any previously loaded rows in place; if a refresh fails over
+      // existing data, toast so the stale state is not mistaken for fresh.
+      setLoadError(true);
+      if (findings.length) {
+        toast({ variant: "destructive", title: "Couldn't refresh findings", description: "Showing the last loaded list. Check your connection and retry." });
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    // Audit #7: re-fetch when the active lab changes, else the list keeps
+    // showing the prior lab's findings under the new lab's URL after a switch.
     if (hasPlanAccess) {
       fetchData();
     } else {
       setLoading(false);
     }
-  }, [hasPlanAccess]);
+  }, [hasPlanAccess, activeLabId]);
 
   const handleCreate = async () => {
     if (!newAccreditor) return;
     setSaving(true);
     try {
-      await fetch(`${findingsApi}`, {
+      const res = await fetch(`${findingsApi}`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -159,6 +173,13 @@ export default function VeritaResponseAppPage() {
           status: "open",
         }),
       });
+      if (!res.ok) {
+        // Audit #3: never report a failed create as success. Keep the dialog
+        // open with the entered data and surface the server's message.
+        const body = await res.json().catch(() => ({}));
+        toast({ variant: "destructive", title: "Could not create finding", description: body?.error || `Request failed (${res.status})` });
+        return;
+      }
       setNewAccreditor("CMS");
       setNewFindingNumber("");
       setNewStandardRef("");
@@ -168,16 +189,29 @@ export default function VeritaResponseAppPage() {
       setNewDescription("");
       setShowCreate(false);
       await fetchData();
+    } catch {
+      toast({ variant: "destructive", title: "Could not create finding", description: "Check your connection and try again." });
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (id: number) => {
-    await fetch(`${findingsApi}/${id}`, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
+    // Audit #8: a failed delete must not silently look like success.
+    try {
+      const res = await fetch(`${findingsApi}/${id}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast({ variant: "destructive", title: "Could not delete finding", description: body?.error || `Request failed (${res.status})` });
+        return;
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Could not delete finding", description: "Check your connection and try again." });
+      return;
+    }
     await fetchData();
   };
 
@@ -320,7 +354,21 @@ export default function VeritaResponseAppPage() {
                 </tr>
               </thead>
               <tbody>
-                {findings.length === 0 && (
+                {loadError && findings.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center">
+                      <AlertTriangle size={28} className="mx-auto text-destructive mb-2" />
+                      <div className="font-semibold text-foreground mb-1">Couldn't load your findings</div>
+                      <div className="text-sm text-muted-foreground mb-3 max-w-sm mx-auto">
+                        Something went wrong loading this lab's deficiency findings. This does not mean your findings were cleared. Check your connection and try again.
+                      </div>
+                      <Button size="sm" variant="outline" onClick={fetchData}>
+                        <RefreshCw size={12} className="mr-1.5" />Retry
+                      </Button>
+                    </td>
+                  </tr>
+                )}
+                {!loadError && findings.length === 0 && (
                   <tr>
                     <td colSpan={6} className="py-12 text-center text-muted-foreground text-sm">
                       No findings yet. Click "New Finding" to record one.
