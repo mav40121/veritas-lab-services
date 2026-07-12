@@ -51,6 +51,14 @@ const ACCREDITORS: { value: Accreditor; label: string; anchorLabel: string; offs
   { value: "Other", label: "Other",          anchorLabel: "Anchor date",         offsetDays: 30, deadlineNote: "Neutral default of 30 days." },
 ];
 
+// Audit #11: only CMS/CAP/TJC carry a hard regulatory response deadline. COLA is
+// consultative (no hard deadline) and AABB's 45 days is the FDA reportable-event
+// window, not a lab CAPA deadline. Their clocks are SOFT TARGETS: amber "target"
+// styling, not red "overdue", and they are excluded from the "past their
+// deadline" overdue count/banner.
+const HARD_DEADLINE_ACCREDITORS = new Set<Accreditor>(["CMS", "CAP", "TJC"]);
+const isHardDeadline = (acc: string) => HARD_DEADLINE_ACCREDITORS.has(acc as Accreditor);
+
 const STATUS_BADGES: Record<FindingStatus, { label: string; cls: string }> = {
   open:                 { label: "Open",        cls: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
   drafting:             { label: "Drafting",    cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
@@ -248,6 +256,7 @@ export default function VeritaResponseAppPage() {
   const overdueCount = findings.filter((f) => {
     if (!f.due_date) return false;
     if (f.status === "closed" || f.status === "accepted") return false;
+    if (!isHardDeadline(f.accreditor)) return false; // #11: soft clocks are not "overdue"
     const d = daysUntil(f.due_date);
     return d !== null && d < 0;
   }).length;
@@ -377,19 +386,27 @@ export default function VeritaResponseAppPage() {
                 )}
                 {findings.map((f) => {
                   const d = daysUntil(f.due_date);
+                  // #11: soft-clock accreditors (COLA/AABB) read "target", not "overdue".
+                  const hard = isHardDeadline(f.accreditor);
                   const dueLabel = !f.due_date
                     ? "No deadline"
                     : d === null
                       ? f.due_date
                       : d < 0
-                        ? `${Math.abs(d)}d overdue (${f.due_date})`
+                        ? hard
+                          ? `${Math.abs(d)}d overdue (${f.due_date})`
+                          : `${Math.abs(d)}d past target (${f.due_date})`
                         : d === 0
-                          ? `Due today (${f.due_date})`
+                          ? hard
+                            ? `Due today (${f.due_date})`
+                            : `Target today (${f.due_date})`
                           : `In ${d}d (${f.due_date})`;
                   const dueCls = !f.due_date
                     ? "text-muted-foreground"
                     : d !== null && d < 0
-                      ? "text-red-700 dark:text-red-400 font-semibold"
+                      ? hard
+                        ? "text-red-700 dark:text-red-400 font-semibold"
+                        : "text-amber-700 dark:text-amber-400 font-medium"
                       : d !== null && d <= 7
                         ? "text-amber-700 dark:text-amber-400 font-medium"
                         : "text-muted-foreground";
