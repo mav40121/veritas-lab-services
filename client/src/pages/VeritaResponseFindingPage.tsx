@@ -13,6 +13,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -232,15 +240,29 @@ interface EffCheck {
 function EffectivenessPanel({ activeLabId, findingId, completionDate, canEdit, onFindingChange }: {
   activeLabId: number; findingId: string; completionDate: string | null; canEdit: boolean; onFindingChange: () => void;
 }) {
+  const { toast } = useToast();
   const [checks, setChecks] = useState<EffCheck[] | null>(null);
+  const [checksError, setChecksError] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Audit #9: the outcome note is captured in a styled dialog, not a native
+  // window.prompt (which is unstyled and is suppressed inside sandboxed
+  // iframes / embedded previews, dead-ending the flow). recordTarget holds the
+  // checkpoint + outcome being recorded; a "not effective" outcome reopens the
+  // finding.
+  const [recordTarget, setRecordTarget] = useState<{ check: EffCheck; status: "effective" | "not_effective" } | null>(null);
+  const [noteText, setNoteText] = useState("");
   const base = `${API_BASE}/api/labs/${activeLabId}/findings/${findingId}/effectiveness-checks`;
 
   const load = async () => {
     try {
       const r = await fetch(base, { headers: authHeaders() });
-      if (r.ok) setChecks(await r.json());
-    } catch { /* leave as-is */ }
+      if (!r.ok) throw new Error(`load ${r.status}`);
+      setChecks(await r.json());
+      setChecksError(false);
+    } catch {
+      // Audit #9: a failed load must not read as "no checkpoints yet".
+      setChecksError(true);
+    }
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [findingId, activeLabId]);
 
@@ -249,29 +271,36 @@ function EffectivenessPanel({ activeLabId, findingId, completionDate, canEdit, o
     try {
       const r = await fetch(`${base}/generate`, { method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" } });
       const data = await r.json().catch(() => ({}));
-      if (r.ok) setChecks(data.checks || []);
-      else alert(data.error || "Could not start effectiveness monitoring.");
+      if (r.ok) { setChecks(data.checks || []); setChecksError(false); }
+      else toast({ variant: "destructive", title: "Could not start monitoring", description: data.error || "Please try again." });
     } finally { setBusy(false); }
   };
 
-  const record = async (check: EffCheck, status: "effective" | "not_effective") => {
-    const note = window.prompt(
-      status === "effective"
-        ? `What evidence shows the corrective action held at ${check.interval_days} days?`
-        : `What recurred at ${check.interval_days} days? (this reopens the finding)`,
-      "",
-    );
-    if (note === null) return;
+  const openRecord = (check: EffCheck, status: "effective" | "not_effective") => {
+    setNoteText("");
+    setRecordTarget({ check, status });
+  };
+
+  const submitRecord = async () => {
+    if (!recordTarget) return;
+    const { check, status } = recordTarget;
     setBusy(true);
     try {
       const r = await fetch(`${base}/${check.id}`, {
         method: "PUT",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ status, outcome_note: note }),
+        body: JSON.stringify({ status, outcome_note: noteText.trim() || null }),
       });
       const data = await r.json().catch(() => ({}));
-      if (r.ok) { await load(); if (data.reopened) onFindingChange(); }
-      else alert(data.error || "Could not record checkpoint.");
+      if (r.ok) {
+        setRecordTarget(null);
+        await load();
+        if (data.reopened) onFindingChange();
+      } else {
+        toast({ variant: "destructive", title: "Could not record checkpoint", description: data.error || "Please try again." });
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Could not record checkpoint", description: "Check your connection and try again." });
     } finally { setBusy(false); }
   };
 
@@ -285,7 +314,13 @@ function EffectivenessPanel({ activeLabId, findingId, completionDate, canEdit, o
         <p className="text-xs text-muted-foreground">
           A plan of correction is not finished when it is signed. CLIA and CAP expect the lab to verify the corrective action stayed effective. These 30, 60, and 90 day checkpoints are anchored on the completion date and appear on the VeritaTrack worklist until resolved.
         </p>
-        {!hasChecks ? (
+        {checksError && !hasChecks ? (
+          <div className="flex items-center gap-3 text-sm">
+            <AlertTriangle size={16} className="text-destructive shrink-0" />
+            <span className="text-muted-foreground">Couldn't load the checkpoints.</span>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={load}>Retry</Button>
+          </div>
+        ) : !hasChecks ? (
           <div className="flex items-center gap-3">
             <Button size="sm" onClick={generate} disabled={busy || !canEdit || !completionDate}>
               Start 30/60/90 day monitoring
@@ -313,8 +348,8 @@ function EffectivenessPanel({ activeLabId, findingId, completionDate, canEdit, o
                   </div>
                   {c.status === "pending" && canEdit && (
                     <div className="flex gap-1 shrink-0">
-                      <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={() => record(c, "effective")}>Effective</Button>
-                      <Button size="sm" variant="outline" className="h-7 text-xs text-red-700" disabled={busy} onClick={() => record(c, "not_effective")}>Not effective</Button>
+                      <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={() => openRecord(c, "effective")}>Effective</Button>
+                      <Button size="sm" variant="outline" className="h-7 text-xs text-red-700" disabled={busy} onClick={() => openRecord(c, "not_effective")}>Not effective</Button>
                     </div>
                   )}
                 </div>
@@ -322,6 +357,48 @@ function EffectivenessPanel({ activeLabId, findingId, completionDate, canEdit, o
             })}
           </div>
         )}
+
+        {/* Audit #9: styled record dialog replacing the native window.prompt. */}
+        <Dialog open={!!recordTarget} onOpenChange={(o) => { if (!o) setRecordTarget(null); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {recordTarget?.status === "effective"
+                  ? `Verify effective at ${recordTarget?.check.interval_days} days`
+                  : `Record recurrence at ${recordTarget?.check.interval_days} days`}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2">
+              <Label htmlFor="eff-note" className="text-sm">
+                {recordTarget?.status === "effective"
+                  ? "What evidence shows the corrective action held?"
+                  : "What recurred? Recording this reopens the finding."}
+              </Label>
+              <Textarea
+                id="eff-note"
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                rows={4}
+                placeholder="Optional but recommended for the surveyor-facing record."
+              />
+              {recordTarget?.status === "not_effective" && (
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  This marks the checkpoint not effective and reopens the finding for further corrective action.
+                </p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setRecordTarget(null)} disabled={busy}>Cancel</Button>
+              <Button
+                onClick={submitRecord}
+                disabled={busy}
+                className={recordTarget?.status === "not_effective" ? "bg-red-600 hover:bg-red-700 text-white" : ""}
+              >
+                {busy ? "Saving..." : recordTarget?.status === "effective" ? "Mark effective" : "Reopen finding"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );
@@ -357,8 +434,10 @@ export default function VeritaResponseFindingPage() {
 
   const [finding, setFinding] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const hasPlanAccess = !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
 
@@ -368,22 +447,28 @@ export default function VeritaResponseFindingPage() {
     try {
       const res = await fetch(findingUrl, { headers: authHeaders() });
       if (!res.ok) {
-        setFinding(null);
+        // Audit #4: distinguish a real 404/403 (finding gone / no access) from a
+        // transient 5xx/network error. A 500 must offer a retry, not claim the
+        // finding was deleted.
+        if (res.status === 404 || res.status === 403) { setFinding(null); setLoadError(false); }
+        else setLoadError(true);
         return;
       }
       const data = await res.json();
       setFinding(data);
+      setLoadError(false);
     } catch {
-      setFinding(null);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    // Audit #7: re-fetch when the active lab changes, not only on id/plan.
     if (hasPlanAccess) fetchFinding();
     else setLoading(false);
-  }, [hasPlanAccess, id]);
+  }, [hasPlanAccess, id, activeLabId]);
 
   // Single field setter
   const setField = (key: string, value: any) => {
@@ -438,10 +523,21 @@ export default function VeritaResponseFindingPage() {
 
   const handleDelete = async () => {
     if (!id) return;
-    await fetch(findingUrl, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
+    // Audit #8: only navigate away on a confirmed delete; surface failures.
+    try {
+      const res = await fetch(findingUrl, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast({ variant: "destructive", title: "Could not delete finding", description: body?.error || `Request failed (${res.status})` });
+        return;
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Could not delete finding", description: "Check your connection and try again." });
+      return;
+    }
     navigate(activeLabId ? `/labs/${activeLabId}/veritaresponse` : "/veritaresponse");
   };
 
@@ -628,6 +724,26 @@ export default function VeritaResponseFindingPage() {
       <div className="flex items-center justify-center py-24 text-muted-foreground">
         <RefreshCw size={20} className="animate-spin mr-2" />
         Loading finding...
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-16 text-center">
+        <AlertTriangle size={36} className="mx-auto text-destructive mb-3" />
+        <h2 className="text-2xl font-bold mb-2">Couldn't load this finding</h2>
+        <p className="text-muted-foreground mb-6">
+          Something went wrong loading this finding. This does not mean it was deleted. Check your connection and try again.
+        </p>
+        <div className="flex items-center justify-center gap-2">
+          <Button variant="outline" onClick={fetchFinding}>
+            <RefreshCw size={14} className="mr-1.5" />Retry
+          </Button>
+          <Button asChild variant="ghost">
+            <Link href={activeLabId ? `/labs/${activeLabId}/veritaresponse` : "/veritaresponse"}><ArrowLeft size={14} className="mr-1.5" />All findings</Link>
+          </Button>
+        </div>
       </div>
     );
   }
@@ -1015,6 +1131,32 @@ export default function VeritaResponseFindingPage() {
                   Fill in the missing fields below, save, then generate the PDF.
                 </div>
               )}
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      {/* Audit #13: when no accreditor response card applies, say so instead of
+          silently withholding it. Covers "Other" (no standardized form) and the
+          legacy case of a CAP/TJC/COLA/AABB finding on a lab whose accreditor
+          flag was later dropped (the dropdown still supports editing it). */}
+      {(() => {
+        const acc = finding.accreditor as Accreditor;
+        const hasCard =
+          acc === "CMS" ||
+          (["CAP", "TJC", "COLA", "AABB"].includes(acc) && labAllowedAccreditors.has(acc));
+        if (hasCard) return null;
+        return (
+          <Card>
+            <CardHeader className="py-3 px-4 border-b">
+              <CardTitle className="text-base font-semibold">Response document</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4">
+              <p className="text-sm text-muted-foreground">
+                {acc === "Other"
+                  ? "This finding uses the \"Other\" accreditor, which has no standardized Plan of Correction form. Document the response in the fields above. A generated response PDF is available for CMS, CAP, TJC, COLA, and AABB findings."
+                  : `This lab is not currently flagged for ${acc} accreditation, so the ${acc} response form is not available here. Enable ${acc} in the lab's accreditor settings to generate its response document, or document the response in the fields above.`}
+              </p>
             </CardContent>
           </Card>
         );
