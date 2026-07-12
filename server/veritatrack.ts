@@ -95,8 +95,16 @@ export function registerVeritaTrackRoutes(
     authMiddleware,
     (req: any, res) => {
       if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
-      const labId = Number(req.params.labId);
-      if (!Number.isFinite(labId)) return res.status(400).json({ error: "Bad labId" });
+      // SECURITY (multi-lab IDOR fix, 2026-07-11): resolve + membership-validate
+      // the lab via resolveLegacyLabId (the SAME guard the /tasks list read uses
+      // at line ~349) instead of trusting req.params.labId. Without this, the
+      // route had authMiddleware only (no labScopeMiddleware, unlike its /tasks
+      // and /dashboard siblings), so any authenticated track-plan user could
+      // read ANY lab's worklist + cross-module data by passing an arbitrary
+      // :labId. resolveLegacyLabId ignores a forged foreign lab and falls back
+      // to the requester's own validated lab, so no cross-lab read is possible.
+      const labId = resolveLegacyLabId(sqlite, req);
+      if (labId == null) return res.status(400).json({ error: "No lab resolved" });
       const tasks = sqlite.prepare(
         "SELECT * FROM veritatrack_tasks WHERE lab_id = ? AND active = 1 ORDER BY category, name"
       ).all(labId) as any[];
