@@ -104,7 +104,7 @@ const MODULES = [
     label: "VeritaTrack™",
     desc: "Regulatory Compliance Calendar",
     detail:
-      "Track every timed regulatory task: calibration verification, correlations, competency, equipment calibration, QC review, and more. Auto-imports schedules from VeritaMap™. Sign-off logging with initials and dates. Excel export matches your existing regulatory calendar format.",
+      "Track every timed regulatory task: calibration verification, correlations, competency, equipment calibration, QC review, and more. One-click import of your VeritaMap™ test menu. Sign-off logging with initials and dates. Excel export in a standard regulatory-calendar layout.",
     badge: "New",
     badgeColor: "emerald",
     icon: CalendarDays,

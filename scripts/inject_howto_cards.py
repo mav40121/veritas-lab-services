@@ -84,9 +84,9 @@ CARDS = {
   ),
   "VeritaTrackAppPage": dict(
     moduleKey="veritatrack", moduleName="VeritaTrack™",
-    what="VeritaTrack is the regulatory calendar. Every timed task in one place: calibration verification, correlations, competency, equipment maintenance, QC review, PT enrollment, license renewal. Auto-imports schedules from VeritaMap so adding a new instrument creates its cal-ver cadence automatically.",
+    what="VeritaTrack is the regulatory calendar. Every timed task in one place: calibration verification, correlations, competency, equipment maintenance, QC review, PT enrollment, license renewal. One-click import of your VeritaMap test menu; re-run after adding an instrument to create its calibration-verification cadence.",
     how=[
-      "Set up your test menu in VeritaMap; tasks auto-create here at their CLIA cadence.",
+      "Set up your test menu in VeritaMap, then click Import from VeritaMap to create tasks at their CLIA cadence.",
       "Add ad-hoc tasks (equipment service, contract renewals, accreditor application deadlines).",
       "Sign off tasks as complete with initials, date, and reviewer name.",
       "Export to Excel in the regulatory-calendar format your lab already uses.",
