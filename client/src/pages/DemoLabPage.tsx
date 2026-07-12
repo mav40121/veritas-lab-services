@@ -1354,14 +1354,14 @@ export default function DemoLabPage() {
                   Every timed regulatory task, in one calendar.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                  VeritaTrack&#8482; tracks calibration verification, correlations, competency, equipment calibration, QC review, and every other timed regulatory task. Auto-imports schedules from VeritaMap&#8482;. Sign-off logging with initials and dates. Excel export matches your existing regulatory calendar format.
+                  VeritaTrack&#8482; tracks calibration verification, correlations, competency, equipment calibration, QC review, and every other timed regulatory task. One-click import of your VeritaMap&#8482; test menu. Sign-off logging with initials and dates. Excel export in a standard regulatory-calendar layout.
                 </p>
               </div>
               <Card>
                 <CardContent className="py-5">
                   <ul className="space-y-2 text-sm">
                     <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Calibration verification, correlations, competency, instrument maintenance, QC review, PT enrollment, license renewal: all in one calendar.</span></li>
-                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Auto-imports schedules from VeritaMap&#8482; so adding a new instrument auto-creates its cal-ver cadence.</span></li>
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>One-click import of your VeritaMap&#8482; test menu; re-run after adding an instrument to create its calibration-verification cadence.</span></li>
                     <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Sign-off logging with initials, dates, and reviewer; survey-ready audit trail.</span></li>
                     <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Excel export matches the format your lab already uses for its regulatory calendar.</span></li>
                   </ul>

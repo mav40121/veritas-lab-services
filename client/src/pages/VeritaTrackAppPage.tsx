@@ -306,7 +306,7 @@ function TaskFormDialog({ trigger, existing, onDone, trackApi, tasksKey, dashKey
         <div className="space-y-3 mt-2">
           <div>
             <label className="text-xs text-muted-foreground font-medium block mb-1">Task Name *</label>
-            <Input placeholder="e.g. Cal Ver - Sodium" value={name} onChange={e => setName(e.target.value)} className="h-8 text-sm" />
+            <Input placeholder="e.g. Calibration Verification - Sodium" value={name} onChange={e => setName(e.target.value)} className="h-8 text-sm" />
           </div>
           <div>
             <label className="text-xs text-muted-foreground font-medium block mb-1">Category</label>
@@ -422,7 +422,10 @@ function CompactTaskRow({ task, onRefresh, trackApi, tasksKey, dashKey }: {
 
   const deleteTask = useMutation({
     mutationFn: async () => {
-      await fetch(`${API_BASE}/api/veritatrack/tasks/${task.id}`, { method: "DELETE", headers: authHeaders() });
+      // Check r.ok so a failed delete (403 seat/plan gate, 404) does not run
+      // onSuccess and report success while the task is still present.
+      const r = await fetch(`${API_BASE}/api/veritatrack/tasks/${task.id}`, { method: "DELETE", headers: authHeaders() });
+      if (!r.ok) throw new Error(await r.text().catch(() => `HTTP ${r.status}`));
     },
     onSuccess: () => {
       // Multi-Lab hotfix (2026-06-07): invalidate the scoped keys so the
@@ -847,9 +850,9 @@ export default function VeritaTrackAppPage() {
       <ModuleHowToCard
         moduleKey="veritatrack"
         moduleName="VeritaTrack™"
-        whatItDoes="VeritaTrack is the regulatory calendar. Every timed task in one place: calibration verification, correlations, competency, equipment maintenance, QC review, PT enrollment, license renewal. Auto-imports schedules from VeritaMap so adding a new instrument creates its cal-ver cadence automatically."
+        whatItDoes="VeritaTrack is the regulatory calendar. Every timed task in one place: calibration verification, correlations, competency, equipment maintenance, QC review, PT enrollment, license renewal. One-click import of your VeritaMap test menu; re-run after adding an instrument to create its calibration-verification cadence."
         howToUse={[
-          "Set up your test menu in VeritaMap; tasks auto-create here at their CLIA cadence.",
+          "Set up your test menu in VeritaMap, then click Import from VeritaMap to create tasks at their CLIA cadence.",
           "Add ad-hoc tasks (equipment service, contract renewals, accreditor application deadlines).",
           "Sign off tasks as complete with initials, date, and reviewer name.",
           "Export to Excel in the regulatory-calendar format your lab already uses.",
@@ -868,7 +871,7 @@ export default function VeritaTrackAppPage() {
             Quick Setup
           </Button>
           <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={handleImport} disabled={importLoading}
-            title="Import cal ver, method comparison, precision, and SOP schedules from VeritaMap™">
+            title="Import calibration verification, correlation / method comparison, precision, and SOP schedules from VeritaMap™">
             <Upload size={12} />
             {importLoading ? "Importing..." : "Import from VeritaMap™"}
           </Button>
