@@ -44,10 +44,18 @@ function nextDue(lastDate: string | null, frequencyMonths: number): string {
   return base.toISOString().split("T")[0];
 }
 
+// #6 (2026-07-11): whole-day difference between today and a YYYY-MM-DD date,
+// computed date-only (both parsed as UTC midnight). The prior code diffed a
+// UTC-midnight due date against a live timestamp, so in any US (negative-UTC-
+// offset) timezone a task read "overdue" on its actual due date and the
+// Due-Today bucket was always empty. Date-only makes due-today == 0.
+function daysUntilDateOnly(dateStr: string): number {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  return Math.round((Date.parse(dateStr + "T00:00:00Z") - Date.parse(todayStr + "T00:00:00Z")) / 86400000);
+}
+
 function taskStatus(nextDueDate: string): "overdue" | "due_soon" | "current" | "not_started" {
-  const now = new Date();
-  const due = new Date(nextDueDate);
-  const daysUntil = Math.floor((due.getTime() - now.getTime()) / 86400000);
+  const daysUntil = daysUntilDateOnly(nextDueDate);
   if (daysUntil < 0) return "overdue";
   if (daysUntil <= 30) return "due_soon";
   return "current";
@@ -670,7 +678,7 @@ export function registerVeritaTrackRoutes(
       if (!last) { notStarted++; continue; }
       const nextDueDate = nextDue(last.completed_date, t.frequency_months);
       const due = new Date(nextDueDate);
-      const daysUntil = Math.floor((due.getTime() - now.getTime()) / 86400000);
+      const daysUntil = daysUntilDateOnly(nextDueDate);
       if (daysUntil < 0) { overdue++; overdueItems.push({ ...t, next_due: nextDueDate, days_overdue: -daysUntil }); }
       else if (due <= monthEnd) { dueThisMonth++; dueThisMonthItems.push({ ...t, next_due: nextDueDate, days_until: daysUntil }); }
       else if (due <= thirtyDays) { dueSoon++; dueSoonItems.push({ ...t, next_due: nextDueDate, days_until: daysUntil }); }
@@ -987,20 +995,30 @@ export function registerVeritaTrackRoutes(
       const tasks = sqlite.prepare(
         "SELECT * FROM veritatrack_tasks WHERE lab_id = ? AND active = 1"
       ).all(req.scope.labId) as any[];
-      let overdue = 0, dueSoon = 0, current = 0, notStarted = 0;
-      const items = tasks.map((t: any) => {
+      // #5 shape fix (2026-07-11): return the SAME camelCase shape as the legacy
+      // dashboard (dueThisMonth/dueSoon + *Items) so the client's Due This Month
+      // and Due Soon cards are not blank on the multi-lab path (they previously
+      // read dashboard.dueThisMonth / dashboard.dueSoon against a snake_case,
+      // dueThisMonth-less response).
+      const now = new Date();
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      const thirtyDays = new Date(now.getTime() + 30 * 86400000);
+      let overdue = 0, dueThisMonth = 0, dueSoon = 0, current = 0, notStarted = 0;
+      const overdueItems: any[] = [], dueThisMonthItems: any[] = [], dueSoonItems: any[] = [];
+      for (const t of tasks) {
         const last = sqlite.prepare(
-          "SELECT * FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC LIMIT 1"
+          "SELECT completed_date FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC LIMIT 1"
         ).get(t.id) as any;
-        const nextDueDate = last ? nextDue(last.completed_date, t.frequency_months) : null;
-        const status = last ? taskStatus(nextDueDate!) : "not_started";
-        if (status === "overdue") overdue++;
-        else if (status === "due_soon") dueSoon++;
-        else if (status === "current") current++;
-        else notStarted++;
-        return { ...t, last_signoff: last || null, next_due: nextDueDate, status };
-      });
-      res.json({ overdue, due_soon: dueSoon, current, not_started: notStarted, total: tasks.length, tasks: items });
+        if (!last) { notStarted++; continue; }
+        const nextDueDate = nextDue(last.completed_date, t.frequency_months);
+        const due = new Date(nextDueDate);
+        const daysUntil = daysUntilDateOnly(nextDueDate);
+        if (daysUntil < 0) { overdue++; overdueItems.push({ ...t, next_due: nextDueDate, days_overdue: -daysUntil }); }
+        else if (due <= monthEnd) { dueThisMonth++; dueThisMonthItems.push({ ...t, next_due: nextDueDate, days_until: daysUntil }); }
+        else if (due <= thirtyDays) { dueSoon++; dueSoonItems.push({ ...t, next_due: nextDueDate, days_until: daysUntil }); }
+        else { current++; }
+      }
+      res.json({ overdue, dueThisMonth, dueSoon, current, notStarted, total: tasks.length, overdueItems, dueThisMonthItems, dueSoonItems });
     });
   }
 }

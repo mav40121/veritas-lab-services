@@ -157,7 +157,10 @@ function fmtDate(d?: string | null): string {
 
 function daysLabel(next_due?: string | null): string {
   if (!next_due) return "";
-  const diff = Math.floor((new Date(next_due).getTime() - Date.now()) / 86400000);
+  // Date-only diff (both at UTC midnight) so a task reads "Due today" on its
+  // actual due date rather than "1d overdue" in a US (negative-offset) timezone.
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const diff = Math.round((Date.parse(next_due + "T00:00:00Z") - Date.parse(todayStr + "T00:00:00Z")) / 86400000);
   if (diff < 0)  return `${-diff}d overdue`;
   if (diff === 0) return "Due today";
   return `in ${diff}d`;
