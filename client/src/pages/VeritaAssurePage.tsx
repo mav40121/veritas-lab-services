@@ -126,7 +126,7 @@ const MODULES = [
     label: "VeritaResponse™",
     desc: "Post-Survey Deficiency Response",
     detail:
-      "When you get cited, VeritaResponse turns Word documents and email threads into one tracked finding with a due-date clock per accreditor (CAP 30 days, TJC 60 days, CMS-2567 10 days, AABB event-driven). Renders the federal CMS-2567 Plan of Correction PDF with all 5 POC elements labeled. Cross-links to your most recent VeritaCheck study for the cited standard so you can show the surveyor what you had already done.",
+      "When you get cited, VeritaResponse turns Word documents and email threads into one tracked finding with a due-date clock per accreditor (CAP 30 days, TJC 60 days, CMS-2567 10 days, AABB event-driven). Renders a CMS-2567-compatible Plan of Correction PDF with all 5 POC elements labeled. Surfaces your most recent VeritaCheck study when the finding cites a 42 CFR 493 standard, so you can show the surveyor what you had already done.",
     badge: "New",
     badgeColor: "emerald",
     icon: ClipboardList,
