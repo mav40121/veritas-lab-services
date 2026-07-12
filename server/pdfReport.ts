@@ -5885,6 +5885,22 @@ function buildCms2567HTML(input: Cms2567Input): string {
 </body></html>`;
 }
 
+// Running footer for the VeritaResponse POC PDFs (2026-07-12 fix). Mirrors
+// FOOTER_TEMPLATE and carries "Page X of Y" so EVERY page of a multi-page Plan
+// of Correction gets the CLAUDE.md Sec 5 footer. Previously all 5 generators
+// passed "" here, so the running footer held only the license band (no brand
+// line, no page numbers). Hyphen (not em-dash) matches FOOTER_TEMPLATE + Sec 3.
+const VERITARESPONSE_FOOTER_TEMPLATE = `
+<div style="width:100%;padding:0 15mm;box-sizing:border-box;font-family:Helvetica,Arial,sans-serif">
+  <div style="border-top:1px solid #d2d7dc;padding-top:3px">
+    <div style="font-size:6px;color:#a0a0a0;line-height:1.4">VeritaResponse&trade; organizes post-survey deficiency responses. It does not constitute legal or regulatory advice; the laboratory director or designee is responsible for the final Plan of Correction and its submission.</div>
+    <div style="display:flex;justify-content:space-between;font-size:7px;color:#646e78;margin-top:2px">
+      <span>VeritaAssure&trade; | VeritaResponse&trade; | Confidential - For Internal Lab Use Only</span>
+      <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
+    </div>
+  </div>
+</div>`;
+
 export async function generateCms2567PDF(input: Cms2567Input, licenseCtx?: Partial<LicenseContext> | null): Promise<Buffer> {
   const validation = validateCms2567POC(input.finding);
   if (!validation.ok) {
@@ -5894,7 +5910,7 @@ export async function generateCms2567PDF(input: Cms2567Input, licenseCtx?: Parti
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    const stamped = applyLicenseToPuppeteer(html, "", licenseCtx);
+    const stamped = applyLicenseToPuppeteer(html, VERITARESPONSE_FOOTER_TEMPLATE, licenseCtx);
     await page.setContent(stamped.html, { waitUntil: "networkidle0" });
     const pdfBuffer = await page.pdf({
       format: "Letter",
@@ -6081,7 +6097,7 @@ export async function generateCapResponsePDF(input: Cms2567Input, licenseCtx?: P
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    const stamped = applyLicenseToPuppeteer(html, "", licenseCtx);
+    const stamped = applyLicenseToPuppeteer(html, VERITARESPONSE_FOOTER_TEMPLATE, licenseCtx);
     await page.setContent(stamped.html, { waitUntil: "networkidle0" });
     const pdfBuffer = await page.pdf({
       format: "Letter",
@@ -6273,7 +6289,7 @@ export async function generateTjcEscPDF(input: Cms2567Input, licenseCtx?: Partia
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    const stamped = applyLicenseToPuppeteer(html, "", licenseCtx);
+    const stamped = applyLicenseToPuppeteer(html, VERITARESPONSE_FOOTER_TEMPLATE, licenseCtx);
     await page.setContent(stamped.html, { waitUntil: "networkidle0" });
     const pdfBuffer = await page.pdf({
       format: "Letter",
@@ -6459,7 +6475,7 @@ export async function generateColaResponsePDF(input: Cms2567Input, licenseCtx?: 
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    const stamped = applyLicenseToPuppeteer(html, "", licenseCtx);
+    const stamped = applyLicenseToPuppeteer(html, VERITARESPONSE_FOOTER_TEMPLATE, licenseCtx);
     await page.setContent(stamped.html, { waitUntil: "networkidle0" });
     const pdfBuffer = await page.pdf({
       format: "Letter",
@@ -6654,7 +6670,7 @@ export async function generateAabbNerPDF(input: Cms2567Input, licenseCtx?: Parti
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    const stamped = applyLicenseToPuppeteer(html, "", licenseCtx);
+    const stamped = applyLicenseToPuppeteer(html, VERITARESPONSE_FOOTER_TEMPLATE, licenseCtx);
     await page.setContent(stamped.html, { waitUntil: "networkidle0" });
     const pdfBuffer = await page.pdf({
       format: "Letter",
