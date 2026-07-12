@@ -1384,15 +1384,15 @@ export default function DemoLabPage() {
                   When you get cited, you have a clock and a workflow, not a Word document and a panic.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                  VeritaResponse&#8482; turns post-survey deficiencies into one tracked finding with a due-date clock per accreditor (CAP 30 days, TJC 60 days, CMS-2567 10 days, AABB event-driven). Renders the federal CMS-2567 Plan of Correction PDF with all 5 POC elements labeled. Cross-links to your most recent VeritaCheck&#8482; study for the cited standard.
+                  VeritaResponse&#8482; turns post-survey deficiencies into one tracked finding with a due-date clock per accreditor (CAP 30 days, TJC 60 days, CMS-2567 10 days, AABB event-driven). Renders a CMS-2567-compatible Plan of Correction PDF with all 5 POC elements labeled. Surfaces your most recent VeritaCheck&#8482; study when the finding cites a 42 CFR 493 standard.
                 </p>
               </div>
               <Card>
                 <CardContent className="py-5">
                   <ul className="space-y-2 text-sm">
                     <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Per-accreditor due-date clocks: CAP 30 days, TJC 60 days, CMS-2567 10 days, AABB event-driven.</span></li>
-                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Federal CMS-2567 Plan of Correction PDF with all 5 POC elements labeled.</span></li>
-                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Cross-links to your most recent VeritaCheck&#8482; study so you can show the surveyor what you had already done.</span></li>
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>CMS-2567-compatible Plan of Correction PDF with all 5 POC elements labeled.</span></li>
+                    <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>Surfaces your most recent VeritaCheck&#8482; study when the finding cites a 42 CFR 493 standard, so you can show the surveyor what you had already done.</span></li>
                     <li className="flex gap-2"><CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" /><span>One source of truth for each finding, replacing scattered Word documents and email threads.</span></li>
                   </ul>
                 </CardContent>
