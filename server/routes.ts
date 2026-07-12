@@ -18395,6 +18395,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return d.toISOString().slice(0, 10);
   }
 
+  // Lab identity for the generated POC PDFs (2026-07-12 fix).
+  // The 5 accreditor PDF builders read input.user.lab_name / .clia_number, but
+  // the routes previously fed them storage.getUserById(dataUserId): that is a
+  // Drizzle TYPED select over the users schema object, which declares NEITHER
+  // lab_name nor clia_number (those columns live on the labs table), so every
+  // rendered CMS-2567 / CAP / TJC / COLA / AABB Plan of Correction printed the
+  // logged-in PERSON's name and always "CLIA: Not on file", single-lab too.
+  // Resolve the FINDING's own lab (multi-lab correct) from the labs row, and
+  // fall back to the owner's users record (raw read, so clia_* are present) for
+  // legacy findings whose lab_id is null.
+  function resolveFindingLabIdentity(
+    finding: any,
+    ownerUserId: number,
+  ): { lab_name: string | null; clia_number: string | null } {
+    const sqlite = (db as any).$client;
+    if (finding?.lab_id) {
+      const lab = sqlite
+        .prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?")
+        .get(finding.lab_id) as any;
+      if (lab && (lab.lab_name || lab.clia_number)) {
+        return { lab_name: lab.lab_name ?? null, clia_number: lab.clia_number ?? null };
+      }
+    }
+    const u = sqlite
+      .prepare("SELECT clia_lab_name, clia_number FROM users WHERE id = ?")
+      .get(ownerUserId) as any;
+    return { lab_name: u?.clia_lab_name ?? null, clia_number: u?.clia_number ?? null };
+  }
+
   // GET all findings for the active lab.
   // Shape A broader sweep (2026-06-09): findings has lab_id; user_id scope
   // leaked across labs for multi-lab owners.
@@ -18644,7 +18673,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
     }
     try {
-      const user = await storage.getUserById(dataUserId);
+      const user = resolveFindingLabIdentity(finding, dataUserId);
       const pdfBuffer = await generateCms2567PDF(
         { finding, user },
         licenseCtxFromReq(req, "VeritaResponse™"),
@@ -18705,7 +18734,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
     }
     try {
-      const user = await storage.getUserById(dataUserId);
+      const user = resolveFindingLabIdentity(finding, dataUserId);
       const pdfBuffer = await generateCapResponsePDF(
         { finding, user },
         licenseCtxFromReq(req, "VeritaResponse™"),
@@ -18763,7 +18792,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
     }
     try {
-      const user = await storage.getUserById(dataUserId);
+      const user = resolveFindingLabIdentity(finding, dataUserId);
       const pdfBuffer = await generateTjcEscPDF(
         { finding, user },
         licenseCtxFromReq(req, "VeritaResponse™"),
@@ -18820,7 +18849,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
     }
     try {
-      const user = await storage.getUserById(dataUserId);
+      const user = resolveFindingLabIdentity(finding, dataUserId);
       const pdfBuffer = await generateColaResponsePDF(
         { finding, user },
         licenseCtxFromReq(req, "VeritaResponse™"),
@@ -18879,7 +18908,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
     }
     try {
-      const user = await storage.getUserById(dataUserId);
+      const user = resolveFindingLabIdentity(finding, dataUserId);
       const pdfBuffer = await generateAabbNerPDF(
         { finding, user },
         licenseCtxFromReq(req, "VeritaResponse™"),
