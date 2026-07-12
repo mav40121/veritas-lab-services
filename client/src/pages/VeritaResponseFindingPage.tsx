@@ -767,8 +767,14 @@ export default function VeritaResponseFindingPage() {
   const accCfg = ACCREDITORS.find((a) => a.value === finding.accreditor);
   const anchorLabel = accCfg?.anchorLabel ?? "Anchor date";
   const d = daysUntil(finding.due_date);
-  const isOverdue = d !== null && d < 0 && status !== "closed" && status !== "accepted";
-  const isDueSoon = d !== null && d >= 0 && d <= 7 && status !== "closed" && status !== "accepted";
+  // #11: only CMS/CAP/TJC carry a hard deadline. COLA (consultative) and AABB
+  // (FDA reportable-event window, not a lab CAPA deadline) get a soft "target"
+  // treatment: amber, not red "overdue".
+  const hardDeadline = ["CMS", "CAP", "TJC"].includes(finding.accreditor);
+  const isActive = status !== "closed" && status !== "accepted";
+  const isOverdue = hardDeadline && d !== null && d < 0 && isActive;
+  const isPastTarget = !hardDeadline && d !== null && d < 0 && isActive;
+  const isDueSoon = d !== null && d >= 0 && d <= 7 && isActive;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
@@ -811,7 +817,7 @@ export default function VeritaResponseFindingPage() {
           className={`flex items-start gap-3 rounded-lg border p-4 ${
             isOverdue
               ? "border-red-200 bg-red-50 dark:bg-red-900/10 dark:border-red-800"
-              : isDueSoon
+              : isDueSoon || isPastTarget
                 ? "border-amber-200 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-800"
                 : "border-border bg-muted/30"
           }`}
@@ -821,17 +827,21 @@ export default function VeritaResponseFindingPage() {
             className={`mt-0.5 shrink-0 ${
               isOverdue
                 ? "text-red-600 dark:text-red-400"
-                : isDueSoon
+                : isDueSoon || isPastTarget
                   ? "text-amber-600 dark:text-amber-400"
                   : "text-muted-foreground"
             }`}
           />
           <div className="text-sm">
             <span className="font-semibold">
-              Due {finding.due_date}
+              {hardDeadline ? "Due" : "Target"} {finding.due_date}
               {d !== null && (
                 <>
-                  {" "}({d < 0 ? `${Math.abs(d)}d overdue` : d === 0 ? "today" : `in ${d}d`})
+                  {" "}({d < 0
+                    ? hardDeadline ? `${Math.abs(d)}d overdue` : `${Math.abs(d)}d past target`
+                    : d === 0
+                      ? hardDeadline ? "today" : "target today"
+                      : `in ${d}d`})
                 </>
               )}
             </span>
@@ -872,7 +882,7 @@ export default function VeritaResponseFindingPage() {
             </CardHeader>
             <CardContent className="p-4 space-y-2">
               <div className="text-xs text-muted-foreground">
-                CMS form 2567 requires 5 Plan of Correction elements per State Operations Manual section 7314. Save your draft to update this checklist.
+                CMS form 2567 requires 5 Plan of Correction elements per 42 CFR 493 and the CMS-2567 form instructions. Save your draft to update this checklist.
               </div>
               <ul className="space-y-1">
                 {elements.map((el) => {
