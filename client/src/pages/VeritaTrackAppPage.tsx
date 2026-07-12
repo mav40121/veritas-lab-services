@@ -15,6 +15,7 @@ import {
 import {
   CheckCircle2, Plus, Download, Upload,
   ChevronDown, ChevronRight, Pencil, Trash2, CalendarDays, List, Settings, History,
+  AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
@@ -674,11 +675,14 @@ export default function VeritaTrackAppPage() {
     ? `/api/labs/${activeLabId}/veritatrack/dashboard`
     : `/api/veritatrack/dashboard`;
 
-  const { data: tasks = [], isLoading, refetch } = useQuery<Task[]>({
+  const { data: tasks = [], isLoading, isError: tasksError, refetch } = useQuery<Task[]>({
     queryKey: [tasksKey],
     queryFn: async () => {
       const r = await fetch(`${trackApi}/tasks`, { headers: authHeaders() });
-      if (!r.ok) return [];
+      // A failed load must NOT masquerade as an empty calendar: throw so the
+      // page can show a distinct error state instead of "No tasks yet" (which
+      // would nudge a re-seed and create duplicates on a transient outage).
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return r.json();
     },
     enabled: hasPlanAccess,
@@ -688,6 +692,7 @@ export default function VeritaTrackAppPage() {
     queryKey: [dashKey],
     queryFn: async () => {
       const r = await fetch(`${trackApi}/dashboard`, { headers: authHeaders() });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return r.json();
     },
     enabled: hasPlanAccess,
@@ -745,12 +750,14 @@ export default function VeritaTrackAppPage() {
     return cats;
   }, [tasks]);
 
-  // Auto-open setup panel when no tasks exist
+  // Auto-open setup panel when no tasks exist. Gated on !tasksError so a failed
+  // load does not pop the re-seed panel (which masks the outage and invites
+  // duplicate tasks).
   useEffect(() => {
-    if (!isLoading && tasks.length === 0) {
+    if (!isLoading && !tasksError && tasks.length === 0) {
       setSetupOpen(true);
     }
-  }, [isLoading, tasks.length]);
+  }, [isLoading, tasksError, tasks.length]);
 
   const handleSeedDefaults = async () => {
     if (selectedToggles.size === 0) return;
@@ -1067,8 +1074,22 @@ export default function VeritaTrackAppPage() {
         <span className="text-xs text-muted-foreground ml-auto">{filtered.length} task{filtered.length !== 1 ? "s" : ""}</span>
       </div>
 
+      {/* Error state: a failed load must not read as an empty calendar */}
+      {!isLoading && tasksError && (
+        <div className="text-center py-16 border border-dashed border-destructive/40 rounded-2xl">
+          <AlertTriangle size={36} className="mx-auto text-destructive mb-3" />
+          <h3 className="font-semibold text-foreground mb-1">Couldn't load your calendar</h3>
+          <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
+            Something went wrong loading your regulatory tasks. This does not mean your calendar was cleared. Check your connection and try again.
+          </p>
+          <Button size="sm" variant="outline" onClick={() => refetch()}>
+            <History size={12} className="mr-1" />Retry
+          </Button>
+        </div>
+      )}
+
       {/* Empty state */}
-      {!isLoading && tasks.length === 0 && (
+      {!isLoading && !tasksError && tasks.length === 0 && (
         <div className="text-center py-16 border border-dashed border-border rounded-2xl">
           <CalendarDays size={36} className="mx-auto text-muted-foreground mb-3" />
           <h3 className="font-semibold text-foreground mb-1">No tasks yet</h3>
