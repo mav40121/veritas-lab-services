@@ -198,7 +198,6 @@ function CalculatorSection() {
   const [productiveHours, setProductiveHours] = useState<string>("");
   const [billableTests, setBillableTests] = useState<string>("");
   const [facilityType, setFacilityType] = useState<string>("community");
-  const [hourlyRate, setHourlyRate] = useState<string>("35");
   const [estimateFromFTE, setEstimateFromFTE] = useState(false);
   const [ftes, setFtes] = useState<string>("");
   const [productivePct, setProductivePct] = useState<number>(85);
@@ -220,11 +219,9 @@ function CalculatorSection() {
     const targetHours = midpoint ? midpoint * tests : null;
     const hoursDiff = targetHours ? effectiveHours - targetHours : null;
     const fteDiff = hoursDiff ? hoursDiff / (2080 / 12 * 0.85) : null;
-    const rate = parseFloat(hourlyRate) || 35;
-    const annualSavings = hoursDiff ? Math.abs(hoursDiff) * 12 * rate : null;
     const isOutperforming = hoursDiff != null && hoursDiff < 0;
-    return { ratio, band, midpoint, targetHours, hoursDiff, fteDiff, annualSavings, isOutperforming };
-  }, [effectiveHours, tests, facilityType, hourlyRate]);
+    return { ratio, band, midpoint, targetHours, hoursDiff, fteDiff, isOutperforming };
+  }, [effectiveHours, tests, facilityType]);
 
   return (
     <div className="grid md:grid-cols-2 gap-6">
@@ -279,11 +276,6 @@ function CalculatorSection() {
           <div className="space-y-1.5">
             <Label>Monthly Billable Tests</Label>
             <Input type="number" placeholder="e.g. 36000" value={billableTests} onChange={e => setBillableTests(e.target.value)} min={0} />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Average Hourly Labor Rate ($)</Label>
-            <Input type="number" placeholder="35" value={hourlyRate} onChange={e => setHourlyRate(e.target.value)} min={0} step={0.5} />
           </div>
         </CardContent>
       </Card>
@@ -349,14 +341,6 @@ function CalculatorSection() {
                           {result.fteDiff ? <>, equivalent to roughly <strong>{Math.abs(result.fteDiff).toFixed(1)}</strong> FTEs of efficiency</> : null}.
                         </div>
                       </div>
-                      {result.annualSavings != null && result.annualSavings > 0 && (
-                        <div className="flex items-start gap-3">
-                          <DollarSign size={18} className="mt-0.5 shrink-0 text-emerald-600" />
-                          <div className="text-sm">
-                            Your efficiency advantage: <strong className="text-lg text-emerald-600">${result.annualSavings.toLocaleString(undefined, { maximumFractionDigits: 0 })}/yr</strong> in labor savings vs. benchmark
-                          </div>
-                        </div>
-                      )}
                     </>
                   ) : (
                     <>
@@ -368,14 +352,6 @@ function CalculatorSection() {
                           {result.fteDiff ? <>, roughly <strong>{Math.abs(result.fteDiff).toFixed(1)}</strong> FTEs</> : null}.
                         </div>
                       </div>
-                      {result.annualSavings != null && result.annualSavings > 0 && (
-                        <div className="flex items-start gap-3">
-                          <DollarSign size={18} className="mt-0.5 shrink-0" style={{ color: "#01696F" }} />
-                          <div className="text-sm">
-                            Annual savings potential: <strong className="text-lg">${result.annualSavings.toLocaleString(undefined, { maximumFractionDigits: 0 })}/yr</strong>
-                          </div>
-                        </div>
-                      )}
                     </>
                   )}
                 </div>

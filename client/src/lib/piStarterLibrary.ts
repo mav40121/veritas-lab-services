@@ -44,7 +44,7 @@ export const PI_STARTER_LIBRARY: StarterMetric[] = [
     unit: "% specimens rejected",
     direction: "lower_is_better",
     benchmark: "0.2-0.75%",
-    source: "CAP Q-Probes; AABB Standards 34th ed.",
+    source: "CAP Q-Probes; AABB Standards",
   },
   {
     department: "Blood Bank / Transfusion Medicine",
@@ -53,7 +53,7 @@ export const PI_STARTER_LIBRARY: StarterMetric[] = [
     unit: "Discrepancies per total specimens tested",
     direction: "lower_is_better",
     benchmark: "Goal: zero ABO-incompatible releases",
-    source: "AABB Standards 34th ed.; ISO 15189",
+    source: "AABB Standards; ISO 15189",
   },
   {
     department: "Blood Bank / Transfusion Medicine",
@@ -1214,7 +1214,7 @@ export const PI_STARTER_LIBRARY: StarterMetric[] = [
     unit: "% of collections using >=2 acceptable patient identifiers",
     direction: "higher_is_better",
     benchmark: "Goal: 100%",
-    source: "TJC NPSG.01.01.01; AABB Standards 34th ed.",
+    source: "TJC NPSG.01.01.01; AABB Standards",
   },
   {
     department: "Specimen Processing / Pre-Analytical",
@@ -1223,7 +1223,7 @@ export const PI_STARTER_LIBRARY: StarterMetric[] = [
     unit: "Incidents per period of pre-labeled containers",
     direction: "lower_is_better",
     benchmark: "Goal: zero",
-    source: "TJC NPSG.01.01.01; AABB Standards 34th ed.",
+    source: "TJC NPSG.01.01.01; AABB Standards",
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
