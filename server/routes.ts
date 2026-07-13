@@ -2687,9 +2687,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         detail: "2 consecutive results on same side >2SD",
         related_result_ids: [ids[i - 1], ids[i]] });
     }
-    if (i >= 1 && Math.abs(z - sdis[i - 1]) > 4) {
+    // Audit #6 (2026-07-12): canonical Westgard R-4s requires the two points to
+    // STRADDLE the mean (one > +2s AND the other < -2s) with a > 4s span, not
+    // merely a > 4s range. The straddle guard stops over-rejecting valid runs
+    // (e.g. z=-2.2 then +1.9 spans 4.1s, but +1.9 is inside +2s, so canon would
+    // not reject).
+    if (i >= 1 && Math.abs(z - sdis[i - 1]) > 4 &&
+        ((z > 2 && sdis[i - 1] < -2) || (z < -2 && sdis[i - 1] > 2))) {
       violations.push({ rule_code: "R-4s", severity: "rejection",
-        detail: `range ${Math.abs(z - sdis[i - 1]).toFixed(2)}SD across zero`,
+        detail: `range ${Math.abs(z - sdis[i - 1]).toFixed(2)}SD, points straddle the mean (>+2s and <-2s)`,
         related_result_ids: [ids[i - 1], ids[i]] });
     }
     if (i >= 3) {
@@ -3227,8 +3233,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // (qc_corrective_actions.nce_reference was reserved as the "future
   // VeritaResponse FK" hook). A surveyor reading a recurring or unresolved
   // Westgard rejection expects a formal CAPA record; this one click opens it
-  // pre-filled from the QC context, citing 42 CFR 493.1256(d) (the CLIA QC
-  // corrective-action requirement). CMS is always an allowed accreditor
+  // pre-filled from the QC context, citing 42 CFR 493.1282 (the CLIA
+  // corrective-action standard). CMS is always an allowed accreditor
   // (every lab holds CLIA), so the finding gate never blocks this path.
   app.post("/api/labs/:labId/qc/corrective-actions/:caId/escalate-to-response", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
     const sqlite = (db as any).$client;
@@ -3275,7 +3281,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           user_id, lab_id, accreditor, finding_number, standard_ref,
           phase_or_severity, description, surveyor_notes,
           anchor_date, due_date, status, immediate_action
-        ) VALUES (?, ?, 'CMS', ?, '42 CFR 493.1256(d)', ?, ?, ?, ?, ?, 'open', ?)`
+        ) VALUES (?, ?, 'CMS', ?, '42 CFR 493.1282', ?, ?, ?, ?, ?, 'open', ?)`
       ).run(
         userIdForRow, req.scope.labId,
         `QC-${ruleCode}`,

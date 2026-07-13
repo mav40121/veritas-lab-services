@@ -253,6 +253,10 @@ export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
           <div class="ack-value">${p.attestationAcknowledged ? "YES" : "____"}</div>
         </div>
       </div>
+      <div style="margin-top:14pt">
+        <div class="ack-label">Signature</div>
+        <div style="border-bottom:1px solid #333;height:22pt"></div>
+      </div>
     </div>`;
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaQC Monthly Review</title><style>${CSS}</style></head><body>
