@@ -162,7 +162,25 @@ export function registerVeritaBenchRoutes(
   const resolveOpsLabId = (req: any): number | null => {
     if (req.scope?.labId) return Number(req.scope.labId);
     const q = req.query?.labId;
-    if (q != null && q !== "") { const n = Number(q); if (Number.isFinite(n) && n > 0) return n; }
+    if (q == null || q === "") return null;
+    const n = Number(q);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    // Audit #5 (2026-07-12): these routes have no labScopeMiddleware, so the raw
+    // client ?labId must be membership-validated before it is trusted (mirrors
+    // resolveLegacyLabId's header check). Without this, a user can pass a foreign
+    // lab's id to stamp its name + CLIA onto the leverage PDF (#23) and to scope
+    // ops reads/writes to a sibling lab. An unowned labId falls back to
+    // account-only scoping (null).
+    const userId = req.user?.userId ?? req.userId;
+    const ownerId = req.ownerUserId ?? userId;
+    try {
+      const ok = sqlite.prepare(
+        `SELECT 1 AS ok FROM labs WHERE id = ? AND owner_user_id IN (?, ?)
+         UNION
+         SELECT 1 AS ok FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'`
+      ).get(n, userId, ownerId, n, userId);
+      if (ok) return n;
+    } catch { /* fall through to account-only scoping */ }
     return null;
   };
 
@@ -2372,6 +2390,13 @@ export function registerVeritaBenchRoutes(
     const accountId = req.ownerUserId ?? req.userId;
     const { metric_id, year, month, value, volume, notes } = req.body;
     if (!metric_id || !year || !month) return res.status(400).json({ error: "metric_id, year, and month are required" });
+    // Audit #1 (2026-07-12) SECURITY: validate the metric belongs to THIS account
+    // before the upsert. Without it, a foreign metric_id combined with the global
+    // UNIQUE(metric_id, year, month) let any suite user overwrite (and read back)
+    // another account's PI entry. pi_metrics is account-scoped, so this is the
+    // tenant boundary; the read-back is also account-filtered as defense in depth.
+    const owns = sqlite.prepare("SELECT 1 FROM pi_metrics WHERE id = ? AND account_id = ?").get(metric_id, accountId);
+    if (!owns) return res.status(404).json({ error: "Metric not found" });
     const now = new Date().toISOString();
     try {
       sqlite.prepare(`
@@ -2384,8 +2409,8 @@ export function registerVeritaBenchRoutes(
           updated_at = excluded.updated_at
       `).run(metric_id, accountId, year, month, value ?? null, volume ?? null, notes ?? null, now, now);
       const row = sqlite.prepare(
-        "SELECT * FROM pi_entries WHERE metric_id = ? AND year = ? AND month = ?"
-      ).get(metric_id, year, month);
+        "SELECT * FROM pi_entries WHERE metric_id = ? AND year = ? AND month = ? AND account_id = ?"
+      ).get(metric_id, year, month, accountId);
       res.json(row);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
