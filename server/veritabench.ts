@@ -378,11 +378,18 @@ export function registerVeritaBenchRoutes(
       wb.created = new Date();
 
       // ===== Lab identity (Excel Export Standard) =====
+      // Audit #9 (2026-07-12): resolve identity from the SELECTED lab (labs table),
+      // like the Leverage PDF, so a multi-lab export prints the correct lab header
+      // and never falls back to the logged-in person's name.
+      const idLabId = resolveOpsLabId(req);
+      const idLabRow = idLabId != null
+        ? sqlite.prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(idLabId) as any
+        : null;
       const ownerRow = sqlite.prepare(
-        "SELECT clia_lab_name, clia_number, name FROM users WHERE id = ?"
+        "SELECT clia_lab_name, clia_number FROM users WHERE id = ?"
       ).get(accountId) as any;
-      const labName = ownerRow?.clia_lab_name || ownerRow?.name || "Laboratory";
-      const cliaNumber = ownerRow?.clia_number || "Not on file";
+      const labName = idLabRow?.lab_name || ownerRow?.clia_lab_name || "Laboratory";
+      const cliaNumber = idLabRow?.clia_number || ownerRow?.clia_number || "Not on file";
       const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || "veritaassure-export";
 
       // ===== About sheet (sheet 1) =====
@@ -428,19 +435,19 @@ export function registerVeritaBenchRoutes(
       };
       const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
       aboutSection("About this product");
-      aboutBody("This workbook is a month-by-month export of the productivity data the laboratory has entered into VeritaBench. Each row represents a single calendar month and shows billable test volume, productive and non-productive hours, overtime, total FTEs, and three derived metrics (Productivity Ratio, Overtime Percentage, Productive Percentage). It is intended for internal trending, board reporting, and benchmarking conversations \u2014 not as a personnel evaluation instrument and not as a substitute for a formal time-and-motion study.");
+      aboutBody("This workbook is a month-by-month export of the productivity data the laboratory has entered into VeritaBench. Each row represents a single calendar month and shows billable test volume, productive and non-productive hours, overtime, total FTEs, and three derived metrics (Productivity Ratio, Overtime Percentage, Productive Percentage). It is intended for internal trending, board reporting, and benchmarking conversations, not as a personnel evaluation instrument and not as a substitute for a formal time-and-motion study.");
       aboutBlank();
       aboutSection("How to use this workbook");
-      aboutBody("The Productivity Data tab is sorted oldest-to-newest so a quick glance shows the trend line for each metric. Productivity Ratio is productive hours divided by billable tests (lower is leaner). OT % is overtime hours as a share of productive hours. Productive % is productive hours divided by total worked hours (productive plus non-productive). Use the auto-filter on row 1 to isolate a year, a facility type, or a month range. Notes capture context the lab director recorded at the time \u2014 staffing changes, instrument downtime, holiday weeks \u2014 and should be read alongside the numeric columns.");
+      aboutBody("The Productivity Data tab is sorted oldest-to-newest so a quick glance shows the trend line for each metric. Productivity Ratio is productive hours divided by billable tests (lower is leaner). OT % is overtime hours as a share of productive hours. Productive % is productive hours divided by total worked hours (productive plus non-productive). Use the auto-filter on row 1 to isolate a year, a facility type, or a month range. Notes capture context the lab director recorded at the time, staffing changes, instrument downtime, holiday weeks, and should be read alongside the numeric columns.");
       aboutBlank();
       aboutSection("Disclaimer");
-      aboutBody("This workbook is an internal management report, not an audit-grade productivity assessment, not a regulatory submission, and not a substitute for a formal staffing or time-and-motion study. The numbers reflect what the laboratory entered into VeritaBench; VeritaAssure does not validate the underlying timecards, LIS billable-test counts, or FTE allocations. Productivity Ratio, OT %, and Productive % are mechanical formulas applied to the entered values \u2014 they are not benchmarks against an external standard, and a 'good' or 'bad' ratio depends on the lab's test mix, automation level, complexity, and union or contractual rules. This workbook is not a personnel evaluation tool and must not be used to discipline, terminate, or compensate individual employees. The lab director and senior leadership are responsible for staffing decisions, productivity targets, and any operational action taken on the basis of these numbers. VeritaAssure does not certify staffing levels, does not advise on labor law compliance, and does not represent these figures to any accrediting or regulatory body.");
+      aboutBody("This workbook is an internal management report, not an audit-grade productivity assessment, not a regulatory submission, and not a substitute for a formal staffing or time-and-motion study. The numbers reflect what the laboratory entered into VeritaBench; VeritaAssure does not validate the underlying timecards, LIS billable-test counts, or FTE allocations. Productivity Ratio, OT %, and Productive % are mechanical formulas applied to the entered values, they are not benchmarks against an external standard, and a 'good' or 'bad' ratio depends on the lab's test mix, automation level, complexity, and union or contractual rules. This workbook is not a personnel evaluation tool and must not be used to discipline, terminate, or compensate individual employees. The lab director and senior leadership are responsible for staffing decisions, productivity targets, and any operational action taken on the basis of these numbers. VeritaAssure does not certify staffing levels, does not advise on labor law compliance, and does not represent these figures to any accrediting or regulatory body.");
       aboutBlank();
       aboutSection("Lab identity");
       aboutBody(`This workbook was prepared for ${labName} (CLIA ${cliaNumber}). The lab name and CLIA appear on every printed page header and footer.`);
       aboutBlank();
       aboutSection("Coverage gaps");
-      aboutBody("If your laboratory needs a productivity metric or column not represented here \u2014 for example, test-mix-weighted CAP workload units, send-out volume, or department-level breakouts \u2014 please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.");
+      aboutBody("If your laboratory needs a productivity metric or column not represented here, for example, test-mix-weighted CAP workload units, send-out volume, or department-level breakouts, please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.");
       about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaBench Productivity Tracker&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
       about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
       await about.protect(exportPwd, {
@@ -1167,8 +1174,8 @@ export function registerVeritaBenchRoutes(
   // Notes) are unlocked. Discrepancy is an in-cell formula that
   // populates when Counted Qty is entered.
   //
-  // Filters: department / category / vendor — same query-param
-  // shape as the reorder routes — so the user can produce a
+  // Filters: department / category / vendor, same query-param
+  // shape as the reorder routes, so the user can produce a
   // Chemistry-only or a Bio-Rad-only count sheet.
   //
   // Streamed inline (no PDF token store) because the workbook is
@@ -1552,7 +1559,7 @@ export function registerVeritaBenchRoutes(
     }
   });
 
-  // resolveInventoryItemForMutation — fix for "Item not found" 2026-06-09.
+  // resolveInventoryItemForMutation, fix for "Item not found" 2026-06-09.
   //
   // Items created by the seed script (or by a different user in the same lab)
   // have account_id != the current requester's user_id. The list endpoint
@@ -1589,7 +1596,7 @@ export function registerVeritaBenchRoutes(
     }
     const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, barcode_value, unit_cost, on_order_qty, on_order_expected_date, on_order_placed_date, intacct_item_id } = req.body;
     // Sage Intacct item id: preserve on omit (partial edit shouldn't wipe it);
-    // blank string clears it (back to account-based). Verbatim — no casing change.
+    // blank string clears it (back to account-based). Verbatim, no casing change.
     const resolvedIntacctItemId = (intacct_item_id === undefined)
       ? ((existing as any).intacct_item_id ?? null)
       : (intacct_item_id === null || (typeof intacct_item_id === "string" && intacct_item_id.trim() === "") ? null : String(intacct_item_id));
@@ -1728,7 +1735,7 @@ export function registerVeritaBenchRoutes(
 
     // Consumption ledger: a DOWNWARD cycle-count correction is a depletion. The
     // helper skips qty <= 0, so an upward / no-change adjustment records nothing.
-    // Side-effect only — on_hand was already set above; the ledger never touches it.
+    // Side-effect only, on_hand was already set above; the ledger never touches it.
     logConsumption({
       itemId: Number(itemId), labId: (existing as any).lab_id, accountId: req.ownerUserId ?? req.userId,
       qty: beforeQty - usageQty, unitCostAtEvent: (existing as any).unit_cost ?? null,
@@ -2006,7 +2013,7 @@ export function registerVeritaBenchRoutes(
       });
     } catch { /* audit is best-effort */ }
 
-    // Consumption ledger: a write-off is a depletion. Side-effect only — on_hand
+    // Consumption ledger: a write-off is a depletion. Side-effect only, on_hand
     // was already moved in the transaction above; the ledger never touches it.
     logConsumption({
       itemId: Number(itemId), labId, accountId: req.ownerUserId ?? req.userId,
@@ -2054,11 +2061,18 @@ export function registerVeritaBenchRoutes(
       wb.created = new Date();
 
       // ===== Lab identity (Excel Export Standard) =====
+      // Audit #9 (2026-07-12): resolve identity from the SELECTED lab (labs table),
+      // like the Leverage PDF, so a multi-lab export prints the correct lab header
+      // and never falls back to the logged-in person's name.
+      const idLabId = resolveOpsLabId(req);
+      const idLabRow = idLabId != null
+        ? sqlite.prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(idLabId) as any
+        : null;
       const ownerRow = sqlite.prepare(
-        "SELECT clia_lab_name, clia_number, name FROM users WHERE id = ?"
+        "SELECT clia_lab_name, clia_number FROM users WHERE id = ?"
       ).get(accountId) as any;
-      const labName = ownerRow?.clia_lab_name || ownerRow?.name || "Laboratory";
-      const cliaNumber = ownerRow?.clia_number || "Not on file";
+      const labName = idLabRow?.lab_name || ownerRow?.clia_lab_name || "Laboratory";
+      const cliaNumber = idLabRow?.clia_number || ownerRow?.clia_number || "Not on file";
       const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || "veritaassure-export";
 
       // ===== About sheet (sheet 1) =====
@@ -2071,7 +2085,7 @@ export function registerVeritaBenchRoutes(
       const about = wb.addWorksheet("About");
       about.getColumn(1).width = 110;
       const aboutTitle = about.getCell("A1");
-      aboutTitle.value = `VeritaBench Staffing Analyzer \u2014 ${study.name}`;
+      aboutTitle.value = `VeritaBench Staffing Analyzer, ${study.name}`;
       aboutTitle.font = { name: "Calibri", bold: true, size: 14, color: { argb: "FFFFFFFF" } };
       aboutTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
       aboutTitle.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
@@ -2104,19 +2118,19 @@ export function registerVeritaBenchRoutes(
       };
       const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
       aboutSection("About this product");
-      aboutBody("This workbook is the analysis output of a VeritaBench Staffing Analyzer study. The lab recorded specimen-receipt and result-verification volumes hour-by-hour and day-by-day; the Averages tab shows the mean specimens received and results verified for each of the 168 hour-of-week slots (24 hours \u00d7 7 days), averaged across every observation week the study contains. It is a workload-shape report intended to inform shift design, bench coverage, and break scheduling \u2014 not an FTE entitlement calculation, not a CAP workload-unit study, and not a personnel evaluation tool.");
+      aboutBody("This workbook is the analysis output of a VeritaBench Staffing Analyzer study. The lab recorded specimen-receipt and result-verification volumes hour-by-hour and day-by-day; the Averages tab shows the mean specimens received and results verified for each of the 168 hour-of-week slots (24 hours \u00d7 7 days), averaged across every observation week the study contains. It is a workload-shape report intended to inform shift design, bench coverage, and break scheduling, not an FTE entitlement calculation, not a CAP workload-unit study, and not a personnel evaluation tool.");
       aboutBlank();
       aboutSection("How to use this workbook");
       aboutBody("The Averages tab is laid out with 24 rows (one per hour slot, midnight at the top) and 14 day columns: the first 7 are average specimens Received per hour, the second 7 are average results Verified per hour. Read across a row to see how a single hour-of-day compares Monday-through-Sunday; read down a column to see how a single weekday's volume curve looks. Pair the Received and Verified columns to identify lag (high receipt volume followed by delayed verification) or pile-up risk. The freeze pane keeps the Hour Slot column visible while you scroll across the 14 day columns.");
       aboutBlank();
       aboutSection("Disclaimer");
-      aboutBody("This workbook is an internal staffing-shape analysis, not an audit-grade staffing study, not a CAP/CLIA-required workload assessment, and not a substitute for a formal time-and-motion or productivity engineering study. The averages reflect only the hours and days the lab entered into VeritaBench for this study; gaps, holiday weeks, instrument outages, and short-staffed weeks are baked into the averages and are not corrected for. Specimen-receipt and result-verification counts are not equivalent to actual hands-on work time \u2014 they are volume proxies. This workbook is not a personnel evaluation tool and must not be used to discipline, terminate, or compensate individual employees, nor to justify reductions in force. The lab director and senior leadership are responsible for shift design, FTE allocation, and any operational action taken on the basis of these numbers. VeritaAssure does not certify staffing levels, does not advise on labor or scheduling law, and does not represent these figures to any accrediting or regulatory body.");
+      aboutBody("This workbook is an internal staffing-shape analysis, not an audit-grade staffing study, not a CAP/CLIA-required workload assessment, and not a substitute for a formal time-and-motion or productivity engineering study. The averages reflect only the hours and days the lab entered into VeritaBench for this study; gaps, holiday weeks, instrument outages, and short-staffed weeks are baked into the averages and are not corrected for. Specimen-receipt and result-verification counts are not equivalent to actual hands-on work time, they are volume proxies. This workbook is not a personnel evaluation tool and must not be used to discipline, terminate, or compensate individual employees, nor to justify reductions in force. The lab director and senior leadership are responsible for shift design, FTE allocation, and any operational action taken on the basis of these numbers. VeritaAssure does not certify staffing levels, does not advise on labor or scheduling law, and does not represent these figures to any accrediting or regulatory body.");
       aboutBlank();
       aboutSection("Lab identity");
       aboutBody(`This workbook was prepared for ${labName} (CLIA ${cliaNumber}). The lab name and CLIA appear on every printed page header and footer.`);
       aboutBlank();
       aboutSection("Coverage gaps");
-      aboutBody("If your laboratory needs additional metrics in this analysis \u2014 for example, send-out volumes, STAT vs routine separation, instrument-level breakouts, or 15-minute granularity \u2014 please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.");
+      aboutBody("If your laboratory needs additional metrics in this analysis, for example, send-out volumes, STAT vs routine separation, instrument-level breakouts, or 15-minute granularity, please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.");
       about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaBench Staffing Analyzer&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
       about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
       await about.protect(exportPwd, {
@@ -2153,6 +2167,10 @@ export function registerVeritaBenchRoutes(
         wsAvg.addRow(rowData);
       }
 
+      // Audit #21 (2026-07-12): a real auto-filter on the Averages sheet (Sec 6);
+      // 15 columns (Hour Slot + 7 Received + 7 Verified) x header + 24 hour rows.
+      wsAvg.autoFilter = { from: "A1", to: "O25" };
+
       // Style headers
       const tealFill: any = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
       const headerFont: any = { bold: true, color: { argb: "FFFFFFFF" }, name: "Calibri", size: 11 };
@@ -2182,7 +2200,7 @@ export function registerVeritaBenchRoutes(
       }
 
       // Page-setup header/footer carry lab identity on every printed page.
-      wsAvg.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaBench Staffing Analyzer \u2014 ${study.name}&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      wsAvg.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaBench Staffing Analyzer, ${study.name}&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
       wsAvg.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
 
       await wsAvg.protect(exportPwd, {
@@ -2522,7 +2540,7 @@ export function registerVeritaBenchRoutes(
     res.json({ metrics: result });
   });
 
-  // ── MULTI-LAB Tier 2 — Phase 3.11b: lab-scoped VeritaStock endpoints ───────
+  // ── MULTI-LAB Tier 2, Phase 3.11b: lab-scoped VeritaStock endpoints ───────
   const labScopeMiddleware = (app as any).locals?.labScopeMiddleware;
   if (labScopeMiddleware) {
     app.get("/api/labs/:labId/inventory", authMiddleware, labScopeMiddleware, (req: any, res) => {
@@ -2534,7 +2552,7 @@ export function registerVeritaBenchRoutes(
       res.json(items);
     });
 
-    // GET /api/labs/:labId/inventory/reorder-list — lab-scoped reorder list.
+    // GET /api/labs/:labId/inventory/reorder-list, lab-scoped reorder list.
     // Same shape as the legacy /api/inventory/reorder-list above; gated on
     // the active lab membership rather than account_id.
     app.get("/api/labs/:labId/inventory/reorder-list", authMiddleware, labScopeMiddleware, (req: any, res) => {
@@ -2547,7 +2565,7 @@ export function registerVeritaBenchRoutes(
       res.json({ items, totalCount: items.length, generatedAt: new Date().toISOString() });
     });
 
-    // POST /api/labs/:labId/inventory/reorder-list/pdf — lab-scoped reorder
+    // POST /api/labs/:labId/inventory/reorder-list/pdf, lab-scoped reorder
     // document PDF. Lab identity comes from the labs table for THIS labId
     // (not the requester's default lab), so a user with memberships on
     // multiple labs gets a correctly stamped header per lab.
@@ -2585,7 +2603,7 @@ export function registerVeritaBenchRoutes(
       }
     });
 
-    // POST /api/labs/:labId/inventory/reorder-list/excel — lab-scoped Excel
+    // POST /api/labs/:labId/inventory/reorder-list/excel, lab-scoped Excel
     // variant. Same shape as the legacy /api/inventory/reorder-list/excel
     // above; differs only in how the lab identity for the header is read
     // (this labId, not the requester's default lab).
@@ -2624,7 +2642,7 @@ export function registerVeritaBenchRoutes(
       }
     });
 
-    // GET /api/labs/:labId/veritastock/intacct-config — the saved Sage Intacct
+    // GET /api/labs/:labId/veritastock/intacct-config, the saved Sage Intacct
     // export config for this location, plus the vendors' Intacct-ID status the UI
     // uses to show the "set up" empty state and a missing-ID list.
     app.get("/api/labs/:labId/veritastock/intacct-config", authMiddleware, labScopeMiddleware, (req: any, res) => {
@@ -2638,7 +2656,7 @@ export function registerVeritaBenchRoutes(
       res.json({ config, configured, vendors });
     });
 
-    // PUT /api/labs/:labId/veritastock/intacct-config — save the export config
+    // PUT /api/labs/:labId/veritastock/intacct-config, save the export config
     // (transaction definition, GL account, dimensions, date format, and the
     // editable Intacct-header -> source column mapping). Config edit, not code.
     app.put("/api/labs/:labId/veritastock/intacct-config", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
@@ -2666,7 +2684,7 @@ export function registerVeritaBenchRoutes(
       res.json({ ok: true, config });
     });
 
-    // POST /api/labs/:labId/inventory/reorder-list/intacct-csv — config-driven
+    // POST /api/labs/:labId/inventory/reorder-list/intacct-csv, config-driven
     // Sage Intacct purchasing CSV off the CURRENT reorder list (same decorated
     // items the Order PDF/XLSX use), through the account's template_columns
     // mapping so headers match the customer's import template exactly. Preflight
@@ -2711,7 +2729,7 @@ export function registerVeritaBenchRoutes(
       }
     });
 
-    // POST /api/labs/:labId/inventory/count-sheet/excel — lab-scoped
+    // POST /api/labs/:labId/inventory/count-sheet/excel, lab-scoped
     // Inventory Count workbook. Same shape as the legacy
     // /api/inventory/count-sheet/excel above; differs only in how items
     // are scoped (lab_id, not account_id) and where lab identity is read
@@ -2772,7 +2790,7 @@ export function registerVeritaBenchRoutes(
       }
     });
 
-    // GET /api/labs/:labId/veritastock/receipts — receipt history for lead-time
+    // GET /api/labs/:labId/veritastock/receipts, receipt history for lead-time
     // verification. Returns recent receive events (placed/expected/received
     // dates plus programmed vs actual lead time), newest first, so the facility
     // can document every received order and check it against programmed lead time.
@@ -2789,7 +2807,7 @@ export function registerVeritaBenchRoutes(
       }
     });
 
-    // GET /api/labs/:labId/veritastock/lead-time-flags — lead-time drift.
+    // GET /api/labs/:labId/veritastock/lead-time-flags, lead-time drift.
     // For each item with at least MIN_SAMPLE received POs (placed + received on
     // file), compare the trailing-average actual lead time to the item's CURRENT
     // programmed lead time. Flag only when the average deviates by more than
@@ -2844,7 +2862,7 @@ export function registerVeritaBenchRoutes(
       }
     });
 
-    // POST /api/labs/:labId/inventory/labels/pdf — lab-scoped barcode label
+    // POST /api/labs/:labId/inventory/labels/pdf, lab-scoped barcode label
     // sheet. Same shape as the legacy /api/inventory/labels/pdf above; differs
     // only in how items are scoped (lab_id, not account_id) and where lab
     // identity is read (the labs row for THIS labId). Fixes the cross-lab
@@ -2901,7 +2919,7 @@ export function registerVeritaBenchRoutes(
       }
     });
 
-    // POST /api/labs/:labId/inventory/snap-order/pdf — lab-scoped snap order
+    // POST /api/labs/:labId/inventory/snap-order/pdf, lab-scoped snap order
     // PDF. Same shape as the legacy variant; differs only in how items are
     // scoped (by lab_id rather than account_id) and where the lab identity
     // header comes from (the labs row for THIS labId).
