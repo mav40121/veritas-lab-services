@@ -538,6 +538,17 @@ function AdequacyPanel({ study, readOnly, onAttested }: {
   const attested = !!study.adequacy_attested_at;
 
   async function submit(clear = false) {
+    // #15: a gap determination is only defensible with a documented plan to close
+    // it (see 42 CFR staffing-sufficiency intent). Enforce the "Required" the note
+    // placeholder promises rather than accepting an empty gap attestation.
+    if (!clear && determination === "gap_identified" && !note.trim()) {
+      toast({
+        title: "Plan required",
+        description: "A gap determination must document the gap (hours, department) and the plan to close it (added FTE, schedule change, cross-training).",
+        variant: "destructive",
+      });
+      return;
+    }
     setBusy(true);
     try {
       const res = await fetch(`${API_BASE}/api/staffing-studies/${study.id}/attest-adequacy`, {
@@ -611,6 +622,8 @@ export default function VeritaBenchStaffingPage() {
   const { toast } = useToast();
   const [studies, setStudies] = useState<StaffingStudy[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [detailError, setDetailError] = useState(false);
   const [selectedStudy, setSelectedStudy] = useState<StaffingStudy | null>(null);
   const [studyData, setStudyData] = useState<HourlyDataItem[]>([]);
   const [activeTab, setActiveTab] = useState<string>("week1");
@@ -638,7 +651,7 @@ export default function VeritaBenchStaffingPage() {
   async function loadGrid() {
     try {
       const res = await fetch(`${API_BASE}/api/staffing-grid${labQ}`, { headers: authHeaders() });
-      if (!res.ok) return;
+      if (!res.ok) { setLoadError(true); return; }
       const d = await res.json();
       setGridHoursPerFte(d.hoursPerFteYear ?? 2080);
       setGridLines((d.lines || []).map((l: any) => ({
@@ -647,7 +660,7 @@ export default function VeritaBenchStaffingPage() {
         days_per_week: l.days_per_week != null ? String(l.days_per_week) : "",
         over_under: l.over_under != null ? String(l.over_under) : "",
       })));
-    } catch {}
+    } catch { setLoadError(true); }
   }
 
   async function saveGrid() {
@@ -671,21 +684,30 @@ export default function VeritaBenchStaffingPage() {
     try {
       const res = await fetch(`${API_BASE}/api/staffing-studies${labQ}`, { headers: authHeaders() });
       if (res.ok) setStudies(await res.json());
-    } catch {} finally { setLoading(false); }
+      else setLoadError(true);
+    } catch { setLoadError(true); } finally { setLoading(false); }
   }
 
   async function loadStudyData(id: number) {
+    setDetailError(false);
     try {
       const res = await fetch(`${API_BASE}/api/staffing-studies/${id}`, { headers: authHeaders() });
       if (res.ok) {
         const result = await res.json();
         setStudyData(result.data || []);
-      }
-    } catch {}
+      } else { setDetailError(true); }
+    } catch { setDetailError(true); }
+  }
+
+  function retryList() {
+    setLoadError(false);
+    setLoading(true);
+    loadStudies();
+    loadGrid();
   }
 
   useEffect(() => {
-    if (isLoggedIn && hasPlanAccess) { loadStudies(); loadGrid(); }
+    if (isLoggedIn && hasPlanAccess) { setLoadError(false); loadStudies(); loadGrid(); }
     else setLoading(false);
   }, [isLoggedIn, hasPlanAccess, labId]);
 
@@ -701,6 +723,7 @@ export default function VeritaBenchStaffingPage() {
         body: JSON.stringify({ name, department: dept, start_date: startDate || null }),
       });
       if (res.ok) { toast({ title: "Study created" }); loadStudies(); }
+      else { const e = await res.json().catch(() => ({})); toast({ title: "Create failed", description: e.error, variant: "destructive" }); }
     } catch { toast({ title: "Create failed", variant: "destructive" }); }
   }
 
@@ -711,20 +734,32 @@ export default function VeritaBenchStaffingPage() {
         toast({ title: "Study deleted" });
         if (selectedStudy?.id === s.id) { setSelectedStudy(null); setStudyData([]); }
         loadStudies();
-      }
+      } else { const e = await res.json().catch(() => ({})); toast({ title: "Delete failed", description: e.error, variant: "destructive" }); }
     } catch { toast({ title: "Delete failed", variant: "destructive" }); }
   }
 
   async function handleSaveData(items: Omit<HourlyDataItem, "id" | "study_id" | "created_at">[]) {
     if (!selectedStudy) return;
+    // #4: the by-hour grid autosaves silently. If the POST fails and we swallow it,
+    // the tech's typed values look saved (they are still on screen) but are lost on
+    // reload. Surface the failure and do NOT reload stale server data over the
+    // unsaved entries, so the values stay on screen for another autosave attempt.
     try {
-      await fetch(`${API_BASE}/api/staffing-studies/${selectedStudy.id}/data`, {
+      const res = await fetch(`${API_BASE}/api/staffing-studies/${selectedStudy.id}/data`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify(items),
       });
-    } catch {}
-    // Reload data
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        toast({ title: "Autosave failed", description: e.error || "Your latest entries are not saved yet. Check your connection; they remain on screen to retry.", variant: "destructive" });
+        return;
+      }
+    } catch {
+      toast({ title: "Autosave failed", description: "Network error. Your latest entries are not saved yet; they remain on screen to retry.", variant: "destructive" });
+      return;
+    }
+    // Only refresh from the server after a confirmed successful save.
     loadStudyData(selectedStudy.id);
   }
 
@@ -735,6 +770,9 @@ export default function VeritaBenchStaffingPage() {
       if (res.ok) {
         const blob = await res.blob();
         saveAs(blob, `Staffing-Analysis_${selectedStudy.name.replace(/[^a-zA-Z0-9]/g, "_")}.xlsx`);
+      } else {
+        const e = await res.json().catch(() => ({}));
+        toast({ title: "Export failed", description: e.error, variant: "destructive" });
       }
     } catch { toast({ title: "Export failed", variant: "destructive" }); }
   }
@@ -781,6 +819,14 @@ export default function VeritaBenchStaffingPage() {
           </div>
           <Button variant="outline" size="sm" onClick={handleExport}><FileDown size={14} className="mr-1.5" />Export</Button>
         </div>
+
+        {/* #17: a failed detail load must not render as a study with no data. */}
+        {detailError && (
+          <div role="alert" className="mb-6 flex items-center justify-between gap-3 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <span>Couldn't load this study's hourly data. The grids below may be incomplete; this is a load error, not empty data.</span>
+            <Button variant="outline" size="sm" onClick={() => loadStudyData(selectedStudy.id)} className="border-red-300 text-red-800 hover:bg-red-100 shrink-0">Retry</Button>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex gap-0.5 mb-6 overflow-x-auto border-b">
@@ -831,6 +877,25 @@ export default function VeritaBenchStaffingPage() {
   }
 
   // Study list view
+  // #3/#20: a load in progress or a failed load must not render as an empty
+  // workspace ("No staffing studies yet").
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+        <div className="text-center py-16 text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+  if (loadError) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span>Couldn't load staffing studies. This may be a permissions or connection issue, not an empty workspace. Your saved studies are not affected.</span>
+          <Button variant="outline" size="sm" onClick={retryList} className="border-red-300 text-red-800 hover:bg-red-100 shrink-0">Retry</Button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
       {/* Staffing Grid (leverage chain, Phase 3) */}
