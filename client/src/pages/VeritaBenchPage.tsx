@@ -98,6 +98,7 @@ export default function VeritaBenchPage() {
   const [tab, setTab] = useState<"data" | "dashboard">("dashboard");
   const [months, setMonths] = useState<ProductivityMonth[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editRow, setEditRow] = useState<ProductivityMonth | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ProductivityMonth | null>(null);
@@ -123,6 +124,12 @@ export default function VeritaBenchPage() {
   const [fcTrailing, setFcTrailing] = useState<number>(0);
   const [fcSaving, setFcSaving] = useState(false);
   const [fcReportLoading, setFcReportLoading] = useState(false);
+  // #14: the CFO leverage report is built server-side from the SAVED forecast row,
+  // not from the on-screen form. Snapshot the saved values so we can detect unsaved
+  // edits and refuse to emit a PDF that would not match what the director is looking at.
+  const [fcSavedSnap, setFcSavedSnap] = useState<string>("");
+  const fcSig = `${fcGoal}|${fcVolume}|${fcHoursPerFte}|${fcStaffFte}`;
+  const forecastDirty = fcSig !== fcSavedSnap;
 
   const fcResult = useMemo(() => {
     const goal = parseFloat(fcGoal);
@@ -142,22 +149,26 @@ export default function VeritaBenchPage() {
       const d = await res.json();
       setFcTrailing(d.trailingAnnualVolume ?? 0);
       const s = d.saved;
+      let g = "", v = "", h = "2080", st = "";
       if (s) {
-        setFcGoal(s.goal_ratio != null ? String(s.goal_ratio) : "");
-        setFcVolume(s.forecast_annual_volume != null ? String(s.forecast_annual_volume) : (d.trailingAnnualVolume ? String(d.trailingAnnualVolume) : ""));
-        setFcHoursPerFte(s.hours_per_fte != null ? String(s.hours_per_fte) : "2080");
-        setFcStaffFte(s.staffing_model_fte != null ? String(s.staffing_model_fte) : "");
+        g = s.goal_ratio != null ? String(s.goal_ratio) : "";
+        v = s.forecast_annual_volume != null ? String(s.forecast_annual_volume) : (d.trailingAnnualVolume ? String(d.trailingAnnualVolume) : "");
+        h = s.hours_per_fte != null ? String(s.hours_per_fte) : "2080";
+        st = s.staffing_model_fte != null ? String(s.staffing_model_fte) : "";
       } else if (d.trailingAnnualVolume) {
-        setFcVolume(String(d.trailingAnnualVolume));
+        v = String(d.trailingAnnualVolume);
       }
       // Phase 3: when the lab has a staffing grid, it drives the FTE need (overrides manual entry).
       const grid = d.staffingGrid;
       if (grid && grid.source === "grid" && grid.fteNeed > 0) {
-        setFcStaffFte(String(Number(grid.fteNeed.toFixed(2))));
+        st = String(Number(grid.fteNeed.toFixed(2)));
         setFcStaffFromGrid(true);
       } else {
         setFcStaffFromGrid(false);
       }
+      setFcGoal(g); setFcVolume(v); setFcHoursPerFte(h); setFcStaffFte(st);
+      // #14: record the saved signature so an unsaved edit blocks a mismatched CFO report.
+      setFcSavedSnap(`${g}|${v}|${h}|${st}`);
     } catch {}
   }
 
@@ -174,13 +185,24 @@ export default function VeritaBenchPage() {
           staffing_model_fte: fcStaffFte ? parseFloat(fcStaffFte) : null,
         }),
       });
-      if (res.ok) { toast({ title: "Goal saved" }); }
+      if (res.ok) { toast({ title: "Goal saved" }); setFcSavedSnap(fcSig); }
       else { const e = await res.json(); toast({ title: "Error", description: e.error, variant: "destructive" }); }
     } catch { toast({ title: "Save failed", variant: "destructive" }); }
     finally { setFcSaving(false); }
   }
 
   async function generateReport() {
+    // #14: the report is rendered server-side from the SAVED forecast, so unsaved
+    // edits would produce a PDF that contradicts the numbers on screen. Make the
+    // director save first rather than hand them a stale report.
+    if (forecastDirty) {
+      toast({
+        title: "Save the goal first",
+        description: "The CFO report is built from your saved forecast. Save your changes so the report matches what you see here.",
+        variant: "destructive",
+      });
+      return;
+    }
     setFcReportLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/productivity/leverage-report${labQ}`, {
@@ -201,10 +223,18 @@ export default function VeritaBenchPage() {
   const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "clinic", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
   async function loadData() {
+    setLoadError(false);
     try {
       const res = await fetch(`${API_BASE}/api/productivity${labQ}`, { headers: authHeaders() });
       if (res.ok) setMonths(await res.json());
-    } catch {} finally { setLoading(false); }
+      else setLoadError(true);
+    } catch { setLoadError(true); } finally { setLoading(false); }
+  }
+
+  function retryLoad() {
+    setLoading(true);
+    loadData();
+    loadForecast();
   }
 
   useEffect(() => {
@@ -275,6 +305,7 @@ export default function VeritaBenchPage() {
     try {
       const res = await fetch(`${API_BASE}/api/productivity/${deleteTarget.id}`, { method: "DELETE", headers: authHeaders() });
       if (res.ok) { toast({ title: "Deleted" }); loadData(); }
+      else { const e = await res.json().catch(() => ({})); toast({ title: "Delete failed", description: e.error, variant: "destructive" }); }
     } catch { toast({ title: "Delete failed", variant: "destructive" }); }
     setDeleteTarget(null);
   }
@@ -285,6 +316,9 @@ export default function VeritaBenchPage() {
       if (res.ok) {
         const blob = await res.blob();
         saveAs(blob, `VeritaPace-Productivity_${new Date().toISOString().split("T")[0]}.xlsx`);
+      } else {
+        const e = await res.json().catch(() => ({}));
+        toast({ title: "Export failed", description: e.error, variant: "destructive" });
       }
     } catch { toast({ title: "Export failed", variant: "destructive" }); }
   }
@@ -328,7 +362,7 @@ export default function VeritaBenchPage() {
 
   const facilityBenchmark = currentMonth ? BENCHMARKS[currentMonth.facility_type] : BENCHMARKS.community;
 
-  useSEO({ title: "VeritaPace\u2122 | Monthly Lab Productivity Tracker | VeritaAssure\u2122", description: "Track monthly lab productivity with VeritaPace\u2122. Billable tests per paid hour benchmarking, FTE and overtime analysis, and peer comparisons. Included with VeritaAssure\u2122 Suite plans." });
+  useSEO({ title: "VeritaPace\u2122 | Monthly Lab Productivity Tracker | VeritaAssure\u2122", description: "Track monthly lab productivity with VeritaPace\u2122. Productive hours per billable test against published facility-type reference ranges, FTE and overtime analysis, and year-over-year trend. Included with VeritaAssure\u2122 Suite plans." });
 
   // Unauthenticated gate - marketing landing
   if (!isLoggedIn) {
@@ -350,16 +384,16 @@ export default function VeritaBenchPage() {
                 </p>
                 <div className="border-l-4 border-primary pl-4 mb-6">
                   <p className="text-base leading-relaxed italic text-foreground/90">
-                    "Know exactly when you're overstaffed, understaffed, and how you compare to peer labs."
+                    "Know exactly when you're overstaffed, understaffed, and how you track against published facility-type benchmarks."
                   </p>
                 </div>
       <ModuleHowToCard
         moduleKey="veritabench"
         moduleName="VeritaBench™"
-        whatItDoes="VeritaBench is the productivity calculator. Tracks billable tests per productive hour, compares to industry benchmarks (community hospital, large trauma center, reference lab), surfaces month-over-month trend, and feeds the staffing-by-hour analysis."
+        whatItDoes="VeritaBench is the productivity calculator. Tracks productive hours per billable test, compares to published reference ranges by facility type (community hospital, large trauma center, reference lab), surfaces month-over-month trend, and feeds the staffing-by-hour analysis."
         howToUse={[
           "Enter monthly billable test count and productive hours for each month you want to track.",
-          "The dashboard shows your tests-per-productive-hour ratio versus the benchmark range for your facility type.",
+          "The dashboard shows your productive-hours-per-billable-test ratio versus the reference range for your facility type (lower is more efficient).",
           "Drill into the trend to see month-over-month direction and seasonal patterns.",
           "Use the gap delta versus benchmark to drive staffing or workflow conversations with hospital leadership.",
           "Export the dashboard to share with finance or the lab oversight committee."
@@ -367,11 +401,11 @@ export default function VeritaBenchPage() {
       />
 
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  VeritaPace{"\u2122"} turns your monthly volume and payroll data into the productivity metrics lab leadership actually needs: billable tests per paid hour, FTE counts, overtime ratios, productive vs non-productive hours, and benchmarks against the Clinic, Community, and Hospital peer groups. Built by a former TJC laboratory surveyor with 200+ facility inspections.
+                  VeritaPace{"\u2122"} turns your monthly volume and payroll data into the productivity metrics lab leadership actually needs: productive hours per billable test, FTE counts, overtime ratios, productive vs non-productive hours, and published reference ranges by facility type. Built by a former TJC laboratory surveyor with 200+ facility inspections.
                 </p>
                 <ul className="space-y-2 mb-6 text-sm">
                   <li className="flex items-start gap-2"><TrendingUp size={16} className="text-primary mt-0.5 shrink-0" /><span>Monthly productivity tracking with year-over-year trend analysis</span></li>
-                  <li className="flex items-start gap-2"><Award size={16} className="text-primary mt-0.5 shrink-0" /><span>Billable tests per paid hour vs facility-type benchmarks</span></li>
+                  <li className="flex items-start gap-2"><Award size={16} className="text-primary mt-0.5 shrink-0" /><span>Productive hours per billable test vs facility-type reference ranges</span></li>
                   <li className="flex items-start gap-2"><Users size={16} className="text-primary mt-0.5 shrink-0" /><span>FTE counts and overtime ratio calculations from payroll data</span></li>
                   <li className="flex items-start gap-2"><Clock size={16} className="text-primary mt-0.5 shrink-0" /><span>By-hour staffing analyzer to identify overstaffed and understaffed periods</span></li>
                 </ul>
@@ -410,10 +444,10 @@ export default function VeritaBenchPage() {
                       VeritaPace{"\u2122"}
                     </div>
                     <div className="text-xs text-white/70 text-center space-y-1 mb-4">
-                      <div>Tests per Paid Hour</div>
+                      <div>Hours per Billable Test</div>
                       <div>FTE & Overtime</div>
                       <div>Productive vs Non-Productive</div>
-                      <div>Peer Benchmarking</div>
+                      <div>Facility-Type Benchmarks</div>
                       <div>Excel Export</div>
                     </div>
                     <div className="w-12 h-0.5 bg-white/40 mb-4" />
@@ -484,7 +518,18 @@ export default function VeritaBenchPage() {
         </button>
       </div>
 
-      {tab === "dashboard" && (
+      {/* #3/#20: a failed load must read as an error, never as an empty lab. */}
+      {loadError && (
+        <div role="alert" className="mb-6 flex items-center justify-between gap-3 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span>Couldn't load productivity data. This may be a permissions or connection issue, not an empty lab. Your saved data is not affected.</span>
+          <Button variant="outline" size="sm" onClick={retryLoad} className="border-red-300 text-red-800 hover:bg-red-100 shrink-0">Retry</Button>
+        </div>
+      )}
+
+      {tab === "dashboard" && loading && (
+        <div className="text-center py-12 text-muted-foreground">Loading...</div>
+      )}
+      {tab === "dashboard" && !loading && (
         <div className="space-y-6">
           {/* Summary Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -646,6 +691,11 @@ export default function VeritaBenchPage() {
         <div>
           {loading ? (
             <div className="text-center py-12 text-muted-foreground">Loading...</div>
+          ) : loadError ? (
+            <div className="text-center py-12">
+              <Activity size={40} className="mx-auto text-red-400 mb-4" />
+              <p className="text-red-700 mb-4">Productivity data couldn't be loaded. This is not an empty lab. Use Retry above.</p>
+            </div>
           ) : months.length === 0 ? (
             <div className="text-center py-12">
               <Activity size={40} className="mx-auto text-muted-foreground mb-4" />
