@@ -163,7 +163,7 @@ export default function VeritaQCDailyReviewPage() {
       );
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        toast({ title: "Opened in VeritaResponse", description: `Finding #${data.finding_id} created, citing 42 CFR 493.1256(d). Document root cause and CAPA to close.` });
+        toast({ title: "Opened in VeritaResponse", description: `Finding #${data.finding_id} created, citing 42 CFR 493.1282. Document root cause and CAPA to close.` });
         await load();
       } else if (res.status === 409 && data.finding_id) {
         toast({ title: "Already in VeritaResponse", description: `This action is linked to finding #${data.finding_id}.` });
@@ -505,7 +505,7 @@ export default function VeritaQCDailyReviewPage() {
                                         className="h-6 px-2 text-xs text-amber-700 hover:text-amber-800"
                                         disabled={escalatingCaId === escalatable.id}
                                         onClick={() => escalateToResponse(escalatable)}
-                                        title="Open a formal CAPA record in VeritaResponse, citing 42 CFR 493.1256(d)"
+                                        title="Open a formal CAPA record in VeritaResponse, citing 42 CFR 493.1282"
                                       >
                                         {escalatingCaId === escalatable.id ? "Opening..." : "Escalate to VeritaResponse"}
                                       </Button>
