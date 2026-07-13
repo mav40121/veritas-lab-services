@@ -342,6 +342,7 @@ export default function VeritaBenchPIPage() {
   const [entries, setEntries] = useState<PIEntry[]>([]);
   const [dashboardData, setDashboardData] = useState<DashboardMetric[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [year, setYear] = useState<number>(new Date().getFullYear());
   const [entryMonth, setEntryMonth] = useState<number>(new Date().getMonth() + 1);
 
@@ -389,12 +390,15 @@ export default function VeritaBenchPIPage() {
 
   const hasPlanAccess = user && SUITE_PLANS.includes(user.plan);
 
-  // Whether user has NO departments yet (first-time UX)
-  const isFirstTime = !loading && departments.length === 0;
+  // Whether user has NO departments yet (first-time UX).
+  // #3: a failed load must NOT be mistaken for a brand-new account, or a surveyor's
+  // PI program would appear to vanish behind the setup wizard.
+  const isFirstTime = !loading && !loadError && departments.length === 0;
 
   // -- Load departments -------------------------------------------------------
 
   async function loadDepartments() {
+    setLoadError(false);
     try {
       const res = await fetch(`${API_BASE}/api/pi/departments`, { headers: authHeaders() });
       if (res.ok) {
@@ -403,8 +407,8 @@ export default function VeritaBenchPIPage() {
         if (depts.length > 0 && !selectedDeptId) {
           setSelectedDeptId(String(depts[0].id));
         }
-      }
-    } catch {} finally { setLoading(false); }
+      } else { setLoadError(true); }
+    } catch { setLoadError(true); } finally { setLoading(false); }
   }
 
   useEffect(() => {
@@ -413,26 +417,40 @@ export default function VeritaBenchPIPage() {
   }, [isLoggedIn, hasPlanAccess]);
 
   // -- Load metrics + entries when department or year changes ------------------
-
+  // #19: re-set loading around the switch so the previous department's data is
+  // not shown under the newly-selected department's header while the new data
+  // is still in flight.
   useEffect(() => {
     if (!selectedDeptId || !isLoggedIn || !hasPlanAccess) return;
-    loadMetrics();
-    loadEntries();
-    loadDashboard();
+    setLoading(true);
+    setLoadError(false);
+    Promise.all([loadMetrics(), loadEntries(), loadDashboard()]).finally(() => setLoading(false));
   }, [selectedDeptId, year]);
+
+  function retryAll() {
+    setLoadError(false);
+    setLoading(true);
+    if (selectedDeptId) {
+      Promise.all([loadMetrics(), loadEntries(), loadDashboard()]).finally(() => setLoading(false));
+    } else {
+      loadDepartments();
+    }
+  }
 
   async function loadMetrics() {
     try {
       const res = await fetch(`${API_BASE}/api/pi/metrics?department_id=${selectedDeptId}`, { headers: authHeaders() });
       if (res.ok) setMetrics(await res.json());
-    } catch {}
+      else setLoadError(true);
+    } catch { setLoadError(true); }
   }
 
   async function loadEntries() {
     try {
       const res = await fetch(`${API_BASE}/api/pi/entries?year=${year}&department_id=${selectedDeptId}`, { headers: authHeaders() });
       if (res.ok) setEntries(await res.json());
-    } catch {}
+      else setLoadError(true);
+    } catch { setLoadError(true); }
   }
 
   async function loadDashboard() {
@@ -441,8 +459,8 @@ export default function VeritaBenchPIPage() {
       if (res.ok) {
         const data = await res.json();
         setDashboardData(data.metrics || []);
-      }
-    } catch {}
+      } else { setLoadError(true); }
+    } catch { setLoadError(true); }
   }
 
   // -- Populate entry form when month/metrics/entries change ------------------
@@ -464,12 +482,18 @@ export default function VeritaBenchPIPage() {
 
   async function handleSaveAll() {
     setSaving(true);
+    // #16: the batch save POSTed each entry and ignored every response, then
+    // always toasted "Saved". Count failures so a rejected entry (validation,
+    // permission, network) is reported instead of silently dropped, and keep the
+    // typed values on screen on partial failure rather than reloading over them.
+    let attempted = 0, failed = 0;
     try {
       for (const m of metrics) {
         const vals = entryValues[m.id];
         if (!vals) continue;
         if (vals.value === "" && vals.volume === "" && vals.notes === "") continue;
-        await fetch(`${API_BASE}/api/pi/entries`, {
+        attempted++;
+        const res = await fetch(`${API_BASE}/api/pi/entries`, {
           method: "POST",
           headers: { ...authHeaders(), "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -481,12 +505,21 @@ export default function VeritaBenchPIPage() {
             notes: vals.notes || null,
           }),
         });
+        if (!res.ok) failed++;
       }
-      toast({ title: "Saved" });
-      loadEntries();
-      loadDashboard();
+      if (failed === 0) {
+        toast({ title: attempted > 0 ? "Saved" : "Nothing to save" });
+        loadEntries();
+        loadDashboard();
+      } else {
+        toast({
+          title: `Saved ${attempted - failed} of ${attempted}`,
+          description: `${failed} ${failed === 1 ? "entry" : "entries"} did not save. Your values remain on screen; press Save All to retry.`,
+          variant: "destructive",
+        });
+      }
     } catch {
-      toast({ title: "Save failed", variant: "destructive" });
+      toast({ title: "Save failed", description: "Your values remain on screen; press Save All to retry.", variant: "destructive" });
     } finally { setSaving(false); }
   }
 
@@ -560,7 +593,7 @@ export default function VeritaBenchPIPage() {
         loadMetrics();
         loadEntries();
         loadDashboard();
-      }
+      } else { const e = await res.json().catch(() => ({})); toast({ title: "Delete failed", description: e.error, variant: "destructive" }); }
     } catch { toast({ title: "Delete failed", variant: "destructive" }); }
     setDeleteMetricTarget(null);
   }
@@ -569,6 +602,10 @@ export default function VeritaBenchPIPage() {
 
   async function handleAddFromLibrary(selectedMetrics: StarterMetric[]) {
     setAddingFromLibrary(true);
+    // #18: the department- and metric-create calls ignored their responses, so a
+    // rejected create was silently dropped while the toast still claimed success.
+    // Count what actually landed and report accurately.
+    let added = 0, failed = 0;
     try {
       // Group by department
       const byDept: Record<string, StarterMetric[]> = {};
@@ -598,13 +635,15 @@ export default function VeritaBenchPIPage() {
             deptIdMap[deptName] = deptId;
             existingDeptNames.add(deptName);
           } else {
+            // The whole department (and its metrics) could not be created.
+            failed += deptMetrics.length;
             continue;
           }
         }
 
         for (let i = 0; i < deptMetrics.length; i++) {
           const m = deptMetrics[i];
-          await fetch(`${API_BASE}/api/pi/metrics`, {
+          const res = await fetch(`${API_BASE}/api/pi/metrics`, {
             method: "POST",
             headers: { ...authHeaders(), "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -615,10 +654,19 @@ export default function VeritaBenchPIPage() {
               sort_order: i,
             }),
           });
+          if (res.ok) added++; else failed++;
         }
       }
 
-      toast({ title: `Added ${selectedMetrics.length} metric${selectedMetrics.length !== 1 ? "s" : ""}` });
+      if (failed === 0) {
+        toast({ title: `Added ${added} metric${added !== 1 ? "s" : ""}` });
+      } else {
+        toast({
+          title: `Added ${added} of ${added + failed}`,
+          description: `${failed} metric${failed !== 1 ? "s" : ""} could not be added. Try again for the remainder.`,
+          variant: added > 0 ? "default" : "destructive",
+        });
+      }
       setShowLibraryDialog(false);
       // Reload everything
       await loadDepartments();
@@ -682,6 +730,19 @@ export default function VeritaBenchPIPage() {
         <h2 className="font-serif text-2xl font-bold mb-2">Upgrade to access VeritaQA{"\u2122"}</h2>
         <p className="text-muted-foreground mb-6 max-w-md">VeritaQA{"\u2122"} is included in all VeritaAssure{"\u2122"} suite plans. Subscribe to get started.</p>
         <Button asChild style={{ backgroundColor: "#01696F" }}><Link href="/pricing">View Plans</Link></Button>
+      </div>
+    );
+  }
+
+  // -- Load-error view (nothing loaded) ---------------------------------------
+
+  if (loadError && !loading && departments.length === 0) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span>Couldn't load your PI program. This is a load error, not a new or empty account, and your saved metrics are not affected.</span>
+          <Button variant="outline" size="sm" onClick={retryAll} className="border-red-300 text-red-800 hover:bg-red-100 shrink-0">Retry</Button>
+        </div>
       </div>
     );
   }
@@ -755,6 +816,14 @@ export default function VeritaBenchPIPage() {
           </Select>
         </div>
       </div>
+
+      {/* #3: partial load failure (some data loaded) reads as an error, not empty data. */}
+      {loadError && (
+        <div role="alert" className="mb-6 flex items-center justify-between gap-3 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span>Some PI data couldn't be loaded. Figures below may be incomplete; this is a load error, not empty data.</span>
+          <Button variant="outline" size="sm" onClick={retryAll} className="border-red-300 text-red-800 hover:bg-red-100 shrink-0">Retry</Button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 border-b">
