@@ -109,10 +109,12 @@ export default function VeritaQCAppPage() {
 
   const [lots, setLots] = useState<ControlLot[]>([]);
   const [loadingLots, setLoadingLots] = useState(true);
+  const [lotsError, setLotsError] = useState(false);
   const [selectedLotId, setSelectedLotId] = useState<number | null>(null);
 
   const [results, setResults] = useState<ResultRow[]>([]);
   const [loadingResults, setLoadingResults] = useState(false);
+  const [resultsError, setResultsError] = useState(false);
 
   // Entry form state
   const [formValue, setFormValue] = useState("");
@@ -131,6 +133,10 @@ export default function VeritaQCAppPage() {
   const [caExcludeFromBaseline, setCaExcludeFromBaseline] = useState(true);
   const [caFollowUp, setCaFollowUp] = useState("");
   const [caSubmitting, setCaSubmitting] = useState(false);
+  // Audit #13: after repeated CA-save failures, allow the tech to dismiss the
+  // (otherwise-forced) modal. The QC result is already persisted; the CA is
+  // resolvable from the Daily Review missing-CA action.
+  const [caFailCount, setCaFailCount] = useState(0);
 
   // Add-Control-Lot dialog state. Drives the 8-field form that creates a
   // new entry in qc_control_lots via POST /api/labs/:labId/qc/control-lots.
@@ -154,16 +160,19 @@ export default function VeritaQCAppPage() {
     setLoadingLots(true);
     try {
       const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/qc/lots`, { headers: authHeaders() });
-      if (res.ok) {
-        const data = await res.json();
-        setLots(data.lots || []);
-        if (data.lots && data.lots.length > 0 && selectedLotId === null) {
-          const firstActive = data.lots.find((l: ControlLot) => l.status === "active") || data.lots[0];
-          setSelectedLotId(firstActive.id);
-        }
+      if (!res.ok) throw new Error(`lots ${res.status}`);
+      const data = await res.json();
+      setLots(data.lots || []);
+      if (data.lots && data.lots.length > 0 && selectedLotId === null) {
+        const firstActive = data.lots.find((l: ControlLot) => l.status === "active") || data.lots[0];
+        setSelectedLotId(firstActive.id);
       }
+      setLotsError(false);
     } catch (err) {
+      // Audit #8: a failed lot load must not read as "no control lots yet"
+      // (which invites re-creating existing lots). Flag the error instead.
       console.error("Failed to load lots:", err);
+      setLotsError(true);
     } finally {
       setLoadingLots(false);
     }
@@ -172,17 +181,21 @@ export default function VeritaQCAppPage() {
   async function loadResults(lotId: number) {
     if (!activeLabId) return;
     setLoadingResults(true);
+    // Audit #3: clear stale rows before the fetch so a failed lot-switch does
+    // NOT leave the previous lot's results displayed under the new lot's header.
+    setResults([]);
     try {
       const res = await fetch(
         `${API_BASE}/api/labs/${activeLabId}/qc/results?control_lot_id=${lotId}&limit=20`,
         { headers: authHeaders() },
       );
-      if (res.ok) {
-        const data = await res.json();
-        setResults(data.results || []);
-      }
+      if (!res.ok) throw new Error(`results ${res.status}`);
+      const data = await res.json();
+      setResults(data.results || []);
+      setResultsError(false);
     } catch (err) {
       console.error("Failed to load results:", err);
+      setResultsError(true);
     } finally {
       setLoadingResults(false);
     }
@@ -243,6 +256,7 @@ export default function VeritaQCAppPage() {
         setCaActionTaken("");
         setCaExcludeFromBaseline(true);
         setCaFollowUp("");
+        setCaFailCount(0);
         setCaModalOpen(true);
       } else if (data.violations.length > 0) {
         toast({
@@ -281,15 +295,18 @@ export default function VeritaQCAppPage() {
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         toast({ title: err.error || "Corrective action save failed", variant: "destructive" });
+        setCaFailCount(c => c + 1);
         return;
       }
       toast({ title: "Corrective action filed" });
       setCaModalOpen(false);
       setCaForResultId(null);
       setCaForViolation(null);
+      setCaFailCount(0);
       if (selectedLotId) await loadResults(selectedLotId);
     } catch (err: any) {
       toast({ title: err.message || "Save failed", variant: "destructive" });
+      setCaFailCount(c => c + 1);
     } finally {
       setCaSubmitting(false);
     }
@@ -495,6 +512,14 @@ export default function VeritaQCAppPage() {
 
       {loadingLots ? (
         <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">Loading control lots...</CardContent></Card>
+      ) : lotsError ? (
+        <Card>
+          <CardContent className="py-8 text-center">
+            <p className="font-semibold text-foreground mb-1">Couldn't load control lots</p>
+            <p className="text-sm text-muted-foreground mb-3 max-w-md mx-auto">Something went wrong loading this lab's control lots. Your lots were not deleted. Check your connection and try again.</p>
+            <Button size="sm" variant="outline" onClick={loadLots}>Retry</Button>
+          </CardContent>
+        </Card>
       ) : lots.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center">
@@ -548,6 +573,9 @@ export default function VeritaQCAppPage() {
                     <div>
                       <span className="font-medium text-foreground">Exp:</span>{" "}
                       {selectedLot.expiration_date || "n/a"}
+                      {selectedLot.expiration_date && selectedLot.expiration_date < todayIsoDate() && (
+                        <span className="ml-1 inline-flex items-center rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">EXPIRED</span>
+                      )}
                     </div>
                   </div>
                   <div className="mt-3 flex items-center gap-2">
@@ -598,6 +626,16 @@ export default function VeritaQCAppPage() {
                 <p className="mb-3 text-xs text-amber-700 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5">
                   Read-only access on this lab. Submit is disabled until the
                   subscription is renewed.
+                </p>
+              )}
+              {selectedLot && selectedLot.status !== "active" && (
+                <p className="mb-3 text-xs text-red-700 bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5">
+                  This control lot is {selectedLot.status}. Select an active lot before logging QC.
+                </p>
+              )}
+              {selectedLot && selectedLot.status === "active" && selectedLot.expiration_date && selectedLot.expiration_date < todayIsoDate() && (
+                <p className="mb-3 text-xs text-red-700 bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5">
+                  This control lot expired on {selectedLot.expiration_date}. Confirm this is intended before logging QC.
                 </p>
               )}
               <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -657,7 +695,7 @@ export default function VeritaQCAppPage() {
                   />
                 </div>
                 <div className="sm:col-span-2 flex justify-end">
-                  <Button type="submit" disabled={submitting || isReadOnly}>
+                  <Button type="submit" disabled={submitting || isReadOnly || (!!selectedLot && selectedLot.status !== "active")}>
                     {submitting ? "Submitting..." : "Submit result"}
                   </Button>
                 </div>
@@ -672,6 +710,12 @@ export default function VeritaQCAppPage() {
             <CardContent>
               {loadingResults ? (
                 <p className="text-sm text-muted-foreground">Loading...</p>
+              ) : resultsError ? (
+                <div className="text-sm">
+                  <p className="text-destructive font-medium mb-1">Couldn't load results for this lot.</p>
+                  <p className="text-xs text-muted-foreground mb-2">This does not mean there are none. Check your connection and retry.</p>
+                  <Button size="sm" variant="outline" onClick={() => selectedLotId && loadResults(selectedLotId)}>Retry</Button>
+                </div>
               ) : results.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No results logged for this lot yet.</p>
               ) : (
@@ -729,7 +773,13 @@ export default function VeritaQCAppPage() {
         </>
       )}
 
-      <Dialog open={caModalOpen} onOpenChange={(open) => { if (!open && caForResultId) return; setCaModalOpen(open); }}>
+      <Dialog open={caModalOpen} onOpenChange={(open) => {
+        // Audit #13: normally forced (cannot close without a CA), but after
+        // repeated save failures the tech can dismiss. The QC result is already
+        // persisted; the CA is resolvable from the Daily Review missing-CA action.
+        if (!open && caForResultId && caFailCount < 2) return;
+        setCaModalOpen(open);
+      }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -782,7 +832,21 @@ export default function VeritaQCAppPage() {
               </span>
             </label>
           </div>
+          {caFailCount >= 1 && (
+            <p className="text-xs text-amber-700">
+              Having trouble saving? The result is already logged. You can close and file the corrective action later from the Daily Review.
+            </p>
+          )}
           <div className="flex justify-end gap-2">
+            {caFailCount >= 2 && (
+              <Button
+                variant="outline"
+                onClick={() => { setCaModalOpen(false); setCaForResultId(null); setCaForViolation(null); }}
+                disabled={caSubmitting}
+              >
+                Close, resolve later
+              </Button>
+            )}
             <Button onClick={handleCaSubmit} disabled={caSubmitting || !caActionTaken.trim()}>
               {caSubmitting ? "Saving..." : "File corrective action"}
             </Button>
