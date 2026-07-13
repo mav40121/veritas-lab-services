@@ -12,7 +12,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  AlertTriangle, CheckCircle2, Lock, ClipboardList, ChevronRight, FileDown,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import {
+  AlertTriangle, CheckCircle2, Lock, ClipboardList, ChevronRight, FileDown, RefreshCw,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -106,7 +110,44 @@ export default function VeritaQCDailyReviewPage() {
   const [dateFilter, setDateFilter] = useState<DateFilter>("30d");
   const [results, setResults] = useState<RecentResult[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [escalatingCaId, setEscalatingCaId] = useState<number | null>(null);
+
+  // Audit #11: file a corrective action directly from the daily review for a
+  // rejection flagged 'missing', instead of the review being a read-only
+  // dead-end. Bound to the offending qc_result_id + its rejection violation.
+  const [caTarget, setCaTarget] = useState<{ resultId: number; violationId: number | null; label: string } | null>(null);
+  const [caText, setCaText] = useState("");
+  const [filingCa, setFilingCa] = useState(false);
+
+  async function submitCa() {
+    if (!activeLabId || !caTarget || !caText.trim()) return;
+    setFilingCa(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/qc/corrective-actions`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          qc_result_id: caTarget.resultId,
+          qc_rule_violation_id: caTarget.violationId,
+          action_taken: caText.trim(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast({ title: "Could not file corrective action", description: data.error || "Try again.", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Corrective action filed" });
+      setCaTarget(null);
+      setCaText("");
+      await load();
+    } catch {
+      toast({ title: "Could not file corrective action", description: "Network error.", variant: "destructive" });
+    } finally {
+      setFilingCa(false);
+    }
+  }
 
   // Wave A7: escalate a filed corrective action into a VeritaResponse finding
   // stub. The QC corrective action documents the in-the-moment fix; the
@@ -160,12 +201,16 @@ export default function VeritaQCDailyReviewPage() {
         `${API_BASE}/api/labs/${activeLabId}/qc/recent?${params.toString()}`,
         { headers: authHeaders() },
       );
-      if (res.ok) {
-        const data = await res.json();
-        setResults(data.results || []);
-      }
+      if (!res.ok) throw new Error(`Failed to load QC (${res.status})`);
+      const data = await res.json();
+      setResults(data.results || []);
+      setLoadError(false);
     } catch (err) {
+      // Audit #2: a failed load must NOT render the green "all clear" empty
+      // state (which would tell a director QC is in control when it never
+      // loaded). Flag the error so the list shows a distinct error card.
       console.error("Failed to load recent QC:", err);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -369,6 +414,19 @@ export default function VeritaQCDailyReviewPage() {
 
       {loading ? (
         <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">Loading...</CardContent></Card>
+      ) : loadError ? (
+        <Card>
+          <CardContent className="py-8 text-center">
+            <AlertTriangle className="mx-auto h-10 w-10 text-destructive mb-2" />
+            <p className="font-semibold text-foreground mb-1">Couldn't load QC results</p>
+            <p className="text-sm text-muted-foreground mb-3 max-w-md mx-auto">
+              Something went wrong loading this lab's QC. This does not mean QC is in control. Check your connection and try again.
+            </p>
+            <Button size="sm" variant="outline" onClick={load}>
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />Retry
+            </Button>
+          </CardContent>
+        </Card>
       ) : groups.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center">
@@ -456,9 +514,25 @@ export default function VeritaQCDailyReviewPage() {
                                 );
                               })()
                             ) : needsCA ? (
-                              <span className="inline-flex items-center gap-1 text-red-700 font-medium">
-                                <AlertTriangle className="h-3 w-3" /> missing
-                              </span>
+                              <div className="flex flex-col items-start gap-1">
+                                <span className="inline-flex items-center gap-1 text-red-700 font-medium">
+                                  <AlertTriangle className="h-3 w-3" /> missing
+                                </span>
+                                {hasPlanAccess && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-2 text-xs text-teal-700 hover:text-teal-800"
+                                    onClick={() => {
+                                      const rej = r.violations.find(v => v.severity === "rejection");
+                                      setCaText("");
+                                      setCaTarget({ resultId: r.id, violationId: rej?.id ?? null, label: `${r.result_date}, value ${r.result_value}` });
+                                    }}
+                                  >
+                                    File corrective action
+                                  </Button>
+                                )}
+                              </div>
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
@@ -548,9 +622,16 @@ export default function VeritaQCDailyReviewPage() {
               <FileDown className="h-4 w-4 mr-1" />
               {downloadingPdf ? "Generating..." : "Download monthly PDF"}
             </Button>
-            <Button onClick={handleFileAttestation} disabled={!reviewLotId || filing}>
-              {filing ? "Filing..." : "File attestation"}
-            </Button>
+            <ConfirmDialog
+              title="File monthly attestation?"
+              message={`Confirm you have reviewed the monthly QC PDF for this lot and period and documented corrective actions for every out-of-control run.${missingCA > 0 ? ` Note: ${missingCA} rejection(s) in the current view still have no corrective action.` : ""}`}
+              confirmLabel="File attestation"
+              onConfirm={handleFileAttestation}
+            >
+              <Button disabled={!reviewLotId || filing}>
+                {filing ? "Filing..." : "File attestation"}
+              </Button>
+            </ConfirmDialog>
           </div>
 
           {pastReviews.length > 0 && (
@@ -582,6 +663,33 @@ export default function VeritaQCDailyReviewPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Audit #11: file a corrective action directly from the daily review. */}
+      <Dialog open={!!caTarget} onOpenChange={(o) => { if (!o) setCaTarget(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>File corrective action</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            {caTarget && (
+              <p className="text-xs text-muted-foreground">For the rejected run: {caTarget.label}.</p>
+            )}
+            <textarea
+              value={caText}
+              onChange={(e) => setCaText(e.target.value)}
+              rows={4}
+              placeholder="Describe the corrective action taken (root cause, action, result)."
+              className="w-full text-sm rounded border border-input bg-background px-3 py-2"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCaTarget(null)} disabled={filingCa}>Cancel</Button>
+            <Button onClick={submitCa} disabled={filingCa || !caText.trim()}>
+              {filingCa ? "Filing..." : "File corrective action"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
