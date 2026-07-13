@@ -2664,7 +2664,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const vals = history.map(r => r.result_value);
     const ids = history.map(r => r.id);
     const sdis = vals.map(v => (v - mean) / sd);
-    const i = sdis.length - 1;
+    // Audit HIGH #1 (2026-07-12): anchor evaluation to the ACTUAL just-entered
+    // result, not the last date-ordered element. history is ordered by
+    // result_date ASC, so a back-dated / out-of-order entry does NOT sort last;
+    // `sdis.length - 1` would then score a different (usually in-control) result
+    // and let the entered flyer pass as clean (false accept) while it still
+    // enters the accepted baseline and poisons future SD. indexOf anchors every
+    // single-point + window rule to the point being entered.
+    const i = ids.indexOf(newResultId);
+    if (i < 0) return [];
     const z = sdis[i];
     const violations: WestgardViolation[] = [];
     if (Math.abs(z) > 3) {
@@ -2718,6 +2726,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { control_lot_id, result_value, result_date, instrument, run_time, comment } = req.body || {};
     if (!control_lot_id || result_value === undefined || result_value === null || !result_date) {
       return res.status(400).json({ error: "control_lot_id, result_value, result_date required" });
+    }
+    // Audit #7 (2026-07-12): validate value finiteness + ISO date server-side so a
+    // direct API call cannot inject Infinity/NaN or a non-ISO date, which would
+    // sort wrong under ORDER BY result_date and corrupt the Westgard windows (#1)
+    // and the PDF month-window string comparison.
+    if (!Number.isFinite(Number(result_value))) {
+      return res.status(400).json({ error: "result_value must be a finite number" });
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(result_date))) {
+      return res.status(400).json({ error: "result_date must be in YYYY-MM-DD format" });
     }
     const sqlite = (db as any).$client;
     const lot = sqlite.prepare(
@@ -3158,6 +3176,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT id, lab_id FROM qc_results WHERE id = ? AND lab_id = ?"
     ).get(Number(qc_result_id), req.scope.labId) as any;
     if (!result) return res.status(404).json({ error: "QC result not found in this lab" });
+    // Audit #5 (2026-07-12): qc_rule_violations has no lab_id column; it is only
+    // safe when reached via a lab-scoped qc_result_id. Verify the referenced
+    // violation belongs to THIS (already lab-validated) result before storing it,
+    // else a caller could link a foreign lab's violation id and leak its Westgard
+    // metadata (rule_code / severity / detail) into their own finding on escalate.
+    if (qc_rule_violation_id) {
+      const v = sqlite.prepare(
+        "SELECT 1 FROM qc_rule_violations WHERE id = ? AND qc_result_id = ?"
+      ).get(Number(qc_rule_violation_id), Number(qc_result_id));
+      if (!v) return res.status(400).json({ error: "Rule violation does not belong to this result" });
+    }
     const now = new Date().toISOString();
     let newId: number;
     try {
