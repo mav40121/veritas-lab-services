@@ -119,6 +119,8 @@ export default function VeritaCheckCoveragePage() {
   const labId = useActiveLabId();
   const [specialty, setSpecialty] = useState("all");
   const [status, setStatus] = useState("attention"); // attention = missing + review + covered-but-failed
+  const [mcSpecialty, setMcSpecialty] = useState("all");
+  const [mcStatus, setMcStatus] = useState("attention"); // attention = missing + documented FAIL
   const [sort, setSort] = useState<SortState>({ key: null, dir: "asc" }); // null = server order (specialty, status, analyte)
   const [mcSort, setMcSort] = useState<McSortState>({ key: null, dir: "asc" }); // null = default order (missing first, then studies on file)
   const openStudy = (id?: number | null) => { if (id) navigate(labRoute(`/study/${id}/results`)); };
@@ -226,6 +228,19 @@ export default function VeritaCheckCoveragePage() {
   );
 
   const specialties = useMemo(() => Array.from(new Set((data?.rows || []).map((r) => r.specialty))).sort(), [data]);
+  // Method-comparison rows carry no specialty of their own; derive it from the
+  // cal-ver rows (every map analyte appears there) so the MC section can filter
+  // by specialty the same way the Cal Ver / Linearity section does.
+  const analyteSpecialty = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of data?.rows || []) if (!m.has(r.analyte)) m.set(r.analyte, r.specialty);
+    return m;
+  }, [data]);
+  const mcSpecialties = useMemo(() => {
+    const set = new Set<string>();
+    for (const m of data?.methodComparisons || []) { const sp = analyteSpecialty.get(m.analyte); if (sp) set.add(sp); }
+    return Array.from(set).sort();
+  }, [data, analyteSpecialty]);
   const rows = useMemo(() => {
     let r = data?.rows || [];
     if (specialty !== "all") r = r.filter((x) => x.specialty === specialty);
@@ -245,7 +260,12 @@ export default function VeritaCheckCoveragePage() {
   }, [data, specialty, status, sort]);
 
   const mcRows = useMemo(() => {
-    const base = data?.methodComparisons || [];
+    let base = data?.methodComparisons || [];
+    if (mcSpecialty !== "all") base = base.filter((m) => analyteSpecialty.get(m.analyte) === mcSpecialty);
+    if (mcStatus === "attention") base = base.filter((m) => !m.hasStudy || isFail(m.verdict));
+    else if (mcStatus === "missing") base = base.filter((m) => !m.hasStudy);
+    else if (mcStatus === "onfile") base = base.filter((m) => m.hasStudy && !isFail(m.verdict));
+    else if (mcStatus === "fail") base = base.filter((m) => m.hasStudy && isFail(m.verdict));
     // Default (unsorted) order: gaps first, then studies on file — the original layout.
     if (!mcSort.key) return base.filter((m) => !m.hasStudy).concat(base.filter((m) => m.hasStudy));
     // Study column sorts by state: missing (0) < documented FAIL (1) < study on file (2).
@@ -264,7 +284,7 @@ export default function VeritaCheckCoveragePage() {
       if (c === 0) c = a.analyte.localeCompare(b.analyte); // stable tiebreak by analyte
       return mcSort.dir === "asc" ? c : -c;
     });
-  }, [data, mcSort]);
+  }, [data, mcSort, mcSpecialty, mcStatus, analyteSpecialty]);
 
   if (!labId) {
     return <div className="max-w-2xl mx-auto px-4 py-16 text-center text-muted-foreground">Pick a lab in the NavBar switcher to view coverage.</div>;
@@ -310,6 +330,26 @@ export default function VeritaCheckCoveragePage() {
         <h2 className="font-semibold">Method comparisons ({mcMissing} missing)</h2>
       </div>
       <p className="text-xs text-muted-foreground mb-3">An analyte reported off two or more instruments needs the instruments correlated.</p>
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <Select value={mcSpecialty} onValueChange={setMcSpecialty}>
+          <SelectTrigger className="w-52 h-8 text-xs" data-testid="mc-specialty-filter"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All specialties</SelectItem>
+            {mcSpecialties.map((sp) => <SelectItem key={sp} value={sp}>{sp}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={mcStatus} onValueChange={setMcStatus}>
+          <SelectTrigger className="w-48 h-8 text-xs" data-testid="mc-status-filter"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="attention">Needs attention</SelectItem>
+            <SelectItem value="all">All</SelectItem>
+            <SelectItem value="missing">Missing</SelectItem>
+            <SelectItem value="onfile">On file</SelectItem>
+            <SelectItem value="fail">Failed</SelectItem>
+          </SelectContent>
+        </Select>
+        <span className="text-xs text-muted-foreground">{mcRows.length} shown</span>
+      </div>
       <Card className="mb-8"><CardContent className="p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -320,6 +360,7 @@ export default function VeritaCheckCoveragePage() {
               <McSortTh label="Verdict" k="verdict" sort={mcSort} setSort={setMcSort} />
             </tr></thead>
             <tbody>
+              {mcRows.length === 0 && <tr><td colSpan={4} className="py-6 text-center text-muted-foreground text-sm">Nothing matches this filter.</td></tr>}
               {mcRows.map((m) => (
                 <tr key={m.analyte} className={`border-b border-border/60 ${m.hasStudy ? "cursor-pointer hover:bg-muted/40" : ""}`} onClick={() => openStudy(m.studyId)} title={m.hasStudy ? "Open study" : undefined}>
                   <td className="py-2 px-3">{m.analyte}</td>
