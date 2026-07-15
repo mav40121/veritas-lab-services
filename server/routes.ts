@@ -27420,14 +27420,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return { calver: false, type: "noncal" };
     }
 
-    // Optional clean slate: delete this tool's own seeded/repaired studies (the
-    // COVERAGE_SEED marker) so a re-run rebuilds the study set from scratch (e.g.
-    // after tuning the gap target). Exemptions are left in place: they are
-    // deterministic and idempotent, and re-clearing them here would race the
-    // already-loaded in-memory combo flags. Studies-only reset avoids that.
-    let resetDeleted = 0;
+    // Optional clean slate: soft-archive this tool's own seeded/repaired studies
+    // (the COVERAGE_SEED marker) so a re-run rebuilds the study set from scratch
+    // (e.g. after tuning the gap target). Archive, not DELETE: repaired-in-place
+    // studies are pre-existing rows other tables reference, so a hard delete hits
+    // a FK constraint; archived_at also removes them from coverage (the matcher
+    // filters archived_at IS NULL) and is reversible. Exemptions are left in
+    // place: deterministic/idempotent, and re-clearing them here would race the
+    // already-loaded in-memory combo flags.
+    let resetArchived = 0;
     if (reset && !dryRun) {
-      resetDeleted = (sqlite.prepare("DELETE FROM studies WHERE lab_id = ? AND comment = ?").run(lid, MARK) as any).changes || 0;
+      resetArchived = (sqlite.prepare(
+        "UPDATE studies SET archived_at = ? WHERE lab_id = ? AND comment = ? AND archived_at IS NULL"
+      ).run(now, lid, MARK) as any).changes || 0;
     }
     const instLabel = (i: { instrument_name: string; nickname: string | null } | undefined) =>
       i ? (i.nickname ? `${i.instrument_name} (${i.nickname})` : i.instrument_name) : "";
@@ -27475,7 +27480,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const calGapEvery = Math.max(2, Math.round(1 / Math.max(0.01, 1 - calPct)));
     const calGapAnalytes = new Set(calverAnalytes.filter((_, i) => i % calGapEvery === calGapEvery - 1));
     const existsCalSeed = sqlite.prepare(
-      `SELECT 1 FROM studies WHERE lab_id = ? AND study_type = 'cal_ver' AND comment = ? AND coverage_analyte = ? AND instrument = ? LIMIT 1`
+      `SELECT 1 FROM studies WHERE lab_id = ? AND study_type = 'cal_ver' AND comment = ? AND coverage_analyte = ? AND instrument = ? AND archived_at IS NULL LIMIT 1`
     );
     let calSeeded = 0, calGaps = 0, calSkipped = 0;
     for (const cb of calverCombos) {
@@ -27549,7 +27554,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const after = dryRun ? null : computeCoverageForLab(sqlite, lid).summary;
     res.json({
-      ok: true, dryRun: !!dryRun, labId: lid, labName: lab.lab_name, resetDeleted,
+      ok: true, dryRun: !!dryRun, labId: lid, labName: lab.lab_name, resetArchived,
       exemptions: { waived: exemptWaived, noncal: exemptNoncal, alreadySet: exemptSkipped },
       calVer: { candidates: calverCombos.length, gapAnalytes: calGapAnalytes.size, seeded: calSeeded, gaps: calGaps, skipped: calSkipped },
       methodComparison: { needed: mcAnalytes.length, repaired: mcRepaired, seeded: mcSeeded, gaps: mcGaps, skipped: mcSkipped },
