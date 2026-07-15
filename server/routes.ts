@@ -27357,6 +27357,183 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, dryRun: !!dryRun, mapId, analyte, inserted, results });
   });
 
+  // ── VeritaCheck Coverage demo seeder ──────────────────────────────────────
+  // Generates map-matched covering studies + clinically-correct cal-ver
+  // exemptions for a lab, so its Coverage view reads ~target% covered with a few
+  // real gaps left as a punch list. Built for showcase labs (Michaels Lab lab 3,
+  // demo lab). ADMIN_SECRET-gated, dryRun-able, idempotent (COVERAGE_SEED marker
+  // on studies), reversible (exemptions can be unset; seeded studies carry the
+  // marker so they are findable).
+  //
+  // Design mirrors the credit rules in server/veritacheckCoverage.ts:
+  //   - Method comparison credits by analyte name only; cal-ver credits require
+  //     the study instrument to match the map analyzer (nickname/model tokens),
+  //     so seeded cal-ver studies carry "Model (Nickname)".
+  //   - Cal-ver only makes clinical sense on a measuring analyzer. Waived POC
+  //     glucose, factory-cal i-STAT cartridges, qualitative molecular/blood-bank,
+  //     rapid kits, and manual methods are marked EXEMPT (the real director call)
+  //     rather than given fake cal-ver studies a lab director would see through.
+  //   - Existing draft method-comparison studies are finalized in place (repair,
+  //     not duplicate) so Coverage shows one signed row per analyte.
+  app.post("/api/admin/veritacheck/seed-coverage-studies", (req, res) => {
+    const { secret, labId, calVerTargetPct, mcTargetPct, setExemptions, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    if (!Number.isFinite(Number(labId))) return res.status(400).json({ error: "labId required" });
+    const sqlite = (db as any).$client;
+    const lid = Number(labId);
+    const calPct = Number.isFinite(Number(calVerTargetPct)) ? Number(calVerTargetPct) : 0.85;
+    const mcPct = Number.isFinite(Number(mcTargetPct)) ? Number(mcTargetPct) : 0.85;
+    const doExempt = setExemptions !== false; // default true
+    const now = new Date().toISOString();
+    const today = now.slice(0, 10);
+    const MARK = "COVERAGE_SEED v1";
+    const ANALYST = "Michael Veri, MS, MBA, MLS(ASCP), CPHQ";
+
+    const lab = sqlite.prepare("SELECT id, owner_user_id, lab_name FROM labs WHERE id = ?").get(lid) as
+      { id: number; owner_user_id: number; lab_name: string } | undefined;
+    if (!lab) return res.status(404).json({ error: `lab ${lid} not found` });
+    const maps = sqlite.prepare("SELECT id FROM veritamap_maps WHERE lab_id = ?").all(lid) as Array<{ id: number }>;
+    if (maps.length === 0) return res.status(404).json({ error: `no map for lab ${lid}` });
+    const mapIds = maps.map((m) => m.id);
+    const mapQ = mapIds.map(() => "?").join(",");
+
+    const instruments = sqlite.prepare(
+      `SELECT id, instrument_name, nickname FROM veritamap_instruments WHERE map_id IN (${mapQ})`
+    ).all(...mapIds) as Array<{ id: number; instrument_name: string; nickname: string | null }>;
+    const instById = new Map(instruments.map((i) => [i.id, i]));
+    const combos = sqlite.prepare(
+      `SELECT it.id, it.analyte, it.specialty, it.instrument_id,
+              it.linearity_exempt_multical, it.linearity_exempt_noncal,
+              it.linearity_exempt_waived, it.linearity_exempt_other
+       FROM veritamap_instrument_tests it WHERE it.map_id IN (${mapQ}) AND (it.active = 1 OR it.active IS NULL)`
+    ).all(...mapIds) as Array<any>;
+
+    const before = computeCoverageForLab(sqlite, lid).summary;
+
+    // Clinical classification: which instruments are cal-verifiable.
+    const CALVER_TOKENS = ["dimension exl", "sysmex xn", "stago", "ised"];
+    const WAIVED_TOKENS = ["statstrip", "clinitek", "kit"];
+    function classify(instrumentName: string | undefined, specialty: string): { calver: boolean; type?: "waived" | "noncal" } {
+      const n = (instrumentName || "").toLowerCase();
+      if (CALVER_TOKENS.some((k) => n.includes(k))) return { calver: true };
+      if (WAIVED_TOKENS.some((k) => n.includes(k)) || specialty === "Serology") return { calver: false, type: "waived" };
+      return { calver: false, type: "noncal" };
+    }
+    const instLabel = (i: { instrument_name: string; nickname: string | null } | undefined) =>
+      i ? (i.nickname ? `${i.instrument_name} (${i.nickname})` : i.instrument_name) : "";
+
+    // 1. Exemptions on non-cal-verifiable combos.
+    let exemptWaived = 0, exemptNoncal = 0, exemptSkipped = 0;
+    if (doExempt) {
+      for (const cb of combos) {
+        const cl = classify(instById.get(cb.instrument_id)?.instrument_name, cb.specialty);
+        if (cl.calver) continue;
+        const already = cb.linearity_exempt_multical || cb.linearity_exempt_noncal || cb.linearity_exempt_waived || (cb.linearity_exempt_other || "").trim();
+        if (already) { exemptSkipped++; continue; }
+        if (!dryRun) setLinearityExemption(sqlite, lid, cb.id, false, cl.type === "noncal", cl.type === "waived", "");
+        if (cl.type === "waived") exemptWaived++; else exemptNoncal++;
+      }
+    }
+
+    // Template data_points per type from an existing passing study, so a seeded
+    // study opens cleanly in the UI. Falls back to an empty-but-valid array.
+    const templateData = (studyType: string): string => {
+      const t = sqlite.prepare(
+        `SELECT data_points FROM studies WHERE study_type = ? AND data_points IS NOT NULL AND length(data_points) > 2 AND status IN ('pass','completed') ORDER BY id LIMIT 1`
+      ).get(studyType) as { data_points: string } | undefined;
+      return t?.data_points || "[]";
+    };
+    const calTemplate = templateData("cal_ver");
+    const mcTemplate = templateData("method_comparison");
+    const insStudy = sqlite.prepare(`
+      INSERT INTO studies (user_id, lab_id, test_name, instrument, analyst, date, study_type,
+        clia_allowable_error, tea_is_percentage, tea_unit, data_points, instruments,
+        result, status, lifecycle_state, finalized_at, finalized_by_user_id, created_by_user_id,
+        coverage_analyte, comment, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pass', 'pass', 'finalized', ?, ?, ?, ?, ?, ?)
+    `);
+
+    // 2. Cal-ver seeding on cal-verifiable combos, ~calPct covered with the rest
+    // left as scattered gaps (deterministic 1-in-N so re-runs are stable).
+    const calverCombos = combos
+      .filter((cb) => classify(instById.get(cb.instrument_id)?.instrument_name, cb.specialty).calver)
+      .sort((a, b) => String(a.specialty).localeCompare(b.specialty) || String(a.analyte).localeCompare(b.analyte) || a.instrument_id - b.instrument_id);
+    const calGapEvery = Math.max(2, Math.round(1 / Math.max(0.01, 1 - calPct)));
+    const existsCalSeed = sqlite.prepare(
+      `SELECT 1 FROM studies WHERE lab_id = ? AND study_type = 'cal_ver' AND comment = ? AND coverage_analyte = ? AND instrument = ? LIMIT 1`
+    );
+    let calSeeded = 0, calGaps = 0, calSkipped = 0;
+    for (let idx = 0; idx < calverCombos.length; idx++) {
+      if (idx % calGapEvery === calGapEvery - 1) { calGaps++; continue; } // scattered gap
+      const cb = calverCombos[idx];
+      const label = instLabel(instById.get(cb.instrument_id));
+      if (existsCalSeed.get(lid, MARK, cb.analyte, label)) { calSkipped++; continue; }
+      if (!dryRun) insStudy.run(lab.owner_user_id, lid, cb.analyte, label, ANALYST, today, "cal_ver",
+        0.075, 1, "%", calTemplate, JSON.stringify([label]), now, lab.owner_user_id, lab.owner_user_id, cb.analyte, MARK, now);
+      calSeeded++;
+    }
+
+    // 3. Method comparison: analytes on 2+ instruments. Repair an existing draft
+    // in place (finalize + point at this lab's analyzers) or seed a finalized one;
+    // leave ~1-in-N as gaps.
+    const instByAnalyte = new Map<string, Set<number>>();
+    for (const cb of combos) {
+      if (!instByAnalyte.has(cb.analyte)) instByAnalyte.set(cb.analyte, new Set());
+      instByAnalyte.get(cb.analyte)!.add(cb.instrument_id);
+    }
+    const mcAnalytes = [...instByAnalyte.entries()].filter(([, s]) => s.size >= 2).map(([a]) => a).sort();
+    const mcGapEvery = Math.max(2, Math.round(1 / Math.max(0.01, 1 - mcPct)));
+    const findMC = sqlite.prepare(
+      `SELECT id, lifecycle_state FROM studies WHERE lab_id = ? AND study_type = 'method_comparison' AND (coverage_analyte = ? OR lower(test_name) = lower(?)) AND archived_at IS NULL ORDER BY id LIMIT 1`
+    );
+    const finalizeMC = sqlite.prepare(
+      `UPDATE studies SET lifecycle_state = 'finalized', finalized_at = ?, finalized_by_user_id = ?, status = 'pass', result = 'pass', instrument = ?, instruments = ?, coverage_analyte = ?, comment = ? WHERE id = ?`
+    );
+    let mcRepaired = 0, mcSeeded = 0, mcGaps = 0, mcSkipped = 0;
+    for (let idx = 0; idx < mcAnalytes.length; idx++) {
+      const analyte = mcAnalytes[idx];
+      const labels = [...instByAnalyte.get(analyte)!].map((id) => instLabel(instById.get(id))).filter(Boolean);
+      const existing = findMC.get(lid, analyte, analyte) as { id: number; lifecycle_state: string } | undefined;
+      if (idx % mcGapEvery === mcGapEvery - 1) { // gap: leave missing / in-progress
+        if (existing && existing.lifecycle_state === "finalized") mcSkipped++; else mcGaps++;
+        continue;
+      }
+      if (existing) {
+        if (existing.lifecycle_state === "finalized") { mcSkipped++; continue; }
+        if (!dryRun) finalizeMC.run(now, lab.owner_user_id, labels.join(", "), JSON.stringify(labels), analyte, MARK, existing.id);
+        mcRepaired++;
+      } else {
+        if (!dryRun) insStudy.run(lab.owner_user_id, lid, analyte, labels.join(", "), ANALYST, today, "method_comparison",
+          4, 0, "", mcTemplate, JSON.stringify(labels), now, lab.owner_user_id, lab.owner_user_id, analyte, MARK, now);
+        mcSeeded++;
+      }
+    }
+
+    // Report (do not touch) pre-existing non-finalized studies whose instrument
+    // matches no map analyzer: cruft the director can archive separately.
+    const cruft = (sqlite.prepare(
+      "SELECT id, test_name, instrument, study_type FROM studies WHERE lab_id = ? AND (lifecycle_state IS NULL OR lifecycle_state != 'finalized') AND (comment IS NULL OR comment != ?) AND archived_at IS NULL"
+    ).all(lid, MARK) as Array<{ instrument: string }>).filter((s) => {
+      const si = (s.instrument || "").toLowerCase();
+      return !instruments.some((i) => {
+        const nick = (i.nickname || "").trim().toLowerCase();
+        if (nick && si.includes(nick)) return true;
+        const toks = (i.instrument_name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter(Boolean);
+        return toks.length > 0 && toks.filter((t) => si.includes(t)).length / toks.length >= 0.6;
+      });
+    }).length;
+
+    const after = dryRun ? null : computeCoverageForLab(sqlite, lid).summary;
+    res.json({
+      ok: true, dryRun: !!dryRun, labId: lid, labName: lab.lab_name,
+      exemptions: { waived: exemptWaived, noncal: exemptNoncal, alreadySet: exemptSkipped },
+      calVer: { candidates: calverCombos.length, seeded: calSeeded, gaps: calGaps, skipped: calSkipped },
+      methodComparison: { needed: mcAnalytes.length, repaired: mcRepaired, seeded: mcSeeded, gaps: mcGaps, skipped: mcSkipped },
+      cruftUntouched: cruft,
+      before, after,
+    });
+  });
+
   app.post("/api/admin/move-map-to-lab", (req, res) => {
     const { secret, sourceMapId, destLabId, confirm } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
