@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Study } from "@shared/schema";
-import { PlusCircle, FileText, Trash2, CheckCircle2, XCircle, FlaskConical, Download, Edit2, FileEdit, Archive, GitBranch, FolderOpen, ListChecks } from "lucide-react";
+import { PlusCircle, FileText, Trash2, CheckCircle2, XCircle, FlaskConical, Download, Edit2, FileEdit, Archive, GitBranch, FolderOpen } from "lucide-react";
 import { AddToSignoffGroup } from "@/components/AddToSignoffGroup";
 import { useToast } from "@/hooks/use-toast";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
@@ -22,6 +22,7 @@ import { ComplianceScoreTile } from "@/components/ComplianceScoreTile";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
+import { CoverageSummaryCard } from "@/components/CoverageSummaryCard";
 
 export default function Dashboard() {
   const labRoute = useLabRoute();
@@ -152,12 +153,6 @@ export default function Dashboard() {
               Sign-off Groups
             </Link>
           </Button>
-          <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-1">
-            <Link href={labRoute("/veritacheck/coverage")}>
-              <ListChecks size={13} />
-              Coverage
-            </Link>
-          </Button>
           {readOnly ? (
             <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled title="Resubscribe to add new records">
               <PlusCircle size={14} className="mr-1.5" />
@@ -186,6 +181,11 @@ export default function Dashboard() {
           "The medical director or designee signs; download the PDF and file with your CLIA records.",
         ]}
       />
+
+      {/* Coverage summary: the single most valuable VeritaCheck view (map
+          requires vs. studies on file) promoted from a buried toolbar button
+          to a live headline card. Self-hides until the lab has a map. */}
+      <CoverageSummaryCard className="mb-6" />
 
       {/* Wave J PR J4 (2026-06-06): headline compliance score for the lab.
           Aggregates the five tile signals into a single number with a
