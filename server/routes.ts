@@ -27376,7 +27376,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   //   - Existing draft method-comparison studies are finalized in place (repair,
   //     not duplicate) so Coverage shows one signed row per analyte.
   app.post("/api/admin/veritacheck/seed-coverage-studies", (req, res) => {
-    const { secret, labId, calVerTargetPct, mcTargetPct, setExemptions, dryRun } = req.body || {};
+    const { secret, labId, calVerTargetPct, mcTargetPct, setExemptions, reset, dryRun } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
     if (!Number.isFinite(Number(labId))) return res.status(400).json({ error: "labId required" });
     const sqlite = (db as any).$client;
@@ -27419,6 +27419,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (WAIVED_TOKENS.some((k) => n.includes(k)) || specialty === "Serology") return { calver: false, type: "waived" };
       return { calver: false, type: "noncal" };
     }
+
+    // Optional clean slate: delete this tool's own seeded/repaired studies (the
+    // COVERAGE_SEED marker) so a re-run rebuilds the study set from scratch (e.g.
+    // after tuning the gap target). Exemptions are left in place: they are
+    // deterministic and idempotent, and re-clearing them here would race the
+    // already-loaded in-memory combo flags. Studies-only reset avoids that.
+    let resetDeleted = 0;
+    if (reset && !dryRun) {
+      resetDeleted = (sqlite.prepare("DELETE FROM studies WHERE lab_id = ? AND comment = ?").run(lid, MARK) as any).changes || 0;
+    }
     const instLabel = (i: { instrument_name: string; nickname: string | null } | undefined) =>
       i ? (i.nickname ? `${i.instrument_name} (${i.nickname})` : i.instrument_name) : "";
 
@@ -27453,19 +27463,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pass', 'pass', 'finalized', ?, ?, ?, ?, ?, ?)
     `);
 
-    // 2. Cal-ver seeding on cal-verifiable combos, ~calPct covered with the rest
-    // left as scattered gaps (deterministic 1-in-N so re-runs are stable).
+    // 2. Cal-ver seeding on cal-verifiable combos. Gaps are chosen at the ANALYTE
+    // level, not per combo: because studyMatchesInstrument credits on shared model
+    // tokens, a study on one unit (Bert) also covers its twin (Ernie), so a
+    // per-combo gap gets silently back-filled by the sibling. Skipping every N-th
+    // cal-verifiable analyte (all of its combos) yields a real, visible gap.
     const calverCombos = combos
       .filter((cb) => classify(instById.get(cb.instrument_id)?.instrument_name, cb.specialty).calver)
       .sort((a, b) => String(a.specialty).localeCompare(b.specialty) || String(a.analyte).localeCompare(b.analyte) || a.instrument_id - b.instrument_id);
+    const calverAnalytes = [...new Set(calverCombos.map((cb) => String(cb.analyte)))].sort();
     const calGapEvery = Math.max(2, Math.round(1 / Math.max(0.01, 1 - calPct)));
+    const calGapAnalytes = new Set(calverAnalytes.filter((_, i) => i % calGapEvery === calGapEvery - 1));
     const existsCalSeed = sqlite.prepare(
       `SELECT 1 FROM studies WHERE lab_id = ? AND study_type = 'cal_ver' AND comment = ? AND coverage_analyte = ? AND instrument = ? LIMIT 1`
     );
     let calSeeded = 0, calGaps = 0, calSkipped = 0;
-    for (let idx = 0; idx < calverCombos.length; idx++) {
-      if (idx % calGapEvery === calGapEvery - 1) { calGaps++; continue; } // scattered gap
-      const cb = calverCombos[idx];
+    for (const cb of calverCombos) {
+      if (calGapAnalytes.has(String(cb.analyte))) { calGaps++; continue; } // whole-analyte gap
       const label = instLabel(instById.get(cb.instrument_id));
       if (existsCalSeed.get(lid, MARK, cb.analyte, label)) { calSkipped++; continue; }
       if (!dryRun) insStudy.run(lab.owner_user_id, lid, cb.analyte, label, ANALYST, today, "cal_ver",
@@ -27535,9 +27549,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const after = dryRun ? null : computeCoverageForLab(sqlite, lid).summary;
     res.json({
-      ok: true, dryRun: !!dryRun, labId: lid, labName: lab.lab_name,
+      ok: true, dryRun: !!dryRun, labId: lid, labName: lab.lab_name, resetDeleted,
       exemptions: { waived: exemptWaived, noncal: exemptNoncal, alreadySet: exemptSkipped },
-      calVer: { candidates: calverCombos.length, seeded: calSeeded, gaps: calGaps, skipped: calSkipped },
+      calVer: { candidates: calverCombos.length, gapAnalytes: calGapAnalytes.size, seeded: calSeeded, gaps: calGaps, skipped: calSkipped },
       methodComparison: { needed: mcAnalytes.length, repaired: mcRepaired, seeded: mcSeeded, gaps: mcGaps, skipped: mcSkipped },
       cruftUntouched: cruft,
       before, after,
