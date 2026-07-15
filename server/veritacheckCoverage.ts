@@ -88,7 +88,7 @@ function instrTokens(s: string): Set<string> {
 function normAnalyte(s: string): string {
   return (s || "").toLowerCase().replace(/\([^)]*\)/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 }
-function analyteMatch(a: string, b: string): boolean {
+export function analyteMatch(a: string, b: string): boolean {
   const na = normAnalyte(a), nb = normAnalyte(b);
   if (!na || !nb) return false;
   if (na === nb) return true;
