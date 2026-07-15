@@ -15,7 +15,7 @@ import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
-import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution } from "./veritacheckCoverage";
+import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution, analyteMatch } from "./veritacheckCoverage";
 import { evaluateManualDiff } from "./rumke";
 import { auditVeritamapConsistency } from "./veritamapConsistency";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
@@ -27483,8 +27483,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     const mcAnalytes = [...instByAnalyte.entries()].filter(([, s]) => s.size >= 2).map(([a]) => a).sort();
     const mcGapEvery = Math.max(2, Math.round(1 / Math.max(0.01, 1 - mcPct)));
-    const findMC = sqlite.prepare(
-      `SELECT id, lifecycle_state FROM studies WHERE lab_id = ? AND study_type = 'method_comparison' AND (coverage_analyte = ? OR lower(test_name) = lower(?)) AND archived_at IS NULL ORDER BY id LIMIT 1`
+    // Match existing MC studies with the SAME matcher Coverage uses (analyteMatch:
+    // exact/substring/synonym), not an exact SQL string, so a draft named "AST" is
+    // repaired in place for map analyte "Aspartate aminotransferase (AST) (SGOT)"
+    // instead of leaving an unsigned shadow. Lowest-id first mirrors matcher .find;
+    // a used-id guard stops one study being claimed by two analytes.
+    const labMcStudies = sqlite.prepare(
+      `SELECT id, test_name, coverage_analyte, lifecycle_state FROM studies WHERE lab_id = ? AND study_type = 'method_comparison' AND archived_at IS NULL ORDER BY id`
+    ).all(lid) as Array<{ id: number; test_name: string; coverage_analyte: string | null; lifecycle_state: string }>;
+    const usedMc = new Set<number>();
+    const findExistingMc = (analyte: string) => labMcStudies.find(
+      (s) => !usedMc.has(s.id) && ((!!s.coverage_analyte && s.coverage_analyte === analyte) || analyteMatch(s.test_name, analyte))
     );
     const finalizeMC = sqlite.prepare(
       `UPDATE studies SET lifecycle_state = 'finalized', finalized_at = ?, finalized_by_user_id = ?, status = 'pass', result = 'pass', instrument = ?, instruments = ?, coverage_analyte = ?, comment = ? WHERE id = ?`
@@ -27493,7 +27502,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     for (let idx = 0; idx < mcAnalytes.length; idx++) {
       const analyte = mcAnalytes[idx];
       const labels = [...instByAnalyte.get(analyte)!].map((id) => instLabel(instById.get(id))).filter(Boolean);
-      const existing = findMC.get(lid, analyte, analyte) as { id: number; lifecycle_state: string } | undefined;
+      const existing = findExistingMc(analyte);
+      if (existing) usedMc.add(existing.id);
       if (idx % mcGapEvery === mcGapEvery - 1) { // gap: leave missing / in-progress
         if (existing && existing.lifecycle_state === "finalized") mcSkipped++; else mcGaps++;
         continue;
