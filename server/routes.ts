@@ -48,14 +48,25 @@ function licenseCtxFromReq(req: any, productName?: string): LicenseContext {
   // normalizeLicenseContext when omitted.
   const u = req?.user || null;
   const userRow = req?.userId ? storage.getUserById(req.userId) as any : null;
-  // 2026-06-11: prefer the ACTIVE lab's name so the license band matches the
-  // report header for multi-lab users. resolveActiveLabForRequest honors the
-  // X-Active-Lab-Id header (sent by every /labs/:id page) and validates
-  // membership; it falls back to the user's default lab when no header is
-  // present, so single-lab users are unaffected. Guarded so a resolver hiccup
-  // degrades to the user-record lab name rather than throwing.
-  let activeLabName: string | null = null;
-  if (req?.userId) {
+  // 2026-07-16 (parking-lot #43): prefer the lab the ROUTE already resolved.
+  // req.scope.lab is set by labScopeMiddleware from the /api/labs/:labId path
+  // param and is membership-validated, and it is the same lab whose name the
+  // export body prints in "Prepared for". Reading it first makes the licensee
+  // and the document body agree BY CONSTRUCTION rather than by both happening
+  // to derive the same answer from different inputs.
+  //
+  // Before this, the licensee came only from resolveActiveLabForRequest, which
+  // reads the X-Active-Lab-Id header and silently falls back to the user's
+  // DEFAULT lab inside the catch below. The browser sends that header so UI
+  // users were fine, but any caller that omitted it (API client, script, curl)
+  // got a workbook reading "Prepared for: Lab A" on the About sheet and
+  // "Licensed to: Lab B" on every printed page. Two sources of truth, one
+  // document.
+  //
+  // The header resolver stays as the fallback for legacy unprefixed routes
+  // (/api/veritamap/maps/:id/excel and friends) which have no req.scope.
+  let activeLabName: string | null = req?.scope?.lab?.lab_name || null;
+  if (!activeLabName && req?.userId) {
     try { activeLabName = resolveActiveLabForRequest(req.userId, req)?.lab_name || null; } catch {}
   }
   const labName = activeLabName || userRow?.cliaLabName || userRow?.clia_lab_name || null;
@@ -80,6 +91,38 @@ function licenseCtxFromReq(req: any, productName?: string): LicenseContext {
     productName,
   };
 }
+
+/**
+ * Height in points for a wrapped Excel header row, sized to the longest header
+ * that has to wrap. Parking-lot #44.
+ *
+ * CLAUDE.md §6 asks for "row height 20" AND "wrap text". Those two rules
+ * conflict the moment a header is wider than its column: height 20 renders
+ * about one line of Calibri 11, so the tail of a two-line header is simply cut
+ * off in print and in PDF. On the VeritaMap export that truncated a regulatory
+ * citation mid-string, printing "Reference Range Attestation (42 CFR" with the
+ * section number missing, which leaves the column not saying which requirement
+ * it attests to. Cell VALUES were never affected; this is the printed header
+ * only.
+ *
+ * An Excel column-width unit is about one character of Calibri 11. Header text
+ * is bold and therefore slightly wider, so only ~95% of the nominal width is
+ * usable before the wrap. Returns at least the §6 baseline of 20, so single
+ * line headers look exactly as they do today.
+ */
+function headerRowHeight(headers: string[], colWidths: number[]): number {
+  const LINE_PT = 14;   // one line of bold Calibri 11 plus leading
+  const PAD_PT = 6;     // top/bottom padding inside the cell
+  const BASELINE = 20;  // CLAUDE.md §6 height, and the single-line appearance
+  let maxLines = 1;
+  for (let i = 0; i < headers.length; i++) {
+    const text = String(headers[i] ?? "");
+    const usable = Math.max(1, Math.floor((colWidths[i] ?? 12) * 0.95));
+    maxLines = Math.max(maxLines, Math.ceil(text.length / usable));
+  }
+  return Math.max(BASELINE, maxLines * LINE_PT + PAD_PT);
+}
+
 import { logAudit } from "./audit";
 import { logConsumption } from "./consumptionLedger";
 import { reconcileLots } from "./inventoryLots";
@@ -14088,7 +14131,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // ── Header row (row 1) ──
       const headerRow = ws.getRow(1);
-      headerRow.height = 20;
+      // Derived from the longest header instead of pinned at 20 (parking-lot
+      // #44). wrapText is on below, and 20pt renders about one line, so
+      // "Reference Range Attestation (42 CFR 493.1253)" printed with the
+      // section number cut off, leaving the column unable to say which
+      // requirement it attests to. Single-line headers still come out at 20.
+      headerRow.height = headerRowHeight(headers, colWidths);
       headerRow.eachCell((cell) => {
         cell.font = { name: "Calibri", bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
@@ -17563,7 +17611,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // Header row styling
       const headerRow = ws.getRow(1);
-      headerRow.height = 20;
+      headerRow.height = headerRowHeight(headers, colWidths);
       headerRow.eachCell((cell) => {
         cell.font = { name: "Calibri", bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
@@ -25925,7 +25973,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // Header row styling
       const headerRow = ws.getRow(1);
-      headerRow.height = 20;
+      headerRow.height = headerRowHeight(headers, colWidths);
       headerRow.eachCell((cell) => {
         cell.font = { name: "Calibri", bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
