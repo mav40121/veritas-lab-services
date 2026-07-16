@@ -27465,6 +27465,101 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, dryRun: !!dryRun, changed: changes.length, changes });
   });
 
+  // The three complexity values CLIA recognises. Allowlist, not blocklist: an
+  // unrecognised value is rejected rather than written, because complexity is a
+  // regulatory property (PT 493.801, verification 493.1253, competency
+  // 493.1235, QC 493.1256, personnel Subpart M). Shared by the seed endpoint
+  // and set-complexity below so both agree on one canonical spelling.
+  const VERITAMAP_COMPLEXITY_VALUES = new Set(["WAIVED", "MODERATE", "HIGH"]);
+
+  // Correct complexity on EXISTING veritamap_instrument_tests rows for a lab's
+  // map, matched by instrument-name substring.
+  //
+  // This is the missing SOURCE-side counterpart to the rebuildMapTests fix
+  // above. Before this endpoint there was no admin path that could fix
+  // complexity at the source: the seeder is INSERT OR IGNORE, so re-posting the
+  // corrected value silently no-ops and reports the analyte in skipped[]; and
+  // /api/admin/veritamap/resync-complexity only re-derives the veritamap_tests
+  // rollup FROM instrument_tests, so it faithfully propagates a wrong source
+  // value. The downstream half of this bug was fixed; this is the upstream half.
+  //
+  // Safety posture mirrors add-analyte: targeted (one lab, instrument-name
+  // substring, explicitly named analytes), dryRun previews the diff, and it is
+  // UPDATE-only -- it can never insert a row and never drop one. Complexity is
+  // allowlisted. Audited, because this rewrites a regulatory value on a
+  // customer's live map. rebuildMapTests then propagates to the rollup.
+  app.post("/api/admin/veritamap/set-complexity", (req, res) => {
+    const { secret, labId, instrumentNameLike, analyte, analytes, complexity, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+
+    const list: string[] = Array.isArray(analytes)
+      ? analytes.map((a: any) => String(a || "").trim()).filter(Boolean)
+      : (analyte ? [String(analyte).trim()].filter(Boolean) : []);
+    if (!Number.isFinite(Number(labId)) || !instrumentNameLike || list.length === 0) {
+      return res.status(400).json({ error: "labId, instrumentNameLike, and analyte or analytes[] required" });
+    }
+    const cx = String(complexity ?? "").trim().toUpperCase();
+    if (!cx) return res.status(400).json({ error: "complexity_required" });
+    if (!VERITAMAP_COMPLEXITY_VALUES.has(cx)) {
+      return res.status(400).json({
+        error: "complexity_invalid",
+        complexity: complexity ?? null,
+        allowed: Array.from(VERITAMAP_COMPLEXITY_VALUES),
+      });
+    }
+
+    const sqlite = (db as any).$client;
+    const maps = sqlite.prepare("SELECT id FROM veritamap_maps WHERE lab_id = ?").all(Number(labId)) as Array<{ id: number }>;
+    if (maps.length === 0) return res.status(404).json({ error: `no map for lab ${labId}` });
+    if (maps.length > 1) return res.status(400).json({ error: `lab ${labId} has ${maps.length} maps; ambiguous`, mapIds: maps.map((m) => m.id) });
+    const mapId = maps[0].id;
+
+    const instruments = sqlite.prepare(
+      "SELECT id, instrument_name FROM veritamap_instruments WHERE map_id = ? AND instrument_name LIKE ?"
+    ).all(mapId, `%${instrumentNameLike}%`) as Array<{ id: number; instrument_name: string }>;
+    if (instruments.length === 0) return res.status(400).json({ error: `no instruments on map ${mapId} match "${instrumentNameLike}"` });
+
+    const findRow = sqlite.prepare("SELECT id, analyte, complexity FROM veritamap_instrument_tests WHERE instrument_id = ? AND lower(analyte) = lower(?)");
+    const upd = sqlite.prepare("UPDATE veritamap_instrument_tests SET complexity = ? WHERE id = ?");
+
+    const results: any[] = [];
+    const before: any[] = [];
+    let updated = 0;
+    for (const inst of instruments) {
+      for (const a of list) {
+        const row = findRow.get(inst.id, a) as any;
+        if (!row) {
+          results.push({ instrumentId: inst.id, instrument: inst.instrument_name, analyte: a, action: "skipped-not-on-instrument" });
+          continue;
+        }
+        if (String(row.complexity || "").toUpperCase() === cx) {
+          results.push({ instrumentId: inst.id, instrument: inst.instrument_name, analyte: row.analyte, action: "skipped-already", complexity: row.complexity });
+          continue;
+        }
+        before.push({ instrumentId: inst.id, analyte: row.analyte, complexity: row.complexity });
+        if (!dryRun) { upd.run(cx, row.id); updated++; }
+        results.push({ instrumentId: inst.id, instrument: inst.instrument_name, analyte: row.analyte, action: dryRun ? "would-update" : "updated", from: row.complexity, to: cx });
+      }
+    }
+
+    if (!dryRun && updated > 0) {
+      logAudit({
+        userId: 0,
+        ownerUserId: 0,
+        module: "veritamap",
+        action: "update",
+        entityType: "instrument_tests_complexity",
+        entityId: String(mapId),
+        entityLabel: `${instrumentNameLike} -> ${cx}`,
+        before,
+        after: results.filter((r) => r.action === "updated"),
+        ipAddress: (req as any).ip,
+      });
+      rebuildMapTests(mapId);
+    }
+    res.json({ ok: true, dryRun: !!dryRun, mapId, complexity: cx, updated, results });
+  });
+
   // Surgically add ONE analyte to the instruments of a lab's map, matched by
   // instrument-name substring. Unlike the build page (which full-replaces an
   // instrument's whole test list), this is a targeted INSERT OR IGNORE per
@@ -28278,6 +28373,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const beforeRows = sqlite.prepare("SELECT analyte, active FROM veritamap_instrument_tests WHERE instrument_id=?").all(instrumentId) as any[];
       const beforeAnalytes = new Set(beforeRows.map((r: any) => r.analyte));
 
+      // Complexity is a REGULATORY property, not a display field: it drives PT
+      // enrollment (493.801), performance verification (493.1253), competency
+      // elements (493.1235), QC design (493.1256) and personnel requirements
+      // (Subpart M). A payload that omits it is therefore REJECTED, never
+      // defaulted. The prior `String(t.complexity || "MODERATE")` silently wrote
+      // MODERATE with no error and no marker distinguishing "the lab said
+      // moderate" from "nobody said anything" -- that is how the CLIA-waived
+      // CLINITEK Status+ dipstick rows were seeded MODERATE on San Carlos,
+      // over-applying requirements and producing a false readiness picture.
+      // This matches the standing rule for every other regulatory field on the
+      // map (reference ranges BLANK, AMR BLANK, critical values lab-entered):
+      // never pre-populate a value the lab did not state.
+      //
+      // Validated up front, before the transaction opens, so a payload with any
+      // bad row writes NOTHING rather than half a menu.
+      for (const t of tests) {
+        const a = String(t?.analyte || "").trim();
+        if (!a) continue;
+        const cx = String(t?.complexity ?? "").trim().toUpperCase();
+        if (!cx) return res.status(400).json({ error: "complexity_required", analyte: a });
+        if (!VERITAMAP_COMPLEXITY_VALUES.has(cx)) {
+          return res.status(400).json({
+            error: "complexity_invalid",
+            analyte: a,
+            complexity: t?.complexity ?? null,
+            allowed: Array.from(VERITAMAP_COMPLEXITY_VALUES),
+          });
+        }
+      }
+
       const stmt = sqlite.prepare(
         "INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)"
       );
@@ -28288,7 +28413,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           const analyte = String(t.analyte || "").trim();
           if (!analyte) continue;
           const specialty = String(t.specialty || "").trim();
-          const complexity = String(t.complexity || "MODERATE").trim();
+          // Validated above; stored canonical-uppercase so the rollup's
+          // COMPLEXITY_RANK lookup and the allowlist agree on one spelling.
+          const complexity = String(t.complexity).trim().toUpperCase();
           const active = (typeof t.active === "number" && (t.active === 0 || t.active === 1)) ? t.active : dActive;
           const r = stmt.run(instrumentId, mapId, analyte, specialty, complexity, active);
           if (r.changes === 1) inserted++;
