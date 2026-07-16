@@ -12304,12 +12304,53 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // NOT NULL on purpose, because SQLite treats NULLs as DISTINCT in a UNIQUE
   // index and a nullable upper bound would silently allow duplicate rows).
   const ALL_AGES_BAND = { ageMinDays: 0, ageMaxDays: 999999, sex: "A", label: "All ages" } as const;
+  const BAND_SEXES = new Set(["A", "F", "M"]); // A = any/all. Allowlist, not blocklist.
 
-  // GET analyte-values
+  // Human label for a band, used when the caller does not supply one. Days are
+  // the storage unit because neonatal bands need finer resolution than years
+  // (e.g. total bilirubin 0-1 y).
+  function deriveBandLabel(minD: number, maxD: number, sex: string): string {
+    const fmt = (d: number) => (d % 365 === 0 ? `${d / 365} y` : `${d} d`);
+    let age: string;
+    if (minD === ALL_AGES_BAND.ageMinDays && maxD === ALL_AGES_BAND.ageMaxDays) age = "All ages";
+    else if (maxD === ALL_AGES_BAND.ageMaxDays) age = `${fmt(minD)} and older`;
+    else if (minD === 0) age = `0 to ${fmt(maxD)}`;
+    else age = `${fmt(minD)} to ${fmt(maxD)}`;
+    const sexPart = sex === "F" ? ", female" : sex === "M" ? ", male" : "";
+    return age + sexPart;
+  }
+
+  // Resolve the age/sex band a request is addressing. Omitting every band field
+  // yields the "All ages / any sex" band, so a pre-band client keeps behaving
+  // exactly as before. Returns an error string instead of guessing on bad input:
+  // a reference range or critical value filed against the wrong age band is a
+  // clinical error, not a formatting one.
+  function parseBand(body: any): { band: { ageMinDays: number; ageMaxDays: number; sex: string; label: string } } | { error: string } {
+    const hasBand =
+      body?.age_min_days !== undefined || body?.age_max_days !== undefined || body?.sex !== undefined;
+    if (!hasBand) return { band: { ...ALL_AGES_BAND } };
+
+    const minD = body.age_min_days === undefined ? ALL_AGES_BAND.ageMinDays : Number(body.age_min_days);
+    const maxD = body.age_max_days === undefined ? ALL_AGES_BAND.ageMaxDays : Number(body.age_max_days);
+    const sex = String(body.sex ?? ALL_AGES_BAND.sex).trim().toUpperCase();
+
+    if (!Number.isInteger(minD) || minD < 0) return { error: "age_min_days must be an integer >= 0" };
+    if (!Number.isInteger(maxD) || maxD < 0) return { error: "age_max_days must be an integer >= 0" };
+    if (maxD > ALL_AGES_BAND.ageMaxDays) return { error: `age_max_days must be <= ${ALL_AGES_BAND.ageMaxDays} (the unbounded sentinel)` };
+    if (minD >= maxD) return { error: "age_min_days must be less than age_max_days" };
+    if (!BAND_SEXES.has(sex)) return { error: `sex must be one of ${Array.from(BAND_SEXES).join(", ")} (A = any)` };
+
+    const label = String(body.band_label ?? "").trim() || deriveBandLabel(minD, maxD, sex);
+    return { band: { ageMinDays: minD, ageMaxDays: maxD, sex, label } };
+  }
+
+  // GET analyte-values. Returns EVERY band; a single-band analyte looks exactly
+  // like it did before bands existed. Ordered so the response is stable and the
+  // All-ages band sorts first within an analyte.
   app.get("/api/labs/:labId/veritamap/maps/:id/analyte-values", authMiddleware, labScopeMiddleware, requireMapInActiveLab, (req: any, res) => {
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
     const values = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? ORDER BY analyte"
+      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? ORDER BY analyte, age_min_days, age_max_days DESC, sex"
     ).all(Number(req.params.id));
     res.json(values);
   });
@@ -12320,13 +12361,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // locked ref range, else null. Critical values and units stay editable
   // (the MEC review flow governs criticals). Shared by the lab-scoped AND
   // legacy analyte-values PUTs so the lock cannot be bypassed.
-  function refLockConflict(mapId: number, analyte: string, body: any): string | null {
-    // Scoped to the All-ages band: that is the row both PUTs write, so the lock
-    // check has to read the same row. Keyed on analyte alone it could read a
-    // different band's lock than the one being written once bands are in use.
+  function refLockConflict(mapId: number, analyte: string, body: any, band = ALL_AGES_BAND as any): string | null {
+    // Scoped to the band being written: the lock check must read the same row the
+    // PUT writes. Keyed on analyte alone it could read a different band's lock.
     const existing = (db as any).$client.prepare(
       "SELECT ref_range_low, ref_range_high, ref_locked FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ?"
-    ).get(mapId, analyte, ALL_AGES_BAND.ageMinDays, ALL_AGES_BAND.ageMaxDays, ALL_AGES_BAND.sex) as any;
+    ).get(mapId, analyte, band.ageMinDays, band.ageMaxDays, band.sex) as any;
     if (!existing?.ref_locked) return null;
     const refChanged =
       (body?.ref_range_low || null) !== (existing.ref_range_low || null) ||
@@ -12340,34 +12380,76 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
     const mapId = Number(req.params.id);
     const analyte = safeDecodeParam(req.params.analyte);
-    const lockErr = refLockConflict(mapId, analyte, req.body);
+    // Band comes from the body and defaults to All-ages, so a client that knows
+    // nothing about bands writes the same single row it always did.
+    const parsed = parseBand(req.body);
+    if ("error" in parsed) return res.status(400).json({ error: parsed.error });
+    const band = parsed.band;
+    const lockErr = refLockConflict(mapId, analyte, req.body, band);
     if (lockErr) return res.status(409).json({ error: lockErr });
     const { ref_range_low, ref_range_high, critical_low, critical_high, units } = req.body;
     const now = new Date().toISOString();
-    // The conflict target must name the table's ACTUAL unique key. That key is
-    // now (map_id, analyte, age_min_days, age_max_days, sex); the old
-    // ON CONFLICT(map_id, analyte) no longer matches any unique constraint and
-    // SQLite rejects the statement outright, which broke every reference-range
-    // and critical-value save. This route addresses the "All ages / any sex"
-    // band explicitly, so its behaviour is exactly what it was before bands
-    // existed: one row per analyte.
+    // The conflict target must name the table's ACTUAL unique key
+    // (map_id, analyte, age_min_days, age_max_days, sex). The old
+    // ON CONFLICT(map_id, analyte) matches no unique constraint and SQLite
+    // rejects the statement outright. Band values are BOUND, never interpolated:
+    // they now originate from a request body.
     (db as any).$client.prepare(`
       INSERT INTO veritamap_analyte_values
         (map_id, analyte, age_min_days, age_max_days, sex, band_label,
          ref_range_low, ref_range_high, critical_low, critical_high, units, updated_at)
-      VALUES (?, ?, ${ALL_AGES_BAND.ageMinDays}, ${ALL_AGES_BAND.ageMaxDays}, '${ALL_AGES_BAND.sex}', '${ALL_AGES_BAND.label}', ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(map_id, analyte, age_min_days, age_max_days, sex) DO UPDATE SET
+        band_label = excluded.band_label,
         ref_range_low = excluded.ref_range_low,
         ref_range_high = excluded.ref_range_high,
         critical_low = excluded.critical_low,
         critical_high = excluded.critical_high,
         units = excluded.units,
         updated_at = excluded.updated_at
-    `).run(mapId, analyte, ref_range_low || null, ref_range_high || null, critical_low || null, critical_high || null, units || null, now);
+    `).run(
+      mapId, analyte, band.ageMinDays, band.ageMaxDays, band.sex, band.label,
+      ref_range_low || null, ref_range_high || null, critical_low || null, critical_high || null, units || null, now,
+    );
     const row = (db as any).$client.prepare(
       "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ?"
-    ).get(mapId, analyte, ALL_AGES_BAND.ageMinDays, ALL_AGES_BAND.ageMaxDays, ALL_AGES_BAND.sex);
+    ).get(mapId, analyte, band.ageMinDays, band.ageMaxDays, band.sex);
     res.json(row);
+  });
+
+  // DELETE one band off an analyte. Targeted by the band key, so it can only
+  // remove the row the caller named. Deleting a band never removes the analyte
+  // from the map: the menu lives in veritamap_tests / instrument_tests, and this
+  // table only holds the lab-entered values.
+  app.delete("/api/labs/:labId/veritamap/maps/:id/analyte-values/:analyte/band", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
+    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
+    const mapId = Number(req.params.id);
+    const analyte = safeDecodeParam(req.params.analyte);
+    const parsed = parseBand(req.body);
+    if ("error" in parsed) return res.status(400).json({ error: parsed.error });
+    const band = parsed.band;
+    const existing = (db as any).$client.prepare(
+      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ?"
+    ).get(mapId, analyte, band.ageMinDays, band.ageMaxDays, band.sex) as any;
+    if (!existing) return res.status(404).json({ error: "band not found", analyte, band: { age_min_days: band.ageMinDays, age_max_days: band.ageMaxDays, sex: band.sex } });
+    // An attested band is locked per 493.1253; deleting it would drop the
+    // attested values without going through unlock-ref, which is auditable.
+    if (existing.ref_locked) {
+      return res.status(409).json({ error: "Reference range is locked by director attestation per 42 CFR 493.1253. Unlock it (owner or admin) before deleting this band." });
+    }
+    logAudit({
+      userId: req.user?.userId, ownerUserId: req.ownerUserId, module: "veritamap",
+      action: "delete", entityType: "analyte_value_band", entityId: `${mapId}:${analyte}`,
+      entityLabel: `${analyte} (${existing.band_label ?? ""})`, before: existing, after: null,
+      ipAddress: req.ip,
+    });
+    (db as any).$client.prepare(
+      "DELETE FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ?"
+    ).run(mapId, analyte, band.ageMinDays, band.ageMaxDays, band.sex);
+    const remaining = (db as any).$client.prepare(
+      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ? ORDER BY age_min_days"
+    ).all(mapId, analyte);
+    res.json({ ok: true, deleted: { analyte, band_label: existing.band_label }, remaining });
   });
 
   // ── Wave A4: VeritaMap provenance (MEC review + 493.1253 attestation) ────
@@ -13658,12 +13740,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     const tests = rawTests.map((t: any) => ({ ...t, instruments: instrMap[t.analyte] ?? [] }));
 
-    // Fetch lab-entered analyte values and AMR values
+    // Fetch lab-entered analyte values and AMR values.
+    //
+    // An analyte can now carry several age/sex bands. This consumer renders ONE
+    // value per test row, so it must CHOOSE a band rather than let whichever row
+    // happened to come back last win: `analyteValuesMap[av.analyte] = av` in a
+    // loop was silently last-band-wins and therefore nondeterministic.
+    //
+    // The choice is the All-ages band, which is what every row meant before bands
+    // existed, so single-band analytes (all of them today) are unaffected. If a
+    // lab has only real bands and no All-ages row, the widest band is used as a
+    // deterministic stand-in. Rendering every band is a separate change to the
+    // export contract; until then `analyteValueBands` carries the full set.
     const analyteValuesRaw = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_analyte_values WHERE map_id = ?"
+      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? ORDER BY analyte, age_min_days, age_max_days DESC, sex"
     ).all(req.params.id);
+    const analyteValueBands: Record<string, any[]> = {};
+    for (const av of analyteValuesRaw) {
+      if (!analyteValueBands[av.analyte]) analyteValueBands[av.analyte] = [];
+      analyteValueBands[av.analyte].push(av);
+    }
+    const pickDisplayBand = (bands: any[]): any => {
+      if (!bands || bands.length === 0) return undefined;
+      const allAges = bands.find(
+        (b) => b.age_min_days === ALL_AGES_BAND.ageMinDays && b.age_max_days === ALL_AGES_BAND.ageMaxDays && b.sex === ALL_AGES_BAND.sex,
+      );
+      if (allAges) return allAges;
+      return bands.reduce((widest, b) => (b.age_max_days - b.age_min_days > widest.age_max_days - widest.age_min_days ? b : widest), bands[0]);
+    };
     const analyteValuesMap: Record<string, any> = {};
-    for (const av of analyteValuesRaw) analyteValuesMap[av.analyte] = av;
+    for (const [analyte, bands] of Object.entries(analyteValueBands)) analyteValuesMap[analyte] = pickDisplayBand(bands);
 
     const amrValuesRaw = (db as any).$client.prepare(
       "SELECT * FROM veritamap_amr_values WHERE map_id = ?"
@@ -14159,13 +14265,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { ref_range_low, ref_range_high, critical_low, critical_high, units } = req.body;
     const now = new Date().toISOString();
     // Same fix as the lab-scoped PUT above: the conflict target must name the
-    // table's real unique key, which now carries the age/sex band. Targets the
-    // "All ages / any sex" band, so behaviour is unchanged from before bands.
+    // table's real unique key, which now carries the age/sex band. This LEGACY
+    // route stays All-ages only (it is not band-aware; use the lab-scoped PUT to
+    // address a band), but the band values are BOUND rather than interpolated so
+    // this statement can never become an injection vector if it is ever wired to
+    // caller-supplied bands.
     (db as any).$client.prepare(`
       INSERT INTO veritamap_analyte_values
         (map_id, analyte, age_min_days, age_max_days, sex, band_label,
          ref_range_low, ref_range_high, critical_low, critical_high, units, updated_at)
-      VALUES (?, ?, ${ALL_AGES_BAND.ageMinDays}, ${ALL_AGES_BAND.ageMaxDays}, '${ALL_AGES_BAND.sex}', '${ALL_AGES_BAND.label}', ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(map_id, analyte, age_min_days, age_max_days, sex) DO UPDATE SET
         ref_range_low = excluded.ref_range_low,
         ref_range_high = excluded.ref_range_high,
@@ -14173,7 +14282,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         critical_high = excluded.critical_high,
         units = excluded.units,
         updated_at = excluded.updated_at
-    `).run(mapId, analyte, ref_range_low || null, ref_range_high || null, critical_low || null, critical_high || null, units || null, now);
+    `).run(
+      mapId, analyte, ALL_AGES_BAND.ageMinDays, ALL_AGES_BAND.ageMaxDays, ALL_AGES_BAND.sex, ALL_AGES_BAND.label,
+      ref_range_low || null, ref_range_high || null, critical_low || null, critical_high || null, units || null, now,
+    );
     const row = (db as any).$client.prepare(
       "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ?"
     ).get(mapId, analyte, ALL_AGES_BAND.ageMinDays, ALL_AGES_BAND.ageMaxDays, ALL_AGES_BAND.sex);
