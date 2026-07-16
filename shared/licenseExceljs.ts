@@ -83,6 +83,73 @@ function insertLicenseBand(ws: ExcelJS.Worksheet, ctx: LicenseContext): void {
   shiftFreezePane(ws);
 }
 
+/**
+ * Split an Excel header/footer string into its &L / &C / &R sections.
+ *
+ * Excel puts every header/footer into three sections marked by &L, &C and &R.
+ * Everything else (&P page number, &N page count, &"font,style", &10 size, &D)
+ * is formatting INSIDE a section and must be carried through untouched.
+ *
+ * Two things make a naive split wrong:
+ *   1. `&&` is an escaped literal ampersand. In "A && L", scanning for /&[LCR]/
+ *      would match the second & followed by L and invent a section break.
+ *   2. `&"Calibri,Regular"` starts with &" not &C, so the C inside the font name
+ *      must not be read as a section marker.
+ * Walking the string two characters at a time handles both: an `&&` consumes
+ * both characters, so the second & is never examined as a marker.
+ *
+ * Text before any marker is Excel's center section, which is where a bare
+ * string with no markers lands.
+ */
+function splitHeaderFooter(s: string | null | undefined): { L: string; C: string; R: string } {
+  const out = { L: "", C: "", R: "" };
+  const str = String(s || "");
+  let section: "L" | "C" | "R" = "C";
+  let i = 0;
+  while (i < str.length) {
+    if (str[i] === "&" && i + 1 < str.length) {
+      const next = str[i + 1];
+      if (next === "&") { out[section] += "&&"; i += 2; continue; }   // escaped literal &
+      if (next === "L" || next === "C" || next === "R") { section = next; i += 2; continue; }
+    }
+    out[section] += str[i];
+    i += 1;
+  }
+  return out;
+}
+
+function joinHeaderFooter(p: { L: string; C: string; R: string }): string {
+  let s = "";
+  if (p.L) s += `&L${p.L}`;
+  if (p.C) s += `&C${p.C}`;
+  if (p.R) s += `&R${p.R}`;
+  return s;
+}
+
+/**
+ * Stamp the license into a sheet's header/footer WITHOUT destroying whatever is
+ * already there.
+ *
+ * Parking-lot #43: this used to assign `oddHeader`/`oddFooter` outright. Every
+ * customer-facing export sets its own header/footer first, carrying the lab
+ * name and CLIA per CLAUDE.md §6 rule 3 so identity survives cell-level
+ * copy-paste. Those lines were being silently overwritten twenty lines later,
+ * which meant the CLIA appeared in no header or footer of any shipped workbook
+ * and the name shown was the licensee rather than the "Prepared for" lab.
+ *
+ * Rules, in priority order:
+ *   - Sheet already has a header  -> leave it alone. It carries §6 identity, and
+ *     the licensee is already stated in the row-1 band, the About sheet and the
+ *     footer. Three statements is plenty; a fourth is not worth clobbering the
+ *     CLIA for.
+ *   - Sheet has no header         -> set the license header (prior behavior, so
+ *     exports that never set one keep their band).
+ *   - Sheet already has a footer  -> append the copyright line UNDER the
+ *     existing left section rather than over it, and leave &C/&R (page numbers,
+ *     product mark) untouched.
+ *   - Sheet has no footer         -> set the license footer including page
+ *     numbers (prior behavior).
+ */
 function setHeaderFooter(ws: ExcelJS.Worksheet, ctx: LicenseContext): void {
   ws.headerFooter = ws.headerFooter || ({} as any);
   const headerRight = `Licensed: ${ctx.licensee}`;
@@ -90,8 +157,23 @@ function setHeaderFooter(ws: ExcelJS.Worksheet, ctx: LicenseContext): void {
     `© 2026 Veritas Lab Services, LLC | ` +
     `Licensed to: ${ctx.licensee} (${ctx.email}) | ` +
     `Issued ${ctx.issueDate} | Do not redistribute`;
-  ws.headerFooter.oddHeader = `&R${headerRight}`;
-  ws.headerFooter.oddFooter = `&L${footerLeft}&RPage &P of &N`;
+
+  const existingHeader = String(ws.headerFooter.oddHeader || "");
+  if (!existingHeader.trim()) {
+    ws.headerFooter.oddHeader = `&R${headerRight}`;
+  }
+
+  const existingFooter = String(ws.headerFooter.oddFooter || "");
+  if (!existingFooter.trim()) {
+    ws.headerFooter.oddFooter = `&L${footerLeft}&RPage &P of &N`;
+  } else {
+    const parts = splitHeaderFooter(existingFooter);
+    // Newline inside a section is a real line break in Excel. Any font/size code
+    // already opening the section keeps applying to the appended line.
+    parts.L = parts.L ? `${parts.L}\n${footerLeft}` : footerLeft;
+    ws.headerFooter.oddFooter = joinHeaderFooter(parts);
+  }
+
   ws.headerFooter.evenHeader = ws.headerFooter.oddHeader;
   ws.headerFooter.evenFooter = ws.headerFooter.oddFooter;
 }
