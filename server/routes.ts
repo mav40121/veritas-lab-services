@@ -16588,7 +16588,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json({
         labName: "Riverside Regional Medical Center",
         cliaNumber: "22D0999999",
-        address: "1200 Medical Center Drive, Richmond, VA 23298",
+        address: "100 Medical Center Drive, Riverside, CA 92501",
         stats: {
           studyCount,
           scanCompletionPct: scanPct,
