@@ -27419,7 +27419,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   //   - Existing draft method-comparison studies are finalized in place (repair,
   //     not duplicate) so Coverage shows one signed row per analyte.
   app.post("/api/admin/veritacheck/seed-coverage-studies", (req, res) => {
-    const { secret, labId, calVerTargetPct, mcTargetPct, setExemptions, reset, dryRun } = req.body || {};
+    const { secret, labId, calVerTargetPct, mcTargetPct, setExemptions, reset, archiveCruft, dryRun } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
     if (!Number.isFinite(Number(labId))) return res.status(400).json({ error: "labId required" });
     const sqlite = (db as any).$client;
@@ -27453,32 +27453,61 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const before = computeCoverageForLab(sqlite, lid).summary;
 
-    // Clinical classification: which instruments are cal-verifiable.
-    const CALVER_TOKENS = ["dimension exl", "sysmex xn", "stago", "ised"];
-    const WAIVED_TOKENS = ["statstrip", "clinitek", "kit"];
+    // Clinical classification: which analyte x instrument combos are
+    // cal-verifiable. Portable across labs (Michaels Lab, demo, San Carlos): a
+    // combo is cal-verifiable ONLY on a quantitative measuring analyzer in a
+    // quantitative specialty. Manual methods, waived POC, qualitative
+    // molecular/blood-bank/serology, and dipstick urinalysis are exempt. This is
+    // specialty + instrument based (not a hardcoded model list) so it works on
+    // any lab's analyzers; it reproduces Michaels Lab's 143 cal-ver / 46 exempt.
+    const EXEMPT_INSTR = ["manual", "tube", "gram", "kit", "clinitek", "statstrip",
+      "i-stat", "istat", "echo", "gel", "id-mts", "id mts", "rapid", "wet",
+      "genexpert", "cepheid", "id now", "bactec", "bd max", "microscop", "osom"];
+    const WAIVED_INSTR = ["statstrip", "clinitek", "kit", "osom", "rapid"];
+    const EXEMPT_SPECIALTY = new Set(["Blood Bank", "Immunohematology", "Molecular",
+      "Serology", "General Immunology", "Microbiology", "POC", "Urinalysis", "Toxicology"]);
     function classify(instrumentName: string | undefined, specialty: string): { calver: boolean; type?: "waived" | "noncal" } {
       const n = (instrumentName || "").toLowerCase();
-      if (CALVER_TOKENS.some((k) => n.includes(k))) return { calver: true };
-      if (WAIVED_TOKENS.some((k) => n.includes(k)) || specialty === "Serology") return { calver: false, type: "waived" };
-      return { calver: false, type: "noncal" };
+      const waived = WAIVED_INSTR.some((k) => n.includes(k)) || specialty === "Serology" || specialty === "Urinalysis";
+      if (EXEMPT_INSTR.some((k) => n.includes(k))) return { calver: false, type: waived ? "waived" : "noncal" };
+      if (EXEMPT_SPECIALTY.has(specialty)) return { calver: false, type: waived ? "waived" : "noncal" };
+      return { calver: true };
     }
+    const instLabel = (i: { instrument_name: string; nickname: string | null } | undefined) =>
+      i ? (i.nickname ? `${i.instrument_name} (${i.nickname})` : i.instrument_name) : "";
+    // A study's instrument matches a map analyzer when the map nickname is in the
+    // study string, or model tokens overlap >= 60% (mirror studyMatchesInstrument).
+    const instrModelMatches = (studyInstr: string) => {
+      const si = (studyInstr || "").toLowerCase();
+      return instruments.some((i) => {
+        const nick = (i.nickname || "").trim().toLowerCase();
+        if (nick && si.includes(nick)) return true;
+        const toks = (i.instrument_name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter(Boolean);
+        return toks.length > 0 && toks.filter((t) => si.includes(t)).length / toks.length >= 0.6;
+      });
+    };
 
     // Optional clean slate: soft-archive this tool's own seeded/repaired studies
-    // (the COVERAGE_SEED marker) so a re-run rebuilds the study set from scratch
-    // (e.g. after tuning the gap target). Archive, not DELETE: repaired-in-place
-    // studies are pre-existing rows other tables reference, so a hard delete hits
-    // a FK constraint; archived_at also removes them from coverage (the matcher
-    // filters archived_at IS NULL) and is reversible. Exemptions are left in
-    // place: deterministic/idempotent, and re-clearing them here would race the
-    // already-loaded in-memory combo flags.
-    let resetArchived = 0;
+    // (the COVERAGE_SEED marker) AND, unless archiveCruft===false, the pre-existing
+    // non-finalized "cruft" studies whose instrument matches no map analyzer
+    // (wrong-analyzer clones left from an earlier seed/import that read as
+    // duplicates in the study list). Archive, not DELETE: repaired-in-place rows
+    // are referenced by other tables so a hard delete hits a FK; archived_at also
+    // removes them from coverage (the matcher filters archived_at IS NULL) and is
+    // reversible. Exemptions are left in place (deterministic/idempotent).
+    let resetArchived = 0, cruftArchived = 0;
     if (reset && !dryRun) {
       resetArchived = (sqlite.prepare(
         "UPDATE studies SET archived_at = ? WHERE lab_id = ? AND comment = ? AND archived_at IS NULL"
       ).run(now, lid, MARK) as any).changes || 0;
+      if (archiveCruft !== false) {
+        const cruftRows = sqlite.prepare(
+          "SELECT id, instrument FROM studies WHERE lab_id = ? AND (lifecycle_state IS NULL OR lifecycle_state != 'finalized') AND (comment IS NULL OR comment != ?) AND archived_at IS NULL"
+        ).all(lid, MARK) as Array<{ id: number; instrument: string }>;
+        const arch = sqlite.prepare("UPDATE studies SET archived_at = ? WHERE id = ?");
+        for (const r of cruftRows) { if (!instrModelMatches(r.instrument)) { arch.run(now, r.id); cruftArchived++; } }
+      }
     }
-    const instLabel = (i: { instrument_name: string; nickname: string | null } | undefined) =>
-      i ? (i.nickname ? `${i.instrument_name} (${i.nickname})` : i.instrument_name) : "";
 
     // 1. Exemptions on non-cal-verifiable combos.
     let exemptWaived = 0, exemptNoncal = 0, exemptSkipped = 0;
@@ -27525,10 +27554,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const existsCalSeed = sqlite.prepare(
       `SELECT 1 FROM studies WHERE lab_id = ? AND study_type = 'cal_ver' AND comment = ? AND coverage_analyte = ? AND instrument = ? AND archived_at IS NULL LIMIT 1`
     );
-    let calSeeded = 0, calGaps = 0, calSkipped = 0;
+    let calSeeded = 0, calGaps = 0, calSkipped = 0, calDeduped = 0;
+    // One cal-ver per (analyte, instrument MODEL), not per unit: a study on one
+    // unit already credits its same-model twin via studyMatchesInstrument's
+    // model-token overlap, so seeding both Bert AND Ernie only creates a
+    // look-alike duplicate in the study list with zero extra coverage. Dedupe on
+    // instrument_name (the model), keeping the first unit's labeled study.
+    const seenCalModel = new Set<string>();
     for (const cb of calverCombos) {
       if (calGapAnalytes.has(String(cb.analyte))) { calGaps++; continue; } // whole-analyte gap
-      const label = instLabel(instById.get(cb.instrument_id));
+      const inst = instById.get(cb.instrument_id);
+      const modelKey = `${cb.analyte}||${inst?.instrument_name || ""}`;
+      if (seenCalModel.has(modelKey)) { calDeduped++; continue; } // sibling unit of same model
+      seenCalModel.add(modelKey);
+      const label = instLabel(inst);
       if (existsCalSeed.get(lid, MARK, cb.analyte, label)) { calSkipped++; continue; }
       if (!dryRun) insStudy.run(lab.owner_user_id, lid, cb.analyte, label, ANALYST, today, "cal_ver",
         0.075, 1, "%", calTemplate, JSON.stringify([label]), now, lab.owner_user_id, lab.owner_user_id, cb.analyte, MARK, now);
@@ -27581,25 +27620,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
     }
 
-    // Report (do not touch) pre-existing non-finalized studies whose instrument
-    // matches no map analyzer: cruft the director can archive separately.
+    // Remaining (still-active) pre-existing non-finalized studies whose instrument
+    // matches no map analyzer. With reset+archiveCruft this is normally 0; on a
+    // no-reset run it is the cruft the director could clean up.
     const cruft = (sqlite.prepare(
-      "SELECT id, test_name, instrument, study_type FROM studies WHERE lab_id = ? AND (lifecycle_state IS NULL OR lifecycle_state != 'finalized') AND (comment IS NULL OR comment != ?) AND archived_at IS NULL"
-    ).all(lid, MARK) as Array<{ instrument: string }>).filter((s) => {
-      const si = (s.instrument || "").toLowerCase();
-      return !instruments.some((i) => {
-        const nick = (i.nickname || "").trim().toLowerCase();
-        if (nick && si.includes(nick)) return true;
-        const toks = (i.instrument_name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter(Boolean);
-        return toks.length > 0 && toks.filter((t) => si.includes(t)).length / toks.length >= 0.6;
-      });
-    }).length;
+      "SELECT instrument FROM studies WHERE lab_id = ? AND (lifecycle_state IS NULL OR lifecycle_state != 'finalized') AND (comment IS NULL OR comment != ?) AND archived_at IS NULL"
+    ).all(lid, MARK) as Array<{ instrument: string }>).filter((s) => !instrModelMatches(s.instrument)).length;
 
     const after = dryRun ? null : computeCoverageForLab(sqlite, lid).summary;
     res.json({
-      ok: true, dryRun: !!dryRun, labId: lid, labName: lab.lab_name, resetArchived,
+      ok: true, dryRun: !!dryRun, labId: lid, labName: lab.lab_name, resetArchived, cruftArchived,
       exemptions: { waived: exemptWaived, noncal: exemptNoncal, alreadySet: exemptSkipped },
-      calVer: { candidates: calverCombos.length, gapAnalytes: calGapAnalytes.size, seeded: calSeeded, gaps: calGaps, skipped: calSkipped },
+      calVer: { candidates: calverCombos.length, gapAnalytes: calGapAnalytes.size, seeded: calSeeded, deduped: calDeduped, gaps: calGaps, skipped: calSkipped },
       methodComparison: { needed: mcAnalytes.length, repaired: mcRepaired, seeded: mcSeeded, gaps: mcGaps, skipped: mcSkipped },
       cruftUntouched: cruft,
       before, after,
