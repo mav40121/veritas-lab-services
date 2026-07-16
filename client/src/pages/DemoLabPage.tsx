@@ -100,7 +100,6 @@ export default function DemoLabPage() {
   const map = data?.maps?.[0];
   const scan = data?.scans?.[0];
   const studies = data?.studies || [];
-  const cumsumTrackers = data?.cumsumTrackers || [];
 
   // Build scan item map
   const scanItemMap: Record<number, any> = {};
@@ -130,12 +129,12 @@ export default function DemoLabPage() {
     { id: "veritapolicy", label: "VeritaPolicy™", icon: Shield },
     { id: "veritaqc", label: "VeritaQC™", icon: Activity },
     { id: "veritatrack", label: "VeritaTrack™", icon: CalendarDays },
-    { id: "veritaresponse", label: "VeritaResponse™", icon: ClipboardList },
+    { id: "veritaresponse", label: "VeritaResponse™", icon: AlertTriangle },
   ];
 
   const typeLabel: Record<string, string> = {
     method_comparison: "Correlation / Method Comparison",
-    cal_ver: "Calibration Verification (CLSI EP06)",
+    cal_ver: "Calibration Verification / Linearity (CLSI EP06)",
     precision: "Accuracy & Precision",
     lot_to_lot: "Lot-to-Lot",
     pt_coag: "PT/Coag",
@@ -248,7 +247,7 @@ export default function DemoLabPage() {
       if (!res.ok) return;
       const { token } = await res.json();
       const name = (testName || "Study").replace(/\s+/g, "_");
-      const type = studyType === "cal_ver" ? "CalVer" : studyType === "method_comparison" ? "MethodComp" : studyType === "ref_interval" ? "RefInterval" : "Study";
+      const type = studyType === "cal_ver" ? "CalibrationVerification" : studyType === "method_comparison" ? "CorrelationMethodComparison" : studyType === "ref_interval" ? "ReferenceRangeVerification" : "Study";
       downloadPdfToken(token, `VeritaCheck_${name}_${type}.pdf`);
     } catch {}
   }
@@ -315,7 +314,7 @@ export default function DemoLabPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Shield size={16} />
-              VeritaAssure&#8482; Live Demo - Riverside Regional Medical Center | This is a fully interactive demo with real data.
+              VeritaAssure&#8482; Live Demo - Riverside Regional Medical Center | This is a fully interactive demo with live, generated data.
             </div>
             <Button asChild size="sm" className="bg-white text-[#006064] hover:bg-white/90 font-semibold border-0">
               <Link href="/login">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
@@ -376,7 +375,7 @@ export default function DemoLabPage() {
             <div className="space-y-6">
               <div className="border-l-4 border-[#006064] pl-5 mb-2">
                 <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
-                  Riverside Regional has completed {numWord(studyCount)} EP {studiesWord} for their chemistry department. {passedClause} {failedClause}. Below you can see how VeritaAssure&#8482; documents both outcomes.
+                  Riverside Regional has completed {numWord(studyCount)} EP {studiesWord} for their chemistry department. {passedClause} {failedClause}. Below you can see how VeritaAssure&#8482; documents each study, from the raw data through the medical director or designee sign-off.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
                   Calibration verification is required every 6 months per 42 CFR 493.1255. Method comparisons between instruments sharing a reference range are required at least every 6 months per accreditor standards and whenever a significant change occurs. VeritaCheck&#8482; runs every EP study required for CLIA and CAP compliance: method comparison, calibration verification/linearity, accuracy, precision, lot-to-lot verification, and QC range establishment. Each study generates a compliant PDF report with full statistical tables.
@@ -411,13 +410,13 @@ export default function DemoLabPage() {
                   <div className="rounded-xl border border-[#006064]/30 bg-[#006064]/[0.03] p-5">
                     <h3 className="text-base font-bold text-foreground mb-1">Coverage: what your VeritaMap requires versus what you have</h3>
                     <p className="text-sm text-muted-foreground mb-4">
-                      VeritaCheck&#8482; reads this lab&#8217;s menu, works out every method comparison and calibration verification / linearity study it requires across {s.analytes} analytes and {s.instruments} instruments, and lays out what is covered, what needs review, and what is missing, in one view.
+                      VeritaCheck&#8482; reads this lab&#8217;s menu, works out every correlation / method comparison and calibration verification / linearity study it requires across {s.analytes} analytes and {s.instruments} instruments, and lays out what is covered, what needs review, and what is missing, in one view.
                     </p>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                      {tile("Method comparisons", `${s.methodComparisonsDone}/${s.methodComparisonsNeeded}`, mcMissing ? `${mcMissing} missing` : "all done", mcMissing > 0)}
-                      {tile("Cal Ver / Linearity", `${s.linearityCovered}/${s.linearityRequired}`, clMissing ? `${clMissing} to resolve` : "all done", clMissing > 0)}
-                      {tile("Not required", String(s.linearityExempt), "3+ cal, waived, other", false)}
-                      {tile("Analyte x instrument", String(s.combos), `${s.instruments} instruments`, false)}
+                      {tile("Correlation / Method Comp.", `${s.methodComparisonsDone}/${s.methodComparisonsNeeded}`, mcMissing ? `${mcMissing} missing` : "all done", mcMissing > 0)}
+                      {tile("Calibration Verification / Linearity", `${s.linearityCovered}/${s.linearityRequired}`, clMissing ? `${clMissing} to resolve` : "all done", clMissing > 0)}
+                      {tile("Not required", String(s.linearityExempt), "3+ calibrators, waived, other", false)}
+                      {tile("Analyte-instrument pairs", String(s.combos), `${s.instruments} instruments`, false)}
                     </div>
                     {mcRows.length > 0 && (
                       <div className="overflow-x-auto rounded-lg border border-border bg-background">
@@ -495,7 +494,7 @@ export default function DemoLabPage() {
                               <div><span className="text-muted-foreground">Comparison:</span> {instruments[1]}</div>
                               <div><span className="text-muted-foreground">Date:</span> {study.date}</div>
                               <div><span className="text-muted-foreground">Analyst:</span> {study.analyst}</div>
-                              <div><span className="text-muted-foreground">CLIA TEa:</span> {study.tea_is_percentage ? `\u00B1${(study.clia_allowable_error * 100).toFixed(1).replace(/\.0$/, '')}%` : `\u00B1${study.clia_allowable_error} ${study.tea_unit || 'mmol/L'}`}</div>
+                              <div><span className="text-muted-foreground">CLIA TEa:</span> {study.tea_is_percentage ? `\u00B1${(study.clia_allowable_error * 100).toFixed(1).replace(/\.0$/, '')}%` : `\u00B1${study.clia_allowable_error} ${study.tea_unit || ''}`}</div>
                             </>
                           )}
                         </div>
@@ -673,68 +672,6 @@ export default function DemoLabPage() {
                 </Button>
               </div>
 
-              {/* CUMSUM section */}
-              {cumsumTrackers.length > 0 && (
-                <div className="mt-2">
-                  <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                    <Activity size={16} /> CUMSUM Trackers
-                  </h3>
-                  {cumsumTrackers.map((tracker: any) => (
-                    <Card key={tracker.id}>
-                      <CardContent className="py-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="font-medium text-sm">{tracker.instrument_name} - {tracker.analyte}</div>
-                            <div className="text-xs text-muted-foreground mt-0.5">{tracker.entries?.length || 0} lot changes tracked</div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm font-mono font-bold text-primary">
-                              CumSum: {tracker.entries?.length ? tracker.entries[tracker.entries.length - 1].cumsum : 0} sec
-                            </div>
-                            <Badge className="pass-badge text-[10px] mt-1">
-                              {tracker.entries?.length ? tracker.entries[tracker.entries.length - 1].verdict : "N/A"}
-                            </Badge>
-                          </div>
-                        </div>
-                        {tracker.entries?.length > 0 && (
-                          <div className="mt-3 overflow-x-auto w-full">
-                            <table className="min-w-[600px] w-full text-xs">
-                              <thead>
-                                <tr className="text-muted-foreground border-b">
-                                  <th className="text-left py-1 pr-3">Year</th>
-                                  <th className="text-left py-1 pr-3">Lot Change</th>
-                                  <th className="text-right py-1 pr-3">Old Mean</th>
-                                  <th className="text-right py-1 pr-3">New Mean</th>
-                                  <th className="text-right py-1 pr-3">Diff</th>
-                                  <th className="text-right py-1 pr-3">CumSum</th>
-                                  <th className="text-right py-1">Verdict</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {tracker.entries.map((entry: any) => (
-                                  <tr key={entry.id} className="border-b border-border/50">
-                                    <td className="py-1.5 pr-3">{entry.year}</td>
-                                    <td className="py-1.5 pr-3">{entry.lot_label}</td>
-                                    <td className="py-1.5 pr-3 text-right font-mono">{entry.old_lot_geomean?.toFixed(1)}</td>
-                                    <td className="py-1.5 pr-3 text-right font-mono">{entry.new_lot_geomean?.toFixed(1)}</td>
-                                    <td className="py-1.5 pr-3 text-right font-mono">{entry.difference?.toFixed(1)}</td>
-                                    <td className="py-1.5 pr-3 text-right font-mono font-bold">{entry.cumsum?.toFixed(1)}</td>
-                                    <td className="py-1.5 text-right">
-                                      <Badge className="pass-badge text-[10px]">{entry.verdict}</Badge>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                            <p className="text-xs text-muted-foreground mt-2 sm:hidden">Scroll horizontally to see all columns</p>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-
               {/* Sample reports (Pfizer demo follow-up 2026-05-19). Lives at the
                   bottom of the VeritaCheck tab so a prospect reviewing the
                   Riverside studies can also download representative PDFs for
@@ -761,7 +698,7 @@ export default function DemoLabPage() {
                   Riverside Regional's laboratory has been fully mapped - 11 analyzers and 2 manual methods across the Chemistry, Hematology, and Blood Bank departments.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                  When building your lab in VeritaMap&#8482;, you select your instruments from a database of 190+ FDA-cleared analyzers. VeritaMap&#8482; queries the FDA test complexity database and presents every approved test for that instrument. You toggle the tests your lab performs, and VeritaMap&#8482; builds your complete test menu, with CLIA complexity, reference ranges, critical values, and AMR populated automatically from Mayo Clinic Laboratories published data. The result is a living map of your laboratory that is always survey-ready.
+                  When building your lab in VeritaMap&#8482;, you select your instruments from a database of 190+ FDA-cleared analyzers. VeritaMap&#8482; queries the FDA test complexity database and presents every approved test for that instrument. You toggle the tests your lab performs, and VeritaMap&#8482; builds your complete test menu with CLIA test complexity filled in automatically, plus structured fields for the reference ranges, critical values, and AMR your lab verifies and adopts per CLIA 493.1253. The result is a living map of your laboratory that is always survey-ready.
                 </p>
               </div>
               {map ? (
@@ -838,7 +775,7 @@ export default function DemoLabPage() {
             <div className="space-y-5">
               <div className="border-l-4 border-[#006064] pl-5 mb-2">
                 <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
-                  Riverside Regional's inspection readiness checklist has been completed across all major TJC and CAP domains.
+                  Riverside Regional's inspection readiness checklist is scored live across all major TJC and CAP domains.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
                   VeritaScan&#8482; walks through 173 standards drawn from TJC and CAP requirements, tracks completion status by domain, and flags items that need attention before a surveyor arrives. The checklist exports to Excel for documentation and evidence gathering. Below is Riverside Regional's current readiness snapshot.
@@ -1053,7 +990,7 @@ export default function DemoLabPage() {
                                     <td className="py-1.5 pr-3 text-muted-foreground">{item.evidence}</td>
                                     <td className="py-1.5 pr-3">{item.date_met}</td>
                                     <td className="py-1.5 text-center">
-                                      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
+                                      <Badge className={`text-[10px] ${item.passed ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"}`}>
                                         {item.passed ? "PASS" : "FAIL"}
                                       </Badge>
                                     </td>
@@ -1178,8 +1115,10 @@ export default function DemoLabPage() {
                 </p>
               </div>
 
-              {!ptCoverage ? (
+              {loading ? (
                 <div className="text-center text-muted-foreground py-12">Loading PT coverage analysis...</div>
+              ) : !ptCoverage ? (
+                <div className="text-center text-muted-foreground py-12">PT coverage analysis is unavailable in this demo view.</div>
               ) : (
                 <>
                   {/* Summary Cards */}
@@ -1389,7 +1328,7 @@ export default function DemoLabPage() {
                   Westgard rules evaluated at the bench. Monthly attestation signed by the medical director or designee.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                  VeritaQC&#8482; runs daily QC entry with real-time Westgard rule evaluation (1-2s, 1-3s, 2-2s, R-4s, 4-1s, N-x bias, N-T trend). Required corrective action capture on every rejection. Monthly review PDF with on-page-1 attestation block and inline Levey-Jennings chart.
+                  VeritaQC&#8482; runs daily QC entry with real-time Westgard rule evaluation (1-2s, 1-3s, 2-2s, R-4s, 4-1s, plus consecutive-bias and trend detection). Required corrective action capture on every rejection. Monthly review PDF with on-page-1 attestation block and inline Levey-Jennings chart.
                 </p>
               </div>
               <Card>
