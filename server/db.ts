@@ -2848,19 +2848,38 @@ sqlite.exec(`
   }
 }
 
-// VeritaMap analyte values -- per lab, per analyte (shared across instruments)
+// VeritaMap analyte values -- per lab, per analyte, per age/sex band.
+// Real labs stratify reference ranges and critical values by age (peds vs
+// adult) and sex, so the key is (map_id, analyte, age band, sex). The common
+// case is a single "All ages / any sex" band, which reads exactly like the
+// original one-row-per-analyte model.
+//
+// age_max_days is NOT NULL with an UNBOUNDED sentinel (999999) on purpose:
+// SQLite treats NULLs as DISTINCT inside a UNIQUE index, so a nullable upper
+// bound would let two identical "all ages" rows coexist and would silently
+// defeat the constraint. sex: 'A' = any/all, otherwise 'F' or 'M'.
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS veritamap_analyte_values (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     map_id INTEGER NOT NULL,
     analyte TEXT NOT NULL,
+    age_min_days INTEGER NOT NULL DEFAULT 0,
+    age_max_days INTEGER NOT NULL DEFAULT 999999,
+    sex TEXT NOT NULL DEFAULT 'A',
+    band_label TEXT,
     ref_range_low TEXT,
     ref_range_high TEXT,
     critical_low TEXT,
     critical_high TEXT,
     units TEXT,
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(map_id, analyte)
+    mec_reviewed_at TEXT,
+    mec_reviewed_by TEXT,
+    ref_attested_at TEXT,
+    ref_attested_by TEXT,
+    ref_attested_title TEXT,
+    ref_locked INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(map_id, analyte, age_min_days, age_max_days, sex)
   );
 `);
 
@@ -2905,6 +2924,77 @@ sqlite.exec(`
     ["amr_locked", "ALTER TABLE veritamap_amr_values ADD COLUMN amr_locked INTEGER NOT NULL DEFAULT 0"],
   ] as const) {
     if (!amrCols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+  }
+}
+
+// 2026-07-16: age/sex band rebuild for veritamap_analyte_values.
+//
+// The table was UNIQUE(map_id, analyte) -- exactly one row per analyte -- so an
+// age-specific value (e.g. a pediatric creatinine critical that differs from the
+// adult one) could not be represented at all; it would have to be flattened onto
+// the adult row. SQLite cannot ALTER or DROP a UNIQUE constraint, so widening the
+// key requires the standard create-copy-drop-rename rebuild.
+//
+// Guarded on age_min_days so it runs exactly once and is a no-op on a fresh DB
+// (the CREATE above already ships the band columns). Every pre-existing row
+// becomes the "All ages" / any-sex band, which is precisely what it meant before,
+// so existing labs are semantically unchanged.
+//
+// The copy runs AFTER the Wave A4 provenance ALTERs above, so mec_reviewed_* and
+// ref_attested_* / ref_locked are guaranteed to exist and are carried across.
+// Losing them would silently destroy director attestations under 42 CFR 493.1253.
+{
+  const avCols = (sqlite.prepare("PRAGMA table_info(veritamap_analyte_values)").all() as { name: string }[]).map(c => c.name);
+  if (avCols.length > 0 && !avCols.includes("age_min_days")) {
+    const rebuildAnalyteValues = sqlite.transaction(() => {
+      sqlite.exec("DROP TABLE IF EXISTS veritamap_analyte_values_rebuild");
+      sqlite.exec(`
+        CREATE TABLE veritamap_analyte_values_rebuild (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          map_id INTEGER NOT NULL,
+          analyte TEXT NOT NULL,
+          age_min_days INTEGER NOT NULL DEFAULT 0,
+          age_max_days INTEGER NOT NULL DEFAULT 999999,
+          sex TEXT NOT NULL DEFAULT 'A',
+          band_label TEXT,
+          ref_range_low TEXT,
+          ref_range_high TEXT,
+          critical_low TEXT,
+          critical_high TEXT,
+          units TEXT,
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          mec_reviewed_at TEXT,
+          mec_reviewed_by TEXT,
+          ref_attested_at TEXT,
+          ref_attested_by TEXT,
+          ref_attested_title TEXT,
+          ref_locked INTEGER NOT NULL DEFAULT 0,
+          UNIQUE(map_id, analyte, age_min_days, age_max_days, sex)
+        )
+      `);
+      sqlite.exec(`
+        INSERT INTO veritamap_analyte_values_rebuild
+          (id, map_id, analyte, age_min_days, age_max_days, sex, band_label,
+           ref_range_low, ref_range_high, critical_low, critical_high, units, updated_at,
+           mec_reviewed_at, mec_reviewed_by, ref_attested_at, ref_attested_by, ref_attested_title, ref_locked)
+        SELECT
+           id, map_id, analyte, 0, 999999, 'A', 'All ages',
+           ref_range_low, ref_range_high, critical_low, critical_high, units, updated_at,
+           mec_reviewed_at, mec_reviewed_by, ref_attested_at, ref_attested_by, ref_attested_title, ref_locked
+        FROM veritamap_analyte_values
+      `);
+      sqlite.exec("DROP TABLE veritamap_analyte_values");
+      sqlite.exec("ALTER TABLE veritamap_analyte_values_rebuild RENAME TO veritamap_analyte_values");
+    });
+    try {
+      const before = (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_analyte_values").get() as { n: number }).n;
+      rebuildAnalyteValues();
+      const after = (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_analyte_values").get() as { n: number }).n;
+      console.log(`[db] veritamap_analyte_values rebuilt with age/sex bands: ${before} -> ${after} rows`);
+    } catch (err: any) {
+      console.error("[db] veritamap_analyte_values band rebuild FAILED:", err.message);
+      throw err;
+    }
   }
 }
 
