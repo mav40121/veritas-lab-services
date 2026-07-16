@@ -121,6 +121,40 @@ interface AnalyteValues {
   ref_attested_by?: string | null;
   ref_attested_title?: string | null;
   ref_locked?: number | null;
+  // Age/sex band. An analyte can carry several sets of values, because real labs
+  // stratify by age (peds vs adult) and sex. Almost every analyte has exactly one
+  // band, the "All ages" default, which is what a row meant before bands existed.
+  // These travel with the row, so PUTting the object back addresses its own band.
+  age_min_days?: number;
+  age_max_days?: number;
+  sex?: string;
+  band_label?: string | null;
+}
+
+// Mirrors ALL_AGES_BAND in server/routes.ts. age_max_days is an UNBOUNDED
+// sentinel rather than null because SQLite treats NULLs as DISTINCT inside a
+// UNIQUE index (see server/db.ts).
+const ALL_AGES = { age_min_days: 0, age_max_days: 999999, sex: "A", band_label: "All ages" };
+const isAllAgesBand = (b?: AnalyteValues) =>
+  !b || ((b.age_min_days ?? 0) === ALL_AGES.age_min_days && (b.age_max_days ?? ALL_AGES.age_max_days) === ALL_AGES.age_max_days && (b.sex ?? "A") === ALL_AGES.sex);
+const sameBand = (a: AnalyteValues, b: AnalyteValues) =>
+  (a.age_min_days ?? 0) === (b.age_min_days ?? 0) &&
+  (a.age_max_days ?? ALL_AGES.age_max_days) === (b.age_max_days ?? ALL_AGES.age_max_days) &&
+  (a.sex ?? "A") === (b.sex ?? "A");
+// Display name for a band. Falls back to deriving one so a row written by an
+// older client (band_label null) still reads sensibly.
+function bandName(b: AnalyteValues): string {
+  if (b.band_label) return b.band_label;
+  const min = b.age_min_days ?? 0;
+  const max = b.age_max_days ?? ALL_AGES.age_max_days;
+  const fmt = (d: number) => (d % 365 === 0 ? `${d / 365} y` : `${d} d`);
+  let age: string;
+  if (min === 0 && max === ALL_AGES.age_max_days) age = "All ages";
+  else if (max === ALL_AGES.age_max_days) age = `${fmt(min)} and older`;
+  else if (min === 0) age = `0 to ${fmt(max)}`;
+  else age = `${fmt(min)} to ${fmt(max)}`;
+  const s = b.sex ?? "A";
+  return age + (s === "F" ? ", female" : s === "M" ? ", male" : "");
 }
 
 interface AmrValues {
@@ -591,9 +625,10 @@ interface TestRowProps {
   test: TestRecord;
   onChange: (analyte: string, field: string, value: string) => void;
   onRowMount?: (el: HTMLTableRowElement | null) => void;
-  analyteValues?: AnalyteValues;
+  analyteBands?: AnalyteValues[];
   amrValues?: AmrValues;
   onSaveAnalyteValues?: (analyte: string, values: AnalyteValues) => void;
+  onDeleteAnalyteBand?: (analyte: string, band: AnalyteValues) => Promise<void>;
   onSaveAmrValues?: (analyte: string, instrumentId: number, values: { amr_low: string; amr_high: string }) => void;
   onEditCorrelation?: (test: TestRecord, corr: CorrelationRecord | null) => void;
   readOnly?: boolean;
@@ -1048,9 +1083,30 @@ function CorrelationEditModal({ open, onClose, sourceTest, existing, mapId, onSa
   );
 }
 
-function TestRow({ test, onChange, onRowMount, analyteValues, amrValues, onSaveAnalyteValues, onSaveAmrValues, onEditCorrelation, readOnly, colCount, onProvenance, canUnlock }: TestRowProps) {
+function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAnalyteValues, onDeleteAnalyteBand, onSaveAmrValues, onEditCorrelation, readOnly, colCount, onProvenance, canUnlock }: TestRowProps) {
   const [expanded, setExpanded] = React.useState(false);
-  const [localAv, setLocalAv] = React.useState<AnalyteValues>(analyteValues || {});
+  // An analyte can carry several age/sex bands. The row edits ONE at a time; the
+  // band picker below only appears once there is more than one, so an analyte
+  // with the usual single "All ages" band looks exactly as it always has.
+  const bands = React.useMemo<AnalyteValues[]>(
+    () => (analyteBands && analyteBands.length ? analyteBands : [{ ...ALL_AGES }]),
+    [analyteBands],
+  );
+  const [activeBandKey, setActiveBandKey] = React.useState<string>("");
+  const bandKey = (b: AnalyteValues) => `${b.age_min_days ?? 0}:${b.age_max_days ?? ALL_AGES.age_max_days}:${b.sex ?? "A"}`;
+  const activeBand = React.useMemo(
+    () => bands.find(b => bandKey(b) === activeBandKey) ?? bands[0],
+    [bands, activeBandKey],
+  );
+  const [addingBand, setAddingBand] = React.useState(false);
+  const [newBandMinY, setNewBandMinY] = React.useState("0");
+  const [newBandMaxY, setNewBandMaxY] = React.useState("18");
+  const [newBandSex, setNewBandSex] = React.useState("A");
+  const [bandBusy, setBandBusy] = React.useState(false);
+  // TestRow validates the add-band form locally and needs to tell the user why a
+  // band was refused, so it needs its own toast; the page-level one is not in scope here.
+  const { toast } = useToast();
+  const [localAv, setLocalAv] = React.useState<AnalyteValues>(activeBand || {});
   const [localAmr, setLocalAmr] = React.useState<AmrValues>(amrValues || {});
   const [saving, setSaving] = React.useState(false);
   // Wave A4 provenance mini-forms. attestFor: "ref" or an instrument id.
@@ -1067,7 +1123,10 @@ function TestRow({ test, onChange, onRowMount, analyteValues, amrValues, onSaveA
   // the LegacyWorkspaceRedirect middleware (last follow-up from PR #182).
   const testRowActiveLabId = useActiveLabId();
 
-  React.useEffect(() => { setLocalAv(analyteValues || {}); }, [analyteValues]);
+  // Hydrate the editor from the ACTIVE band. Re-running when the active band
+  // changes is what makes switching bands swap the values in the inputs. The
+  // autosave hydration ref below keeps this from firing a spurious PUT.
+  React.useEffect(() => { avHydratedRef.current = false; setLocalAv(activeBand || {}); }, [activeBand]);
   React.useEffect(() => { setLocalAmr(amrValues || {}); }, [amrValues]);
 
   // Autosave for the analyte-values and AMR-values dialogs. Debounced 1.5s
@@ -1381,6 +1440,110 @@ function TestRow({ test, onChange, onRowMount, analyteValues, amrValues, onSaveA
               - CLIA requires each lab to establish and verify these values independently.
             </span>
           </div>
+          {/* Age/sex bands. CLIA labs stratify reference ranges and critical
+              values by age (peds vs adult) and sex. The picker only appears once
+              an analyte actually has more than one band, so the usual
+              single-band analyte reads exactly as it did before bands existed.
+              Ages are entered in years and stored in days, because neonatal
+              bands need finer resolution than years. */}
+          {(bands.length > 1 || addingBand || !readOnly) && (
+            <div className="mb-3 flex flex-wrap items-center gap-1.5">
+              {bands.length > 1 && (
+                <>
+                  <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide mr-1">Values for</span>
+                  {bands.map(b => {
+                    const active = bandKey(b) === bandKey(activeBand);
+                    return (
+                      <button
+                        key={bandKey(b)}
+                        type="button"
+                        onClick={() => setActiveBandKey(bandKey(b))}
+                        className={`text-[11px] rounded-full border px-2 py-0.5 transition-colors ${active ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground border-border hover:bg-secondary"}`}
+                      >
+                        {bandName(b)}{b.ref_locked ? " (locked)" : ""}
+                      </button>
+                    );
+                  })}
+                </>
+              )}
+              {!readOnly && onSaveAnalyteValues && !addingBand && (
+                <button type="button" className="text-[11px] text-primary hover:underline px-1" onClick={() => setAddingBand(true)}>
+                  + Add age/sex band
+                </button>
+              )}
+              {!readOnly && onDeleteAnalyteBand && bands.length > 1 && !isAllAgesBand(activeBand) && !activeBand.ref_locked && (
+                <button
+                  type="button"
+                  className="text-[11px] text-destructive hover:underline px-1"
+                  disabled={bandBusy}
+                  onClick={async () => {
+                    setBandBusy(true);
+                    try { await onDeleteAnalyteBand(test.analyte, activeBand); setActiveBandKey(""); }
+                    catch { /* handler toasts */ }
+                    finally { setBandBusy(false); }
+                  }}
+                >
+                  Remove this band
+                </button>
+              )}
+            </div>
+          )}
+          {addingBand && (
+            <div className="mb-3 flex flex-wrap items-end gap-2 rounded-md border border-border bg-secondary/40 p-2">
+              <div>
+                <label className="text-[10px] text-muted-foreground font-medium block mb-1">From age (years)</label>
+                <Input className="h-7 text-xs w-24" value={newBandMinY} onChange={e => setNewBandMinY(e.target.value)} placeholder="0" />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground font-medium block mb-1">To age (years)</label>
+                <Input className="h-7 text-xs w-24" value={newBandMaxY} onChange={e => setNewBandMaxY(e.target.value)} placeholder="blank = no limit" />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground font-medium block mb-1">Sex</label>
+                <select
+                  className="h-7 text-xs rounded-md border border-input bg-background px-2"
+                  value={newBandSex}
+                  onChange={e => setNewBandSex(e.target.value)}
+                >
+                  <option value="A">Any</option>
+                  <option value="F">Female</option>
+                  <option value="M">Male</option>
+                </select>
+              </div>
+              <Button
+                size="sm"
+                className="h-7 text-xs"
+                disabled={bandBusy}
+                onClick={async () => {
+                  const minY = Number(newBandMinY.trim() === "" ? "0" : newBandMinY);
+                  const maxRaw = newBandMaxY.trim();
+                  const minD = Math.round(minY * 365);
+                  const maxD = maxRaw === "" ? ALL_AGES.age_max_days : Math.round(Number(maxRaw) * 365);
+                  if (!Number.isFinite(minD) || !Number.isFinite(maxD) || minD < 0 || minD >= maxD) {
+                    toast({ title: "Check the age range", description: "From-age must be a number less than the to-age. Leave the to-age blank for no upper limit.", variant: "destructive" });
+                    return;
+                  }
+                  const candidate: AnalyteValues = { age_min_days: minD, age_max_days: maxD, sex: newBandSex };
+                  if (bands.some(b => sameBand(b, candidate))) {
+                    toast({ title: "That band already exists", description: `${test.analyte} already has ${bandName(candidate)}.`, variant: "destructive" });
+                    return;
+                  }
+                  setBandBusy(true);
+                  try {
+                    // Create it empty; the director then types the values into the
+                    // grid below, which autosaves against this band.
+                    if (onSaveAnalyteValues) await onSaveAnalyteValues(test.analyte, { ...candidate, units: localAv.units ?? null });
+                    setActiveBandKey(bandKey(candidate));
+                    setAddingBand(false);
+                  } catch { /* handler toasts */ }
+                  finally { setBandBusy(false); }
+                }}
+              >
+                Add band
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setAddingBand(false)}>Cancel</Button>
+            </div>
+          )}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-3">
             {/* Units */}
             <div>
@@ -1729,7 +1892,8 @@ export default function VeritaMapMapPage() {
   const [isCopying, setIsCopying] = useState(false);
   const [copyFromInstrumentId, setCopyFromInstrumentId] = useState<number | null>(null);
   // Analyte values and AMR values keyed by analyte and instId::analyte respectively
-  const [analyteValuesMap, setAnalyteValuesMap] = useState<Record<string, AnalyteValues>>({});
+  // analyte -> its age/sex bands. Almost always a single "All ages" band.
+  const [analyteValuesMap, setAnalyteValuesMap] = useState<Record<string, AnalyteValues[]>>({});
   const [amrValuesMap, setAmrValuesMap] = useState<Record<string, { amr_low?: string; amr_high?: string }>>({});
 
   // Correlation edit modal state
@@ -1906,8 +2070,17 @@ export default function VeritaMapMapPage() {
     if (!mapId) return;
     fetch(`${API_BASE}${mapApiBase}/analyte-values`, { headers: authHeaders() })
       .then(r => r.json()).then((rows: any[]) => {
-        const m: Record<string, AnalyteValues> = {};
-        for (const row of rows) m[row.analyte] = row;
+        // Group by analyte: an analyte can carry several age/sex bands. The old
+        // `m[row.analyte] = row` kept only whichever band came back last, which
+        // silently hid the rest and was order-dependent. Sorted All-ages first.
+        const m: Record<string, AnalyteValues[]> = {};
+        for (const row of rows) {
+          if (!m[row.analyte]) m[row.analyte] = [];
+          m[row.analyte].push(row);
+        }
+        for (const list of Object.values(m)) {
+          list.sort((a, b) => (isAllAgesBand(a) ? -1 : isAllAgesBand(b) ? 1 : (a.age_min_days ?? 0) - (b.age_min_days ?? 0)));
+        }
         setAnalyteValuesMap(m);
       }).catch(() => {});
     fetch(`${API_BASE}${mapApiBase}/amr-values`, { headers: authHeaders() })
@@ -1918,7 +2091,10 @@ export default function VeritaMapMapPage() {
       }).catch(() => {});
   }, [mapId, mapApiBase]);
 
-  // Save analyte values (ref range, critical values, units)
+  // Save analyte values (ref range, critical values, units) for ONE band.
+  // `values` carries its own band fields, so the PUT addresses that band; a value
+  // object with no band fields defaults to All-ages server-side, which is what
+  // every row meant before bands existed.
   const handleSaveAnalyteValues = useCallback(async (analyte: string, values: AnalyteValues) => {
     const res = await fetch(`${API_BASE}${mapApiBase}/analyte-values/${encodeURIComponent(analyte)}`, {
       method: "PUT",
@@ -1927,10 +2103,36 @@ export default function VeritaMapMapPage() {
     });
     if (!res.ok) {
       const msg = await res.json().then((d: any) => d?.error).catch(() => null);
-      toast({ title: "Critical values not saved", description: msg || "Server error. Please try again.", variant: "destructive" });
+      toast({ title: "Values not saved", description: msg || "Server error. Please try again.", variant: "destructive" });
       throw new Error(msg || `analyte-values save failed (${res.status})`);
     }
-    setAnalyteValuesMap(prev => ({ ...prev, [analyte]: values }));
+    const saved: AnalyteValues = await res.json().catch(() => values);
+    // Replace the matching band only. Replacing the whole analyte would drop the
+    // other bands out of local state until a reload.
+    setAnalyteValuesMap(prev => {
+      const list = prev[analyte] ?? [];
+      const idx = list.findIndex(b => sameBand(b, saved));
+      const next = idx >= 0 ? list.map((b, i) => (i === idx ? saved : b)) : [...list, saved];
+      next.sort((a, b) => (isAllAgesBand(a) ? -1 : isAllAgesBand(b) ? 1 : (a.age_min_days ?? 0) - (b.age_min_days ?? 0)));
+      return { ...prev, [analyte]: next };
+    });
+  }, [mapId, mapApiBase, toast]);
+
+  // Delete one age/sex band off an analyte. The server refuses an attested band
+  // (493.1253) and never removes the analyte from the map itself.
+  const handleDeleteAnalyteBand = useCallback(async (analyte: string, band: AnalyteValues) => {
+    const res = await fetch(`${API_BASE}${mapApiBase}/analyte-values/${encodeURIComponent(analyte)}/band`, {
+      method: "DELETE",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ age_min_days: band.age_min_days ?? 0, age_max_days: band.age_max_days ?? ALL_AGES.age_max_days, sex: band.sex ?? "A" }),
+    });
+    if (!res.ok) {
+      const msg = await res.json().then((d: any) => d?.error).catch(() => null);
+      toast({ title: "Band not removed", description: msg || "Server error. Please try again.", variant: "destructive" });
+      throw new Error(msg || `band delete failed (${res.status})`);
+    }
+    setAnalyteValuesMap(prev => ({ ...prev, [analyte]: (prev[analyte] ?? []).filter(b => !sameBand(b, band)) }));
+    toast({ title: "Band removed", description: `${analyte}: ${bandName(band)}` });
   }, [mapId, mapApiBase, toast]);
 
   // Save AMR values (per instrument)
@@ -2575,7 +2777,7 @@ export default function VeritaMapMapPage() {
                       if (el) rowRefs.current.set(test.analyte, el);
                       else rowRefs.current.delete(test.analyte);
                     }}
-                    analyteValues={analyteValuesMap[test.analyte]}
+                    analyteBands={analyteValuesMap[test.analyte]}
                     amrValues={Object.fromEntries(
                       (test.instruments ?? []).map(inst => [
                         inst.id,
@@ -2583,6 +2785,7 @@ export default function VeritaMapMapPage() {
                       ])
                     )}
                     onSaveAnalyteValues={handleSaveAnalyteValues}
+                    onDeleteAnalyteBand={handleDeleteAnalyteBand}
                     onSaveAmrValues={handleSaveAmrValues}
                     onProvenance={activeLabId ? handleProvenance : undefined}
                     canUnlock={canUnlockProvenance}
