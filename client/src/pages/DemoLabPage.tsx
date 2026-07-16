@@ -397,12 +397,16 @@ export default function DemoLabPage() {
                     </CardContent>
                   </Card>
                 );
-                // Show a credible mix: a few covered rows plus the real gaps.
+                // Show a credible, representative mix: a spread of covered rows
+                // (sampled across the menu, not the alphabetical-first few, which
+                // would all be one specialty) plus the real gaps.
                 const mcAll = coverage.methodComparisons || [];
-                const mcRows = [
-                  ...mcAll.filter((m: any) => m.hasStudy).slice(0, 4),
-                  ...mcAll.filter((m: any) => !m.hasStudy).slice(0, 2),
-                ];
+                const covered = mcAll.filter((m: any) => m.hasStudy);
+                const missing = mcAll.filter((m: any) => !m.hasStudy);
+                const step = Math.max(1, Math.floor(covered.length / 4));
+                const pickedCovered: any[] = [];
+                for (let i = 0; i < covered.length && pickedCovered.length < 4; i += step) pickedCovered.push(covered[i]);
+                const mcRows = [...pickedCovered, ...missing.slice(0, 2)];
                 return (
                   <div className="rounded-xl border border-[#006064]/30 bg-[#006064]/[0.03] p-5">
                     <h3 className="text-base font-bold text-foreground mb-1">Coverage: what your VeritaMap requires versus what you have</h3>
