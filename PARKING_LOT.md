@@ -1058,6 +1058,25 @@ strike-throughs above); see C30. Pre- vs post-COLA: indifferent.
 
 ---
 
+### 44. Long Excel column headers are clipped, truncating CFR citations mid-string
+
+**Effort:** S (compute the header row height from the longest wrapped header, or raise the fixed height; then sweep the other export routes)
+**Importance:** Medium. The VeritaMap workbook currently prints "Reference Range Attestation (42 CFR" with "493.1253)" cut off, and "AMR Attestation (42 CFR 493.1253, per" with "instrument)" cut off. A regulatory citation truncated mid-string in a document a surveyor reads is worse than a cosmetic defect: the column no longer says which requirement it attests to. Not a data error. The cell values are complete and correct; only the printed header is cut.
+
+**What:** CLAUDE.md §6 specifies both "row height 20" for the header row and "wrap text" for cells. Those two rules conflict for any header longer than its column width. Row height 20 renders roughly one line of Calibri 11, so a header that wraps to two or three lines has its tail clipped in print and in PDF export. Confirmed on the live VeritaMap Compliance Map export: header row height is 20.0 with `wrapText: true`, and the three longest headers are "AMR Attestation (42 CFR 493.1253, per instrument)" (49 chars), "Reference Range Attestation (42 CFR 493.1253)" (45), and "Last Correlation / Method Comparison Date" (41). "Last SOP Review Date" and "AMR High (per instrument)" clip too.
+
+**Class scope (unverified beyond VeritaMap):** the row-height-20 rule in §6 applies to every customer-facing workbook, so any export whose header text exceeds its column width is a candidate. The other ExcelJS export routes were not checked. A sweep should compare each header's length against its `colWidths` entry rather than fixing VeritaMap alone.
+
+**Evidence:** Found 2026-07-16 during the PR 4 (#1046) Gate 3 render. The live export was opened in Excel and printed to PDF at fit-to-2-pages-wide; the clipping is visible on both pages. Verified pre-existing and not introduced by PR 4: the pre-PR-4 workbook has the identical header row height (20.0) and the identical three longest headers. PR 4's new header ("Age / Sex Band", 13 chars at column width 22) fits on one line and neither caused nor worsened this.
+
+**Fix sketch:** Derive the header row height from the longest header divided by its column width (the export already does this for About-sheet body text at routes.ts:13909-13915, ~88 chars per line at width 110), rather than hardcoding 20. Alternatively shorten the header text itself, though the CFR citations are the part worth keeping. Either way, update the §6 "row height 20" wording so the rule is a minimum rather than a fixed value, since as written it guarantees this defect.
+
+**Source:** 2026-07-16 session, PR 4 (#1046) Gate 3 render. Sibling of [[#43]]; both were found by looking at the rendered workbook, and neither was catchable by the verify scripts.
+
+**Status:** Parked by operator decision 2026-07-16. Not started. No code touched.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C34. Wire the two static-audit guards into CI (was #43)
