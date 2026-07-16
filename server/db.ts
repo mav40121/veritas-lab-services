@@ -1922,6 +1922,13 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
   ensure("stripe_subscription_id",     "ALTER TABLE labs ADD COLUMN stripe_subscription_id TEXT");
   ensure("study_credits",              "ALTER TABLE labs ADD COLUMN study_credits INTEGER DEFAULT 0");
   ensure("has_completed_onboarding",   "ALTER TABLE labs ADD COLUMN has_completed_onboarding INTEGER DEFAULT 0");
+  // 2026-07-15: card-less trial hard-lock. A trial lab (is_trial=1) is fully
+  // blocked at its subscription_expires_at (reads AND writes) via
+  // labScopeMiddleware, instead of falling into the 2-year read-only retention
+  // that is meant for lapsed PAYING customers. Default 0 so every existing and
+  // paid/comped lab is untouched (pure ALTER+DEFAULT, no cascading writes); the
+  // specific trial labs are marked via POST /api/admin/set-lab-trial.
+  ensure("is_trial",                   "ALTER TABLE labs ADD COLUMN is_trial INTEGER NOT NULL DEFAULT 0");
   ensure("preferred_pt_vendor",        "ALTER TABLE labs ADD COLUMN preferred_pt_vendor TEXT");
   // NYS CLEP Phase-0 (2026-07-10): per-lab jurisdiction regime. NY is a
   // CLIA-exempt state; a NY lab is DUAL — NYS DOH/CLEP for state jurisdiction

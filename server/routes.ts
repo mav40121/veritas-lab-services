@@ -2182,6 +2182,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, before: { expires_at: lab.subscription_expires_at, status: lab.subscription_status }, lab: updated });
   });
 
+  // Admin: mark/unmark a lab as a card-less TRIAL. A trial lab is fully blocked
+  // (reads + writes, everyone) once subscription_expires_at passes — see the
+  // is_trial hard-lock in labScopeMiddleware. Paid/comped labs must stay
+  // is_trial=0 so they keep the 2-year read-only retention. Idempotent.
+  app.post("/api/admin/set-lab-trial", (req, res) => {
+    const { secret, labId, isTrial } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!Number.isFinite(Number(labId))) return res.status(400).json({ error: "labId required" });
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id, lab_name, is_trial, subscription_expires_at, stripe_customer_id FROM labs WHERE id = ?").get(Number(labId)) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    const val = isTrial === false || Number(isTrial) === 0 ? 0 : 1;
+    sqlite.prepare("UPDATE labs SET is_trial = ?, updated_at = ? WHERE id = ?").run(val, new Date().toISOString(), Number(labId));
+    console.log(`[admin/set-lab-trial] lab_id=${labId} (${lab.lab_name}): is_trial ${lab.is_trial} -> ${val}`);
+    res.json({ ok: true, labId: Number(labId), labName: lab.lab_name, is_trial: val, subscription_expires_at: lab.subscription_expires_at });
+  });
+
   // Admin: provision a comped secondary lab for an existing owner.
   // Creates labs row + lab_members row (is_primary_lab=0, role='owner') in
   // a single transaction. No Stripe customer or subscription is created.
@@ -5387,7 +5404,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const row = (db as any).$client.prepare(`
       SELECT lm.id AS membership_id, lm.role AS role, lm.permissions_json AS permissions_json,
              l.id AS lab_id, l.plan AS plan, l.study_credits AS study_credits, l.subscription_status AS subscription_status,
-             l.subscription_expires_at AS subscription_expires_at,
+             l.subscription_expires_at AS subscription_expires_at, l.is_trial AS is_trial,
+             l.owner_user_id AS owner_user_id,
              l.plan_expires_at AS plan_expires_at, l.stripe_customer_id AS stripe_customer_id,
              l.lab_name AS lab_name, l.clia_number AS clia_number,
              l.accreditation_tjc AS accreditation_tjc, l.accreditation_cap AS accreditation_cap,
@@ -5397,6 +5415,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       WHERE lm.user_id = ? AND lm.lab_id = ? AND lm.status = 'active' LIMIT 1
     `).get(userId, labId) as any;
     if (!row) return res.status(403).json({ error: "No active membership for this lab" });
+
+    // 2026-07-15: card-less trial hard-lock. A trial lab (is_trial=1) is fully
+    // blocked once its subscription_expires_at has passed — reads AND writes,
+    // for EVERYONE including the owner (the owner can restore access via the
+    // admin path). This differs from the 2-year read-only retention that
+    // getAccessLevel/requireWriteAccess grant lapsed PAYING labs: a trial does
+    // not get to keep browsing the product after it ends. Scoped to this lab
+    // only, so the member can still log in and use any other lab they belong to.
+    if (Number(row.is_trial) === 1 && row.subscription_expires_at) {
+      if (new Date() >= new Date(row.subscription_expires_at)) {
+        return res.status(403).json({
+          error: "This trial has ended. Contact Veritas Lab Services to continue.",
+          code: "TRIAL_EXPIRED",
+          expiredAt: row.subscription_expires_at,
+        });
+      }
+    }
 
     let permissions: Record<string, any> = {};
     try { permissions = JSON.parse(row.permissions_json || '{}'); } catch {}
