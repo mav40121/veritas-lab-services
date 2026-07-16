@@ -1039,6 +1039,25 @@ strike-throughs above); see C30. Pre- vs post-COLA: indifferent.
 
 ---
 
+### 43. License stamp clobbers the §6 lab-identity header/footer and can name the wrong lab
+
+**Effort:** S-M (one shared helper plus a verify script; 8 callsites to re-check)
+**Importance:** Medium-High. Every customer-facing workbook currently prints a header and footer that name the *licensee* lab and omit the CLIA number entirely, which is not what CLAUDE.md §6 "Customer-facing workbooks" rule 3 specifies. On an API path that omits `X-Active-Lab-Id`, the licensee resolves to the user's default lab, so a multi-lab customer can receive a workbook reading "Prepared for: Lab A" on the About sheet and "Licensed to: Lab B" on every printed page.
+
+**What:** `licenseCtxFromReq` (server/routes.ts:57-61) resolves the licensee lab from `resolveActiveLabForRequest`, which reads the `X-Active-Lab-Id` header and silently falls back to the user's default lab inside a bare `catch {}`. The export body meanwhile resolves the lab from `req.scope.labId` (the URL path param, set by `labScopeMiddleware`). Two sources of truth for one document. Separately and unconditionally, `applyLicenseToExcelJSWorkbook` (shared/licenseExceljs.ts:93-96) *assigns* rather than merges `oddHeader`/`oddFooter` on every sheet, so the six lines in the VeritaMap export that carefully set `${labName}    CLIA: ${cliaNumber}` (routes.ts:13932-13933, 14215-14216, 14224-14225) are dead code, overwritten at routes.ts:14237. §6 rule 3 exists so identity survives cell-level copy-paste; layers (b) and (c) do not currently exist in any shipped workbook.
+
+**Class scope (8 callsites, all `applyLicenseToExcelJS(wb, licenseCtxFromReq(req, ...))`):** routes.ts:9981 and 16677 (VeritaCheck), 14237 and 17640 (VeritaMap), 15581 (VeritaScan), 25985 (VeritaLab), 29317 and 29988 (VeritaPolicy).
+
+**Evidence:** Found 2026-07-16 during the PR 4 render-and-look on live `8e85ea5`. `POST /api/labs/3/veritamap/maps/47/excel` with no `X-Active-Lab-Id` returned a workbook whose About sheet A3 read "Prepared for: Michaels Lab    CLIA: 55D5555555" while every sheet header read "Licensed: UMass Memorial Health - Milford Regional Medical Center". Re-running the same request *with* `X-Active-Lab-Id: 3` produced "Licensed: Michaels Lab", confirming the header-driven resolution. The browser flow does send the header (client/src/lib/auth.ts:80), so the wrong-lab half is not currently reaching UI users; the clobbered header/footer half reaches everyone.
+
+**Fix sketch:** Have the license context accept an explicit lab (prefer `req.scope.lab`) rather than re-deriving from a header, and make the stamp *merge* into the existing header/footer instead of assigning over it, so the §6 identity line and the license band coexist. Ship `scripts/verify-license-stamp-identity.mjs` asserting: scoped route stamps the scoped lab, missing header does not silently fall back to a different lab, and CLIA survives in both header and footer on every sheet.
+
+**Source:** 2026-07-16 session, PR 4 (#1046) Gate 3 render. Related: `feedback_pdf_lab_identity_resolution` memory (same `resolveActiveLabForRequest` swallowed-throw shape).
+
+**Status:** Parked by operator decision 2026-07-16 ("log it, finish PR 4 first"). Not started. No code touched.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C34. Wire the two static-audit guards into CI (was #43)
