@@ -16523,7 +16523,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return { ...s, items, total, assessed, compliant };
       });
 
-      const studies = (db as any).$client.prepare("SELECT * FROM studies WHERE user_id = ? ORDER BY id DESC").all(userId);
+      // Exclude COVERAGE_SEED studies: those exist only to credit the Coverage
+      // map (via /api/demo/coverage) and carry reused template data that
+      // evaluates as fail, so they must never appear as individual demo study
+      // cards or count toward the pass/fail narrative.
+      const studies = (db as any).$client.prepare("SELECT * FROM studies WHERE user_id = ? AND (comment IS NULL OR comment != 'COVERAGE_SEED v1') ORDER BY id DESC").all(userId);
 
       const trackers = (db as any).$client.prepare("SELECT * FROM cumsum_trackers WHERE user_id = ?").all(userId);
       const trackersWithEntries = trackers.map((t: any) => {
@@ -16569,7 +16573,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const userId = getDemoUserId();
       if (!userId) return res.status(404).json({ error: "Demo data not found" });
 
-      const studyCount = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM studies WHERE user_id = ?").get(userId)?.cnt || 0;
+      const studyCount = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM studies WHERE user_id = ? AND (comment IS NULL OR comment != 'COVERAGE_SEED v1')").get(userId)?.cnt || 0;
       const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE user_id = ?").get(userId);
       let scanPct = 0;
       if (scan) {
@@ -16604,7 +16608,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const userId = getDemoUserId();
       if (!userId) return res.json([]);
 
-      const studies = (db as any).$client.prepare("SELECT * FROM studies WHERE user_id = ? ORDER BY id DESC").all(userId);
+      // Exclude COVERAGE_SEED studies: those exist only to credit the Coverage
+      // map (via /api/demo/coverage) and carry reused template data that
+      // evaluates as fail, so they must never appear as individual demo study
+      // cards or count toward the pass/fail narrative.
+      const studies = (db as any).$client.prepare("SELECT * FROM studies WHERE user_id = ? AND (comment IS NULL OR comment != 'COVERAGE_SEED v1') ORDER BY id DESC").all(userId);
       res.json(studies);
     } catch (err: any) {
       console.error("Demo studies error:", err.message);
@@ -16640,7 +16648,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     // Fallback: if not found, IDs may have changed after a server update
     if (!studyRow) {
-      const demoStudies = (db as any).$client.prepare("SELECT * FROM studies WHERE user_id = ? ORDER BY id ASC").all(userId);
+      const demoStudies = (db as any).$client.prepare("SELECT * FROM studies WHERE user_id = ? AND (comment IS NULL OR comment != 'COVERAGE_SEED v1') ORDER BY id ASC").all(userId);
       return res.status(404).json({
         error: "Study not found",
         validIds: demoStudies.map((s: any) => s.id),
