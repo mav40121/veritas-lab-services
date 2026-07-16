@@ -13742,16 +13742,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     // Fetch lab-entered analyte values and AMR values.
     //
-    // An analyte can now carry several age/sex bands. This consumer renders ONE
-    // value per test row, so it must CHOOSE a band rather than let whichever row
-    // happened to come back last win: `analyteValuesMap[av.analyte] = av` in a
-    // loop was silently last-band-wins and therefore nondeterministic.
+    // An analyte can carry several age/sex bands, and the export renders one row
+    // per band, so the full set is kept grouped by analyte. Ordered All-ages
+    // first, then by age, so an analyte's rows come out in a sensible order.
     //
-    // The choice is the All-ages band, which is what every row meant before bands
-    // existed, so single-band analytes (all of them today) are unaffected. If a
-    // lab has only real bands and no All-ages row, the widest band is used as a
-    // deterministic stand-in. Rendering every band is a separate change to the
-    // export contract; until then `analyteValueBands` carries the full set.
+    // This deliberately does NOT collapse to one row per analyte. The earlier
+    // `analyteValuesMap[av.analyte] = av` in a loop kept whichever band came back
+    // last, which was nondeterministic and, once a lab had real bands, would have
+    // silently dropped values out of a document a surveyor reads.
     const analyteValuesRaw = (db as any).$client.prepare(
       "SELECT * FROM veritamap_analyte_values WHERE map_id = ? ORDER BY analyte, age_min_days, age_max_days DESC, sex"
     ).all(req.params.id);
@@ -13760,16 +13758,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!analyteValueBands[av.analyte]) analyteValueBands[av.analyte] = [];
       analyteValueBands[av.analyte].push(av);
     }
-    const pickDisplayBand = (bands: any[]): any => {
-      if (!bands || bands.length === 0) return undefined;
-      const allAges = bands.find(
-        (b) => b.age_min_days === ALL_AGES_BAND.ageMinDays && b.age_max_days === ALL_AGES_BAND.ageMaxDays && b.sex === ALL_AGES_BAND.sex,
-      );
-      if (allAges) return allAges;
-      return bands.reduce((widest, b) => (b.age_max_days - b.age_min_days > widest.age_max_days - widest.age_min_days ? b : widest), bands[0]);
-    };
-    const analyteValuesMap: Record<string, any> = {};
-    for (const [analyte, bands] of Object.entries(analyteValueBands)) analyteValuesMap[analyte] = pickDisplayBand(bands);
 
     const amrValuesRaw = (db as any).$client.prepare(
       "SELECT * FROM veritamap_amr_values WHERE map_id = ?"
@@ -13954,9 +13942,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // ── Sheet 2: Compliance Map ──
       const ws = wb.addWorksheet("Compliance Map");
 
+      // "Age / Sex Band" sits immediately before the values it qualifies. It is
+      // deliberately NOT in column A or B: the freeze pane is C2 so that Analyte
+      // and Instruments stay visible, and inserting ahead of them would freeze
+      // the wrong columns.
       const headers = [
         "Analyte", "Instruments", "Serial Number", "Department", "Specialty", "Complexity",
         "Number of Instruments", "CFR Section", "Correlation Required",
+        "Age / Sex Band",
         "Units of Measure", "Reference Range Low", "Reference Range High",
         "Critical Low", "Critical High",
         "MEC Reviewed/Approved",
@@ -13971,6 +13964,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Column widths
       const colWidths = [
         22, 55, 20, 18, 20, 14, 22, 14, 20,
+        22,
         18, 20, 20, 16, 16, 26, 16, 22, 34, 34,
         30, 28, 36, 36, 18, 18, 18, 18, 30, 50,
       ];
@@ -13979,7 +13973,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const NE = "Not established"; // shown when lab hasn't entered a value
 
       // Build data rows
-      const rows = tests.map((t: any) => {
+      // One row per analyte PER AGE/SEX BAND. Almost every analyte has a single
+      // "All ages" band and therefore still produces exactly one row that reads
+      // as it always did. An analyte that is genuinely stratified (San Carlos:
+      // creatinine peds vs adult, total bilirubin 0-1 y) now exports every band
+      // instead of one silently-chosen row, which would have understated or
+      // overstated the lab's own values in a document a surveyor reads.
+      //
+      // The per-analyte columns (instruments, dates, statuses, AMR, correlations)
+      // repeat on each band row so that every row stays self-describing and the
+      // sheet stays filterable by band. They describe the analyte, not the band.
+      const rows = tests.flatMap((t: any) => {
         const instruments = t.instruments || [];
         const instrList = instruments.map((i: any) => `${i.instrument_name} [${i.role}]`).join("; ");
         const serialList = instruments.map((i: any) => i.serial_number || "").filter((s: string) => s).join("; ");
@@ -13993,14 +13997,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const precStatus = isWaived ? "N/A (Waived)" : getComplianceStatus(t.last_precision, 6);
         const sopStatus = getComplianceStatus(t.last_sop_review, 24);
 
-        // Lab-entered analyte values
-        const av = analyteValuesMap[t.analyte];
-        const units = av?.units || NE;
-        const refLow = av?.ref_range_low || NE;
-        const refHigh = av?.ref_range_high || NE;
-        const critLow = av?.critical_low || NE;
-        const critHigh = av?.critical_high || NE;
-
         // AMR: one entry per instrument that runs this analyte
         const amrLines = instruments.map((inst: any) => {
           const amrEntry = amrValuesMap[`${inst.id}::${t.analyte}`];
@@ -14009,16 +14005,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           return `${inst.instrument_name}: ${lo} - ${hi}`;
         }).join("; ");
 
-        // Wave A4 provenance columns. MEC owns the final critical values;
-        // reference
-        // range and AMR carry the director-or-designee attestation per
-        // 42 CFR 493.1253 once recorded.
-        const mecCell = av?.mec_reviewed_at
-          ? `Reviewed/approved ${String(av.mec_reviewed_at).slice(0, 10)}${av.mec_reviewed_by ? ` (recorded by ${av.mec_reviewed_by})` : ""}`
-          : (av?.critical_low || av?.critical_high) ? "Pending MEC review" : "";
-        const refAttestCell = av?.ref_locked
-          ? `Attested by ${av.ref_attested_by}, ${av.ref_attested_title} on ${String(av.ref_attested_at).slice(0, 10)}`
-          : (av?.ref_range_low && av?.ref_range_high) ? "Pending director attestation" : "";
         const amrAttestCell = instruments.map((inst: any) => {
           const amrEntry = amrValuesMap[`${inst.id}::${t.analyte}`];
           if (!amrEntry?.amr_low || !amrEntry?.amr_high) return null;
@@ -14027,37 +14013,64 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             : `${inst.instrument_name}: pending`;
         }).filter(Boolean).join("; ");
 
-        return [
-          t.analyte,
-          instrList,
-          serialList,
-          department,
-          t.specialty,
-          t.complexity,
-          instrCount,
-          cfr,
-          correlReq,
-          units,
-          refLow,
-          refHigh,
-          critLow,
-          critHigh,
-          mecCell,
-          amrLines || NE,
-          "", // AMR High (per instrument) -- shown inline in AMR Low column above
-          refAttestCell,
-          amrAttestCell,
-          t.last_cal_ver || "",
-          calVerStatus,
-          t.last_method_comp || "",
-          mcStatus,
-          t.last_precision || "",
-          precStatus,
-          t.last_sop_review || "",
-          sopStatus,
-          t.notes || "",
-          correlationSummary(t.analyte),
-        ];
+        // No values entered at all -> a single row of "Not established", exactly
+        // as before bands existed. Never fabricate a band the lab did not state.
+        const bands: any[] = analyteValueBands[t.analyte] ?? [];
+        const bandList: any[] = bands.length ? bands : [null];
+
+        return bandList.map((av: any) => {
+          const bandLabel = !av
+            ? ALL_AGES_BAND.label
+            : (av.band_label || deriveBandLabel(av.age_min_days ?? ALL_AGES_BAND.ageMinDays, av.age_max_days ?? ALL_AGES_BAND.ageMaxDays, av.sex ?? ALL_AGES_BAND.sex));
+          const units = av?.units || NE;
+          const refLow = av?.ref_range_low || NE;
+          const refHigh = av?.ref_range_high || NE;
+          const critLow = av?.critical_low || NE;
+          const critHigh = av?.critical_high || NE;
+
+          // Wave A4 provenance columns, resolved PER BAND: the MEC adopts
+          // critical values and the director attests a reference range for a
+          // specific age/sex band, not for the analyte as a whole.
+          const mecCell = av?.mec_reviewed_at
+            ? `Reviewed/approved ${String(av.mec_reviewed_at).slice(0, 10)}${av.mec_reviewed_by ? ` (recorded by ${av.mec_reviewed_by})` : ""}`
+            : (av?.critical_low || av?.critical_high) ? "Pending MEC review" : "";
+          const refAttestCell = av?.ref_locked
+            ? `Attested by ${av.ref_attested_by}, ${av.ref_attested_title} on ${String(av.ref_attested_at).slice(0, 10)}`
+            : (av?.ref_range_low && av?.ref_range_high) ? "Pending director attestation" : "";
+
+          return [
+            t.analyte,
+            instrList,
+            serialList,
+            department,
+            t.specialty,
+            t.complexity,
+            instrCount,
+            cfr,
+            correlReq,
+            bandLabel,
+            units,
+            refLow,
+            refHigh,
+            critLow,
+            critHigh,
+            mecCell,
+            amrLines || NE,
+            "", // AMR High (per instrument) -- shown inline in AMR Low column above
+            refAttestCell,
+            amrAttestCell,
+            t.last_cal_ver || "",
+            calVerStatus,
+            t.last_method_comp || "",
+            mcStatus,
+            t.last_precision || "",
+            precStatus,
+            t.last_sop_review || "",
+            sopStatus,
+            t.notes || "",
+            correlationSummary(t.analyte),
+          ];
+        });
       });
 
       // Add data rows
