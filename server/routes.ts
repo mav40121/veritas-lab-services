@@ -4691,11 +4691,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // tech's session pins to their universal-roster identity.
       try {
         const isStaffPortal = seatInvite.seat_type === 'staff_portal';
-        const targetLabId = isStaffPortal
-          ? seatInvite.lab_id
-          : ((db as any).$client.prepare(
-              "SELECT lab_id FROM lab_members WHERE user_id = ? AND is_primary_lab = 1 AND status = 'active' LIMIT 1"
-            ).get(seatInvite.owner_user_id) as any)?.lab_id;
+        // 2026-07-16: honor the seat's explicit lab_id for EVERY seat type, not
+        // just staff_portal. A prospect invited to their OWN lab (the seat
+        // carries that lab_id, e.g. Faith Medical Center's seat had lab_id=14)
+        // must land there, never the inviter's primary lab. Only a regular seat
+        // with NO lab_id falls back to the inviter's primary lab (an owner adding
+        // their own staff). This closes the leak where prospects on a lab-scoped
+        // seat auto-joined the inviter's showcase lab (Michaels Lab).
+        const targetLabId = seatInvite.lab_id
+          ?? (isStaffPortal
+              ? null
+              : ((db as any).$client.prepare(
+                  "SELECT lab_id FROM lab_members WHERE user_id = ? AND is_primary_lab = 1 AND status = 'active' LIMIT 1"
+                ).get(seatInvite.owner_user_id) as any)?.lab_id);
         if (targetLabId) {
           const dupMember = (db as any).$client.prepare(
             "SELECT id FROM lab_members WHERE lab_id = ? AND user_id = ?"
