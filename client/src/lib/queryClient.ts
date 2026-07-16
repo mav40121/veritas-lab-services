@@ -17,7 +17,7 @@ async function throwIfResNotOk(res: Response) {
     // Check for subscription-related errors
     try {
       const parsed = JSON.parse(text);
-      if (parsed.code === 'SUBSCRIPTION_EXPIRED_READ_ONLY' || parsed.code === 'DATA_RETENTION_EXPIRED') {
+      if (parsed.code === 'SUBSCRIPTION_EXPIRED_READ_ONLY' || parsed.code === 'DATA_RETENTION_EXPIRED' || parsed.code === 'TRIAL_EXPIRED') {
         triggerSubscriptionError(parsed.code, parsed.error);
       }
     } catch {}

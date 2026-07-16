@@ -25,7 +25,8 @@ export function SubscriptionModal() {
 
   if (!open || !errorInfo) return null;
 
-  const isLocked = errorInfo.code === 'DATA_RETENTION_EXPIRED';
+  const isTrial = errorInfo.code === 'TRIAL_EXPIRED';
+  const isLocked = errorInfo.code === 'DATA_RETENTION_EXPIRED' || isTrial;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setOpen(false)}>
@@ -34,12 +35,14 @@ export function SubscriptionModal() {
           <div className={`p-2 rounded-full ${isLocked ? 'bg-red-100 dark:bg-red-900/30' : 'bg-amber-100 dark:bg-amber-900/30'}`}>
             <Lock size={20} className={isLocked ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'} />
           </div>
-          <h3 className="font-bold text-lg">Subscription Required</h3>
+          <h3 className="font-bold text-lg">{isTrial ? "Trial Ended" : "Subscription Required"}</h3>
         </div>
         <p className="text-sm text-muted-foreground mb-6">
-          {isLocked
-            ? "Your data retention period has ended. Please resubscribe to regain access to your account."
-            : "Your subscription has expired. Your existing data is preserved and viewable. Resubscribe to continue adding new records."
+          {isTrial
+            ? (errorInfo.message || "This trial has ended. Contact Veritas Lab Services to continue.")
+            : isLocked
+              ? "Your data retention period has ended. Please resubscribe to regain access to your account."
+              : "Your subscription has expired. Your existing data is preserved and viewable. Resubscribe to continue adding new records."
           }
         </p>
         <div className="flex gap-3">
@@ -49,13 +52,23 @@ export function SubscriptionModal() {
           >
             Close
           </button>
-          <a
-            href="/veritacheck"
-            onClick={() => setOpen(false)}
-            className="flex-1 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-center font-medium"
-          >
-            View Plans
-          </a>
+          {isTrial ? (
+            <a
+              href="mailto:info@veritaslabservices.com"
+              onClick={() => setOpen(false)}
+              className="flex-1 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-center font-medium"
+            >
+              Contact us
+            </a>
+          ) : (
+            <a
+              href="/veritacheck"
+              onClick={() => setOpen(false)}
+              className="flex-1 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-center font-medium"
+            >
+              View Plans
+            </a>
+          )}
         </div>
       </div>
     </div>
