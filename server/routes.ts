@@ -1676,6 +1676,88 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // Admin: raise the public demo VeritaScan (Riverside Regional, demo user) to a
+  // target inspection-readiness level so the /demo/compliance VeritaScan tab shows
+  // a strong but credible score. Promotes Not-Assessed items to Compliant and
+  // leaves a spread of realistic gaps across domains (never one whole domain
+  // unassessed). The demo scan is not touched by any reset, so this persists.
+  // Idempotent; supports { dryRun: true } to preview the plan without writing.
+  app.post("/api/admin/seed-demo-scan-readiness", (req, res) => {
+    const { secret, targetCompliant = 152, dryRun = false } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    try {
+      const sqlite = (db as any).$client;
+      const demoUserId = getDemoUserId();
+      if (!demoUserId) return res.status(404).json({ error: "demo user not found" });
+      const scan = sqlite.prepare("SELECT id FROM veritascan_scans WHERE user_id = ?").get(demoUserId) as { id: number } | undefined;
+      if (!scan) return res.status(404).json({ error: "demo scan not found" });
+
+      const rows = sqlite.prepare("SELECT item_id, status FROM veritascan_items WHERE scan_id = ?").all(scan.id) as { item_id: number; status: string }[];
+      const before = {
+        total: rows.length,
+        compliant: rows.filter((r) => r.status === "Compliant").length,
+        notAssessed: rows.filter((r) => r.status === "Not Assessed").length,
+      };
+
+      // Map item_id -> domain from the static checklist so gaps spread evenly.
+      const domainOf = new Map<number, string>();
+      for (const it of VERITASCAN_SCAN_ITEMS as any[]) domainOf.set(it.id, it.domain);
+
+      const naItems = rows.filter((r) => r.status === "Not Assessed").map((r) => r.item_id);
+      const need = Math.max(0, targetCompliant - before.compliant);
+      const promoteCount = Math.min(need, naItems.length);
+      const keepGaps = naItems.length - promoteCount;
+
+      // Round-robin across domains so gaps are distributed, not clustered.
+      const byDomain = new Map<string, number[]>();
+      for (const id of naItems) {
+        const d = domainOf.get(id) || "Other";
+        if (!byDomain.has(d)) byDomain.set(d, []);
+        byDomain.get(d)!.push(id);
+      }
+      const domains = Array.from(byDomain.keys());
+      const gapSet = new Set<number>();
+      let round = 0;
+      while (gapSet.size < keepGaps) {
+        let addedThisRound = 0;
+        for (const d of domains) {
+          const list = byDomain.get(d)!;
+          if (list.length > round) {
+            gapSet.add(list[round]);
+            addedThisRound++;
+            if (gapSet.size >= keepGaps) break;
+          }
+        }
+        round++;
+        if (addedThisRound === 0) break;
+      }
+      const promoteIds = naItems.filter((id) => !gapSet.has(id));
+
+      const gapsByDomain: Record<string, number> = {};
+      for (const id of gapSet) {
+        const d = domainOf.get(id) || "Other";
+        gapsByDomain[d] = (gapsByDomain[d] || 0) + 1;
+      }
+      const projectedCompliant = before.compliant + promoteIds.length;
+      const readinessPctOf173 = Math.round((projectedCompliant / 173) * 100);
+
+      if (dryRun) {
+        return res.json({ ok: true, dryRun: true, scanId: scan.id, before, plan: { targetCompliant, promote: promoteIds.length, keepGaps: gapSet.size, projectedCompliant, readinessPctOf173 }, gapsByDomain });
+      }
+
+      const now = new Date().toISOString();
+      const note = `Demo readiness seed on ${now.split("T")[0]}`;
+      const upd = sqlite.prepare("UPDATE veritascan_items SET status = 'Compliant', completion_source = 'demo_seed', completion_note = ?, updated_at = ? WHERE scan_id = ? AND item_id = ? AND status = 'Not Assessed'");
+      const tx = sqlite.transaction(() => { for (const id of promoteIds) upd.run(note, now, scan.id, id); });
+      tx();
+
+      res.json({ ok: true, scanId: scan.id, before, after: { compliant: projectedCompliant, notAssessed: before.notAssessed - promoteIds.length, readinessPctOf173 }, promoted: promoteIds.length, keptGaps: gapSet.size, gapsByDomain });
+    } catch (err: any) {
+      console.error("[admin/seed-demo-scan-readiness] failed:", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/admin/set-seats", (req, res) => {
     const { secret, userId, seatCount } = req.body;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
