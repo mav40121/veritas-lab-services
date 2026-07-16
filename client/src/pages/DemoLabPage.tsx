@@ -42,6 +42,7 @@ export default function DemoLabPage() {
   const [data, setData] = useState<DemoData | null>(null);
   const [competencyData, setCompetencyData] = useState<CompetencyData | null>(null);
   const [ptCoverage, setPtCoverage] = useState<any>(null);
+  const [coverage, setCoverage] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("veritacheck");
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set());
@@ -56,10 +57,12 @@ export default function DemoLabPage() {
       fetch(`${API_BASE}/api/demo/data`).then((r) => r.json()),
       fetch(`${API_BASE}/api/demo/competency`).then((r) => r.json()).catch(() => null),
       fetch(`${API_BASE}/api/demo/pt`).then((r) => r.json()).catch(() => null),
-    ]).then(([demoData, compData, ptResult]) => {
+      fetch(`${API_BASE}/api/demo/coverage`).then((r) => r.json()).catch(() => null),
+    ]).then(([demoData, compData, ptResult, coverageResult]) => {
       setData(demoData);
       setCompetencyData(compData);
       setPtCoverage(ptResult);
+      setCoverage(coverageResult);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
@@ -379,6 +382,64 @@ export default function DemoLabPage() {
                   Calibration verification is required every 6 months per 42 CFR 493.1255. Method comparisons between instruments sharing a reference range are required at least every 6 months per accreditor standards and whenever a significant change occurs. VeritaCheck&#8482; runs every EP study required for CLIA and CAP compliance: method comparison, calibration verification/linearity, accuracy, precision, lot-to-lot verification, and QC range establishment. Each study generates a compliant PDF report with full statistical tables.
                 </p>
               </div>
+
+              {/* Coverage: required-vs-have completeness map (the differentiator) */}
+              {coverage?.hasMap && coverage.summary && (() => {
+                const s = coverage.summary;
+                const mcMissing = Math.max(0, s.methodComparisonsNeeded - s.methodComparisonsDone);
+                const clMissing = (s.linearityMissing || 0) + (s.linearityReview || 0);
+                const tile = (label: string, value: string, sub: string, bad: boolean) => (
+                  <Card>
+                    <CardContent className="pt-4 pb-4 text-center">
+                      <div className={`text-2xl font-bold ${bad ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>{value}</div>
+                      <div className="text-xs text-muted-foreground mt-1">{label}</div>
+                      <div className="text-[11px] text-muted-foreground mt-0.5">{sub}</div>
+                    </CardContent>
+                  </Card>
+                );
+                // Show a credible mix: a few covered rows plus the real gaps.
+                const mcAll = coverage.methodComparisons || [];
+                const mcRows = [
+                  ...mcAll.filter((m: any) => m.hasStudy).slice(0, 4),
+                  ...mcAll.filter((m: any) => !m.hasStudy).slice(0, 2),
+                ];
+                return (
+                  <div className="rounded-xl border border-[#006064]/30 bg-[#006064]/[0.03] p-5">
+                    <h3 className="text-base font-bold text-foreground mb-1">Coverage: what your VeritaMap requires versus what you have</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      VeritaCheck&#8482; reads this lab&#8217;s menu, works out every method comparison and calibration verification / linearity study it requires across {s.analytes} analytes and {s.instruments} instruments, and lays out what is covered, what needs review, and what is missing, in one view.
+                    </p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                      {tile("Method comparisons", `${s.methodComparisonsDone}/${s.methodComparisonsNeeded}`, mcMissing ? `${mcMissing} missing` : "all done", mcMissing > 0)}
+                      {tile("Cal Ver / Linearity", `${s.linearityCovered}/${s.linearityRequired}`, clMissing ? `${clMissing} to resolve` : "all done", clMissing > 0)}
+                      {tile("Not required", String(s.linearityExempt), "3+ cal, waived, other", false)}
+                      {tile("Analyte x instrument", String(s.combos), `${s.instruments} instruments`, false)}
+                    </div>
+                    {mcRows.length > 0 && (
+                      <div className="overflow-x-auto rounded-lg border border-border bg-background">
+                        <table className="w-full text-sm">
+                          <thead><tr className="text-left text-xs text-muted-foreground border-b border-border">
+                            <th className="py-2 px-3">Analyte</th><th className="py-2 px-3">Instruments</th><th className="py-2 px-3">Correlation</th>
+                          </tr></thead>
+                          <tbody>
+                            {mcRows.map((m: any) => (
+                              <tr key={m.analyte} className="border-b border-border/60 last:border-0">
+                                <td className="py-2 px-3 font-medium">{m.analyte}</td>
+                                <td className="py-2 px-3 text-muted-foreground text-xs">{(m.instruments || []).join(", ")}</td>
+                                <td className="py-2 px-3">
+                                  {m.hasStudy
+                                    ? <span className="inline-block rounded px-2 py-0.5 text-[11px] font-medium border border-emerald-500/40 text-emerald-600 dark:text-emerald-400">Covered</span>
+                                    : <span className="inline-block rounded px-2 py-0.5 text-[11px] font-medium border border-red-500/40 text-red-600 dark:text-red-400">Missing</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Study cards */}
               <div className="grid sm:grid-cols-2 gap-4">
