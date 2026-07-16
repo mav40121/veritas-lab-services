@@ -12297,6 +12297,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // veritamap_analyte_values is keyed (map_id, analyte, age_min_days,
+  // age_max_days, sex). Routes that address a single value per analyte address
+  // the default "All ages / any sex" band, which is what every row meant before
+  // bands existed. ageMaxDays is the UNBOUNDED sentinel (see server/db.ts: it is
+  // NOT NULL on purpose, because SQLite treats NULLs as DISTINCT in a UNIQUE
+  // index and a nullable upper bound would silently allow duplicate rows).
+  const ALL_AGES_BAND = { ageMinDays: 0, ageMaxDays: 999999, sex: "A", label: "All ages" } as const;
+
   // GET analyte-values
   app.get("/api/labs/:labId/veritamap/maps/:id/analyte-values", authMiddleware, labScopeMiddleware, requireMapInActiveLab, (req: any, res) => {
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
@@ -12313,9 +12321,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // (the MEC review flow governs criticals). Shared by the lab-scoped AND
   // legacy analyte-values PUTs so the lock cannot be bypassed.
   function refLockConflict(mapId: number, analyte: string, body: any): string | null {
+    // Scoped to the All-ages band: that is the row both PUTs write, so the lock
+    // check has to read the same row. Keyed on analyte alone it could read a
+    // different band's lock than the one being written once bands are in use.
     const existing = (db as any).$client.prepare(
-      "SELECT ref_range_low, ref_range_high, ref_locked FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?"
-    ).get(mapId, analyte) as any;
+      "SELECT ref_range_low, ref_range_high, ref_locked FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ?"
+    ).get(mapId, analyte, ALL_AGES_BAND.ageMinDays, ALL_AGES_BAND.ageMaxDays, ALL_AGES_BAND.sex) as any;
     if (!existing?.ref_locked) return null;
     const refChanged =
       (body?.ref_range_low || null) !== (existing.ref_range_low || null) ||
@@ -12333,10 +12344,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (lockErr) return res.status(409).json({ error: lockErr });
     const { ref_range_low, ref_range_high, critical_low, critical_high, units } = req.body;
     const now = new Date().toISOString();
+    // The conflict target must name the table's ACTUAL unique key. That key is
+    // now (map_id, analyte, age_min_days, age_max_days, sex); the old
+    // ON CONFLICT(map_id, analyte) no longer matches any unique constraint and
+    // SQLite rejects the statement outright, which broke every reference-range
+    // and critical-value save. This route addresses the "All ages / any sex"
+    // band explicitly, so its behaviour is exactly what it was before bands
+    // existed: one row per analyte.
     (db as any).$client.prepare(`
-      INSERT INTO veritamap_analyte_values (map_id, analyte, ref_range_low, ref_range_high, critical_low, critical_high, units, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(map_id, analyte) DO UPDATE SET
+      INSERT INTO veritamap_analyte_values
+        (map_id, analyte, age_min_days, age_max_days, sex, band_label,
+         ref_range_low, ref_range_high, critical_low, critical_high, units, updated_at)
+      VALUES (?, ?, ${ALL_AGES_BAND.ageMinDays}, ${ALL_AGES_BAND.ageMaxDays}, '${ALL_AGES_BAND.sex}', '${ALL_AGES_BAND.label}', ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(map_id, analyte, age_min_days, age_max_days, sex) DO UPDATE SET
         ref_range_low = excluded.ref_range_low,
         ref_range_high = excluded.ref_range_high,
         critical_low = excluded.critical_low,
@@ -12345,8 +12365,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         updated_at = excluded.updated_at
     `).run(mapId, analyte, ref_range_low || null, ref_range_high || null, critical_low || null, critical_high || null, units || null, now);
     const row = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?"
-    ).get(mapId, analyte);
+      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ?"
+    ).get(mapId, analyte, ALL_AGES_BAND.ageMinDays, ALL_AGES_BAND.ageMaxDays, ALL_AGES_BAND.sex);
     res.json(row);
   });
 
@@ -14138,10 +14158,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!map) return res.status(404).json({ error: "Map not found" });
     const { ref_range_low, ref_range_high, critical_low, critical_high, units } = req.body;
     const now = new Date().toISOString();
+    // Same fix as the lab-scoped PUT above: the conflict target must name the
+    // table's real unique key, which now carries the age/sex band. Targets the
+    // "All ages / any sex" band, so behaviour is unchanged from before bands.
     (db as any).$client.prepare(`
-      INSERT INTO veritamap_analyte_values (map_id, analyte, ref_range_low, ref_range_high, critical_low, critical_high, units, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(map_id, analyte) DO UPDATE SET
+      INSERT INTO veritamap_analyte_values
+        (map_id, analyte, age_min_days, age_max_days, sex, band_label,
+         ref_range_low, ref_range_high, critical_low, critical_high, units, updated_at)
+      VALUES (?, ?, ${ALL_AGES_BAND.ageMinDays}, ${ALL_AGES_BAND.ageMaxDays}, '${ALL_AGES_BAND.sex}', '${ALL_AGES_BAND.label}', ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(map_id, analyte, age_min_days, age_max_days, sex) DO UPDATE SET
         ref_range_low = excluded.ref_range_low,
         ref_range_high = excluded.ref_range_high,
         critical_low = excluded.critical_low,
@@ -14150,8 +14175,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         updated_at = excluded.updated_at
     `).run(mapId, analyte, ref_range_low || null, ref_range_high || null, critical_low || null, critical_high || null, units || null, now);
     const row = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?"
-    ).get(mapId, analyte);
+      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ?"
+    ).get(mapId, analyte, ALL_AGES_BAND.ageMinDays, ALL_AGES_BAND.ageMaxDays, ALL_AGES_BAND.sex);
     res.json(row);
   });
 
