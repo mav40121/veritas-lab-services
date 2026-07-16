@@ -18,7 +18,7 @@
 //
 // Env: PW_BASE (default production www), PW_TOKEN (JWT), PW_MAP_BANDS=1 to run.
 
-import { test, expect } from "@playwright/test";
+import { test, expect, Page } from "@playwright/test";
 import { injectAuth } from "./_auth";
 
 const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
@@ -26,6 +26,20 @@ const TOKEN = process.env.PW_TOKEN || "";
 const LAB_ID = process.env.PW_LAB_ID || "3";
 const MAP_ID = process.env.PW_MAP_ID || "47";
 const ANALYTE = process.env.PW_ANALYTE || "Acetone";
+
+// The values editor is opened by the chevron button in the analyte cell, not by
+// clicking the row, and it renders in its OWN table row below the analyte's row.
+// So: expand via the chevron inside the analyte's row, then locate the editor at
+// page level (only one row is expanded at a time).
+const EXPAND_TITLE = "Enter reference range, critical values, AMR";
+async function openAnalyte(page: Page): Promise<void> {
+  await page.goto(`${BASE}/labs/${LAB_ID}/veritamap-app/${MAP_ID}`, { waitUntil: "domcontentloaded" });
+  const row = page.locator("tr", { hasText: ANALYTE }).first();
+  await expect(row).toBeVisible({ timeout: 30000 });
+  await row.getByTitle(EXPAND_TITLE).click();
+  // The editor is open once the Units field is on screen.
+  await expect(page.getByPlaceholder("e.g. mEq/L").first()).toBeVisible({ timeout: 15000 });
+}
 
 test.describe("VeritaMap analyte age/sex bands", () => {
   test.beforeEach(async ({ page }) => {
@@ -35,22 +49,17 @@ test.describe("VeritaMap analyte age/sex bands", () => {
   });
 
   test("single band shows no chrome; add a band, switch, then remove it", async ({ page }) => {
-    await page.goto(`${BASE}/labs/${LAB_ID}/veritamap-app/${MAP_ID}`, { waitUntil: "domcontentloaded" });
-
-    // Expand the analyte's row to reveal the values editor.
-    const row = page.locator("tr", { hasText: ANALYTE }).first();
-    await expect(row).toBeVisible({ timeout: 20000 });
-    await row.click();
+    await openAnalyte(page);
 
     // 1. A single-band analyte must show NO band picker. This is every existing
     //    lab today, so it is the regression that would be most visible.
-    await expect(page.getByText("Values for")).toHaveCount(0);
+    await expect(page.getByText("Age / sex band")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "+ Add age/sex band" })).toBeVisible();
 
     // Seed a known All-ages value so we can prove adding a band does not eat it.
     const refLow = page.getByPlaceholder("e.g. 136").first();
     await refLow.fill("0.6");
-    await page.waitForTimeout(2000); // debounced autosave is 1.5s
+    await page.waitForTimeout(2500); // debounced autosave is 1.5s
 
     // 2. Add a peds band (0 to 18 years).
     await page.getByRole("button", { name: "+ Add age/sex band" }).click();
@@ -59,7 +68,7 @@ test.describe("VeritaMap analyte age/sex bands", () => {
     await page.getByRole("button", { name: "Add band" }).click();
 
     // The picker appears only now that there are two bands.
-    await expect(page.getByText("Values for")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Age / sex band")).toBeVisible({ timeout: 10000 });
     await expect(page.getByRole("button", { name: /All ages/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /0 to 18 y/ })).toBeVisible();
 
@@ -71,15 +80,12 @@ test.describe("VeritaMap analyte age/sex bands", () => {
     // 4. Remove the peds band and confirm the row returns to single-band chrome.
     await page.getByRole("button", { name: /0 to 18 y/ }).click();
     await page.getByRole("button", { name: "Remove this band" }).click();
-    await expect(page.getByText("Values for")).toHaveCount(0, { timeout: 10000 });
+    await expect(page.getByText("Age / sex band")).toHaveCount(0, { timeout: 10000 });
     await expect(refLow).toHaveValue("0.6");
   });
 
   test("a duplicate band is refused rather than silently eating a server 400", async ({ page }) => {
-    await page.goto(`${BASE}/labs/${LAB_ID}/veritamap-app/${MAP_ID}`, { waitUntil: "domcontentloaded" });
-    const row = page.locator("tr", { hasText: ANALYTE }).first();
-    await expect(row).toBeVisible({ timeout: 20000 });
-    await row.click();
+    await openAnalyte(page);
 
     // All-ages already exists; adding 0 -> no-limit / Any is the same band.
     await page.getByRole("button", { name: "+ Add age/sex band" }).click();
@@ -90,10 +96,7 @@ test.describe("VeritaMap analyte age/sex bands", () => {
   });
 
   test("an inverted age range is refused client-side", async ({ page }) => {
-    await page.goto(`${BASE}/labs/${LAB_ID}/veritamap-app/${MAP_ID}`, { waitUntil: "domcontentloaded" });
-    const row = page.locator("tr", { hasText: ANALYTE }).first();
-    await expect(row).toBeVisible({ timeout: 20000 });
-    await row.click();
+    await openAnalyte(page);
 
     await page.getByRole("button", { name: "+ Add age/sex band" }).click();
     await page.getByPlaceholder("0").first().fill("40");

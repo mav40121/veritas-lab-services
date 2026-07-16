@@ -1450,7 +1450,10 @@ function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAn
             <div className="mb-3 flex flex-wrap items-center gap-1.5">
               {bands.length > 1 && (
                 <>
-                  <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide mr-1">Values for</span>
+                  {/* Not "Values for": the panel heading above already reads
+                      "Lab-Established Values for <analyte>", and two labels
+                      opening the same way reads as a repeat. */}
+                  <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide mr-1">Age / sex band</span>
                   {bands.map(b => {
                     const active = bandKey(b) === bandKey(activeBand);
                     return (
