@@ -16543,6 +16543,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // GET /api/demo/coverage - VeritaCheck Coverage (required-vs-have) for the
+  // demo lab. Public (no auth), mirrors the authenticated
+  // /api/labs/:labId/veritacheck/coverage using the same computeCoverageForLab,
+  // so the public demo showcases the Coverage feature on the demo lab's menu.
+  app.get("/api/demo/coverage", (_req, res) => {
+    try {
+      const userId = getDemoUserId();
+      if (!userId) return res.json({ hasMap: false });
+      const sqlite = (db as any).$client;
+      const labRow = sqlite.prepare(
+        "SELECT lab_id FROM veritamap_maps WHERE user_id = ? AND lab_id IS NOT NULL LIMIT 1"
+      ).get(userId) as { lab_id: number } | undefined;
+      if (!labRow?.lab_id) return res.json({ hasMap: false });
+      res.json(computeCoverageForLab(sqlite, labRow.lab_id));
+    } catch (err: any) {
+      console.error("Demo coverage error:", err.message);
+      res.status(500).json({ error: "Failed to load demo coverage" });
+    }
+  });
+
   // GET /api/demo/overview - lab summary stats
   app.get("/api/demo/overview", (_req, res) => {
     try {
