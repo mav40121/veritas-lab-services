@@ -59,8 +59,21 @@ const PRODUCTS = [
 const SUITE = { route: "/veritaassure", fn: "renderVeritaAssureContent", id: "#veritaassure", mark: "VeritaAssure", features: 10 };
 const HUB = { route: "/operations", fn: "renderOperationsContent", mark: "VeritaAssure" };
 
+// Batch 7. The two pages that sell the consultant, not the software. No schema
+// node: same reasoning as HUB, they are not products. They are listed separately
+// from PRODUCTS because a PRODUCTS row asserts a SoftwareApplication node.
+//
+// These exist because batches 3 and 4 made every product page crawlable while
+// /services and /team stayed ~530-char shells. The resource articles trade on the
+// former-surveyor credential to earn the reader's trust, and the page that
+// substantiates that credential was the one page a crawler could not read.
+const CONSULTING = [
+  { route: "/services", fn: "renderServicesContent", mark: "consulting" },
+  { route: "/team", fn: "renderTeamContent", mark: "credential" },
+];
+
 console.log("\nCase 1: every product page has a prerender function AND is wired into injectSeoTags");
-for (const p of [...PRODUCTS, SUITE, HUB]) {
+for (const p of [...PRODUCTS, SUITE, HUB, ...CONSULTING]) {
   check(`${p.route}: ${p.fn}() is defined`, new RegExp(`function ${p.fn}\\(\\)`).test(staticSrc));
   // The wiring is what actually puts it in the response. A defined-but-unwired
   // function is the silent failure this catches: the page stays a ~520-char shell.
@@ -151,7 +164,7 @@ console.log("\nCase 4: copy guardrails on EVERY product block and featureList");
   // Includes SUITE and HUB: the guardrails apply to every block that ships, not
   // just the ten product ones. HUB has no id, so its featureList lookup is a
   // no-op and only the block half of the guardrails applies to it.
-  for (const p of [...PRODUCTS, SUITE, HUB]) {
+  for (const p of [...PRODUCTS, SUITE, HUB, ...CONSULTING]) {
     const block = bodyOf(p.fn);
     const node = p.id ? graph.find((n) => n["@id"]?.endsWith(p.id)) : undefined;
     const fl = JSON.stringify(node?.featureList || []);
@@ -160,13 +173,54 @@ console.log("\nCase 4: copy guardrails on EVERY product block and featureList");
     check(`${p.route}: featureList has no em dash`, !fl.includes("—"));
     check(`${p.route}: block has no dated accreditor manual reference`, !DATED.test(block));
     check(`${p.route}: featureList has no dated accreditor manual reference`, !DATED.test(fl));
-    check(`${p.route}: ${p.mark} carries the trademark mark`,
-      new RegExp(`${p.mark}&#8482;`).test(block));
+    // The trademark check only applies to blocks naming a product. /services and
+    // /team sell a person, so their "mark" is a topic label, not a product name.
+    if (!CONSULTING.includes(p)) {
+      check(`${p.route}: ${p.mark} carries the trademark mark`,
+        new RegExp(`${p.mark}&#8482;`).test(block));
+    }
   }
   // Cross-product marks appearing inside another product's copy.
   check("/veritastaff block marks VeritaMap", /VeritaMap&#8482;/.test(bodyOf("renderVeritaStaffContent")));
   check("/veritatrack block marks VeritaMap", /VeritaMap&#8482;/.test(bodyOf("renderVeritaTrackContent")));
   check("/veritapt block marks VeritaScan", /VeritaScan&#8482;/.test(bodyOf("renderVeritaPTContent")));
+}
+
+console.log("\nCase 4c: the consulting pages state the credential faithfully");
+{
+  const bodyOf = (fnName) => {
+    const start = staticSrc.indexOf(`function ${fnName}(`);
+    if (start < 0) return "";
+    return staticSrc.slice(start, staticSrc.indexOf("\n}", start));
+  };
+  const team = bodyOf("renderTeamContent");
+  const services = bodyOf("renderServicesContent");
+  const teamPage = readFileSync(new URL("../client/src/pages/TeamPage.tsx", import.meta.url), "utf8");
+
+  // Every credential here is a claim about a real person, so each traces to the
+  // page that already makes it. These are the ones that would quietly become a
+  // false statement if the copy drifted.
+  check("TeamPage itself claims the 4-year TJC surveyor tenure", /Surveyor \(4 years\)/.test(teamPage));
+  check("/team block says four years, matching TeamPage", /four years/.test(team));
+  check("/team block says Joint Commission, never CMS", /Joint Commission/.test(team) && !/CMS surveyor/i.test(team));
+
+  // Lab Management 101 is NOT published. Saying otherwise is a fabricated claim
+  // about a real book, and TeamPage marks it forthcoming.
+  check("TeamPage marks Lab Management 101 forthcoming", /forthcoming/i.test(teamPage));
+  check("/team block preserves 'forthcoming' on Lab Management 101",
+    /Lab Management 101[^.]*forthcoming/i.test(team));
+
+  // Standing rule: LabVine Learning references are removed permanently.
+  for (const [name, b] of [["/team", team], ["/services", services]]) {
+    check(`${name} block has no LabVine reference`, !/labvine/i.test(b));
+    // Labs verify, manufacturers validate.
+    check(`${name} block does not say "validation" of lab work`, !/method validation|validation suite/i.test(b));
+  }
+
+  // /services must name what is actually sold, not a generic pitch.
+  for (const line of ["mock inspections", "productivity", "coaching"]) {
+    check(`/services block names the ${line} service line`, new RegExp(line, "i").test(services));
+  }
 }
 
 console.log("\nCase 4b: VeritaBench lives at /calculator; /veritabench is a legacy VeritaPace slug");
