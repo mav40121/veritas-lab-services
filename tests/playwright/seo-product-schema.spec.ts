@@ -36,7 +36,17 @@ const PRODUCTS = [
   { route: "/veritascan",   id: "#veritascan",   name: "VeritaScan",   blockText: "self-inspection and compliance audit tool" },
   { route: "/veritamap",    id: "#veritamap",    name: "VeritaMap",    blockText: "master regulatory map" },
   { route: "/veritacomp",   id: "#veritacomp",   name: "VeritaComp",   blockText: "competency assessment across all three types" },
+  // Batch 3
+  { route: "/veritatrack",  id: "#veritatrack",  name: "VeritaTrack",  blockText: "replaces the binders and clipboards" },
+  { route: "/veritapt",     id: "#veritapt",     name: "VeritaPT",     blockText: "tracks proficiency testing enrollment, survey results, and corrective actions" },
+  { route: "/veritalab",    id: "#veritalab",    name: "VeritaLab",    blockText: "centralized storage for a laboratory's accreditation certificates" },
+  { route: "/veritastock",  id: "#veritastock",  name: "VeritaStock",  blockText: "burn-rate par levels, lead-time-aware reorder alerts" },
 ];
+
+// /veritabench is absent on purpose: it renders VeritaPace (h1, useSEO title and
+// hero all say VeritaPace) and there is no /veritapace route, so there is no
+// VeritaBench identity to assert. See scripts/verify-seo-product-prerender.mjs
+// Case 4b, which pins that absence.
 
 test.describe("SEO product pages: schema graph + server-rendered feature block", () => {
   test.beforeEach(() => {
