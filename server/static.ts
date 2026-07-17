@@ -108,6 +108,31 @@ function renderVeritaStaffContent(): string {
   return `<h2>VeritaStaff&#8482; laboratory personnel management</h2><p>VeritaStaff&#8482; is laboratory personnel management: staff roster, CLIA role assignments, competency scheduling, and CMS 209 generation in one place. Every CLIA-certified laboratory must maintain accurate personnel records and demonstrate that staff qualifications match their assigned roles and testing responsibilities. VeritaStaff&#8482; maintains the complete roster with credentials, hire dates, and qualification tracking; assigns the CLIA roles (laboratory director, clinical consultant, technical consultant, technical supervisor, general supervisor, and testing personnel) with specialty coverage across all 17 CMS specialty categories; and auto-generates a pre-filled CMS 209 Laboratory Personnel Report, one row per specialty per person. Its competency timeline engine calculates the Initial, 6-month, 1st Annual, and Annual milestones, with rule sets built in for TJC, CAP, COLA, CLIA-only, and New York State, and early completion recalculates due dates from the actual completion date. It integrates with VeritaMap&#8482; to import departments and suggest technical consultant and technical supervisor specialties. Built by a former Joint Commission laboratory surveyor with more than 200 facility inspections.</p>`;
 }
 
+// Batch 3 (2026-07-17): the remaining product pages that were still a ~520-char
+// shell. Copy is each page's own content (hero, FEATURES arrays), not restated
+// from memory.
+//
+// VeritaBench is deliberately absent. /veritabench renders VeritaPace: the h1,
+// the useSEO title and the hero all say VeritaPace, and there is no /veritapace
+// route. A "VeritaBench is..." block there would publish a product identity the
+// page itself contradicts. Blocked on a product decision, not a copy one.
+//
+// No VeritaStock host branch needed: on STOCK_DEPLOYMENT the route handler
+// returns the shell WITHOUT calling injectSeoTags (see the handler below), so
+// these bodies only ever render on veritaslabservices.com.
+function renderVeritaTrackContent(): string {
+  return `<h2>VeritaTrack&#8482; regulatory calendar and sign-off</h2><p>VeritaTrack&#8482; replaces the binders and clipboards a laboratory uses to document daily, weekly, and monthly QC. It builds itself from the test menu rather than from data entry: one click imports VeritaMap&#8482;, and every analyte that is not waived gets its calibration verification, its correlation, its precision verification, and its SOP review, each on its own frequency and each tied back to the analyte and the instrument it runs on. Waived analytes are skipped automatically, because complexity arrives with the test from its FDA classification rather than being decided by hand.</p><p>Configure recurring daily, weekly, monthly, and custom-cadence tasks across instruments and departments. Status is color-coded Done, Due Soon, Overdue, and Not Started, with due-date alerts so nothing slips through the cracks. Capture sign-offs with timestamps and analyst initials, keep the complete history with notes, and export any date range to Excel for inspector documentation. A sign-off sets the next due date from that task's own frequency and writes the completion date back into VeritaMap&#8482;, so the menu and the calendar cannot drift apart. Built by a former Joint Commission laboratory surveyor with more than 200 facility inspections.</p>`;
+}
+function renderVeritaPTContent(): string {
+  return `<h2>VeritaPT&#8482; proficiency testing tracking</h2><p>VeritaPT&#8482; tracks proficiency testing enrollment, survey results, and corrective actions by analyte. Record each analyte you are enrolled for with its PT provider, program code, and specialty. Log the result for each event alongside the peer mean, the peer standard deviation, and the acceptable range; the standard deviation index is calculated for you. For any unacceptable result, close the loop in the record itself: root cause, action taken, and verification, which is what 42 CFR 493.801 and the CAP checklist require. Download a surveyor-ready PDF covering every enrollment, every event, and every corrective action, with full PT history by analyte, and have it in hand before the survey window opens. VeritaPT&#8482; integrates with VeritaScan&#8482; to auto-complete the proficiency testing items on the self-inspection checklist. Built by a former Joint Commission laboratory surveyor with more than 200 facility inspections.</p>`;
+}
+function renderVeritaLabContent(): string {
+  return `<h2>VeritaLab&#8482; certificate and accreditation tracking</h2><p>VeritaLab&#8482; is centralized storage for a laboratory's accreditation certificates, licenses, and supporting documents. The CLIA certificate is auto-populated from your account lookup data; add CAP accreditation, TJC accreditation, state licenses, and laboratory director licenses alongside it. Configurable expiration reminders go out at 9 months, 6 months, 3 months, 30 days, and at expiration, delivered by email to the account owner, and the system auto-detects missing expiration dates on the auto-populated CLIA records so a blank does not read as a pass.</p><p>Upload and archive the actual certificate PDFs, scanned images, and supporting documents, so during a survey or a renewal you retrieve them instead of scrambling for paperwork. Status is color-coded expired, expiring soon, current, or no date entered, with certificate type badges for CLIA, CAP, TJC, state, and other, and the whole register exports to Excel with the status colors and days-until-expiration calculations intact. Built by a former Joint Commission laboratory surveyor who has reviewed certificate records at more than 200 facilities.</p>`;
+}
+function renderVeritaStockContent(): string {
+  return `<h2>VeritaStock&#8482; inventory and reagent management</h2><p>VeritaStock&#8482; tracks reagent and supply inventory across departments with burn-rate par levels, lead-time-aware reorder alerts, and expiration tracking. Days on hand and reorder points are calculated from real consumption and real vendor lead times rather than from a number somebody typed once, so the reorder point moves when the burn rate moves. Expiration tracking carries a configurable warning window per item, and standing orders are managed with quarterly review reminders. Status is color-coded Reorder Now, Expiring Soon, OK, and Standing Order, so a shelf that is about to bite you is visible before it does. Included with VeritaAssure&#8482; Suite plans on Clinic, Community, Hospital, and Enterprise.</p>`;
+}
+
 function getIndexHtml(distPath: string): string {
   if (!cachedIndexHtml) {
     let html = fs.readFileSync(path.resolve(distPath, "index.html"), "utf-8");
@@ -201,6 +226,14 @@ function injectSeoTags(html: string, routePath: string, meta: SEOMetadata): stri
     noscriptInner += renderVeritaPolicyContent();
   } else if (routePath === "/veritastaff") {
     noscriptInner += renderVeritaStaffContent();
+  } else if (routePath === "/veritatrack") {
+    noscriptInner += renderVeritaTrackContent();
+  } else if (routePath === "/veritapt") {
+    noscriptInner += renderVeritaPTContent();
+  } else if (routePath === "/veritalab") {
+    noscriptInner += renderVeritaLabContent();
+  } else if (routePath === "/veritastock") {
+    noscriptInner += renderVeritaStockContent();
   }
   // If this route carries a FAQPage node, expose its Q&A in the noscript body so
   // crawlers and AI answer engines read the questions and answers as page text,
