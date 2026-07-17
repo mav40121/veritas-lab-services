@@ -63,8 +63,10 @@ function definedTermJsonLd(name: string, description: string, pagePath: string):
 // hand-authored Article nodes (EP26, TEa, QC). articleBody is composed from the
 // article's own headline lede, key takeaways, and section headings, copied
 // verbatim from the rendered page, so the body signal is faithful with zero
-// drift and no fabricated content. Because articleBody is set here, the later
-// enrichArticleBodies() pass leaves these nodes untouched.
+// drift and no fabricated content. An articleBody set here is never replaced:
+// enrichArticleBodies() SEEDS its composition from this text and appends the
+// page's FAQ and HowTo after it, so the authored prose stays intact and stays
+// first. That pass is additive only.
 function articleJsonLd(opts: {
   headline: string;
   description: string;
@@ -557,13 +559,39 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
 // an articleBody for every Article node from its own description plus the Q&A and
 // step text already present on the same page (imported verbatim from faqContent),
 // so the body signal is faithful to the rendered page with zero drift.
-function enrichArticleBodies(map: Record<string, SEOMetadata>): void {
+// Idempotency guard. MODULE SCOPE ON PURPOSE, and load-bearing: the old
+// `if (article.articleBody) continue` was quietly doing two jobs. Besides
+// protecting authored bodies it also made this pass idempotent, because after one
+// run every composed node HAS an articleBody and a second run short-circuits on
+// its own output. The seed below removes that property: a second run would seed
+// from the already-composed body and append the FAQ again, silently doubling it
+// (measured: 158 -> 259 chars, question present 2x). There is one call site today
+// (module load), so that is not a live bug; it becomes one the moment this module
+// is imported twice, a test re-invokes the pass, or someone adds a second call.
+// Do not delete this without restoring some other guard.
+const enrichedArticles = new WeakSet<object>();
+
+// Exported for scripts/verify-article-body-composition.mts, which drives it over
+// synthetic maps to exercise every branch and calls it three times to prove the
+// guard above actually holds.
+export function enrichArticleBodies(map: Record<string, SEOMetadata>): void {
   for (const meta of Object.values(map)) {
     const blocks = Array.isArray(meta.jsonLd) ? meta.jsonLd : meta.jsonLd ? [meta.jsonLd] : [];
     const article = blocks.find((b) => (b as any)?.["@type"] === "Article") as any;
-    if (!article || article.articleBody) continue;
+    if (!article) continue;
+    if (enrichedArticles.has(article)) continue;
+    enrichedArticles.add(article);
+    // Was `if (!article || article.articleBody) continue`. A hand-authored body is
+    // verbatim page text (see articleJsonLd above) and must never be discarded, so
+    // it now SEEDS the composition instead of suppressing it. This pass is
+    // ADDITIVE ONLY: it may add text to an articleBody, never remove or replace it.
+    // Deleting the authored bodies instead would have gutted the four articles that
+    // have no FAQ and no HowTo, where composition falls through to description
+    // alone: 923 -> 155, 1003 -> 151, 1016 -> 152, 1450 -> 138.
     const parts: string[] = [];
-    if (typeof article.description === "string") parts.push(article.description);
+    const authored = typeof article.articleBody === "string" ? article.articleBody.trim() : "";
+    if (authored) parts.push(authored);
+    else if (typeof article.description === "string") parts.push(article.description);
     const faq = blocks.find((b) => (b as any)?.["@type"] === "FAQPage") as any;
     if (faq && Array.isArray(faq.mainEntity)) {
       for (const q of faq.mainEntity) {
