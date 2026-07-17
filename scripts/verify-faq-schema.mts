@@ -113,6 +113,27 @@ function assertHowTo(route: string) {
   const ht = bs.find((b) => b["@type"] === "HowTo");
   check(`${route}: HowTo present`, !!ht);
   check(`${route}: HowTo has >= 3 steps`, Array.isArray(ht?.step) && ht.step.length >= 3);
+
+  // Regression guard for the (s.name || s.text) drop: enrichArticleBodies took a
+  // step's short `name` label and discarded its `text` instruction, so the
+  // substantive half of every HowTo never reached articleBody.
+  //
+  // Phrased as an implication rather than an absolute, because it must hold for
+  // COMPOSED bodies without firing on HAND-AUTHORED ones. enrichArticleBodies
+  // short-circuits on an Article that already has an articleBody, so a hardcoded
+  // body legitimately contains neither the names nor the text. If a step's name
+  // is present, that body was composed, and then its text must be present too.
+  const art = bs.find((b) => b["@type"] === "Article");
+  const body: string = art?.articleBody || "";
+  if (!body || !Array.isArray(ht?.step)) return;
+  const composed = ht.step.filter((s: any) => s?.name && body.includes(s.name));
+  if (composed.length === 0) return; // hand-authored articleBody: not our business
+  const dropped = composed.filter((s: any) => s?.text && !body.includes(s.text));
+  check(
+    `${route}: composed articleBody keeps HowTo step TEXT, not just the name label`,
+    dropped.length === 0,
+    dropped.length ? `${dropped.length}/${composed.length} steps lost their text` : `${composed.length} steps intact`,
+  );
 }
 function assertArticle(route: string) {
   check(`${route}: Article block present`, !!typeBlock(blocksFor(route), "Article"));
@@ -212,6 +233,39 @@ assertNoEmDash(REFINT);
   check(`${REFINT}: every FAQ Q&A composed into articleBody`, faqInBody, `${body.length} chars`);
   // Pre-batch-5 it was 425 chars (description + HowTo step names only).
   check(`${REFINT}: articleBody grew well past its 425-char pre-FAQ size`, body.length > 2000, `${body.length} chars`);
+}
+
+// Class sweep for the HowTo step-text drop. The per-route assertHowTo() calls
+// above cover only the routes someone remembered to list: when the bug was found,
+// 4 routes called it but only 1 of the 3 routes with a COMPOSED body was among
+// them, so 2 of the 3 pages the fix repaired had no guard at all. Deriving the
+// list from seoMetadataMap instead means a HowTo route added later is covered the
+// day it lands, with nobody needing to remember this.
+console.log("");
+console.log("Class sweep: every Article+HowTo route keeps its step text");
+{
+  let swept = 0;
+  for (const [route, meta] of Object.entries<any>(seoMetadataMap)) {
+    const j = meta?.jsonLd;
+    const bs: Block[] = !j ? [] : Array.isArray(j) ? j : [j];
+    const art = bs.find((b) => b["@type"] === "Article");
+    const ht = bs.find((b) => b["@type"] === "HowTo");
+    if (!art || !ht || !Array.isArray(ht.step)) continue;
+    const body: string = art.articleBody || "";
+    const composed = ht.step.filter((s: any) => s?.name && body.includes(s.name));
+    if (composed.length === 0) {
+      // Hand-authored articleBody: enrichArticleBodies never ran on it, so its
+      // HowTo text legitimately is not there. Reported, not failed: what goes in
+      // an authored body is the author's call, not this script's.
+      console.log(`      skip  ${route}  (hand-authored articleBody, ${body.length} chars)`);
+      continue;
+    }
+    swept++;
+    const dropped = composed.filter((s: any) => s?.text && !body.includes(s.text));
+    check(`${route}: all ${composed.length} composed HowTo steps keep their text`, dropped.length === 0,
+      dropped.length ? `${dropped.length} lost text` : `${body.length} char body`);
+  }
+  check(`sweep covered every composed HowTo route`, swept >= 3, `${swept} route(s) swept`);
 }
 
 console.log("");

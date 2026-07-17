@@ -573,8 +573,15 @@ function enrichArticleBodies(map: Record<string, SEOMetadata>): void {
     const howto = blocks.find((b) => (b as any)?.["@type"] === "HowTo") as any;
     if (howto && Array.isArray(howto.step)) {
       for (const s of howto.step) {
-        const t = s?.name || s?.text;
-        if (t) parts.push(String(t));
+        // Take BOTH halves. A HowToStep's `name` is a short label ("Test twenty
+        // reference individuals") and its `text` is the actual instruction. The
+        // prior `name || text` took the label and discarded the instruction on
+        // every step that had a name, which is every step we author, so the
+        // substantive half of every HowTo never reached articleBody.
+        const name = s?.name ? String(s.name) : "";
+        const text = s?.text ? String(s.text) : "";
+        if (name) parts.push(name);
+        if (text && text !== name) parts.push(text);
       }
     }
     const body = parts.join(" ").replace(/\s+/g, " ").trim();
