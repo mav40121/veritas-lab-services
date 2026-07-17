@@ -963,6 +963,11 @@ const cliaUserCols: [string, string][] = [
   ["clia_verified_at", "TEXT"],
   ["seat_count", "INTEGER DEFAULT 1"],
   ["plan_expires_at", "TEXT"],
+  // The paid tier a self-service signup PICKED, recorded as interest, not
+  // entitlement. The account's `plan` is always gated (free/per_study) at signup;
+  // this captures "which plan fits their lab" for sales. See server/signupPlan.ts.
+  // Additive only, no backfill: existing accounts keep NULL.
+  ["signup_selected_tier", "TEXT"],
 ];
 for (const [col, colType] of cliaUserCols) {
   if (!colNames.includes(col)) {
