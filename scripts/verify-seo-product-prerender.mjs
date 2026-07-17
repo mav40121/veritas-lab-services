@@ -32,7 +32,18 @@ const PRODUCTS = [
   { route: "/veritacomp",   fn: "renderVeritaCompContent",   id: "#veritacomp",   mark: "VeritaComp" },
   { route: "/veritapolicy", fn: "renderVeritaPolicyContent", id: "#veritapolicy", mark: "VeritaPolicy" },
   { route: "/veritastaff",  fn: "renderVeritaStaffContent",  id: "#veritastaff",  mark: "VeritaStaff" },
+  // Batch 3
+  { route: "/veritatrack",  fn: "renderVeritaTrackContent",  id: "#veritatrack",  mark: "VeritaTrack" },
+  { route: "/veritapt",     fn: "renderVeritaPTContent",     id: "#veritapt",     mark: "VeritaPT" },
+  { route: "/veritalab",    fn: "renderVeritaLabContent",    id: "#veritalab",    mark: "VeritaLab" },
+  { route: "/veritastock",  fn: "renderVeritaStockContent",  id: "#veritastock",  mark: "VeritaStock" },
 ];
+
+// /veritabench is deliberately NOT here. It renders VeritaPace: the h1, the
+// useSEO title and the hero all say VeritaPace, and there is no /veritapace
+// route. A "VeritaBench is..." block there would publish a product identity the
+// page itself contradicts. Blocked on a product decision, not a copy one.
+// Case 4b below asserts that absence stays deliberate rather than an oversight.
 
 console.log("\nCase 1: every product page has a prerender function AND is wired into injectSeoTags");
 for (const p of PRODUCTS) {
@@ -59,7 +70,8 @@ if (m) {
 
 console.log("\nCase 3: each product has a SoftwareApplication node with a non-empty featureList");
 const apps = graph.filter((n) => n["@type"] === "SoftwareApplication");
-check(`found ${apps.length} SoftwareApplication nodes (VeritaAssure + 6 products = 7)`, apps.length === 7, `got ${apps.length}`);
+check(`found ${apps.length} SoftwareApplication nodes (VeritaAssure + ${PRODUCTS.length} products = ${PRODUCTS.length + 1})`,
+  apps.length === PRODUCTS.length + 1, `got ${apps.length}`);
 for (const p of PRODUCTS) {
   const node = graph.find((n) => typeof n["@id"] === "string" && n["@id"].endsWith(p.id));
   check(`${p.mark}: node exists at ${p.id}`, !!node);
@@ -73,31 +85,43 @@ for (const p of PRODUCTS) {
   check(`${p.mark}: has a description`, typeof node.description === "string" && node.description.length > 20);
 }
 
-console.log("\nCase 4: copy guardrails on the batch-2 blocks and featureLists");
+console.log("\nCase 4: copy guardrails on EVERY product block and featureList");
 {
-  const policyFn = staticSrc.slice(staticSrc.indexOf("function renderVeritaPolicyContent"), staticSrc.indexOf("function renderVeritaStaffContent"));
-  const staffStart = staticSrc.indexOf("function renderVeritaStaffContent");
-  const staffFn = staticSrc.slice(staffStart, staticSrc.indexOf("function getIndexHtml"));
-  const policyNode = graph.find((n) => n["@id"]?.endsWith("#veritapolicy"));
-  const staffNode = graph.find((n) => n["@id"]?.endsWith("#veritastaff"));
-  const surfaces = [
-    ["/veritapolicy block", policyFn],
-    ["/veritastaff block", staffFn],
-    ["/veritapolicy featureList", JSON.stringify(policyNode?.featureList || [])],
-    ["/veritastaff featureList", JSON.stringify(staffNode?.featureList || [])],
-  ];
-  for (const [label, text] of surfaces) {
-    check(`${label}: no em dash`, !text.includes("—"));
-  }
-  // Dated accreditor manual references. The audit script owns the full rule; this
-  // is the narrow version for the copy this PR adds.
+  // Generalised over PRODUCTS rather than a hardcoded pair, so a later batch
+  // cannot add copy that skips the guardrails just by not being named here.
+  const bodyOf = (fnName) => {
+    const start = staticSrc.indexOf(`function ${fnName}(`);
+    if (start < 0) return "";
+    return staticSrc.slice(start, staticSrc.indexOf("\n}", start));
+  };
+  // Dated accreditor manual references. The audit script owns the full rule;
+  // this is the narrow version for the copy these blocks add.
   const DATED = /\b(TJC|CAP|AABB|COLA)\b[^.]{0,40}\b(20\d\d|19\d\d)\b|\b(20\d\d|19\d\d)\s+(edition|manual)\b/i;
-  for (const [label, text] of surfaces) {
-    check(`${label}: no dated accreditor manual reference`, !DATED.test(text));
+
+  for (const p of PRODUCTS) {
+    const block = bodyOf(p.fn);
+    const node = graph.find((n) => n["@id"]?.endsWith(p.id));
+    const fl = JSON.stringify(node?.featureList || []);
+    check(`${p.route}: block found in source`, block.length > 0);
+    check(`${p.route}: block has no em dash`, !block.includes("—"));
+    check(`${p.route}: featureList has no em dash`, !fl.includes("—"));
+    check(`${p.route}: block has no dated accreditor manual reference`, !DATED.test(block));
+    check(`${p.route}: featureList has no dated accreditor manual reference`, !DATED.test(fl));
+    check(`${p.route}: ${p.mark} carries the trademark mark`,
+      new RegExp(`${p.mark}&#8482;`).test(block));
   }
-  check("/veritapolicy block: VeritaPolicy carries the trademark mark", /VeritaPolicy&#8482;/.test(policyFn));
-  check("/veritastaff block: VeritaStaff carries the trademark mark", /VeritaStaff&#8482;/.test(staffFn));
-  check("/veritastaff block: VeritaMap carries the trademark mark", /VeritaMap&#8482;/.test(staffFn));
+  // Cross-product marks appearing inside another product's copy.
+  check("/veritastaff block marks VeritaMap", /VeritaMap&#8482;/.test(bodyOf("renderVeritaStaffContent")));
+  check("/veritatrack block marks VeritaMap", /VeritaMap&#8482;/.test(bodyOf("renderVeritaTrackContent")));
+  check("/veritapt block marks VeritaScan", /VeritaScan&#8482;/.test(bodyOf("renderVeritaPTContent")));
+}
+
+console.log("\nCase 4b: /veritabench stays deliberately absent (it renders VeritaPace)");
+{
+  const bench = readFileSync(new URL("../client/src/pages/VeritaBenchPage.tsx", import.meta.url), "utf8");
+  check("VeritaBenchPage still renders VeritaPace (the blocker)", /VeritaPace/.test(bench));
+  check("no /veritabench prerender is wired", !/routePath === "\/veritabench"/.test(staticSrc));
+  check("no #veritabench node in the graph", !graph.some((n) => n["@id"]?.endsWith("#veritabench")));
 }
 
 console.log("\nCase 5: batch-2 counts match the live page, not a restatement from memory");
