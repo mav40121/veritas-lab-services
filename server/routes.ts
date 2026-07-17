@@ -7,6 +7,7 @@ import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
 import { resolveStudyAccess, consumeStudyCredit, isUnlimitedPlan } from "./studyCredits";
+import { resolveSignupPlan } from "./signupPlan";
 import { db, PLAN_SEATS, PLAN_VIEW_ONLY_SEATS, PLAN_PRICES, PLAN_BED_RANGES, suggestTierFromBeds } from "./db";
 import { computeUsageQty, validateTransfer, validateBatch, matchKey, countOnHand, scopeEnterpriseLocations } from "./enterpriseTransfer";
 import { sendNewsletter, verifyUnsubscribeToken, resolveRecipients } from "./newsletter";
@@ -4759,16 +4760,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // so any selected plan is wrong by definition. The seat-claim block
     // below will set plan/lab_id/seat_count from the owner's record.
     const { plan: reqPlan, hospital_name, hospital_state, bed_count } = req.body;
-    const validPlans = ["free", "per_study", "clinic", "community", "hospital", "enterprise", "waived", "large_hospital", "veritacheck_only", "lab"];
-    const selectedPlan = seatInvite ? "free" : (validPlans.includes(reqPlan) ? reqPlan : "free");
+    // A self-service signup can only ever HOLD a gated plan. The picked paid tier
+    // is recorded as interest (signup_selected_tier), never written to `plan`,
+    // because the study-credit gate treats any paid plan as unlimited. See
+    // server/signupPlan.ts. Fixes the leak where picking Community at signup
+    // granted unlimited access for $0.
+    const { plan: selectedPlan, selectedTier: signupSelectedTier } = resolveSignupPlan(reqPlan, !!seatInvite);
     const selectedSeatCount = seatInvite ? 1 : (PLAN_SEATS[selectedPlan] || 1);
     const effHospitalName = seatInvite ? null : (hospital_name || null);
     const effHospitalState = seatInvite ? null : (hospital_state || null);
     const effBedCount = seatInvite ? null : (bed_count || null);
     try {
       (db as any).$client.prepare(
-        "UPDATE users SET hipaa_acknowledged = 1, hipaa_acknowledged_at = ?, plan = ?, seat_count = ?, hospital_name = ?, hospital_state = ?, bed_count = ? WHERE id = ?"
-      ).run(new Date().toISOString(), selectedPlan, selectedSeatCount, effHospitalName, effHospitalState, effBedCount, user.id);
+        "UPDATE users SET hipaa_acknowledged = 1, hipaa_acknowledged_at = ?, plan = ?, seat_count = ?, hospital_name = ?, hospital_state = ?, bed_count = ?, signup_selected_tier = ? WHERE id = ?"
+      ).run(new Date().toISOString(), selectedPlan, selectedSeatCount, effHospitalName, effHospitalState, effBedCount, signupSelectedTier, user.id);
       // Also update in-memory storage so the returned user object reflects the new plan
       storage.updateUserPlan(user.id, selectedPlan, user.studyCredits);
     } catch {}
