@@ -112,10 +112,13 @@ function renderVeritaStaffContent(): string {
 // shell. Copy is each page's own content (hero, FEATURES arrays), not restated
 // from memory.
 //
-// VeritaBench is deliberately absent. /veritabench renders VeritaPace: the h1,
-// the useSEO title and the hero all say VeritaPace, and there is no /veritapace
-// route. A "VeritaBench is..." block there would publish a product identity the
-// page itself contradicts. Blocked on a product decision, not a copy one.
+// VeritaBench is absent from THIS list because it is not a batch-3 page: its
+// page is /calculator, prerendered above by renderProductivityCalculatorContent().
+// /veritabench is a legacy slug that renders VeritaPace (h1, useSEO title and
+// hero all say VeritaPace), which is why no "VeritaBench is..." block belongs
+// there. See OperationsPage.tsx MODULES for the authoritative route map:
+// VeritaBench=/calculator, VeritaPace=/veritabench, VeritaShift=/veritabench/staffing,
+// VeritaQA=/veritabench/pi, VeritaStock=/veritastock, VeritaOps=/veritaops-app.
 //
 // No VeritaStock host branch needed: on STOCK_DEPLOYMENT the route handler
 // returns the shell WITHOUT calling injectSeoTags (see the handler below), so
@@ -128,6 +131,17 @@ function renderVeritaPTContent(): string {
 }
 function renderVeritaLabContent(): string {
   return `<h2>VeritaLab&#8482; certificate and accreditation tracking</h2><p>VeritaLab&#8482; is centralized storage for a laboratory's accreditation certificates, licenses, and supporting documents. The CLIA certificate is auto-populated from your account lookup data; add CAP accreditation, TJC accreditation, state licenses, and laboratory director licenses alongside it. Configurable expiration reminders go out at 9 months, 6 months, 3 months, 30 days, and at expiration, delivered by email to the account owner, and the system auto-detects missing expiration dates on the auto-populated CLIA records so a blank does not read as a pass.</p><p>Upload and archive the actual certificate PDFs, scanned images, and supporting documents, so during a survey or a renewal you retrieve them instead of scrambling for paperwork. Status is color-coded expired, expiring soon, current, or no date entered, with certificate type badges for CLIA, CAP, TJC, state, and other, and the whole register exports to Excel with the status colors and days-until-expiration calculations intact. Built by a former Joint Commission laboratory surveyor who has reviewed certificate records at more than 200 facilities.</p>`;
+}
+// Batch 4 (2026-07-17): the two hub pages. /veritaassure is the suite's own
+// landing page and carries the only node in the graph with no isPartOf (it IS
+// the suite). /operations is the operations-stream hub: prerender only, no
+// node, because it is not a product and every added node is one the stock host
+// has to filter.
+function renderVeritaAssureContent(): string {
+  return `<h2>VeritaAssure&#8482; laboratory compliance platform</h2><p>VeritaAssure&#8482; is the integrated compliance platform for clinical laboratories from Veritas Lab Services, LLC, built by a former Joint Commission laboratory surveyor with more than 200 facility inspections. It unites performance verification, inspection readiness, test menu mapping, competency assessment, policy control, personnel records, and certificate monitoring in one browser-based system. No desktop software, no installation, and no protected health information is stored.</p><p>The suite is seventeen modules in two streams. Eleven compliance modules: VeritaCheck&#8482; runs the performance verification studies required under 42 CFR Part 493 (Calibration Verification / Linearity, Correlation / Method Comparison, precision, and reagent and QC lot verification) and generates CFR-cited PDF reports with a laboratory director or designee signature block on page 1. VeritaMap&#8482; maps every instrument and analyte to its CLIA complexity, specialty, and FDA classification. VeritaScan&#8482; scores self-inspection readiness across 173 compliance items in 10 domains against the current TJC standard and the CAP checklist. VeritaComp&#8482; manages competency using all six CLIA assessment elements on the Initial, 6-month, and annual timeline. VeritaPolicy&#8482; pre-loads the policies CLIA requires and crosswalks each one to your accreditor. VeritaStaff&#8482; holds the personnel roster with CLIA role assignments and auto-generates the CMS 209 Laboratory Personnel Report. VeritaLab&#8482; tracks CLIA, CAP, TJC, COLA, and state certificates with advance expiration reminders. VeritaPT&#8482; checks the test menu against CLIA proficiency testing requirements and surfaces gaps. VeritaTrack&#8482; is the regulatory compliance calendar. VeritaQC&#8482; evaluates daily quality control against Westgard multi-rules. VeritaResponse&#8482; turns a survey citation into a tracked finding with a per-accreditor due-date clock and renders a plan of correction.</p><p>Six operations modules extend the platform: VeritaBench&#8482;, VeritaPace&#8482;, VeritaShift&#8482;, VeritaQA&#8482;, VeritaStock&#8482;, and VeritaOps&#8482;. Modules share data, so the test menu in VeritaMap&#8482; feeds VeritaCheck&#8482; instrument selection, VeritaComp&#8482; competency assignment, and VeritaPT&#8482; enrollment checks. VeritaAssure&#8482; states the regulatory result; final approval and clinical determination rest with the laboratory director or designee.</p>`;
+}
+function renderOperationsContent(): string {
+  return `<h2>VeritaAssure&#8482; laboratory operations</h2><p>The operations stream of the VeritaAssure&#8482; platform covers laboratory productivity, staffing, quality metrics, inventory, and cost per reportable test. Six modules, built by a former Joint Commission laboratory surveyor with more than 200 facility inspections, browser-based, with no protected health information stored.</p><p>VeritaBench&#8482; is a free one-page benchmarking tool with no sign-in: it checks whether your laboratory's billable tests per paid hour fall inside, above, or below the published benchmark. VeritaPace&#8482; tracks productivity month over month with billable tests, paid hours, FTE, overtime, and trend lines, built for managers reporting operational performance to the C-suite. VeritaShift&#8482; analyzes workload hour by hour for shift design and FTE planning, showing where staffed capacity matches demand and where the gaps are. VeritaQA&#8482; is a performance improvement dashboard for department-level quality indicators, tracking metric trends, targets, and corrective actions. VeritaStock&#8482; handles reagent and supply inventory with lot tracking, expiration alerts, calculated par levels, FIFO rotation prompts, and burn-rate-based reorder triggers. VeritaOps&#8482; is a layered cost-per-reportable-test calculator: reagents and supplies plus staff time, with capital depreciation and overhead as opt-in layers, built on CLSI GP11-A cost accounting principles to answer the build versus buy and charge-master questions with transparent math the laboratory director or designee can defend.</p><p>The operations modules complement the eleven compliance modules of VeritaAssure&#8482;, which cover performance verification, inspection readiness, test menu mapping, competency, policy, personnel, certificates, proficiency testing, the regulatory calendar, daily quality control, and post-survey deficiency response. Seventeen modules in total.</p>`;
 }
 function renderVeritaStockContent(): string {
   return `<h2>VeritaStock&#8482; inventory and reagent management</h2><p>VeritaStock&#8482; tracks reagent and supply inventory across departments with burn-rate par levels, lead-time-aware reorder alerts, and expiration tracking. Days on hand and reorder points are calculated from real consumption and real vendor lead times rather than from a number somebody typed once, so the reorder point moves when the burn rate moves. Expiration tracking carries a configurable warning window per item, and standing orders are managed with quarterly review reminders. Status is color-coded Reorder Now, Expiring Soon, OK, and Standing Order, so a shelf that is about to bite you is visible before it does. Included with VeritaAssure&#8482; Suite plans on Clinic, Community, Hospital, and Enterprise.</p>`;
@@ -234,6 +248,10 @@ function injectSeoTags(html: string, routePath: string, meta: SEOMetadata): stri
     noscriptInner += renderVeritaLabContent();
   } else if (routePath === "/veritastock") {
     noscriptInner += renderVeritaStockContent();
+  } else if (routePath === "/veritaassure") {
+    noscriptInner += renderVeritaAssureContent();
+  } else if (routePath === "/operations") {
+    noscriptInner += renderOperationsContent();
   }
   // If this route carries a FAQPage node, expose its Q&A in the noscript body so
   // crawlers and AI answer engines read the questions and answers as page text,
