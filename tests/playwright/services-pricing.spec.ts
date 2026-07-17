@@ -34,12 +34,15 @@ test.describe("/services shows the current consulting rates, not the placeholder
     expect(body, "old block price removed").not.toContain("$4,000");
   });
 
-  test("the internal negotiation floor is never published", async ({ page }) => {
+  test("the internal negotiation floor is never published as the coaching rate", async ({ page }) => {
     await page.goto(`${BASE}/services`, { waitUntil: "networkidle" });
     const body = await page.evaluate(() => document.body.innerText);
-    // $300/hr and $2,500/block are the operator's private floor. They must not
-    // appear anywhere a prospect can read them.
-    expect(body, "floor per-hour not published").not.toContain("$300");
-    expect(body, "floor block price not published").not.toContain("$2,500");
+    // The operator's private coaching floor is "$300 per hour" / "$2,500 for a
+    // block of 10". Assert the FULL floor phrasings, not the bare numbers: the
+    // webinar line legitimately reads "$2,500 to $7,500 per webinar", so a bare
+    // "$2,500" substring would false-positive on an unrelated, intentional price.
+    // What must never publish is the coaching line reverting to the floor.
+    expect(body, "floor hourly phrasing not published").not.toContain("$300 per hour");
+    expect(body, "floor block phrasing not published").not.toContain("$2,500 for a block of 10");
   });
 });
