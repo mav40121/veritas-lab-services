@@ -1,0 +1,52 @@
+name: Signup Gating
+
+# Standing integration test for the signup-gating fix (2026-07-17).
+#
+# The leak: a self-service signup wrote the visitor's PICKED tier straight into
+# users.plan, and the study gate treats any paid plan as unlimited, so picking
+# Community at signup granted unlimited access for $0 (Rachel Hermosilla, Troy
+# Regional). It survived because every existing test asked "does the feature
+# WORK" -- and an over-provisioned account works perfectly. The only thing that
+# catches it is a NEGATIVE assertion: a new account must be gated. That never
+# existed until this test.
+#
+# tests/integration/signup-gating.test.ts boots the REAL Express routes against a
+# throwaway SQLite DB and drives real HTTP: register PICKING Community, assert the
+# account lands plan=free with 2 credits, then assert the study endpoint blocks it
+# at the credit boundary (402 STUDY_CREDITS_EXHAUSTED). Both the plan check and the
+# block check independently go red if the leak regresses (proven by injecting the
+# old behavior). Runs against a temp DB with test secrets -- never touches prod.
+#
+# To make this block merges, enable in:
+#   Settings -> Branches -> main -> Branch protection ->
+#   Require status checks to pass before merging -> select "signup-gating".
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  signup-gating:
+    name: signup-gating
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run signup-gating integration test
+        # The npm script sets DB_PATH to a throwaway file plus the test secrets the
+        # server requires to boot, then runs the test via tsx. No prod, no network.
+        run: npm run test:signup-gating

@@ -11,3 +11,6 @@ playwright-report/
 blob-report/
 .playwright/
 qa-screens/
+
+# integration-test throwaway db
+.tmp-signup-gating.db

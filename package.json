@@ -10,7 +10,8 @@
     "check": "tsc",
     "test:e2e": "playwright test",
     "db:push": "drizzle-kit push",
-    "prepare": "node -e \"if(process.env.CI || !require('fs').existsSync('.git')){process.exit(0)}else{require('child_process').execSync('husky',{stdio:'inherit'})}\""
+    "prepare": "node -e \"if(process.env.CI || !require('fs').existsSync('.git')){process.exit(0)}else{require('child_process').execSync('husky',{stdio:'inherit'})}\"",
+    "test:signup-gating": "rm -f .tmp-signup-gating.db && DB_PATH=.tmp-signup-gating.db JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy tsx tests/integration/signup-gating.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.700.0",
