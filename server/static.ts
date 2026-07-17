@@ -95,6 +95,15 @@ function renderVeritaMapContent(): string {
 function renderVeritaCompContent(): string {
   return `<h2>VeritaComp&#8482; competency assessment</h2><p>VeritaComp&#8482; manages laboratory competency assessment across all three types in one system: technical competency (the six CLIA-required assessment methods per method group for non-waived testing staff, semiannual in year one and annual thereafter), waived testing competency (two of four methods per test), and non-technical competency for phlebotomy, specimen processing, LIS, and other non-testing duties. It integrates with VeritaMap&#8482; to auto-import instruments and suggest method groups, and with VeritaScan&#8482; so completed assessments auto-check the competency domain of the self-inspection. Each employee carries an assessment history with due-date tracking and remediation plans, and every completed assessment generates a PDF with the medical director or designee signature on page 1. Whether the laboratory is accredited by TJC, CAP, or COLA, or operates under CLIA only, VeritaComp&#8482; provides the documentation framework surveyors expect. Built by a former Joint Commission laboratory surveyor with more than 200 facility inspections.</p>`;
 }
+// Batch 2 (2026-07-17): the last two product pages. Requirement counts and
+// chapter lists below are the live page's own ACCREDITOR_PROFILES values
+// (client/src/pages/VeritaPolicyPage.tsx), not restated from memory.
+function renderVeritaPolicyContent(): string {
+  return `<h2>VeritaPolicy&#8482; policy and procedure management</h2><p>VeritaPolicy&#8482; is version-controlled policy and procedure management for clinical laboratories. It pre-loads every policy requirement your accreditor expects, organized by chapter and mapped to the current standard for laboratory accreditation: 88 requirements for The Joint Commission (APR, DC, EC, EM, HR, IC, IM, LD, PI, QSA, SE, TS, WT), 65 for the College of American Pathologists (GEN, COM, CHM, HEM, MIC, IMM, TRM, MOL), 81 for COLA (QC, GLS, PRE, PT, PST, VER, CA), and 286 for CLIA-only laboratories (42 CFR Part 493, Subparts H, J, K, and M). The requirement set shown matches your laboratory's accreditation choice, and the counts are generated from the master citation index. Not every policy applies to every laboratory, so any requirement or whole category can be marked N/A, with bulk actions to configure your scope quickly. Track staff acknowledgments and document review cycles so the policy manual stays survey-ready. Built by a former Joint Commission laboratory surveyor with more than 200 facility inspections.</p>`;
+}
+function renderVeritaStaffContent(): string {
+  return `<h2>VeritaStaff&#8482; laboratory personnel management</h2><p>VeritaStaff&#8482; is laboratory personnel management: staff roster, CLIA role assignments, competency scheduling, and CMS 209 generation in one place. Every CLIA-certified laboratory must maintain accurate personnel records and demonstrate that staff qualifications match their assigned roles and testing responsibilities. VeritaStaff&#8482; maintains the complete roster with credentials, hire dates, and qualification tracking; assigns the CLIA roles (laboratory director, clinical consultant, technical consultant, technical supervisor, general supervisor, and testing personnel) with specialty coverage across all 17 CMS specialty categories; and auto-generates a pre-filled CMS 209 Laboratory Personnel Report, one row per specialty per person. Its competency timeline engine calculates the Initial, 6-month, 1st Annual, and Annual milestones, with rule sets built in for TJC, CAP, COLA, CLIA-only, and New York State, and early completion recalculates due dates from the actual completion date. It integrates with VeritaMap&#8482; to import departments and suggest technical consultant and technical supervisor specialties. Built by a former Joint Commission laboratory surveyor with more than 200 facility inspections.</p>`;
+}
 
 function getIndexHtml(distPath: string): string {
   if (!cachedIndexHtml) {
@@ -190,6 +199,10 @@ function injectSeoTags(html: string, routePath: string, meta: SEOMetadata): stri
     noscriptInner += renderVeritaMapContent();
   } else if (routePath === "/veritacomp") {
     noscriptInner += renderVeritaCompContent();
+  } else if (routePath === "/veritapolicy") {
+    noscriptInner += renderVeritaPolicyContent();
+  } else if (routePath === "/veritastaff") {
+    noscriptInner += renderVeritaStaffContent();
   }
   // If this route carries a FAQPage node, expose its Q&A in the noscript body so
   // crawlers and AI answer engines read the questions and answers as page text,
