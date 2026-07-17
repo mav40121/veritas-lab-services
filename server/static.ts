@@ -3,12 +3,15 @@ import fs from "fs";
 import path from "path";
 import { seoMetadataMap, getBaseUrl, type SEOMetadata } from "./seo-metadata";
 import { teaData } from "../client/src/lib/cliaTeaData";
+import { applyStockBranding } from "@shared/stockBranding";
 
 let cachedIndexHtml: string | null = null;
 
 // The dedicated VeritaStock deployment sets this; veritaslabservices.com does not.
 const STOCK_DEPLOYMENT =
   process.env.VITE_STOCK_DEPLOYMENT === "true" || process.env.STOCK_DEPLOYMENT === "true";
+
+
 
 function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -119,18 +122,13 @@ function getIndexHtml(distPath: string): string {
       // never the VeritaAssure compliance branding. Pages with their own useSEO
       // still override this; pages without it (login, account, members) now read
       // VeritaStock instead of the lab default.
-      const stockTitle = "VeritaStock™ | Multi-Location Inventory Management";
-      const stockDesc = "Multi-location supply inventory: burn-rate par levels, lead-time-aware reorder alerts, expiration tracking, valuation by location, and one-click vendor orders.";
-      const stockKeywords = "VeritaStock, multi-location inventory management, supply inventory software, par level management, reorder point alerts, expiration date tracking, lead-time verification, vendor purchase orders, barcode inventory, materials management";
-      html = html
-        .replace(/<title>[^<]*<\/title>/, `<title>${stockTitle}</title>`)
-        .replace(/<meta name="description" content="[^"]*"/, `<meta name="description" content="${stockDesc}"`)
-        .replace(/<meta name="keywords" content="[^"]*"/, `<meta name="keywords" content="${stockKeywords}"`)
-        .replace(/<meta property="og:title" content="[^"]*"/, `<meta property="og:title" content="${stockTitle}"`)
-        .replace(/<meta property="og:description" content="[^"]*"/, `<meta property="og:description" content="${stockDesc}"`)
-        .replace(/<meta property="og:site_name" content="[^"]*"/, `<meta property="og:site_name" content="VeritaStock | Veritas Lab Services"`)
-        .replace(/<meta name="twitter:title" content="[^"]*"/, `<meta name="twitter:title" content="${stockTitle}"`)
-        .replace(/<meta name="twitter:description" content="[^"]*"/, `<meta name="twitter:description" content="${stockDesc}"`);
+      //
+      // Lives in shared/stockBranding.ts so the de-lab rule is testable: the
+      // rule is a property of the RENDERED page, so a test has to run the real
+      // transform over the real index.html rather than re-implement it. That
+      // module also swaps the ld+json graph, which used to ship the suite's
+      // laboratory wording to crawlers on veritastock.com.
+      html = applyStockBranding(html);
     }
     cachedIndexHtml = html;
   }
