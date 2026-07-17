@@ -40,7 +40,7 @@ const serviceGroups = [
         icon: Shield,
         category: "On-Site",
         title: "On-Site Inspection Readiness",
-        duration: "2 days on-site, written report within 14 days",
+        duration: "2 to 4 days on-site, written report within 14 days",
         pricing: "$12,000 to $18,000 typical engagement",
         description:
           "An on-site mock inspection service for laboratory management, a realistic, supportive simulation of a regulatory survey experience, guiding laboratories through the inspection process and fostering team confidence for official inspections.",
@@ -89,7 +89,7 @@ const serviceGroups = [
         category: "Coaching",
         title: "Leadership Coaching",
         duration: "1 hour sessions, single or 10-session blocks",
-        pricing: "$400 to $600 per session, or $4,000 for a 10-session block",
+        pricing: "$400 per hour, or $3,000 for a block of 10",
         description:
           "VLS offers coaching services to laboratory leaders. You pick the topics, whether improving your lab, C-suite relationships, or learning how to advance into laboratory leadership.",
         details: [
