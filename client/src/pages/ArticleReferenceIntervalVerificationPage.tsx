@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle2, FlaskConical, AlertTriangle } from "lucide-react";
+import { REFINT_ARTICLE_FAQ } from "@/lib/faqContent";
 
 function Callout({ children, type = "info" }: { children: React.ReactNode; type?: "info" | "warning" | "tip" }) {
   const styles = {
@@ -81,6 +82,7 @@ export default function ArticleReferenceIntervalVerificationPage() {
               <TocLink href="#does-not-fit">When the interval genuinely does not fit</TocLink>
               <TocLink href="#method-change">The trigger every laboratory forgets</TocLink>
               <TocLink href="#surveyor">What a surveyor expects to see</TocLink>
+              <TocLink href="#faq">Frequently asked questions</TocLink>
               <TocLink href="#references">References</TocLink>
             </CardContent>
           </Card>
@@ -241,6 +243,18 @@ export default function ArticleReferenceIntervalVerificationPage() {
               sign-off. The principle holds with any tool or none: a reference interval is a claim about your patients, and the record that
               protects the laboratory is the verification behind it.
             </Callout>
+          </Section>
+
+          {/* Mapped from REFINT_ARTICLE_FAQ, never retyped: faqContent.ts is the single
+              source for both this visible render and the FAQPage JSON-LD, so the two
+              cannot drift. Retyping the Q&A here is the exact failure that file prevents. */}
+          <Section id="faq" title="Frequently Asked Questions">
+            {REFINT_ARTICLE_FAQ.map(({ q, a }) => (
+              <div key={q} className="border-b border-border py-5 last:border-0">
+                <h3 className="font-semibold text-base mb-2">{q}</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">{a}</p>
+              </div>
+            ))}
           </Section>
 
           <Section id="references" title="References">
