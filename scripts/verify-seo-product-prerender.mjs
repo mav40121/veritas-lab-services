@@ -39,17 +39,31 @@ const PRODUCTS = [
   { route: "/veritastock",  fn: "renderVeritaStockContent",  id: "#veritastock",  mark: "VeritaStock" },
 ];
 
-// /veritabench is deliberately NOT here. It renders VeritaPace: the h1, the
-// useSEO title and the hero all say VeritaPace, and there is no /veritapace
-// route. A "VeritaBench is..." block there would publish a product identity the
-// page itself contradicts. Blocked on a product decision, not a copy one.
-// Case 4b below asserts that absence stays deliberate rather than an oversight.
+// /veritabench is deliberately NOT here, and NOT because VeritaBench is missing.
+// VeritaBench's page is /calculator, which has shipped a prerender block since
+// the batch-1 era (renderProductivityCalculatorContent). /veritabench is a legacy
+// slug that renders VeritaPace: its h1, useSEO title and hero all say VeritaPace.
+// A "VeritaBench is..." block there would publish a product identity the page
+// itself contradicts. OperationsPage.tsx MODULES is the authoritative route map.
+// Case 4b below pins BOTH halves: the absence at /veritabench and the presence
+// at /calculator, so this cannot be re-misread as an open TODO.
+
+// The two hub pages. Neither is a PRODUCTS row, for reasons the shapes differ:
+//   /veritaassure IS the suite. Its node is the "+1" in the Case 3 count, and it
+//     correctly carries NO isPartOf (the other ten are isPartOf IT). Adding it to
+//     PRODUCTS would both break that count and assert an isPartOf that must not
+//     exist.
+//   /operations has NO node at all. It is a hub, not a product, and every node
+//     added to the suite graph is a node the stock host has to filter. Prerender
+//     only. A PRODUCTS row would assert a node and fail.
+const SUITE = { route: "/veritaassure", fn: "renderVeritaAssureContent", id: "#veritaassure", mark: "VeritaAssure", features: 10 };
+const HUB = { route: "/operations", fn: "renderOperationsContent", mark: "VeritaAssure" };
 
 console.log("\nCase 1: every product page has a prerender function AND is wired into injectSeoTags");
-for (const p of PRODUCTS) {
+for (const p of [...PRODUCTS, SUITE, HUB]) {
   check(`${p.route}: ${p.fn}() is defined`, new RegExp(`function ${p.fn}\\(\\)`).test(staticSrc));
   // The wiring is what actually puts it in the response. A defined-but-unwired
-  // function is the silent failure this catches: the page stays a ~330-char shell.
+  // function is the silent failure this catches: the page stays a ~520-char shell.
   const wired = new RegExp(`routePath === "${p.route}"[\\s\\S]{0,80}${p.fn}\\(\\)`).test(staticSrc);
   check(`${p.route}: wired into injectSeoTags`, wired);
 }
@@ -85,6 +99,42 @@ for (const p of PRODUCTS) {
   check(`${p.mark}: has a description`, typeof node.description === "string" && node.description.length > 20);
 }
 
+console.log("\nCase 3b: the suite node itself (#veritaassure), which is the '+1' above");
+{
+  const node = graph.find((n) => typeof n["@id"] === "string" && n["@id"].endsWith(SUITE.id));
+  check(`${SUITE.mark}: node exists`, !!node);
+  if (node) {
+    check(`${SUITE.mark}: has a non-empty featureList`,
+      Array.isArray(node.featureList) && node.featureList.length > 0);
+    check(`${SUITE.mark}: featureList has ${SUITE.features} entries`,
+      node.featureList?.length === SUITE.features, `got ${node.featureList?.length}`);
+    // It IS the suite: the other ten are isPartOf it, so it must not be isPartOf
+    // anything itself. Asserted rather than assumed, because "add isPartOf like
+    // its siblings" is the obvious wrong edit for someone reading the pattern.
+    check(`${SUITE.mark}: correctly has NO isPartOf`, node.isPartOf === undefined);
+    // The description drifted three ways before batch 4 (named VeritaPace inside
+    // the compliance list, omitted four shipped modules, said "method
+    // verification"). Pin all three so it cannot silently drift back.
+    const d = node.description || "";
+    check(`${SUITE.mark}: description does not name VeritaPace among compliance modules`,
+      !/VeritaPace, VeritaShift/.test(d.split("six operations modules")[0]));
+    for (const mod of ["VeritaQC", "VeritaTrack", "VeritaPT", "VeritaResponse"]) {
+      check(`${SUITE.mark}: description names ${mod}`, d.includes(mod));
+    }
+    // CLAUDE.md section 3: labs verify, manufacturers validate.
+    check(`${SUITE.mark}: says "performance verification", not "method verification"`,
+      d.includes("performance verification") && !/method verification/i.test(d));
+  }
+}
+
+console.log("\nCase 3c: /operations is prerender-only and stays out of the graph");
+{
+  // Deliberate. Asserted so a later batch does not "complete the pattern" by
+  // adding a node for a page that is a hub, not a product.
+  check("/operations: no #operations node in the graph",
+    !graph.some((n) => typeof n["@id"] === "string" && n["@id"].endsWith("#operations")));
+}
+
 console.log("\nCase 4: copy guardrails on EVERY product block and featureList");
 {
   // Generalised over PRODUCTS rather than a hardcoded pair, so a later batch
@@ -98,9 +148,12 @@ console.log("\nCase 4: copy guardrails on EVERY product block and featureList");
   // this is the narrow version for the copy these blocks add.
   const DATED = /\b(TJC|CAP|AABB|COLA)\b[^.]{0,40}\b(20\d\d|19\d\d)\b|\b(20\d\d|19\d\d)\s+(edition|manual)\b/i;
 
-  for (const p of PRODUCTS) {
+  // Includes SUITE and HUB: the guardrails apply to every block that ships, not
+  // just the ten product ones. HUB has no id, so its featureList lookup is a
+  // no-op and only the block half of the guardrails applies to it.
+  for (const p of [...PRODUCTS, SUITE, HUB]) {
     const block = bodyOf(p.fn);
-    const node = graph.find((n) => n["@id"]?.endsWith(p.id));
+    const node = p.id ? graph.find((n) => n["@id"]?.endsWith(p.id)) : undefined;
     const fl = JSON.stringify(node?.featureList || []);
     check(`${p.route}: block found in source`, block.length > 0);
     check(`${p.route}: block has no em dash`, !block.includes("—"));
@@ -116,10 +169,28 @@ console.log("\nCase 4: copy guardrails on EVERY product block and featureList");
   check("/veritapt block marks VeritaScan", /VeritaScan&#8482;/.test(bodyOf("renderVeritaPTContent")));
 }
 
-console.log("\nCase 4b: /veritabench stays deliberately absent (it renders VeritaPace)");
+console.log("\nCase 4b: VeritaBench lives at /calculator; /veritabench is a legacy VeritaPace slug");
 {
+  // Both halves, because asserting only the absence is what let this read as an
+  // open TODO ("VeritaBench is missing, blocked on a product decision") when in
+  // fact VeritaBench shipped and /veritabench is simply the wrong page for it.
   const bench = readFileSync(new URL("../client/src/pages/VeritaBenchPage.tsx", import.meta.url), "utf8");
-  check("VeritaBenchPage still renders VeritaPace (the blocker)", /VeritaPace/.test(bench));
+  const ops = readFileSync(new URL("../client/src/pages/OperationsPage.tsx", import.meta.url), "utf8");
+
+  // The route map, straight from the page that owns it.
+  const routeOf = (label) => {
+    const i = ops.indexOf(`label: "${label}`);
+    const before = ops.slice(0, i);
+    return (before.match(/href: "([^"]+)"/g) || []).pop()?.match(/"([^"]+)"/)?.[1];
+  };
+  check("OperationsPage maps VeritaBench to /calculator", routeOf("VeritaBench") === "/calculator", `got ${routeOf("VeritaBench")}`);
+  check("OperationsPage maps VeritaPace to /veritabench", routeOf("VeritaPace") === "/veritabench", `got ${routeOf("VeritaPace")}`);
+
+  // Presence: VeritaBench's real page ships a block.
+  check("VeritaBench's page (/calculator) IS prerendered", /routePath === "\/calculator"[\s\S]{0,80}renderProductivityCalculatorContent\(\)/.test(staticSrc));
+
+  // Absence: the legacy slug renders VeritaPace, so no VeritaBench block there.
+  check("VeritaBenchPage renders VeritaPace (why the slug gets no block)", /VeritaPace/.test(bench));
   check("no /veritabench prerender is wired", !/routePath === "\/veritabench"/.test(staticSrc));
   check("no #veritabench node in the graph", !graph.some((n) => n["@id"]?.endsWith("#veritabench")));
 }
