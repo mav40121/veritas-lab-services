@@ -10,6 +10,7 @@ import {
   TJC_INSPECTION_FAQ,
   CPRT_FAQ,
   MANUAL_LOGS_FAQ,
+  REFINT_ARTICLE_FAQ,
   FAQ_CATEGORIES,
   flattenFaq,
   type FaqQA,
@@ -241,6 +242,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
         "Reference interval verification is the process by which a clinical laboratory confirms that a manufacturer's or published reference interval is appropriate for its own patient population, most commonly by testing 20 reference individuals and accepting the interval if no more than two fall outside it, per CLSI EP28-A3c and 42 CFR 493.1253.",
         "/resources/verifying-reference-intervals",
       ),
+      faqPageJsonLd(REFINT_ARTICLE_FAQ),
     ],
   },
   "/resources/ep26-reagent-lot-verification": {

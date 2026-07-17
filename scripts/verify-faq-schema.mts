@@ -10,6 +10,7 @@
 //
 // Run: npx tsx scripts/verify-faq-schema.mts
 
+import { readFileSync } from "fs";
 import { seoMetadataMap } from "../server/seo-metadata";
 import {
   TEA_ARTICLE_FAQ,
@@ -21,6 +22,7 @@ import {
   TJC_INSPECTION_FAQ,
   CPRT_FAQ,
   MANUAL_LOGS_FAQ,
+  REFINT_ARTICLE_FAQ,
   FAQ_CATEGORIES,
   flattenFaq,
   type FaqQA,
@@ -168,7 +170,51 @@ assertDefinedTerm(MANUAL_LOGS, "Transcription event", MANUAL_LOGS);
 assertSerializable(MANUAL_LOGS);
 assertNoEmDash(MANUAL_LOGS);
 
+const REFINT = "/resources/verifying-reference-intervals";
+assertArticle(REFINT);
+assertFaqVerbatim(REFINT, REFINT_ARTICLE_FAQ);
+assertHowTo(REFINT);
+assertDefinedTerm(REFINT, "Reference Interval Verification", REFINT);
+assertSerializable(REFINT);
+assertNoEmDash(REFINT);
+
+// Batch 5 additions. assertFaqVerbatim proves schema == source array. These two
+// prove the other two links in the chain that a presence check would miss.
+{
+  const src = readFileSync(new URL("../client/src/pages/ArticleReferenceIntervalVerificationPage.tsx", import.meta.url), "utf8");
+
+  // 1. RENDERED COUNT == SCHEMA COUNT, structurally rather than by counting JSX.
+  //    faqContent.ts exists so the visible Q&A and the FAQPage node cannot drift,
+  //    which is what Google's FAQ policy requires. A FAQPage node whose Q&A is not
+  //    visible on the page is a policy violation, not a cosmetic gap. The page
+  //    must therefore MAP the array; retyping the Q&A into JSX would satisfy a
+  //    naive "is there a faq section" check while breaking the guarantee.
+  check(`${REFINT}: page imports REFINT_ARTICLE_FAQ from the single source`,
+    /import\s*\{[^}]*REFINT_ARTICLE_FAQ[^}]*\}\s*from\s*"@\/lib\/faqContent"/.test(src));
+  check(`${REFINT}: page MAPS the array (does not retype the Q&A)`,
+    /REFINT_ARTICLE_FAQ\.map\(/.test(src));
+  check(`${REFINT}: renders a visible #faq section`, /id="faq"/.test(src));
+  check(`${REFINT}: #faq is reachable from the Contents card`,
+    /TocLink href="#faq"/.test(src));
+  // Order matters: the spec puts FAQ before References.
+  check(`${REFINT}: #faq precedes #references`,
+    src.indexOf('id="faq"') > 0 && src.indexOf('id="faq"') < src.indexOf('id="references"'));
+
+  // 2. articleBody ACTUALLY GREW. enrichArticleBodies() composes description + FAQ
+  //    + HowTo, but only when the Article node has no articleBody already. If it
+  //    silently fails to pick the FAQ up, the change is half-shipped and every
+  //    other check here still passes.
+  const bs = blocksFor(REFINT);
+  const art = typeBlock(bs, "Article");
+  const body: string = art?.articleBody || "";
+  check(`${REFINT}: Article has an articleBody`, body.length > 0, `${body.length} chars`);
+  const faqInBody = REFINT_ARTICLE_FAQ.every((qa) => body.includes(qa.q) && body.includes(qa.a));
+  check(`${REFINT}: every FAQ Q&A composed into articleBody`, faqInBody, `${body.length} chars`);
+  // Pre-batch-5 it was 425 chars (description + HowTo step names only).
+  check(`${REFINT}: articleBody grew well past its 425-char pre-FAQ size`, body.length > 2000, `${body.length} chars`);
+}
+
 console.log("");
-console.log(`FAQ source counts: TEa=${TEA_ARTICLE_FAQ.length}, CalVer=${CALVER_ARTICLE_FAQ.length}, /faq=${flattenFaq(FAQ_CATEGORIES).length}`);
+console.log(`FAQ source counts: TEa=${TEA_ARTICLE_FAQ.length}, CalVer=${CALVER_ARTICLE_FAQ.length}, RefInt=${REFINT_ARTICLE_FAQ.length}, /faq=${flattenFaq(FAQ_CATEGORIES).length}`);
 console.log(failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

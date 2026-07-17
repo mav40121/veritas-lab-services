@@ -606,6 +606,37 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
   },
 ];
 
+// /resources/verifying-reference-intervals  (visible "Frequently Asked Questions")
+// Every answer restates prose already published in
+// ArticleReferenceIntervalVerificationPage.tsx. No new regulatory claim: both
+// 42 CFR 493.1253 and CLSI EP28-A3c are cited in that article's own References.
+export const REFINT_ARTICLE_FAQ: FaqQA[] = [
+  {
+    q: "Does CLIA require laboratories to establish reference intervals, or only verify them?",
+    a: "CLIA, under 42 CFR 493.1253, lists the reference interval among the performance specifications a laboratory must verify are appropriate for its own patient population before reporting patient results. It does not require most laboratories to establish intervals from scratch, and it does not dictate a single method. In practice there are three tiers: establishing, verifying, and documented review. Most laboratories only need the second or third.",
+  },
+  {
+    q: "How many samples does it take to verify a reference interval?",
+    a: "Commonly twenty. The laboratory tests a small group of its own reference individuals against the interval it intends to adopt, and if no more than a small proportion, conventionally two of the twenty, fall outside the proposed interval, the interval is considered verified for that laboratory's population. If three or more of the twenty fall outside, the verification has not passed, and the CLSI EP28-A3c procedure is to test a second group of twenty. Establishing an interval from scratch is a different tier: the CLSI guideline recommends a minimum of 120 qualified reference individuals per partition, which is why very few clinical laboratories do it.",
+  },
+  {
+    q: "What do you do if your laboratory cannot recruit twenty reference individuals?",
+    a: "Use the documented review, sometimes called transference. It is the tier for the laboratory that genuinely cannot recruit even twenty reference individuals, which is a real situation for low-volume, specialized, or newly implemented tests, and it uses no new reference samples. The laboratory assesses the manufacturer's reference population as described in the package insert or method documentation, reviews the published literature and clinical guidance for the analyte, confirms the analytical performance of the method in its own hands, and documents the similarity or difference between the reference population and the population it serves. This tier is a fallback, not a shortcut. It is the path a surveyor scrutinizes hardest, and its entire strength is the quality of the written rationale.",
+  },
+  {
+    q: "Do you have to re-verify reference intervals after changing instruments or methods?",
+    a: "Yes. The reference interval is tied to the method that produces it, and when the method changes, the verification no longer holds. A new analyzer, a new platform, a significant reagent reformulation, or a change in measurement principle can shift where results fall, and an interval verified on the old method is not automatically valid on the new one. A laboratory that migrates instruments and carries its reference intervals forward untouched has quietly un-verified them, and it is one of the most common gaps a thorough inspector finds.",
+  },
+  {
+    q: "What is a reference individual, and how do you define one?",
+    a: "A reference individual is a person who meets criteria the laboratory sets in writing before the study begins. A list of twenty healthy adults with no definition of healthy is a dataset that looks rigorous and defends nothing. The definition is a set of inclusion and exclusion criteria set in advance: the age range and sex distribution appropriate to the analyte, a health-status screen, exclusions for relevant medications and conditions, and fasting status where the analyte requires it. When a surveyor asks how the reference population was constituted, the written criteria are the answer. Their strength comes from being explicit, not from the sample being large.",
+  },
+  {
+    q: "What does a surveyor expect to see for reference intervals?",
+    a: "Evidence of a defensible process, not a full establishment study. A surveyor who understands reference intervals knows most laboratories cannot produce one and are not required to. The surveyor wants written inclusion and exclusion criteria for reference individuals; a verification study, or a documented review with a real rationale, for the intervals in use; a similarity assessment between the reference population and the laboratory's patients, especially where the two plainly differ; and evidence that the intervals were re-verified when the method changed. The laboratory that can produce those is in a far stronger position than the one holding only a stack of package inserts.",
+  },
+];
+
 // Flatten categories to a single Q&A list (for FAQPage JSON-LD mainEntity).
 export function flattenFaq(categories: FaqCategory[]): FaqQA[] {
   return categories.flatMap((c) => c.items);
