@@ -497,14 +497,17 @@ export function registerVeritaTrackRoutes(
     // users.lab_id with a fallback to user_id when lab_id is null (legacy).
     if (task.map_analyte && task.map_field) {
       try {
-        const ownerLabRow = sqlite.prepare(
-          "SELECT lab_id FROM users WHERE id = ?"
-        ).get(userId) as { lab_id: number | null } | undefined;
-        const ownerLabId = ownerLabRow?.lab_id ?? null;
-        const maps = ownerLabId != null
+        // #107-class fix (2026-07-11): scope the VeritaMap writeback to the
+        // TASK's lab (signoffLabId = task.lab_id, fallback resolveLegacyLabId),
+        // NOT the owner's home lab (users.lab_id). users.lab_id can drift from
+        // the active lab, so a multi-lab owner signing off a map-linked task on
+        // Lab B was writing the completion date onto Lab A's veritamap_tests and
+        // never updating Lab B. signoffLabId is the lab the sign-off itself was
+        // recorded against, so the map writeback now lands on the right lab.
+        const maps = signoffLabId != null
           ? sqlite.prepare(
               "SELECT id FROM veritamap_maps WHERE lab_id = ?"
-            ).all(ownerLabId) as Array<{ id: number }>
+            ).all(signoffLabId) as Array<{ id: number }>
           : sqlite.prepare(
               "SELECT id FROM veritamap_maps WHERE user_id = ?"
             ).all(userId) as Array<{ id: number }>;
