@@ -2629,6 +2629,37 @@ export function registerVeritaBenchRoutes(
       res.json({ items, totalCount: items.length, generatedAt: new Date().toISOString() });
     });
 
+    // GET /api/labs/:labId/inventory/count-history, lab-scoped count history +
+    // true burn. Same report as the legacy path; scoped on active-lab membership.
+    app.get("/api/labs/:labId/inventory/count-history", authMiddleware, labScopeMiddleware, (req: any, res) => {
+      if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+      const days = Number(req.query.days) || 365;
+      const itemId = req.query.item_id ? Number(req.query.item_id) : null;
+      try {
+        res.json(buildCountHistory(sqlite, req.scope.labId, { days, itemId }));
+      } catch (err: any) {
+        console.error("Count history error (lab-scoped):", err.message);
+        res.status(500).json({ error: "count_history_failed", detail: err.message });
+      }
+    });
+
+    // POST /api/labs/:labId/inventory/count-history/xlsx, lab-scoped workbook.
+    app.post("/api/labs/:labId/inventory/count-history/xlsx", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+      if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+      const days = Number(req.body?.days) || Number(req.query?.days) || 365;
+      try {
+        const report = buildCountHistory(sqlite, req.scope.labId, { days });
+        const labRow = sqlite.prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
+        const buffer = await generateCountHistoryExcel(report, { labName: labRow?.lab_name ?? null, cliaNumber: labRow?.clia_number ?? null });
+        const filename = `VeritaStock_Count_History_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        const token = storePdfToken(buffer, filename);
+        res.json({ token, itemCount: report.items.length });
+      } catch (err: any) {
+        console.error("Count history xlsx error (lab-scoped):", err.message);
+        res.status(500).json({ error: "count_history_xlsx_failed", detail: err.message });
+      }
+    });
+
     // POST /api/labs/:labId/inventory/reorder-list/pdf, lab-scoped reorder
     // document PDF. Lab identity comes from the labs table for THIS labId
     // (not the requester's default lab), so a user with memberships on
