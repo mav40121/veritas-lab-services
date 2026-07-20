@@ -23,8 +23,11 @@ const input = {
     { last_name: "Veri", first_name: "Michael", middle_initial: "A", highest_complexity: "H", performs_testing: 1, qualifications_text: null,
       roles: [1, 2, 3, 4, 5, 6, 7, 8, 9].flatMap((s) => [{ role: "TC", specialty_number: s }, { role: "TS", specialty_number: s }]).concat([{ role: "GS", specialty_number: null }, { role: "TP", specialty_number: null }]) },
     { last_name: "Hall", first_name: "John", middle_initial: null, highest_complexity: "H", performs_testing: 1, qualifications_text: null, roles: [{ role: "TS", specialty_number: 7 }, { role: "GS", specialty_number: null }, { role: "TP", specialty_number: null }] },
+    // Pure bench tech: performs_testing but NO assigned role -> should still get TP.
+    { last_name: "Bench", first_name: "Tina", middle_initial: null, highest_complexity: "H", performs_testing: 1, qualifications_text: null, roles: [] },
     // Listed LAST on purpose; the builder must promote the LD to the very first line.
-    { last_name: "Gilles", first_name: "Christopher", middle_initial: null, highest_complexity: "H", performs_testing: 0, qualifications_text: null, roles: [{ role: "LD", specialty_number: null }] },
+    // performs_testing = 1 reproduces the San Carlos bug: the LD must NOT be auto-flagged TP.
+    { last_name: "Gilles", first_name: "Christopher", middle_initial: null, highest_complexity: "H", performs_testing: 1, qualifications_text: null, roles: [{ role: "LD", specialty_number: null }] },
   ],
   specialties: { 1: "Bacteriology", 7: "Chemistry", 8: "Hematology", 9: "Immunohematology" },
 };

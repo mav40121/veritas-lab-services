@@ -5077,8 +5077,15 @@ function buildEmployeeRows(emp: CMS209Input["employees"][number]): CMS209Row[] {
   const tsSpecs = empRoles.filter(r => r.role === "TS" && r.specialty_number).map(r => r.specialty_number!);
   const name = `${emp.last_name}, ${emp.first_name}${emp.middle_initial ? " " + emp.middle_initial : ""}`;
   const specs = Array.from(new Set([...tcSpecs, ...tsSpecs])).sort((a, b) => a - b);
+  // TP is checked when the TP role is actually assigned in VeritaAssure. The
+  // performs_testing flag only auto-adds TP for a person with NO supervisory /
+  // director role, so a bench tech is still documented but a Lab Director,
+  // Consultant, or Supervisor who happens to perform testing is never derived
+  // into Testing Personnel (a documented CLIA position they were not assigned).
+  const isSupervisory = ["LD", "CC", "TC", "TS", "GS"].some(r => roleSet.has(r));
+  const tp = roleSet.has("TP") || (emp.performs_testing === 1 && !isSupervisory);
   if (!specs.length) {
-    return [{ name, ld: roleSet.has("LD"), cc: roleSet.has("CC"), tc: "", ts: "", gs: roleSet.has("GS"), tp: roleSet.has("TP") || emp.performs_testing === 1, ctGs: roleSet.has("CT_GS"), ct: roleSet.has("CT"), mh: emp.highest_complexity === "M" ? "M" : "H" }];
+    return [{ name, ld: roleSet.has("LD"), cc: roleSet.has("CC"), tc: "", ts: "", gs: roleSet.has("GS"), tp, ctGs: roleSet.has("CT_GS"), ct: roleSet.has("CT"), mh: emp.highest_complexity === "M" ? "M" : "H" }];
   }
   return specs.map((spec, i) => ({
     name: i === 0 ? name : "",
@@ -5087,7 +5094,7 @@ function buildEmployeeRows(emp: CMS209Input["employees"][number]): CMS209Row[] {
     tc: tcSpecs.includes(spec) ? String(spec) : "",
     ts: tsSpecs.includes(spec) ? String(spec) : "",
     gs: i === 0 && roleSet.has("GS"),
-    tp: i === 0 && (roleSet.has("TP") || emp.performs_testing === 1),
+    tp: i === 0 && tp,
     ctGs: i === 0 && roleSet.has("CT_GS"),
     ct: i === 0 && roleSet.has("CT"),
     mh: i === 0 ? (emp.highest_complexity === "M" ? "M" : "H") : "",
