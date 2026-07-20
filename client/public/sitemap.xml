@@ -3,7 +3,7 @@
 
   <!-- Core marketing pages -->
   <url><loc>https://www.veritaslabservices.com/</loc><changefreq>weekly</changefreq><priority>1.0</priority><lastmod>2026-06-18</lastmod></url>
-  <url><loc>https://www.veritaslabservices.com/veritaassure</loc><changefreq>weekly</changefreq><priority>0.9</priority><lastmod>2026-06-29</lastmod></url>
+  <url><loc>https://www.veritaslabservices.com/veritaassure</loc><changefreq>weekly</changefreq><priority>0.9</priority><lastmod>2026-07-12</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/operations</loc><changefreq>weekly</changefreq><priority>0.9</priority><lastmod>2026-05-22</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/pricing</loc><changefreq>monthly</changefreq><priority>0.9</priority><lastmod>2026-06-19</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/services</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-31</lastmod></url>
@@ -11,15 +11,15 @@
   <url><loc>https://www.veritaslabservices.com/team</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-17</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/faq</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-06-15</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/getting-started</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-05-18</lastmod></url>
-  <url><loc>https://www.veritaslabservices.com/book</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-17</lastmod></url>
+  <url><loc>https://www.veritaslabservices.com/book</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-07-10</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/book/scoping-call</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-05-31</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/founding-lab/apply</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-06-03</lastmod></url>
-  <url><loc>https://www.veritaslabservices.com/roadmap</loc><changefreq>monthly</changefreq><priority>0.5</priority><lastmod>2026-06-29</lastmod></url>
+  <url><loc>https://www.veritaslabservices.com/roadmap</loc><changefreq>monthly</changefreq><priority>0.5</priority><lastmod>2026-07-10</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/trust</loc><changefreq>monthly</changefreq><priority>0.5</priority><lastmod>2026-05-17</lastmod></url>
 
   <!-- Product pages (Compliance stream) -->
-  <url><loc>https://www.veritaslabservices.com/veritacheck</loc><changefreq>monthly</changefreq><priority>0.9</priority><lastmod>2026-07-08</lastmod></url>
-  <url><loc>https://www.veritaslabservices.com/veritascan</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-18</lastmod></url>
+  <url><loc>https://www.veritaslabservices.com/veritacheck</loc><changefreq>monthly</changefreq><priority>0.9</priority><lastmod>2026-07-15</lastmod></url>
+  <url><loc>https://www.veritaslabservices.com/veritascan</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-07-10</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/veritamap</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-18</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/veritacomp</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-05-18</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/veritastaff</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-05-18</lastmod></url>
@@ -29,38 +29,39 @@
   <url><loc>https://www.veritaslabservices.com/veritatrack</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-05-18</lastmod></url>
 
   <!-- Product pages (Operations stream) -->
-  <url><loc>https://www.veritaslabservices.com/veritabench</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-06-30</lastmod></url>
-  <url><loc>https://www.veritaslabservices.com/veritabench/staffing</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-06-29</lastmod></url>
-  <url><loc>https://www.veritaslabservices.com/veritabench/pi</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-06-12</lastmod></url>
+  <url><loc>https://www.veritaslabservices.com/veritabench</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-07-12</lastmod></url>
+  <url><loc>https://www.veritaslabservices.com/veritabench/staffing</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-07-12</lastmod></url>
+  <url><loc>https://www.veritaslabservices.com/veritabench/pi</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-07-12</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/veritastock</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-07-09</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/calculator</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-07-01</lastmod></url>
 
   <!-- Demos -->
-  <url><loc>https://www.veritaslabservices.com/demo</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-05-25</lastmod></url>
-  <url><loc>https://www.veritaslabservices.com/demo/compliance</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-06-01</lastmod></url>
-  <url><loc>https://www.veritaslabservices.com/demo/operations</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-25</lastmod></url>
-  <url><loc>https://www.veritaslabservices.com/demo/cprt</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-25</lastmod></url>
-  <url><loc>https://www.veritaslabservices.com/demo/qc</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-25</lastmod></url>
+  <url><loc>https://www.veritaslabservices.com/demo</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-07-09</lastmod></url>
+  <url><loc>https://www.veritaslabservices.com/demo/compliance</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-07-15</lastmod></url>
+  <url><loc>https://www.veritaslabservices.com/demo/operations</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-07-12</lastmod></url>
+  <url><loc>https://www.veritaslabservices.com/demo/cprt</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-07-09</lastmod></url>
+  <url><loc>https://www.veritaslabservices.com/demo/qc</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-07-09</lastmod></url>
 
   <!-- Resources / Articles -->
   <url><loc>https://www.veritaslabservices.com/resources</loc><changefreq>weekly</changefreq><priority>0.8</priority><lastmod>2026-07-05</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/resources/clia-calibration-verification-method-comparison</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-06-26</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/resources/clia-tea-what-lab-directors-dont-know</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-06-26</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/resources/ep26-reagent-lot-verification</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-06-25</lastmod></url>
-  <url><loc>https://www.veritaslabservices.com/resources/how-veritaassure-trains-lab-leaders</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-04-25</lastmod></url>
+  <url><loc>https://www.veritaslabservices.com/resources/how-veritaassure-trains-lab-leaders</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-07-10</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/resources/calibration-verification-requirements-clia</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-07-01</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/resources/how-to-perform-method-comparison-study</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-07-01</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/resources/tjc-laboratory-inspection-checklist-preparation</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-07-01</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/resources/how-to-validate-veritacheck-clia</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-05-17</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/resources/laboratory-inventory-management</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-05-10</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/resources/manual-logs-why-most-labs-should-stop</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-07-01</lastmod></url>
-  <url><loc>https://www.veritaslabservices.com/resources/precision-verification-report-interpretation-guide</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-07-01</lastmod></url>
-  <url><loc>https://www.veritaslabservices.com/resources/verifying-reference-intervals</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-07-05</lastmod></url>
+  <url><loc>https://www.veritaslabservices.com/resources/precision-verification-report-interpretation-guide</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-07-09</lastmod></url>
+  <url><loc>https://www.veritaslabservices.com/resources/verifying-reference-intervals</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-07-16</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/resources/cost-per-reportable-test-four-layer-framework</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-07-01</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/resources/why-veritacheck-vs-legacy-verification</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-06-16</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/resources/quality-control-testing-into-compliance</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-07-01</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/resources/clia-tea-lookup</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-07-01</lastmod></url>
   <url><loc>https://www.veritaslabservices.com/study-guide</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-07-08</lastmod></url>
+  <url><loc>https://www.veritaslabservices.com/resources/tjc-laboratory-inspection-what-to-expect</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
 
   <!-- Legal -->
   <url><loc>https://www.veritaslabservices.com/terms</loc><changefreq>yearly</changefreq><priority>0.3</priority><lastmod>2026-04-25</lastmod></url>

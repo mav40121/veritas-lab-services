@@ -9,6 +9,17 @@ import { teaData } from "@/lib/cliaTeaData";
 
 const articles = [
   {
+    slug: "tjc-laboratory-inspection-what-to-expect",
+    title: "The Anatomy of a Joint Commission Laboratory Survey",
+    summary: "A former Joint Commission surveyor walks through a laboratory survey phase by phase: the opening, the tour, proficiency testing and license review, the records and tracers where most findings live, personnel, observed procedures, and the summation on the SAFER matrix. Then how to turn that method into a mock inspection that finds your gaps first.",
+    category: "Inspection Readiness",
+    readTime: "18 min read",
+    author: "Michael Veri",
+    date: "July 2026",
+    tags: ["Inspection Readiness", "TJC", "Tracer Methodology", "Mock Inspection", "SAFER Matrix"],
+    featured: true,
+  },
+  {
     slug: "verifying-reference-intervals",
     title: "Verifying Reference Intervals When You Cannot Establish Them: A Practical Guide for the Real-World Laboratory",
     summary: "Most reference intervals were inherited, not verified. CLIA does not require most laboratories to establish reference intervals; it requires them to verify the ones they use are appropriate for their patients. The three tiers of establish, verify, and documented review, how to define reference individuals, the CLSI EP28-A3c 20-sample verification, and re-verifying when the method changes.",

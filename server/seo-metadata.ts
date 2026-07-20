@@ -8,6 +8,7 @@ import {
   METHODCOMP_FAQ,
   PRECISION_FAQ,
   TJC_INSPECTION_FAQ,
+  MOCK_INSPECTION_FAQ,
   CPRT_FAQ,
   MANUAL_LOGS_FAQ,
   REFINT_ARTICLE_FAQ,
@@ -413,6 +414,17 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
       datePublished: "2026-05-17",
     }),
   },
+  "/resources/tjc-laboratory-inspection-what-to-expect": {
+    title: "What Happens During a TJC Laboratory Inspection, 2026 Guide | Veritas Lab Services",
+    description: "A former Joint Commission surveyor walks through a laboratory survey phase by phase, the tour, PT review, records, tracers, personnel, and procedures, and how to rehearse it with a mock inspection.",
+    jsonLd: articleJsonLd({
+      headline: "The Anatomy of a Joint Commission Laboratory Survey",
+      description: "A former Joint Commission surveyor walks through a laboratory survey phase by phase, the tour, PT review, records, tracers, personnel, and procedures, and how to rehearse it with a mock inspection.",
+      articleBody: "A former surveyor walks through the survey, phase by phase, and shows how to turn it into a mock inspection that finds your gaps first. Sections: Key takeaways; What the survey actually is; The survey, phase by phase; How to run your own mock inspection; From finding to corrective action; Frequently asked questions; About the author.",
+      path: "/resources/tjc-laboratory-inspection-what-to-expect",
+      datePublished: "2026-07-20",
+    }),
+  },
   "/resources/how-to-validate-veritacheck-clia": {
     title: "How to Validate VeritaCheck\u2122 for CLIA Compliance | Veritas Lab Services",
     description: "Software validation documentation for VeritaCheck\u2122 under CLIA requirements. How to validate laboratory information systems and comply with 42 CFR 493.1252.",
@@ -631,6 +643,23 @@ const methodComparisonHowTo: Record<string, unknown> = {
     { "@type": "HowToStep", name: "Determine pass or fail and document", text: "Compare the results to the pre-defined criteria, record the determination for the inspection file, and have the medical director or designee review it. CLSI EP09-A3 is the reference protocol." },
   ],
 };
+const mockInspectionHowTo: Record<string, unknown> = {
+  "@context": "https://schema.org",
+  "@type": "HowTo",
+  name: "How to run your own laboratory mock inspection",
+  description: "Rehearsing a Joint Commission laboratory survey on your own laboratory by following the same method: scope, tour, PT records, records review, tracers, personnel, observed procedures, and a SAFER-scored findings list.",
+  step: [
+    { "@type": "HowToStep", name: "Open with an honest description of your own scope", text: "Open with an honest description of your own scope, from memory, and check it against reality." },
+    { "@type": "HowToStep", name: "Tour for the testing you do not know about", text: "Tour for the testing you do not know about, waived testing included, and find the unregistered device." },
+    { "@type": "HowToStep", name: "Assign an independent reviewer", text: "Assign an independent reviewer, someone who does not run the area, because you cannot find the gap in a system you built." },
+    { "@type": "HowToStep", name: "Work your PT records for the imperfect passing scores", text: "Work your PT records for the imperfect passing scores, and confirm your director file and reference-lab contracts are current." },
+    { "@type": "HowToStep", name: "Sample three or four months of QC", text: "Sample three or four months of QC, maintenance, and temperatures, and ask whether your monthly review would truly have caught what is in them. Confirm your reagent water is tested, and check the eyewash, the safety shower, and PPE at the bench." },
+    { "@type": "HowToStep", name: "Run tracers from the patient record outward", text: "Run tracers from the patient record outward, across every department, and follow a critical value all the way to the provider notification." },
+    { "@type": "HowToStep", name: "Pull the personnel files your tracers named", text: "Pull the personnel files your tracers named, and check competency, the job-description match, and primary-source-verified credentials." },
+    { "@type": "HowToStep", name: "Observe your own high-risk procedures", text: "Observe your own high-risk procedures against your own policies, line by line." },
+    { "@type": "HowToStep", name: "Write your own findings", text: "Write your own findings, place each one on the same SAFER matrix a surveyor would use, and fix them on your timeline instead of the surveyor's." },
+  ],
+};
 const tjcSurveyHowTo: Record<string, unknown> = {
   "@context": "https://schema.org",
   "@type": "HowTo",
@@ -664,6 +693,7 @@ const ROUTE_FAQ: Record<string, FaqQA[]> = {
   "/resources/how-to-perform-method-comparison-study": METHODCOMP_FAQ,
   "/resources/precision-verification-report-interpretation-guide": PRECISION_FAQ,
   "/resources/tjc-laboratory-inspection-checklist-preparation": TJC_INSPECTION_FAQ,
+  "/resources/tjc-laboratory-inspection-what-to-expect": MOCK_INSPECTION_FAQ,
   "/resources/cost-per-reportable-test-four-layer-framework": CPRT_FAQ,
   "/resources/manual-logs-why-most-labs-should-stop": MANUAL_LOGS_FAQ,
 };
@@ -690,6 +720,19 @@ const ROUTE_EXTRA_JSONLD: Record<string, Record<string, unknown>[]> = {
       "Tracer methodology",
       "Tracer methodology is the survey technique in which a surveyor starts at a single patient result and works backward through the system that produced it: who ordered it, which analyzer ran it, its verification records, who performed it, their competency, and the proficiency testing record for that analyte.",
       "/resources/tjc-laboratory-inspection-checklist-preparation",
+    ),
+  ],
+  "/resources/tjc-laboratory-inspection-what-to-expect": [
+    mockInspectionHowTo,
+    definedTermJsonLd(
+      "Laboratory mock inspection",
+      "A laboratory mock inspection is a full rehearsal of an accreditation survey, run by an independent reviewer before the real surveyor arrives, so the laboratory finds and fixes its own gaps first. It follows the same method as the real survey, including the tracers that follow real patients out of the laboratory into the clinical record.",
+      "/resources/tjc-laboratory-inspection-what-to-expect",
+    ),
+    definedTermJsonLd(
+      "Tracer methodology",
+      "Tracer methodology is the survey technique in which a surveyor follows a single real case through the system that produced it, from a laboratory result back to the patient and the care team, to test whether the process worked in practice and not only on paper.",
+      "/resources/tjc-laboratory-inspection-what-to-expect",
     ),
   ],
   "/resources/cost-per-reportable-test-four-layer-framework": [

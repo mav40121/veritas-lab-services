@@ -56,6 +56,7 @@ const ArticleTrainingPage = lazy(() => import("@/pages/ArticleTrainingPage"));
 const ArticleCLIACalVerRequirementsPage = lazy(() => import("@/pages/ArticleCLIACalVerRequirementsPage"));
 const ArticleMethodComparisonPage = lazy(() => import("@/pages/ArticleMethodComparisonPage"));
 const ArticleTJCInspectionPage = lazy(() => import("@/pages/ArticleTJCInspectionPage"));
+const ArticleMockInspectionPage = lazy(() => import("@/pages/ArticleMockInspectionPage"));
 const ArticleValidateVeritaCheckPage = lazy(() => import("@/pages/ArticleValidateVeritaCheckPage"));
 const ArticleManualLogsPage = lazy(() => import("@/pages/ArticleManualLogsPage"));
 const TeaLookupPage = lazy(() => import("@/pages/TeaLookupPage"));
@@ -391,6 +392,7 @@ function AppContent() {
           <Route path="/resources/calibration-verification-requirements-clia" component={ArticleCLIACalVerRequirementsPage} />
           <Route path="/resources/how-to-perform-method-comparison-study" component={ArticleMethodComparisonPage} />
           <Route path="/resources/tjc-laboratory-inspection-checklist-preparation" component={ArticleTJCInspectionPage} />
+          <Route path="/resources/tjc-laboratory-inspection-what-to-expect" component={ArticleMockInspectionPage} />
           <Route path="/resources/how-to-validate-veritacheck-clia" component={ArticleValidateVeritaCheckPage} />
           <Route path="/resources/laboratory-inventory-management" component={ArticleInventoryManagementPage} />
           <Route path="/resources/manual-logs-why-most-labs-should-stop" component={ArticleManualLogsPage} />
