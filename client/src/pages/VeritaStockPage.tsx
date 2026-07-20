@@ -1083,6 +1083,47 @@ export default function VeritaStockInventoryPage() {
     }
   };
 
+  // ── Count History (prior counts + true burn) ─────────────────────────────
+  const [countHistoryOpen, setCountHistoryOpen] = useState(false);
+  const [countHistory, setCountHistory] = useState<any | null>(null);
+  const [countHistoryLoading, setCountHistoryLoading] = useState(false);
+  const countHistoryUrl = (suffix = "") => activeLabId
+    ? `${API_BASE}/api/labs/${activeLabId}/inventory/count-history${suffix}`
+    : `${API_BASE}/api/inventory/count-history${suffix}`;
+  useEffect(() => {
+    if (!countHistoryOpen) return;
+    setCountHistoryLoading(true);
+    fetch(countHistoryUrl("?days=365"), { headers: authHeaders() })
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d) => setCountHistory(d))
+      .catch(() => setCountHistory({ items: [] }))
+      .finally(() => setCountHistoryLoading(false));
+  }, [countHistoryOpen, activeLabId]);
+  const downloadCountHistoryXlsx = async () => {
+    try {
+      const res = await fetch(countHistoryUrl("/xlsx"), { method: "POST", headers: authHeaders() });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "Could not generate workbook", description: err.error || `HTTP ${res.status}`, variant: "destructive" });
+        return;
+      }
+      const { token } = await res.json();
+      window.open(`${API_BASE}/api/pdf/${token}`, "_blank");
+    } catch {
+      toast({ title: "Could not generate workbook", description: "Network error", variant: "destructive" });
+    }
+  };
+  // Flattened count rows (one per count event) for the on-screen table.
+  const countHistoryRows = useMemo(() => {
+    const out: any[] = [];
+    for (const it of (countHistory?.items ?? [])) {
+      for (const c of (it.counts ?? [])) {
+        out.push({ item_name: it.item_name, count_unit: it.count_unit, true_burn: it.true_burn_per_day_count_unit, ...c });
+      }
+    }
+    return out;
+  }, [countHistory]);
+
   // ── Export for Sage Intacct ──────────────────────────────────────────────
   // A config-driven CSV off the current reorder list that matches the customer's
   // Sage Intacct "Purchasing transactions" import template. The mapping (exact
@@ -1976,6 +2017,16 @@ export default function VeritaStockInventoryPage() {
             <FileSpreadsheet size={14} className="mr-1.5" />
             {generatingOrderDoc === "excel" ? "Generating..." : "Order XLSX"}
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setCountHistoryOpen(true)}
+            title="See every physical count and its date per item, with a true burn rate reconciled against the counts"
+            data-testid="count-history-button"
+          >
+            <BarChart3 size={14} className="mr-1.5" />
+            Count History
+          </Button>
           {/* Sage Intacct hand-off: config-driven purchasing CSV off the reorder
               list. Unconfigured -> opens setup; configured -> exports (preflight
               blocks an incomplete file with a named list). San-Carlos-specific
@@ -2807,6 +2858,62 @@ export default function VeritaStockInventoryPage() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Count History: every recorded physical count per item, with a true burn
+          rate reconciled against the counts. Read-only; export to Excel. */}
+      <Dialog open={countHistoryOpen} onOpenChange={setCountHistoryOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="count-history-dialog">
+          <DialogHeader>
+            <DialogTitle>Count History</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+            <p className="text-xs text-muted-foreground max-w-lg">
+              Every physical count recorded in the last 365 days, with who took it and when. True burn per day is calculated from the counts themselves (prior count plus receipts minus new count) and needs at least two counts per item.
+            </p>
+            <Button size="sm" variant="outline" onClick={downloadCountHistoryXlsx} disabled={countHistoryRows.length === 0} data-testid="count-history-export-button">
+              <FileSpreadsheet size={14} className="mr-1.5" /> Export Excel
+            </Button>
+          </div>
+          {countHistoryLoading ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">Loading count history...</p>
+          ) : countHistoryRows.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center" data-testid="count-history-empty">
+              No counts recorded yet. Counts appear here as staff count inventory in the count kiosk or Staff Portal. History accrues from the day this feature went live; earlier counts were not recorded.
+            </p>
+          ) : (
+            <div className="overflow-x-auto border border-border rounded-md">
+              <table className="w-full text-xs">
+                <thead className="bg-muted/50">
+                  <tr className="text-left">
+                    <th className="p-2">Item</th>
+                    <th className="p-2">Count Date</th>
+                    <th className="p-2 text-right">Counted</th>
+                    <th className="p-2 text-right">Prior</th>
+                    <th className="p-2 text-right">Change</th>
+                    <th className="p-2">Counted By</th>
+                    <th className="p-2">Source</th>
+                    <th className="p-2 text-right">True Burn/day</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {countHistoryRows.map((r: any, i: number) => (
+                    <tr key={i} className="border-t border-border">
+                      <td className="p-2">{r.item_name}</td>
+                      <td className="p-2 font-mono">{String(r.occurred_at).slice(0, 10)}</td>
+                      <td className="p-2 text-right font-mono">{r.counted_qty}</td>
+                      <td className="p-2 text-right font-mono">{r.previous_qty ?? ""}</td>
+                      <td className="p-2 text-right font-mono">{r.delta == null ? "" : (r.delta > 0 ? `+${r.delta}` : r.delta)}</td>
+                      <td className="p-2">{r.counted_by ?? ""}</td>
+                      <td className="p-2">{r.source === "kiosk" ? "Count kiosk" : r.source === "staff_portal" ? "Staff portal" : r.source}</td>
+                      <td className="p-2 text-right font-mono">{r.true_burn == null ? "" : `${r.true_burn} ${r.count_unit || ""}`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
