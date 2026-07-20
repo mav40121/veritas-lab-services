@@ -306,6 +306,34 @@ export const MANUAL_LOGS_FAQ: FaqQA[] = [
 ];
 
 // /faq  (the main FAQ page, grouped by category)
+// /resources/tjc-laboratory-inspection-what-to-expect  (visible "Frequently Asked Questions")
+export const MOCK_INSPECTION_FAQ: FaqQA[] = [
+  {
+    q: "What is a laboratory mock inspection?",
+    a: "A laboratory mock inspection is a full rehearsal of an accreditation survey, run by an independent reviewer before the real surveyor arrives, so the laboratory finds and fixes its own gaps first. It follows the same arc as the real survey: the tour, the proficiency testing and record review, the tracers that follow real patients, the personnel files, and the procedures watched at the bedside. The goal is not to pass the mock. It is to surface the findings while there is still time to correct them.",
+  },
+  {
+    q: "How often should a laboratory run a mock inspection?",
+    a: "At a minimum, once in the months leading up to an expected survey, commonly three to six months out, which leaves time to close what it finds. Beyond that schedule, run one after any event that changes the risk: a new test or instrument placed into service, a change in laboratory leadership or key staff, or a prior deficiency that has to be shown as corrected.",
+  },
+  {
+    q: "What is the difference between a mock inspection and the real survey?",
+    a: "The method is the same; the stakes and the reviewer differ. A mock inspection is conducted by your own independent reviewer and its findings stay internal, so they can be corrected before they become official. The real survey is conducted by the accreditor and its findings become Requirements for Improvement in the final report, each one placed on the SAFER matrix by risk. A good mock inspection is deliberately run to be as demanding as the real one, because a soft mock gives false comfort.",
+  },
+  {
+    q: "What should a laboratory inspection checklist include?",
+    a: "It should follow the survey arc rather than a generic list: the full footprint of testing including bedside and point of care sites, proficiency testing enrollment and follow-up on every score below 100, quality control and maintenance and temperature records with documented monthly review, individualized quality control plans where used, verification of performance specifications and correlation and linearity studies on schedule, reference ranges and critical value handling, personnel competency with primary source verified credentials, referral laboratory oversight, verification that the laboratory information system moves results without altering them, laboratory safety, the eyewash, safety showers, and PPE, and the broader environment-of-care records where they fall to the laboratory, specimen handling, and result reporting. Each item should map to the TJC standard that requires it; TJC surveys to the CLIA regulations underneath, with additional requirements layered on as it sees fit.",
+  },
+  {
+    q: "What is tracer methodology in a laboratory survey?",
+    a: "A tracer is a real case the surveyor follows through the system to test whether the process worked in practice. The surveyor names a specific event, such as a unit of blood transfused in the ICU in a given month or a critical troponin that resulted in the ED, and asks the laboratory to find it and present it the way the care team saw it. The tracer then moves outward into the clinical documentation, most often to the provider notification on a critical value or the vital sign monitoring on a transfusion, where the gaps usually sit.",
+  },
+  {
+    q: "Who should conduct a laboratory mock inspection?",
+    a: "Someone independent of the area under review. The reviewer needs to read the records the way a stranger will, not the way the author intended, and that is only possible when the reviewer did not build the system. That can be a qualified staff member from another section, a quality officer, or an outside consultant with survey experience. The one person who should not run it is the person who owns the area being reviewed.",
+  },
+];
+
 export const FAQ_CATEGORIES: FaqCategory[] = [
   {
     category: "About VeritaAssure\u2122",
