@@ -55,6 +55,9 @@ interface Role {
   employee_id: number;
   role: string;
   specialty_number: number | null;
+  // CMS-209 Part B: a TC/TS scoped to the ENTIRE lab (expands to the lab's
+  // specialty list on the 209). 1 = entire lab, 0/undefined = specific.
+  all_specialties?: number;
 }
 
 interface CompetencySchedule {
@@ -204,6 +207,14 @@ export default function VeritaStaffAppPage() {
     queryKey: [empKey],
     enabled: !!hasAccess && !!lab,
   });
+
+  // CMS-209 Part B: readiness (TC/TS needs-review gaps + lab specialty list).
+  const readinessKey = activeLabId ? `/api/labs/${activeLabId}/staff/cms209-readiness` : `/api/staff/cms209-readiness`;
+  const { data: cms209Readiness } = useQuery<{ labSpecialties: number[]; gaps: { employeeId?: number; name: string; role: string; reason: string }[] }>({
+    queryKey: [readinessKey],
+    enabled: !!hasAccess && !!lab,
+  });
+  const cms209Gaps = cms209Readiness?.gaps ?? [];
 
   // PR E2 hotfix (2026-06-05): the dashboard-stats endpoint is the single
   // source of truth for the overdue set. Both the tile on the dashboard and
@@ -367,6 +378,25 @@ export default function VeritaStaffAppPage() {
           )}
         </div>
       </div>
+
+      {/* CMS-209 Part B: needs-review banner. TC/TS whose specialty is missing
+          (or entire-lab with an empty lab list) render blank on the 209, so the
+          director sees exactly who to fix before generating. */}
+      {lab && cms209Gaps.length > 0 && (
+        <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3" data-testid="cms209-gaps-banner">
+          <div className="flex items-center gap-2 text-sm font-semibold text-amber-800">
+            <AlertTriangle size={16} />
+            {cms209Gaps.length} TC/TS assignment{cms209Gaps.length === 1 ? "" : "s"} need a specialty before the CMS 209 is complete
+          </div>
+          <ul className="mt-1.5 space-y-0.5 text-xs text-amber-900">
+            {cms209Gaps.map((g, i) => (
+              <li key={`${g.employeeId}-${g.role}-${i}`}>
+                <span className="font-mono font-bold">{g.role}</span> {g.name}: {g.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* PR E2 (2026-06-05): respect ?filter=overdue from the dashboard tile
           drilldown. Limits the rendered list to performs_testing employees
@@ -628,6 +658,24 @@ function LabSetupDialog({ open, onOpenChange, lab, isStaffAccreditorAllowed }: {
   });
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
+  // CMS-209 Part B: the director-set list of CMS specialties this lab performs.
+  // "Entire lab" TC/TS assignments expand to this list on the 209.
+  const [labSpecialties, setLabSpecialties] = useState<number[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    const url = activeLabId
+      ? `${API_BASE}/api/labs/${activeLabId}/staff/lab-specialties`
+      : `${API_BASE}/api/staff/lab-specialties`;
+    fetch(url, { headers: authHeaders() })
+      .then((r) => (r.ok ? r.json() : { specialties: [] }))
+      .then((d) => setLabSpecialties(Array.isArray(d.specialties) ? d.specialties : []))
+      .catch(() => setLabSpecialties([]));
+  }, [open, activeLabId]);
+
+  function toggleLabSpecialty(n: number) {
+    setLabSpecialties((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n].sort((a, b) => a - b)));
+  }
 
   useEffect(() => {
     if (lab) {
@@ -652,6 +700,11 @@ function LabSetupDialog({ open, onOpenChange, lab, isStaffAccreditorAllowed }: {
       if (res.ok) {
         const data = await res.json();
         setSuggestions(data);
+        // Pre-select the suggested CMS specialties into the lab list (union, so
+        // manual picks are preserved). The director still confirms with Save.
+        const suggested = data.flatMap((s: any) => (s.specialties || []).map((sp: any) => Number(sp.number)))
+          .filter((n: number) => Number.isInteger(n) && n >= 1 && n <= 17);
+        if (suggested.length > 0) setLabSpecialties((prev) => Array.from(new Set([...prev, ...suggested])).sort((a, b) => a - b));
         if (data.length > 0) toast({ title: "VeritaMap™ departments found", description: `${data.length} department(s) can be mapped to CMS specialties.` });
         else toast({ title: "No VeritaMap™ departments", description: "No maps found. You can still set up specialties manually." });
       }
@@ -674,6 +727,15 @@ function LabSetupDialog({ open, onOpenChange, lab, isStaffAccreditorAllowed }: {
         body: JSON.stringify(form),
       });
       if (!res.ok) throw new Error(await res.text());
+      // CMS-209 Part B: persist the director-set lab specialty list.
+      const specUrl = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/staff/lab-specialties`
+        : `${API_BASE}/api/staff/lab-specialties`;
+      await fetch(specUrl, {
+        method: "PUT",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ specialties: labSpecialties }),
+      });
       await queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).endsWith('/staff/lab') });
       toast({ title: "Lab saved" });
       onOpenChange(false);
@@ -762,6 +824,25 @@ function LabSetupDialog({ open, onOpenChange, lab, isStaffAccreditorAllowed }: {
               </SelectContent>
             </Select>
           </div>
+          {/* CMS-209 Part B: director-set list of CMS specialties the lab
+              performs. An "entire lab" TC/TS assignment expands to exactly
+              these on the 209. */}
+          <div data-testid="lab-specialties">
+            <label className="text-sm font-medium">Specialties this lab performs (CMS 209)</label>
+            <p className="text-xs text-muted-foreground mb-1.5">Used to expand "entire lab" TC/TS assignments to one row per specialty on the CMS 209.</p>
+            <div className="flex flex-wrap gap-1">
+              {Object.entries(CMS_SPECIALTIES).map(([num, name]) => {
+                const n = Number(num);
+                const active = labSpecialties.includes(n);
+                return (
+                  <button key={`lab-spec-${n}`} type="button" onClick={() => toggleLabSpecialty(n)}
+                    className={`px-2 py-0.5 rounded text-xs border transition-colors ${active ? "bg-primary/15 text-primary border-primary/30 font-medium" : "bg-card border-border hover:border-primary/40"}`}>
+                    {n}. {name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <Button variant="outline" size="sm" onClick={loadSuggestions} className="w-full">
             Import departments from VeritaMap{"™"}
           </Button>
@@ -784,6 +865,25 @@ function LabSetupDialog({ open, onOpenChange, lab, isStaffAccreditorAllowed }: {
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// CMS-209 Part B: preview for an "entire lab" TC/TS assignment. Shows what the
+// role expands to on the 209, or warns when the lab specialty list is empty.
+function EntireLabNote({ labSpecialties }: { labSpecialties: number[] }) {
+  if (labSpecialties.length === 0) {
+    return (
+      <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800" data-testid="entire-lab-empty">
+        <div className="flex items-center gap-1.5 font-semibold"><AlertTriangle size={12} /> Lab specialty list is empty</div>
+        <p className="mt-1 leading-snug">Set the specialties this lab performs in Lab Setup. Until then, this entire-lab assignment renders blank on the CMS 209.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-md border border-blue-500/30 bg-blue-500/5 px-3 py-2 text-[11px] text-blue-900">
+      <p className="leading-snug">On the CMS 209 this expands to one row per specialty the lab performs:</p>
+      <p className="mt-1 font-medium">{labSpecialties.map((n) => `${n}. ${CMS_SPECIALTIES[n]}`).join(", ")}</p>
+    </div>
   );
 }
 
@@ -810,8 +910,11 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
     canAdjustInventory: false,
     canViewAudit: false,
   });
-  const [roles, setRoles] = useState<{ role: string; specialtyNumber: number | null }[]>([]);
+  const [roles, setRoles] = useState<{ role: string; specialtyNumber: number | null; allSpecialties?: boolean }[]>([]);
   const [saving, setSaving] = useState(false);
+  // CMS-209 Part B: the lab's director-set specialty list, so the "Entire lab"
+  // TC/TS option can show what it expands to (and warn when the list is empty).
+  const [labSpecialties, setLabSpecialties] = useState<number[]>([]);
 
   // 2026-06-09 Auth unification: Staff Portal invite state. Only used
   // in edit mode; new employees are saved first, then can be invited
@@ -861,12 +964,25 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
         canAdjustInventory: employee.can_adjust_inventory === 1,
         canViewAudit: employee.can_view_audit === 1,
       });
-      setRoles(employee.roles.map((r) => ({ role: r.role, specialtyNumber: r.specialty_number })));
+      setRoles(employee.roles.map((r) => ({ role: r.role, specialtyNumber: r.specialty_number, allSpecialties: !!r.all_specialties })));
     } else {
       setForm({ lastName: "", firstName: "", middleInitial: "", title: "", titleCode: "", hireDate: "", qualificationsText: "", qualificationsVerifiedAt: "", qualificationsVerifiedBy: "", highestComplexity: "H", performsTesting: true, canAdjustInventory: false, canViewAudit: false });
       setRoles([]);
     }
   }, [employee, open]);
+
+  // CMS-209 Part B: load the lab's specialty list so the "Entire lab" TC/TS
+  // option can preview what it expands to on the 209.
+  useEffect(() => {
+    if (!open) return;
+    const url = activeLabId
+      ? `${API_BASE}/api/labs/${activeLabId}/staff/lab-specialties`
+      : `${API_BASE}/api/staff/lab-specialties`;
+    fetch(url, { headers: authHeaders() })
+      .then((r) => (r.ok ? r.json() : { specialties: [] }))
+      .then((d) => setLabSpecialties(Array.isArray(d.specialties) ? d.specialties : []))
+      .catch(() => setLabSpecialties([]));
+  }, [open, activeLabId]);
 
   const complexity = lab?.complexity || "high";
   const availableRoles = (() => {
@@ -895,6 +1011,19 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
 
   function removeSpecialty(role: string, specNum: number) {
     setRoles(roles.filter((r) => !(r.role === role && r.specialtyNumber === specNum)));
+  }
+
+  // CMS-209 Part B: scope a TC/TS to the entire lab, or back to specific
+  // specialties. "Entire lab" collapses to a single flagged row that the server
+  // expands to the lab's specialty list at 209 generation. Switching back to
+  // "specific" drops that flag row, leaving the specialty grid empty to fill in.
+  function setEntireLab(role: string, on: boolean) {
+    const others = roles.filter((r) => r.role !== role);
+    if (on) {
+      setRoles([...others, { role, specialtyNumber: null, allSpecialties: true }]);
+    } else {
+      setRoles(others);
+    }
   }
 
   async function handleSave() {
@@ -930,6 +1059,9 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
   const tsSpecs = roles.filter((r) => r.role === "TS").map((r) => r.specialtyNumber).filter(Boolean) as number[];
   const hasTC = roles.some((r) => r.role === "TC");
   const hasTS = roles.some((r) => r.role === "TS");
+  // CMS-209 Part B: is this TC/TS scoped to the entire lab?
+  const tcAllLab = roles.some((r) => r.role === "TC" && r.allSpecialties);
+  const tsAllLab = roles.some((r) => r.role === "TS" && r.allSpecialties);
 
   // Wave G PR G6 (2026-06-06). Inline CLIA role qualification reminders.
   // Paraphrased from 42 CFR §§493.1405, 493.1411, 493.1417, 493.1441,
@@ -1170,18 +1302,32 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
             {hasTC && (
               <div className="mb-3">
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">TC Specialties (moderate complexity)</label>
-                <div className="flex flex-wrap gap-1">
-                  {Object.entries(CMS_SPECIALTIES).map(([num, name]) => {
-                    const n = Number(num);
-                    const active = tcSpecs.includes(n);
-                    return (
-                      <button key={`tc-${n}`} onClick={() => active ? removeSpecialty("TC", n) : addSpecialty("TC", n)}
-                        className={`px-2 py-0.5 rounded text-xs border transition-colors ${active ? "bg-blue-500/20 text-blue-700 border-blue-500/30" : "bg-card border-border hover:border-blue-500/30"}`}>
-                        {n}. {name}
-                      </button>
-                    );
-                  })}
+                <div className="inline-flex rounded-md border border-border overflow-hidden mb-2" data-testid="tc-scope-toggle">
+                  <button type="button" onClick={() => setEntireLab("TC", false)}
+                    className={`px-2.5 py-1 text-xs ${!tcAllLab ? "bg-blue-500/20 text-blue-700 font-semibold" : "bg-card text-muted-foreground"}`}>
+                    Specific specialties
+                  </button>
+                  <button type="button" onClick={() => setEntireLab("TC", true)} data-testid="tc-entire-lab"
+                    className={`px-2.5 py-1 text-xs border-l border-border ${tcAllLab ? "bg-blue-500/20 text-blue-700 font-semibold" : "bg-card text-muted-foreground"}`}>
+                    Entire lab
+                  </button>
                 </div>
+                {tcAllLab ? (
+                  <EntireLabNote labSpecialties={labSpecialties} />
+                ) : (
+                  <div className="flex flex-wrap gap-1">
+                    {Object.entries(CMS_SPECIALTIES).map(([num, name]) => {
+                      const n = Number(num);
+                      const active = tcSpecs.includes(n);
+                      return (
+                        <button key={`tc-${n}`} onClick={() => active ? removeSpecialty("TC", n) : addSpecialty("TC", n)}
+                          className={`px-2 py-0.5 rounded text-xs border transition-colors ${active ? "bg-blue-500/20 text-blue-700 border-blue-500/30" : "bg-card border-border hover:border-blue-500/30"}`}>
+                          {n}. {name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
@@ -1189,18 +1335,32 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
             {hasTS && (
               <div className="mb-3">
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">TS Specialties (high complexity)</label>
-                <div className="flex flex-wrap gap-1">
-                  {Object.entries(CMS_SPECIALTIES).map(([num, name]) => {
-                    const n = Number(num);
-                    const active = tsSpecs.includes(n);
-                    return (
-                      <button key={`ts-${n}`} onClick={() => active ? removeSpecialty("TS", n) : addSpecialty("TS", n)}
-                        className={`px-2 py-0.5 rounded text-xs border transition-colors ${active ? "bg-emerald-500/20 text-emerald-700 border-emerald-500/30" : "bg-card border-border hover:border-emerald-500/30"}`}>
-                        {n}. {name}
-                      </button>
-                    );
-                  })}
+                <div className="inline-flex rounded-md border border-border overflow-hidden mb-2" data-testid="ts-scope-toggle">
+                  <button type="button" onClick={() => setEntireLab("TS", false)}
+                    className={`px-2.5 py-1 text-xs ${!tsAllLab ? "bg-emerald-500/20 text-emerald-700 font-semibold" : "bg-card text-muted-foreground"}`}>
+                    Specific specialties
+                  </button>
+                  <button type="button" onClick={() => setEntireLab("TS", true)} data-testid="ts-entire-lab"
+                    className={`px-2.5 py-1 text-xs border-l border-border ${tsAllLab ? "bg-emerald-500/20 text-emerald-700 font-semibold" : "bg-card text-muted-foreground"}`}>
+                    Entire lab
+                  </button>
                 </div>
+                {tsAllLab ? (
+                  <EntireLabNote labSpecialties={labSpecialties} />
+                ) : (
+                  <div className="flex flex-wrap gap-1">
+                    {Object.entries(CMS_SPECIALTIES).map(([num, name]) => {
+                      const n = Number(num);
+                      const active = tsSpecs.includes(n);
+                      return (
+                        <button key={`ts-${n}`} onClick={() => active ? removeSpecialty("TS", n) : addSpecialty("TS", n)}
+                          className={`px-2 py-0.5 rounded text-xs border transition-colors ${active ? "bg-emerald-500/20 text-emerald-700 border-emerald-500/30" : "bg-card border-border hover:border-emerald-500/30"}`}>
+                          {n}. {name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
@@ -1392,6 +1552,9 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
   const roleNames = Array.from(new Set(employee.roles.map((r) => r.role)));
   const tcSpecs = employee.roles.filter((r) => r.role === "TC" && r.specialty_number);
   const tsSpecs = employee.roles.filter((r) => r.role === "TS" && r.specialty_number);
+  // CMS-209 Part B: TC/TS scoped to the entire lab (expands to the lab list on the 209).
+  const tcAllLab = employee.roles.some((r) => r.role === "TC" && r.all_specialties);
+  const tsAllLab = employee.roles.some((r) => r.role === "TS" && r.all_specialties);
   const compStatus = getCompetencyStatus(employee.competencySchedule);
   // Wave H PR H1: termination state for the dialog. The Remove button
   // opens the dialog instead of immediately calling DELETE so the lab
@@ -1556,18 +1719,22 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
                 <Badge key={r} className="font-mono text-sm">{r}</Badge>
               ))}
             </div>
-            {tcSpecs.length > 0 && (
+            {(tcSpecs.length > 0 || tcAllLab) && (
               <div className="mb-2">
                 <p className="text-xs font-medium text-muted-foreground mb-1">TC Specialties:</p>
-                {tcSpecs.map((r) => (
+                {tcAllLab ? (
+                  <p className="text-xs font-medium">Entire lab</p>
+                ) : tcSpecs.map((r) => (
                   <p key={r.id} className="text-xs">{r.specialty_number}. {CMS_SPECIALTIES[r.specialty_number!]}</p>
                 ))}
               </div>
             )}
-            {tsSpecs.length > 0 && (
+            {(tsSpecs.length > 0 || tsAllLab) && (
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-1">TS Specialties:</p>
-                {tsSpecs.map((r) => (
+                {tsAllLab ? (
+                  <p className="text-xs font-medium">Entire lab</p>
+                ) : tsSpecs.map((r) => (
                   <p key={r.id} className="text-xs">{r.specialty_number}. {CMS_SPECIALTIES[r.specialty_number!]}</p>
                 ))}
               </div>
