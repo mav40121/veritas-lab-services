@@ -4324,6 +4324,48 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_consumption_item_time ON inven
   }
 }
 
+// inventory_count_events — append-only history of PHYSICAL COUNTS. One row every
+// time an item's on-hand is SET by a human counting it (kiosk count-workflow or
+// staff-portal adjust). Unlike inventory_consumption_events (depletions only,
+// positive qty), a count records the ABSOLUTE counted quantity plus the prior
+// value and delta, up OR down. This is what a "prior counts and dates" report
+// and a physical-recount-reconciled true burn rate read from.
+//   INVARIANT (same as the consumption ledger): NEVER drives
+//   inventory_items.quantity_on_hand; on_hand stays the single source of truth.
+//   HIPAA-free: quantities + who + timestamps only. counted_by is initials or a
+//   staff name label, never a patient/order/test identifier.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS inventory_count_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id INTEGER NOT NULL,
+    lab_id INTEGER NOT NULL,
+    account_id INTEGER,
+    counted_qty REAL NOT NULL,
+    previous_qty REAL,
+    delta REAL,
+    counted_by TEXT,
+    source TEXT NOT NULL,
+    occurred_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_count_lab_time ON inventory_count_events(lab_id, occurred_at)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_count_item_time ON inventory_count_events(item_id, occurred_at)`); } catch {}
+// Migration block per NEW DB TABLE RULE: idempotent ALTER guards.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(inventory_count_events)").all() as { name: string }[]).map((c) => c.name);
+  if (cols.length > 0) {
+    const required: Array<[string, string]> = [
+      ["item_id", "INTEGER"], ["lab_id", "INTEGER"], ["account_id", "INTEGER"],
+      ["counted_qty", "REAL"], ["previous_qty", "REAL"], ["delta", "REAL"],
+      ["counted_by", "TEXT"], ["source", "TEXT"], ["occurred_at", "TEXT"], ["created_at", "TEXT"],
+    ];
+    for (const [c, t] of required) {
+      if (!cols.includes(c)) { try { sqlite.exec(`ALTER TABLE inventory_count_events ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+  }
+}
+
 // inventory_transfers — ledger of stock moved between two labs (locations)
 // in the same enterprise. One row per completed transfer. qty_usage_units
 // is the canonical amount moved (usage_units); display_qty/display_unit
