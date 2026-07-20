@@ -127,6 +127,7 @@ function headerRowHeight(headers: string[], colWidths: number[]): number {
 
 import { logAudit } from "./audit";
 import { logConsumption } from "./consumptionLedger";
+import { logCount } from "./countLedger";
 import { reconcileLots } from "./inventoryLots";
 import { CLSI_COMPLIANCE_MATRIX_B64, SOFTWARE_VALIDATION_TEMPLATE_B64, SPECIMEN_TUBE_LABELING_GUIDE_B64 } from "./downloadAssets";
 import { cliaAnalytes, ptCategoryLinks } from "./cliaAnalytes";
@@ -7886,6 +7887,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ipAddress: req.ip,
       });
 
+      // Count-history ledger: this kiosk adjust IS a physical count. Best-effort,
+      // never blocks the count (mirrors the consumption ledger). See countLedger.
+      logCount({
+        itemId: id,
+        labId: req.inventoryLabId,
+        accountId: item.account_id ?? lab?.owner_user_id ?? null,
+        countedQty: usageQty,
+        previousQty: beforeQty,
+        countedBy: initials.toUpperCase(),
+        source: "kiosk",
+        occurredAt: nowIso,
+      });
+
       const updated = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(id);
       res.json({
         item: decorateKioskItem(updated),
@@ -8054,6 +8068,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           via: "staff_portal",
         },
         ipAddress: req.ip,
+      });
+
+      // Count-history ledger: a staff-portal adjust IS a physical count.
+      // Best-effort, never blocks the count. See countLedger.
+      logCount({
+        itemId: id,
+        labId,
+        accountId: item.account_id ?? ownerRow.owner_user_id ?? null,
+        countedQty: usageQty,
+        previousQty: beforeQty,
+        countedBy: employeeFullName,
+        source: "staff_portal",
+        occurredAt: nowIso,
       });
 
       const updated = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(id);
