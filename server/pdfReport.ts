@@ -5064,88 +5064,149 @@ function buildCMS209HTML(input: CMS209Input): string {
 }
 
 // One printable line per person, but TC/TS split into one row per specialty
-// (name + the other roles ride the first of those rows). Same rules as
-// buildCMS209HTML, extracted so the AcroForm filler reuses them verbatim.
+// (name + the other roles ride the first of those rows).
 interface CMS209Row { name: string; ld: boolean; cc: boolean; tc: string; ts: string; gs: boolean; tp: boolean; ctGs: boolean; ct: boolean; mh: string; }
-function buildCMS209Rows(input: CMS209Input): CMS209Row[] {
-  const rows: CMS209Row[] = [];
-  for (const emp of (input.employees || [])) {
-    const empRoles = emp.roles || [];
-    if (!emp.performs_testing && !empRoles.some(r => ["LD", "CC", "TC", "TS", "GS"].includes(r.role))) continue;
-    const roleSet = new Set(empRoles.map(r => r.role));
-    const tcSpecs = empRoles.filter(r => r.role === "TC" && r.specialty_number).map(r => r.specialty_number!);
-    const tsSpecs = empRoles.filter(r => r.role === "TS" && r.specialty_number).map(r => r.specialty_number!);
-    const name = `${emp.last_name}, ${emp.first_name}${emp.middle_initial ? " " + emp.middle_initial : ""}`;
-    const specs = Array.from(new Set([...tcSpecs, ...tsSpecs]));
-    if (!specs.length) {
-      rows.push({ name, ld: roleSet.has("LD"), cc: roleSet.has("CC"), tc: "", ts: "", gs: roleSet.has("GS"), tp: roleSet.has("TP") || emp.performs_testing === 1, ctGs: roleSet.has("CT_GS"), ct: roleSet.has("CT"), mh: emp.highest_complexity === "M" ? "M" : "H" });
-    } else {
-      specs.forEach((spec, i) => rows.push({
-        name: i === 0 ? name : "",
-        ld: i === 0 && roleSet.has("LD"),
-        cc: i === 0 && roleSet.has("CC"),
-        tc: tcSpecs.includes(spec) ? String(spec) : "",
-        ts: tsSpecs.includes(spec) ? String(spec) : "",
-        gs: i === 0 && roleSet.has("GS"),
-        tp: i === 0 && (roleSet.has("TP") || emp.performs_testing === 1),
-        ctGs: i === 0 && roleSet.has("CT_GS"),
-        ct: i === 0 && roleSet.has("CT"),
-        mh: i === 0 ? (emp.highest_complexity === "M" ? "M" : "H") : "",
-      }));
-    }
+
+// One employee's rows: a single row, unless they hold TC/TS specialties, in
+// which case one row per specialty (name + the other roles ride the first row).
+function buildEmployeeRows(emp: CMS209Input["employees"][number]): CMS209Row[] {
+  const empRoles = emp.roles || [];
+  if (!emp.performs_testing && !empRoles.some(r => ["LD", "CC", "TC", "TS", "GS"].includes(r.role))) return [];
+  const roleSet = new Set(empRoles.map(r => r.role));
+  const tcSpecs = empRoles.filter(r => r.role === "TC" && r.specialty_number).map(r => r.specialty_number!);
+  const tsSpecs = empRoles.filter(r => r.role === "TS" && r.specialty_number).map(r => r.specialty_number!);
+  const name = `${emp.last_name}, ${emp.first_name}${emp.middle_initial ? " " + emp.middle_initial : ""}`;
+  const specs = Array.from(new Set([...tcSpecs, ...tsSpecs])).sort((a, b) => a - b);
+  if (!specs.length) {
+    return [{ name, ld: roleSet.has("LD"), cc: roleSet.has("CC"), tc: "", ts: "", gs: roleSet.has("GS"), tp: roleSet.has("TP") || emp.performs_testing === 1, ctGs: roleSet.has("CT_GS"), ct: roleSet.has("CT"), mh: emp.highest_complexity === "M" ? "M" : "H" }];
   }
-  return rows;
+  return specs.map((spec, i) => ({
+    name: i === 0 ? name : "",
+    ld: i === 0 && roleSet.has("LD"),
+    cc: i === 0 && roleSet.has("CC"),
+    tc: tcSpecs.includes(spec) ? String(spec) : "",
+    ts: tsSpecs.includes(spec) ? String(spec) : "",
+    gs: i === 0 && roleSet.has("GS"),
+    tp: i === 0 && (roleSet.has("TP") || emp.performs_testing === 1),
+    ctGs: i === 0 && roleSet.has("CT_GS"),
+    ct: i === 0 && roleSet.has("CT"),
+    mh: i === 0 ? (emp.highest_complexity === "M" ? "M" : "H") : "",
+  }));
 }
 
-// Fills the OFFICIAL fillable CMS-209 AcroForm (server/data/cms-209-template.pdf),
-// not the HTML facsimile buildCMS209HTML rendered. On the real form TC and TS are
-// TEXT fields holding the CMS specialty number (per the form's own instruction),
-// which is why the facsimile could never represent them from a role with no
-// specialty. The federal form carries no vendor banner, so licenseCtx is unused.
+// Person-BLOCKS, medical director first. Each block is one person's rows and is
+// kept together on a single page (never split across a page boundary). The LD is
+// forced to the first block so it is always the first line of the first page.
+// Array.prototype.sort is stable in V8, so non-LD order is otherwise preserved.
+function buildCMS209Blocks(input: CMS209Input): CMS209Row[][] {
+  const emps = [...(input.employees || [])];
+  const isLD = (e: CMS209Input["employees"][number]) => (e.roles || []).some(r => r.role === "LD");
+  emps.sort((a, b) => (isLD(a) === isLD(b) ? 0 : isLD(a) ? -1 : 1));
+  return emps.map(buildEmployeeRows).filter(b => b.length > 0);
+}
+
+// Pack person-blocks into pages of CAP rows WITHOUT splitting a block. A block
+// that will not fit in the space remaining on the current page starts a fresh
+// page (the current page simply keeps blank rows). The only forced split is a
+// single person whose own block exceeds a full page (e.g. an entire-lab TS with
+// more than CAP specialties) — unavoidable, and chunked across pages.
+function paginateCMS209Blocks(blocks: CMS209Row[][], cap: number): CMS209Row[][] {
+  const pages: CMS209Row[][] = [];
+  let cur: CMS209Row[] = [];
+  for (const block of blocks) {
+    if (block.length > cap) {
+      if (cur.length) { pages.push(cur); cur = []; }
+      for (let i = 0; i < block.length; i += cap) pages.push(block.slice(i, i + cap));
+      continue;
+    }
+    if (cur.length + block.length > cap) { pages.push(cur); cur = []; }
+    cur.push(...block);
+  }
+  if (cur.length) pages.push(cur);
+  if (!pages.length) pages.push([]);
+  return pages;
+}
+
+// Fills the OFFICIAL fillable CMS-209 AcroForm (server/data/cms-209-template.pdf).
+// On the real form TC and TS are TEXT fields holding the CMS specialty number
+// (per the form's own instruction). Personnel never bleed across pages: each
+// person's rows stay together, and the form page is replicated as many times as
+// needed (its own instruction: "Copy this page and attach continuation sheets").
+// Each page is a fresh template copy, filled then FLATTENED before stacking, so
+// same-named AcroForm fields on different pages cannot collide. The specialty
+// list (template page 2) is appended once at the end. No vendor banner on the
+// federal form, so licenseCtx is unused.
 export async function generateCMS209PDF(input: CMS209Input, _licenseCtx?: Partial<LicenseContext> | null): Promise<Buffer> {
-  const { PDFDocument } = await import("pdf-lib");
+  const { PDFDocument, StandardFonts, PDFName } = await import("pdf-lib");
   const templatePath = [
     _teaResolve(process.cwd(), "dist", "data", "cms-209-template.pdf"),
     _teaResolve(process.cwd(), "server", "data", "cms-209-template.pdf"),
   ].find((p) => _teaExistsSync(p));
   if (!templatePath) throw new Error("CMS-209 template not found (server/data/cms-209-template.pdf)");
-
-  const doc = await PDFDocument.load(_teaReadFileSync(templatePath));
-  const form = doc.getForm();
-  const setText = (name: string, val: string) => { try { form.getTextField(name).setText(val); } catch { /* field absent on template */ } };
-  const check = (name: string) => { try { form.getCheckBox(name).check(); } catch { /* field absent on template */ } };
+  const templateBytes = _teaReadFileSync(templatePath);
 
   const { lab } = input;
-  setText("1 LABORATORY NAME", lab.lab_name || "");
-  setText("2 CLIA IDENTIFICATION NUMBER", lab.clia_number || "");
-  setText("3 LABORATORY ADDRESS NUMBER AND STREET", lab.lab_address_street || "");
-  setText("CITY", lab.lab_address_city || "");
-  setText("STATE", lab.lab_address_state || "");
-  setText("ZIP CODE", lab.lab_address_zip || "");
   const director = (input.employees || []).find((e) => (e.roles || []).some((r) => r.role === "LD"));
-  if (director) setText("Printed name of laboratory director", `${director.last_name}, ${director.first_name}${director.middle_initial ? " " + director.middle_initial : ""}`);
+  const directorName = director ? `${director.last_name}, ${director.first_name}${director.middle_initial ? " " + director.middle_initial : ""}` : "";
 
-  // Government form field-name quirks: LD row1 has no "1"; CC/TC/TS/CT-GS/CT use
-  // two spaces; GS/TP one; M OR H uses a capital "Row". Confirmed from the AcroForm.
-  const rows = buildCMS209Rows(input);
-  const CAP = 14; // rows on the one fillable page; overflow -> continuation sheet
-  rows.slice(0, CAP).forEach((r, idx) => {
-    const n = idx + 1;
-    if (r.name) setText(`EMPLOYEE NAMES ${n}`, r.name);
-    if (r.ld) check(n === 1 ? "LD row1" : `LD1 row${n}`);
-    if (r.cc) check(`CC1  row${n}`);
-    if (r.tc) setText(`TC1  row${n}`, r.tc);
-    if (r.ts) setText(`TS1  row${n}`, r.ts);
-    if (r.gs) check(`GS1 row${n}`);
-    if (r.tp) check(`TP1 row${n}`);
-    if (r.ctGs) check(`CT/GS1  row${n}`);
-    if (r.ct) check(`CT1  row${n}`);
-    if (r.mh) setText(`M OR H Row${n}`, r.mh);
-  });
-  if (rows.length > CAP) check("Check Box6"); // "additional space needed" per the form
+  const pages = paginateCMS209Blocks(buildCMS209Blocks(input), 14);
+  const total = pages.length;
 
-  const bytes = await doc.save();
-  return stampPdfAuthor(Buffer.from(bytes));
+  const out = await PDFDocument.create();
+  for (let p = 0; p < total; p++) {
+    const tmp = await PDFDocument.load(templateBytes);
+    const form = tmp.getForm();
+    const setText = (name: string, val: string) => { try { form.getTextField(name).setText(val); } catch { /* field absent on template */ } };
+    const check = (name: string) => { try { form.getCheckBox(name).check(); } catch { /* field absent on template */ } };
+
+    // Header repeats on every sheet (each continuation sheet is a full copy).
+    setText("1 LABORATORY NAME", lab.lab_name || "");
+    setText("2 CLIA IDENTIFICATION NUMBER", lab.clia_number || "");
+    setText("3 LABORATORY ADDRESS NUMBER AND STREET", lab.lab_address_street || "");
+    setText("CITY", lab.lab_address_city || "");
+    setText("STATE", lab.lab_address_state || "");
+    setText("ZIP CODE", lab.lab_address_zip || "");
+    if (directorName) setText("Printed name of laboratory director", directorName);
+
+    // Government form field-name quirks: LD row1 has no "1"; CC/TC/TS/CT-GS/CT
+    // use two spaces; GS/TP one; M OR H uses a capital "Row".
+    pages[p].forEach((r, idx) => {
+      const n = idx + 1;
+      if (r.name) setText(`EMPLOYEE NAMES ${n}`, r.name);
+      if (r.ld) check(n === 1 ? "LD row1" : `LD1 row${n}`);
+      if (r.cc) check(`CC1  row${n}`);
+      if (r.tc) setText(`TC1  row${n}`, r.tc);
+      if (r.ts) setText(`TS1  row${n}`, r.ts);
+      if (r.gs) check(`GS1 row${n}`);
+      if (r.tp) check(`TP1 row${n}`);
+      if (r.ctGs) check(`CT/GS1  row${n}`);
+      if (r.ct) check(`CT1  row${n}`);
+      if (r.mh) setText(`M OR H Row${n}`, r.mh);
+    });
+    if (p < total - 1) check("Check Box6"); // "additional space needed" on every sheet but the last
+
+    // Fill the form's own "IF CONTINUATION SHEET PAGE __ OF __" footer blanks.
+    const font = await tmp.embedFont(StandardFonts.Helvetica);
+    const pg = tmp.getPage(0);
+    const y = pg.getHeight() - 767; // footer baseline (page is 792 tall)
+    pg.drawText(String(p + 1), { x: 538, y, size: 9, font });
+    pg.drawText(String(total), { x: 565, y, size: 9, font });
+
+    form.flatten(); // bake values into page content so stacked pages don't share fields
+    const [copied] = await out.copyPages(tmp, [0]);
+    // flatten leaves one stray widget annotation whose parent field ref is now
+    // dangling; the appearance is already baked into the page content, so drop
+    // the leftover annotations to keep the output xref clean (no Adobe repair).
+    copied.node.set(PDFName.of("Annots"), out.context.obj([]));
+    out.addPage(copied);
+  }
+
+  // Specialty-number reference (template page 2) once at the end.
+  const specSrc = await PDFDocument.load(templateBytes);
+  const [specPage] = await out.copyPages(specSrc, [1]);
+  out.addPage(specPage);
+
+  return stampPdfAuthor(Buffer.from(await out.save()));
 }
 
 // ─── VeritaPT PDF ────────────────────────────────────────────────────────────
