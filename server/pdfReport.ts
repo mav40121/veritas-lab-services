@@ -5063,26 +5063,89 @@ function buildCMS209HTML(input: CMS209Input): string {
   </body></html>`;
 }
 
-export async function generateCMS209PDF(input: CMS209Input, licenseCtx?: Partial<LicenseContext> | null): Promise<Buffer> {
-  const html = buildCMS209HTML(input);
-  const browser = await getBrowser();
-  const page = await browser.newPage();
-  try {
-    const stamped = applyLicenseToPuppeteer(html, "", licenseCtx);
-    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
-    const pdfBuffer = await page.pdf({
-      format: "Letter",
-      landscape: true,
-      printBackground: true,
-      displayHeaderFooter: true,
-      headerTemplate: "<span></span>",
-      footerTemplate: stamped.footerTemplate,
-      margin: { top: "10mm", right: "12mm", bottom: "14mm", left: "12mm" },
-    });
-    return stampPdfAuthor(pdfBuffer);
-  } finally {
-    await page.close();
+// One printable line per person, but TC/TS split into one row per specialty
+// (name + the other roles ride the first of those rows). Same rules as
+// buildCMS209HTML, extracted so the AcroForm filler reuses them verbatim.
+interface CMS209Row { name: string; ld: boolean; cc: boolean; tc: string; ts: string; gs: boolean; tp: boolean; ctGs: boolean; ct: boolean; mh: string; }
+function buildCMS209Rows(input: CMS209Input): CMS209Row[] {
+  const rows: CMS209Row[] = [];
+  for (const emp of (input.employees || [])) {
+    const empRoles = emp.roles || [];
+    if (!emp.performs_testing && !empRoles.some(r => ["LD", "CC", "TC", "TS", "GS"].includes(r.role))) continue;
+    const roleSet = new Set(empRoles.map(r => r.role));
+    const tcSpecs = empRoles.filter(r => r.role === "TC" && r.specialty_number).map(r => r.specialty_number!);
+    const tsSpecs = empRoles.filter(r => r.role === "TS" && r.specialty_number).map(r => r.specialty_number!);
+    const name = `${emp.last_name}, ${emp.first_name}${emp.middle_initial ? " " + emp.middle_initial : ""}`;
+    const specs = Array.from(new Set([...tcSpecs, ...tsSpecs]));
+    if (!specs.length) {
+      rows.push({ name, ld: roleSet.has("LD"), cc: roleSet.has("CC"), tc: "", ts: "", gs: roleSet.has("GS"), tp: roleSet.has("TP") || emp.performs_testing === 1, ctGs: roleSet.has("CT_GS"), ct: roleSet.has("CT"), mh: emp.highest_complexity === "M" ? "M" : "H" });
+    } else {
+      specs.forEach((spec, i) => rows.push({
+        name: i === 0 ? name : "",
+        ld: i === 0 && roleSet.has("LD"),
+        cc: i === 0 && roleSet.has("CC"),
+        tc: tcSpecs.includes(spec) ? String(spec) : "",
+        ts: tsSpecs.includes(spec) ? String(spec) : "",
+        gs: i === 0 && roleSet.has("GS"),
+        tp: i === 0 && (roleSet.has("TP") || emp.performs_testing === 1),
+        ctGs: i === 0 && roleSet.has("CT_GS"),
+        ct: i === 0 && roleSet.has("CT"),
+        mh: i === 0 ? (emp.highest_complexity === "M" ? "M" : "H") : "",
+      }));
+    }
   }
+  return rows;
+}
+
+// Fills the OFFICIAL fillable CMS-209 AcroForm (server/data/cms-209-template.pdf),
+// not the HTML facsimile buildCMS209HTML rendered. On the real form TC and TS are
+// TEXT fields holding the CMS specialty number (per the form's own instruction),
+// which is why the facsimile could never represent them from a role with no
+// specialty. The federal form carries no vendor banner, so licenseCtx is unused.
+export async function generateCMS209PDF(input: CMS209Input, _licenseCtx?: Partial<LicenseContext> | null): Promise<Buffer> {
+  const { PDFDocument } = await import("pdf-lib");
+  const templatePath = [
+    _teaResolve(process.cwd(), "dist", "data", "cms-209-template.pdf"),
+    _teaResolve(process.cwd(), "server", "data", "cms-209-template.pdf"),
+  ].find((p) => _teaExistsSync(p));
+  if (!templatePath) throw new Error("CMS-209 template not found (server/data/cms-209-template.pdf)");
+
+  const doc = await PDFDocument.load(_teaReadFileSync(templatePath));
+  const form = doc.getForm();
+  const setText = (name: string, val: string) => { try { form.getTextField(name).setText(val); } catch { /* field absent on template */ } };
+  const check = (name: string) => { try { form.getCheckBox(name).check(); } catch { /* field absent on template */ } };
+
+  const { lab } = input;
+  setText("1 LABORATORY NAME", lab.lab_name || "");
+  setText("2 CLIA IDENTIFICATION NUMBER", lab.clia_number || "");
+  setText("3 LABORATORY ADDRESS NUMBER AND STREET", lab.lab_address_street || "");
+  setText("CITY", lab.lab_address_city || "");
+  setText("STATE", lab.lab_address_state || "");
+  setText("ZIP CODE", lab.lab_address_zip || "");
+  const director = (input.employees || []).find((e) => (e.roles || []).some((r) => r.role === "LD"));
+  if (director) setText("Printed name of laboratory director", `${director.last_name}, ${director.first_name}${director.middle_initial ? " " + director.middle_initial : ""}`);
+
+  // Government form field-name quirks: LD row1 has no "1"; CC/TC/TS/CT-GS/CT use
+  // two spaces; GS/TP one; M OR H uses a capital "Row". Confirmed from the AcroForm.
+  const rows = buildCMS209Rows(input);
+  const CAP = 14; // rows on the one fillable page; overflow -> continuation sheet
+  rows.slice(0, CAP).forEach((r, idx) => {
+    const n = idx + 1;
+    if (r.name) setText(`EMPLOYEE NAMES ${n}`, r.name);
+    if (r.ld) check(n === 1 ? "LD row1" : `LD1 row${n}`);
+    if (r.cc) check(`CC1  row${n}`);
+    if (r.tc) setText(`TC1  row${n}`, r.tc);
+    if (r.ts) setText(`TS1  row${n}`, r.ts);
+    if (r.gs) check(`GS1 row${n}`);
+    if (r.tp) check(`TP1 row${n}`);
+    if (r.ctGs) check(`CT/GS1  row${n}`);
+    if (r.ct) check(`CT1  row${n}`);
+    if (r.mh) setText(`M OR H Row${n}`, r.mh);
+  });
+  if (rows.length > CAP) check("Check Box6"); // "additional space needed" per the form
+
+  const bytes = await doc.save();
+  return stampPdfAuthor(Buffer.from(bytes));
 }
 
 // ─── VeritaPT PDF ────────────────────────────────────────────────────────────
