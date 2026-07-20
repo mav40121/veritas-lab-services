@@ -49,4 +49,54 @@ test.describe("Mock-inspection cornerstone article", () => {
     expect(types, "HowTo node").toContain("HowTo");
     expect(types, "DefinedTerm node").toContain("DefinedTerm");
   });
+
+  test("author authority entity + Article graph connections resolve", async ({ page }) => {
+    await page.goto(`${BASE}${SLUG}`, { waitUntil: "networkidle" });
+    // Flatten every JSON-LD node on the page into one id->node map. JSON.parse the
+    // whole graph, never grep: one bad comma would break the block silently.
+    const { byId, article, breadcrumb } = await page.$$eval('script[type="application/ld+json"]', (nodes) => {
+      const all: any[] = [];
+      for (const n of nodes) {
+        try {
+          const j = JSON.parse(n.textContent || "{}");
+          const arr = Array.isArray(j) ? j : (j["@graph"] ? j["@graph"] : [j]);
+          for (const node of arr) if (node && typeof node === "object") all.push(node);
+        } catch {}
+      }
+      const byId: Record<string, any> = {};
+      for (const n of all) if (n["@id"]) byId[n["@id"]] = n;
+      return {
+        byId,
+        article: all.find((n) => n["@type"] === "Article") || null,
+        breadcrumb: all.find((n) => n["@type"] === "BreadcrumbList") || null,
+      };
+    });
+
+    // 1. Author authority entity resolves and carries expertise signals.
+    const authorId = article?.author?.["@id"];
+    expect(authorId, "Article.author is an @id ref").toContain("#michael-veri");
+    const person = byId[authorId];
+    expect(person, "author @id resolves to a node").toBeTruthy();
+    expect(person["@type"]).toBe("Person");
+    expect(Array.isArray(person.sameAs) && person.sameAs.some((s: string) => s.includes("linkedin.com/in/michael-veri"))).toBe(true);
+    expect((person.knowsAbout || []).length, "knowsAbout").toBeGreaterThanOrEqual(4);
+    expect((person.hasCredential || []).length, "hasCredential").toBeGreaterThanOrEqual(4);
+
+    // 2. Article.about references two DefinedTerm ids that both resolve.
+    const aboutIds = (article.about || []).map((a: any) => a["@id"]);
+    expect(aboutIds.length, "Article.about has two terms").toBe(2);
+    for (const id of aboutIds) {
+      expect(byId[id], `about ${id} resolves`).toBeTruthy();
+      expect(byId[id]["@type"]).toBe("DefinedTerm");
+    }
+
+    // 3. mentions point only at the two products the article touches.
+    const mentionIds = (article.mentions || []).map((m: any) => m["@id"]);
+    expect(mentionIds.some((i: string) => i.includes("#veritascan"))).toBe(true);
+    expect(mentionIds.some((i: string) => i.includes("#veritacheck"))).toBe(true);
+
+    // 4. BreadcrumbList parses with three positions.
+    expect(breadcrumb, "BreadcrumbList present").toBeTruthy();
+    expect((breadcrumb.itemListElement || []).length).toBe(3);
+  });
 });
