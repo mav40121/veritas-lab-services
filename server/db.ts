@@ -437,7 +437,22 @@ sqlite.exec(`
     lab_id INTEGER NOT NULL,
     role TEXT NOT NULL,
     specialty_number INTEGER,
+    all_specialties INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (employee_id) REFERENCES staff_employees(id),
+    FOREIGN KEY (lab_id) REFERENCES staff_labs(id)
+  );
+
+  -- CMS-209 Part B: the director-set list of CMS specialty numbers (1-17) a
+  -- lab performs. An "entire lab" TC/TS (staff_roles.all_specialties = 1)
+  -- expands to one 209 row per entry here at generation time. Blank list =
+  -- nothing to expand to (the entire-lab role then surfaces as needs-review).
+  CREATE TABLE IF NOT EXISTS staff_lab_specialties (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    tier2_lab_id INTEGER,
+    specialty_number INTEGER NOT NULL,
+    created_at TEXT,
+    UNIQUE(lab_id, specialty_number),
     FOREIGN KEY (lab_id) REFERENCES staff_labs(id)
   );
 
@@ -3110,6 +3125,29 @@ for (const t of ["staff_employees", "staff_roles"]) {
   if (sb.changes > 0) {
     console.log(`[migration] Multi-lab Phase 3.9 (${t}): backfilled tier2_lab_id on ${sb.changes} row(s)`);
   }
+}
+
+// CMS-209 Part B migrations. staff_roles predates the "entire lab" TC/TS
+// concept, so the all_specialties flag must be added by ALTER on upgraded
+// schemas. staff_lab_specialties is a fresh table, but per the NEW DB TABLE
+// RULE it still gets a PRAGMA-guarded column check so a future column add on
+// the live server cannot leave the table short.
+{
+  const roleCols = (sqlite.prepare(`PRAGMA table_info(staff_roles)`).all() as any[]).map(c => c.name);
+  if (!roleCols.includes("all_specialties")) {
+    try { sqlite.exec(`ALTER TABLE staff_roles ADD COLUMN all_specialties INTEGER NOT NULL DEFAULT 0`); } catch {}
+  }
+  const labSpecMigrations: [string, string][] = [
+    ["tier2_lab_id", "INTEGER"],
+    ["created_at", "TEXT"],
+  ];
+  const labSpecCols = (sqlite.prepare(`PRAGMA table_info(staff_lab_specialties)`).all() as any[]).map(c => c.name);
+  for (const [col, colType] of labSpecMigrations) {
+    if (!labSpecCols.includes(col)) {
+      try { sqlite.exec(`ALTER TABLE staff_lab_specialties ADD COLUMN ${col} ${colType}`); } catch {}
+    }
+  }
+  try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_staff_lab_specialties_lab ON staff_lab_specialties(lab_id)`); } catch {}
 }
 
 // Multi-Lab Tier 2 — Phase 3.8 (VeritaLab module):
