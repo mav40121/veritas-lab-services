@@ -14,6 +14,8 @@ import type { LicenseContext } from "@shared/licenseText";
 import { generateReorderListPDF, generateReorderListExcel, generateSnapOrderPDF, type ReorderItem, type SnapOrderItem, type VendorRecordForPdf } from "./orderDocument";
 import { generateBarcodeLabelSheetPdf, type BarcodeLabelInput } from "./barcodeLabelPdf";
 import { generateInventoryCountExcel, type InventoryCountItem } from "./inventoryCountExcel";
+import { buildCountHistory } from "./countHistoryReport";
+import { generateCountHistoryExcel } from "./countHistoryExcel";
 import { storePdfToken } from "./pdfTokens";
 import { buildIntacctCSV, preflightIntacct, type IntacctExportConfig, type VendorIdMap } from "./intacctExport";
 import { forecastFromGoal, chainGap, staffingGridFte, DEFAULT_HOURS_PER_FTE_YEAR } from "@shared/operationsForecast";
@@ -967,6 +969,43 @@ export function registerVeritaBenchRoutes(
     } catch (err: any) {
       console.error("Reorder PDF generation error:", err.message);
       res.status(500).json({ error: "PDF generation failed", detail: err.message });
+    }
+  });
+
+  // GET /api/inventory/count-history - per-item physical count history (from the
+  // inventory_count_events ledger) plus a recount-reconciled true burn rate.
+  // Scoped to the active lab the same way the inventory list is.
+  app.get("/api/inventory/count-history", authMiddleware, (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const labId = resolveLegacyLabId((db as any).$client, req);
+    if (!labId) return res.json({ generatedAt: new Date().toISOString(), windowDays: 0, items: [] });
+    const days = Number(req.query.days) || 365;
+    const itemId = req.query.item_id ? Number(req.query.item_id) : null;
+    try {
+      res.json(buildCountHistory(sqlite, labId, { days, itemId }));
+    } catch (err: any) {
+      console.error("Count history error:", err.message);
+      res.status(500).json({ error: "count_history_failed", detail: err.message });
+    }
+  });
+
+  // POST /api/inventory/count-history/xlsx - the same report as a workbook.
+  // Returns a one-time token the client GETs at /api/pdf/:token (reorder pattern).
+  app.post("/api/inventory/count-history/xlsx", authMiddleware, async (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const labId = resolveLegacyLabId((db as any).$client, req);
+    if (!labId) return res.status(400).json({ error: "No active lab" });
+    const days = Number(req.body?.days) || Number(req.query?.days) || 365;
+    try {
+      const report = buildCountHistory(sqlite, labId, { days });
+      const labRow = sqlite.prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(labId) as any;
+      const buffer = await generateCountHistoryExcel(report, { labName: labRow?.lab_name ?? null, cliaNumber: labRow?.clia_number ?? null });
+      const filename = `VeritaStock_Count_History_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      const token = storePdfToken(buffer, filename);
+      res.json({ token, itemCount: report.items.length });
+    } catch (err: any) {
+      console.error("Count history xlsx error:", err.message);
+      res.status(500).json({ error: "count_history_xlsx_failed", detail: err.message });
     }
   });
 
