@@ -27,7 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Lock, Plus, Edit2, Trash2, AlertTriangle, Package, Clock, AlertCircle, RefreshCw,
-  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users, Building2, DollarSign, PackageCheck, PackageX, BarChart3, ScrollText, Layers, Barcode,
+  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users, Building2, DollarSign, PackageCheck, PackageX, BarChart3, ScrollText, Layers, Barcode, Smartphone, Monitor,
 } from "lucide-react";
 import BarcodeScannerModal from "@/components/BarcodeScannerModal";
 import InventoryCountWorkflow, { type CountItem } from "@/components/InventoryCountWorkflow";
@@ -1124,6 +1124,22 @@ export default function VeritaStockInventoryPage() {
     return out;
   }, [countHistory]);
 
+  // ── Mobile / desktop view toggle ─────────────────────────────────────────
+  // The inventory table hides Department/Vendor/Barcode below md/lg/xl to fit a
+  // phone, so a counter on a phone loses columns (San Carlos). "Desktop view"
+  // un-hides every column and lets the table scroll sideways, so the phone shows
+  // the full grid. Persisted so the choice sticks across visits.
+  const [viewMode, setViewMode] = useState<"mobile" | "desktop">(() => {
+    try { return localStorage.getItem("veritastock_view_mode") === "desktop" ? "desktop" : "mobile"; } catch { return "mobile"; }
+  });
+  const forceDesktop = viewMode === "desktop";
+  const respCol = (bp: "md" | "lg" | "xl") => (forceDesktop ? "" : `hidden ${bp}:table-cell`);
+  const toggleViewMode = () => setViewMode((m) => {
+    const next = m === "desktop" ? "mobile" : "desktop";
+    try { localStorage.setItem("veritastock_view_mode", next); } catch {}
+    return next;
+  });
+
   // ── Export for Sage Intacct ──────────────────────────────────────────────
   // A config-driven CSV off the current reorder list that matches the customer's
   // Sage Intacct "Purchasing transactions" import template. The mapping (exact
@@ -2027,6 +2043,16 @@ export default function VeritaStockInventoryPage() {
             <BarChart3 size={14} className="mr-1.5" />
             Count History
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={toggleViewMode}
+            title={forceDesktop ? "Switch to mobile view (fits the phone screen)" : "Switch to desktop view (all columns, scroll sideways) for counting on a phone"}
+            data-testid="view-mode-toggle"
+          >
+            {forceDesktop ? <Smartphone size={14} className="mr-1.5" /> : <Monitor size={14} className="mr-1.5" />}
+            {forceDesktop ? "Mobile view" : "Desktop view"}
+          </Button>
           {/* Sage Intacct hand-off: config-driven purchasing CSV off the reorder
               list. Unconfigured -> opens setup; configured -> exports (preflight
               blocks an incomplete file with a named list). San-Carlos-specific
@@ -2332,12 +2358,12 @@ export default function VeritaStockInventoryPage() {
         </div>
       ) : (
         <div className="overflow-auto border rounded-lg max-h-[70vh]">
-          <table className="w-full text-sm">
+          <table className={`text-sm ${forceDesktop ? "min-w-[900px]" : "w-full"}`}>
             <thead>
               <tr className="border-b">
                 <SortHeader field="item_name">Item Name</SortHeader>
                 {isColumnVisible("category") && <SortHeader field="category">Category</SortHeader>}
-                {isColumnVisible("department") && <SortHeader field="department" className="hidden md:table-cell">Dept</SortHeader>}
+                {isColumnVisible("department") && <SortHeader field="department" className={respCol("md")}>Dept</SortHeader>}
                 {isColumnVisible("quantity_on_hand") && <SortHeader field="quantity_on_hand">On Hand</SortHeader>}
                 {isColumnVisible("on_order") && <th className="text-left px-3 py-2 font-medium sticky top-0 z-20 bg-muted" title="Quantity on a purchase order but not yet received. Counts toward inventory position so an inbound item does not re-trigger Reorder Now.">On Order</th>}
                 {isColumnVisible("unit_cost") && <th className="text-left px-3 py-2 font-medium sticky top-0 z-20 bg-muted">Unit Cost</th>}
@@ -2347,8 +2373,8 @@ export default function VeritaStockInventoryPage() {
                 {isColumnVisible("days_remaining") && <SortHeader field="days_remaining">Days Left</SortHeader>}
                 {isColumnVisible("stock_status") && <SortHeader field="stock_status">Stock Status</SortHeader>}
                 {isColumnVisible("expiration_date") && <SortHeader field="expiration_date">Expiration</SortHeader>}
-                {isColumnVisible("vendor") && <SortHeader field="vendor" className="hidden lg:table-cell">Vendor</SortHeader>}
-                {isColumnVisible("barcode") && <SortHeader field="barcode_value" className="hidden xl:table-cell">Barcode</SortHeader>}
+                {isColumnVisible("vendor") && <SortHeader field="vendor" className={respCol("lg")}>Vendor</SortHeader>}
+                {isColumnVisible("barcode") && <SortHeader field="barcode_value" className={respCol("xl")}>Barcode</SortHeader>}
                 <th className="text-center px-3 py-2 font-medium w-[80px] sticky top-0 z-20 bg-muted">Actions</th>
               </tr>
             </thead>
@@ -2377,7 +2403,7 @@ export default function VeritaStockInventoryPage() {
                     </td>
                   )}
                   {isColumnVisible("department") && (
-                    <td className="px-3 py-2 text-xs hidden md:table-cell">{item.department}</td>
+                    <td className={`px-3 py-2 text-xs ${respCol("md")}`}>{item.department}</td>
                   )}
                   {isColumnVisible("quantity_on_hand") && (
                     <td className="px-3 py-2 font-mono text-sm" data-testid="onhand-cell">
@@ -2448,10 +2474,10 @@ export default function VeritaStockInventoryPage() {
                     </td>
                   )}
                   {isColumnVisible("vendor") && (
-                    <td className="px-3 py-2 text-xs hidden lg:table-cell">{item.vendor ?? "-"}</td>
+                    <td className={`px-3 py-2 text-xs ${respCol("lg")}`}>{item.vendor ?? "-"}</td>
                   )}
                   {isColumnVisible("barcode") && (
-                    <td className="px-3 py-2 font-mono text-xs hidden xl:table-cell whitespace-nowrap">
+                    <td className={`px-3 py-2 font-mono text-xs whitespace-nowrap ${respCol("xl")}`}>
                       {(item as any).barcode_value || <span className="text-muted-foreground">-</span>}
                     </td>
                   )}
