@@ -16,6 +16,7 @@ import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
+import { entireLabFlag, sanitizeSpecialties, expandEntireLabRoles, cms209Gaps } from "./cms209Roles";
 import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution, analyteMatch } from "./veritacheckCoverage";
 import { evaluateManualDiff } from "./rumke";
 import { auditVeritamapConsistency } from "./veritamapConsistency";
@@ -21989,6 +21990,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     "Histology / Pathology": [12], "Cytology": [11],
   };
 
+  // ---- CMS-209 Part B helpers (entire-lab TC/TS + lab specialty list) ----
+  // Pure role-shaping helpers (entireLabFlag, expandEntireLabRoles, cms209Gaps,
+  // sanitizeSpecialties) live in server/cms209Roles.ts so they are unit-testable
+  // (scripts/verify-cms209-partb.mts). getLabSpecialtyNumbers is db-bound and
+  // stays here.
+  //
+  // getLabSpecialtyNumbers: the director-set list of CMS specialty numbers a
+  // staff lab performs, ascending. staffLabId is staff_labs.id.
+  function getLabSpecialtyNumbers(staffLabId: number): number[] {
+    try {
+      return ((db as any).$client
+        .prepare("SELECT specialty_number FROM staff_lab_specialties WHERE lab_id = ? ORDER BY specialty_number")
+        .all(staffLabId) as any[])
+        .map((r) => Number(r.specialty_number))
+        .filter((n) => Number.isInteger(n) && n >= 1 && n <= 17);
+    } catch { return []; }
+  }
+
   // Get or create staff lab
   app.get("/api/staff/lab", authMiddleware, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
@@ -22154,9 +22173,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     // Insert roles
     if (roles && Array.isArray(roles)) {
-      const roleStmt = (db as any).$client.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number) VALUES (?,?,?,?)");
+      const roleStmt = (db as any).$client.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number, all_specialties) VALUES (?,?,?,?,?)");
       for (const r of roles) {
-        roleStmt.run(empId, lab.id, r.role, r.specialtyNumber || null);
+        roleStmt.run(empId, lab.id, r.role, r.specialtyNumber || null, entireLabFlag(r));
       }
       // Phase 3.9 dual-write tier2_lab_id on the newly inserted role rows.
       try {
@@ -22247,9 +22266,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Replace roles
     if (roles && Array.isArray(roles)) {
       (db as any).$client.prepare("DELETE FROM staff_roles WHERE employee_id = ?").run(req.params.id);
-      const roleStmt = (db as any).$client.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number) VALUES (?,?,?,?)");
+      const roleStmt = (db as any).$client.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number, all_specialties) VALUES (?,?,?,?,?)");
       for (const r of roles) {
-        roleStmt.run(req.params.id, lab.id, r.role, r.specialtyNumber || null);
+        roleStmt.run(req.params.id, lab.id, r.role, r.specialtyNumber || null, entireLabFlag(r));
       }
     }
 
@@ -22423,8 +22442,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).run(lab.id, tier2LabId, ownerUserId, lastName.trim(), firstName.trim(), middleInitial || null, title || null, titleCode || null, hireDate || null, qualificationsText || null, qualificationsVerifiedAt || null, qualificationsVerifiedBy || null, highestComplexity || 'H', performsTesting ? 1 : 0, canAdjustInventory ? 1 : 0, canViewAudit ? 1 : 0, 'active', now, now);
       const id = result.lastInsertRowid;
       if (Array.isArray(roles)) {
-        const roleStmt = sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, tier2_lab_id, role, specialty_number) VALUES (?,?,?,?,?)");
-        for (const r of roles) roleStmt.run(id, lab.id, tier2LabId, r.role, r.specialtyNumber || null);
+        const roleStmt = sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, tier2_lab_id, role, specialty_number, all_specialties) VALUES (?,?,?,?,?,?)");
+        for (const r of roles) roleStmt.run(id, lab.id, tier2LabId, r.role, r.specialtyNumber || null, entireLabFlag(r));
       }
       if (performsTesting) {
         const accreditor = lab.accreditation_body;
@@ -22505,8 +22524,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       );
       if (Array.isArray(roles)) {
         sqlite.prepare("DELETE FROM staff_roles WHERE employee_id = ?").run(req.params.id);
-        const roleStmt = sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, tier2_lab_id, role, specialty_number) VALUES (?,?,?,?,?)");
-        for (const r of roles) roleStmt.run(req.params.id, emp.lab_id, tier2LabId, r.role, r.specialtyNumber || null);
+        const roleStmt = sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, tier2_lab_id, role, specialty_number, all_specialties) VALUES (?,?,?,?,?,?)");
+        for (const r of roles) roleStmt.run(req.params.id, emp.lab_id, tier2LabId, r.role, r.specialtyNumber || null, entireLabFlag(r));
       }
       // PR E3: ensure milestones populate when hire_date is now present and
       // performs_testing is on. Same idempotent helper used at POST time.
@@ -24557,7 +24576,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const pdfBuffer = await generateCMS209PDF({
         lab,
-        employees: employeesWithRoles,
+        employees: expandEntireLabRoles(employeesWithRoles, getLabSpecialtyNumbers(lab.id)),
         specialties: CMS_SPECIALTIES,
       }, licenseCtxFromReq(req));
       const date = new Date().toISOString().split("T")[0];
@@ -24589,7 +24608,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const pdfBuffer = await generateCMS209PDF({
         lab,
-        employees: employeesWithRoles,
+        employees: expandEntireLabRoles(employeesWithRoles, getLabSpecialtyNumbers(lab.id)),
         specialties: CMS_SPECIALTIES,
       }, licenseCtxFromReq(req));
       const date = new Date().toISOString().split("T")[0];
@@ -24605,6 +24624,89 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Get CMS specialties reference
   app.get("/api/staff/specialties", (_req: any, res) => {
     res.json(CMS_SPECIALTIES);
+  });
+
+  // ---- CMS-209 Part B: director-set lab specialty list + readiness ----
+  // (sanitizeSpecialties lives in server/cms209Roles.ts.)
+  // writeLabSpecialties: replace-all the lab's specialty list atomically.
+  function writeLabSpecialties(staffLabId: number, tier2LabId: number | null, nums: number[]) {
+    const sqlite = (db as any).$client;
+    const now = new Date().toISOString();
+    sqlite.transaction(() => {
+      sqlite.prepare("DELETE FROM staff_lab_specialties WHERE lab_id = ?").run(staffLabId);
+      const ins = sqlite.prepare("INSERT OR IGNORE INTO staff_lab_specialties (lab_id, tier2_lab_id, specialty_number, created_at) VALUES (?,?,?,?)");
+      for (const n of nums) ins.run(staffLabId, tier2LabId, n, now);
+    })();
+  }
+  // employeesWithRolesForStaffLab: active employees + their raw roles (carrying
+  // all_specialties) for a staff lab, scoped the same way the CMS-209 routes do.
+  function employeesWithRolesForStaffLab(whereCol: "lab_id" | "tier2_lab_id", scopeId: number): any[] {
+    const employees = (db as any).$client.prepare(
+      `SELECT * FROM staff_employees WHERE ${whereCol} = ? AND status = 'active' ORDER BY last_name, first_name`
+    ).all(scopeId) as any[];
+    return employees.map((emp: any) => ({
+      ...emp,
+      roles: (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(emp.id),
+    }));
+  }
+
+  // Owner variant: GET the lab specialty list
+  app.get("/api/staff/lab-specialties", authMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const dataUserId = req.ownerUserId ?? req.user.userId;
+    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+    if (!lab) return res.json({ specialties: [], specialtyLabels: CMS_SPECIALTIES });
+    res.json({ specialties: getLabSpecialtyNumbers(lab.id), specialtyLabels: CMS_SPECIALTIES });
+  });
+
+  // Owner variant: PUT (replace) the lab specialty list
+  app.put("/api/staff/lab-specialties", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const dataUserId = req.ownerUserId ?? req.user.userId;
+    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+    if (!lab) return res.status(400).json({ error: "Set up your lab first" });
+    const nums = sanitizeSpecialties(req.body?.specialties);
+    writeLabSpecialties(lab.id, lab.tier2_lab_id ?? null, nums);
+    res.json({ specialties: getLabSpecialtyNumbers(lab.id), specialtyLabels: CMS_SPECIALTIES });
+  });
+
+  // Owner variant: CMS-209 readiness (lab list + TC/TS needs-review gaps)
+  app.get("/api/staff/cms209-readiness", authMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const dataUserId = req.ownerUserId ?? req.user.userId;
+    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+    if (!lab) return res.json({ labSpecialties: [], gaps: [], specialtyLabels: CMS_SPECIALTIES });
+    const emps = employeesWithRolesForStaffLab("lab_id", lab.id);
+    const labNums = getLabSpecialtyNumbers(lab.id);
+    res.json({ labSpecialties: labNums, gaps: cms209Gaps(emps, labNums), specialtyLabels: CMS_SPECIALTIES });
+  });
+
+  // Lab-scoped variant: GET the lab specialty list
+  app.get("/api/labs/:labId/staff/lab-specialties", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE tier2_lab_id = ?").get(req.scope.labId) as any;
+    if (!lab) return res.json({ specialties: [], specialtyLabels: CMS_SPECIALTIES });
+    res.json({ specialties: getLabSpecialtyNumbers(lab.id), specialtyLabels: CMS_SPECIALTIES });
+  });
+
+  // Lab-scoped variant: PUT (replace) the lab specialty list
+  app.put("/api/labs/:labId/staff/lab-specialties", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE tier2_lab_id = ?").get(req.scope.labId) as any;
+    if (!lab) return res.status(400).json({ error: "Set up your lab first" });
+    const nums = sanitizeSpecialties(req.body?.specialties);
+    writeLabSpecialties(lab.id, req.scope.labId, nums);
+    res.json({ specialties: getLabSpecialtyNumbers(lab.id), specialtyLabels: CMS_SPECIALTIES });
+  });
+
+  // Lab-scoped variant: CMS-209 readiness
+  app.get("/api/labs/:labId/staff/cms209-readiness", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE tier2_lab_id = ?").get(req.scope.labId) as any;
+    if (!lab) return res.json({ labSpecialties: [], gaps: [], specialtyLabels: CMS_SPECIALTIES });
+    const emps = employeesWithRolesForStaffLab("tier2_lab_id", req.scope.labId);
+    const labNums = getLabSpecialtyNumbers(lab.id);
+    res.json({ labSpecialties: labNums, gaps: cms209Gaps(emps, labNums), specialtyLabels: CMS_SPECIALTIES });
   });
 
   // ── CLIA LOOKUP ───────────────────────────────────────────────────────────
