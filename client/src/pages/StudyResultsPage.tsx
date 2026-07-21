@@ -2164,7 +2164,7 @@ function PTCoagReport({ study, results }: { study: Study; results: PTCoagResults
       {module1s.map((m1, mi) => (
       <Card className="mb-6" key={`m1-${mi}`}>
         <CardHeader className="pb-2"><CardTitle className="text-sm">
-          Module 1: Normal Patient Mean & RI Verification{nInst > 1 ? ` — ${m1.instrumentName || `Instrument ${mi + 1}`}` : ""}
+          Module 1: Normal Patient Mean & RI Verification{nInst > 1 ? `: ${m1.instrumentName || `Instrument ${mi + 1}`}` : ""}
         </CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
