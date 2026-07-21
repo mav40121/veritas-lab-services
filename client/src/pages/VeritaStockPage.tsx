@@ -1854,8 +1854,10 @@ export default function VeritaStockInventoryPage() {
           </div>
         </div>
       )}
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      {/* Header. Stacks vertically on a phone so the action-button cluster
+          wraps full-width below the title instead of being squeezed into a
+          thin right column that runs off the right edge (San Carlos, mobile). */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
         <div>
           <h1 className="font-serif text-2xl font-bold" style={{ color: "#01696F" }}>VeritaStock{"™"}</h1>
           <p className="text-sm text-muted-foreground mt-1">Burn-rate tracking, calculated par levels, and standing order management</p>
@@ -1883,7 +1885,7 @@ export default function VeritaStockInventoryPage() {
           </div>
           )}
         </div>
-        <div className="flex flex-wrap gap-2 justify-end">
+        <div className="flex flex-wrap gap-2 md:justify-end">
           {/* Incoming transfers waiting to accept at this location. Always
               present so the destination user learns where Accept/Reject lives
               (it is on the Enterprise view); emphasized with a live count badge
