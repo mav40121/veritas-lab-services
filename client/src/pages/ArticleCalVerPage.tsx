@@ -157,7 +157,7 @@ return (
             <strong>A correlation study is a precision study.</strong> The only difference is the source of variability. Traditional precision studies examine reproducibility within a single method; correlation studies examine reproducibility across multiple methods or instruments.
           </p>
           <p>
-            The Joint Commission requires correlation studies when multiple instruments or methods are used for the same test. Importantly, the standard does not specify a minimum number of specimens; the laboratory defines both the number of data points and the acceptability criteria.
+            The <Link href="/resources/tjc-laboratory-inspection-what-to-expect" className="text-primary hover:underline">Joint Commission</Link> requires correlation studies when multiple instruments or methods are used for the same test. Importantly, the standard does not specify a minimum number of specimens; the laboratory defines both the number of data points and the acceptability criteria.
           </p>
 
           <Callout type="info">

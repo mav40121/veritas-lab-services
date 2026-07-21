@@ -120,7 +120,7 @@ export default function ArticleEP26Page() {
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Setting the acceptance criterion</h2>
           <p>
-            Anchor the criterion to the analyte's total allowable error. A common, defensible rule is to accept the new lot when the mean absolute percent difference between lots is within TEa and at least 90 percent of paired patient specimens are within TEa. TEa gives you a federally published, clinically grounded yardstick rather than an unwritten internal threshold, which is far easier to defend to a surveyor.
+            Anchor the criterion to the analyte's total allowable error. A common, defensible rule is to accept the new lot when the mean absolute percent difference between lots is within TEa and at least 90 percent of paired patient specimens are within TEa. TEa gives you a federally published, clinically grounded yardstick rather than an unwritten internal threshold, which is far easier to defend to a <Link href="/resources/tjc-laboratory-inspection-what-to-expect" className="text-primary hover:underline">surveyor</Link>.
           </p>
           <p>
             Where do you get TEa for your analyte? See{" "}
