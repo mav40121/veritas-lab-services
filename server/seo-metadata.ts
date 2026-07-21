@@ -50,10 +50,14 @@ function faqPageJsonLd(items: FaqQA[]): Record<string, unknown> {
 // DefinedTerm JSON-LD for a glossary term the site authoritatively defines.
 // inDefinedTermSet points at the page that defines the term, so AI answer
 // engines can anchor a citation to that URL.
-function definedTermJsonLd(name: string, description: string, pagePath: string): Record<string, unknown> {
+// termId (e.g. "term-tracer-methodology") gives the term a stable @id fragment on
+// the site's canonical origin so an Article node can reference it by @id via
+// `about`. Omit it for terms nothing else needs to reference.
+function definedTermJsonLd(name: string, description: string, pagePath: string, termId?: string): Record<string, unknown> {
   return {
     "@context": "https://schema.org",
     "@type": "DefinedTerm",
+    ...(termId ? { "@id": `${BASE_URL}/#${termId}` } : {}),
     name,
     description,
     inDefinedTermSet: `${BASE_URL}${pagePath}`,
@@ -75,6 +79,13 @@ function articleJsonLd(opts: {
   path: string;
   datePublished: string;
   dateModified?: string;
+  // about / mentions connect an Article into the entity graph. `about` points at
+  // the DefinedTerm @ids the article authoritatively defines; `mentions` at the
+  // product @ids it legitimately touches. Pass only where the prose earns them,
+  // never to stuff keywords. isPartOf is added to every article (all resolve to
+  // the single #website node in the global @graph).
+  about?: Array<Record<string, unknown>>;
+  mentions?: Array<Record<string, unknown>>;
 }): Record<string, unknown> {
   return {
     "@context": "https://schema.org",
@@ -91,6 +102,9 @@ function articleJsonLd(opts: {
     datePublished: opts.datePublished,
     dateModified: opts.dateModified ?? opts.datePublished,
     inLanguage: "en-US",
+    isPartOf: { "@id": `${BASE_URL}/#website` },
+    ...(opts.about ? { about: opts.about } : {}),
+    ...(opts.mentions ? { mentions: opts.mentions } : {}),
     mainEntityOfPage: `${BASE_URL}${opts.path}`,
   };
 }
@@ -411,6 +425,14 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
       articleBody: "A former surveyor walks through the survey, phase by phase, and shows how to turn it into a mock inspection that finds your gaps first. Sections: Key takeaways; What the survey actually is; The survey, phase by phase; How to run your own mock inspection; From finding to corrective action; Frequently asked questions; About the author.",
       path: "/resources/tjc-laboratory-inspection-what-to-expect",
       datePublished: "2026-07-20",
+      about: [
+        { "@id": `${BASE_URL}/#term-laboratory-mock-inspection` },
+        { "@id": `${BASE_URL}/#term-tracer-methodology` },
+      ],
+      mentions: [
+        { "@id": `${BASE_URL}/#veritascan` },
+        { "@id": `${BASE_URL}/#veritacheck` },
+      ],
     }),
   },
   "/resources/how-to-validate-veritacheck-clia": {
@@ -648,6 +670,17 @@ const mockInspectionHowTo: Record<string, unknown> = {
     { "@type": "HowToStep", name: "Write your own findings", text: "Write your own findings, place each one on the same SAFER matrix a surveyor would use, and fix them on your timeline instead of the surveyor's." },
   ],
 };
+// Breadcrumb for the cornerstone: Home > Resources > this page. The last item
+// carries no `item` URL because it is the current page (schema.org convention).
+const mockInspectionBreadcrumb: Record<string, unknown> = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    { "@type": "ListItem", position: 1, name: "Home", item: `${BASE_URL}/` },
+    { "@type": "ListItem", position: 2, name: "Resources", item: `${BASE_URL}/resources` },
+    { "@type": "ListItem", position: 3, name: "What Happens During a TJC Laboratory Inspection" },
+  ],
+};
 const tjcSurveyHowTo: Record<string, unknown> = {
   "@context": "https://schema.org",
   "@type": "HowTo",
@@ -703,15 +736,18 @@ const ROUTE_EXTRA_JSONLD: Record<string, Record<string, unknown>[]> = {
   ],
   "/resources/tjc-laboratory-inspection-what-to-expect": [
     mockInspectionHowTo,
+    mockInspectionBreadcrumb,
     definedTermJsonLd(
       "Laboratory mock inspection",
       "A laboratory mock inspection is a full rehearsal of an accreditation survey, run by an independent reviewer before the real surveyor arrives, so the laboratory finds and fixes its own gaps first. It follows the same method as the real survey, including the tracers that follow real patients out of the laboratory into the clinical record.",
       "/resources/tjc-laboratory-inspection-what-to-expect",
+      "term-laboratory-mock-inspection",
     ),
     definedTermJsonLd(
       "Tracer methodology",
       "Tracer methodology is the survey technique in which a surveyor follows a single real case through the system that produced it, from a laboratory result back to the patient and the care team, to test whether the process worked in practice and not only on paper.",
       "/resources/tjc-laboratory-inspection-what-to-expect",
+      "term-tracer-methodology",
     ),
   ],
   "/resources/cost-per-reportable-test-four-layer-framework": [
