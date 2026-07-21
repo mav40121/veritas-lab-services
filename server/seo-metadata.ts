@@ -402,17 +402,6 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
       datePublished: "2026-04-25",
     }),
   },
-  "/resources/tjc-laboratory-inspection-checklist-preparation": {
-    title: "TJC Laboratory Inspection Checklist and Preparation Guide | Veritas Lab Services",
-    description: "Prepare your clinical laboratory for a Joint Commission survey. Common findings, checklist items, and strategies from a former TJC laboratory surveyor.",
-    jsonLd: articleJsonLd({
-      headline: "Preparing for a TJC Laboratory Inspection: A Practical Checklist for Lab Directors",
-      description: "Prepare your clinical laboratory for a Joint Commission survey. Common findings, checklist items, and strategies from a former TJC laboratory surveyor.",
-      articleBody: "The laboratories that do well on TJC surveys are not the ones that scrambled the week before. They are the ones that maintain documentation continuously and can retrieve anything in under two minutes. A TJC laboratory survey does not begin with a checklist. It begins with a tracer, and the tracer starts at the patient. A surveyor follows a test result backward through your system: who ordered it, which analyzer ran it, what verification was on file for that analyzer, who performed the test, how their competency was documented, and where your proficiency testing record sits for that analyte. Every link in that chain either holds or does not. TJC surveys follow a tracer methodology, starting at the patient and working backward through your system. Five areas are traced most consistently: performance verification, proficiency testing, competency, instrument documentation, and procedures. Documentation is not paperwork, it is the evidence that your quality practices exist. Conduct a mock survey ninety days before your anticipated survey window. Sections: The Five Areas Surveyors Trace Most Consistently; How VeritaAssure™ Addresses Each Area; The 90-Day Rule.",
-      path: "/resources/tjc-laboratory-inspection-checklist-preparation",
-      datePublished: "2026-05-17",
-    }),
-  },
   "/resources/tjc-laboratory-inspection-what-to-expect": {
     title: "What Happens During a TJC Laboratory Inspection, 2026 Guide | Veritas Lab Services",
     description: "A former Joint Commission surveyor walks through a laboratory survey phase by phase, the tour, PT review, records, tracers, personnel, and procedures, and how to rehearse it with a mock inspection.",
@@ -691,7 +680,6 @@ const ROUTE_FAQ: Record<string, FaqQA[]> = {
   "/resources/calibration-verification-requirements-clia": CALVER_REQ_FAQ,
   "/resources/how-to-perform-method-comparison-study": METHODCOMP_FAQ,
   "/resources/precision-verification-report-interpretation-guide": PRECISION_FAQ,
-  "/resources/tjc-laboratory-inspection-checklist-preparation": TJC_INSPECTION_FAQ,
   "/resources/tjc-laboratory-inspection-what-to-expect": MOCK_INSPECTION_FAQ,
   "/resources/cost-per-reportable-test-four-layer-framework": CPRT_FAQ,
   "/resources/manual-logs-why-most-labs-should-stop": MANUAL_LOGS_FAQ,
@@ -711,14 +699,6 @@ const ROUTE_EXTRA_JSONLD: Record<string, Record<string, unknown>[]> = {
       "Coefficient of variation",
       "The coefficient of variation (CV) is the standard deviation expressed as a percent of the mean, CV = (SD / mean) x 100. It expresses imprecision on a common scale so a laboratory can compare it across analytes and concentration levels.",
       "/resources/precision-verification-report-interpretation-guide",
-    ),
-  ],
-  "/resources/tjc-laboratory-inspection-checklist-preparation": [
-    tjcSurveyHowTo,
-    definedTermJsonLd(
-      "Tracer methodology",
-      "Tracer methodology is the survey technique in which a surveyor starts at a single patient result and works backward through the system that produced it: who ordered it, which analyzer ran it, its verification records, who performed it, their competency, and the proficiency testing record for that analyte.",
-      "/resources/tjc-laboratory-inspection-checklist-preparation",
     ),
   ],
   "/resources/tjc-laboratory-inspection-what-to-expect": [
