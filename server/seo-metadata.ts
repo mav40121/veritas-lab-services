@@ -83,15 +83,14 @@ function articleJsonLd(opts: {
     description: opts.description,
     articleBody: opts.articleBody,
     image: `${BASE_URL}/og-image.png`,
-    author: {
-      "@type": "Person",
-      name: "Michael Veri",
-      jobTitle: "Former Joint Commission Laboratory Surveyor",
-      url: `${BASE_URL}/team`,
-    },
+    // Reference the single authoritative author entity (Person node in the
+    // global @graph in client/index.html), rather than an inline Person, so
+    // every article resolves to the same author identity for E-E-A-T / GEO.
+    author: { "@id": `${BASE_URL}/#michael-veri` },
     publisher: { "@id": `${BASE_URL}/#organization` },
     datePublished: opts.datePublished,
     dateModified: opts.dateModified ?? opts.datePublished,
+    inLanguage: "en-US",
     mainEntityOfPage: `${BASE_URL}${opts.path}`,
   };
 }
