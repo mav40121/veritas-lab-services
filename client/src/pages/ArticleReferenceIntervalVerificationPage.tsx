@@ -223,7 +223,7 @@ export default function ArticleReferenceIntervalVerificationPage() {
 
           <Section id="surveyor" title="What a surveyor expects to see">
             <p>
-              A surveyor who understands reference intervals does not want to see a full establishment study from every laboratory, because the
+              A <Link href="/resources/tjc-laboratory-inspection-what-to-expect" className="text-primary hover:underline">surveyor</Link> who understands reference intervals does not want to see a full establishment study from every laboratory, because the
               surveyor knows most laboratories cannot produce one and are not required to. The surveyor wants evidence of a defensible process:
               written inclusion and exclusion criteria for reference individuals; a verification study, or a documented review with a real
               rationale, for the intervals in use; a similarity assessment between the reference population and the laboratory&rsquo;s patients,

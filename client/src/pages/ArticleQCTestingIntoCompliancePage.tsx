@@ -276,7 +276,7 @@ export default function ArticleQCTestingIntoCompliancePage() {
 
           <Section id="surveyor" title="What a surveyor expects to see">
             <p>
-              A surveyor who knows quality control does not page through a clean chart and feel reassured. The reviewer looks for the things a
+              A <Link href="/resources/tjc-laboratory-inspection-what-to-expect" className="text-primary hover:underline">surveyor</Link> who knows quality control does not page through a clean chart and feel reassured. The reviewer looks for the things a
               manufactured chart cannot produce. Control limits calculated from the laboratory's own data, not lifted from the insert. A documented
               investigation behind every out-of-control result, with an assignable cause and a corrective action, not a silent repeat. Evidence that
               the quality control strategy was matched to the performance of each method. And a culture in which a flagged control is treated as
