@@ -87,7 +87,7 @@ import {
   Line,
   ResponsiveContainer,
 } from "recharts";
-import { FileDown, FileSpreadsheet, ArrowLeft, CheckCircle2, XCircle, Loader2, BookOpen, Archive, ArchiveRestore, GitBranch } from "lucide-react";
+import { FileDown, FileSpreadsheet, ArrowLeft, CheckCircle2, XCircle, Loader2, BookOpen, Archive, ArchiveRestore, GitBranch, Pencil } from "lucide-react";
 import React, { useState, useCallback, useEffect } from "react";
 import { API_BASE } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -3316,6 +3316,13 @@ export default function StudyResults() {
           </>
         ) : (study as any).lifecycle_state !== "finalized" ? (
           <>
+            {/* Edit: an unsigned study can be reopened for edits from here, so the
+                user is not forced back to the dashboard to find the edit control
+                (the results page previously had no path to editing). Signed-off
+                studies show Amend instead; archived show Restore. */}
+            <Button variant="default" size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => navigate(labRoute(`/study/${study.id}/edit`))} data-testid="edit-study-button">
+              <Pencil size={13} className="mr-1" />Edit
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setFinalizeOpen(true)} data-testid="open-finalize-dialog">
               Sign and lock
             </Button>
