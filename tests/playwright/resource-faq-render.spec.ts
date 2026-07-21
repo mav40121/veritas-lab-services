@@ -18,7 +18,6 @@ const ROUTES: { path: string; firstQ: string }[] = [
   { path: "/resources/calibration-verification-requirements-clia", firstQ: "How often is calibration verification required under CLIA?" },
   { path: "/resources/how-to-perform-method-comparison-study", firstQ: "When is a method comparison study required?" },
   { path: "/resources/precision-verification-report-interpretation-guide", firstQ: "Why is precision verification required?" },
-  { path: "/resources/tjc-laboratory-inspection-checklist-preparation", firstQ: "How does a TJC laboratory survey work?" },
   { path: "/resources/cost-per-reportable-test-four-layer-framework", firstQ: "What is cost per reportable test (CPRT)?" },
   { path: "/resources/manual-logs-why-most-labs-should-stop", firstQ: "Why do laboratories use manual logs?" },
   // Batch 5

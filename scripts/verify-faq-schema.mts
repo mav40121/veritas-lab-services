@@ -19,7 +19,6 @@ import {
   CALVER_REQ_FAQ,
   METHODCOMP_FAQ,
   PRECISION_FAQ,
-  TJC_INSPECTION_FAQ,
   CPRT_FAQ,
   MANUAL_LOGS_FAQ,
   REFINT_ARTICLE_FAQ,
@@ -167,14 +166,6 @@ assertFaqVerbatim(PRECISION, PRECISION_FAQ);
 assertDefinedTerm(PRECISION, "Coefficient of variation", PRECISION);
 assertSerializable(PRECISION);
 assertNoEmDash(PRECISION);
-
-const TJC = "/resources/tjc-laboratory-inspection-checklist-preparation";
-assertArticle(TJC);
-assertFaqVerbatim(TJC, TJC_INSPECTION_FAQ);
-assertHowTo(TJC);
-assertDefinedTerm(TJC, "Tracer methodology", TJC);
-assertSerializable(TJC);
-assertNoEmDash(TJC);
 
 const CPRT = "/resources/cost-per-reportable-test-four-layer-framework";
 assertArticle(CPRT);

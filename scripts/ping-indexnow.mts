@@ -30,7 +30,7 @@ const SEED = [
   `${base}/resources/calibration-verification-requirements-clia`,
   `${base}/resources/how-to-perform-method-comparison-study`,
   `${base}/resources/precision-verification-report-interpretation-guide`,
-  `${base}/resources/tjc-laboratory-inspection-checklist-preparation`,
+  `${base}/resources/tjc-laboratory-inspection-what-to-expect`,
   `${base}/resources/cost-per-reportable-test-four-layer-framework`,
   `${base}/resources/manual-logs-why-most-labs-should-stop`,
   `${base}/pricing`,
