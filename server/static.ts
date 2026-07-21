@@ -319,6 +319,10 @@ export function serveStatic(app: Express) {
     "/m/login": "/login",
     "/m/create-account": "/register",
     "/m/reset": "/reset-password",
+    // The checklist/preparation article is superseded by the more comprehensive
+    // "what to expect" cornerstone (same topic, phase-by-phase + mock inspection).
+    // 301 consolidates the two into one page so they stop cannibalizing each other.
+    "/resources/tjc-laboratory-inspection-checklist-preparation": "/resources/tjc-laboratory-inspection-what-to-expect",
   };
   app.use((req, res, next) => {
     if (req.method !== "GET") return next();

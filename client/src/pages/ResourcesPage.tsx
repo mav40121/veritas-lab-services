@@ -141,17 +141,6 @@ const articles = [
     featured: false,
   },
   {
-    slug: "tjc-laboratory-inspection-checklist-preparation",
-    title: "Preparing for a TJC Laboratory Inspection: A Practical Checklist for Lab Directors",
-    summary: "A former Joint Commission surveyor explains the five areas surveyors trace most consistently and how to prepare your documentation before the survey window opens.",
-    category: "Inspection Readiness",
-    readTime: "10 min read",
-    author: "Michael Veri",
-    date: "April 2026",
-    tags: ["TJC", "Inspection Readiness", "Survey Prep", "Documentation"],
-    featured: false,
-  },
-  {
     slug: "how-to-validate-veritacheck-clia",
     title: "How to Validate VeritaCheck™ for Your Clinical Laboratory",
     summary: "A step-by-step guide to completing IQ/OQ/PQ software validation for VeritaCheck™, with a free downloadable template. Most labs finish in under two hours.",

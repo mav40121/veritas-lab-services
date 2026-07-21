@@ -288,7 +288,7 @@ export default function ArticleInventoryManagementPage() {
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm">
               <ChevronRight size={14} className="text-primary" />
-              <Link href="/resources/tjc-laboratory-inspection-checklist-preparation" className="text-primary hover:underline">TJC Laboratory Inspection Checklist and Preparation</Link>
+              <Link href="/resources/tjc-laboratory-inspection-what-to-expect" className="text-primary hover:underline">What Happens During a TJC Laboratory Inspection</Link>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <ChevronRight size={14} className="text-primary" />
