@@ -1066,6 +1066,12 @@ export interface Module1Result {
   ptRI: { low: number; high: number };
   inrRI: { low: number; high: number };
   pass: boolean;
+  // Per-instrument labeling for the symmetric multi-instrument geomean. Optional
+  // so legacy single-instrument results still type-check and render.
+  instrumentName?: string;
+  isi?: number;
+  reagentLot?: string;
+  reagentExp?: string;
 }
 
 export interface DemingRegressionResult {
@@ -1097,11 +1103,26 @@ export interface Module2or3Result {
   tea: number;
 }
 
+// One instrument's Module-1 geomean input. Each analyzer establishes its own
+// mean normal PT (MNPT) from its own set of normal specimens, with its own ISI
+// and reference intervals (the geomean/ISI/INR are analyzer+reagent+lot specific).
+export interface PTCoagInstrumentInput {
+  name?: string;
+  ptValues: number[];
+  isi: number;
+  ptRI: { low: number; high: number };
+  inrRI: { low: number; high: number };
+  reagentLot?: string;
+  reagentExp?: string;
+}
+
 export interface PTCoagResults {
   type: "pt_coag";
-  module1: Module1Result;
-  module2: Module2or3Result;
-  module3: Module2or3Result | null; // null if skipped
+  // One Module-1 geomean result per instrument (symmetric multi-instrument).
+  // Legacy single-instrument studies produce a 1-element array.
+  module1s: Module1Result[];
+  module2: Module2or3Result | null; // optional two-instrument comparison
+  module3: Module2or3Result | null; // optional old-lot vs new-lot comparison
   overallPass: boolean;
   summary: string;
 }
@@ -1171,24 +1192,38 @@ export function calculateDemingModule(
   };
 }
 
+// Symmetric multi-instrument geomean. Each instrument in module1Blocks gets its
+// own Module-1 geometric-mean PT/INR + RI verification. The two comparison
+// modules are optional (pass null to skip). Overall PASS requires every
+// instrument's Module 1 to pass, plus any comparison module that is present.
+// Backward compatible: a single-instrument study passes a 1-element array.
 export function calculatePTCoag(
-  module1Data: { ptValues: number[]; isi: number; ptRI: { low: number; high: number }; inrRI: { low: number; high: number } },
-  module2Data: { xValues: number[]; yValues: number[]; specimenIds: string[]; tea: number },
+  module1Blocks: PTCoagInstrumentInput[],
+  module2Data: { xValues: number[]; yValues: number[]; specimenIds: string[]; tea: number } | null,
   module3Data: { xValues: number[]; yValues: number[]; specimenIds: string[]; tea: number } | null
 ): PTCoagResults {
-  const module1 = calculateModule1(module1Data.ptValues, module1Data.isi, module1Data.ptRI, module1Data.inrRI);
-  const module2 = calculateDemingModule(module2Data.xValues, module2Data.yValues, module2Data.specimenIds, module2Data.tea);
+  const module1s: Module1Result[] = module1Blocks.map((b) => ({
+    ...calculateModule1(b.ptValues, b.isi, b.ptRI, b.inrRI),
+    instrumentName: b.name,
+    isi: b.isi,
+    reagentLot: b.reagentLot,
+    reagentExp: b.reagentExp,
+  }));
+  const module2 = module2Data ? calculateDemingModule(module2Data.xValues, module2Data.yValues, module2Data.specimenIds, module2Data.tea) : null;
   const module3 = module3Data ? calculateDemingModule(module3Data.xValues, module3Data.yValues, module3Data.specimenIds, module3Data.tea) : null;
 
-  const overallPass = module1.pass && module2.pass && (module3 ? module3.pass : true);
+  const module1sPass = module1s.length > 0 && module1s.every((m) => m.pass);
+  const overallPass = module1sPass && (module2 ? module2.pass : true) && (module3 ? module3.pass : true);
 
-  const m1Summary = `Module 1: Geometric Mean PT = ${module1.geoMeanPT.toFixed(1)} sec, INR = ${module1.geoMeanINR.toFixed(2)}. PT RI verification: ${module1.ptRIPass ? "PASS" : "FAIL"} (${module1.ptOutsideRI}/${module1.n} outside). INR RI verification: ${module1.inrRIPass ? "PASS" : "FAIL"} (${module1.inrOutsideRI}/${module1.n} outside).`;
-  const m2Summary = `Module 2: Two-Instrument Comparison. R=${module2.regression.r.toFixed(4)}, Slope=${module2.regression.slope.toFixed(3)}, Coverage=${module2.coverage.toFixed(0)}% within TEa. ${module2.pass ? "PASS" : "FAIL"}.`;
-  const m3Summary = module3 ? `Module 3: Old Lot vs New Lot. R=${module3.regression.r.toFixed(4)}, Slope=${module3.regression.slope.toFixed(3)}, Coverage=${module3.coverage.toFixed(0)}% within TEa. ${module3.pass ? "PASS" : "FAIL"}.` : "Module 3: Skipped (single analyzer lab).";
+  const m1Summary = module1s.length === 1
+    ? `Module 1: Geometric Mean PT = ${module1s[0].geoMeanPT.toFixed(1)} sec, INR = ${module1s[0].geoMeanINR.toFixed(2)}. PT RI verification: ${module1s[0].ptRIPass ? "PASS" : "FAIL"} (${module1s[0].ptOutsideRI}/${module1s[0].n} outside). INR RI verification: ${module1s[0].inrRIPass ? "PASS" : "FAIL"} (${module1s[0].inrOutsideRI}/${module1s[0].n} outside).`
+    : `Module 1: geometric mean and reference-interval verification for ${module1s.length} instruments. ` + module1s.map((m, i) => `${m.instrumentName || `Instrument ${i + 1}`}: geoMean PT ${m.geoMeanPT.toFixed(1)} sec, INR ${m.geoMeanINR.toFixed(2)}, ${m.pass ? "PASS" : "FAIL"} (PT ${m.ptOutsideRI}/${m.n}, INR ${m.inrOutsideRI}/${m.n} outside RI)`).join("; ") + ".";
+  const m2Summary = module2 ? `Module 2: Two-Instrument Comparison. R=${module2.regression.r.toFixed(4)}, Slope=${module2.regression.slope.toFixed(3)}, Coverage=${module2.coverage.toFixed(0)}% within TEa. ${module2.pass ? "PASS" : "FAIL"}.` : "Module 2: Not performed.";
+  const m3Summary = module3 ? `Module 3: Old Lot vs New Lot. R=${module3.regression.r.toFixed(4)}, Slope=${module3.regression.slope.toFixed(3)}, Coverage=${module3.coverage.toFixed(0)}% within TEa. ${module3.pass ? "PASS" : "FAIL"}.` : "Module 3: Not performed.";
 
   const summary = `${m1Summary} ${m2Summary} ${m3Summary} Overall: ${overallPass ? "PASS" : "FAIL"}.`;
 
-  return { type: "pt_coag", module1, module2, module3, overallPass, summary };
+  return { type: "pt_coag", module1s, module2, module3, overallPass, summary };
 }
 
 // ─── QC RANGE ESTABLISHMENT ─────────────────────────────────────────────────

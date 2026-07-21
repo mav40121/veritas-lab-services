@@ -1707,7 +1707,7 @@ export default function VeritaCheckPage() {
         };
       })();
       const results = calculatePTCoag(
-        { ptValues: m1Valid, isi: ptISI, ptRI: { low: ptRILow, high: ptRIHigh }, inrRI: { low: ptINRRILow, high: ptINRRIHigh } },
+        [{ name: ptInstrumentName, ptValues: m1Valid, isi: ptISI, ptRI: { low: ptRILow, high: ptRIHigh }, inrRI: { low: ptINRRILow, high: ptINRRIHigh } }],
         { xValues: m2Valid.map(d => d.x!), yValues: m2Valid.map(d => d.y!), specimenIds: m2Valid.map(d => d.id), tea: ptModule2TEa },
         module3Data
       );

@@ -3255,7 +3255,12 @@ function geometricMean(values: number[]): number {
 function buildPTCoagHTML(study: Study, results: any): string {
   const instrumentNames: string[] = safeJsonParse(study.instruments) || [];
   const rawData = safeJsonParse(study.dataPoints) || {};
-  const { module1 = { specimens: [], n: 0, geoMeanPT: 0, geoMeanINR: 0, ptRI: { low: 0, high: 0 }, inrRI: { low: 0, high: 0 }, ptRIPass: true, inrRIPass: true, ptOutsideRI: 0, inrOutsideRI: 0, pass: true }, module2 = { errorIndexResults: [], regression: { slope: 0, intercept: 0, r2: 0 }, pass: true, meanEI: 0, sdEI: 0, n: 0 }, module3 } = results;
+  // Symmetric multi-instrument: results.module1s is one Module-1 result per
+  // instrument. This shim renders the first instrument (the legacy single shape);
+  // the full per-instrument PDF loop lands with the multi-instrument entry UI.
+  const M1_FALLBACK = { specimens: [], n: 0, geoMeanPT: 0, geoMeanINR: 0, ptRI: { low: 0, high: 0 }, inrRI: { low: 0, high: 0 }, ptRIPass: true, inrRIPass: true, ptOutsideRI: 0, inrOutsideRI: 0, pass: true };
+  const { module1s = [], module2 = { errorIndexResults: [], regression: { slope: 0, intercept: 0, r2: 0 }, pass: true, meanEI: 0, sdEI: 0, n: 0 }, module3 } = results;
+  const module1 = (Array.isArray(module1s) && module1s[0]) || (results as any).module1 || M1_FALLBACK;
 
   // Module 1 section
   const m1DataRows = (module1.specimens || []).map((s: any, i: number) => {

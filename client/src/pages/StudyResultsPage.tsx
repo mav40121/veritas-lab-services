@@ -2130,17 +2130,28 @@ function ReportableRangeReport({ study, results }: { study: Study; results: any 
 
 // ─── PT/COAG NEW LOT VALIDATION results ─────────────────────────────────────
 function PTCoagReport({ study, results }: { study: Study; results: PTCoagResults }) {
-  const { module1, module2, module3 } = results;
+  const { module1s, module2, module3 } = results;
+  const nInst = module1s.length;
+  const primary = module1s[0];
+  const m1PassCount = module1s.filter((m) => m.pass).length;
+  const topTiles = nInst === 1
+    ? [
+        { label: "Geometric Mean PT", value: `${primary.geoMeanPT.toFixed(1)} sec` },
+        { label: "Geometric Mean INR", value: primary.geoMeanINR.toFixed(2) },
+        module2 ? { label: "Module 2 Coverage", value: `${module2.coverage.toFixed(0)}%` } : { label: "Module 1", value: primary.pass ? "PASS" : "FAIL" },
+        { label: "Overall", value: results.overallPass ? "PASS" : "FAIL" },
+      ]
+    : [
+        { label: "Instruments", value: String(nInst) },
+        { label: "Module 1", value: `${m1PassCount}/${nInst} pass` },
+        module2 ? { label: "Module 2 Coverage", value: `${module2.coverage.toFixed(0)}%` } : { label: "Comparisons", value: module3 ? "Lot only" : "None" },
+        { label: "Overall", value: results.overallPass ? "PASS" : "FAIL" },
+      ];
 
   return (
     <>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        {[
-          { label: "Geometric Mean PT", value: `${module1.geoMeanPT.toFixed(1)} sec` },
-          { label: "Geometric Mean INR", value: module1.geoMeanINR.toFixed(2) },
-          { label: "Module 2 Coverage", value: `${module2.coverage.toFixed(0)}%` },
-          { label: "Overall", value: results.overallPass ? "PASS" : "FAIL" },
-        ].map(({ label, value }) => (
+        {topTiles.map(({ label, value }) => (
           <Card key={label}><CardContent className="p-4">
             <div className="text-lg font-bold">{value}</div>
             <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
@@ -2148,19 +2159,24 @@ function PTCoagReport({ study, results }: { study: Study; results: PTCoagResults
         ))}
       </div>
 
-      {/* Module 1 */}
-      <Card className="mb-6">
-        <CardHeader className="pb-2"><CardTitle className="text-sm">Module 1: Normal Patient Mean & RI Verification</CardTitle></CardHeader>
+      {/* Module 1: one geometric-mean + RI-verification card per instrument
+          (symmetric multi-instrument; each analyzer has its own MNPT/ISI/RI). */}
+      {module1s.map((m1, mi) => (
+      <Card className="mb-6" key={`m1-${mi}`}>
+        <CardHeader className="pb-2"><CardTitle className="text-sm">
+          Module 1: Normal Patient Mean & RI Verification{nInst > 1 ? ` — ${m1.instrumentName || `Instrument ${mi + 1}`}` : ""}
+        </CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-            <div><span className="text-muted-foreground">N: </span><span className="font-mono">{module1.n}</span></div>
-            <div><span className="text-muted-foreground">Geo Mean PT: </span><span className="font-mono">{module1.geoMeanPT.toFixed(2)} sec</span></div>
-            <div><span className="text-muted-foreground">Geo Mean INR: </span><span className="font-mono">{module1.geoMeanINR.toFixed(3)}</span></div>
-            <div><span className="text-muted-foreground">PT RI: </span><span className="font-mono">{module1.ptRI.low}–{module1.ptRI.high} sec</span></div>
-            <div><span className="text-muted-foreground">INR RI: </span><span className="font-mono">{module1.inrRI.low}–{module1.inrRI.high}</span></div>
-            <div><span className="text-muted-foreground">PT Outside RI: </span><span className={`font-mono font-semibold ${module1.ptRIPass ? "text-green-400" : "text-red-400"}`}>{module1.ptOutsideRI}/{module1.n}</span></div>
-            <div><span className="text-muted-foreground">INR Outside RI: </span><span className={`font-mono font-semibold ${module1.inrRIPass ? "text-green-400" : "text-red-400"}`}>{module1.inrOutsideRI}/{module1.n}</span></div>
-            <div><span className="text-muted-foreground">Module 1: </span><span className={`font-semibold ${module1.pass ? "text-green-400" : "text-red-400"}`}>{module1.pass ? "PASS" : "FAIL"}</span></div>
+            <div><span className="text-muted-foreground">N: </span><span className="font-mono">{m1.n}</span></div>
+            <div><span className="text-muted-foreground">Geo Mean PT: </span><span className="font-mono">{m1.geoMeanPT.toFixed(2)} sec</span></div>
+            <div><span className="text-muted-foreground">Geo Mean INR: </span><span className="font-mono">{m1.geoMeanINR.toFixed(3)}</span></div>
+            {m1.isi != null && <div><span className="text-muted-foreground">ISI: </span><span className="font-mono">{m1.isi}</span></div>}
+            <div><span className="text-muted-foreground">PT RI: </span><span className="font-mono">{m1.ptRI.low}–{m1.ptRI.high} sec</span></div>
+            <div><span className="text-muted-foreground">INR RI: </span><span className="font-mono">{m1.inrRI.low}–{m1.inrRI.high}</span></div>
+            <div><span className="text-muted-foreground">PT Outside RI: </span><span className={`font-mono font-semibold ${m1.ptRIPass ? "text-green-400" : "text-red-400"}`}>{m1.ptOutsideRI}/{m1.n}</span></div>
+            <div><span className="text-muted-foreground">INR Outside RI: </span><span className={`font-mono font-semibold ${m1.inrRIPass ? "text-green-400" : "text-red-400"}`}>{m1.inrOutsideRI}/{m1.n}</span></div>
+            <div><span className="text-muted-foreground">Module 1: </span><span className={`font-semibold ${m1.pass ? "text-green-400" : "text-red-400"}`}>{m1.pass ? "PASS" : "FAIL"}</span></div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -2172,7 +2188,7 @@ function PTCoagReport({ study, results }: { study: Study; results: PTCoagResults
                 <th className="text-right py-2 pr-3 text-muted-foreground font-medium">INR in RI?</th>
               </tr></thead>
               <tbody>
-                {module1.specimens.map((s, i) => (
+                {m1.specimens.map((s, i) => (
                   <tr key={i} className="border-b border-border/40">
                     <td className="py-2 pr-3 font-mono">{s.id}</td>
                     <td className="text-right py-2 pr-3 font-mono">{s.pt.toFixed(1)}</td>
@@ -2186,8 +2202,10 @@ function PTCoagReport({ study, results }: { study: Study; results: PTCoagResults
           </div>
         </CardContent>
       </Card>
+      ))}
 
-      {/* Module 2 */}
+      {/* Module 2 (optional two-instrument comparison) */}
+      {module2 && (
       <Card className="mb-6">
         <CardHeader className="pb-2"><CardTitle className="text-sm">Module 2: Two-Instrument Comparison (Deming Regression)</CardTitle></CardHeader>
         <CardContent className="space-y-3">
@@ -2225,6 +2243,7 @@ function PTCoagReport({ study, results }: { study: Study; results: PTCoagResults
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Module 3 */}
       {module3 && (
@@ -2866,17 +2885,24 @@ export default function StudyResults() {
     const { data, sampleType } = rawDataPoints;
     results = calculateLotToLot(data, study.cliaAllowableError, sampleType);
   } else if (study.studyType === "pt_coag") {
-    const { module1, module2, module3: m3Raw } = rawDataPoints;
-    const m2Valid = module2.data.filter((d: any) => d.x !== null && d.y !== null);
-    const module3Data = m3Raw ? (() => {
+    const { module1, module1Instruments, module2, module3: m3Raw } = rawDataPoints;
+    // Symmetric multi-instrument: module1Instruments[] is the new shape. Legacy
+    // single-instrument studies carry a singular `module1` + the top-level
+    // `instrument` name; normalize those into a 1-element array so old studies
+    // still compute and render.
+    const module1Blocks = Array.isArray(module1Instruments) && module1Instruments.length > 0
+      ? module1Instruments.map((b: any) => ({ name: b.name, ptValues: b.ptValues, isi: b.isi, ptRI: b.ptRI, inrRI: b.inrRI, reagentLot: b.reagentLot, reagentExp: b.reagentExp }))
+      : [{ name: (study as any).instrument, ptValues: module1.ptValues, isi: module1.isi, ptRI: module1.ptRI, inrRI: module1.inrRI, reagentLot: rawDataPoints.reagentLot, reagentExp: rawDataPoints.reagentExp }];
+    // Module 2/3 comparisons are optional (may be absent on a multi-instrument study).
+    const m2Data = module2 && Array.isArray(module2.data) ? (() => {
+      const v = module2.data.filter((d: any) => d.x !== null && d.y !== null);
+      return v.length >= 3 ? { xValues: v.map((d: any) => d.x), yValues: v.map((d: any) => d.y), specimenIds: v.map((d: any) => d.id), tea: module2.tea } : null;
+    })() : null;
+    const module3Data = m3Raw && Array.isArray(m3Raw.data) ? (() => {
       const m3Valid = m3Raw.data.filter((d: any) => d.x !== null && d.y !== null);
       return m3Valid.length >= 3 ? { xValues: m3Valid.map((d: any) => d.x), yValues: m3Valid.map((d: any) => d.y), specimenIds: m3Valid.map((d: any) => d.id), tea: m3Raw.tea } : null;
     })() : null;
-    results = calculatePTCoag(
-      module1,
-      { xValues: m2Valid.map((d: any) => d.x), yValues: m2Valid.map((d: any) => d.y), specimenIds: m2Valid.map((d: any) => d.id), tea: module2.tea },
-      module3Data
-    );
+    results = calculatePTCoag(module1Blocks, m2Data, module3Data);
   } else if (study.studyType === "qc_range") {
     const { dataPoints: dp, dateRange } = rawDataPoints;
     results = calculateQCRange(dp as QCRangeDataPoint[], dateRange);
