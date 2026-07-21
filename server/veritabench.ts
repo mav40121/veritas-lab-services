@@ -6,6 +6,7 @@ import crypto from "crypto";
 import { db } from "./db";
 import { logAudit } from "./audit";
 import { logConsumption } from "./consumptionLedger";
+import { logCount } from "./countLedger";
 import { addLot, reconcileLots } from "./inventoryLots";
 import { resolveLegacyLabId } from "./labAccessGuard";
 import { DEMO_USER_EMAIL } from "./constants";
@@ -1510,6 +1511,18 @@ export function registerVeritaBenchRoutes(
         if (!result.hit) {
           return res.status(404).json({ ok: false, action: "unknown_barcode", scan_event_id: result.scanEventId, barcode_value: barcode });
         }
+        // Count-history ledger: a set_qty scan is "Scan to count", a physical
+        // count. decrement/increment/correction are deltas, not counts, so they
+        // are excluded. Best-effort, never blocks the scan. See countLedger.
+        if (requestedAction === "set_qty") {
+          logCount({
+            itemId: result.itemId, labId,
+            accountId: accountId,
+            countedQty: result.qtyAfter, previousQty: result.qtyBefore,
+            countedBy: (req.user && (req.user.name || req.user.email)) || null,
+            source: "director", occurredAt: new Date().toISOString(),
+          });
+        }
         const fresh = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(result.itemId) as any;
         const decorated = decorateInventoryItem(fresh);
         return res.json({
@@ -1797,6 +1810,18 @@ export function registerVeritaBenchRoutes(
       itemId: Number(itemId), labId: (existing as any).lab_id, accountId: req.ownerUserId ?? req.userId,
       qty: beforeQty - usageQty, unitCostAtEvent: (existing as any).unit_cost ?? null,
       reason: "adjust_down", sourceEventRef: `adjust:${reason || "cycle_count"}`, occurredAt: nowIso,
+    });
+
+    // Count-history ledger: a main-page adjust IS a physical count (the user keys
+    // in the counted on-hand). This is the path San Carlos counts through, which
+    // is why the ledger was empty. Best-effort, never blocks the save. See
+    // countLedger; mirrors the kiosk/staff-portal adjust call sites.
+    logCount({
+      itemId: Number(itemId), labId: (existing as any).lab_id,
+      accountId: req.ownerUserId ?? req.userId,
+      countedQty: usageQty, previousQty: beforeQty,
+      countedBy: (req.user && (req.user.name || req.user.email)) || null,
+      source: "director", occurredAt: nowIso,
     });
 
     const fresh = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(itemId);
