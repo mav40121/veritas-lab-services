@@ -25,7 +25,15 @@ test.describe("VeritaCheck PT/INR geomean: multi-instrument authoring", () => {
   test("Add instrument appends independent Module-1 blocks; Remove drops one", async ({ page }) => {
     test.skip(!TOKEN || !LAB_ID, "PW_TOKEN + PW_LAB_ID required");
     await injectAuth(page, BASE, TOKEN);
-    await page.goto(`${BASE}/labs/${LAB_ID}/study/new?studyType=pt_coag`, { waitUntil: "networkidle" });
+    await page.goto(`${BASE}/labs/${LAB_ID}/study/new`, { waitUntil: "networkidle" });
+
+    // Select the PT/INR Geometric Mean study type from the dropdown (the real
+    // user path; more robust than a deep-link query param).
+    await page.getByTestId("select-study-type").click();
+    await page.getByRole("option", { name: /PT\/INR Geometric Mean/i }).click();
+
+    // The Module-1 entry (with the Add-instrument flow) lives on the Data Entry tab.
+    await page.getByText("Data Entry", { exact: true }).click();
 
     // The pt_coag form renders with a single instrument: the "Add instrument"
     // button is present and no additional-instrument Remove control exists yet.
