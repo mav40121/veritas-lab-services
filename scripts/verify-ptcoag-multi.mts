@@ -5,6 +5,7 @@
 // passes AND any present comparison module passes.
 // Run: npx tsx scripts/verify-ptcoag-multi.mts
 import { calculatePTCoag, calculateModule1, geometricMean } from "../client/src/lib/calculations";
+import { computePTCoagStatus } from "../server/ptCoagVerdict";
 
 let pass = 0, fail = 0;
 const approx = (a: number, b: number, eps = 1e-9) => Math.abs(a - b) <= eps;
@@ -77,6 +78,51 @@ const failCompare = calculatePTCoag(
 check("comparison-fail: module1 passes", failCompare.module1s[0].pass === true);
 check("comparison-fail: module2 fails on poor coverage", failCompare.module2!.pass === false, `coverage ${failCompare.module2!.coverage.toFixed(0)}%`);
 check("comparison-fail: overallPass false", failCompare.overallPass === false);
+
+// --- Case 5: SERVER verdict parity. computePTCoagStatus (the actual server
+// code path in computeStudyStatus) must agree with the client engine's
+// overallPass for the exact dataPoints shape that VeritaCheckPage persists.
+// This is the receipt that the two evaluators cannot drift.
+const pair = (xs: number[], ys: number[]) => xs.map((x, i) => ({ id: `S${String(i + 1).padStart(5, "0")}`, x, y: ys[i] }));
+const block = (name: string, ptValues: number[], isi: number) => ({ name, ptValues, isi, ptRI, inrRI });
+
+const parity: { label: string; dp: any; client: boolean }[] = [
+  {
+    label: "N=1 + module2 (all pass)",
+    dp: { module1Instruments: [block("ACL TOP 351", normalA, 1.0)], module2: { data: pair([11, 12, 13], [11.1, 12.1, 12.9]), tea: 0.20 }, module3: null },
+    client: one.overallPass,
+  },
+  {
+    label: "N=2 independent, no comparison",
+    dp: { module1Instruments: [block("ACL TOP 351", normalA, 1.0), block("STA-R Max", normalB, 1.05)], module2: null, module3: null },
+    client: two.overallPass,
+  },
+  {
+    label: "N=2 one instrument fails RI",
+    dp: { module1Instruments: [block("Good", normalA, 1.0), block("Bad", bad, 1.0)], module2: null, module3: null },
+    client: mixed.overallPass,
+  },
+  {
+    label: "N=1 comparison module fails",
+    dp: { module1Instruments: [block("A", normalA, 1.0)], module2: { data: pair([10, 11, 12], [20, 22, 24]), tea: 0.05 }, module3: null },
+    client: failCompare.overallPass,
+  },
+  {
+    label: "legacy single module1 (no module1Instruments)",
+    dp: { module1: { ptValues: normalA, isi: 1.0, ptRI, inrRI }, module2: null, module3: null },
+    client: calculatePTCoag([{ name: "legacy", ptValues: normalA, isi: 1.0, ptRI, inrRI }], null, null).overallPass,
+  },
+  {
+    label: "empty (no instruments) -> fail",
+    dp: { module2: null, module3: null },
+    client: false,
+  },
+];
+for (const p of parity) {
+  const server = computePTCoagStatus(p.dp);
+  const expected = p.client ? "pass" : "fail";
+  check(`server parity: ${p.label}`, server === expected, `server=${server}, client=${expected}`);
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

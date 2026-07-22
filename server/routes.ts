@@ -163,6 +163,7 @@ import { insertStudySchema, insertContactSchema, registerSchema, loginSchema, ty
 // Mirrors the client calculation logic so the stored status is always correct.
 // Each study type has its own pass/fail rule derived from the raw dataPoints.
 import { isCensored, censorValueForMath, type CensoringPolicy } from "@shared/censoring";
+import { computePTCoagStatus } from "./ptCoagVerdict";
 
 function computeStudyStatus(studyType: string, dataPointsJson: string, instrumentsJson: string, cliaAllowableError: number, teaIsPercentage: boolean = true, cliaAbsoluteFloor: number | null = null, censoringPolicy: CensoringPolicy = "exclude"): "pass" | "fail" {
   try {
@@ -587,7 +588,16 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
       return allPass ? "pass" : "fail";
     }
 
-    // pt_coag or unknown: trust client value (pt_coag is gated anyway)
+    if (studyType === "pt_coag") {
+      // Symmetric multi-instrument PT/INR geomean verdict, recomputed from the
+      // raw dataPoints (never trusting the client status). Rule-for-rule mirror
+      // of the client engine, in a single importable module so the two cannot
+      // drift. Previously this branch hardcoded "fail" for every pt_coag study,
+      // which made a genuinely passing geomean study show FAIL server-side.
+      return computePTCoagStatus(rawData);
+    }
+
+    // unknown study type
     return "fail";
   } catch (err) {
     console.error("[computeStudyStatus] Error recomputing status:", err);
