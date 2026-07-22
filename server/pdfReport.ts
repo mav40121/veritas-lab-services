@@ -3255,32 +3255,80 @@ function geometricMean(values: number[]): number {
 function buildPTCoagHTML(study: Study, results: any): string {
   const instrumentNames: string[] = safeJsonParse(study.instruments) || [];
   const rawData = safeJsonParse(study.dataPoints) || {};
-  const { module1 = { specimens: [], n: 0, geoMeanPT: 0, geoMeanINR: 0, ptRI: { low: 0, high: 0 }, inrRI: { low: 0, high: 0 }, ptRIPass: true, inrRIPass: true, ptOutsideRI: 0, inrOutsideRI: 0, pass: true }, module2 = { errorIndexResults: [], regression: { slope: 0, intercept: 0, r2: 0 }, pass: true, meanEI: 0, sdEI: 0, n: 0 }, module3 } = results;
+  // Symmetric multi-instrument: results.module1s is one Module-1 result per
+  // instrument. This shim renders the first instrument (the legacy single shape);
+  // the full per-instrument PDF loop lands with the multi-instrument entry UI.
+  const M1_FALLBACK = { specimens: [], n: 0, geoMeanPT: 0, geoMeanINR: 0, ptRI: { low: 0, high: 0 }, inrRI: { low: 0, high: 0 }, ptRIPass: true, inrRIPass: true, ptOutsideRI: 0, inrOutsideRI: 0, pass: true };
+  const { module1s = [], module3 } = results;
+  // Module 2 (two-instrument comparison) is optional now that a study can be a
+  // pure multi-instrument geomean with no comparison. null => not performed.
+  const module2 = results.module2 || null;
+  const hasM2 = !!module2;
+  // One Module-1 block per instrument. Legacy single-instrument studies fall
+  // back to the singular module1 shape.
+  const m1Blocks: any[] = (Array.isArray(module1s) && module1s.length > 0)
+    ? module1s
+    : [ (results as any).module1 || M1_FALLBACK ];
+  const isMultiInstrument = m1Blocks.length > 1;
+  const module1 = m1Blocks[0]; // primary, drives single-value page-1 tiles
+  const module1AllPass = m1Blocks.every((m: any) => m.pass);
+  const instLabel = (m: any, i: number) => m.instrumentName || instrumentNames[i] || `Instrument ${i + 1}`;
 
-  // Module 1 section
-  const m1DataRows = (module1.specimens || []).map((s: any, i: number) => {
-    return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
+  // Per-instrument Module-1 stats block. Each analyzer establishes its own MNPT,
+  // ISI, reference intervals, and RI-verification verdict.
+  const instrumentStatsBlock = (m: any, i: number) => `
+    ${isMultiInstrument ? `<div class="section-label" style="margin-top:10px">Instrument ${i + 1}: ${instLabel(m, i)}</div>` : ""}
+    <div class="supp-stats">
+      <span class="key">N:</span><span>${m.n}</span>
+      <span class="key">Geometric Mean PT:</span><span>${m.geoMeanPT.toFixed(2)} sec</span>
+      <span class="key">Geometric Mean INR:</span><span>${m.geoMeanINR.toFixed(3)}</span>
+      <span class="key">ISI:</span><span>${m.isi ?? rawData.module1?.isi ?? "-"}</span>
+      <span class="key">PT RI:</span><span>${m.ptRI.low}–${m.ptRI.high} sec</span>
+      <span class="key">INR RI:</span><span>${m.inrRI.low}–${m.inrRI.high}</span>
+      <span class="key">PT Outside RI:</span><span class="${m.ptRIPass ? "pass" : "fail"}">${m.ptOutsideRI}/${m.n} (${m.ptRIPass ? "PASS" : "FAIL"})</span>
+      <span class="key">INR Outside RI:</span><span class="${m.inrRIPass ? "pass" : "fail"}">${m.inrOutsideRI}/${m.n} (${m.inrRIPass ? "PASS" : "FAIL"})</span>
+      ${m.reagentLot ? `<span class="key">Reagent Lot:</span><span>${m.reagentLot}${m.reagentExp ? " (exp " + m.reagentExp + ")" : ""}</span>` : ""}
+    </div>`;
+
+  const m1Section = `
+    <div class="section-heading">Module 1: Normal Patient Mean & Reference Range Verification${isMultiInstrument ? ` (${m1Blocks.length} instruments)` : ""}</div>
+    ${m1Blocks.map((m, i) => instrumentStatsBlock(m, i)).join("")}
+  `;
+
+  // Per-instrument specimen tables (one per analyzer).
+  const m1IndividualTables = m1Blocks.map((m: any, i: number) => {
+    const rows = (m.specimens || []).map((s: any, j: number) => `<tr class="${j % 2 === 1 ? "stripe" : ""}">
       <td>${s.id}</td>
       <td class="text-right">${s.pt.toFixed(1)}</td>
       <td class="text-right">${s.inr.toFixed(2)}</td>
       <td class="text-right ${s.ptInRI ? "pass" : "fail"}">${s.ptInRI ? "Yes" : "No"}</td>
       <td class="text-right ${s.inrInRI ? "pass" : "fail"}">${s.inrInRI ? "Yes" : "No"}</td>
-    </tr>`;
+    </tr>`).join("");
+    return `<div class="section-label" style="margin-top:12px">Module 1 - Individual Results${isMultiInstrument ? `: ${instLabel(m, i)}` : ""}</div>
+    <table>
+      <thead><tr><th>Specimen</th><th class="text-right">PT (sec)</th><th class="text-right">INR</th><th class="text-right">PT in RI?</th><th class="text-right">INR in RI?</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
   }).join("");
 
-  const m1Section = `
-    <div class="section-heading">Module 1: Normal Patient Mean & Reference Range Verification</div>
-    <div class="supp-stats">
-      <span class="key">N:</span><span>${module1.n}</span>
-      <span class="key">Geometric Mean PT:</span><span>${module1.geoMeanPT.toFixed(2)} sec</span>
-      <span class="key">Geometric Mean INR:</span><span>${module1.geoMeanINR.toFixed(3)}</span>
-      <span class="key">ISI:</span><span>${rawData.module1?.isi ?? "-"}</span>
-      <span class="key">PT RI:</span><span>${module1.ptRI.low}–${module1.ptRI.high} sec</span>
-      <span class="key">INR RI:</span><span>${module1.inrRI.low}–${module1.inrRI.high}</span>
-      <span class="key">PT Outside RI:</span><span class="${module1.ptRIPass ? "pass" : "fail"}">${module1.ptOutsideRI}/${module1.n} (${module1.ptRIPass ? "PASS" : "FAIL"})</span>
-      <span class="key">INR Outside RI:</span><span class="${module1.inrRIPass ? "pass" : "fail"}">${module1.inrOutsideRI}/${module1.n} (${module1.inrRIPass ? "PASS" : "FAIL"})</span>
-    </div>
-  `;
+  // Page-1 Module-1 roll-up: one row per instrument. This is the hero for a
+  // multi-instrument study and the fallback when no comparison module is present.
+  const m1SummaryTable = `
+    <hr class="divider">
+    <div class="section-label">Module 1 Summary by Instrument</div>
+    <table style="font-size:8pt;margin-bottom:6px">
+      <thead><tr><th>Instrument</th><th class="text-right">Geo Mean PT</th><th class="text-right">Geo Mean INR</th><th class="text-right">PT RI</th><th class="text-right">INR RI</th><th class="text-right">Verdict</th></tr></thead>
+      <tbody>
+        ${m1Blocks.map((m: any, i: number) => `<tr class="${i % 2 === 1 ? "stripe" : ""}">
+          <td>${instLabel(m, i)}</td>
+          <td class="text-right">${m.geoMeanPT.toFixed(2)} sec</td>
+          <td class="text-right">${m.geoMeanINR.toFixed(3)}</td>
+          <td class="text-right ${m.ptRIPass ? "pass" : "fail"}">${m.ptOutsideRI}/${m.n} ${m.ptRIPass ? "PASS" : "FAIL"}</td>
+          <td class="text-right ${m.inrRIPass ? "pass" : "fail"}">${m.inrOutsideRI}/${m.n} ${m.inrRIPass ? "PASS" : "FAIL"}</td>
+          <td class="text-right ${m.pass ? "pass" : "fail"}">${m.pass ? "PASS" : "FAIL"}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>`;
 
   // Module 2 section - Deming with Error Index
   const m2 = module2 || { errorIndexResults: [], regression: { r: 0, slope: 1, intercept: 0, see: 0, n: 0 }, averageErrorIndex: 0, errorIndexRange: { min: 0, max: 0 }, pass: true, coverage: 100, tea: 0 };
@@ -3309,7 +3357,7 @@ function buildPTCoagHTML(study: Study, results: any): string {
     </tr>`;
   }).join("");
 
-  const m2Section = `
+  const m2Section = hasM2 ? `
     <div class="section-heading" style="page-break-before:always">Module 2: Two-Instrument Comparison (Deming Regression)</div>
     <div class="charts">${m2Scatter}${m2EI}</div>
     <hr class="divider">
@@ -3328,7 +3376,9 @@ function buildPTCoagHTML(study: Study, results: any): string {
         <tr><td>TEa</td><td class="text-right">±${(m2.tea * 100).toFixed(0)}%</td></tr>
       </tbody>
     </table>
-  `;
+  ` : `
+    <div class="section-heading"${isMultiInstrument ? "" : ` style="page-break-before:always"`}>Module 2: Two-Instrument Comparison</div>
+    <p style="font-size:9pt;color:${MUTED};margin:8px 0">Module 2 not performed. Each instrument's geometric-mean PT/INR and reference intervals were verified independently in Module 1; a two-instrument comparison was not part of this study.</p>`;
 
   // Module 3 section (if present)
   let m3Section = "";
@@ -3382,8 +3432,8 @@ function buildPTCoagHTML(study: Study, results: any): string {
       </div>
     `;
   } else {
-    m3Section = `<div class="section-heading" style="page-break-before:always">Module 3: Old Lot vs New Lot Comparison</div>
-      <p style="font-size:9pt;color:${MUTED};margin:8px 0">Module 3 skipped - single analyzer lab.</p>`;
+    m3Section = `<div class="section-heading"${isMultiInstrument ? "" : ` style="page-break-before:always"`}>Module 3: Old Lot vs New Lot Comparison</div>
+      <p style="font-size:9pt;color:${MUTED};margin:8px 0">Module 3 not performed. No old-lot vs new-lot comparison was included in this study.</p>`;
   }
 
   // Narrative
@@ -3405,15 +3455,26 @@ function buildPTCoagHTML(study: Study, results: any): string {
 
   // Overall verdict
   const verdictHtml = `<div class="verdict ${results.overallPass ? "pass-bg" : "fail-bg"}" style="margin-top:12px">
-    ${overallVerdict} - Module 1: ${module1.pass ? "Meets criteria" : "Does not meet criteria"}, Module 2: ${module2.pass ? "Meets criteria" : "Does not meet criteria"}${module3 ? `, Module 3: ${module3.pass ? "Meets criteria" : "Does not meet criteria"}` : ""}
+    ${overallVerdict} - Module 1: ${module1AllPass ? "Meets criteria" : "Does not meet criteria"}${hasM2 ? `, Module 2: ${module2.pass ? "Meets criteria" : "Does not meet criteria"}` : ""}${module3 ? `, Module 3: ${module3.pass ? "Meets criteria" : "Does not meet criteria"}` : ""}
   </div>`;
 
-  const reagentInfo = rawData.reagentLot ? `<div style="font-size:8pt;margin-bottom:6px">Reagent Lot: ${rawData.reagentLot} · Expiration: ${rawData.reagentExp || "-"} · ISI: ${rawData.module1?.isi ?? "-"}</div>` : "";
+  const reagentInfo = (!isMultiInstrument && rawData.reagentLot) ? `<div style="font-size:8pt;margin-bottom:6px">Reagent Lot: ${rawData.reagentLot} · Expiration: ${rawData.reagentExp || "-"} · ISI: ${rawData.module1?.isi ?? "-"}</div>` : "";
 
   // Page 1 compact key stats
-  const ptCompactM1Pass = module1.pass ? "PASS" : "FAIL";
-  const ptCompactM2Pass = module2.pass ? "PASS" : "FAIL";
+  const ptCompactM1Pass = module1AllPass ? "PASS" : "FAIL";
+  const ptCompactM2Pass = hasM2 ? (module2.pass ? "PASS" : "FAIL") : "N/A";
   const ptCompactM3Pass = module3 ? (module3.pass ? "PASS" : "FAIL") : "N/A";
+  // Page-1 hero: a multi-instrument study (or any study with no comparison
+  // module) leads with the per-instrument Module-1 roll-up; a single-instrument
+  // study that includes a comparison keeps the two-instrument correlation charts.
+  const page1Hero = (hasM2 && !isMultiInstrument)
+    ? `<div class="charts">${m2Scatter}${m2EI}</div>`
+    : `${m1SummaryTable}${hasM2 ? `<div class="charts">${m2Scatter}${m2EI}</div>` : ""}`;
+  const keyStatsLastRow = isMultiInstrument
+    ? `<tr><td style="color:${MUTED};font-weight:700">Instruments</td><td>${m1Blocks.length}</td>
+           <td style="color:${MUTED};font-weight:700">Module 1 (all instruments)</td><td class="${module1AllPass ? "pass" : "fail"}">${module1AllPass ? "PASS" : "FAIL"}</td></tr>`
+    : `<tr><td style="color:${MUTED};font-weight:700">Geo Mean PT</td><td>${module1.geoMeanPT.toFixed(2)} sec</td>
+           <td style="color:${MUTED};font-weight:700">Geo Mean INR</td><td>${module1.geoMeanINR.toFixed(3)}</td></tr>`;
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - PT/INR Geometric Mean Calculator (H47) - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
@@ -3422,18 +3483,17 @@ function buildPTCoagHTML(study: Study, results: any): string {
   ${headerHTML(study, (study as any)._cliaNumber)}
   ${reagentInfo}
 
-  <div class="charts">${m2Scatter}${m2EI}</div>
+  ${page1Hero}
 
   <hr class="divider">
   <div class="section-label">Key Statistics Summary</div>
   <table style="font-size:8pt;margin-bottom:6px">
     <tbody>
-      <tr><td style="color:${MUTED};font-weight:700;width:25%">Module 1 (Normal Mean/RI)</td><td style="width:25%" class="${module1.pass ? "pass" : "fail"}">${ptCompactM1Pass}</td>
-          <td style="color:${MUTED};font-weight:700;width:25%">Module 2 (Two-Instrument)</td><td style="width:25%" class="${module2.pass ? "pass" : "fail"}">${ptCompactM2Pass}</td></tr>
+      <tr><td style="color:${MUTED};font-weight:700;width:25%">Module 1 (Normal Mean/RI)</td><td style="width:25%" class="${module1AllPass ? "pass" : "fail"}">${ptCompactM1Pass}</td>
+          <td style="color:${MUTED};font-weight:700;width:25%">Module 2 (Two-Instrument)</td><td style="width:25%" class="${hasM2 ? (module2.pass ? "pass" : "fail") : ""}">${ptCompactM2Pass}</td></tr>
       <tr><td style="color:${MUTED};font-weight:700">Module 3 (Lot Comparison)</td><td class="${module3 ? (module3.pass ? "pass" : "fail") : ""}">${ptCompactM3Pass}</td>
           <td style="color:${MUTED};font-weight:700">Overall</td><td class="${results.overallPass ? "pass" : "fail"}">${overallVerdict}</td></tr>
-      <tr><td style="color:${MUTED};font-weight:700">Geo Mean PT</td><td>${module1.geoMeanPT.toFixed(2)} sec</td>
-          <td style="color:${MUTED};font-weight:700">Geo Mean INR</td><td>${module1.geoMeanINR.toFixed(3)}</td></tr>
+      ${keyStatsLastRow}
     </tbody>
   </table>
 
@@ -3447,19 +3507,15 @@ function buildPTCoagHTML(study: Study, results: any): string {
     ${m1Section}
 
     ${m2Section}
-    <div class="section-label">Module 2 - Experimental Results</div>
+    ${hasM2 ? `<div class="section-label">Module 2 - Experimental Results</div>
     <table>
       <thead><tr><th>Specimen</th><th class="text-right">Inst 1</th><th class="text-right">Inst 2</th><th class="text-right">Error Index</th><th class="text-right">Pass?</th></tr></thead>
       <tbody>${m2DataRows}</tbody>
-    </table>
+    </table>` : ""}
 
     ${m3Section}
 
-    <div class="section-label" style="margin-top:12px">Module 1 - Individual Results</div>
-    <table>
-      <thead><tr><th>Specimen</th><th class="text-right">PT (sec)</th><th class="text-right">INR</th><th class="text-right">PT in RI?</th><th class="text-right">INR in RI?</th></tr></thead>
-      <tbody>${m1DataRows}</tbody>
-    </table>
+    ${m1IndividualTables}
     ${verdictHtml}
   </div>
 

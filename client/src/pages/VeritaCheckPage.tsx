@@ -708,6 +708,64 @@ export default function VeritaCheckPage() {
           if (maxReps > 0) setRrReplicatesPerLevel(maxReps);
         }
       }
+      // PT/INR geomean rehydration. Persisted shape is an OBJECT:
+      // { module1Instruments:[{name,ptValues,isi,ptRI,inrRI,reagentLot,reagentExp}],
+      //   module1, module2, module3, instrument, reagentLot, reagentExp }.
+      // Legacy studies have only module1 (singular) + top-level instrument; both
+      // map to Instrument 1. Instruments 2..N (if any) fill ptAddlInstruments.
+      if (studyTypeForHydrate === "pt_coag" && dpParsed && typeof dpParsed === "object" && !Array.isArray(dpParsed)) {
+        const dp = dpParsed as any;
+        const fill20 = (src: any): (number | null)[] => {
+          const out: (number | null)[] = Array(20).fill(null);
+          if (Array.isArray(src)) src.slice(0, 20).forEach((v: any, i: number) => { out[i] = typeof v === "number" && !isNaN(v) ? v : null; });
+          return out;
+        };
+        const insts = Array.isArray(dp.module1Instruments) && dp.module1Instruments.length > 0 ? dp.module1Instruments : null;
+        const primary = insts ? insts[0] : (dp.module1 ? { ...dp.module1, name: dp.instrument, reagentLot: dp.reagentLot, reagentExp: dp.reagentExp } : null);
+        if (primary) {
+          if (typeof primary.name === "string" && primary.name) setPtInstrumentName(primary.name);
+          else if (typeof dp.instrument === "string" && dp.instrument) setPtInstrumentName(dp.instrument);
+          const rl = primary.reagentLot ?? dp.reagentLot; if (typeof rl === "string") setPtReagentLot(rl);
+          const re = primary.reagentExp ?? dp.reagentExp; if (typeof re === "string") setPtReagentExp(re);
+          if (typeof primary.isi === "number") setPtISI(primary.isi);
+          if (primary.ptRI && typeof primary.ptRI.low === "number") setPtRILow(primary.ptRI.low);
+          if (primary.ptRI && typeof primary.ptRI.high === "number") setPtRIHigh(primary.ptRI.high);
+          if (primary.inrRI && typeof primary.inrRI.low === "number") setPtINRRILow(primary.inrRI.low);
+          if (primary.inrRI && typeof primary.inrRI.high === "number") setPtINRRIHigh(primary.inrRI.high);
+          setPtModule1Data(fill20(primary.ptValues) as any);
+        }
+        if (insts && insts.length > 1) {
+          setPtAddlInstruments(insts.slice(1).map((b: any) => ({
+            name: typeof b.name === "string" ? b.name : "",
+            reagentLot: typeof b.reagentLot === "string" ? b.reagentLot : "",
+            reagentExp: typeof b.reagentExp === "string" ? b.reagentExp : "",
+            isi: typeof b.isi === "number" ? b.isi : 0.97,
+            ptRILow: b.ptRI && typeof b.ptRI.low === "number" ? b.ptRI.low : 10,
+            ptRIHigh: b.ptRI && typeof b.ptRI.high === "number" ? b.ptRI.high : 14,
+            inrRILow: b.inrRI && typeof b.inrRI.low === "number" ? b.inrRI.low : 0.9,
+            inrRIHigh: b.inrRI && typeof b.inrRI.high === "number" ? b.inrRI.high : 1.2,
+            ptValues: fill20(b.ptValues),
+          })));
+        }
+        const pairRows = (data: any[]): { id: string; x: number | null; y: number | null }[] => {
+          const rows = Array.from({ length: 20 }, (_, i) => ({ id: `S${String(i + 1).padStart(5, "0")}`, x: null as number | null, y: null as number | null }));
+          if (Array.isArray(data)) data.slice(0, 20).forEach((d: any, i: number) => { rows[i] = { id: typeof d.id === "string" ? d.id : rows[i].id, x: typeof d.x === "number" ? d.x : null, y: typeof d.y === "number" ? d.y : null }; });
+          return rows;
+        };
+        if (dp.module2 && typeof dp.module2 === "object") {
+          if (typeof dp.module2.inst2 === "string") setPtInstrument2Name(dp.module2.inst2);
+          if (typeof dp.module2.tea === "number") setPtModule2TEa(dp.module2.tea);
+          if (Array.isArray(dp.module2.data) && dp.module2.data.length > 0) setPtModule2Data(pairRows(dp.module2.data));
+        }
+        if (dp.module3 && typeof dp.module3 === "object") {
+          setPtSkipModule3(false);
+          if (typeof dp.module3.tea === "number") setPtModule3TEa(dp.module3.tea);
+          if (typeof dp.module3.oldLot === "string") setPtOldLotNum(dp.module3.oldLot);
+          if (Array.isArray(dp.module3.data) && dp.module3.data.length > 0) setPtModule3Data(pairRows(dp.module3.data));
+        } else if (dp.module3 === null) {
+          setPtSkipModule3(true);
+        }
+      }
       editHydratedRef.current = true;
     } catch (err) {
       console.warn("[veritacheck edit] hydrate failed", err);
@@ -1027,6 +1085,14 @@ export default function VeritaCheckPage() {
   const [ptINRRILow, setPtINRRILow] = useState(0.9);
   const [ptINRRIHigh, setPtINRRIHigh] = useState(1.2);
   const [ptModule1Data, setPtModule1Data] = useState<number[]>(Array(20).fill(null));
+  // Additional instruments (symmetric multi-instrument geomean). Instrument 1 is
+  // the singular pt* state above; instruments 2..N live here, each with its own
+  // geomean inputs. Empty array = a single-instrument study (backward compatible).
+  type PtInstrumentBlock = { name: string; reagentLot: string; reagentExp: string; isi: number; ptRILow: number; ptRIHigh: number; inrRILow: number; inrRIHigh: number; ptValues: (number | null)[] };
+  const [ptAddlInstruments, setPtAddlInstruments] = useState<PtInstrumentBlock[]>([]);
+  const addPtInstrument = () => setPtAddlInstruments(p => [...p, { name: "", reagentLot: "", reagentExp: "", isi: 0.97, ptRILow: 10, ptRIHigh: 14, inrRILow: 0.9, inrRIHigh: 1.2, ptValues: Array(20).fill(null) }]);
+  const patchPtInstrument = (i: number, patch: Partial<PtInstrumentBlock>) => setPtAddlInstruments(p => p.map((b, idx) => idx === i ? { ...b, ...patch } : b));
+  const setPtInstrumentValue = (i: number, ci: number, v: number | null) => setPtAddlInstruments(p => p.map((b, idx) => idx === i ? { ...b, ptValues: b.ptValues.map((x, xi) => xi === ci ? v : x) } : b));
   // Module 2
   const [ptInstrument2Name, setPtInstrument2Name] = useState("ACL TOP 352");
   const [ptModule2TEa, setPtModule2TEa] = useState(0.20);
@@ -1695,29 +1761,41 @@ export default function VeritaCheckPage() {
 
     if (studyType === "pt_coag") {
       const m1Valid = ptModule1Data.filter(v => v !== null && !isNaN(v));
-      if (m1Valid.length < 3) { toast({ title: "Please enter at least 3 PT values for Module 1", variant: "destructive" }); return; }
+      if (m1Valid.length < 3) { toast({ title: "Please enter at least 3 PT values for Instrument 1 (Module 1)", variant: "destructive" }); return; }
+      // Per-instrument Module-1 blocks: instrument 1 (singular state) plus any
+      // additional instruments. Each analyzer needs >= 3 normal PT values.
+      const addlBlocks = ptAddlInstruments.map((b, i) => ({
+        i,
+        name: b.name.trim() || `Instrument ${i + 2}`,
+        ptValues: b.ptValues.filter(v => v !== null && !isNaN(v as number)) as number[],
+        isi: b.isi, ptRI: { low: b.ptRILow, high: b.ptRIHigh }, inrRI: { low: b.inrRILow, high: b.inrRIHigh },
+        reagentLot: b.reagentLot, reagentExp: b.reagentExp,
+      }));
+      const shortAddl = addlBlocks.find(b => b.ptValues.length < 3);
+      if (shortAddl) { toast({ title: `Please enter at least 3 PT values for Instrument ${shortAddl.i + 2}`, variant: "destructive" }); return; }
+      const module1Instruments = [
+        { name: ptInstrumentName, ptValues: m1Valid, isi: ptISI, ptRI: { low: ptRILow, high: ptRIHigh }, inrRI: { low: ptINRRILow, high: ptINRRIHigh }, reagentLot: ptReagentLot, reagentExp: ptReagentExp },
+        ...addlBlocks.map(({ i, ...rest }) => rest),
+      ];
+      // Module 2 (two-instrument comparison) is optional; include only if entered.
       const m2Valid = ptModule2Data.filter(d => d.x !== null && d.y !== null);
-      if (m2Valid.length < 3) { toast({ title: "Please enter at least 3 paired values for Module 2", variant: "destructive" }); return; }
+      const m2Data = m2Valid.length >= 3
+        ? { xValues: m2Valid.map(d => d.x!), yValues: m2Valid.map(d => d.y!), specimenIds: m2Valid.map(d => d.id), tea: ptModule2TEa }
+        : null;
       const module3Data = ptSkipModule3 ? null : (() => {
         const m3Valid = ptModule3Data.filter(d => d.x !== null && d.y !== null);
         if (m3Valid.length < 3) return null;
-        return {
-          xValues: m3Valid.map(d => d.x!), yValues: m3Valid.map(d => d.y!),
-          specimenIds: m3Valid.map(d => d.id), tea: ptModule3TEa
-        };
+        return { xValues: m3Valid.map(d => d.x!), yValues: m3Valid.map(d => d.y!), specimenIds: m3Valid.map(d => d.id), tea: ptModule3TEa };
       })();
-      const results = calculatePTCoag(
-        { ptValues: m1Valid, isi: ptISI, ptRI: { low: ptRILow, high: ptRIHigh }, inrRI: { low: ptINRRILow, high: ptINRRIHigh } },
-        { xValues: m2Valid.map(d => d.x!), yValues: m2Valid.map(d => d.y!), specimenIds: m2Valid.map(d => d.id), tea: ptModule2TEa },
-        module3Data
-      );
+      const results = calculatePTCoag(module1Instruments, m2Data, module3Data);
       const study: InsertStudy = {
         testName: testName.trim(), instrument: ptInstrumentName, analyst: analyst.trim() || "-",
         date, studyType: "pt_coag", cliaAllowableError: ptModule2TEa,
         teaIsPercentage: 1, teaUnit: '%', cliaAbsoluteFloor: null, cliaAbsoluteUnit: null, cliaPresetLabel,
         dataPoints: JSON.stringify({
+          module1Instruments,
           module1: { ptValues: m1Valid, isi: ptISI, ptRI: { low: ptRILow, high: ptRIHigh }, inrRI: { low: ptINRRILow, high: ptINRRIHigh } },
-          module2: { data: m2Valid, tea: ptModule2TEa, inst1: ptInstrumentName, inst2: ptInstrument2Name },
+          module2: m2Data ? { data: m2Valid, tea: ptModule2TEa, inst1: ptInstrumentName, inst2: ptInstrument2Name } : null,
           module3: ptSkipModule3 ? null : { data: ptModule3Data.filter(d => d.x !== null && d.y !== null), tea: ptModule3TEa, oldLot: ptOldLotNum, newLot: ptReagentLot },
           instrument: ptInstrumentName, reagentLot: ptReagentLot, reagentExp: ptReagentExp
         }),
@@ -3191,6 +3269,7 @@ return (
                   <Card>
                     <CardHeader className="pb-3"><CardTitle className="text-base">Module 1: Normal Patient Mean & Reference Range Verification</CardTitle></CardHeader>
                     <CardContent className="space-y-4">
+                      {ptAddlInstruments.length > 0 && <div className="text-sm font-semibold">Instrument 1</div>}
                       <div className="grid sm:grid-cols-3 gap-4">
                         <div className="space-y-1.5"><Label>Instrument</Label><Input value={ptInstrumentName} onChange={e => setPtInstrumentName(e.target.value)} /></div>
                         <div className="space-y-1.5"><Label>Reagent Lot (New)</Label><Input value={ptReagentLot} onChange={e => setPtReagentLot(e.target.value)} /></div>
@@ -3216,6 +3295,39 @@ return (
                         </div>
                         {ptModule1Data.filter(v => v !== null && !isNaN(v)).length < 20 && <p className="text-xs text-amber-500">Minimum 20 normal specimens recommended</p>}
                       </div>
+                      {/* Additional instruments: each analyzer gets its own geomean + RI verification. */}
+                      {ptAddlInstruments.map((blk, ai) => (
+                        <div key={ai} className="border-t border-border pt-4 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm font-semibold">Instrument {ai + 2}</div>
+                            <Button type="button" variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" onClick={() => setPtAddlInstruments(p => p.filter((_, idx) => idx !== ai))} data-testid={`pt-remove-instrument-${ai}`}><Trash2 size={13} className="mr-1" />Remove</Button>
+                          </div>
+                          <div className="grid sm:grid-cols-3 gap-4">
+                            <div className="space-y-1.5"><Label>Instrument</Label><Input value={blk.name} onChange={e => patchPtInstrument(ai, { name: e.target.value })} /></div>
+                            <div className="space-y-1.5"><Label>Reagent Lot (New)</Label><Input value={blk.reagentLot} onChange={e => patchPtInstrument(ai, { reagentLot: e.target.value })} /></div>
+                            <div className="space-y-1.5"><Label>Reagent Expiration</Label><Input type="date" value={blk.reagentExp} onChange={e => patchPtInstrument(ai, { reagentExp: e.target.value })} /></div>
+                          </div>
+                          <div className="grid sm:grid-cols-3 gap-4">
+                            <div className="space-y-1.5"><Label>ISI Value</Label><Input type="number" step="0.01" value={blk.isi} onChange={e => patchPtInstrument(ai, { isi: parseFloat(e.target.value) || 0.97 })} /></div>
+                            <div className="space-y-1.5"><Label>PT RI Low (sec)</Label><Input type="number" step="0.1" value={blk.ptRILow} onChange={e => patchPtInstrument(ai, { ptRILow: parseFloat(e.target.value) || 10 })} /></div>
+                            <div className="space-y-1.5"><Label>PT RI High (sec)</Label><Input type="number" step="0.1" value={blk.ptRIHigh} onChange={e => patchPtInstrument(ai, { ptRIHigh: parseFloat(e.target.value) || 14 })} /></div>
+                          </div>
+                          <div className="grid sm:grid-cols-2 gap-4">
+                            <div className="space-y-1.5"><Label>INR RI Low</Label><Input type="number" step="0.1" value={blk.inrRILow} onChange={e => patchPtInstrument(ai, { inrRILow: parseFloat(e.target.value) || 0.9 })} /></div>
+                            <div className="space-y-1.5"><Label>INR RI High</Label><Input type="number" step="0.1" value={blk.inrRIHigh} onChange={e => patchPtInstrument(ai, { inrRIHigh: parseFloat(e.target.value) || 1.2 })} /></div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="text-sm font-medium">Normal Patient PT Results (seconds)</div>
+                            <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
+                              {blk.ptValues.map((v, ci) => (
+                                <Input key={ci} type="number" step="any" placeholder="-" value={v ?? ""} onChange={e => setPtInstrumentValue(ai, ci, e.target.value === "" ? null : parseFloat(e.target.value))} className="h-8 text-xs text-center" />
+                              ))}
+                            </div>
+                            {blk.ptValues.filter(v => v !== null && !isNaN(v as number)).length < 20 && <p className="text-xs text-amber-500">Minimum 20 normal specimens recommended</p>}
+                          </div>
+                        </div>
+                      ))}
+                      <Button type="button" variant="outline" size="sm" onClick={addPtInstrument} data-testid="pt-add-instrument"><PlusCircle size={13} className="mr-1" />Add instrument</Button>
                     </CardContent>
                   </Card>
 

@@ -190,7 +190,7 @@ function buildPTINRSample() {
   const m2Ids = Array.from({ length: 30 }, (_, i) => `P${String(i + 1).padStart(3, "0")}`);
 
   const results = calculatePTCoag(
-    { ptValues: normalPTs, isi, ptRI, inrRI },
+    [{ name: "Stago STA-R Max3", ptValues: normalPTs, isi, ptRI, inrRI }],
     { xValues: m2x, yValues: m2y, specimenIds: m2Ids, tea: 0.20 },
     null,
   );
