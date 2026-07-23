@@ -1703,6 +1703,17 @@ export default function VeritaCheckPage() {
     },
     onError: (err: any) => {
       const msg = err?.message || "Failed to save study";
+      // Lab-identity gate: a finalized study is a compliance record that needs
+      // the lab's CLIA number. Surface a clear, actionable prompt (and the draft
+      // escape hatch) instead of the raw error.
+      if (err?.code === "CLIA_REQUIRED" || /CLIA number/i.test(msg)) {
+        toast({
+          title: "Add your lab's CLIA number to finalize this study",
+          description: "A finalized compliance study needs your lab's CLIA number. Add it in Account Settings, then save again. You can keep working now by saving a draft.",
+          variant: "destructive",
+        });
+        return;
+      }
       toast({ title: msg, variant: "destructive" });
     },
   });

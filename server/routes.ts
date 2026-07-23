@@ -164,6 +164,7 @@ import { insertStudySchema, insertContactSchema, registerSchema, loginSchema, ty
 // Each study type has its own pass/fail rule derived from the raw dataPoints.
 import { isCensored, censorValueForMath, type CensoringPolicy } from "@shared/censoring";
 import { computePTCoagStatus } from "./ptCoagVerdict";
+import { blockFinalizeWithoutClia, CLIA_REQUIRED_MESSAGE } from "./cliaGate";
 
 function computeStudyStatus(studyType: string, dataPointsJson: string, instrumentsJson: string, cliaAllowableError: number, teaIsPercentage: boolean = true, cliaAbsoluteFloor: number | null = null, censoringPolicy: CensoringPolicy = "exclude"): "pass" | "fail" {
   try {
@@ -10580,6 +10581,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       parsed = insertStudySchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     }
+    // Lab-identity gate: a finalized study is a compliance record whose PDF
+    // header needs the lab's CLIA. Block finalizing under a lab with no CLIA.
+    {
+      const _labClia = ((db as any).$client.prepare("SELECT clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any)?.clia_number;
+      if (blockFinalizeWithoutClia(isDraft, _labClia)) {
+        return res.status(400).json({ error: CLIA_REQUIRED_MESSAGE, code: "CLIA_REQUIRED" });
+      }
+    }
     const verifiedStatus = isDraft ? 'draft' : computeStudyStatus(
       parsed.data.studyType,
       parsed.data.dataPoints,
@@ -10650,6 +10659,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     const isDraft = req.body?.status === 'draft';
+    // Lab-identity gate (see POST /api/labs/:labId/studies): block finalizing a
+    // study under a lab with no CLIA number on record.
+    {
+      const _labClia = ((db as any).$client.prepare("SELECT clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any)?.clia_number;
+      if (blockFinalizeWithoutClia(isDraft, _labClia)) {
+        return res.status(400).json({ error: CLIA_REQUIRED_MESSAGE, code: "CLIA_REQUIRED" });
+      }
+    }
     let payload: any;
     if (isDraft) {
       payload = {
