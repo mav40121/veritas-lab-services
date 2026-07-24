@@ -110,7 +110,7 @@ function formToBody(f: AnalyteFormState): any {
   };
 }
 
-export function VerificationAnalytesPanel({ verificationId }: { verificationId: number }) {
+export function VerificationAnalytesPanel({ verificationId, onAnalytesChanged }: { verificationId: number; onAnalytesChanged?: () => void }) {
   const { toast } = useToast();
   const [analytes, setAnalytes] = useState<VerificationAnalyte[]>([]);
   const [loading, setLoading] = useState(true);
@@ -192,6 +192,7 @@ export function VerificationAnalytesPanel({ verificationId }: { verificationId: 
       toast({ title: "Analyte added" });
       setAdding(false);
       await reload();
+      onAnalytesChanged?.(); // per-analyte study slots were seeded server-side; refresh the Elements tab
     } catch (e: any) {
       toast({ title: "Could not add analyte", description: e.message, variant: "destructive" });
     } finally { setBusy(false); }
@@ -277,6 +278,7 @@ export function VerificationAnalytesPanel({ verificationId }: { verificationId: 
       }
       toast({ title: "Analyte deleted" });
       await reload();
+      onAnalytesChanged?.(); // its empty study slots were removed server-side; refresh the Elements tab
     } catch (e: any) {
       toast({ title: "Could not delete", description: e.message, variant: "destructive" });
     } finally { setBusy(false); }
