@@ -58,6 +58,7 @@ interface VerificationStudy {
   element: string;
   study_id: number | null;
   analyte: string;
+  analyte_id: number | null;
   sample_count: number;
   clsi_protocol: string;
   design_rationale: string;
@@ -649,6 +650,22 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
     enabled: !!verification,
   });
 
+  // Analytes on this package. Drives the Performance Elements tab's per-analyte
+  // rows (2026-07-24, Longstreth: one study per analyte). Kept in sync with the
+  // Analytes tab via onAnalytesChanged.
+  const { data: analytes = [] } = useQuery<{ id: number; analyte_name: string }[]>({
+    queryKey: [`/api/veritacheck/verifications/${id}/analytes`],
+    queryFn: async () => {
+      const r = await fetch(`${API_BASE}/api/veritacheck/verifications/${id}/analytes`, { headers: authHeaders() });
+      return r.json();
+    },
+    enabled: !!verification,
+  });
+  const refreshAfterAnalyteChange = () => {
+    refetch(); // new/removed per-analyte study slots
+    qc.invalidateQueries({ queryKey: [`/api/veritacheck/verifications/${id}/analytes`] });
+  };
+
   const showToast = (msg: string, isError = false) => { setToast(msg); setToastError(isError); setTimeout(() => setToast(""), isError ? 5000 : 3000); };
 
   // Wave A3.2-UI (2026-06-07): probe the survey-bundle preview to populate
@@ -868,10 +885,29 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
       {activeTab === "elements" && (
         <div className="space-y-4">
           {ALL_ELEMENTS.filter(el => elements.includes(el.key)).map(el => {
-            const slot = verification.studies?.find(s => s.element === el.key);
+            const elSlots = (verification.studies || []).filter(s => s.element === el.key);
             const suggested = suggestedStudies.filter(s =>
               (ELEMENT_TO_STUDY_TYPE[el.key] || []).includes(s.studyType)
             );
+            // Per-analyte rows for every element except carryover (one
+            // instrument-wide carryover study covers the whole package), and
+            // only once analytes exist. Legacy single-analyte packages fall
+            // back to the single-slot card.
+            const perAnalyte = el.key !== "carryover" && analytes.length > 0;
+            if (perAnalyte) {
+              return (
+                <PerAnalyteElementCard
+                  key={el.key}
+                  element={el}
+                  analytes={analytes}
+                  slots={elSlots}
+                  suggested={suggested}
+                  verificationId={id}
+                  onPatch={patchStudy}
+                />
+              );
+            }
+            const slot = elSlots.find(s => s.analyte_id == null) || elSlots[0];
             return (
               <ElementCard
                 key={el.key}
@@ -904,7 +940,7 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
 
       {/* Analytes tab (2026-06-09 PR2 Michael feedback: multi-analyte) */}
       {activeTab === "analytes" && (
-        <VerificationAnalytesPanel verificationId={id} />
+        <VerificationAnalytesPanel verificationId={id} onAnalytesChanged={refreshAfterAnalyteChange} />
       )}
 
       {/* Units tab */}
@@ -1078,6 +1114,101 @@ function ElementCard({ element, slot, suggested, verificationId, onPatch }: {
 }
 
 // ── Unit card ─────────────────────────────────────────────────────────────────
+// ── Per-analyte element card (2026-07-24, Longstreth: one study per analyte) ──
+// For a non-carryover element with analytes, render the element header once and
+// one Run / Link / status row per analyte, each bound to that analyte's slot.
+function PerAnalyteElementCard({ element, analytes, slots, suggested, verificationId, onPatch }: {
+  element: typeof ALL_ELEMENTS[0];
+  analytes: { id: number; analyte_name: string }[];
+  slots: VerificationStudy[];
+  suggested: ExistingStudy[];
+  verificationId: number;
+  onPatch: (slotId: number, payload: object) => void;
+}) {
+  const doneCount = analytes.filter(a => {
+    const s = slots.find(x => x.analyte_id === a.id);
+    return s != null && (s.passed === 1 || s.passed === 0);
+  }).length;
+  return (
+    <Card className="border border-border">
+      <CardContent className="p-4">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-sm font-semibold">{element.label}</span>
+          <Badge variant="outline" className="text-xs">{element.protocol}</Badge>
+          <span className="text-xs text-muted-foreground ml-auto">{doneCount}/{analytes.length} analytes</span>
+        </div>
+        <p className="text-xs text-muted-foreground mb-2">Recommended: {element.samples}. One study per analyte.</p>
+        <div className="rounded-md border border-border/60 divide-y divide-border/60">
+          {analytes.map(a => (
+            <AnalyteSlotRow
+              key={a.id}
+              element={element}
+              analyteName={a.analyte_name}
+              slot={slots.find(s => s.analyte_id === a.id)}
+              suggested={suggested}
+              verificationId={verificationId}
+              onPatch={onPatch}
+            />
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AnalyteSlotRow({ element, analyteName, slot, suggested, verificationId, onPatch }: {
+  element: typeof ALL_ELEMENTS[0];
+  analyteName: string;
+  slot?: VerificationStudy;
+  suggested: ExistingStudy[];
+  verificationId: number;
+  onPatch: (slotId: number, payload: object) => void;
+}) {
+  const [, navigate] = useLocation();
+  const [showLink, setShowLink] = useState(false);
+  const studyParam = ELEMENT_STUDY_PARAM[element.key];
+  const isDone = slot != null && (slot.passed === 1 || slot.passed === 0);
+  const isPassed = slot?.passed === 1;
+  const runUrl = `/veritacheck?studyType=${studyParam}&verificationId=${verificationId}&element=${element.key}&slotId=${slot?.id || ""}&analyte=${encodeURIComponent(analyteName)}`;
+  return (
+    <div className="px-3 py-2" data-testid={`analyte-slot-${element.key}-${analyteName}`}>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="text-xs font-medium">{analyteName}</span>
+        {isDone ? (
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-semibold ${isPassed ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>{isPassed ? "PASS" : "FAIL"}</span>
+            <button className="text-xs text-muted-foreground underline" onClick={() => slot && onPatch(slot.id, { passed: null, study_id: null })}>Redo</button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 flex-wrap">
+            {slot?.testName && <span className="text-xs text-muted-foreground">Linked: <strong>{slot.testName}</strong></span>}
+            {slot?.testName && <button className="text-xs underline text-muted-foreground" onClick={() => slot && onPatch(slot.id, { study_id: null })}>Unlink</button>}
+            <Button size="sm" className="h-7 text-xs gap-1" onClick={() => navigate(runUrl)} data-testid={`analyte-run-${element.key}-${analyteName}`}>
+              <FlaskConical size={12} /> Run
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowLink(v => !v)} disabled={!slot}>Link Existing Study</Button>
+          </div>
+        )}
+      </div>
+      {showLink && slot && (
+        <div className="mt-2">
+          <Select onValueChange={(v) => { onPatch(slot.id, { study_id: parseInt(v) }); setShowLink(false); }}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select a completed study to link" /></SelectTrigger>
+            <SelectContent>
+              {suggested.length === 0 && (
+                <SelectItem value="__none" disabled className="text-xs text-muted-foreground">No studies found</SelectItem>
+              )}
+              {suggested.map(s => (
+                <SelectItem key={s.id} value={String(s.id)} className="text-xs">{s.testName} - {new Date(s.createdAt).toLocaleDateString()}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function UnitCard({ unit, verificationId, onSaved, onDeleted }: { unit: InstrumentUnit; verificationId: number; onSaved: () => void; onDeleted: () => void }) {
   const [directorName, setDirectorName] = useState(unit.director_name || "");
   const [directorTitle, setDirectorTitle] = useState(unit.director_title || "");
