@@ -214,6 +214,16 @@ export default function VeritaCheckVerificationPage() {
   const openDetail = (id: number) => { setActiveId(id); setView("detail"); };
   const backToList = () => { setActiveId(null); setView("list"); qc.invalidateQueries({ queryKey: [verificationsUrl] }); };
 
+  // Deep-link support: /labs/:labId/dashboard/verifications?verification=NN opens
+  // that workbook directly, so the study-create page's breadcrumb can round-trip
+  // back to the exact workbook a study was launched from (2026-07-24, Longstreth
+  // navigation feedback). Mount-only so clicking Back still returns to the list.
+  useEffect(() => {
+    const vid = new URLSearchParams(window.location.search).get("verification");
+    if (vid && /^\d+$/.test(vid)) { setActiveId(Number(vid)); setView("detail"); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="space-y-6">
       {/* Header */}

@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XCircle, LayoutDashboard, BookOpen, ChevronRight, Shield, Info, HelpCircle, Upload, AlertTriangle, FileSpreadsheet, ClipboardCheck, Tag, ListChecks } from "lucide-react";
+import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XCircle, LayoutDashboard, BookOpen, ChevronRight, ChevronLeft, Shield, Info, HelpCircle, Upload, AlertTriangle, FileSpreadsheet, ClipboardCheck, Tag, ListChecks } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { CoverageAttributionDialog } from "@/components/CoverageAttributionDialog";
 import ManualDifferentialForm from "@/components/ManualDifferentialForm";
@@ -440,6 +440,25 @@ export default function VeritaCheckPage() {
   const prePopAnalyte = prePopParams.get("analyte");
   const prePopInst1 = prePopParams.get("instrument1");
   const prePopInst2 = prePopParams.get("instrument2");
+
+  // Breadcrumb back to the verification workbook this study was launched from
+  // (2026-07-24, Longstreth navigation feedback). When the Run button on the
+  // workbook opened this page it passed verificationId + element; surface a
+  // persistent link back so the user can move between the two without losing
+  // their place. Only shown when arriving from a workbook.
+  const fromVerificationId = prePopParams.get("verificationId");
+  const fromVerificationElement = prePopParams.get("element");
+  const VERIFICATION_ELEMENT_LABELS: Record<string, string> = {
+    accuracy: "Accuracy / Bias",
+    precision: "Precision",
+    reportable_range: "Reportable Range",
+    reference_interval: "Reference Range",
+    method_comparison: "Method Comparison",
+    carryover: "Carryover",
+  };
+  const workbookHref = fromVerificationId
+    ? `${editingLabId ? `/labs/${editingLabId}` : ""}/dashboard/verifications?verification=${fromVerificationId}`
+    : null;
 
   const [testName, setTestName] = useState(prePopAnalyte || "");
   const [analyst, setAnalyst] = useState("");
@@ -2674,6 +2693,26 @@ return (
         </>
       ) : (
         <>
+          {/* Breadcrumb back to the verification workbook this study was launched
+              from (2026-07-24, Longstreth navigation feedback). */}
+          {workbookHref && (
+            <div className="border-b border-border bg-muted/40">
+              <div className="container-default py-2.5">
+                <Link href={workbookHref}>
+                  <a className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline" data-testid="back-to-verification-workbook">
+                    <ChevronLeft size={15} />
+                    Back to the verification workbook
+                    {fromVerificationElement && VERIFICATION_ELEMENT_LABELS[fromVerificationElement] && (
+                      <span className="text-muted-foreground font-normal">
+                        {"·"} building {VERIFICATION_ELEMENT_LABELS[fromVerificationElement]}
+                      </span>
+                    )}
+                  </a>
+                </Link>
+              </div>
+            </div>
+          )}
+
           {/* Hero for logged-in users */}
           <section className="border-b border-border bg-primary/5">
             <div className="container-default py-14">
