@@ -1512,8 +1512,7 @@ export default function VeritaCheckPage() {
   // capped at 5 before 2026-07-23).
   const MAX_INSTRUMENTS = 10;
   const addInstrument = () => {
-    const maxInst = MAX_INSTRUMENTS;
-    if (instrumentNames.length >= maxInst) { toast({ title: `Maximum ${maxInst} instruments supported` }); return; }
+    if (instrumentNames.length >= MAX_INSTRUMENTS) { toast({ title: `Maximum ${MAX_INSTRUMENTS} instruments supported` }); return; }
     const newName = studyType === "method_comparison"
       ? `Comparison ${instrumentNames.length}`
       : `Instrument ${instrumentNames.length + 1}`;
