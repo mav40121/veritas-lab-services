@@ -3,6 +3,7 @@ import { stampPdfAuthor } from "./pdfMeta";
 import { db } from "./db";
 import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
 import { resolveStudyAccess, consumeStudyCredit } from "./studyCredits";
+import { seedSlotsForAnalyte } from "./verificationSlots";
 import { getCanonicalMDLs, getCanonicalMDLProvenance, computeSystematicErrorAtMDL } from "./canonicalMDLs";
 import { teaAllowanceAt } from "./teaAllowance";
 import {
@@ -1372,7 +1373,21 @@ export function registerVeritaCheckVerificationRoutes(
       new Date().toISOString(),
       new Date().toISOString(),
     );
-    res.json({ id: (r as any).lastInsertRowid, ok: true });
+    const newAnalyteId = Number((r as any).lastInsertRowid);
+    // Seed one study slot per per-analyte element for this analyte so the
+    // Performance Elements tab can link a study per analyte (carryover stays
+    // instrument-wide). The first analyte adopts the placeholder slots seeded
+    // at package creation, preserving any already-linked study.
+    let elemArr: string[] = [];
+    try { elemArr = JSON.parse((parent as any).elements || "[]"); } catch { elemArr = []; }
+    const slotsSeeded = seedSlotsForAnalyte(sqlite, {
+      verificationId: Number(req.params.id),
+      analyteId: newAnalyteId,
+      analyteName: analyte_name.trim(),
+      elements: elemArr,
+      protocolFor: (el) => CLSI_GUIDANCE[el]?.protocol || null,
+    });
+    res.json({ id: newAnalyteId, ok: true, slotsSeeded });
   });
 
   app.patch("/api/veritacheck/verifications/:id/analytes/:analyteId", authMiddleware, requireWriteAccess, (req: any, res) => {
@@ -1451,12 +1466,15 @@ export function registerVeritaCheckVerificationRoutes(
     if (existing.lifecycle_state === "finalized") {
       return res.status(409).json({ error: "Analyte is finalized and cannot be deleted. Use the amendment workflow." });
     }
-    // Block delete if any non-instrument-scoped studies still point at this analyte.
+    // Block delete only if a slot with a LINKED study points at this analyte.
+    // Since per-analyte seeding (2026-07-24) gives every analyte one empty slot
+    // per element, guarding on slot existence alone would make analytes
+    // undeletable; the empty (unlinked) slots are removed with the analyte below.
     const linked = sqlite.prepare(
-      "SELECT COUNT(*) AS n FROM veritacheck_verification_studies WHERE analyte_id = ? AND scope <> 'instrument'"
+      "SELECT COUNT(*) AS n FROM veritacheck_verification_studies WHERE analyte_id = ? AND scope <> 'instrument' AND study_id IS NOT NULL"
     ).get(req.params.analyteId) as any;
     if (linked.n > 0) {
-      return res.status(409).json({ error: `Cannot delete: ${linked.n} study slot(s) still reference this analyte. Reassign or remove them first.` });
+      return res.status(409).json({ error: `Cannot delete: ${linked.n} linked study(ies) still reference this analyte. Unlink them first.` });
     }
     // Refuse to delete the only analyte (back-compat: legacy
     // single-analyte verifications must always have one analyte row).
@@ -1466,6 +1484,8 @@ export function registerVeritaCheckVerificationRoutes(
     if (cnt.n <= 1) {
       return res.status(409).json({ error: "Cannot delete the only analyte on a verification. Add another analyte first." });
     }
+    // Remove this analyte's empty (unlinked) seeded slots, then the analyte.
+    sqlite.prepare("DELETE FROM veritacheck_verification_studies WHERE analyte_id = ? AND study_id IS NULL").run(req.params.analyteId);
     sqlite.prepare("DELETE FROM veritacheck_verification_analytes WHERE id = ?").run(req.params.analyteId);
     res.json({ ok: true });
   });

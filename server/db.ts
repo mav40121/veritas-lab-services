@@ -3525,6 +3525,11 @@ try {
   // analyte-specific).
   if (!vcsCols.includes("analyte_id"))        sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN analyte_id INTEGER");
   if (!vcsCols.includes("scope"))             sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN scope TEXT NOT NULL DEFAULT 'analyte'");
+  // 2026-07-24 per-analyte study slots: one slot per (element, analyte). Partial
+  // unique index (analyte_id NOT NULL) so per-analyte seeding stays idempotent
+  // and can't create duplicate slots, while leaving legacy/carryover NULL slots
+  // untouched (SQLite treats NULLs as distinct in unique indexes).
+  sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_vcs_verif_element_analyte ON veritacheck_verification_studies(verification_id, element, analyte_id) WHERE analyte_id IS NOT NULL");
 } catch (e) { console.warn("veritacheck_verification_studies migration:", e); }
 
 // ── 2026-06-09 Multi-analyte verification packages (Michael feedback) ──
