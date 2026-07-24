@@ -1508,8 +1508,11 @@ export default function VeritaCheckPage() {
     setLinkedInstruments(prev => ({ ...prev, [idx]: inst }));
   };
 
+  // Max instruments/methods per study. Uniform 10 (non-comparison studies were
+  // capped at 5 before 2026-07-23).
+  const MAX_INSTRUMENTS = 10;
   const addInstrument = () => {
-    const maxInst = studyType === "method_comparison" ? 10 : 5;
+    const maxInst = MAX_INSTRUMENTS;
     if (instrumentNames.length >= maxInst) { toast({ title: `Maximum ${maxInst} instruments supported` }); return; }
     const newName = studyType === "method_comparison"
       ? `Comparison ${instrumentNames.length}`
@@ -2797,7 +2800,7 @@ return (
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-base flex items-center justify-between">
                   {studyType === "method_comparison" ? "Instruments / Methods" : "Instruments / Methods"}
-                  <Button variant="outline" size="sm" onClick={addInstrument} disabled={instrumentNames.length >= (studyType === "method_comparison" ? 10 : 5)}><PlusCircle size={13} className="mr-1" />{studyType === "method_comparison" ? "Add Instrument" : "Add"}</Button>
+                  <Button variant="outline" size="sm" onClick={addInstrument} disabled={instrumentNames.length >= MAX_INSTRUMENTS}><PlusCircle size={13} className="mr-1" />{studyType === "method_comparison" ? "Add Instrument" : "Add"}</Button>
                 </CardTitle></CardHeader>
                 <CardContent className="space-y-3">
                   {studyType === "method_comparison" ? (
