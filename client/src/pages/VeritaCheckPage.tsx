@@ -2698,16 +2698,14 @@ return (
           {workbookHref && (
             <div className="border-b border-border bg-muted/40">
               <div className="container-default py-2.5">
-                <Link href={workbookHref}>
-                  <a className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline" data-testid="back-to-verification-workbook">
-                    <ChevronLeft size={15} />
-                    Back to the verification workbook
-                    {fromVerificationElement && VERIFICATION_ELEMENT_LABELS[fromVerificationElement] && (
-                      <span className="text-muted-foreground font-normal">
-                        {"·"} building {VERIFICATION_ELEMENT_LABELS[fromVerificationElement]}
-                      </span>
-                    )}
-                  </a>
+                <Link href={workbookHref} className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline" data-testid="back-to-verification-workbook">
+                  <ChevronLeft size={15} />
+                  Back to the verification workbook
+                  {fromVerificationElement && VERIFICATION_ELEMENT_LABELS[fromVerificationElement] && (
+                    <span className="text-muted-foreground font-normal">
+                      {"·"} building {VERIFICATION_ELEMENT_LABELS[fromVerificationElement]}
+                    </span>
+                  )}
                 </Link>
               </div>
             </div>
