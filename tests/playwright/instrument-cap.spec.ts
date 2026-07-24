@@ -32,8 +32,14 @@ test.describe("VeritaCheck setup: instrument cap is 10", () => {
       await page.waitForTimeout(100);
     }
 
-    await expect(page.getByDisplayValue("Instrument 10")).toBeVisible();
-    await expect(page.getByDisplayValue("Instrument 11")).toHaveCount(0);
+    // Playwright has no getByDisplayValue (that is a Testing-Library method).
+    // Read every input's current value and assert on them directly. Default
+    // cal_ver seeds Instrument 1 + 2, so the 8 adds land Instrument 3..10.
+    const values = await page.locator("input").evaluateAll(
+      els => els.map(e => (e as HTMLInputElement).value),
+    );
+    expect(values).toContain("Instrument 10");    // 10th instrument row exists
+    expect(values).not.toContain("Instrument 11"); // cap holds at 10
     await expect(add).toBeDisabled();
   });
 });
