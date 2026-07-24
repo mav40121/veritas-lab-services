@@ -1539,6 +1539,20 @@ export default function VeritaCheckPage() {
     setDataPoints(prev => prev.map(dp => { const vals = { ...dp.instrumentValues }; delete vals[name]; return { ...dp, instrumentValues: vals }; }));
   };
 
+  // Per-cell raw-text buffer for the censoring data grids. A cell STORES a
+  // number, but binding the input value straight to that number clobbers an
+  // in-progress decimal: typing "10." parses to 10 and React resets the field
+  // to "10", so a decimal point (or a trailing zero) can never be typed.
+  // Regression from #716 (2026-06-10). While a cell is focused we echo the raw
+  // keystrokes; the parsed value is still committed to state for the engine. On
+  // blur the draft is dropped so the canonical stored value shows.
+  const [cellDrafts, setCellDrafts] = useState<Record<string, string>>({});
+  const cellField = (key: string, stored: EntryCell, commit: (raw: string) => void) => ({
+    value: (key in cellDrafts ? cellDrafts[key] : cellDisplay(stored)) as string | number,
+    onChange: (e: any) => { const raw = e.target.value; setCellDrafts(d => ({ ...d, [key]: raw })); commit(raw); },
+    onBlur: () => setCellDrafts(d => { if (!(key in d)) return d; const { [key]: _drop, ...rest } = d; return rest; }),
+  });
+
   const updateDataPoint = (levelIdx: number, field: string, value: string) => {
     // 2026-06-10 (PR B): accept censored entry. parseCensoredInput turns
     // "<17"/">500" into the censored object, "17" into {value:17}, and
@@ -3780,7 +3794,7 @@ return (
                               return (
                                 <tr key={idx} className="border-b border-border/50">
                                   <td className="py-1.5 pr-4"><Input value={dp.specimenId} onChange={e => { const d = [...refData]; d[idx] = { ...d[idx], specimenId: e.target.value }; setRefData(d); }} className="h-8 text-sm w-24" /></td>
-                                  <td className="py-1.5 pr-4"><Input type="text" inputMode="text" placeholder="-" title="Enter a number, or <17 / >500 for a censored result" value={cellDisplay(dp.value)} onChange={e => { const d = [...refData]; d[idx] = { ...d[idx], value: parseCell(e.target.value) }; setRefData(d); }} className="h-8 text-sm w-32" /></td>
+                                  <td className="py-1.5 pr-4"><Input type="text" inputMode="text" placeholder="-" title="Enter a number, or <17 / >500 for a censored result" {...cellField(`ref-${idx}`, dp.value, v => { const d = [...refData]; d[idx] = { ...d[idx], value: parseCell(v) }; setRefData(d); })} className="h-8 text-sm w-32" /></td>
                                   <td className="py-1.5">
                                     {inRange && <span className="text-xs text-green-600 dark:text-green-400 font-medium">In range</span>}
                                     {outRange && <span className="text-xs text-red-600 dark:text-red-400 font-medium">Outside</span>}
@@ -4585,14 +4599,13 @@ return (
                             {Array.from({ length: precisionReps }).map((_, vi) => (
                               <Input key={vi} type="text" inputMode="text" placeholder="-"
                                 title="Enter a number, or <17 / >500 for a censored result"
-                                value={cellDisplay(precisionValues[li]?.[vi] ?? null)}
-                                onChange={e => {
+                                {...cellField(`prec-${li}-${vi}`, precisionValues[li]?.[vi] ?? null, raw => {
                                   const vals = [...precisionValues];
                                   if (!vals[li]) vals[li] = [];
                                   vals[li] = [...vals[li]];
-                                  vals[li][vi] = parseCell(e.target.value);
+                                  vals[li][vi] = parseCell(raw);
                                   setPrecisionValues(vals);
-                                }}
+                                })}
                                 className="h-8 text-xs text-center"
                               />
                             ))}
@@ -4618,16 +4631,15 @@ return (
                                       <td key={ci} className="py-1 px-1">
                                         <Input type="text" inputMode="text" placeholder="-"
                                           title="Enter a number, or <17 / >500 for a censored result"
-                                          value={cellDisplay(precisionAdvancedData[li]?.[di]?.[ci] ?? null)}
-                                          onChange={e => {
+                                          {...cellField(`preca-${li}-${di}-${ci}`, precisionAdvancedData[li]?.[di]?.[ci] ?? null, raw => {
                                             const data = [...precisionAdvancedData];
                                             if (!data[li]) data[li] = [];
                                             data[li] = [...data[li]];
                                             if (!data[li][di]) data[li][di] = [];
                                             data[li][di] = [...data[li][di]];
-                                            data[li][di][ci] = parseCell(e.target.value);
+                                            data[li][di][ci] = parseCell(raw);
                                             setPrecisionAdvancedData(data);
-                                          }}
+                                          })}
                                           className="h-7 text-xs text-center w-20"
                                         />
                                       </td>
@@ -4733,7 +4745,7 @@ return (
                                   data-testid={`input-sample-label-mc-${idx}`}
                                 />
                               </td>
-                              {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="text" inputMode="text" placeholder="--" title="Enter a number, or <17 / >500 for a censored result" data-testid={`input-dp-value-${idx}-${colIdx}`} value={cellDisplay(dp.instrumentValues[n])} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, colIdx)} onKeyDown={e => handleGridKeyDown(e, idx, colIdx)} /></td>)}
+                              {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="text" inputMode="text" placeholder="--" title="Enter a number, or <17 / >500 for a censored result" data-testid={`input-dp-value-${idx}-${colIdx}`} {...cellField(`cvv-${idx}-${colIdx}`, dp.instrumentValues[n], v => updateDataPoint(idx, n, v))} className="h-8 text-sm w-28" ref={setGridRef(idx, colIdx)} onKeyDown={e => handleGridKeyDown(e, idx, colIdx)} /></td>)}
                             </tr>
                           ))}
                         </tbody>
@@ -4756,8 +4768,8 @@ return (
                                   data-testid={`input-level-label-${idx}`}
                                 />
                               </td>
-                              <td className="py-1.5 pr-4"><Input type="text" inputMode="text" placeholder="--" title="Enter a number, or <17 / >500 for a censored result" data-testid={`input-dp-expected-${idx}`} value={cellDisplay(dp.expectedValue)} onChange={e => updateDataPoint(idx, "expectedValue", e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, 0)} onKeyDown={e => handleGridKeyDown(e, idx, 0)} /></td>
-                              {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="text" inputMode="text" placeholder="--" title="Enter a number, or <17 / >500 for a censored result" data-testid={`input-dp-value-${idx}-${colIdx + 1}`} value={cellDisplay(dp.instrumentValues[n])} onChange={e => updateDataPoint(idx, n, e.target.value)} className="h-8 text-sm w-28" ref={setGridRef(idx, colIdx + 1)} onKeyDown={e => handleGridKeyDown(e, idx, colIdx + 1)} /></td>)}
+                              <td className="py-1.5 pr-4"><Input type="text" inputMode="text" placeholder="--" title="Enter a number, or <17 / >500 for a censored result" data-testid={`input-dp-expected-${idx}`} {...cellField(`mce-${idx}`, dp.expectedValue, v => updateDataPoint(idx, "expectedValue", v))} className="h-8 text-sm w-28" ref={setGridRef(idx, 0)} onKeyDown={e => handleGridKeyDown(e, idx, 0)} /></td>
+                              {instrumentNames.map((n, colIdx) => <td key={n} className="py-1.5 pr-4"><Input type="text" inputMode="text" placeholder="--" title="Enter a number, or <17 / >500 for a censored result" data-testid={`input-dp-value-${idx}-${colIdx + 1}`} {...cellField(`mcv-${idx}-${colIdx}`, dp.instrumentValues[n], v => updateDataPoint(idx, n, v))} className="h-8 text-sm w-28" ref={setGridRef(idx, colIdx + 1)} onKeyDown={e => handleGridKeyDown(e, idx, colIdx + 1)} /></td>)}
                             </tr>
                           ))}
                         </tbody>
