@@ -2855,7 +2855,43 @@ sqlite.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_vtrack_audit_task ON veritatrack_audit(task_id);
   CREATE INDEX IF NOT EXISTS idx_vtrack_audit_lab  ON veritatrack_audit(lab_id);
+
+  -- 2026-07-26 VeritaTrack due-date reminders (Longstreth): per-lab config for
+  -- the nightly reminder engine, and a send-log for dedup + surveyor audit.
+  CREATE TABLE IF NOT EXISTS veritatrack_reminder_config (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL UNIQUE,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    lead_days INTEGER NOT NULL DEFAULT 14,
+    overdue_cadence_days INTEGER NOT NULL DEFAULT 2,
+    recipients_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS veritatrack_reminder_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL,
+    lab_id INTEGER NOT NULL,
+    reminder_kind TEXT NOT NULL,
+    due_date TEXT,
+    sent_on TEXT NOT NULL,
+    recipient_email TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_vtrack_rem_log_task ON veritatrack_reminder_log(task_id, reminder_kind);
+  CREATE INDEX IF NOT EXISTS idx_vtrack_rem_log_lab  ON veritatrack_reminder_log(lab_id);
 `);
+// PRAGMA migration block per the New DB Table Rule (CLAUDE.md §8).
+{
+  try {
+    const cfgCols = (sqlite.prepare("PRAGMA table_info(veritatrack_reminder_config)").all() as { name: string }[]).map(c => c.name);
+    void cfgCols; // Future ALTER TABLE veritatrack_reminder_config ADD COLUMN ... blocks go here.
+    const logCols = (sqlite.prepare("PRAGMA table_info(veritatrack_reminder_log)").all() as { name: string }[]).map(c => c.name);
+    void logCols; // Future ALTER TABLE veritatrack_reminder_log ADD COLUMN ... blocks go here.
+  } catch {
+    // fresh DB: CREATE TABLE above handled it
+  }
+}
 // PRAGMA migration block per the New DB Table Rule (CLAUDE.md §8).
 {
   try {
