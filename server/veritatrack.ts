@@ -38,7 +38,7 @@ function frequencyToMonths(freq: string): number {
   }
 }
 
-function nextDue(lastDate: string | null, frequencyMonths: number): string {
+export function nextDue(lastDate: string | null, frequencyMonths: number): string {
   const base = lastDate ? new Date(lastDate) : new Date();
   base.setMonth(base.getMonth() + frequencyMonths);
   return base.toISOString().split("T")[0];
@@ -49,7 +49,7 @@ function nextDue(lastDate: string | null, frequencyMonths: number): string {
 // UTC-midnight due date against a live timestamp, so in any US (negative-UTC-
 // offset) timezone a task read "overdue" on its actual due date and the
 // Due-Today bucket was always empty. Date-only makes due-today == 0.
-function daysUntilDateOnly(dateStr: string): number {
+export function daysUntilDateOnly(dateStr: string): number {
   const todayStr = new Date().toISOString().slice(0, 10);
   return Math.round((Date.parse(dateStr + "T00:00:00Z") - Date.parse(todayStr + "T00:00:00Z")) / 86400000);
 }
@@ -392,6 +392,62 @@ export function registerVeritaTrackRoutes(
     const last = (signoffs as any[])[0] || null;
     const nextDueDate = last ? nextDue(last.completed_date, task.frequency_months) : null;
     res.json({ ...task, signoffs, next_due: nextDueDate, status: last ? taskStatus(nextDueDate!) : "not_started" });
+  });
+
+  // ── VeritaTrack due-date reminders config (2026-07-26, Longstreth request).
+  // Lab-scoped via resolveLegacyLabId, the SAME resolver the tasks list read
+  // uses, so the reminder scope always matches the tasks the runner will scan.
+  // One config row per lab. GET returns the ★ defaults when unset so the client
+  // renders the panel with no create step (enabled defaults OFF).
+  app.get("/api/veritatrack/reminder-config", authMiddleware, (req: any, res) => {
+    if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+    const labId = resolveLegacyLabId(sqlite, req);
+    if (!labId) return res.status(400).json({ error: "No active lab" });
+    const row = sqlite.prepare("SELECT * FROM veritatrack_reminder_config WHERE lab_id = ?").get(labId) as any;
+    let recipients: any[] = [];
+    try { recipients = row ? JSON.parse(row.recipients_json || "[]") : []; } catch { recipients = []; }
+    res.json({
+      lab_id: labId,
+      enabled: row ? !!row.enabled : false,
+      lead_days: row ? row.lead_days : 14,
+      overdue_cadence_days: row ? row.overdue_cadence_days : 2,
+      recipients,
+      configured: !!row,
+    });
+  });
+
+  // PUT upsert the config. Same write gate as task mutations (write access +
+  // VeritaTrack module edit). Empty recipient list is allowed: the nightly
+  // runner falls back to the lab owner so reminders are never silently off.
+  app.put("/api/veritatrack/reminder-config", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
+    if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+    const labId = resolveLegacyLabId(sqlite, req);
+    if (!labId) return res.status(400).json({ error: "No active lab" });
+    const { enabled, lead_days, overdue_cadence_days, recipients } = req.body || {};
+    const enabledInt = enabled ? 1 : 0;
+    const lead = Math.max(1, Math.min(60, Number.isFinite(+lead_days) ? Math.round(+lead_days) : 14));
+    const cadence = Math.max(1, Math.min(30, Number.isFinite(+overdue_cadence_days) ? Math.round(+overdue_cadence_days) : 2));
+    let recips: { email: string; name?: string }[] = [];
+    if (Array.isArray(recipients)) {
+      recips = recipients
+        .map((r: any) => (typeof r === "string" ? { email: r } : { email: r?.email, name: r?.name }))
+        .filter((r: any) => r.email && typeof r.email === "string" && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(r.email))
+        .map((r: any) => ({ email: String(r.email).trim(), ...(r.name ? { name: String(r.name).trim() } : {}) }));
+    }
+    const recipientsJson = JSON.stringify(recips);
+    const now = new Date().toISOString();
+    const existing = sqlite.prepare("SELECT id FROM veritatrack_reminder_config WHERE lab_id = ?").get(labId) as any;
+    if (existing) {
+      sqlite.prepare(
+        "UPDATE veritatrack_reminder_config SET enabled=?, lead_days=?, overdue_cadence_days=?, recipients_json=?, updated_at=? WHERE lab_id=?"
+      ).run(enabledInt, lead, cadence, recipientsJson, now, labId);
+    } else {
+      sqlite.prepare(
+        "INSERT INTO veritatrack_reminder_config (lab_id, enabled, lead_days, overdue_cadence_days, recipients_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?)"
+      ).run(labId, enabledInt, lead, cadence, recipientsJson, now, now);
+    }
+    trackAudit({ labId, taskId: null, event: "reminder_config_updated", detail: `enabled=${enabledInt} lead=${lead} cadence=${cadence} recips=${recips.length}`, byUserId: req.user?.userId ?? null });
+    res.json({ lab_id: labId, enabled: !!enabledInt, lead_days: lead, overdue_cadence_days: cadence, recipients: recips, configured: true });
   });
 
   // POST create task

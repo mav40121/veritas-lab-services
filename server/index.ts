@@ -285,6 +285,38 @@ app.use((req, res, next) => {
     console.error("[policy-reminders] Scheduler setup error:", err.message);
   }
 
+  // Schedule daily VeritaTrack due-date reminder dispatch at midnight UTC.
+  // Mirrors the finding/policy reminder schedulers. Per-lab opt-in
+  // (veritatrack_reminder_config.enabled); idempotent via
+  // veritatrack_reminder_log dedup; no-op when RESEND_API_KEY is unset.
+  try {
+    const { runVeritaTrackReminders } = await import("./veritatrackReminders");
+    const scheduleTrackReminders = () => {
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setUTCHours(24, 0, 0, 0);
+      const msUntilMidnight = midnight.getTime() - now.getTime();
+      setTimeout(() => {
+        console.log("[veritatrack-reminders] Running due-date reminder dispatch...");
+        runVeritaTrackReminders().catch((err) =>
+          console.error("[veritatrack-reminders] Run failed:", err?.message || err)
+        );
+        setInterval(() => {
+          console.log("[veritatrack-reminders] Running due-date reminder dispatch...");
+          runVeritaTrackReminders().catch((err) =>
+            console.error("[veritatrack-reminders] Run failed:", err?.message || err)
+          );
+        }, 24 * 60 * 60 * 1000);
+      }, msUntilMidnight);
+      console.log(
+        `[veritatrack-reminders] Due-date reminder dispatch scheduled in ${Math.round(msUntilMidnight / 60000)} minutes`
+      );
+    };
+    scheduleTrackReminders();
+  } catch (err: any) {
+    console.error("[veritatrack-reminders] Scheduler setup error:", err.message);
+  }
+
   // Schedule nightly off-site database backup at 04:00 UTC. Env-gated:
   // if GOOGLE_DRIVE_SA_JSON or GOOGLE_DRIVE_BACKUP_FOLDER_ID is unset
   // the run is a no-op. 04:00 chosen to clear the midnight UTC snapshot
