@@ -741,6 +741,26 @@ function renderStudyAppendix(slot: any, teal: string): string {
 // `page-break-before:always` between blocks for the bundle path.
 //
 // `teal` is the canonical VeritaCheck deliverable color (#01696F).
+// Render one Performance Element that was attested by a manual/offline method
+// (2026-07-24, Longstreth). Pure + exported so scripts/verify-manual-method.mts
+// can prove the surveyor-facing framing and that the free-text note/URL are HTML
+// escaped. Labeled "Manual method (attested; not computed by VeritaCheck)" so it
+// is never mistaken for a computed study; the director's page-1 sign-off governs.
+export function renderManualMethodElementHtml(label: string, protocol: string, slot: any, teal: string): string {
+  const esc = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const evidence = slot?.manual_evidence_url
+    ? `<strong>Supporting data on file:</strong> <a href="${esc(slot.manual_evidence_url)}" style="color:${teal}">${esc(slot.manual_evidence_url)}</a>`
+    : `<strong>Supporting data on file:</strong> Retained in the laboratory record.`;
+  return `<div style="margin-bottom:28px">
+    <div style="font-weight:700;font-size:14px;color:${teal};border-bottom:2px solid ${teal};padding-bottom:4px;margin-bottom:12px">${esc(label)} (${esc(protocol)})</div>
+    ${slot?.analyte ? `<div style="font-size:12px;margin-bottom:6px"><strong>Analyte:</strong> ${esc(slot.analyte)}</div>` : ""}
+    <div style="font-size:12px;margin-bottom:6px"><strong>Verification method:</strong> Manual method (attested; not computed by VeritaCheck)</div>
+    <div style="font-size:12px;margin-bottom:6px">${evidence}</div>
+    ${slot?.manual_note ? `<div style="font-size:12px;margin-bottom:6px"><strong>Attestation note:</strong><br><span style="color:#374151">${esc(slot.manual_note)}</span></div>` : ""}
+    <div style="font-size:12px;margin-top:8px"><strong>Result:</strong> <span style='color:#059669;font-weight:700'>PASS</span> (attested by manual method)</div>
+  </div>`;
+}
+
 export function buildVerificationBlockHtml(v: any, instruments: any[], studies: any[]): string {
   const teal = "#01696F";
   const elements: string[] = (() => { try { return JSON.parse(v.elements || "[]"); } catch { return []; } })();
@@ -814,6 +834,12 @@ export function buildVerificationBlockHtml(v: any, instruments: any[], studies: 
         <div style="font-weight:600;font-size:13px;color:#374151">${el.label} - EXCLUDED</div>
         <div style="font-size:12px;color:#6b7280;margin-top:6px">Justification: ${elementReasons[el.key] || "Not documented"}</div>
       </div>`;
+    }
+    // Manual-method attestation (2026-07-24, Longstreth): an offline/manual
+    // verification the director attested, rendered distinctly so a surveyor
+    // never mistakes it for a computed study.
+    if (slot?.manual_method === 1) {
+      return renderManualMethodElementHtml(el.label, el.protocol, slot, teal);
     }
     const appendix = slot ? renderStudyAppendix(slot, teal) : "";
     return `<div style="margin-bottom:28px">
@@ -1545,7 +1571,7 @@ export function registerVeritaCheckVerificationRoutes(
     // it, a writer could flip another lab's pass/fail verdict by primary key.
     const slot = sqlite.prepare("SELECT id FROM veritacheck_verification_studies WHERE id = ? AND verification_id = ?").get(req.params.studySlotId, req.params.id);
     if (!slot) return res.status(404).json({ error: "Study slot not found on this verification" });
-    const allowed = ["study_id","analyte","sample_count","clsi_protocol","design_rationale","result_summary","passed","analyte_id","scope"];
+    const allowed = ["study_id","analyte","sample_count","clsi_protocol","design_rationale","result_summary","passed","analyte_id","scope","manual_method","manual_note","manual_evidence_url"];
     const sets: string[] = [];
     const vals: any[] = [];
     for (const key of allowed) {
