@@ -66,6 +66,11 @@ interface VerificationStudy {
   passed: number | null;
   testName: string | null;
   studyType: string | null;
+  // 2026-07-24 manual-method attestation (Longstreth): element completed by a
+  // manual/offline method the director attests, with a note + evidence URL.
+  manual_method?: number | null;
+  manual_note?: string | null;
+  manual_evidence_url?: string | null;
   // 2026-06-09 PR3 of multi-analyte: carryover can be flagged
   // scope='instrument' so one EP10 study covers every analyte on the
   // package. Default 'analyte' preserves legacy single-analyte
@@ -989,9 +994,11 @@ function ElementCard({ element, slot, suggested, verificationId, onPatch }: {
   const [, navigate] = useLocation();
   const [showLinkExisting, setShowLinkExisting] = useState(false);
 
+  const attested = slot?.manual_method === 1;
   const isDone = slot?.passed === 1 || slot?.passed === 0;
+  const isDoneStudy = isDone && !attested; // "done via a computed/linked study"
   const isPassed = slot?.passed === 1;
-  const isFailed = slot?.passed === 0;
+  const isFailed = slot?.passed === 0 && !attested;
 
   const studyParam = ELEMENT_STUDY_PARAM[element.key];
   const studyLabel = ELEMENT_STUDY_LABEL[element.key];
@@ -1009,7 +1016,7 @@ function ElementCard({ element, slot, suggested, verificationId, onPatch }: {
           <div className="flex items-center gap-2">
             {isPassed && <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />}
             {isFailed && <AlertTriangle size={16} className="text-red-500 shrink-0" />}
-            {!isDone && <Circle size={16} className="text-muted-foreground shrink-0" />}
+            {!isDoneStudy && !attested && <Circle size={16} className="text-muted-foreground shrink-0" />}
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold">{element.label}</span>
@@ -1020,7 +1027,7 @@ function ElementCard({ element, slot, suggested, verificationId, onPatch }: {
           </div>
 
           {/* Primary action */}
-          {!isDone ? (
+          {attested ? null : !isDoneStudy ? (
             <div className="flex items-center gap-2 flex-wrap">
               <Button
                 size="sm"
@@ -1050,8 +1057,12 @@ function ElementCard({ element, slot, suggested, verificationId, onPatch }: {
           )}
         </div>
 
+        {/* Manual-method attestation (2026-07-24, Longstreth): available until a
+            study is linked/run; shows the attested state once set. */}
+        {!isDoneStudy && <ManualMethodControls slot={slot} onAttest={onPatch} />}
+
         {/* Linked study info */}
-        {slot?.testName && (
+        {!attested && slot?.testName && (
           <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 px-3 py-2 rounded">
             <FlaskConical size={12} />
             <span>Linked: <strong>{slot.testName}</strong></span>
@@ -1156,6 +1167,42 @@ function PerAnalyteElementCard({ element, analytes, slots, suggested, verificati
   );
 }
 
+// Shared manual-method attestation control (2026-07-24, Longstreth). Renders
+// either the attested state (with Redo) or a "Manual method" button that opens
+// an inline note + evidence-URL form. onAttest is slot-bound by the caller.
+function ManualMethodControls({ slot, onAttest }: { slot?: VerificationStudy; onAttest: (payload: object) => void }) {
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const [url, setUrl] = useState("");
+  if (!slot) return null;
+  if (slot.manual_method === 1) {
+    return (
+      <div className="mt-2 text-xs bg-muted/40 rounded px-3 py-2" data-testid={`manual-method-attested-${slot.id}`}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-medium">Manual method</span>
+          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">PASS (attested)</span>
+          <button className="ml-auto underline text-muted-foreground" onClick={() => onAttest({ manual_method: 0, passed: null, manual_note: null, manual_evidence_url: null })}>Redo</button>
+        </div>
+        {slot.manual_note && <div className="mt-1 text-muted-foreground">Note: {slot.manual_note}</div>}
+        {slot.manual_evidence_url && <div className="mt-1"><a href={slot.manual_evidence_url} target="_blank" rel="noreferrer" className="text-primary underline break-all">Supporting data</a></div>}
+      </div>
+    );
+  }
+  return (
+    <div className="mt-1">
+      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setOpen(v => !v)} data-testid={`manual-method-toggle-${slot.id}`}>Manual method</Button>
+      {open && (
+        <div className="mt-2 space-y-2 bg-muted/30 rounded p-2" data-testid={`manual-method-form-${slot.id}`}>
+          <p className="text-[11px] text-muted-foreground">Attest this element was completed by a manual method and passed. Attach supporting data as a link (no patient data).</p>
+          <textarea className="w-full text-xs border border-border rounded px-2 py-1 bg-background" rows={2} placeholder="Attestation note / troubleshooting (no PHI)" value={note} onChange={e => setNote(e.target.value)} data-testid={`manual-method-note-${slot.id}`} />
+          <input className="w-full text-xs border border-border rounded px-2 py-1 bg-background" placeholder="Evidence link (URL)" value={url} onChange={e => setUrl(e.target.value)} data-testid={`manual-method-url-${slot.id}`} />
+          <Button size="sm" className="h-7 text-xs" data-testid={`manual-method-attest-${slot.id}`} onClick={() => { onAttest({ manual_method: 1, passed: 1, study_id: null, manual_note: note.trim() || null, manual_evidence_url: url.trim() || null }); setOpen(false); }}>Attest passed by manual method</Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AnalyteSlotRow({ element, analyteName, slot, suggested, verificationId, onPatch }: {
   element: typeof ALL_ELEMENTS[0];
   analyteName: string;
@@ -1167,19 +1214,20 @@ function AnalyteSlotRow({ element, analyteName, slot, suggested, verificationId,
   const [, navigate] = useLocation();
   const [showLink, setShowLink] = useState(false);
   const studyParam = ELEMENT_STUDY_PARAM[element.key];
-  const isDone = slot != null && (slot.passed === 1 || slot.passed === 0);
+  const attested = slot?.manual_method === 1;
+  const isDoneStudy = slot != null && !attested && (slot.passed === 1 || slot.passed === 0);
   const isPassed = slot?.passed === 1;
   const runUrl = `/veritacheck?studyType=${studyParam}&verificationId=${verificationId}&element=${element.key}&slotId=${slot?.id || ""}&analyte=${encodeURIComponent(analyteName)}`;
   return (
     <div className="px-3 py-2" data-testid={`analyte-slot-${element.key}-${analyteName}`}>
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <span className="text-xs font-medium">{analyteName}</span>
-        {isDone ? (
+        {isDoneStudy ? (
           <div className="flex items-center gap-2">
             <span className={`text-xs font-semibold ${isPassed ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>{isPassed ? "PASS" : "FAIL"}</span>
             <button className="text-xs text-muted-foreground underline" onClick={() => slot && onPatch(slot.id, { passed: null, study_id: null })}>Redo</button>
           </div>
-        ) : (
+        ) : !attested ? (
           <div className="flex items-center gap-2 flex-wrap">
             {slot?.testName && <span className="text-xs text-muted-foreground">Linked: <strong>{slot.testName}</strong></span>}
             {slot?.testName && <button className="text-xs underline text-muted-foreground" onClick={() => slot && onPatch(slot.id, { study_id: null })}>Unlink</button>}
@@ -1188,8 +1236,9 @@ function AnalyteSlotRow({ element, analyteName, slot, suggested, verificationId,
             </Button>
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowLink(v => !v)} disabled={!slot}>Link Existing Study</Button>
           </div>
-        )}
+        ) : null}
       </div>
+      {!isDoneStudy && <ManualMethodControls slot={slot} onAttest={(p) => slot && onPatch(slot.id, p)} />}
       {showLink && slot && (
         <div className="mt-2">
           <Select onValueChange={(v) => { onPatch(slot.id, { study_id: parseInt(v) }); setShowLink(false); }}>

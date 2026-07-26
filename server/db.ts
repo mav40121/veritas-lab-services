@@ -3525,6 +3525,12 @@ try {
   // analyte-specific).
   if (!vcsCols.includes("analyte_id"))        sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN analyte_id INTEGER");
   if (!vcsCols.includes("scope"))             sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN scope TEXT NOT NULL DEFAULT 'analyte'");
+  // 2026-07-24 manual-method attestation (Longstreth): a director can attest an
+  // element was completed by a manual/offline method and passed, with a note and
+  // an evidence URL pointer (no PHI), instead of running a computed study.
+  if (!vcsCols.includes("manual_method"))       sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN manual_method INTEGER NOT NULL DEFAULT 0");
+  if (!vcsCols.includes("manual_note"))         sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN manual_note TEXT");
+  if (!vcsCols.includes("manual_evidence_url")) sqlite.exec("ALTER TABLE veritacheck_verification_studies ADD COLUMN manual_evidence_url TEXT");
   // 2026-07-24 per-analyte study slots: one slot per (element, analyte). Partial
   // unique index (analyte_id NOT NULL) so per-analyte seeding stays idempotent
   // and can't create duplicate slots, while leaving legacy/carryover NULL slots
