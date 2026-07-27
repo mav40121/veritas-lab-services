@@ -5,7 +5,7 @@ import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useSEO } from "@/hooks/useSEO";
 import { API_BASE } from "@/lib/queryClient";
-import { isStockHost } from "@/lib/host";
+import { isStockHost, isSingleSiteDemo } from "@/lib/host";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { Button } from "@/components/ui/button";
@@ -1697,6 +1697,10 @@ export default function VeritaStockInventoryPage() {
   };
 
   const onStock = isStockHost();
+  // Temporary single-site demo (e.g. "Pfizer Proposed"): hide the multi-location
+  // surfaces (Incoming accept, Enterprise/All-Locations) so the page reads as one
+  // site. Presentational only; see client/src/lib/host.ts.
+  const singleSiteDemo = isSingleSiteDemo();
   useSEO({ title: onStock ? "VeritaStock\u2122 | Multi-Location Inventory Management" : "VeritaStock\u2122 | Laboratory Inventory & Reagent Management", description: onStock ? "Multi-location supply inventory: burn-rate par levels, lead-time-aware reorder alerts, expiration tracking, valuation by location, and one-click vendor orders." : "Track reagent and supply inventory with burn-rate-aware par levels, lead-time-aware reorder alerts, and expiration tracking. Included with VeritaAssure\u2122 Suite plans." });
 
   if (!isLoggedIn) {
@@ -1810,7 +1814,7 @@ export default function VeritaStockInventoryPage() {
           waiting to be accepted. Surfaced at the very top so the destination
           user cannot miss where to go (the Accept/Reject panel is on the
           Enterprise view, anchored at #incoming). */}
-      {incomingCount > 0 && activeLabId && (
+      {incomingCount > 0 && activeLabId && !singleSiteDemo && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2.5" data-testid="incoming-transfers-banner">
           <div className="flex items-center gap-2 text-sm text-emerald-900">
             <PackageCheck size={16} className="text-emerald-600 shrink-0" />
@@ -1890,6 +1894,7 @@ export default function VeritaStockInventoryPage() {
               present so the destination user learns where Accept/Reject lives
               (it is on the Enterprise view); emphasized with a live count badge
               when a shipment is pending. Fixes "hard to find where ED accepts". */}
+          {!singleSiteDemo && (
           <Link href={activeLabId ? `/labs/${activeLabId}/veritastock/enterprise#incoming` : "/veritastock/enterprise"}>
             <Button
               size="sm"
@@ -1905,6 +1910,7 @@ export default function VeritaStockInventoryPage() {
               )}
             </Button>
           </Link>
+          )}
           {/* Vendor Directory entry point (PR 2 of vendor management).
               Director clicks here to manage vendor accounts, ordering
               channels, and contact tracks. The Order PDF auto-fills
@@ -1937,6 +1943,7 @@ export default function VeritaStockInventoryPage() {
           {/* Enterprise (multi-location) view: cross-location stock roll-up
               and warehouse-to-stockroom transfers. Backend in PR 1
               (enterpriseTransfer.ts + /api/labs/:labId/veritastock/*). */}
+          {!singleSiteDemo && (
           <Link href={activeLabId ? `/labs/${activeLabId}/veritastock/enterprise` : "/veritastock/enterprise"}>
             <Button
               size="sm"
@@ -1948,6 +1955,7 @@ export default function VeritaStockInventoryPage() {
               Enterprise
             </Button>
           </Link>
+          )}
           {/* Valuation Trends: 6-month inventory value on hand by location with
               monthly waste. Cross-location, reads /api/inventory/valuation-trend. */}
           <Link href={activeLabId ? `/labs/${activeLabId}/veritastock/trends` : "/veritastock/trends"}>

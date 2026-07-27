@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ChevronDown, Building2, Check, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isSingleSiteDemo, SINGLE_SITE_DEMO_NAME } from "@/lib/host";
 
 function labLabel(m: Membership): string {
   return m.labName || m.cliaNumber || `Lab #${m.labId}`;
@@ -112,7 +113,21 @@ function useLabSwitcherState() {
 }
 
 export function LabSwitcher() {
+  // Hook called unconditionally to keep hook order stable; the single-site flag
+  // is constant for the page lifetime.
   const state = useLabSwitcherState();
+  // Single-site demo mode: show one static, non-switching site chip.
+  if (isSingleSiteDemo()) {
+    return (
+      <div
+        className="hidden lg:flex items-center gap-1.5 max-w-[220px] rounded-md border px-3 h-8 text-xs font-medium"
+        title={`Active site: ${SINGLE_SITE_DEMO_NAME}`}
+      >
+        <Building2 size={13} className="text-primary shrink-0" />
+        <span className="truncate">{SINGLE_SITE_DEMO_NAME}</span>
+      </div>
+    );
+  }
   if (!state) return null;
   const { memberships, current, switchTo } = state;
 
@@ -235,6 +250,18 @@ export function LabSwitcher() {
 // to the desktop variant.
 export function LabSwitcherMobile({ onAfterSwitch }: { onAfterSwitch?: () => void }) {
   const state = useLabSwitcherState();
+  // Single-site demo mode: one static site, no switching.
+  if (isSingleSiteDemo()) {
+    return (
+      <div className="px-1 py-2 border-t border-border mt-2">
+        <div className="px-2 pb-1.5 flex items-center gap-1.5">
+          <Building2 size={13} className="text-primary shrink-0" />
+          <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Site</span>
+        </div>
+        <div className="px-3 py-2 text-sm font-medium">{SINGLE_SITE_DEMO_NAME}</div>
+      </div>
+    );
+  }
   if (!state) return null;
   const { memberships, current, switchTo } = state;
 

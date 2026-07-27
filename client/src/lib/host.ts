@@ -18,3 +18,14 @@ export const isStockHost = (): boolean => {
   if (import.meta.env.VITE_STOCK_DEPLOYMENT === "true") return true;
   return typeof window !== "undefined" && /(^|\.)veritastock\.com$/i.test(window.location.hostname);
 };
+
+// Temporary single-site demo mode, injected by the server (server/static.ts)
+// when DEMO_SINGLE_SITE=on on the stock deployment. Purely presentational: the
+// location switcher collapses to one site relabeled below, and the
+// multi-location nav (All Locations / Enterprise / Incoming / transfers) is
+// hidden. No data is changed, so removing the env var fully reverts it.
+export const isSingleSiteDemo = (): boolean =>
+  typeof window !== "undefined" && (window as any).__DEMO_SINGLE_SITE__ === true;
+
+// Display name for the single site in that mode.
+export const SINGLE_SITE_DEMO_NAME = "Pfizer Proposed";
