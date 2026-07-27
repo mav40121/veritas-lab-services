@@ -15,7 +15,7 @@ import {
 import {
   CheckCircle2, Plus, Download, Upload,
   ChevronDown, ChevronRight, Pencil, Trash2, CalendarDays, List, Settings, History,
-  AlertTriangle,
+  AlertTriangle, Bell, Mail,
 } from "lucide-react";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
@@ -650,10 +650,189 @@ function CalendarView({ tasks }: { tasks: Task[] }) {
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
+// ── Reminders panel ───────────────────────────────────────────────────────────
+interface ReminderConfig {
+  lab_id: number;
+  enabled: boolean;
+  lead_days: number;
+  overdue_cadence_days: number;
+  recipients: { email: string; name?: string }[];
+  configured: boolean;
+}
+
+const emailValid = (e: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e.trim());
+
+function RemindersPanel({ trackApi, cfgKey }: { trackApi: string; cfgKey: string }) {
+  const qc = useQueryClient();
+  const { data, isLoading, isError } = useQuery<ReminderConfig>({
+    queryKey: [cfgKey],
+    queryFn: async () => {
+      const r = await fetch(`${trackApi}/reminder-config`, { headers: authHeaders() });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    },
+  });
+
+  const [enabled, setEnabled] = useState(false);
+  const [leadDays, setLeadDays] = useState(14);
+  const [cadence, setCadence] = useState(2);
+  const [recipients, setRecipients] = useState<{ email: string; name?: string }[]>([]);
+  const [newEmail, setNewEmail] = useState("");
+  const [newName, setNewName] = useState("");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [errMsg, setErrMsg] = useState("");
+
+  // Hydrate the editable form from the server config once it loads.
+  useEffect(() => {
+    if (data) {
+      setEnabled(data.enabled);
+      setLeadDays(data.lead_days);
+      setCadence(data.overdue_cadence_days);
+      setRecipients(data.recipients || []);
+    }
+  }, [data]);
+
+  const addRecipient = () => {
+    const e = newEmail.trim();
+    if (!emailValid(e)) return;
+    if (!recipients.some(r => r.email.toLowerCase() === e.toLowerCase())) {
+      setRecipients([...recipients, newName.trim() ? { email: e, name: newName.trim() } : { email: e }]);
+    }
+    setNewEmail(""); setNewName("");
+  };
+  const removeRecipient = (email: string) => setRecipients(recipients.filter(r => r.email !== email));
+
+  const save = async () => {
+    setSaveState("saving"); setErrMsg("");
+    try {
+      const r = await fetch(`${trackApi}/reminder-config`, {
+        method: "PUT",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled, lead_days: leadDays, overdue_cadence_days: cadence, recipients }),
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({} as any));
+        throw new Error(j.error || `HTTP ${r.status}`);
+      }
+      const saved = await r.json();
+      qc.setQueryData([cfgKey], saved);
+      setRecipients(saved.recipients || []);
+      setSaveState("saved");
+      setTimeout(() => setSaveState(s => (s === "saved" ? "idle" : s)), 2500);
+    } catch (e: any) {
+      setErrMsg(e?.message || "Save failed"); setSaveState("error");
+    }
+  };
+
+  if (isLoading) {
+    return <div className="text-sm text-muted-foreground py-10 text-center">Loading reminder settings...</div>;
+  }
+  if (isError) {
+    return (
+      <div className="text-center py-10 border border-dashed border-destructive/40 rounded-2xl">
+        <AlertTriangle size={28} className="mx-auto text-destructive mb-2" />
+        <p className="text-sm text-muted-foreground">Couldn't load reminder settings. Try again in a moment.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl space-y-5" data-testid="reminders-panel">
+      {/* Enable toggle */}
+      <div className="flex items-start justify-between gap-4 rounded-2xl border border-border p-4">
+        <div>
+          <div className="flex items-center gap-2 font-semibold text-foreground">
+            <Bell size={16} className="text-primary" /> Email reminders
+          </div>
+          <p className="text-xs text-muted-foreground mt-1 max-w-md">
+            When on, VeritaTrack emails the recipients below as each task approaches its due date and again while it is overdue, until the sign-off is recorded. Task names only, no patient data.
+          </p>
+        </div>
+        <Toggle checked={enabled} onChange={setEnabled} />
+      </div>
+
+      {/* Recipients */}
+      <div className="rounded-2xl border border-border p-4">
+        <div className="flex items-center gap-2 font-semibold text-foreground mb-1">
+          <Mail size={15} className="text-primary" /> Recipients
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Who receives the reminder emails. If you leave this empty, reminders go to the lab owner.
+        </p>
+        {recipients.length > 0 && (
+          <div className="space-y-2 mb-3">
+            {recipients.map(r => (
+              <div key={r.email} className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2" data-testid="recipient-row">
+                <span className="text-sm text-foreground truncate">
+                  {r.name ? <span className="font-medium">{r.name} </span> : null}
+                  <span className="text-muted-foreground">{r.email}</span>
+                </span>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Remove" onClick={() => removeRecipient(r.email)} data-testid="recipient-remove">
+                  <Trash2 size={13} />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex items-end gap-2 flex-wrap">
+          <div className="flex-1 min-w-[180px]">
+            <label className="text-[11px] text-muted-foreground">Email</label>
+            <Input value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="name@lab.org" className="h-8 text-sm"
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addRecipient(); } }} data-testid="recipient-email-input" />
+          </div>
+          <div className="flex-1 min-w-[140px]">
+            <label className="text-[11px] text-muted-foreground">Name (optional)</label>
+            <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Jane Doe" className="h-8 text-sm"
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addRecipient(); } }} data-testid="recipient-name-input" />
+          </div>
+          <Button size="sm" variant="outline" onClick={addRecipient} disabled={!emailValid(newEmail)} data-testid="recipient-add">
+            <Plus size={13} className="mr-1" />Add
+          </Button>
+        </div>
+      </div>
+
+      {/* Timing */}
+      <div className="rounded-2xl border border-border p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="text-xs font-medium text-foreground">Start reminding (days before due)</label>
+          <Input type="number" min={1} max={60} value={leadDays}
+            onChange={e => setLeadDays(Math.max(1, Math.min(60, Number(e.target.value) || 14)))}
+            className="h-8 text-sm mt-1 w-28" data-testid="lead-days-input" />
+          <p className="text-[11px] text-muted-foreground mt-1">Approaching reminders fire on a 14, 7, 3, 1 day schedule within this window.</p>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-foreground">Overdue reminder every (days)</label>
+          <Input type="number" min={1} max={30} value={cadence}
+            onChange={e => setCadence(Math.max(1, Math.min(30, Number(e.target.value) || 2)))}
+            className="h-8 text-sm mt-1 w-28" data-testid="cadence-input" />
+          <p className="text-[11px] text-muted-foreground mt-1">Once a task is overdue, it repeats on this cadence until signed off.</p>
+        </div>
+      </div>
+
+      {/* Save */}
+      <div className="flex items-center gap-3">
+        <Button onClick={save} disabled={saveState === "saving"} data-testid="reminders-save">
+          {saveState === "saving" ? "Saving..." : "Save reminder settings"}
+        </Button>
+        {saveState === "saved" && (
+          <span className="text-sm text-green-700 flex items-center gap-1" data-testid="reminders-saved">
+            <CheckCircle2 size={14} /> Saved
+          </span>
+        )}
+        {saveState === "error" && (
+          <span className="text-sm text-destructive flex items-center gap-1">
+            <AlertTriangle size={14} /> {errMsg}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function VeritaTrackAppPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const [view, setView] = useState<"list" | "calendar">("list");
+  const [view, setView] = useState<"list" | "calendar" | "reminders">("list");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [importLoading, setImportLoading] = useState(false);
@@ -680,6 +859,9 @@ export default function VeritaTrackAppPage() {
   const dashKey = activeLabId
     ? `/api/labs/${activeLabId}/veritatrack/dashboard`
     : `/api/veritatrack/dashboard`;
+  const cfgKey = activeLabId
+    ? `/api/labs/${activeLabId}/veritatrack/reminder-config`
+    : `/api/veritatrack/reminder-config`;
 
   const { data: tasks = [], isLoading, isError: tasksError, refetch } = useQuery<Task[]>({
     queryKey: [tasksKey],
@@ -1052,36 +1234,47 @@ export default function VeritaTrackAppPage() {
             className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${view === "calendar" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
             <CalendarDays size={12} /> Calendar
           </button>
+          <button onClick={() => setView("reminders")} data-testid="reminders-tab"
+            className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${view === "reminders" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
+            <Bell size={12} /> Reminders
+          </button>
         </div>
 
-        <Select value={filterCategory} onValueChange={setFilterCategory}>
-          <SelectTrigger className="h-8 text-xs w-48">
-            <SelectValue placeholder="All categories" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All categories</SelectItem>
-            {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        {view !== "reminders" && (
+          <>
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="h-8 text-xs w-48">
+                <SelectValue placeholder="All categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
 
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="h-8 text-xs w-36">
-            <SelectValue placeholder="All statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="overdue">Overdue</SelectItem>
-            <SelectItem value="due_soon">Due Soon</SelectItem>
-            <SelectItem value="current">Current</SelectItem>
-            <SelectItem value="not_started">Not Started</SelectItem>
-          </SelectContent>
-        </Select>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="h-8 text-xs w-36">
+                <SelectValue placeholder="All statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="overdue">Overdue</SelectItem>
+                <SelectItem value="due_soon">Due Soon</SelectItem>
+                <SelectItem value="current">Current</SelectItem>
+                <SelectItem value="not_started">Not Started</SelectItem>
+              </SelectContent>
+            </Select>
 
-        <span className="text-xs text-muted-foreground ml-auto">{filtered.length} task{filtered.length !== 1 ? "s" : ""}</span>
+            <span className="text-xs text-muted-foreground ml-auto">{filtered.length} task{filtered.length !== 1 ? "s" : ""}</span>
+          </>
+        )}
       </div>
 
+      {/* Reminders panel */}
+      {view === "reminders" && <RemindersPanel trackApi={trackApi} cfgKey={cfgKey} />}
+
       {/* Error state: a failed load must not read as an empty calendar */}
-      {!isLoading && tasksError && (
+      {view !== "reminders" && !isLoading && tasksError && (
         <div className="text-center py-16 border border-dashed border-destructive/40 rounded-2xl">
           <AlertTriangle size={36} className="mx-auto text-destructive mb-3" />
           <h3 className="font-semibold text-foreground mb-1">Couldn't load your calendar</h3>
@@ -1095,7 +1288,7 @@ export default function VeritaTrackAppPage() {
       )}
 
       {/* Empty state */}
-      {!isLoading && !tasksError && tasks.length === 0 && (
+      {view !== "reminders" && !isLoading && !tasksError && tasks.length === 0 && (
         <div className="text-center py-16 border border-dashed border-border rounded-2xl">
           <CalendarDays size={36} className="mx-auto text-muted-foreground mb-3" />
           <h3 className="font-semibold text-foreground mb-1">No tasks yet</h3>

@@ -90,6 +90,53 @@ export function registerVeritaTrackRoutes(
     ].includes(plan);
   }
 
+  // ── Reminder-config read/write shared by the legacy (resolveLegacyLabId) and
+  // the lab-prefixed (labScopeMiddleware) route variants, so validation and the
+  // ★ defaults live in ONE place and cannot drift between the two paths.
+  function readReminderConfig(labId: number) {
+    const row = sqlite.prepare("SELECT * FROM veritatrack_reminder_config WHERE lab_id = ?").get(labId) as any;
+    let recipients: any[] = [];
+    try { recipients = row ? JSON.parse(row.recipients_json || "[]") : []; } catch { recipients = []; }
+    return {
+      lab_id: labId,
+      enabled: row ? !!row.enabled : false,
+      lead_days: row ? row.lead_days : 14,
+      overdue_cadence_days: row ? row.overdue_cadence_days : 2,
+      recipients,
+      configured: !!row,
+    };
+  }
+
+  function writeReminderConfig(labId: number, body: any) {
+    const { enabled, lead_days, overdue_cadence_days, recipients } = body || {};
+    const enabledInt = enabled ? 1 : 0;
+    const lead = Math.max(1, Math.min(60, Number.isFinite(+lead_days) ? Math.round(+lead_days) : 14));
+    const cadence = Math.max(1, Math.min(30, Number.isFinite(+overdue_cadence_days) ? Math.round(+overdue_cadence_days) : 2));
+    let recips: { email: string; name?: string }[] = [];
+    if (Array.isArray(recipients)) {
+      recips = recipients
+        .map((r: any) => (typeof r === "string" ? { email: r } : { email: r?.email, name: r?.name }))
+        .filter((r: any) => r.email && typeof r.email === "string" && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(r.email))
+        .map((r: any) => ({ email: String(r.email).trim(), ...(r.name ? { name: String(r.name).trim() } : {}) }));
+    }
+    const recipientsJson = JSON.stringify(recips);
+    const now = new Date().toISOString();
+    const existing = sqlite.prepare("SELECT id FROM veritatrack_reminder_config WHERE lab_id = ?").get(labId) as any;
+    if (existing) {
+      sqlite.prepare(
+        "UPDATE veritatrack_reminder_config SET enabled=?, lead_days=?, overdue_cadence_days=?, recipients_json=?, updated_at=? WHERE lab_id=?"
+      ).run(enabledInt, lead, cadence, recipientsJson, now, labId);
+    } else {
+      sqlite.prepare(
+        "INSERT INTO veritatrack_reminder_config (lab_id, enabled, lead_days, overdue_cadence_days, recipients_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?)"
+      ).run(labId, enabledInt, lead, cadence, recipientsJson, now, now);
+    }
+    return {
+      config: { lab_id: labId, enabled: !!enabledInt, lead_days: lead, overdue_cadence_days: cadence, recipients: recips, configured: true },
+      detail: `enabled=${enabledInt} lead=${lead} cadence=${cadence} recips=${recips.length}`,
+    };
+  }
+
   // ── VeritaTrack 3-element framework, move-1 (2026-06-07): today's
   // worklist. Move-1 is "reduce time-to-action": the director shouldn't
   // have to mentally compute which tasks are due now. This endpoint
@@ -403,17 +450,7 @@ export function registerVeritaTrackRoutes(
     if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
     const labId = resolveLegacyLabId(sqlite, req);
     if (!labId) return res.status(400).json({ error: "No active lab" });
-    const row = sqlite.prepare("SELECT * FROM veritatrack_reminder_config WHERE lab_id = ?").get(labId) as any;
-    let recipients: any[] = [];
-    try { recipients = row ? JSON.parse(row.recipients_json || "[]") : []; } catch { recipients = []; }
-    res.json({
-      lab_id: labId,
-      enabled: row ? !!row.enabled : false,
-      lead_days: row ? row.lead_days : 14,
-      overdue_cadence_days: row ? row.overdue_cadence_days : 2,
-      recipients,
-      configured: !!row,
-    });
+    res.json(readReminderConfig(labId));
   });
 
   // PUT upsert the config. Same write gate as task mutations (write access +
@@ -423,31 +460,9 @@ export function registerVeritaTrackRoutes(
     if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
     const labId = resolveLegacyLabId(sqlite, req);
     if (!labId) return res.status(400).json({ error: "No active lab" });
-    const { enabled, lead_days, overdue_cadence_days, recipients } = req.body || {};
-    const enabledInt = enabled ? 1 : 0;
-    const lead = Math.max(1, Math.min(60, Number.isFinite(+lead_days) ? Math.round(+lead_days) : 14));
-    const cadence = Math.max(1, Math.min(30, Number.isFinite(+overdue_cadence_days) ? Math.round(+overdue_cadence_days) : 2));
-    let recips: { email: string; name?: string }[] = [];
-    if (Array.isArray(recipients)) {
-      recips = recipients
-        .map((r: any) => (typeof r === "string" ? { email: r } : { email: r?.email, name: r?.name }))
-        .filter((r: any) => r.email && typeof r.email === "string" && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(r.email))
-        .map((r: any) => ({ email: String(r.email).trim(), ...(r.name ? { name: String(r.name).trim() } : {}) }));
-    }
-    const recipientsJson = JSON.stringify(recips);
-    const now = new Date().toISOString();
-    const existing = sqlite.prepare("SELECT id FROM veritatrack_reminder_config WHERE lab_id = ?").get(labId) as any;
-    if (existing) {
-      sqlite.prepare(
-        "UPDATE veritatrack_reminder_config SET enabled=?, lead_days=?, overdue_cadence_days=?, recipients_json=?, updated_at=? WHERE lab_id=?"
-      ).run(enabledInt, lead, cadence, recipientsJson, now, labId);
-    } else {
-      sqlite.prepare(
-        "INSERT INTO veritatrack_reminder_config (lab_id, enabled, lead_days, overdue_cadence_days, recipients_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?)"
-      ).run(labId, enabledInt, lead, cadence, recipientsJson, now, now);
-    }
-    trackAudit({ labId, taskId: null, event: "reminder_config_updated", detail: `enabled=${enabledInt} lead=${lead} cadence=${cadence} recips=${recips.length}`, byUserId: req.user?.userId ?? null });
-    res.json({ lab_id: labId, enabled: !!enabledInt, lead_days: lead, overdue_cadence_days: cadence, recipients: recips, configured: true });
+    const { config, detail } = writeReminderConfig(labId, req.body);
+    trackAudit({ labId, taskId: null, event: "reminder_config_updated", detail, byUserId: req.user?.userId ?? null });
+    res.json(config);
   });
 
   // POST create task
@@ -1075,6 +1090,22 @@ export function registerVeritaTrackRoutes(
         else { current++; }
       }
       res.json({ overdue, dueThisMonth, dueSoon, current, notStarted, total: tasks.length, overdueItems, dueThisMonthItems, dueSoonItems });
+    });
+
+    // Reminder config, lab-prefixed variant (the path the client uses). Scoped
+    // by labScopeMiddleware -> req.scope.labId; shares readReminderConfig /
+    // writeReminderConfig with the legacy route above so there is one source of
+    // truth for defaults and validation.
+    app.get("/api/labs/:labId/veritatrack/reminder-config", authMiddleware, labScopeMiddleware, (req: any, res) => {
+      if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+      res.json(readReminderConfig(req.scope.labId));
+    });
+
+    app.put("/api/labs/:labId/veritatrack/reminder-config", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
+      if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+      const { config, detail } = writeReminderConfig(req.scope.labId, req.body);
+      trackAudit({ labId: req.scope.labId, taskId: null, event: "reminder_config_updated", detail, byUserId: req.user?.userId ?? null });
+      res.json(config);
     });
   }
 }
