@@ -3185,7 +3185,13 @@ export default function StudyResults() {
       const hasAllInstrumentsInValues = dp.length > 0 && instrumentNames.every(n => n in (dp[0].instrumentValues || {}));
       if (hasAllInstrumentsInValues && instrumentNames.length >= 2) {
         const comparisonNames = instrumentNames.slice(1);
+        // 2026-07-27 fix: spread ...d FIRST so director-excluded points keep
+        // their `excluded`/`exclusion_reason` flags through the remap. Without
+        // it, calculateMethodComparison (calculations.ts) could not filter the
+        // excluded points on multi-instrument studies, so the on-screen verdict
+        // counted all points and showed FAIL on a study the server marked pass.
         const mappedPoints: DataPoint[] = dp.map(d => ({
+          ...d,
           level: d.level,
           expectedValue: d.instrumentValues[primaryName] ?? null,
           instrumentValues: Object.fromEntries(comparisonNames.map(n => [n, d.instrumentValues[n] ?? null])),
