@@ -47,6 +47,25 @@ for (const p of VERITAPOLICY_MASTER_LIST) {
   if (k && !policyByName.has(k)) policyByName.set(k, p);
 }
 
+// Phase 0 of the orphan triage (2026-07-27): CFR sections that are genuinely
+// not lab-SOP-mappable, so they are intentionally uncited and must NOT count as
+// orphans. Explicit list (not a regex) so every suppression is a named,
+// reviewable decision. Categories: chapter "Condition:" headers; CMS
+// registration/certificate/notification mechanics; inspection/enforcement/
+// Medicare-payment/sanction sections. Keys are normStd("cfr", ...) form.
+const CFR_INTENTIONALLY_UNMAPPED = new Set<string>([
+  "42 CFR 493.1", "42 CFR 493.5", "42 CFR 493.19", "42 CFR 493.20", "42 CFR 493.25",
+  "42 CFR 493.43", "42 CFR 493.51", "42 CFR 493.53", "42 CFR 493.55", "42 CFR 493.61",
+  "42 CFR 493.63", "42 CFR 493.553", "42 CFR 493.551", "42 CFR 493.557", "42 CFR 493.807",
+  "42 CFR 493.833", "42 CFR 493.839", "42 CFR 493.901", "42 CFR 493.1203", "42 CFR 493.1205",
+  "42 CFR 493.1207", "42 CFR 493.1208", "42 CFR 493.1210", "42 CFR 493.1211", "42 CFR 493.1212",
+  "42 CFR 493.1213", "42 CFR 493.1220", "42 CFR 493.1221", "42 CFR 493.1225", "42 CFR 493.1226",
+  "42 CFR 493.1227", "42 CFR 493.1240", "42 CFR 493.1361", "42 CFR 493.1409", "42 CFR 493.1415",
+  "42 CFR 493.1481", "42 CFR 493.1771", "42 CFR 493.1777", "42 CFR 493.1780", "42 CFR 493.1800",
+  "42 CFR 493.1807", "42 CFR 493.1808", "42 CFR 493.1809", "42 CFR 493.1826", "42 CFR 493.1828",
+  "42 CFR 493.1832", "42 CFR 493.1836", "42 CFR 493.1842",
+]);
+
 let grandGaps = 0, grandOrphans = 0;
 
 for (const acc of ACCS) {
@@ -69,8 +88,11 @@ for (const acc of ACCS) {
     if (key && !defined.has(key)) { defined.set(key, r.name); rawByNorm.set(key, r.standard); }
   }
 
-  // 1) Orphans: defined by the catalog, cited by NO policy.
-  const orphans = [...defined.keys()].filter(k => !referenced.has(k));
+  // 1) Orphans: defined by the catalog, cited by NO policy. Structural CFR
+  //    sections on the intentionally-unmapped list are suppressed (Phase 0).
+  const allOrphans = [...defined.keys()].filter(k => !referenced.has(k));
+  const suppressed = allOrphans.filter(k => CFR_INTENTIONALLY_UNMAPPED.has(k));
+  const orphans = allOrphans.filter(k => !CFR_INTENTIONALLY_UNMAPPED.has(k));
   // 2) Danglers: cited by a policy, not in the catalog.
   const danglers = [...referenced].filter(k => !defined.has(k));
   // 3) Name-match gaps: a requirement whose name matches a policy, but that
@@ -88,7 +110,7 @@ for (const acc of ACCS) {
   grandOrphans += orphans.length;
 
   console.log(`\n======== ${acc.toUpperCase()} ========`);
-  console.log(`catalog standards: ${defined.size} | distinct cited by policies: ${referenced.size} | orphans (defined, uncited): ${orphans.length} | danglers (cited, undefined): ${danglers.length}`);
+  console.log(`catalog standards: ${defined.size} | distinct cited by policies: ${referenced.size} | orphans (defined, uncited): ${orphans.length}${suppressed.length ? ` (+${suppressed.length} intentionally unmapped, suppressed)` : ""} | danglers (cited, undefined): ${danglers.length}`);
 
   console.log(`\n  [A] NAME-MATCH GAPS (policy exists by name, standard NOT tagged) — ${nameGaps.length}`);
   for (const g of nameGaps) console.log(`      ${g.std}  ->  policy "${g.policy}"  (catalog: "${g.name}")`);
