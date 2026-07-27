@@ -375,11 +375,26 @@ app.use((req, res, next) => {
   // self-serve demo self-heals each night. ONLY scheduled on the VeritaStock
   // deployment; resetVeritaStockDemo also hard-refuses elsewhere, so the main
   // service can never reshape its real customer labs.
-  if (process.env.VITE_STOCK_DEPLOYMENT === "true" || process.env.STOCK_DEPLOYMENT === "true") {
+  // Kill switch: setting DEMO_NIGHTLY_RESET=off freezes the demo state (the
+  // nightly reset never arms), so a temporary hand-shaped demo (e.g. the
+  // single-site "Pfizer Proposed" demo) persists until we deliberately
+  // re-enable it. Re-enable by removing the env var and redeploying.
+  const nightlyResetDisabled = process.env.DEMO_NIGHTLY_RESET === "off";
+  const onStockDeployment = process.env.VITE_STOCK_DEPLOYMENT === "true" || process.env.STOCK_DEPLOYMENT === "true";
+  if (onStockDeployment && nightlyResetDisabled) {
+    console.log("[demo-reset] Nightly VeritaStock demo reset DISABLED via DEMO_NIGHTLY_RESET=off; demo state persists until re-enabled.");
+  }
+  if (onStockDeployment && !nightlyResetDisabled) {
     try {
       const { resetVeritaStockDemo } = await import("./veritastockDemoReset");
       const { db } = await import("./db");
       const runReset = () => {
+        // Defense in depth: honor the kill switch at run time too, so a timer
+        // that somehow armed before the env was read still no-ops.
+        if (process.env.DEMO_NIGHTLY_RESET === "off") {
+          console.log("[demo-reset] Skipped: DEMO_NIGHTLY_RESET=off");
+          return;
+        }
         try {
           const r = resetVeritaStockDemo((db as any).$client);
           console.log("[demo-reset] VeritaStock demo reset:", r.ok ? JSON.stringify(r.labs) : r.reason);
