@@ -37,8 +37,10 @@ test.describe("Method comparison verdict honors excluded points on screen", () =
     // "8 / 10" full-count tile is gone.
     expect(body, "verdict should read PASS").toMatch(/\bPASS\b/);
     expect(body, "excluded points removed from the pass count (equal tile)").toContain("8 / 8");
-    expect(body, "pre-fix full-count tile (8 of 10) must be gone").not.toContain("8 / 10");
-    // Plotted count should drop below total once exclusions are honored.
-    expect(body, "plotted count reflects the exclusions").toContain("8/10");
+    expect(body, "pre-fix full-count Results Passing tile (8 of 10) must be gone").not.toContain("8 / 10");
+    // Excluded points leave the analysis set entirely, so both the total and
+    // the plotted count are 8 (pre-fix showed 10/10).
+    expect(body, "pre-fix full-count plotted tile (10/10) must be gone").not.toContain("10/10");
+    expect(body, "plotted reflects the 8 included points").toContain("8/8");
   });
 });
