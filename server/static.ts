@@ -169,6 +169,14 @@ function getIndexHtml(distPath: string): string {
     // veritaslabservices.com does not, so it stays VeritaAssure.
     if (STOCK_DEPLOYMENT) {
       html = html.replace("</head>", `<script>window.__STOCK_DEPLOYMENT__=true;</script></head>`);
+      // Temporary single-site demo mode (e.g. the "Pfizer Proposed" walkthrough).
+      // Purely presentational: the client collapses the location switcher to one
+      // site, relabels it, and hides the multi-location nav. Mutates NO data, so
+      // the underlying five-location demo is untouched and revert is just removing
+      // the DEMO_SINGLE_SITE env var and redeploying.
+      if (process.env.DEMO_SINGLE_SITE === "on") {
+        html = html.replace("</head>", `<script>window.__DEMO_SINGLE_SITE__=true;</script></head>`);
+      }
       // VeritaStock is its own product: the default <title>/meta is VeritaStock,
       // never the VeritaAssure compliance branding. Pages with their own useSEO
       // still override this; pages without it (login, account, members) now read

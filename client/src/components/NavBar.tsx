@@ -11,7 +11,7 @@ import { PendingStaffPortalBell } from "@/components/PendingStaffPortalBell";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
-import { isStockHost } from "@/lib/host";
+import { isStockHost, isSingleSiteDemo } from "@/lib/host";
 
 // Mobile menu IA \u2014 mirrors the desktop nav structure (top-level links +
 // collapsible groups) instead of dumping every route as a flat 27-item
@@ -137,10 +137,12 @@ export function NavBar() {
               location === labRoute("/veritastock") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
               Inventory
             </Link>
+            {!isSingleSiteDemo() && (
             <Link href={labRoute("/veritastock/enterprise")} className={cn("px-2 py-1.5 rounded-md text-sm font-medium transition-colors",
               location === labRoute("/veritastock/enterprise") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
               All Locations
             </Link>
+            )}
           </nav>
         )}
 
@@ -365,8 +367,10 @@ export function NavBar() {
             {onStockHost && isLoggedIn && (<>
               <Link href={labRoute("/veritastock")} onClick={closeMobile}
                 className="px-3 py-2 rounded-md text-sm font-medium text-foreground hover:bg-secondary transition-colors">Inventory</Link>
+              {!isSingleSiteDemo() && (
               <Link href={labRoute("/veritastock/enterprise")} onClick={closeMobile}
                 className="px-3 py-2 rounded-md text-sm font-medium text-foreground hover:bg-secondary transition-colors">All Locations</Link>
+              )}
             </>)}
 
             {!onStockHost && (<>
