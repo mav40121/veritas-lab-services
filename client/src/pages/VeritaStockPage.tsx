@@ -46,6 +46,8 @@ interface InventoryItem {
   expiration_date: string | null;
   vendor: string | null;
   storage_location: string | null;
+  storage_temp: string | null;            // controlled: room | refrigerated | frozen | deep_frozen
+  storage_temp_threshold: string | null;  // deep_frozen threshold, e.g. "-70 C"
   notes: string | null;
   status: string;
   burn_rate: number;
@@ -440,6 +442,35 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
                 <Label>Storage Location</Label>
                 <Input value={form.storage_location ?? ""} onChange={(e) => setForm({ ...form, storage_location: e.target.value })} />
               </div>
+              {/* Pfizer demo item 2: storage temperature requirement. Controlled
+                  class; a threshold field appears only for deep frozen. */}
+              <div className="space-y-1.5">
+                <Label>Storage temperature</Label>
+                <Select
+                  value={form.storage_temp ?? "none"}
+                  onValueChange={(v) => setForm({ ...form, storage_temp: v === "none" ? null : v, ...(v !== "deep_frozen" ? { storage_temp_threshold: null } : {}) })}
+                >
+                  <SelectTrigger data-testid="storage-temp-select"><SelectValue placeholder="Not specified" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Not specified</SelectItem>
+                    <SelectItem value="room">Room temperature</SelectItem>
+                    <SelectItem value="refrigerated">Refrigerated</SelectItem>
+                    <SelectItem value="frozen">Frozen</SelectItem>
+                    <SelectItem value="deep_frozen">Deep frozen</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.storage_temp === "deep_frozen" && (
+                <div className="space-y-1.5">
+                  <Label>Deep freeze threshold</Label>
+                  <Input
+                    value={form.storage_temp_threshold ?? ""}
+                    onChange={(e) => setForm({ ...form, storage_temp_threshold: e.target.value })}
+                    placeholder="-70 C"
+                    data-testid="storage-temp-threshold-input"
+                  />
+                </div>
+              )}
               {/* parking-lot #29 Phase 3A: optional barcode binding.
                   Leave blank, and the label sheet will print a synthesized
                   VLS-<id> placeholder for this item. Camera-driven binding
@@ -758,6 +789,8 @@ export default function VeritaStockInventoryPage() {
   const [writeOffTarget, setWriteOffTarget] = useState<InventoryItem | null>(null);
   const [writeOffQty, setWriteOffQty] = useState<number>(0);
   const [writeOffReason, setWriteOffReason] = useState<string>("expired");
+  // Pfizer demo item 5: one-click removal of a whole expired lot (active step).
+  const [expiredLotTarget, setExpiredLotTarget] = useState<InventoryItem | null>(null);
   // Lots dialog: shows a product's child lots (lot #, expiry, qty), oldest-first
   // (FEFO order). Fetched on demand from the lots endpoint.
   const [lotsTarget, setLotsTarget] = useState<InventoryItem | null>(null);
@@ -1549,6 +1582,47 @@ export default function VeritaStockInventoryPage() {
       toast({ title: "Error", description: "Failed to write off", variant: "destructive" });
     }
     setWriteOffTarget(null);
+  };
+
+  // Pfizer demo item 5: removing an expired lot off the shelf is an explicit
+  // active step. A lot is "expired" when its expiration date has passed and it
+  // still has stock on hand. handleWriteOffExpiredLot writes off the ENTIRE
+  // remaining quantity in one click (reason = expired) via the same endpoint.
+  const stockTodayStr = new Date().toISOString().slice(0, 10);
+  const isLotExpired = (it: InventoryItem) =>
+    !!it.expiration_date && it.expiration_date < stockTodayStr && (it.quantity_on_hand || 0) > 0;
+  const STORAGE_TEMP_LABEL: Record<string, string> = {
+    room: "Room temp", refrigerated: "Refrigerated", frozen: "Frozen", deep_frozen: "Deep frozen",
+  };
+  const storageTempLabel = (it: InventoryItem) => {
+    if (!it.storage_temp) return "";
+    const base = STORAGE_TEMP_LABEL[it.storage_temp] || it.storage_temp;
+    return it.storage_temp === "deep_frozen" && it.storage_temp_threshold
+      ? `${base} (${it.storage_temp_threshold})` : base;
+  };
+  const handleWriteOffExpiredLot = async () => {
+    const it = expiredLotTarget;
+    if (!it) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/inventory/${it.id}/write-off`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ qty: it.quantity_on_hand, reason_code: "expired", note: "Expired lot removed from shelf" }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "Could not remove lot", description: err.error || `HTTP ${res.status}`, variant: "destructive" });
+        return;
+      }
+      const data = await res.json();
+      const v = data?.write_off?.waste_value ?? (it.quantity_on_hand || 0) * (it.unit_cost || 0);
+      toast({ title: "Expired lot removed", description: `${it.quantity_on_hand} ${it.usage_unit}s of ${it.item_name}${it.lot_number ? ` (lot ${it.lot_number})` : ""}, $${Number(v).toFixed(2)} recorded as waste` });
+      loadItems();
+      reloadExpired();
+    } catch {
+      toast({ title: "Could not remove lot", description: "Network error", variant: "destructive" });
+    }
+    setExpiredLotTarget(null);
   };
 
   // Computed stats
@@ -2490,6 +2564,16 @@ export default function VeritaStockInventoryPage() {
                       {item.item_name}
                     </button>
                     <div className="text-xs text-muted-foreground">{item.usage_unit}</div>
+                    <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                      {item.storage_temp && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300" data-testid={`storage-temp-badge-${item.id}`}>
+                          {storageTempLabel(item)}
+                        </span>
+                      )}
+                      {isLotExpired(item) && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300">Expired</span>
+                      )}
+                    </div>
                   </td>
                   {isColumnVisible("category") && (
                     <td className="px-3 py-2">
@@ -2589,6 +2673,19 @@ export default function VeritaStockInventoryPage() {
                           data-testid={`button-receive-${item.id}`}
                         >
                           <PackageCheck size={14} />
+                        </Button>
+                      )}
+                      {isLotExpired(item) && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-red-600 dark:text-red-500"
+                          title="Write off expired lot: remove the whole remaining lot from the shelf in one step"
+                          onClick={() => setExpiredLotTarget(item)}
+                          disabled={readOnly}
+                          data-testid={`button-writeoff-expired-lot-${item.id}`}
+                        >
+                          <CalendarClock size={14} />
                         </Button>
                       )}
                       {(item.quantity_on_hand || 0) > 0 && (
@@ -2712,6 +2809,32 @@ export default function VeritaStockInventoryPage() {
 
 
       {/* Delete Confirmation */}
+      {/* Pfizer demo item 5: confirm removal of the whole expired lot. */}
+      <AlertDialog open={!!expiredLotTarget} onOpenChange={(o) => { if (!o) setExpiredLotTarget(null); }}>
+        <AlertDialogContent data-testid="writeoff-expired-lot-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Write off expired lot</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="text-sm">
+                <p className="mb-2">Remove the entire expired lot from the shelf. This records the whole remaining quantity as expired waste; it appears in the audit trail, the wastage report, and the valuation trend.</p>
+                {expiredLotTarget && (
+                  <ul className="list-disc pl-5 space-y-0.5">
+                    <li>{expiredLotTarget.item_name}{expiredLotTarget.lot_number ? ` (lot ${expiredLotTarget.lot_number})` : ""}</li>
+                    <li>Quantity: {expiredLotTarget.quantity_on_hand} {expiredLotTarget.usage_unit}{(expiredLotTarget.quantity_on_hand || 0) === 1 ? "" : "s"}</li>
+                    <li>Expiration: {expiredLotTarget.expiration_date}</li>
+                    <li>Loss: {wasteMoney((expiredLotTarget.quantity_on_hand || 0) * (expiredLotTarget.unit_cost || 0))}</li>
+                  </ul>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleWriteOffExpiredLot} className="bg-red-600 hover:bg-red-700 focus:ring-red-600" data-testid="writeoff-expired-lot-confirm">Write off lot</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

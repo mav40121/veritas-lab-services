@@ -1594,7 +1594,7 @@ export function registerVeritaBenchRoutes(
   app.post("/api/inventory", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
-    const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, unit_cost, on_order_qty, on_order_expected_date, on_order_placed_date } = req.body;
+    const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, storage_temp, storage_temp_threshold, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, unit_cost, on_order_qty, on_order_expected_date, on_order_placed_date } = req.body;
     if (!item_name) return res.status(400).json({ error: "item_name is required" });
     // 2026-06-09: count_unit defaults to order_unit (most labs count in
     // the same unit they order in); pack_size defaults to 1 (count by
@@ -1606,9 +1606,9 @@ export function registerVeritaBenchRoutes(
     const now = new Date().toISOString();
     try {
       const result = sqlite.prepare(`
-        INSERT INTO inventory_items (account_id, item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, unit_cost, on_order_qty, on_order_expected_date, on_order_placed_date, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(accountId, item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, notes ?? null, status ?? 'active', burn_rate ?? 0, order_unit ?? 'each', usage_unit ?? 'each', units_per_order_unit ?? 1, resolvedCountUnit, resolvedPackSize, lead_time_days ?? 5, safety_stock_days ?? 3, desired_days_of_stock ?? 30, standing_order ?? 0, standing_order_review_date ?? null, Number(unit_cost ?? 0), Number(on_order_qty ?? 0), on_order_expected_date ?? null, on_order_placed_date ?? null, now, now);
+        INSERT INTO inventory_items (account_id, item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, storage_temp, storage_temp_threshold, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, unit_cost, on_order_qty, on_order_expected_date, on_order_placed_date, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(accountId, item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, storage_temp || null, storage_temp_threshold || null, notes ?? null, status ?? 'active', burn_rate ?? 0, order_unit ?? 'each', usage_unit ?? 'each', units_per_order_unit ?? 1, resolvedCountUnit, resolvedPackSize, lead_time_days ?? 5, safety_stock_days ?? 3, desired_days_of_stock ?? 30, standing_order ?? 0, standing_order_review_date ?? null, Number(unit_cost ?? 0), Number(on_order_qty ?? 0), on_order_expected_date ?? null, on_order_placed_date ?? null, now, now);
       // write-path Shape A (resolver unification PR B): tag via the SAME shared
       // resolveLegacyLabId the /api/inventory list read uses, so a new item
       // always appears in the lab the user is working in.
@@ -1683,7 +1683,15 @@ export function registerVeritaBenchRoutes(
       if (resolveStatus === 403) return res.status(403).json({ error: "You don't have access to this item's lab" });
       return res.status(404).json({ error: "Item not found" });
     }
-    const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, barcode_value, unit_cost, on_order_qty, on_order_expected_date, on_order_placed_date, intacct_item_id } = req.body;
+    const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, storage_temp, storage_temp_threshold, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, barcode_value, unit_cost, on_order_qty, on_order_expected_date, on_order_placed_date, intacct_item_id } = req.body;
+    // storage_temp / threshold: preserve on omit (partial edit shouldn't wipe
+    // the storage requirement); blank string clears. Mirrors unit_cost / intacct.
+    const resolvedStorageTemp = (storage_temp === undefined)
+      ? ((existing as any).storage_temp ?? null)
+      : (storage_temp || null);
+    const resolvedStorageTempThreshold = (storage_temp_threshold === undefined)
+      ? ((existing as any).storage_temp_threshold ?? null)
+      : (storage_temp_threshold || null);
     // Sage Intacct item id: preserve on omit (partial edit shouldn't wipe it);
     // blank string clears it (back to account-based). Verbatim, no casing change.
     const resolvedIntacctItemId = (intacct_item_id === undefined)
@@ -1742,9 +1750,9 @@ export function registerVeritaBenchRoutes(
       // resolveInventoryItemForMutation above, so the legacy `AND account_id = ?`
       // clause is no longer required and would mis-target seeded items.
       sqlite.prepare(`
-        UPDATE inventory_items SET item_name = ?, catalog_number = ?, lot_number = ?, department = ?, category = ?, quantity_on_hand = ?, unit = ?, expiration_date = ?, vendor = ?, storage_location = ?, notes = ?, status = ?, burn_rate = ?, order_unit = ?, usage_unit = ?, units_per_order_unit = ?, count_unit = ?, units_per_count_unit = ?, lead_time_days = ?, safety_stock_days = ?, desired_days_of_stock = ?, standing_order = ?, standing_order_review_date = ?, barcode_value = ?, unit_cost = ?, on_order_qty = ?, on_order_expected_date = ?, on_order_placed_date = ?, intacct_item_id = ?, updated_at = ?
+        UPDATE inventory_items SET item_name = ?, catalog_number = ?, lot_number = ?, department = ?, category = ?, quantity_on_hand = ?, unit = ?, expiration_date = ?, vendor = ?, storage_location = ?, storage_temp = ?, storage_temp_threshold = ?, notes = ?, status = ?, burn_rate = ?, order_unit = ?, usage_unit = ?, units_per_order_unit = ?, count_unit = ?, units_per_count_unit = ?, lead_time_days = ?, safety_stock_days = ?, desired_days_of_stock = ?, standing_order = ?, standing_order_review_date = ?, barcode_value = ?, unit_cost = ?, on_order_qty = ?, on_order_expected_date = ?, on_order_placed_date = ?, intacct_item_id = ?, updated_at = ?
         WHERE id = ?
-      `).run(item_name ?? (existing as any).item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, notes ?? null, status ?? 'active', burn_rate ?? 0, order_unit ?? 'each', usage_unit ?? 'each', units_per_order_unit ?? 1, resolvedCountUnit, resolvedPackSize, lead_time_days ?? 5, safety_stock_days ?? 3, desired_days_of_stock ?? 30, standing_order ?? 0, standing_order_review_date ?? null, normalizedBarcode, resolvedUnitCost, resolvedOnOrderQty, resolvedOnOrderExpected, resolvedOnOrderPlaced, resolvedIntacctItemId, now, id);
+      `).run(item_name ?? (existing as any).item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, resolvedStorageTemp, resolvedStorageTempThreshold, notes ?? null, status ?? 'active', burn_rate ?? 0, order_unit ?? 'each', usage_unit ?? 'each', units_per_order_unit ?? 1, resolvedCountUnit, resolvedPackSize, lead_time_days ?? 5, safety_stock_days ?? 3, desired_days_of_stock ?? 30, standing_order ?? 0, standing_order_review_date ?? null, normalizedBarcode, resolvedUnitCost, resolvedOnOrderQty, resolvedOnOrderExpected, resolvedOnOrderPlaced, resolvedIntacctItemId, now, id);
       const row = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(id);
       res.json(row);
     } catch (err: any) {
@@ -3132,16 +3140,16 @@ export function registerVeritaBenchRoutes(
 
     app.post("/api/labs/:labId/inventory", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
       if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
-      const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, unit_cost, on_order_qty, on_order_expected_date, on_order_placed_date } = req.body;
+      const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, storage_temp, storage_temp_threshold, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, unit_cost, on_order_qty, on_order_expected_date, on_order_placed_date } = req.body;
       if (!item_name) return res.status(400).json({ error: "item_name is required" });
       const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
       const accountId = ownerRow?.owner_user_id ?? req.userId;
       const now = new Date().toISOString();
       try {
         const result = sqlite.prepare(`
-          INSERT INTO inventory_items (account_id, lab_id, item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, unit_cost, on_order_qty, on_order_expected_date, on_order_placed_date, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(accountId, req.scope.labId, item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, notes ?? null, status ?? 'active', burn_rate ?? 0, order_unit ?? 'each', usage_unit ?? 'each', units_per_order_unit ?? 1, lead_time_days ?? 5, safety_stock_days ?? 3, desired_days_of_stock ?? 30, standing_order ?? 0, standing_order_review_date ?? null, Number(unit_cost ?? 0), Number(on_order_qty ?? 0), on_order_expected_date ?? null, on_order_placed_date ?? null, now, now);
+          INSERT INTO inventory_items (account_id, lab_id, item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, storage_temp, storage_temp_threshold, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, unit_cost, on_order_qty, on_order_expected_date, on_order_placed_date, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(accountId, req.scope.labId, item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, storage_temp || null, storage_temp_threshold || null, notes ?? null, status ?? 'active', burn_rate ?? 0, order_unit ?? 'each', usage_unit ?? 'each', units_per_order_unit ?? 1, lead_time_days ?? 5, safety_stock_days ?? 3, desired_days_of_stock ?? 30, standing_order ?? 0, standing_order_review_date ?? null, Number(unit_cost ?? 0), Number(on_order_qty ?? 0), on_order_expected_date ?? null, on_order_placed_date ?? null, now, now);
         // Persist canonical barcode_value (VLS-<padded id>) at creation so
         // the label code never changes across runtime/algorithm shifts.
         try {

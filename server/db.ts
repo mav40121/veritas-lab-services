@@ -3948,6 +3948,8 @@ sqlite.exec(`
     expiration_date TEXT,
     vendor TEXT,
     storage_location TEXT,
+    storage_temp TEXT,
+    storage_temp_threshold TEXT,
     notes TEXT,
     status TEXT DEFAULT 'active',
     burn_rate REAL DEFAULT 0,
@@ -4292,6 +4294,15 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_receipts_lab ON inventory_
     // line in the Intacct CSV export (uses the mapped GL account + item name).
     if (!iiColNames.includes("intacct_item_id")) {
       try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN intacct_item_id TEXT"); } catch {}
+    }
+    // Storage temperature requirement (Pfizer demo item 2): the controlled
+    // storage class for the item (room / refrigerated / frozen / deep_frozen)
+    // plus a free-text threshold used only for deep_frozen (e.g. "-70 C").
+    if (!iiColNames.includes("storage_temp")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN storage_temp TEXT"); } catch {}
+    }
+    if (!iiColNames.includes("storage_temp_threshold")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN storage_temp_threshold TEXT"); } catch {}
     }
   }
 }
