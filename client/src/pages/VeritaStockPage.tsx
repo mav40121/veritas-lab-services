@@ -2465,7 +2465,7 @@ export default function VeritaStockInventoryPage() {
                         <>
                           {(item.on_order_qty || 0).toLocaleString()} <span className="text-xs text-muted-foreground">{item.usage_unit}s</span>
                           {item.on_order_expected_date && (
-                            <div className="text-[10px] text-muted-foreground">ETA {item.on_order_expected_date}</div>
+                            <div className="text-[10px] text-muted-foreground">ETA {String(item.on_order_expected_date).slice(0, 10)}</div>
                           )}
                         </>
                       ) : <span className="text-muted-foreground">-</span>}
@@ -2669,7 +2669,7 @@ export default function VeritaStockInventoryPage() {
                 <div className="font-medium">{receiveTarget.item_name}</div>
                 <div className="text-muted-foreground">
                   {receiveTarget.on_order_qty} {receiveTarget.usage_unit}s on order
-                  {receiveTarget.on_order_expected_date ? ` · ETA ${receiveTarget.on_order_expected_date}` : ""}
+                  {receiveTarget.on_order_expected_date ? ` · ETA ${String(receiveTarget.on_order_expected_date).slice(0, 10)}` : ""}
                 </div>
               </div>
               <div className="space-y-1.5">
