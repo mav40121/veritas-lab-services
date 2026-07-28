@@ -1678,6 +1678,44 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, labId: targetLabId, user: { id: user?.id, email: user?.email, plan: user?.plan, studyCredits: user?.studyCredits } });
   });
 
+  // Targeted audit_log maintenance (id-based ONLY): delete specific rows and/or
+  // re-owner specific rows to a target owner_user_id. ADMIN_SECRET-gated. Used to
+  // remove test artifacts and to correct rows mis-filed by the pre-2026-07-28
+  // write-off owner-attribution bug (see resolveInventoryOwnerUserId in
+  // veritabench.ts). Deliberately id-targeted so it can never bulk-rewrite the
+  // log. dryRun returns the current rows without changing anything.
+  // Body: { secret, deleteIds?: number[], reowner?: [{id, ownerUserId}], dryRun? }.
+  app.post("/api/admin/audit-maintenance", (req, res) => {
+    const { secret, deleteIds, reowner, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const delIds: number[] = Array.isArray(deleteIds)
+      ? deleteIds.map((x: any) => Number(x)).filter((n: number) => Number.isInteger(n) && n > 0)
+      : [];
+    const reownRows = Array.isArray(reowner)
+      ? reowner
+          .map((r: any) => ({ id: Number(r?.id), ownerUserId: Number(r?.ownerUserId) }))
+          .filter((r: any) => Number.isInteger(r.id) && r.id > 0 && Number.isInteger(r.ownerUserId) && r.ownerUserId > 0)
+      : [];
+    const allIds = [...new Set([...delIds, ...reownRows.map((r) => r.id)])];
+    const before = allIds.length
+      ? sqlite.prepare(
+          `SELECT id, owner_user_id, module, action, entity_id, entity_label FROM audit_log WHERE id IN (${allIds.map(() => "?").join(",")})`
+        ).all(...allIds)
+      : [];
+    if (dryRun) return res.json({ dryRun: true, would_delete: delIds, would_reowner: reownRows, rows: before });
+    let deleted = 0, reowned = 0;
+    const tx = sqlite.transaction(() => {
+      if (delIds.length) {
+        deleted = sqlite.prepare(`DELETE FROM audit_log WHERE id IN (${delIds.map(() => "?").join(",")})`).run(...delIds).changes;
+      }
+      const upd = sqlite.prepare("UPDATE audit_log SET owner_user_id = ? WHERE id = ?");
+      for (const r of reownRows) reowned += upd.run(r.ownerUserId, r.id).changes;
+    });
+    tx();
+    return res.json({ ok: true, deleted, reowned, before });
+  });
+
   // Seed / upsert monthly inventory valuation snapshots for the demo. Admin-gated.
   // Body: { secret, rows: [{ lab_id, year_month, avg_value_on_hand, opening_value?,
   //   closing_value?, waste_value?, waste_note? }] }. Upserts on (lab_id, year_month).
