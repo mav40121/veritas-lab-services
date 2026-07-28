@@ -1134,6 +1134,62 @@ export default function VeritaStockInventoryPage() {
     return out;
   }, [countHistory]);
 
+  // ── Wastage and Losses report ────────────────────────────────────────────
+  // Everything written off (expired / damaged / recalled / lost), grouped by
+  // item and ranked by dollars lost. Reads the owner-scoped waste-report
+  // endpoint; PDF and Excel exports come back as a token the same way Count
+  // History and the Order documents do.
+  const [wasteOpen, setWasteOpen] = useState(false);
+  const [wasteReport, setWasteReport] = useState<any | null>(null);
+  const [wasteLoading, setWasteLoading] = useState(false);
+  const [wasteSince, setWasteSince] = useState<string>("");
+  const [wasteUntil, setWasteUntil] = useState<string>("");
+  const [wasteReason, setWasteReason] = useState<string>("all");
+  const [wasteExporting, setWasteExporting] = useState<null | "pdf" | "xlsx">(null);
+  const wasteQuery = useCallback(() => {
+    const p = new URLSearchParams();
+    if (wasteSince) p.set("since", wasteSince);
+    if (wasteUntil) p.set("until", wasteUntil);
+    if (wasteReason && wasteReason !== "all") p.set("reason", wasteReason);
+    const q = p.toString();
+    return q ? `?${q}` : "";
+  }, [wasteSince, wasteUntil, wasteReason]);
+  useEffect(() => {
+    if (!wasteOpen || !activeLabId) return;
+    setWasteLoading(true);
+    fetch(`${API_BASE}/api/labs/${activeLabId}/veritastock/waste-report${wasteQuery()}`, { headers: authHeaders() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setWasteReport(d))
+      .catch(() => setWasteReport(null))
+      .finally(() => setWasteLoading(false));
+  }, [wasteOpen, activeLabId, wasteQuery]);
+  const downloadWaste = async (kind: "pdf" | "xlsx") => {
+    if (!activeLabId) return;
+    setWasteExporting(kind);
+    try {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/veritastock/waste-report/${kind}${wasteQuery()}`, { method: "POST", headers: authHeaders() });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: `Could not generate ${kind === "pdf" ? "PDF" : "workbook"}`, description: err.error || `HTTP ${res.status}`, variant: "destructive" });
+        return;
+      }
+      const { token } = await res.json();
+      window.open(`${API_BASE}/api/pdf/${token}`, "_blank");
+    } catch {
+      toast({ title: "Export failed", description: "Network error", variant: "destructive" });
+    } finally {
+      setWasteExporting(null);
+    }
+  };
+  const wasteMoney = (n: number) => (Number(n) || 0).toLocaleString("en-US", { style: "currency", currency: "USD" });
+  const WASTE_REASON_COLOR: Record<string, string> = { Expired: "#d97706", Damaged: "#2563eb", Recalled: "#dc2626", Lost: "#6b7280" };
+  const WASTE_REASON_PILL: Record<string, string> = {
+    Expired: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+    Damaged: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
+    Recalled: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
+    Lost: "bg-muted text-muted-foreground",
+  };
+
   // ── Mobile / desktop view toggle ─────────────────────────────────────────
   // The inventory table hides Department/Vendor/Barcode below md/lg/xl to fit a
   // phone, so a counter on a phone loses columns (San Carlos). "Desktop view"
@@ -2069,6 +2125,16 @@ export default function VeritaStockInventoryPage() {
           <Button
             size="sm"
             variant="outline"
+            onClick={() => setWasteOpen(true)}
+            title="Everything written off (expired, damaged, recalled, lost), grouped by item and ranked by dollars lost"
+            data-testid="wastage-report-button"
+          >
+            <PackageX size={14} className="mr-1.5" />
+            Wastage report
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
             onClick={toggleViewMode}
             title={forceDesktop ? "Switch to mobile view (fits the phone screen)" : "Switch to desktop view (all columns, scroll sideways) for counting on a phone"}
             data-testid="view-mode-toggle"
@@ -2962,6 +3028,141 @@ export default function VeritaStockInventoryPage() {
                 </tbody>
               </table>
             </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Wastage and Losses: everything written off (expired / damaged / recalled
+          / lost), grouped by item and ranked by dollars lost. Read-only; export
+          to PDF or Excel. */}
+      <Dialog open={wasteOpen} onOpenChange={setWasteOpen}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto" data-testid="wastage-report-dialog">
+          <DialogHeader>
+            <DialogTitle>Wastage and losses</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-wrap items-end gap-3 mb-4">
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs text-muted-foreground">From</Label>
+              <Input type="date" value={wasteSince} onChange={(e) => setWasteSince(e.target.value)} className="h-9 w-40" data-testid="wastage-since" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs text-muted-foreground">To</Label>
+              <Input type="date" value={wasteUntil} onChange={(e) => setWasteUntil(e.target.value)} className="h-9 w-40" data-testid="wastage-until" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs text-muted-foreground">Reason</Label>
+              <Select value={wasteReason} onValueChange={setWasteReason}>
+                <SelectTrigger className="h-9 w-36" data-testid="wastage-reason"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All reasons</SelectItem>
+                  <SelectItem value="expired">Expired</SelectItem>
+                  <SelectItem value="damaged">Damaged</SelectItem>
+                  <SelectItem value="recalled">Recalled</SelectItem>
+                  <SelectItem value="lost">Lost</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex-1" />
+            <Button size="sm" variant="outline" onClick={() => downloadWaste("pdf")} disabled={wasteExporting !== null || !wasteReport?.summary?.event_count} data-testid="wastage-export-pdf">
+              <FileText size={14} className="mr-1.5" /> {wasteExporting === "pdf" ? "Generating..." : "Export PDF"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => downloadWaste("xlsx")} disabled={wasteExporting !== null || !wasteReport?.summary?.event_count} data-testid="wastage-export-xlsx">
+              <FileSpreadsheet size={14} className="mr-1.5" /> {wasteExporting === "xlsx" ? "Generating..." : "Export Excel"}
+            </Button>
+          </div>
+          {wasteLoading ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">Loading wastage report...</p>
+          ) : !wasteReport || (wasteReport.summary?.event_count ?? 0) === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center" data-testid="wastage-empty">
+              No write-offs recorded for this period. Losses appear here as items are written off (expired, damaged, recalled, or lost) from the inventory table.
+            </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                <div className="rounded-lg bg-muted/40 p-3">
+                  <div className="text-xs text-muted-foreground">Total loss</div>
+                  <div className="text-2xl font-semibold" data-testid="wastage-total-loss">{wasteMoney(wasteReport.summary.total_loss)}</div>
+                </div>
+                <div className="rounded-lg bg-muted/40 p-3">
+                  <div className="text-xs text-muted-foreground">Write-off events</div>
+                  <div className="text-2xl font-semibold">{wasteReport.summary.event_count}</div>
+                </div>
+                <div className="rounded-lg bg-muted/40 p-3">
+                  <div className="text-xs text-muted-foreground">Items affected</div>
+                  <div className="text-2xl font-semibold">{wasteReport.summary.item_count}</div>
+                </div>
+                <div className="rounded-lg bg-muted/40 p-3">
+                  <div className="text-xs text-muted-foreground">Largest loss</div>
+                  <div className="text-sm font-medium truncate" title={wasteReport.summary.top_item?.item_name}>{wasteReport.summary.top_item?.item_name}</div>
+                  <div className="text-xs text-muted-foreground">{wasteMoney(wasteReport.summary.top_item?.loss || 0)}</div>
+                </div>
+              </div>
+              {wasteReport.summary.by_reason?.length > 0 && wasteReport.summary.total_loss > 0 && (
+                <div className="mb-4">
+                  <div className="text-xs text-muted-foreground mb-1">Loss by reason</div>
+                  <div className="flex h-3.5 rounded overflow-hidden">
+                    {wasteReport.summary.by_reason.map((r: any) => (
+                      <div key={r.reason} style={{ width: `${(r.value / wasteReport.summary.total_loss) * 100}%`, background: WASTE_REASON_COLOR[r.label] || "#6b7280" }} title={`${r.label} ${wasteMoney(r.value)}`} />
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-4 mt-2 text-xs text-muted-foreground">
+                    {wasteReport.summary.by_reason.map((r: any) => (
+                      <span key={r.reason} className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-sm" style={{ background: WASTE_REASON_COLOR[r.label] || "#6b7280" }} />
+                        {r.label} {wasteMoney(r.value)} ({r.events})
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="overflow-x-auto border border-border rounded-md">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/50">
+                    <tr className="text-left">
+                      <th className="p-2">Item</th>
+                      <th className="p-2">Reason(s)</th>
+                      <th className="p-2 text-right">Events</th>
+                      <th className="p-2 text-right">Qty</th>
+                      <th className="p-2 text-right">Unit cost</th>
+                      <th className="p-2 text-right">Loss</th>
+                      <th className="p-2 text-right">Share</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {wasteReport.by_item.map((g: any, i: number) => (
+                      <tr key={i} className="border-t border-border" data-testid="wastage-row">
+                        <td className="p-2">
+                          <div>{g.item_name}</div>
+                          <div className="text-[11px] text-muted-foreground">{[g.department, g.vendor].filter(Boolean).join(" · ")}</div>
+                        </td>
+                        <td className="p-2">
+                          <div className="flex flex-wrap gap-1">
+                            {g.reasons.map((rl: string) => (
+                              <span key={rl} className={`px-1.5 py-0.5 rounded text-[11px] ${WASTE_REASON_PILL[rl] || "bg-muted text-muted-foreground"}`}>{rl}</span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="p-2 text-right font-mono">{g.events}</td>
+                        <td className="p-2 text-right font-mono">{g.qty}</td>
+                        <td className="p-2 text-right font-mono">{g.unit_cost == null ? "" : wasteMoney(g.unit_cost)}</td>
+                        <td className="p-2 text-right font-mono font-medium">{wasteMoney(g.loss)}</td>
+                        <td className="p-2 text-right font-mono">{g.share_pct}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-border font-medium">
+                      <td className="p-2" colSpan={2}>Total</td>
+                      <td className="p-2 text-right font-mono">{wasteReport.summary.event_count}</td>
+                      <td className="p-2"></td>
+                      <td className="p-2"></td>
+                      <td className="p-2 text-right font-mono">{wasteMoney(wasteReport.summary.total_loss)}</td>
+                      <td className="p-2 text-right font-mono">100%</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
           )}
         </DialogContent>
       </Dialog>
