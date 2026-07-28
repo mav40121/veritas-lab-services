@@ -162,10 +162,20 @@ const TOGGLEABLE_COLUMNS: { key: ToggleableColumnKey; label: string }[] = [
   { key: "barcode",            label: "Barcode" },
 ];
 
+// Parse a stored expiration into a local-midnight Date. Robust to BOTH the
+// date-only "YYYY-MM-DD" the Add/Edit form writes AND the full ISO timestamp
+// the demo seeds write (isoPlusDays -> toISOString). Appending "T00:00:00" to a
+// full ISO string ("...T01:19:12.752Z") produced an Invalid Date, so the
+// Expiration column and the "Expiring <60d" tile silently read OK/0 for every
+// seeded item. Slicing to the date part fixes both.
+function parseExpiration(s: string): Date {
+  return new Date(String(s).slice(0, 10) + "T00:00:00");
+}
+
 function getExpirationStatus(expDate: string | null): { label: string; color: string; priority: number } {
   if (!expDate) return { label: "N/A", color: "gray", priority: 5 };
   const now = new Date();
-  const exp = new Date(expDate + "T00:00:00");
+  const exp = parseExpiration(expDate);
   const diffMs = exp.getTime() - now.getTime();
   const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
   if (diffDays < 0) return { label: "Expired", color: "red", priority: 0 };
@@ -1496,7 +1506,7 @@ export default function VeritaStockInventoryPage() {
       // CFO / materials-management signal: act today or you stock out.
       if (item.days_remaining != null && item.burn_rate > 0 && item.days_remaining <= (item.lead_time_days || 0)) stockoutRisk++;
       if (item.expiration_date) {
-        const exp = new Date(item.expiration_date + "T00:00:00");
+        const exp = parseExpiration(item.expiration_date);
         const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
         if (diffDays >= 0 && diffDays <= 60) {
           expiringSoon++;
@@ -1552,7 +1562,7 @@ export default function VeritaStockInventoryPage() {
         if (filterStatus === "Reorder Now") return i.needs_reorder;
         if (filterStatus === "Expiring Soon") {
           if (!i.expiration_date) return false;
-          const diff = Math.ceil((new Date(i.expiration_date + "T00:00:00").getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          const diff = Math.ceil((parseExpiration(i.expiration_date).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
           return diff >= 0 && diff <= 60;
         }
         if (filterStatus === "Expired (on shelf)") {
