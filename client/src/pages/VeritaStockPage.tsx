@@ -1832,7 +1832,7 @@ export default function VeritaStockInventoryPage() {
       {/* Expired-on-shelf alert: products past their expiration date that still
           have stock on hand, listed for EVERY location that holds them. This is
           the cross-location "expired but still on the shelf" alert. */}
-      {expiredCount > 0 && activeLabId && (
+      {expiredCount > 0 && activeLabId && !singleSiteDemo && (
         <div className="mb-4 rounded-md border border-red-300 bg-red-50 px-4 py-3" data-testid="expired-on-shelf-banner">
           <div className="flex items-start gap-2 text-sm text-red-900">
             <AlertTriangle size={16} className="text-red-600 shrink-0 mt-0.5" />
@@ -1957,7 +1957,9 @@ export default function VeritaStockInventoryPage() {
           </Link>
           )}
           {/* Valuation Trends: 6-month inventory value on hand by location with
-              monthly waste. Cross-location, reads /api/inventory/valuation-trend. */}
+              monthly waste. Cross-location, reads /api/inventory/valuation-trend.
+              Hidden in single-site demo mode (it would chart all locations). */}
+          {!singleSiteDemo && (
           <Link href={activeLabId ? `/labs/${activeLabId}/veritastock/trends` : "/veritastock/trends"}>
             <Button
               size="sm"
@@ -1969,6 +1971,7 @@ export default function VeritaStockInventoryPage() {
               Valuation Trends
             </Button>
           </Link>
+          )}
           {/* Audit Trail: every inventory action across locations (receive, adjust,
               transfer, write-off, item edit), with who and when. Surveyor-defensible. */}
           <Link href={activeLabId ? `/labs/${activeLabId}/veritastock/audit` : "/veritastock/audit"}>
