@@ -16,6 +16,7 @@ import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
+import { buildWasteReport, generateWasteReportPDF, generateWasteReportExcel, type WasteEventRow, type WasteReportContext } from "./wasteReport";
 import { entireLabFlag, sanitizeSpecialties, expandEntireLabRoles, cms209Gaps } from "./cms209Roles";
 import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution, analyteMatch } from "./veritacheckCoverage";
 import { evaluateManualDiff } from "./rumke";
@@ -6777,6 +6778,108 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
     },
   );
+
+  // Wastage and Losses report. Owner-scoped over inventory_waste_events (same
+  // scoping as the audit-log / consumption-events reads): every write-off across
+  // the owner's locations, optionally narrowed by reason, date range, or a single
+  // location. loadWasteReport does the fetch + aggregation + context once; the
+  // JSON, PDF, and xlsx endpoints all consume it. Answers "everything that
+  // expired on the shelf, all losses, by item."
+  const loadWasteReport = (req: any): { report: ReturnType<typeof buildWasteReport>; ctx: WasteReportContext } | { error: string; status: number } => {
+    const sqlite = (db as any).$client;
+    const labId = req.scope.labId;
+    const baseLab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+    const owner = baseLab?.owner_user_id;
+    if (owner == null) return { error: "Lab not found", status: 404 };
+    const ownerLabIds = (sqlite.prepare("SELECT id FROM labs WHERE owner_user_id = ?").all(owner) as any[]).map((l) => l.id);
+    if (ownerLabIds.length === 0) return { report: buildWasteReport([]), ctx: {} };
+
+    const WASTE_REASONS = new Set(["expired", "damaged", "recalled", "lost"]);
+    const reasonRaw = (req.query.reason || "").toString().trim().toLowerCase();
+    const reason = WASTE_REASONS.has(reasonRaw) ? reasonRaw : "";
+    const since = (req.query.since || "").toString().trim(); // YYYY-MM-DD
+    const until = (req.query.until || "").toString().trim(); // YYYY-MM-DD
+    const scopeLab = Number(req.query.lab_id) || null;
+
+    const placeholders = ownerLabIds.map(() => "?").join(",");
+    let sql = `
+      SELECT w.id, w.item_id, COALESCE(w.item_name, ii.item_name) AS item_name,
+             ii.department AS department, ii.vendor AS vendor, ii.catalog_number AS catalog_number,
+             w.qty, w.unit_cost, w.waste_value, w.reason_code, w.note, w.event_date,
+             l.lab_name AS location_name, u.name AS actor_name
+        FROM inventory_waste_events w
+        LEFT JOIN inventory_items ii ON ii.id = w.item_id
+        LEFT JOIN labs l ON l.id = w.lab_id
+        LEFT JOIN users u ON u.id = w.created_by
+       WHERE w.lab_id IN (${placeholders})`;
+    const params: any[] = [...ownerLabIds];
+    if (reason) { sql += ` AND LOWER(w.reason_code) = ?`; params.push(reason); }
+    if (since) { sql += ` AND w.event_date >= ?`; params.push(since); }
+    if (until) { sql += ` AND w.event_date <= ?`; params.push(until); }
+    if (scopeLab) { sql += ` AND w.lab_id = ?`; params.push(scopeLab); }
+    sql += ` ORDER BY w.event_date DESC, w.id DESC LIMIT 5000`;
+    const rows = sqlite.prepare(sql).all(...params) as WasteEventRow[];
+    const report = buildWasteReport(rows);
+
+    const fmtYmd = (s: string) => { const d = new Date(`${s}T00:00:00Z`); return isNaN(d.getTime()) ? s : d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }); };
+    const labRow = sqlite.prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(labId) as any;
+    const userRow = sqlite.prepare("SELECT name, email FROM users WHERE id = ?").get(req.userId) as any;
+    let locationLabel = "All locations";
+    if (scopeLab) {
+      const ll = sqlite.prepare("SELECT lab_name FROM labs WHERE id = ?").get(scopeLab) as any;
+      locationLabel = ll?.lab_name || `Location ${scopeLab}`;
+    }
+    const ctx: WasteReportContext = {
+      labName: labRow?.lab_name || null,
+      cliaNumber: labRow?.clia_number || null,
+      preparedBy: userRow?.name || userRow?.email || null,
+      rangeLabel: since || until ? `${since ? fmtYmd(since) : "Earliest"} to ${until ? fmtYmd(until) : "today"}` : "All recorded write-offs",
+      locationLabel,
+      reasonLabel: reason ? `${reason.charAt(0).toUpperCase() + reason.slice(1)} only` : null,
+    };
+    return { report, ctx };
+  };
+
+  app.get("/api/labs/:labId/veritastock/waste-report", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    try {
+      const out = loadWasteReport(req);
+      if ("error" in out) return res.status(out.status).json({ error: out.error });
+      return res.json({ ...out.report, context: out.ctx });
+    } catch (err: any) {
+      console.error("[veritastock/waste-report] error:", err);
+      return res.status(500).json({ error: err.message || "waste_report_failed" });
+    }
+  });
+
+  app.post("/api/labs/:labId/veritastock/waste-report/pdf", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    try {
+      const out = loadWasteReport(req);
+      if ("error" in out) return res.status(out.status).json({ error: out.error });
+      const pdfBuffer = await generateWasteReportPDF(out.report, out.ctx);
+      const datestamp = new Date().toISOString().slice(0, 10);
+      const safeLab = (out.ctx.labName || "Lab").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
+      const token = storePdfToken(pdfBuffer, `VeritaStock_Wastage_${safeLab}_${datestamp}.pdf`);
+      return res.json({ token, itemCount: out.report.by_item.length, totalLoss: out.report.summary.total_loss });
+    } catch (err: any) {
+      console.error("[veritastock/waste-report/pdf] error:", err);
+      return res.status(500).json({ error: err.message || "waste_report_pdf_failed" });
+    }
+  });
+
+  app.post("/api/labs/:labId/veritastock/waste-report/xlsx", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    try {
+      const out = loadWasteReport(req);
+      if ("error" in out) return res.status(out.status).json({ error: out.error });
+      const xlsxBuffer = await generateWasteReportExcel(out.report, out.ctx);
+      const datestamp = new Date().toISOString().slice(0, 10);
+      const safeLab = (out.ctx.labName || "Lab").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
+      const token = storePdfToken(xlsxBuffer, `VeritaStock_Wastage_${safeLab}_${datestamp}.xlsx`);
+      return res.json({ token, itemCount: out.report.by_item.length });
+    } catch (err: any) {
+      console.error("[veritastock/waste-report/xlsx] error:", err);
+      return res.status(500).json({ error: err.message || "waste_report_xlsx_failed" });
+    }
+  });
 
   // GET /api/labs/:labId/veritastock/transfers/incoming — pending shipments
   // bound for any location in this lab's enterprise group, so the destination
