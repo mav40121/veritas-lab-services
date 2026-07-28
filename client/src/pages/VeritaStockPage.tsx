@@ -1146,28 +1146,33 @@ export default function VeritaStockInventoryPage() {
   const [wasteUntil, setWasteUntil] = useState<string>("");
   const [wasteReason, setWasteReason] = useState<string>("all");
   const [wasteExporting, setWasteExporting] = useState<null | "pdf" | "xlsx">(null);
-  const wasteQuery = useCallback(() => {
-    const p = new URLSearchParams();
-    if (wasteSince) p.set("since", wasteSince);
-    if (wasteUntil) p.set("until", wasteUntil);
-    if (wasteReason && wasteReason !== "all") p.set("reason", wasteReason);
-    const q = p.toString();
-    return q ? `?${q}` : "";
-  }, [wasteSince, wasteUntil, wasteReason]);
+  // Build the waste-report URL the same way the reorder documents do: a single
+  // `${kind}` path segment plus a `?${qs}` query, so the lab-scoped write-route
+  // guard can statically match it to the server route (two adjacent `${...}`
+  // segments collapse to an unmatchable `:p:p`).
+  const wasteUrl = useCallback((kind: "" | "pdf" | "xlsx") => {
+    const base = `${API_BASE}/api/labs/${activeLabId}/veritastock/waste-report${kind ? `/${kind}` : ""}`;
+    const params = new URLSearchParams();
+    if (wasteSince) params.set("since", wasteSince);
+    if (wasteUntil) params.set("until", wasteUntil);
+    if (wasteReason && wasteReason !== "all") params.set("reason", wasteReason);
+    const qs = params.toString();
+    return qs ? `${base}?${qs}` : base;
+  }, [activeLabId, wasteSince, wasteUntil, wasteReason]);
   useEffect(() => {
     if (!wasteOpen || !activeLabId) return;
     setWasteLoading(true);
-    fetch(`${API_BASE}/api/labs/${activeLabId}/veritastock/waste-report${wasteQuery()}`, { headers: authHeaders() })
+    fetch(wasteUrl(""), { headers: authHeaders() })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setWasteReport(d))
       .catch(() => setWasteReport(null))
       .finally(() => setWasteLoading(false));
-  }, [wasteOpen, activeLabId, wasteQuery]);
+  }, [wasteOpen, activeLabId, wasteUrl]);
   const downloadWaste = async (kind: "pdf" | "xlsx") => {
     if (!activeLabId) return;
     setWasteExporting(kind);
     try {
-      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/veritastock/waste-report/${kind}${wasteQuery()}`, { method: "POST", headers: authHeaders() });
+      const res = await fetch(wasteUrl(kind), { method: "POST", headers: authHeaders() });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         toast({ title: `Could not generate ${kind === "pdf" ? "PDF" : "workbook"}`, description: err.error || `HTTP ${res.status}`, variant: "destructive" });
