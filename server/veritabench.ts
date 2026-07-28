@@ -1654,6 +1654,25 @@ export function registerVeritaBenchRoutes(
     return { item: null, status: 403 };
   }
 
+  // Owner (account) that an inventory audit / consumption row belongs to. This is
+  // the OWNER OF THE ITEM'S LAB, not the acting user's default owner context.
+  // A multi-lab user's req.ownerUserId resolves to their primary owner (e.g. user
+  // 17 resolves to owner 15), so keying audit rows off req.ownerUserId
+  // mis-attributes a cross-lab movement: a write-off on Michaels Lab (lab owner
+  // 17) was logged under owner 15 and never surfaced in the Michaels Lab audit
+  // trail, whose read endpoint filters owner_user_id = lab.owner_user_id. The
+  // transfer endpoints already key on fromLab/toLab.owner_user_id; this mirrors
+  // that. Falls back to the item's account_id, then the request owner.
+  function resolveInventoryOwnerUserId(item: any, req: any): number {
+    const labId = item?.lab_id;
+    if (labId != null) {
+      const lab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+      if (lab?.owner_user_id != null) return lab.owner_user_id;
+    }
+    if (item?.account_id != null) return item.account_id;
+    return req.ownerUserId ?? req.userId;
+  }
+
   // PUT /api/inventory/:id - update an inventory item
   app.put("/api/inventory/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
@@ -1792,9 +1811,10 @@ export function registerVeritaBenchRoutes(
       "UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?"
     ).run(usageQty, nowIso, itemId);
 
+    const ownerUserId = resolveInventoryOwnerUserId(existing, req);
     try {
       logAudit({
-        userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritastock", action: "adjust",
+        userId: req.userId, ownerUserId, module: "veritastock", action: "adjust",
         entityType: "inventory_item", entityId: itemId,
         entityLabel: `${(existing as any).item_name}: count adjusted ${beforeQty} to ${usageQty}${reason ? ` (${reason})` : ""}`,
         before: { quantity_on_hand: beforeQty },
@@ -1807,7 +1827,7 @@ export function registerVeritaBenchRoutes(
     // helper skips qty <= 0, so an upward / no-change adjustment records nothing.
     // Side-effect only, on_hand was already set above; the ledger never touches it.
     logConsumption({
-      itemId: Number(itemId), labId: (existing as any).lab_id, accountId: req.ownerUserId ?? req.userId,
+      itemId: Number(itemId), labId: (existing as any).lab_id, accountId: ownerUserId,
       qty: beforeQty - usageQty, unitCostAtEvent: (existing as any).unit_cost ?? null,
       reason: "adjust_down", sourceEventRef: `adjust:${reason || "cycle_count"}`, occurredAt: nowIso,
     });
@@ -1970,7 +1990,7 @@ export function registerVeritaBenchRoutes(
     try {
       const lotStr = recvLot || recvExp ? ` [lot ${recvLot || "n/a"}${recvExp ? ` exp ${recvExp}` : ""}${newLot ? ", new lot" : ""}]` : "";
       logAudit({
-        userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritastock", action: "receive",
+        userId: req.userId, ownerUserId: resolveInventoryOwnerUserId(e, req), module: "veritastock", action: "receive",
         entityType: "inventory_item", entityId: targetId,
         entityLabel: `${e.item_name}: received ${recv} ${e.usage_unit || "unit"} (on hand ${targetBefore} to ${targetAfter})${lotStr}${noteStr ? ` - ${noteStr}` : ""}`,
         before: { quantity_on_hand: targetBefore, on_order_qty: onOrder },
@@ -2084,9 +2104,10 @@ export function registerVeritaBenchRoutes(
     });
     tx();
 
+    const ownerUserId = resolveInventoryOwnerUserId(existing, req);
     try {
       logAudit({
-        userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritastock", action: "write_off",
+        userId: req.userId, ownerUserId, module: "veritastock", action: "write_off",
         entityType: "inventory_item", entityId: itemId,
         entityLabel: `${(existing as any).item_name}: wrote off ${qty} ${(existing as any).usage_unit || "unit"} (${reasonCode}), $${wasteValue.toFixed(2)} loss`,
         before: { quantity_on_hand: onHand },
@@ -2098,7 +2119,7 @@ export function registerVeritaBenchRoutes(
     // Consumption ledger: a write-off is a depletion. Side-effect only, on_hand
     // was already moved in the transaction above; the ledger never touches it.
     logConsumption({
-      itemId: Number(itemId), labId, accountId: req.ownerUserId ?? req.userId,
+      itemId: Number(itemId), labId, accountId: ownerUserId,
       qty, unitCostAtEvent: unitCost, reason: "write_off",
       sourceEventRef: `write_off:${reasonCode}`, occurredAt: nowIso,
     });
