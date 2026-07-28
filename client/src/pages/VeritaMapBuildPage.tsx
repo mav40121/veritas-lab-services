@@ -1071,6 +1071,11 @@ export default function VeritaMapBuildPage() {
   const [instrumentName, setInstrumentName] = useState<string>("");
   const [manualEntry, setManualEntry] = useState(false);
   const [manualInstrumentName, setManualInstrumentName] = useState("");
+  // Type-to-search instrument picker over the whole catalog, ungated by the
+  // department/vendor cascade. Fixes the "my analyzer isn't a dropdown option"
+  // trap that sent users to Other/Not Listed with an empty test menu.
+  const [instrumentSearch, setInstrumentSearch] = useState("");
+  const [pickedInstrument, setPickedInstrument] = useState("");
   // Request-an-Instrument dialog. Prefills with whatever the user has
   // already typed (custom write-in or manual entry) so they don't retype.
   const [requestModalOpen, setRequestModalOpen] = useState(false);
@@ -1216,7 +1221,9 @@ export default function VeritaMapBuildPage() {
   const isOtherVendor = selectedVendor === OTHER_VENDOR_VALUE;
   const isOtherInstrument = instrumentName === OTHER_INSTRUMENT_VALUE;
 
-  const effectiveInstrumentName = manualEntry
+  const effectiveInstrumentName = pickedInstrument
+    ? pickedInstrument
+    : manualEntry
     ? manualInstrumentName.trim()
     : isOtherDepartment
       ? [customVendor.trim(), customInstrument.trim()].filter(Boolean).join(" ")
@@ -1227,7 +1234,9 @@ export default function VeritaMapBuildPage() {
           ? customInstrument.trim()
           : instrumentName;
 
-  const effectiveCategory = isOtherDepartment
+  const effectiveCategory = pickedInstrument
+    ? (INSTRUMENT_DATA[pickedInstrument]?.category ?? "Unknown")
+    : isOtherDepartment
     ? customDepartment.trim()
     : selectedDepartment || "Unknown";
 
@@ -1265,6 +1274,8 @@ export default function VeritaMapBuildPage() {
         queryKey: [`${mapApiBase}/instruments`],
       });
       qc.invalidateQueries({ queryKey: [`${mapApiBase}/limits`] });
+      setPickedInstrument("");
+      setInstrumentSearch("");
       setInstrumentName("");
       setSelectedVendor("");
       setManualInstrumentName("");
@@ -1492,11 +1503,17 @@ export default function VeritaMapBuildPage() {
   const cascade = useMemo(() => {
     const deptVendorInstr: Record<string, Record<string, string[]>> = {};
     for (const [name, info] of Object.entries(INSTRUMENT_DATA)) {
-      const dept = info.category;
       const vendor = info.vendor || "Unknown";
-      if (!deptVendorInstr[dept]) deptVendorInstr[dept] = {};
-      if (!deptVendorInstr[dept][vendor]) deptVendorInstr[dept][vendor] = [];
-      deptVendorInstr[dept][vendor].push(name);
+      // A few catalog rows carry a compound "A / B" category (e.g.
+      // "Chemistry / Immunoassay"); list the instrument under each real
+      // department so browsing by discipline surfaces it instead of hiding it
+      // behind a phantom compound department.
+      const depts = info.category.split("/").map((d) => d.trim()).filter(Boolean);
+      for (const dept of depts) {
+        if (!deptVendorInstr[dept]) deptVendorInstr[dept] = {};
+        if (!deptVendorInstr[dept][vendor]) deptVendorInstr[dept][vendor] = [];
+        if (!deptVendorInstr[dept][vendor].includes(name)) deptVendorInstr[dept][vendor].push(name);
+      }
     }
     // Sort instrument names within each vendor
     for (const dept of Object.values(deptVendorInstr)) {
@@ -1526,6 +1543,26 @@ export default function VeritaMapBuildPage() {
     if (!selectedDepartment || !selectedVendor || isOtherDepartment || isOtherVendor) return [];
     return cascade[selectedDepartment]?.[selectedVendor] ?? [];
   }, [selectedDepartment, selectedVendor, cascade, isOtherDepartment, isOtherVendor]);
+
+  // Global instrument search across the whole catalog (name, vendor, category).
+  // Lets a user type "Atellica" and pick the exact model regardless of how it
+  // is filed in the department/vendor cascade.
+  const instrumentSearchResults = useMemo(() => {
+    const q = instrumentSearch.trim().toLowerCase();
+    if (q.length < 2) return [] as { name: string; info: FDAInstrument }[];
+    const out: { name: string; info: FDAInstrument }[] = [];
+    for (const [name, info] of Object.entries(INSTRUMENT_DATA)) {
+      if (
+        name.toLowerCase().includes(q) ||
+        (info.vendor || "").toLowerCase().includes(q) ||
+        (info.category || "").toLowerCase().includes(q)
+      ) {
+        out.push({ name, info });
+      }
+    }
+    out.sort((a, b) => a.name.localeCompare(b.name));
+    return out.slice(0, 50);
+  }, [instrumentSearch]);
 
   // Toggle a test for a specific instrument
   function toggleTest(instId: number, analyte: string) {
@@ -1569,6 +1606,8 @@ export default function VeritaMapBuildPage() {
 
   // Reset cascade fields when department changes
   function handleDepartmentChange(v: string) {
+    setPickedInstrument("");
+    setInstrumentSearch("");
     setSelectedDepartment(v);
     setSelectedVendor("");
     setInstrumentName("");
@@ -1651,8 +1690,90 @@ export default function VeritaMapBuildPage() {
           <CardContent className="p-4">
             <h2 className="text-sm font-semibold mb-3">Add Instrument</h2>
 
+            {/* Fast path: search the whole instrument catalog, ungated by department/vendor */}
+            <div className="mb-4">
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 block">Find your instrument</label>
+              {pickedInstrument ? (
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+                  <div className="min-w-0">
+                    <span className="text-sm font-medium">{pickedInstrument}</span>
+                    <span className="ml-2 text-[11px] text-muted-foreground">
+                      {INSTRUMENT_DATA[pickedInstrument]?.vendor} · {INSTRUMENT_DATA[pickedInstrument]?.category} · {INSTRUMENT_DATA[pickedInstrument]?.testCount} tests
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-primary underline underline-offset-2 shrink-0"
+                    onClick={() => { setPickedInstrument(""); setInstrumentSearch(""); }}
+                  >
+                    Change
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <div className="relative">
+                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      className="h-9 text-sm pl-8"
+                      placeholder="Type an instrument, e.g. Atellica, XN, cobas…"
+                      value={instrumentSearch}
+                      onChange={(e) => setInstrumentSearch(e.target.value)}
+                    />
+                  </div>
+                  {instrumentSearch.trim().length >= 2 && (
+                    <div className="mt-1 max-h-60 overflow-y-auto rounded-lg border border-border bg-card shadow-sm">
+                      {instrumentSearchResults.length === 0 ? (
+                        <div className="px-3 py-2 text-xs text-muted-foreground">
+                          No match yet. Try the vendor or a shorter model (e.g. "Atellica", "cobas"), browse by department below, or add it manually.
+                        </div>
+                      ) : (
+                        instrumentSearchResults.map(({ name, info }) => (
+                          <button
+                            key={name}
+                            type="button"
+                            className="w-full text-left px-3 py-2 hover:bg-muted/60 border-b border-border/50 last:border-b-0"
+                            onClick={() => {
+                              setPickedInstrument(name);
+                              setInstrumentSearch("");
+                              setSelectedDepartment("");
+                              setSelectedVendor("");
+                              setInstrumentName("");
+                              setManualEntry(false);
+                              setManualInstrumentName("");
+                              setCustomDepartment("");
+                              setCustomVendor("");
+                              setCustomInstrument("");
+                            }}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-medium truncate">{name}</span>
+                              <span className="text-[10px] text-muted-foreground shrink-0">{info.testCount} tests</span>
+                            </div>
+                            <span className="text-[11px] text-muted-foreground">{info.vendor} · {info.category}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                  <p className="text-[11px] text-muted-foreground mt-1.5">Most analyzers are already in the library with their full test menu. Search here first, or browse by department below.</p>
+                </div>
+              )}
+            </div>
+
             {/* Other Department write-in mode */}
-            {isOtherDepartment ? (
+            {pickedInstrument ? (
+              <div className="max-w-xs">
+                <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 block">Role</label>
+                <Select value={role} onValueChange={(v) => setRole(v as Role)}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ROLES.map((r) => (
+                      <SelectItem key={r} value={r} className="text-sm">{r}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : isOtherDepartment ? (
               <div className="space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   {/* Department dropdown showing "Other" */}
@@ -1705,7 +1826,7 @@ export default function VeritaMapBuildPage() {
                 </div>
                 <p className="text-[11px] text-muted-foreground flex items-start gap-1.5">
                   <Info size={12} className="shrink-0 mt-0.5" />
-                  Use this for EUA tests, laboratory-developed tests (LDTs), or instruments not yet in our database.
+                  Heads up: a custom instrument starts with an empty test menu. Most standard analyzers are already in the library, so try the search at the top first. Use this only for EUA tests, laboratory-developed tests (LDTs), or instruments not yet in our database.
                 </p>
               </div>
             ) : (
@@ -1843,7 +1964,7 @@ export default function VeritaMapBuildPage() {
             {(isOtherInstrument || isOtherVendor) && !isOtherDepartment && (
               <p className="text-[11px] text-muted-foreground flex items-start gap-1.5 mt-2">
                 <Info size={12} className="shrink-0 mt-0.5" />
-                Use this for EUA tests, laboratory-developed tests (LDTs), or instruments not yet in our database.
+                Heads up: a custom instrument starts with an empty test menu. Most standard analyzers are already in the library, so try the search at the top first. Use manual entry only for EUA tests, laboratory-developed tests (LDTs), or instruments not yet in our database.
               </p>
             )}
 
@@ -1873,7 +1994,7 @@ export default function VeritaMapBuildPage() {
                   >
                     Back to instrument list
                   </button>
-                ) : !isOtherDepartment ? (
+                ) : !isOtherDepartment && !pickedInstrument ? (
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <button
                       type="button"

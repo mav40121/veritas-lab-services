@@ -30216,7 +30216,7 @@
     "menuLastVerifiedAt": "2026-05-07"
   },
   "Siemens Atellica CI Analyzer": {
-    "vendor": "Siemens",
+    "vendor": "Siemens Healthineers",
     "category": "Chemistry / Immunoassay",
     "testCount": 8,
     "tests": {
@@ -30255,7 +30255,7 @@
     }
   },
   "Siemens ADVIA 2400": {
-    "vendor": "Siemens",
+    "vendor": "Siemens Healthineers",
     "category": "Chemistry",
     "testCount": 80,
     "tests": {
@@ -30583,7 +30583,7 @@
     "menuLastVerifiedAt": "2026-05-07"
   },
   "Siemens IMMULITE 2000 XPi": {
-    "vendor": "Siemens",
+    "vendor": "Siemens Healthineers",
     "category": "Immunoassay",
     "testCount": 82,
     "tests": {
@@ -30919,7 +30919,7 @@
     "menuLastVerifiedAt": "2026-05-07"
   },
   "Siemens Dimension Vista 1000T": {
-    "vendor": "Siemens",
+    "vendor": "Siemens Healthineers",
     "category": "Chemistry / Immunoassay",
     "testCount": 84,
     "tests": {
