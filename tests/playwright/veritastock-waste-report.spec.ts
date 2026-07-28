@@ -34,7 +34,7 @@ test.describe("VeritaStock Wastage and Losses report", () => {
   });
 
   test("director gets grouped-by-item payload and both export tokens", async ({ request }) => {
-    test.skip(!TOKEN, "PW_TOKEN not set — skipping authenticated path");
+    test.skip(!TOKEN, "PW_TOKEN not set: skipping authenticated path");
     const auth = { Authorization: `Bearer ${TOKEN}` };
 
     // JSON payload: summary + by_item, ranked by loss descending.
