@@ -1733,6 +1733,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // One-shot seed for the temporary single-site "Pfizer Proposed" demo: rewrites
+  // ONLY lab 2 with a lab-consumables catalog. ADMIN_SECRET-gated AND hard-gated
+  // to the stock deployment inside the seeder. Isolated from the San Carlos
+  // reset, so /api/admin/reset-demo (or the nightly reset) restores San Carlos.
+  app.post("/api/admin/seed-pfizer-demo", async (req, res) => {
+    const { secret } = req.body;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    try {
+      const { seedPfizerSingleSiteDemo } = await import("./veritastockPfizerDemo");
+      const result = seedPfizerSingleSiteDemo((db as any).$client);
+      if (!result.ok) return res.status(409).json(result);
+      console.log("[admin/seed-pfizer-demo] seeded lab", result.lab_id, "items:", result.items);
+      res.json(result);
+    } catch (err: any) {
+      console.error("[admin/seed-pfizer-demo] failed:", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Admin: raise the public demo VeritaScan (Riverside Regional, demo user) to a
   // target inspection-readiness level so the /demo/compliance VeritaScan tab shows
   // a strong but credible score. Promotes Not-Assessed items to Compliant and
