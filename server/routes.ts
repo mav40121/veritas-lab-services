@@ -4547,8 +4547,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // Email 1: Requester confirmation
         try {
           const tierLabels: Record<string, string> = {
-            clinic: "Clinic ($499/yr)", community: "Community ($999/yr)",
-            hospital: "Hospital ($1,999/yr)", enterprise: "Enterprise ($2,999/yr)",
+            clinic: "Clinic ($999/yr)", community: "Community ($2,125/yr)",
+            hospital: "Hospital ($4,995/yr)", enterprise: "System (custom quote)",
             veritacheck: "VeritaCheck\u2122 Unlimited ($299/yr)"
           };
           const promoLine = promo_applied

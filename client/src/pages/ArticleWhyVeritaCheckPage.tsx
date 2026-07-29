@@ -112,7 +112,7 @@ export default function ArticleWhyVeritaCheckPage() {
 
             <Panel icon={<Layers size={20} />} title="Integration breadth">
               <p>
-                VeritaCheck™ runs nine study types under one tool: Precision Verification (EP15), Correlation / Method Comparison, Calibration Verification / Linearity, Reagent Lot Verification (EP26), QC Lot Verification (C24-Ed4), PT/INR Geometric Mean Calculator (H47), Multi-Analyte Lot Comparison (Coag), Reference Range Verification, and Analytical Sensitivity (EP17-A2). One login, one billing line, one signature workflow.
+                VeritaCheck™ runs fourteen study types under one tool: Precision Verification (EP15-A3), Method Comparison / Multi-Instrument Correlation (EP09), Calibration Verification (EP06), Linearity (EP06), Reagent Lot Verification (EP26), QC Lot Verification (C24-Ed4), PT/INR Geometric Mean Calculator (H47), Multi-Analyte Lot Comparison, Coag (EP26), Reference Range Verification (EP28), Sensitivity Verification (EP17-A2), Carryover Verification (EP10-A3), Accuracy / Bias (EP15-A3), Reportable Range / AMR Verification (CLIA 493.1255), and Manual Differential (CLSI H20). One login, one billing line, one signature workflow.
               </p>
               <p>
                 Around VeritaCheck™ in the same VeritaAssure™ platform: VeritaPolicy™ for the lab's required policy set, VeritaMap™ for the test menu and critical value reference, VeritaComp™ for staff competency, VeritaLab™ for certificate tracking and CMS-116 application support, VeritaOps™ for cost-per-reportable-test studies, VeritaStock™ for inventory. A director who logs in to VeritaAssure sees all of them.

@@ -26,7 +26,7 @@ const completedItems: RoadmapItem[] = [
   {
     title: "VeritaMap™ - Laboratory Test Menu Mapping",
     description:
-      "Builds a complete instrument and test menu inventory for your lab. Maps 190+ instruments across all specialties, pulls Mayo Clinic Laboratories reference ranges, critical values, and AMR. Exports a formatted Excel workbook with compliance tracking. Free tier available.",
+      "Builds a complete instrument and test menu inventory for your lab. Maps 269 instruments across all specialties; the lab verifies and adopts its own reference ranges, critical values, and AMR. Exports a formatted Excel workbook with compliance tracking. Free tier available.",
   },
   {
     title: "VeritaScan™ - Inspection Readiness Checklist",

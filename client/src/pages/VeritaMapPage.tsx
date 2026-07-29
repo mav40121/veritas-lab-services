@@ -75,7 +75,7 @@ return (
                   </div>
                   <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
                     <div className="text-2xl font-bold text-primary">Included</div>
-                    <div className="text-xs text-muted-foreground">in Clinic ($499/yr) and above</div>
+                    <div className="text-xs text-muted-foreground">in Clinic ($999/yr) and above</div>
                   </div>
                 </div>
               )}
@@ -241,7 +241,7 @@ return (
                 <div className="font-bold text-lg mb-1">VeritaAssure&#8482; Suite</div>
                 <div className="flex items-baseline gap-1 mb-3">
                   <span className="text-sm text-muted-foreground">from</span>
-                  <span className="text-4xl font-bold">$499</span>
+                  <span className="text-4xl font-bold">$999</span>
                   <span className="text-sm text-muted-foreground">/year</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-5">
@@ -265,7 +265,7 @@ return (
           <div className="mt-6 max-w-2xl">
             <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-xl p-5">
               <div className="font-bold text-base mb-1">
-                VeritaAssure&#8482; Suite: <span className="text-primary">Starting at $499/year</span>
+                VeritaAssure&#8482; Suite: <span className="text-primary">Starting at $999/year</span>
                 <Badge className="ml-2 bg-primary text-primary-foreground text-xs">Full Suite</Badge>
               </div>
               <p className="text-sm text-muted-foreground mb-3">

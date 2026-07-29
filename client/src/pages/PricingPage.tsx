@@ -498,7 +498,7 @@ return (
               You pay for who edits, plus a small flat band for who reads.
             </h3>
             <p className="text-sm text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              One shared lab kiosk login for staff who only need read-and-sign access:
+              Individual email and password sign-in for staff who only need read-and-sign access:
               policy acknowledgements, competency self-attestation, inventory adjustments,
               credential view. Per-event signature capture cross-referenced to your VeritaStaff&trade; roster.
               Surveyor-defensible audit trail. Flat band by lab size, not per user.

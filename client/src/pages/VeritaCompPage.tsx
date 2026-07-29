@@ -100,7 +100,7 @@ return (
                 <div className="flex flex-wrap gap-3 mb-8">
                   <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
                     <div className="text-2xl font-bold text-primary">Included</div>
-                    <div className="text-xs text-muted-foreground">in Clinic ($499/yr) and above</div>
+                    <div className="text-xs text-muted-foreground">in Clinic ($999/yr) and above</div>
                   </div>
                 </div>
               )}
@@ -261,7 +261,7 @@ return (
                   <span className="text-4xl font-bold">Included</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  Included in all VeritaAssure&#8482; plans (starting at $499/yr). Full access to all three competency types with PDF generation, employee management, and VeritaScan&#8482; integration.
+                  Included in all VeritaAssure&#8482; plans (starting at $999/yr). Full access to all three competency types with PDF generation, employee management, and VeritaScan&#8482; integration.
                 </p>
                 <ul className="space-y-2 mb-6">
                   {[
@@ -291,7 +291,7 @@ return (
               <FlaskConical size={20} className="text-primary mt-0.5 shrink-0" />
               <div>
                 <div className="font-semibold text-sm mb-1">
-                  VeritaAssure&#8482; Suite: <span className="text-primary">Starting at $499/year</span>
+                  VeritaAssure&#8482; Suite: <span className="text-primary">Starting at $999/year</span>
                   <Badge className="ml-2 bg-primary/10 text-primary border-0 text-xs">Best Value</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground mb-2">

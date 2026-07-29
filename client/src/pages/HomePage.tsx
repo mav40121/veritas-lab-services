@@ -19,7 +19,7 @@ const services = [
 const stats = [
   { value: "200+", label: "Facilities surveyed" },
   { value: "17", label: "Software Modules" },
-  { value: "168", label: "Compliance items tracked" },
+  { value: "173", label: "Compliance items tracked" },
   { value: "22 yrs", label: "Industry experience" },
 ];
 

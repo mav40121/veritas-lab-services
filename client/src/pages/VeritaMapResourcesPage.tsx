@@ -28,7 +28,7 @@ const SECTIONS: Section[] = [
         publisher: "Clinical and Laboratory Standards Institute (CLSI)",
       },
       {
-        title: "CLSI C28-A3c: How to Define and Determine Reference Intervals in the Clinical Laboratory",
+        title: "CLSI EP28-A3c: How to Define and Determine Reference Intervals in the Clinical Laboratory",
         url: "https://clsi.org/standards/products/clinical-chemistry-and-toxicology/documents/c28/",
         description:
           "Companion document to EP28. Covers the analytical and pre-analytical considerations for reference interval studies, including partitioning by age, sex, and sample type.",
@@ -129,7 +129,7 @@ export default function VeritaMapResourcesPage() {
         moduleName="VeritaMap™"
         whatItDoes="VeritaMap is where you build your facility's test menu. Pick the instruments your lab runs, toggle the tests you actually perform on each, and the menu becomes the source of truth that feeds VeritaCheck (study setup), VeritaComp (competency programs), VeritaPT (PT coverage), and VeritaTrack (regulatory calendar). The menu also captures CLIA complexity, specialty, FDA classification, and fields for the critical values, reference intervals, and AMR your lab will verify and enter per 42 CFR 493.1253."
         howToUse={[
-          "Add the instruments your lab runs from the database of 190+ FDA-cleared analyzers.",
+          "Add the instruments your lab runs from the database of 269 FDA-cleared analyzers.",
           "Toggle the tests you actually perform on each instrument; CLIA complexity, specialty, and FDA classification populate automatically.",
           "Record your facility's MEC-adopted critical values for each analyte, if your lab chooses to track them here.",
           "Enter your verified reference intervals and AMR per 42 CFR 493.1253.",

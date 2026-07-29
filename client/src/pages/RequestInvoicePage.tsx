@@ -12,10 +12,10 @@ import { trackEvent } from "@/lib/analytics";
 
 const TIER_OPTIONS = [
   { value: "veritacheck", label: "VeritaCheck\u2122 Unlimited ($299/yr)" },
-  { value: "clinic", label: "Clinic - $499/yr" },
-  { value: "community", label: "Community - $999/yr" },
-  { value: "hospital", label: "Hospital - $1,999/yr" },
-  { value: "enterprise", label: "Enterprise - $2,999/yr" },
+  { value: "clinic", label: "Clinic - $999/yr" },
+  { value: "community", label: "Community - $2,125/yr" },
+  { value: "hospital", label: "Hospital - $4,995/yr" },
+  { value: "enterprise", label: "System - Custom quote" },
 ];
 
 export default function RequestInvoicePage() {

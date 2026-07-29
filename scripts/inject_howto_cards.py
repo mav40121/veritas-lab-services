@@ -42,7 +42,7 @@ CARDS = {
     moduleKey="veritamap", moduleName="VeritaMap™",
     what="VeritaMap maps every instrument and analyte in your lab with CLIA complexity, specialty, FDA classification, reportable range, reference intervals, and critical values. The test menu feeds VeritaCheck for study setup, VeritaComp for competency programs, and VeritaPT for proficiency testing coverage.",
     how=[
-      "Pick your instruments from the database of 190+ FDA-cleared analyzers.",
+      "Pick your instruments from the database of 269 FDA-cleared analyzers.",
       "Toggle the tests your lab actually performs on each instrument; CLIA complexity auto-populates.",
       "Enter your verified reference ranges, critical values, and AMR per 42 CFR 493.1253. Do not pre-populate without verification.",
       "Export your test menu to Excel for survey reference or finance review.",

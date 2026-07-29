@@ -27,7 +27,7 @@ const MODULES = [
     label: "VeritaMap™",
     desc: "Test Menu Regulatory Mapping",
     detail:
-      "Map every instrument and analyte in your lab with CLIA complexity, specialty, and FDA classification. More than 200 instruments across 18 departments. Feeds VeritaCheck™ instrument selection and VeritaComp™ competency programs.",
+      "Map every instrument and analyte in your lab with CLIA complexity, specialty, and FDA classification. More than 260 instruments across 18 departments. Feeds VeritaCheck™ instrument selection and VeritaComp™ competency programs.",
     badge: "Live",
     badgeColor: "emerald",
     icon: Map,
@@ -115,7 +115,7 @@ const MODULES = [
     label: "VeritaPT™",
     desc: "Proficiency Testing Tracker",
     detail:
-      "Reads your VeritaMap™ test menu, checks each analyte against CLIA PT requirements, and surfaces gaps, recommended programs, and current coverage. Tracks CAP, API, and WSLH enrollments. AAA-covered analytes count as coverage with 5 alternative assessment methods per 42 CFR 493.1236(c)(1).",
+      "Reads your VeritaMap™ test menu, checks each analyte against CLIA PT requirements, and surfaces gaps, recommended programs, and current coverage. Tracks CAP, API, and WSLH enrollments. AAA-covered analytes count as coverage with 8 alternative assessment methods per 42 CFR 493.1236(c)(1).",
     badge: "Live",
     badgeColor: "emerald",
     icon: TestTubes,

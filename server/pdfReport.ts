@@ -999,7 +999,7 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
     tjc:  ["QSA.02.01.01", "QSA.02.02.01"],
     cola: ["LAB.021"],
     aabb: ["5.6.2"],
-    clsi: ["EP28-A3c", "C28-A3c"],
+    clsi: ["EP28-A3c"],
     cfr:  ["42 CFR §493.1253(b)(2)", "42 CFR §493.1271(a)"],
   },
   sensitivity: {

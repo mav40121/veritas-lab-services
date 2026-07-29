@@ -75,7 +75,7 @@ function buildHtml(): string {
 
   <div class="panel">
     <h3>3. Integration breadth</h3>
-    <p>VeritaCheck&trade; runs nine study types under one tool: Precision (EP15), Correlation / Method Comparison, Calibration Verification / Linearity, Reagent Lot Verification (EP26), QC Lot Verification (C24-Ed4), PT/INR Geometric Mean (H47), Multi-Analyte Lot Comparison (Coag), Reference Range Verification, and Analytical Sensitivity (EP17-A2).</p>
+    <p>VeritaCheck&trade; runs fourteen study types under one tool: Precision Verification (EP15-A3), Method Comparison / Multi-Instrument Correlation (EP09), Calibration Verification (EP06), Linearity (EP06), Reagent Lot Verification (EP26), QC Lot Verification (C24-Ed4), PT/INR Geometric Mean (H47), Multi-Analyte Lot Comparison, Coag (EP26), Reference Range Verification (EP28), Sensitivity Verification (EP17-A2), Carryover Verification (EP10-A3), Accuracy / Bias (EP15-A3), Reportable Range / AMR Verification (CLIA 493.1255), and Manual Differential (CLSI H20).</p>
     <p>Around it in the same VeritaAssure&trade; platform: VeritaPolicy&trade;, VeritaMap&trade;, VeritaComp&trade;, VeritaLab&trade;, VeritaOps&trade;, VeritaStock&trade;. One login covers all of them.</p>
     <p>Legacy software covers method comparison and precision well. Other study types scatter across separate vendors and spreadsheets.</p>
   </div>

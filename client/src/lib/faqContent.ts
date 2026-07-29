@@ -434,11 +434,11 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "How many seats are included in each plan?",
-        a: "Seat counts scale with plan tier. Clinic includes 2 seats, Community 5, Hospital 15, and Enterprise 25. Seat counts include the account owner, so a 5-seat Community plan is the owner plus 4 invited teammates. See the pricing page or contact info@veritaslabservices.com for specifics on your situation.",
+        a: "Seat counts scale with plan tier. Clinic includes 2 seats, Community 5, and Hospital 15; System plans are custom-quoted. Seat counts include the account owner, so a 5-seat Community plan is the owner plus 4 invited teammates. See the pricing page or contact info@veritaslabservices.com for specifics on your situation.",
       },
       {
         q: "Can I add more seats later?",
-        a: "Each plan tier includes a fixed number of seats. To get more seats, upgrade to the next tier (Clinic to Community, Community to Hospital, or Hospital to Enterprise) from your Account Settings. Tier upgrades are prorated against your current billing period.",
+        a: "Each plan tier includes a fixed number of seats. To get more seats, upgrade to the next tier (Clinic to Community, Community to Hospital, or Hospital to System) from your Account Settings. Tier upgrades are prorated against your current billing period.",
       },
       {
         q: "Can I belong to multiple labs?",
@@ -530,7 +530,7 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "How does pricing scale with lab size?",
-        a: "Plans are tiered by lab type, not by per-instrument or per-test volume. Clinic ($499/yr) is for single-CLIA practices. Community ($999/yr) for community hospitals and reference networks. Hospital ($1,999/yr) for full-service hospital labs. Enterprise ($2,999/yr) for health systems with multiple sites. All plans include the full module suite.",
+        a: "Plans are tiered by lab type, not by per-instrument or per-test volume. Clinic ($999/yr) is for single-CLIA practices. Community ($2,125/yr) for community hospitals and reference networks. Hospital ($4,995/yr) for full-service hospital labs. System (custom quote) for health systems with multiple sites. All plans include the full module suite.",
       },
       {
         q: "How is my plan tier determined?",
@@ -546,7 +546,7 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "What's the difference between the per-study price and the unlimited subscription?",
-        a: "Per Study is $25 per validation study, paid one-time, no subscription. It's ideal for labs that run only a handful of studies a year. VeritaCheck\u2122 Unlimited at $299 per year breaks even after just 12 studies and includes all VeritaCheck\u2122 functionality. For full-suite access (VeritaTrack\u2122, VeritaStock\u2122, VeritaBench\u2122, and others), choose Clinic, Community, Hospital, or Enterprise.",
+        a: "Per Study is $25 per validation study, paid one-time, no subscription. It's ideal for labs that run only a handful of studies a year. VeritaCheck\u2122 Unlimited at $299 the first year ($499 per year after) breaks even after just 12 studies and includes all VeritaCheck\u2122 functionality. For full-suite access (VeritaTrack\u2122, VeritaStock\u2122, VeritaBench\u2122, and others), choose Clinic, Community, Hospital, or System.",
       },
       {
         q: "Do you offer a money-back guarantee?",
