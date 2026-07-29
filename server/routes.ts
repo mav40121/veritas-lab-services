@@ -12046,7 +12046,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // and the new /api/labs/:labId/veritamap/labwide route (lab-scoped).
   function buildLabwideData(maps: Array<{ id: number; name: string; updated_at: string }>) {
     if (maps.length === 0) {
-      return { analytes: [] as any[], sourceMaps: [] as any[], duplicates: [] as any[], totals: { mapCount: 0, analyteCount: 0, departmentCount: 0 } };
+      return { analytes: [] as any[], sourceMaps: [] as any[], duplicates: [] as any[], totals: { mapCount: 0, analyteCount: 0, departmentCount: 0, missingRefRange: 0, missingCritical: 0, missingAmr: 0 } };
     }
     const mapIds = maps.map((m) => m.id);
     const mapNameById: Record<number, string> = {};
@@ -12072,6 +12072,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const key = `${row.map_id}:${(row.analyte || "").toLowerCase()}`;
       if (!instrByKey[key]) instrByKey[key] = { category: row.category, instrument_name: row.instrument_name };
     }
+    // LHF-3: presence flags for reference range, critical value, and AMR, so the
+    // whole-lab menu surfaces which reportable analytes still lack them. Keyed
+    // by map_id + lower(analyte) to match the per-map menu rows.
+    const refByKey = new Set<string>();
+    const critByKey = new Set<string>();
+    for (const v of ((db as any).$client.prepare(`
+      SELECT map_id, analyte, ref_range_low, ref_range_high, critical_low, critical_high
+        FROM veritamap_analyte_values WHERE map_id IN (${placeholders})
+    `).all(...mapIds) as any[])) {
+      const k = `${v.map_id}:${(v.analyte || "").toLowerCase()}`;
+      if (v.ref_range_low != null || v.ref_range_high != null) refByKey.add(k);
+      if (v.critical_low != null || v.critical_high != null) critByKey.add(k);
+    }
+    const amrByKey = new Set<string>();
+    for (const v of ((db as any).$client.prepare(`
+      SELECT map_id, analyte, amr_low, amr_high FROM veritamap_amr_values WHERE map_id IN (${placeholders})
+    `).all(...mapIds) as any[])) {
+      if (v.amr_low != null || v.amr_high != null) amrByKey.add(`${v.map_id}:${(v.analyte || "").toLowerCase()}`);
+    }
     const analytes = rows.map((r: any) => {
       const key = `${r.map_id}:${(r.analyte || "").toLowerCase()}`;
       const instr = instrByKey[key] ?? { category: null, instrument_name: null };
@@ -12081,6 +12100,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         department: instr.category, instrument: instr.instrument_name || r.instrument_source || null,
         last_cal_ver: r.last_cal_ver, last_method_comp: r.last_method_comp,
         last_precision: r.last_precision, last_sop_review: r.last_sop_review,
+        has_ref_range: refByKey.has(key), has_critical: critByKey.has(key), has_amr: amrByKey.has(key),
         updated_at: r.updated_at,
       };
     });
@@ -12095,11 +12115,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       .filter(([, occurrences]) => new Set(occurrences.map((o) => o.map_id)).size >= 2)
       .map(([analyteKey, occurrences]) => ({ analyte_key: analyteKey, occurrences }));
     const departmentCount = new Set(analytes.map((a) => a.department).filter((d): d is string => !!d)).size;
+    const missingRefRange = analytes.filter((a) => !a.has_ref_range).length;
+    const missingCritical = analytes.filter((a) => !a.has_critical).length;
+    const missingAmr = analytes.filter((a) => !a.has_amr).length;
     return {
       analytes,
       sourceMaps: maps.map((m) => ({ id: m.id, name: m.name, updated_at: m.updated_at })),
       duplicates,
-      totals: { mapCount: maps.length, analyteCount: analytes.length, departmentCount },
+      totals: { mapCount: maps.length, analyteCount: analytes.length, departmentCount, missingRefRange, missingCritical, missingAmr },
     };
   }
   function buildLabwideResponse(maps: Array<{ id: number; name: string; updated_at: string }>, res: any) {
