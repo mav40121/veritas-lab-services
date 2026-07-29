@@ -19,6 +19,7 @@ import { storePdfToken, claimPdfToken } from "./pdfTokens";
 import { buildWasteReport, generateWasteReportPDF, generateWasteReportExcel, type WasteEventRow, type WasteReportContext } from "./wasteReport";
 import { entireLabFlag, sanitizeSpecialties, expandEntireLabRoles, cms209Gaps } from "./cms209Roles";
 import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution, analyteMatch } from "./veritacheckCoverage";
+import { buildCoverageReportRows, generateCoverageReportExcel } from "./coverageReport";
 import { evaluateManualDiff } from "./rumke";
 import { auditVeritamapConsistency } from "./veritamapConsistency";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
@@ -12043,9 +12044,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Shared implementation for labwide that takes the initial "which maps"
   // list as a parameter. Used by both the legacy unscoped route (user-scoped)
   // and the new /api/labs/:labId/veritamap/labwide route (lab-scoped).
-  function buildLabwideResponse(maps: Array<{ id: number; name: string; updated_at: string }>, res: any) {
+  function buildLabwideData(maps: Array<{ id: number; name: string; updated_at: string }>) {
     if (maps.length === 0) {
-      return res.json({ analytes: [], sourceMaps: [], duplicates: [], totals: { mapCount: 0, analyteCount: 0, departmentCount: 0 } });
+      return { analytes: [] as any[], sourceMaps: [] as any[], duplicates: [] as any[], totals: { mapCount: 0, analyteCount: 0, departmentCount: 0 } };
     }
     const mapIds = maps.map((m) => m.id);
     const mapNameById: Record<number, string> = {};
@@ -12094,12 +12095,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       .filter(([, occurrences]) => new Set(occurrences.map((o) => o.map_id)).size >= 2)
       .map(([analyteKey, occurrences]) => ({ analyte_key: analyteKey, occurrences }));
     const departmentCount = new Set(analytes.map((a) => a.department).filter((d): d is string => !!d)).size;
-    res.json({
+    return {
       analytes,
       sourceMaps: maps.map((m) => ({ id: m.id, name: m.name, updated_at: m.updated_at })),
       duplicates,
       totals: { mapCount: maps.length, analyteCount: analytes.length, departmentCount },
-    });
+    };
+  }
+  function buildLabwideResponse(maps: Array<{ id: number; name: string; updated_at: string }>, res: any) {
+    return res.json(buildLabwideData(maps));
   }
 
   // Lab-scoped labwide endpoint (Pfizer-visible bug fix 2026-05-20). When the
@@ -12123,6 +12127,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT id, name, updated_at FROM veritamap_maps WHERE lab_id = ? ORDER BY updated_at DESC"
     ).all(labId) as Array<{ id: number; name: string; updated_at: string }>;
     return buildLabwideResponse(maps, res);
+  });
+
+  // LHF-2: one surveyor-ready Coverage Report from the whole-lab menu. Fuses the
+  // menu roll-up + VeritaCheck coverage status + PT enrollment into one xlsx.
+  app.get("/api/labs/:labId/veritamap/coverage-report.xlsx", authMiddleware, labScopeMW, async (req: any, res) => {
+    try {
+      const sqlite = (db as any).$client;
+      const labId = req.scope.labId;
+      const maps = sqlite.prepare(
+        "SELECT id, name, updated_at FROM veritamap_maps WHERE lab_id = ? ORDER BY updated_at DESC"
+      ).all(labId) as Array<{ id: number; name: string; updated_at: string }>;
+      const { analytes } = buildLabwideData(maps);
+      const coverage = computeCoverageForLab(sqlite, labId);
+      const labRow = sqlite.prepare("SELECT owner_user_id, lab_name, clia_number FROM labs WHERE id = ?").get(labId) as any;
+      const pt = computePTCoverage(labRow?.owner_user_id ?? req.userId, labId);
+      const rows = buildCoverageReportRows({
+        analytes: analytes as any,
+        coverageRows: (coverage.rows || []) as any,
+        methodComparisons: (coverage.methodComparisons || []) as any,
+        ptCoverage: ((pt as any).coverage || []) as any,
+      });
+      const buf = await generateCoverageReportExcel(rows, {
+        labName: labRow?.lab_name || "Laboratory",
+        cliaNumber: labRow?.clia_number || "Not on file",
+      });
+      const date = new Date().toISOString().split("T")[0];
+      res.set({
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="VeritaMap_Coverage_Report_${date}.xlsx"`,
+      });
+      res.send(buf);
+    } catch (err: any) {
+      console.error("[coverage-report xlsx]", err?.message);
+      res.status(500).json({ error: "Coverage report failed" });
+    }
   });
 
   // Create map
