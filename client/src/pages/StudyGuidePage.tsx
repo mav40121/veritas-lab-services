@@ -250,7 +250,7 @@ export default function StudyGuidePage() {
           <h1 className="font-serif text-4xl font-bold mb-3">Which study does your lab need?</h1>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
             CLIA requires non-waived laboratories to verify and document instrument performance on a defined schedule.
-            This guide explains the eleven study types supported by VeritaCheck™, what they are, when CLIA requires them, and how VeritaCheck™ automates each one.
+            This guide explains the fourteen study types supported by VeritaCheck™, what they are, when CLIA requires them, and how VeritaCheck™ automates each one.
           </p>
           <p className="text-xs text-muted-foreground mt-4 max-w-2xl">
             All regulatory citations are drawn directly from{" "}
@@ -736,7 +736,7 @@ export default function StudyGuidePage() {
       <section className="section-padding border-t border-border">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="font-serif text-2xl font-bold mb-3">Ready to run a study?</h2>
-          <p className="text-muted-foreground mb-6">VeritaCheck™ automates all eleven study types, no desktop software, no spreadsheets. Generate a CLIA-compliant PDF report in minutes.</p>
+          <p className="text-muted-foreground mb-6">VeritaCheck™ automates all fourteen study types, no desktop software, no spreadsheets. Generate a CLIA-compliant PDF report in minutes.</p>
           <Link href="/veritacheck" className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 rounded-lg font-semibold text-sm transition-colors">
             <FlaskConical size={16} />
             Open VeritaCheck{"\u2122"}

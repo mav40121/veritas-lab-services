@@ -205,7 +205,7 @@ function StatusBadge({ status }: { status: string }) {
 const PLAN_OPTIONS = [
   { value: "free",            label: "Free" },
   { value: "per_study",       label: "Per Study" },
-  { value: "clinic",          label: "Clinic ($499/yr - 2 seats)" },
+  { value: "clinic",          label: "Clinic ($999/yr - 2 seats)" },
   { value: "community",       label: "Community ($999/yr - 5 seats)" },
   { value: "hospital",        label: "Hospital ($1,999/yr - 15 seats)" },
   { value: "enterprise",      label: "Enterprise ($2,999/yr - 25 seats)" },

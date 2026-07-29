@@ -55,7 +55,7 @@ export default function VeritaTrackPage() {
               {!isLoggedIn && (
                 <div className="flex flex-wrap gap-3 mb-8">
                   <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
-                    <div className="text-2xl font-bold text-primary">From $499/yr</div>
+                    <div className="text-2xl font-bold text-primary">From $999/yr</div>
                     <div className="text-xs text-muted-foreground">Included with VeritaAssure{"\u2122"} Suite</div>
                   </div>
                   <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">

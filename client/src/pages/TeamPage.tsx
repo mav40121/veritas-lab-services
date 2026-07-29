@@ -60,7 +60,7 @@ return (
                 Michael is a distinguished US Army veteran with 22 years of service and over a decade of director-level leadership in the civilian healthcare sector. Leveraging four years as a Joint Commission (TJC) Surveyor, he has conducted regulatory and compliance inspections at more than 200 healthcare facilities across the country.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                In 2026, Michael founded VeritaAssure™, a clinical laboratory compliance software suite built directly from his inspection experience. The twelve-module suite is live at veritaslabservices.com, giving laboratory directors the documentation infrastructure that most labs have never had.
+                In 2026, Michael founded VeritaAssure™, a clinical laboratory compliance software suite built directly from his inspection experience. The seventeen-module suite is live at veritaslabservices.com, giving laboratory directors the documentation infrastructure that most labs have never had.
               </p>
 
               {/* Credentials */}
