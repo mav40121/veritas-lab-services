@@ -743,6 +743,7 @@ function EditDocumentDialog({ doc, labId, onClose, onSubmit, onArchive, pending 
             <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="w-full min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-sm" />
           </div>
           <LinkedItemsSection docId={doc.id} />
+          <LinkedPolicySection docId={doc.id} />
           </div>
         <DialogFooter className="justify-between">
           <Button variant="outline" onClick={onArchive} disabled={pending || doc.status === "archived"}>
@@ -883,6 +884,159 @@ function LinkedItemsSection({ docId }: { docId: number }) {
           }}
           onClose={() => setPickerOpen(false)}
         />
+      )}
+    </div>
+  );
+}
+
+// ─── Linked VeritaPolicy policy: attach one of the lab's VeritaPolicy policies
+// to this document (optional) and open it from here. Reuses the existing
+// cross-link endpoints (target_module = "veritapolicy"); the policy list and
+// the inline render both come from VeritaPolicy. No new backend.
+type PolicyDoc = { id: number; title: string; status?: string; current_file_format?: string | null };
+type PolicyXLink = { id: number; document_id: number; target_module: string; target_entity_id: number; target_entity_label: string | null; linked_at: string };
+
+function LinkedPolicySection({ docId }: { docId: number }) {
+  const labId = useActiveLabId();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const xlinkKey = `/api/labs/${labId}/veritascan/documents/${docId}/cross-links`;
+
+  const xlinksQuery = useQuery<PolicyXLink[]>({
+    queryKey: [xlinkKey],
+    enabled: !!labId,
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}${xlinkKey}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(`Failed to load links (${res.status})`);
+      return res.json();
+    },
+  });
+  const policyLinks = (xlinksQuery.data || []).filter(x => x.target_module === "veritapolicy");
+  const linkedPolicyIds = useMemo(() => new Set(policyLinks.map(l => l.target_entity_id)), [policyLinks]);
+
+  const policiesQuery = useQuery<PolicyDoc[]>({
+    queryKey: [`/api/labs/${labId}/veritapolicy/documents`, "scan-link-picker"],
+    enabled: !!labId && pickerOpen,
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/labs/${labId}/veritapolicy/documents`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(`Failed to load policies (${res.status})`);
+      const body = await res.json();
+      return (body?.documents || []) as PolicyDoc[];
+    },
+  });
+
+  const linkMutation = useMutation({
+    mutationFn: async (policy: PolicyDoc) => {
+      const res = await fetch(`${API_BASE}${xlinkKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ target_module: "veritapolicy", target_entity_id: policy.id, target_entity_label: policy.title }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Link failed (${res.status})`); }
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [xlinkKey] }),
+    onError: (err: Error) => toast({ title: "Could not link policy", description: err.message, variant: "destructive" }),
+  });
+
+  const unlinkMutation = useMutation({
+    mutationFn: async (linkId: number) => {
+      const res = await fetch(`${API_BASE}${xlinkKey}/${linkId}`, { method: "DELETE", headers: authHeaders() });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Unlink failed (${res.status})`); }
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [xlinkKey] }),
+    onError: (err: Error) => toast({ title: "Could not unlink policy", description: err.message, variant: "destructive" }),
+  });
+
+  // Open the linked policy inline (new tab). VeritaPolicy render returns a PDF
+  // blob for PDFs and JSON { html } for DOCX/HTML; handle both. Bearer auth
+  // means we fetch then hand a blob URL to a pre-opened tab (popup-safe).
+  const openPolicy = async (policyId: number) => {
+    if (opening) return;
+    setOpening(true);
+    const win = window.open("", "_blank");
+    try {
+      const res = await fetch(`${API_BASE}/api/labs/${labId}/veritapolicy/documents/${policyId}/render`, { headers: authHeaders() });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Open failed (${res.status})`); }
+      const ct = res.headers.get("content-type") || "";
+      let blob: Blob;
+      if (ct.includes("application/json")) {
+        const body = await res.json();
+        blob = new Blob([body?.html || "<p>This policy has no viewable content.</p>"], { type: "text/html" });
+      } else {
+        blob = await res.blob();
+      }
+      const url = URL.createObjectURL(blob);
+      if (win) win.location.href = url; else window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err: any) {
+      if (win) win.close();
+      toast({ title: "Could not open policy", description: String(err?.message || err), variant: "destructive" });
+    } finally {
+      setOpening(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label className="text-sm">Linked Policy <span className="text-muted-foreground text-xs">({policyLinks.length})</span></Label>
+        <Button variant="outline" size="sm" onClick={() => setPickerOpen(true)} data-testid="button-open-policy-picker">
+          <Link2 size={13} className="mr-1.5" />Link Policy
+        </Button>
+      </div>
+      {policyLinks.length === 0 && (
+        <p className="text-xs text-muted-foreground italic">No VeritaPolicy policy linked. Link one so it can be opened from here.</p>
+      )}
+      <div className="space-y-1.5">
+        {policyLinks.map(link => (
+          <div key={link.id} className="flex items-center gap-2 p-2 rounded border bg-muted/30" data-testid={`policy-link-${link.id}`}>
+            <FileCheck2 size={14} className="text-primary shrink-0" />
+            <div className="flex-1 text-xs font-medium truncate" title={link.target_entity_label || `Policy #${link.target_entity_id}`}>
+              {link.target_entity_label || `Policy #${link.target_entity_id}`}
+            </div>
+            <Button variant="ghost" size="sm" className="h-7" onClick={() => openPolicy(link.target_entity_id)} disabled={opening} data-testid={`button-open-policy-${link.target_entity_id}`}>
+              <ExternalLink size={13} className="mr-1" />Open
+            </Button>
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => unlinkMutation.mutate(link.id)} disabled={unlinkMutation.isPending} data-testid={`button-unlink-policy-${link.id}`}>
+              <X size={13} />
+            </Button>
+          </div>
+        ))}
+      </div>
+      {pickerOpen && (
+        <Dialog open onOpenChange={(o) => { if (!o) setPickerOpen(false); }}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader><DialogTitle>Link a VeritaPolicy policy</DialogTitle></DialogHeader>
+            <div className="space-y-1.5 max-h-[60vh] overflow-y-auto">
+              {policiesQuery.isLoading && <p className="text-sm text-muted-foreground">Loading policies...</p>}
+              {policiesQuery.isError && <p className="text-sm text-destructive">Could not load VeritaPolicy policies.</p>}
+              {policiesQuery.data && policiesQuery.data.length === 0 && (
+                <p className="text-sm text-muted-foreground">No policies found in VeritaPolicy for this lab.</p>
+              )}
+              {(policiesQuery.data || []).map(p => {
+                const already = linkedPolicyIds.has(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    disabled={already || linkMutation.isPending}
+                    onClick={() => linkMutation.mutate(p, { onSuccess: () => setPickerOpen(false) })}
+                    className="w-full text-left p-2 rounded border hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    data-testid={`policy-option-${p.id}`}
+                  >
+                    <FileCheck2 size={14} className="text-primary shrink-0" />
+                    <span className="flex-1 text-sm truncate">{p.title}</span>
+                    {already && <Badge variant="outline" className="text-[10px]">Linked</Badge>}
+                  </button>
+                );
+              })}
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
