@@ -89,6 +89,7 @@ interface Compliance {
   overdueList: OverdueRow[];
   dueSoonList: OverdueRow[];
   perUserAttest: UserAttestRow[];
+  perStaffAttest?: { staff_employee_id: number; staff_name: string; title: string | null; signed_count: number; last_signed_at: string | null }[];
   pendingReviewList: PendingReviewRow[];
 }
 
@@ -218,7 +219,7 @@ export default function VeritaPolicyCompliancePage() {
     );
   }
 
-  const { headline, perManual, overdueList, dueSoonList, perUserAttest, pendingReviewList } = data;
+  const { headline, perManual, overdueList, dueSoonList, perUserAttest, perStaffAttest = [], pendingReviewList } = data;
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
@@ -638,6 +639,41 @@ export default function VeritaPolicyCompliancePage() {
                       <td className="py-2 pr-3 text-right text-emerald-700">{u.completed}</td>
                       <td className="py-2 pr-3 text-right">{u.total}</td>
                       <td className="py-2 pr-3 text-right">{pct(u.completed, u.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Staff Portal signatures (kiosk read-and-sign) — LHF-1 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Staff Portal signatures (kiosk)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {perStaffAttest.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No bench-staff kiosk signatures yet.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs uppercase text-muted-foreground">
+                    <th className="py-2 pr-3">Staff member</th>
+                    <th className="py-2 pr-3">Title</th>
+                    <th className="py-2 pr-3 text-right">Policies signed</th>
+                    <th className="py-2 pr-3 text-right">Last signed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {perStaffAttest.map((s) => (
+                    <tr key={s.staff_employee_id} className="border-b last:border-b-0">
+                      <td className="py-2 pr-3 font-medium">{s.staff_name}</td>
+                      <td className="py-2 pr-3 text-muted-foreground">{s.title || ""}</td>
+                      <td className="py-2 pr-3 text-right">{s.signed_count}</td>
+                      <td className="py-2 pr-3 text-right text-muted-foreground">{s.last_signed_at ? String(s.last_signed_at).slice(0, 10) : ""}</td>
                     </tr>
                   ))}
                 </tbody>
