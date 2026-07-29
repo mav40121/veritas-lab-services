@@ -47,6 +47,15 @@ export default function Dashboard() {
     queryKey: [listUrl],
   });
 
+  // Sign-off groups for this lab, so each study row can name the group it
+  // belongs to (the row carries signoff_group_id; this resolves the name).
+  const signoffGroupsUrl = `/api/labs/${labId}/veritacheck/signoff-groups`;
+  const { data: signoffGroups } = useQuery<{ id: number; name: string; status: string }[]>({
+    queryKey: [signoffGroupsUrl],
+    enabled: !!labId,
+  });
+  const groupNameById = new Map((signoffGroups || []).map((g) => [g.id, g.name]));
+
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", deleteUrl(id)),
     onSuccess: () => {
@@ -304,6 +313,12 @@ export default function Dashboard() {
                     {(study as any).archived_at ? (
                       <Badge variant="outline" className="text-xs shrink-0 border-amber-500/40 text-amber-600" data-testid={`badge-archived-${study.id}`} title={(study as any).archive_reason || undefined}>
                         <Archive size={10} className="mr-1" />Archived
+                      </Badge>
+                    ) : null}
+                    {(study as any).signoff_group_id ? (
+                      <Badge variant="outline" className="text-xs shrink-0 max-w-[240px] border-emerald-500/40 text-emerald-600" data-testid={`badge-signoff-group-${study.id}`} title={`In sign-off group: ${groupNameById.get((study as any).signoff_group_id) || `#${(study as any).signoff_group_id}`}`}>
+                        <FolderOpen size={10} className="mr-1 shrink-0" />
+                        <span className="truncate">Sign-off group{groupNameById.get((study as any).signoff_group_id) ? `: ${groupNameById.get((study as any).signoff_group_id)}` : ""}</span>
                       </Badge>
                     ) : null}
                   </div>

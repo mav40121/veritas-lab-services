@@ -10663,6 +10663,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       verdict_override_at: row.verdict_override_at,
       verdict_override_by_user_id: row.verdict_override_by_user_id,
       verdict_before_override: row.verdict_before_override,
+      // Sign-off group membership. Needed by the My Studies list so a study
+      // already assigned to a VeritaCheck sign-off group shows its group at a
+      // glance (was previously dropped here, so the client's "In group" cue
+      // never rendered even after a study was added).
+      signoff_group_id: row.signoff_group_id,
       createdAt: row.created_at,
       lab_id: row.lab_id,
     };
