@@ -47,6 +47,9 @@ interface LabwideAnalyte {
   last_method_comp: string | null;
   last_precision: string | null;
   last_sop_review: string | null;
+  has_ref_range?: boolean;
+  has_critical?: boolean;
+  has_amr?: boolean;
   updated_at: string;
 }
 
@@ -65,7 +68,7 @@ interface LabwideResponse {
   analytes: LabwideAnalyte[];
   sourceMaps: LabwideSourceMap[];
   duplicates: LabwideDuplicate[];
-  totals: { mapCount: number; analyteCount: number; departmentCount: number };
+  totals: { mapCount: number; analyteCount: number; departmentCount: number; missingRefRange: number; missingCritical: number; missingAmr: number };
 }
 
 function formatDate(iso: string | null | undefined): string {
@@ -347,6 +350,30 @@ export default function VeritaMapLabwidePage() {
         </div>
       )}
 
+      {/* Menu completeness gaps (LHF-3): reference range / critical value / AMR */}
+      {!isLoading && data && (
+        <div className="grid grid-cols-3 gap-3 mb-6">
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium mb-1">Missing reference range</div>
+              <div className={`text-2xl font-bold tabular-nums ${data.totals.missingRefRange > 0 ? "text-amber-600" : "text-muted-foreground"}`}>{data.totals.missingRefRange}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium mb-1">Missing critical value (advisory)</div>
+              <div className="text-2xl font-bold tabular-nums text-muted-foreground">{data.totals.missingCritical}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium mb-1">Missing AMR</div>
+              <div className={`text-2xl font-bold tabular-nums ${data.totals.missingAmr > 0 ? "text-amber-600" : "text-muted-foreground"}`}>{data.totals.missingAmr}</div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex flex-col md:flex-row gap-2 mb-4">
         <div className="relative flex-1">
@@ -469,6 +496,30 @@ export default function VeritaMapLabwidePage() {
                                 Same analyte appears in 2 or more maps. Consider linking via
                                 method comparison so results stay aligned across departments.
                               </TooltipContent>
+                            </Tooltip>
+                          )}
+                          {a.has_ref_range === false && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex items-center rounded px-1 text-[9px] font-semibold border border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">RR</span>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs text-xs">No reference range on file for this analyte.</TooltipContent>
+                            </Tooltip>
+                          )}
+                          {a.has_amr === false && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex items-center rounded px-1 text-[9px] font-semibold border border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">AMR</span>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs text-xs">No analytical measurement range (AMR) on file for this analyte.</TooltipContent>
+                            </Tooltip>
+                          )}
+                          {a.has_critical === false && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex items-center rounded px-1 text-[9px] font-semibold border border-border bg-muted text-muted-foreground">CV</span>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs text-xs">No critical value on file. Advisory: not every analyte requires one.</TooltipContent>
                             </Tooltip>
                           )}
                         </div>
