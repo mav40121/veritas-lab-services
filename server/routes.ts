@@ -22289,11 +22289,45 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch { return []; }
   }
 
+  // Lazily seed the VeritaStaff staff_labs record from the account's existing
+  // lab identity (name + CLIA already captured at signup / account level), so a
+  // lab that has its info at the account level is not forced to re-enter it in a
+  // Lab Setup dialog before the roster loads. Defaults match the POST upsert;
+  // blank fields (address, accreditor, complexity) are refined later via Edit
+  // Lab. Returns the seeded row, or null when there is no name+CLIA to seed from.
+  const seedStaffLabFromAccount = (sqlite: any, opts: { tier2LabId: number | null; userId: number; labName?: string | null; cliaNumber?: string | null }) => {
+    const labName = (opts.labName || "").toString().trim();
+    const cliaNumber = (opts.cliaNumber || "").toString().trim();
+    if (!labName || !cliaNumber) return null;
+    const now = new Date().toISOString();
+    try {
+      const result = sqlite.prepare(
+        "INSERT INTO staff_labs (user_id, tier2_lab_id, lab_name, clia_number, lab_address_street, lab_address_city, lab_address_state, lab_address_zip, lab_phone, certificate_type, accreditation_body, accreditation_body_other, includes_nys, complexity, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+      ).run(opts.userId, opts.tier2LabId, labName, cliaNumber, "", "", "", "", "", "compliance", "CLIA_ONLY", "", 0, "high", now, now);
+      return sqlite.prepare("SELECT * FROM staff_labs WHERE id = ?").get(result.lastInsertRowid);
+    } catch {
+      // Concurrent insert or clash: return whatever now exists for this scope.
+      if (opts.tier2LabId) return sqlite.prepare("SELECT * FROM staff_labs WHERE tier2_lab_id = ?").get(opts.tier2LabId) || null;
+      return sqlite.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(opts.userId) || null;
+    }
+  };
+
   // Get or create staff lab
   app.get("/api/staff/lab", authMiddleware, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
+    const sqlite = (db as any).$client;
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId);
+    let lab = sqlite.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId);
+    if (!lab) {
+      const acctLab = sqlite.prepare("SELECT id, clia_number, lab_name FROM labs WHERE owner_user_id = ? ORDER BY id LIMIT 1").get(dataUserId) as any;
+      const u = sqlite.prepare("SELECT clia_number, clia_lab_name, lab_id FROM users WHERE id = ?").get(dataUserId) as any;
+      lab = seedStaffLabFromAccount(sqlite, {
+        tier2LabId: (u?.lab_id ?? acctLab?.id) || null,
+        userId: dataUserId,
+        labName: acctLab?.lab_name || u?.clia_lab_name,
+        cliaNumber: acctLab?.clia_number || u?.clia_number,
+      });
+    }
     res.json(lab || null);
   });
 
@@ -22591,7 +22625,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // tier2_lab_id (FK to labs). Lab-scoped variants scope by tier2_lab_id.
   app.get("/api/labs/:labId/staff/lab", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
-    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE tier2_lab_id = ?").get(req.scope.labId);
+    const sqlite = (db as any).$client;
+    let lab = sqlite.prepare("SELECT * FROM staff_labs WHERE tier2_lab_id = ?").get(req.scope.labId);
+    if (!lab) {
+      // Seed from the active lab's account identity so the roster is not blocked
+      // behind a redundant Lab Setup form (the lab already has name + CLIA).
+      const acct = req.scope.lab || {};
+      lab = seedStaffLabFromAccount(sqlite, {
+        tier2LabId: req.scope.labId,
+        userId: acct.owner_user_id ?? req.userId,
+        labName: acct.lab_name,
+        cliaNumber: acct.clia_number,
+      });
+    }
     res.json(lab || null);
   });
   app.get("/api/labs/:labId/staff/employees", authMiddleware, labScopeMiddleware, (req: any, res) => {
