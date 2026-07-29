@@ -12,6 +12,7 @@ import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { useSEO } from "@/hooks/useSEO";
 import { authHeaders } from "@/lib/auth";
+import { BulkAddToSignoffGroup } from "@/components/BulkAddToSignoffGroup";
 import { ChevronLeft, ListChecks, GitCompare, Download, ArrowUpDown, Unlink } from "lucide-react";
 
 type LinearityStatus = "covered" | "review" | "missing" | "exempt";
@@ -146,6 +147,37 @@ export default function VeritaCheckCoveragePage() {
 
   const coverageUrl = labId ? `/api/labs/${labId}/veritacheck/coverage` : null;
   const { data, isLoading } = useQuery<Coverage>({ queryKey: [coverageUrl], enabled: !!coverageUrl });
+
+  // Bulk add-to-sign-off-group, driven from this readiness view. Coverage rows
+  // already carry the study ids that cover each analyte/instrument (and each
+  // method comparison carries one), so the director can sweep covered studies
+  // into a sign-off group straight from here. Cross-reference the studies list
+  // (which carries signoff_group_id) to know which of those studies are still
+  // groupable (not draft, not finalized, not archived, not already in a group)
+  // and which group an already-grouped study sits in.
+  const studiesUrl = labId ? `/api/labs/${labId}/studies` : null;
+  const { data: studiesForGroup } = useQuery<any[]>({ queryKey: [studiesUrl], enabled: !!studiesUrl });
+  const signoffGroupsUrl = labId ? `/api/labs/${labId}/veritacheck/signoff-groups` : null;
+  const { data: signoffGroups } = useQuery<any[]>({ queryKey: [signoffGroupsUrl], enabled: !!signoffGroupsUrl });
+  const studyById = useMemo(() => new Map<number, any>((studiesForGroup || []).map((s: any) => [s.id, s])), [studiesForGroup]);
+  const groupNameById = useMemo(() => new Map<number, string>((signoffGroups || []).map((g: any) => [g.id, g.name])), [signoffGroups]);
+  const isGroupable = (id: number) => {
+    const s = studyById.get(id);
+    return !!s && s.status !== "draft" && s.lifecycle_state !== "finalized" && !s.archived_at && !s.signoff_group_id;
+  };
+  const studyGroupName = (id: number): string | null => {
+    const s = studyById.get(id);
+    const gid = s && s.signoff_group_id;
+    return gid ? (groupNameById.get(gid) || `#${gid}`) : null;
+  };
+  const [selectedStudies, setSelectedStudies] = useState<Set<number>>(new Set());
+  const toggleStudies = (ids: number[], on: boolean) =>
+    setSelectedStudies((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) { if (on) next.add(id); else next.delete(id); }
+      return next;
+    });
+  const clearStudySelection = () => setSelectedStudies(new Set());
 
   const exemptMut = useMutation({
     mutationFn: (b: { instrumentTestId: number; multical: boolean; noncal: boolean; waived: boolean; otherReason: string }) =>
@@ -286,6 +318,12 @@ export default function VeritaCheckCoveragePage() {
     });
   }, [data, mcSort, mcSpecialty, mcStatus, analyteSpecialty]);
 
+  // Groupable study ids among the currently-shown rows, for the per-table
+  // "Select all groupable" convenience. Deduped across rows (one study can cover
+  // several analytes).
+  const linGroupableIds = Array.from(new Set(rows.flatMap((r) => r.studyIds.filter(isGroupable))));
+  const mcGroupableIds = Array.from(new Set(mcRows.filter((m) => m.studyId && isGroupable(m.studyId)).map((m) => m.studyId as number)));
+
   if (!labId) {
     return <div className="max-w-2xl mx-auto px-4 py-16 text-center text-muted-foreground">Pick a lab in the NavBar switcher to view coverage.</div>;
   }
@@ -349,20 +387,32 @@ export default function VeritaCheckCoveragePage() {
           </SelectContent>
         </Select>
         <span className="text-xs text-muted-foreground">{mcRows.length} shown</span>
+        {mcGroupableIds.length > 0 && (
+          <Button variant="ghost" size="sm" className="h-8" data-testid="cov-mc-select-all"
+            onClick={() => toggleStudies(mcGroupableIds, !mcGroupableIds.every((id) => selectedStudies.has(id)))}>
+            {mcGroupableIds.every((id) => selectedStudies.has(id)) ? "Clear these" : `Select all groupable (${mcGroupableIds.length})`}
+          </Button>
+        )}
       </div>
       <Card className="mb-8"><CardContent className="p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="text-left text-xs text-muted-foreground border-b border-border">
+              <th className="py-2 px-3 font-medium w-8"></th>
               <McSortTh label="Analyte" k="analyte" sort={mcSort} setSort={setMcSort} />
               <McSortTh label="Instruments" k="instruments" sort={mcSort} setSort={setMcSort} />
               <McSortTh label="Study" k="study" sort={mcSort} setSort={setMcSort} />
               <McSortTh label="Verdict" k="verdict" sort={mcSort} setSort={setMcSort} />
             </tr></thead>
             <tbody>
-              {mcRows.length === 0 && <tr><td colSpan={4} className="py-6 text-center text-muted-foreground text-sm">Nothing matches this filter.</td></tr>}
+              {mcRows.length === 0 && <tr><td colSpan={5} className="py-6 text-center text-muted-foreground text-sm">Nothing matches this filter.</td></tr>}
               {mcRows.map((m) => (
                 <tr key={m.analyte} className={`border-b border-border/60 ${m.hasStudy ? "cursor-pointer hover:bg-muted/40" : ""}`} onClick={() => openStudy(m.studyId)} title={m.hasStudy ? "Open study" : undefined}>
+                  <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
+                    {m.studyId && isGroupable(m.studyId)
+                      ? <Checkbox checked={selectedStudies.has(m.studyId)} onCheckedChange={(v) => toggleStudies([m.studyId as number], !!v)} data-testid={`cov-mc-select-${m.studyId}`} aria-label={`Select ${m.analyte} correlation study for a sign-off group`} />
+                      : (m.studyId && studyGroupName(m.studyId) ? <span className="text-[10px] text-muted-foreground whitespace-nowrap" title={`In sign-off group: ${studyGroupName(m.studyId)}`}>In group</span> : null)}
+                  </td>
                   <td className="py-2 px-3">{m.analyte}</td>
                   <td className="py-2 px-3 text-muted-foreground text-xs">{m.instruments.join(", ")}</td>
                   <td className="py-2 px-3">{m.hasStudy
@@ -395,7 +445,7 @@ export default function VeritaCheckCoveragePage() {
           </SelectContent>
         </Select>
         <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="w-48 h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-48 h-8 text-xs" data-testid="lin-status-filter"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="attention">Needs attention</SelectItem>
             <SelectItem value="all">All</SelectItem>
@@ -406,11 +456,18 @@ export default function VeritaCheckCoveragePage() {
           </SelectContent>
         </Select>
         <span className="text-xs text-muted-foreground">{rows.length} shown</span>
+        {linGroupableIds.length > 0 && (
+          <Button variant="ghost" size="sm" className="h-8" data-testid="cov-lin-select-all"
+            onClick={() => toggleStudies(linGroupableIds, !linGroupableIds.every((id) => selectedStudies.has(id)))}>
+            {linGroupableIds.every((id) => selectedStudies.has(id)) ? "Clear these" : `Select all groupable (${linGroupableIds.length})`}
+          </Button>
+        )}
       </div>
       <Card><CardContent className="p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="text-left text-xs text-muted-foreground border-b border-border">
+              <th className="py-2 px-3 font-medium w-8"></th>
               <SortTh label="Analyte" k="analyte" sort={sort} setSort={setSort} />
               <SortTh label="Instrument" k="instrument" sort={sort} setSort={setSort} />
               <SortTh label="Status" k="status" sort={sort} setSort={setSort} />
@@ -419,9 +476,17 @@ export default function VeritaCheckCoveragePage() {
               <th className="py-2 px-3 font-medium text-center">Waived (not rqd)</th><th className="py-2 px-3 font-medium">Other</th>
             </tr></thead>
             <tbody>
-              {rows.length === 0 && <tr><td colSpan={8} className="py-6 text-center text-muted-foreground text-sm">Nothing matches this filter.</td></tr>}
-              {rows.map((r) => (
+              {rows.length === 0 && <tr><td colSpan={9} className="py-6 text-center text-muted-foreground text-sm">Nothing matches this filter.</td></tr>}
+              {rows.map((r) => {
+                const gids = r.studyIds.filter(isGroupable);
+                const groupedName = r.studyIds.map(studyGroupName).find(Boolean) || null;
+                return (
                 <tr key={r.instrumentTestId} className={`border-b border-border/60 ${r.studyIds.length ? "cursor-pointer hover:bg-muted/40" : ""}`} data-testid={`cov-row-${r.instrumentTestId}`} onClick={() => openStudy(r.studyIds[0])} title={r.studyIds.length ? "Open study" : undefined}>
+                  <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
+                    {gids.length > 0
+                      ? <Checkbox checked={gids.every((id) => selectedStudies.has(id))} onCheckedChange={(v) => toggleStudies(gids, !!v)} data-testid={`cov-select-${r.instrumentTestId}`} aria-label={`Select ${r.analyte} on ${r.instrument} for a sign-off group`} />
+                      : (groupedName ? <span className="text-[10px] text-muted-foreground whitespace-nowrap" title={`In sign-off group: ${groupedName}`}>In group</span> : null)}
+                  </td>
                   <td className="py-2 px-3">{r.analyte}</td>
                   <td className="py-2 px-3 text-muted-foreground text-xs">{r.instrument}</td>
                   <td className="py-2 px-3">{linearityBadge(r)}</td>
@@ -448,7 +513,8 @@ export default function VeritaCheckCoveragePage() {
                     />
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -485,6 +551,16 @@ export default function VeritaCheckCoveragePage() {
             </details>
           )}
         </>
+      )}
+
+      {/* Floating batch action bar: appears once studies are selected across
+          either table, and adds them all to a sign-off group in one action. */}
+      {selectedStudies.size > 0 && labId && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 rounded-full border border-border bg-background/95 backdrop-blur px-4 py-2 shadow-lg" data-testid="cov-bulk-bar">
+          <span className="text-sm font-medium">{selectedStudies.size} {selectedStudies.size === 1 ? "study" : "studies"} selected</span>
+          <BulkAddToSignoffGroup labId={labId} studyIds={Array.from(selectedStudies)} listUrl={studiesUrl!} onDone={clearStudySelection} />
+          <Button variant="ghost" size="sm" className="h-8" data-testid="cov-bulk-clear" onClick={clearStudySelection}>Clear</Button>
+        </div>
       )}
     </div>
   );
