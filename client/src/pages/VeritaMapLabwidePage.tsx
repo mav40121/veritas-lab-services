@@ -3,6 +3,8 @@ import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { authHeaders } from "@/lib/auth";
+import { API_BASE } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +31,7 @@ import {
   Link2,
   Search,
   ChevronRight,
+  Download,
 } from "lucide-react";
 
 interface LabwideAnalyte {
@@ -88,6 +91,31 @@ export default function VeritaMapLabwidePage() {
   const [search, setSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [mapFilter, setMapFilter] = useState<string>("all");
+  const [exporting, setExporting] = useState(false);
+
+  // LHF-2: download the surveyor-ready Coverage Report xlsx for this lab. Needs
+  // the auth header, so fetch to a blob rather than a plain link.
+  const exportCoverageReport = async () => {
+    if (!activeLabId || exporting) return;
+    setExporting(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/veritamap/coverage-report.xlsx`, { headers: authHeaders() });
+      if (!res.ok) throw new Error("export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `VeritaMap_Coverage_Report_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      // best-effort; the button re-enables on failure
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Lab-scoped labwide URL when an active lab is set. Without this, the URL
   // says /labs/X/veritamap-app/labwide but the legacy user-scoped endpoint
@@ -356,6 +384,15 @@ export default function VeritaMapLabwidePage() {
             ))}
           </SelectContent>
         </Select>
+        <Button
+          variant="outline"
+          className="h-9 text-sm shrink-0"
+          disabled={!activeLabId || exporting}
+          onClick={exportCoverageReport}
+        >
+          <Download size={14} className="mr-1.5" />
+          {exporting ? "Preparing…" : "Coverage Report"}
+        </Button>
       </div>
 
       {/* Loading */}
