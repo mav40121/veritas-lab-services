@@ -74,6 +74,7 @@ export default function SurveyorViewPage() {
   const [viewPdfUrl, setViewPdfUrl] = useState<string>("");
   const [viewTampered, setViewTampered] = useState(false);
   const [viewSignoffs, setViewSignoffs] = useState<Signoff[]>([]);
+  const [viewStaffSignatures, setViewStaffSignatures] = useState<any[]>([]);
   const [viewLoading, setViewLoading] = useState(false);
 
   const openView = async (doc: SurveyorDoc) => {
@@ -82,11 +83,12 @@ export default function SurveyorViewPage() {
     setViewPdfUrl("");
     setViewTampered(false);
     setViewSignoffs([]);
+    setViewStaffSignatures([]);
     setViewLoading(true);
     try {
       fetch(`/api/surveyor/${token}/policies/${doc.id}/signoffs`)
         .then((r) => r.json())
-        .then((b) => setViewSignoffs(b?.signoffs || []))
+        .then((b) => { setViewSignoffs(b?.signoffs || []); setViewStaffSignatures(b?.staffSignatures || []); })
         .catch(() => {});
       if (doc.current_file_format === "pdf") {
         const res = await fetch(`/api/surveyor/${token}/policies/${doc.id}/render`);
@@ -278,6 +280,32 @@ export default function SurveyorViewPage() {
                         <div className="text-[10px] font-mono text-muted-foreground break-all">
                           sha256: {s.signed_document_hash?.slice(0, 24)}…
                         </div>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+            {viewStaffSignatures.length > 0 && (
+              <div className="rounded border bg-muted/30 p-2 text-xs space-y-1 mb-2">
+                <div className="font-medium flex items-center gap-1">
+                  <ShieldCheck size={14} /> Staff signatures ({viewStaffSignatures.length})
+                </div>
+                <ol className="space-y-1">
+                  {viewStaffSignatures.map((s: any) => (
+                    <li key={s.id} className="flex items-start gap-2 leading-snug">
+                      <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] uppercase border bg-teal-100 text-teal-900 border-teal-300">
+                        signed
+                      </span>
+                      <span className="flex-1">
+                        <span className="font-medium">{s.signer_name}</span>
+                        {s.signer_title && (
+                          <span className="text-muted-foreground"> ({s.signer_title})</span>
+                        )}
+                        {s.version_number != null && (
+                          <span className="text-muted-foreground"> on v{s.version_number}</span>
+                        )}
+                        <span className="text-muted-foreground"> at {fmtDate(s.signed_at)}</span>
                       </span>
                     </li>
                   ))}

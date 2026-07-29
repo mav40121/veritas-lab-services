@@ -32047,6 +32047,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // Kiosk (Staff Portal) policy signatures for one document, enriched with the
+  // signer's name/title from the VeritaStaff roster. Read-side only. Used by the
+  // per-document attestation roster and the public surveyor timeline so a
+  // director or surveyor sees the bench staff who signed, not just writer
+  // accounts. (LHF-1: kiosk signatures were written but never surfaced.)
+  function staffPolicySignaturesForDoc(sqlite: any, labId: number, documentId: number) {
+    const rows = sqlite.prepare(
+      `SELECT sps.id, sps.document_id, sps.version_id, sps.signed_at,
+              sps.typed_signature, sps.ip_address, sps.user_agent,
+              se.first_name, se.last_name, se.middle_initial, se.title,
+              pv.version_number
+         FROM staff_portal_policy_signatures sps
+         LEFT JOIN staff_employees se ON se.id = sps.staff_employee_id
+         LEFT JOIN policy_versions pv ON pv.id = sps.version_id
+        WHERE sps.lab_id = ? AND sps.document_id = ?
+        ORDER BY sps.signed_at DESC`
+    ).all(labId, documentId) as any[];
+    return rows.map((r) => {
+      const nm = [r.last_name, r.first_name].filter(Boolean).join(", ");
+      return {
+        id: r.id,
+        document_id: r.document_id,
+        version_id: r.version_id,
+        version_number: r.version_number,
+        signed_at: r.signed_at,
+        typed_signature: r.typed_signature,
+        ip_address: r.ip_address,
+        user_agent: r.user_agent,
+        signer_name: nm ? nm + (r.middle_initial ? ` ${r.middle_initial}.` : "") : (r.typed_signature || "Staff member"),
+        signer_title: r.title || null,
+        source: "kiosk",
+      };
+    });
+  }
+
   // GET /api/surveyor/:token/policies/:id/signoffs — public signature timeline.
   app.get("/api/surveyor/:token/policies/:id/signoffs", (req: any, res) => {
     const r = resolveSurveyorToken(String(req.params.token || ""));
@@ -32073,7 +32108,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           ORDER BY s.signed_at ASC`
       )
       .all(id);
-    res.json({ signoffs: rows });
+    // LHF-1: include bench-staff kiosk signatures alongside the approval chain
+    // so a surveyor sees who actually read-and-signed, not just the approvers.
+    const staffSignatures = staffPolicySignaturesForDoc(sqlite, doc.lab_id, id);
+    res.json({ signoffs: rows, staffSignatures });
   });
 
   // ── Phase 7: new-version upload + history + search ─────────────────────
@@ -32623,6 +32661,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         )
         .get(labId) as any;
 
+      // LHF-1: per-staff kiosk signature rollup (bench staff who read-and-signed
+      // policies at the Staff Portal), so the director dashboard reflects them,
+      // not just writer-account attesters.
+      const perStaffAttest = (sqlite
+        .prepare(
+          `SELECT sps.staff_employee_id,
+                  se.first_name, se.last_name, se.middle_initial, se.title,
+                  COUNT(DISTINCT sps.document_id || '-' || sps.version_id) AS signed_count,
+                  MAX(sps.signed_at) AS last_signed_at
+             FROM staff_portal_policy_signatures sps
+             LEFT JOIN staff_employees se ON se.id = sps.staff_employee_id
+            WHERE sps.lab_id = ?
+            GROUP BY sps.staff_employee_id
+            ORDER BY signed_count DESC, se.last_name ASC`
+        )
+        .all(labId) as any[]).map((r) => {
+        const nm = [r.last_name, r.first_name].filter(Boolean).join(", ");
+        return {
+          staff_employee_id: r.staff_employee_id,
+          staff_name: nm ? nm + (r.middle_initial ? ` ${r.middle_initial}.` : "") : "Staff member",
+          title: r.title || null,
+          signed_count: Number(r.signed_count || 0),
+          last_signed_at: r.last_signed_at || null,
+        };
+      });
+
       res.json({
         headline,
         perManual: [
@@ -32642,6 +32706,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         overdueList,
         dueSoonList,
         perUserAttest,
+        perStaffAttest,
         pendingReviewList: pendingReviewEnriched,
       });
     }
@@ -32788,7 +32853,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       aboutBody("This workbook is a point-in-time snapshot of the lab's VeritaPolicy compliance dashboard as of the date the export was generated. Each tab mirrors a panel of the live web dashboard so the same numbers can be shared with surveyors, the medical director, or the Quality Committee without screenshots.");
       aboutBlank();
       aboutSection("How to use this workbook");
-      aboutBody("The Headline tab shows total document counts by status. The Per Manual tab breaks those numbers down by policy manual (Chemistry, Hematology, etc). Overdue Documents lists every approved policy past its next-review date. Due Soon lists approved policies with next-review dates in the next 30 days. Per User Attestations shows pending vs completed attestation counts per active lab member.");
+      aboutBody("The Headline tab shows total document counts by status. The Per Manual tab breaks those numbers down by policy manual (Chemistry, Hematology, etc). Overdue Documents lists every approved policy past its next-review date. Due Soon lists approved policies with next-review dates in the next 30 days. Per User Attestations shows pending vs completed attestation counts per active lab member. Staff Portal Signatures lists bench staff who read-and-signed policies at the kiosk, with how many they signed and when they last signed.");
       aboutBlank();
       aboutSection("Disclaimer");
       aboutBody("This workbook is a snapshot, not an authoritative record. The live VeritaPolicy module is the audit-grade record. Status (Approved / In Review / Draft / Expired / Overdue / Due Soon) is calculated from the document's status field and the next_review_date entered by the lab. The lab director is responsible for keeping the underlying VeritaPolicy data current and for the disposition of any overdue policy.");
@@ -32896,6 +32961,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       attestSheet.getColumn(3).width = 12;
       attestSheet.getColumn(4).width = 12;
       attestSheet.getColumn(5).width = 10;
+
+      // Staff Portal Signatures (LHF-1): bench staff who read-and-signed
+      // policies at the kiosk, so the surveyor workbook includes them, not just
+      // writer-account attesters.
+      const perStaffAttest = sqlite.prepare(`
+        SELECT sps.staff_employee_id,
+               se.first_name, se.last_name, se.middle_initial, se.title,
+               COUNT(DISTINCT sps.document_id || '-' || sps.version_id) AS signed_count,
+               MAX(sps.signed_at) AS last_signed_at
+          FROM staff_portal_policy_signatures sps
+          LEFT JOIN staff_employees se ON se.id = sps.staff_employee_id
+         WHERE sps.lab_id = ?
+         GROUP BY sps.staff_employee_id
+         ORDER BY signed_count DESC, se.last_name ASC
+      `).all(labId) as any[];
+      const staffSheet = wb.addWorksheet("Staff Portal Signatures");
+      styleHeaderRow(staffSheet, ["Staff Member", "Title", "Policies Signed", "Last Signed"]);
+      for (const s of perStaffAttest) {
+        const nm = [s.last_name, s.first_name].filter(Boolean).join(", ");
+        staffSheet.addRow([
+          nm ? nm + (s.middle_initial ? ` ${s.middle_initial}.` : "") : "Staff member",
+          s.title || "",
+          Number(s.signed_count || 0),
+          s.last_signed_at || "",
+        ]);
+      }
+      staffSheet.getColumn(1).width = 28;
+      staffSheet.getColumn(2).width = 24;
+      staffSheet.getColumn(3).width = 16;
+      staffSheet.getColumn(4).width = 20;
 
       const buf = await wb.xlsx.writeBuffer();
       const filename = `VeritaPolicy_Compliance_${new Date().toISOString().split("T")[0]}.xlsx`;
@@ -33382,9 +33477,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const currentVersion = enriched.filter((r) => r.version_id === doc.current_version_id);
       const currentTotal = currentVersion.length;
       const currentCompleted = currentVersion.filter((r) => r.completed_at).length;
+      // LHF-1: kiosk (Staff Portal) signatures for this document, so the
+      // per-document roster shows bench staff who read-and-signed, not just
+      // writer accounts.
+      const staffSignatures = staffPolicySignaturesForDoc(sqlite, req.scope.labId, id);
       res.json({
         attestations: enriched,
-        summary: { total, completed, currentVersionTotal: currentTotal, currentVersionCompleted: currentCompleted },
+        staffSignatures,
+        summary: { total, completed, currentVersionTotal: currentTotal, currentVersionCompleted: currentCompleted, staffSigned: staffSignatures.length },
       });
     }
   );
