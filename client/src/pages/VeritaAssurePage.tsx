@@ -137,7 +137,7 @@ const MODULES = [
 const DOWNLOADS = [
   {
     title: "VeritaCheck™ CLSI Compliance Matrix",
-    desc: "One-page landscape reference. Maps all 6 VeritaCheck™ study types to applicable CLSI, CLIA (42 CFR), CAP checklist, and TJC standards. Use this to demonstrate regulatory alignment to inspectors.",
+    desc: "One-page landscape reference. Maps the core VeritaCheck™ verification study types to applicable CLSI, CLIA (42 CFR), CAP checklist, and TJC standards. Use this to demonstrate regulatory alignment to inspectors.",
     badge: "Free Download",
     url: "/api/downloads/clsi-compliance-matrix",
     filename: "VeritaCheck_CLSI_Compliance_Matrix.pdf",

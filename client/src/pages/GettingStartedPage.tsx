@@ -314,7 +314,7 @@ export default function GettingStartedPage() {
               <span className="font-semibold text-sm">CLSI Compliance Matrix</span>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-              One-page reference mapping all 6 VeritaCheck&#8482; study types to CLSI, CLIA, CAP, and TJC standards.
+              One-page reference mapping the core VeritaCheck&#8482; verification study types to CLSI, CLIA, CAP, and TJC standards.
             </p>
             <a
               href="/api/downloads/clsi-compliance-matrix"

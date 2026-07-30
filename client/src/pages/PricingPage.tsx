@@ -443,7 +443,7 @@ return (
                   a 6th tile as "the unaffordable next step up." */}
               <div className="border border-primary/30 bg-primary/5 rounded-lg p-6 max-w-4xl mx-auto text-center">
                 <p className="font-semibold text-base text-foreground mb-2">
-                  Multi-lab, 16+ seats, SSO, BAA, or SLA?
+                  Multi-lab, 16+ seats, SSO (on request), BAA, or SLA?
                 </p>
                 <p className="text-sm text-muted-foreground leading-relaxed">
                   Combine the tiers below across multiple CLIA labs.

@@ -67,12 +67,12 @@ function renderPricingContent(): string {
     { plan: "Clinic", price: "$999/yr", seats: "2 active seats included", addl: "Additional seats $500 each" },
     { plan: "Community (most popular)", price: "$2,125/yr", seats: "5 active seats included", addl: "Additional seats $425 each" },
     { plan: "Hospital", price: "$4,995/yr", seats: "15 active seats included", addl: "Additional seats $333 each" },
-    { plan: "System", price: "Custom quote", seats: "Multi-lab, 16+ seats, SSO, BAA, or SLA", addl: "Contact sales" },
+    { plan: "System", price: "Custom quote", seats: "Multi-lab, 16+ seats, SSO (on request), BAA, or SLA", addl: "Contact sales" },
   ];
   const rows = tiers
     .map((t) => `<tr><td>${escHtml(t.plan)}</td><td>${escHtml(t.price)}</td><td>${escHtml(t.seats)}</td><td>${escHtml(t.addl)}</td></tr>`)
     .join("");
-  return `<h2>VeritaAssure&#8482; pricing</h2><p>Simple, published annual pricing for clinical laboratory compliance software. Your tier is set by the number of active (writer) seats you need; additional active seats above the included count are billed at that tier per-seat rate. Read-and-sign staff access is handled by the Staff Portal add-on, not per seat.</p><table><thead><tr><th>Plan</th><th>Price</th><th>Included seats</th><th>Additional seats</th></tr></thead><tbody>${rows}</tbody></table><p>Every new account includes 2 free VeritaCheck&#8482; study credits. System-tier pricing (more than one CLIA lab, 16 or more seats, or SSO, BAA, and SLA requirements) is a custom quote via info@veritaslabservices.com.</p>`;
+  return `<h2>VeritaAssure&#8482; pricing</h2><p>Simple, published annual pricing for clinical laboratory compliance software. Your tier is set by the number of active (writer) seats you need; additional active seats above the included count are billed at that tier per-seat rate. Read-and-sign staff access is handled by the Staff Portal add-on, not per seat.</p><table><thead><tr><th>Plan</th><th>Price</th><th>Included seats</th><th>Additional seats</th></tr></thead><tbody>${rows}</tbody></table><p>Every new account includes 2 free VeritaCheck&#8482; study credits. System-tier pricing (more than one CLIA lab, 16 or more seats, or SSO (on request), BAA, and SLA requirements) is a custom quote via info@veritaslabservices.com.</p>`;
 }
 
 // Crawlable prerender body for /veritacheck. The page is JS-rendered, so its
