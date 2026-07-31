@@ -234,6 +234,18 @@ function isCustomInstrument(instrumentName: string): boolean {
   return !INSTRUMENT_DATA[instrumentName];
 }
 
+// A short distinguisher beyond the model name so duplicate analyzers are
+// tellable apart in the header and the Copy-From dropdown (COPC feedback
+// 2026-07-29: with two of the same analyzer, the model alone forced a
+// trial-and-error guess when copying a backup). Nickname preferred, else the
+// serial number, else empty (single-instrument labs show nothing extra).
+function instrumentTag(nickname?: string | null, serial?: string | null): string {
+  const n = (nickname || "").trim();
+  if (n) return n;
+  const s = (serial || "").trim();
+  return s ? `SN ${s}` : "";
+}
+
 // ── Step indicator ─────────────────────────────────────────────────────────────
 
 const ROLE_ORDER: Role[] = ["Primary", "Backup", "Satellite", "POC"];
@@ -590,7 +602,7 @@ function InstrumentTestSection({
   onSelectAll: () => void;
   onDeselectAll: () => void;
   onAddCustomTest: (test: TestToggle) => void;
-  otherInstruments: Array<{id: number, instrument_name: string, testCount: number}>;
+  otherInstruments: Array<{id: number, instrument_name: string, testCount: number, nickname?: string | null, serial_number?: string | null}>;
   onCopyFrom: (sourceInstId: number) => void;
   isCopying: boolean;
   roleContext?: Role;
@@ -603,6 +615,7 @@ function InstrumentTestSection({
 
   const isChemistry = instrument.category === "Chemistry";
   const isCustom = isCustomInstrument(instrument.instrument_name);
+  const instTag = instrumentTag(instrument.nickname, instrument.serial_number);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return tests;
@@ -647,6 +660,11 @@ function InstrumentTestSection({
             }`}
           />
           <span className="font-semibold text-sm truncate">{instrument.instrument_name}</span>
+          {instTag && (
+            <span className="text-xs text-muted-foreground truncate shrink-0" title="Assigned name / serial">
+              · {instTag}
+            </span>
+          )}
           <RoleBadge role={instrument.role} />
           <Badge className={`text-[10px] px-1.5 py-0 border-0 ${getCategoryColor(instrument.category)}`}>
             {instrument.category}
@@ -726,11 +744,14 @@ function InstrumentTestSection({
                   onChange={e => setCopySourceId(Number(e.target.value))}
                   className="text-sm border border-blue-300 rounded-lg px-3 py-1.5 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  {otherInstruments.map(inst => (
-                    <option key={inst.id} value={inst.id}>
-                      {inst.instrument_name}{inst.testCount ? ` (${inst.testCount} tests)` : ''}
-                    </option>
-                  ))}
+                  {otherInstruments.map(inst => {
+                    const t = instrumentTag(inst.nickname, inst.serial_number);
+                    return (
+                      <option key={inst.id} value={inst.id}>
+                        {inst.instrument_name}{t ? ` · ${t}` : ''}{inst.testCount ? ` (${inst.testCount} tests)` : ''}
+                      </option>
+                    );
+                  })}
                 </select>
                 <Button
                   type="button"
@@ -769,11 +790,14 @@ function InstrumentTestSection({
                   onChange={e => setCopySourceId(Number(e.target.value))}
                   className="text-sm border border-blue-300 rounded-lg px-3 py-1.5 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  {otherInstruments.map(inst => (
-                    <option key={inst.id} value={inst.id}>
-                      {inst.instrument_name}{inst.testCount ? ` (${inst.testCount} tests)` : ''}
-                    </option>
-                  ))}
+                  {otherInstruments.map(inst => {
+                    const t = instrumentTag(inst.nickname, inst.serial_number);
+                    return (
+                      <option key={inst.id} value={inst.id}>
+                        {inst.instrument_name}{t ? ` · ${t}` : ''}{inst.testCount ? ` (${inst.testCount} tests)` : ''}
+                      </option>
+                    );
+                  })}
                 </select>
                 <Button
                   type="button"
@@ -2213,6 +2237,8 @@ export default function VeritaMapBuildPage() {
                 id: i.id,
                 instrument_name: i.instrument_name,
                 testCount: (testsByInstrument[i.id] ?? []).length,
+                nickname: i.nickname,
+                serial_number: i.serial_number,
               }))}
             roleContext={currentRole}
             onCopyFrom={(sourceInstId) => handleCopyFrom(instr.id, sourceInstId)}
