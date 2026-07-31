@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle2, ChevronRight, Clock, FlaskConical, User, AlertTriangle, ExternalLink, Search } from "lucide-react";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
+import { ContentUpgrade } from "@/components/ContentUpgrade";
 import { teaData } from "@/lib/cliaTeaData";
 
 function Callout({ children, type = "info" }: { children: React.ReactNode; type?: "info" | "warning" | "tip" }) {
@@ -67,6 +68,15 @@ return (
       </section>
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
+
+        {/* Content upgrade: TEa reference table (lead-capture experiment) */}
+        <ContentUpgrade
+          source="upgrade-tea-table"
+          assetUrl="/clia-tea-reference-2026.pdf"
+          assetName="2026-CLIA-TEa-Reference-Table.pdf"
+          title="Download the 2026 CLIA TEa reference table (PDF)"
+          description="Every CLIA allowable total error value in one printable table, grouped by specialty with the CFR section. Free."
+        />
 
         {/* Key Takeaways */}
         <Card className="border-primary/20 bg-primary/5 mb-10">

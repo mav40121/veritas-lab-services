@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Search, FlaskConical, ExternalLink, Info, ChevronRight, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { teaData, specialties, searchTea, type TeaSpecialty } from "@/lib/cliaTeaData";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
+import { ContentUpgrade } from "@/components/ContentUpgrade";
 import { TEA_LOOKUP_FAQ } from "@/lib/faqContent";
 
 const specialtyColors: Record<string, string> = {
@@ -64,6 +65,15 @@ export default function TeaLookupPage() {
       </section>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+
+        {/* Content upgrade: TEa reference table (lead-capture experiment) */}
+        <ContentUpgrade
+          source="upgrade-tea-table"
+          assetUrl="/clia-tea-reference-2026.pdf"
+          assetName="2026-CLIA-TEa-Reference-Table.pdf"
+          title="Prefer the whole table as a PDF?"
+          description="Download every CLIA allowable total error value in one printable reference, grouped by specialty with the CFR section. Free."
+        />
 
         {/* Important notice */}
         <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900 p-4 mb-6 flex gap-3 text-sm">
