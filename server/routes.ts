@@ -27937,6 +27937,71 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ labId, count: enriched.length, maps: enriched });
   });
 
+  // ── ADMIN: Read-only VeritaCheck/VeritaMap diagnostic probe ─────────────
+  // Built 2026-07-31 for the San Carlos incident (coverage-exemption wipe +
+  // method-comparison sign-off showing blank). Returns only small aggregate
+  // rows so the operator does not have to download the whole DB (which the
+  // backup endpoint cannot reliably stream). Read-only; no writes.
+  // Usage: GET /api/admin/diag/veritacheck?secret=&labId=2&testName=BILIRUBIN
+  app.get("/api/admin/diag/veritacheck", (req, res) => {
+    const secret = (req.query.secret as string) || (req.headers["x-admin-secret"] as string);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const sqlite = (db as any).$client;
+    const labId = Number(req.query.labId);
+    const testName = String(req.query.testName || "").toUpperCase();
+    if (!Number.isFinite(labId)) return res.status(400).json({ error: "labId required" });
+    const out: any = { labId, testName };
+    try {
+      const mapIds = (sqlite.prepare("SELECT id FROM veritamap_maps WHERE lab_id = ?").all(labId) as any[]).map((r) => r.id);
+      out.mapIds = mapIds;
+      const ph = mapIds.map(() => "?").join(",");
+      // Sign-off issue: studies + correlation sign-off for the analyte.
+      out.studies = sqlite.prepare(
+        `SELECT id, test_name, study_type, status, lifecycle_state, analyst, date, amends_study_id, archived_at,
+                finalized_at, finalized_by_user_id, finalized_signature
+         FROM studies WHERE lab_id = ? AND UPPER(test_name) LIKE ? ORDER BY id`
+      ).all(labId, `%${testName}%`);
+      if (mapIds.length) {
+        out.correlations = sqlite.prepare(
+          `SELECT co.id, co.pass_fail, co.signoff_by_name, co.signoff_date, co.signoff_by_user_id, co.next_due,
+                  ta.analyte AS a_analyte, tb.analyte AS b_analyte
+           FROM veritamap_test_correlations co
+           JOIN veritamap_tests ta ON ta.id = co.test_a_id
+           JOIN veritamap_tests tb ON tb.id = co.test_b_id
+           WHERE (ta.map_id IN (${ph}) OR tb.map_id IN (${ph}))
+             AND (UPPER(ta.analyte) LIKE ? OR UPPER(tb.analyte) LIKE ?)`
+        ).all(...mapIds, ...mapIds, `%${testName}%`, `%${testName}%`);
+        // Coverage issue: current exemption-flag state.
+        const cnt = (sql: string) => (sqlite.prepare(sql).get(...mapIds) as any).n;
+        out.instrumentTests = {
+          totalActive: cnt(`SELECT COUNT(*) n FROM veritamap_instrument_tests WHERE map_id IN (${ph}) AND (active=1 OR active IS NULL)`),
+          exempt_multical: cnt(`SELECT COUNT(*) n FROM veritamap_instrument_tests WHERE map_id IN (${ph}) AND linearity_exempt_multical=1`),
+          exempt_noncal: cnt(`SELECT COUNT(*) n FROM veritamap_instrument_tests WHERE map_id IN (${ph}) AND linearity_exempt_noncal=1`),
+          exempt_waived: cnt(`SELECT COUNT(*) n FROM veritamap_instrument_tests WHERE map_id IN (${ph}) AND linearity_exempt_waived=1`),
+          exempt_other: cnt(`SELECT COUNT(*) n FROM veritamap_instrument_tests WHERE map_id IN (${ph}) AND linearity_exempt_other IS NOT NULL AND TRIM(linearity_exempt_other)<>''`),
+          anyExempt: cnt(`SELECT COUNT(*) n FROM veritamap_instrument_tests WHERE map_id IN (${ph}) AND (linearity_exempt_multical=1 OR linearity_exempt_noncal=1 OR linearity_exempt_waived=1 OR (linearity_exempt_other IS NOT NULL AND TRIM(linearity_exempt_other)<>''))`),
+          createdRange: sqlite.prepare(`SELECT MIN(created_at) mn, MAX(created_at) mx, COUNT(DISTINCT date(created_at)) d FROM veritamap_instrument_tests WHERE map_id IN (${ph})`).get(...mapIds),
+        };
+      }
+      out.finalizedTotal = (sqlite.prepare("SELECT COUNT(*) n FROM studies WHERE lab_id = ? AND lifecycle_state='finalized'").get(labId) as any).n;
+      out.finalizedBlankSigner = (sqlite.prepare("SELECT COUNT(*) n FROM studies WHERE lab_id = ? AND lifecycle_state='finalized' AND (finalized_signature IS NULL OR TRIM(finalized_signature)='')").get(labId) as any).n;
+      // Restore source: any snapshot tables + their shape.
+      const snapTables = (sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%snapshot%'").all() as any[]).map((r) => r.name);
+      out.snapshots = {};
+      for (const t of snapTables) {
+        try {
+          out.snapshots[t] = {
+            columns: (sqlite.prepare(`PRAGMA table_info(${t})`).all() as any[]).map((c) => c.name),
+            count: (sqlite.prepare(`SELECT COUNT(*) n FROM ${t}`).get() as any).n,
+          };
+        } catch (e: any) { out.snapshots[t] = { err: e.message }; }
+      }
+    } catch (err: any) {
+      out.error = err.message;
+    }
+    res.json(out);
+  });
+
   // ── ADMIN: Move a VeritaMap from one lab to a sibling lab ───────────────
   //
   // 2026-06-08: built to migrate San Carlos's CW Bylas map from
