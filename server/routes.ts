@@ -29289,6 +29289,116 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // POST /api/admin/veritamap/seed-map?secret=$ADMIN_SECRET
+  // Body: {
+  //   mapId: number,
+  //   defaultActive?: 0|1,
+  //   dryRun?: boolean,
+  //   instruments: [
+  //     { name: string, serialNumber?: string, category?: string,
+  //       tests: [{ analyte: string, specialty: string,
+  //                 complexity: "WAIVED"|"MODERATE"|"HIGH", active?: 0|1 }] }
+  //   ]
+  // }
+  //
+  // One-shot map builder for loading a whole test menu from a lab's tracker
+  // when the map is empty. seed-instrument-menu (above) requires a pre-existing
+  // instrumentId; this find-or-creates each instrument on the map first, then
+  // inserts its tests. Instruments are matched case-insensitively by name on
+  // the map (an unmatched name is created). Tests are INSERT OR IGNORE per
+  // (instrument_id, analyte): re-running never duplicates and never overwrites
+  // a value the lab already set. Complexity is REQUIRED and allowlisted per
+  // row, never defaulted (the CLINITEK incident); the ENTIRE payload is
+  // validated before any write, so a single bad row writes nothing.
+  // dryRun:true reports the planned create/insert counts and writes zero.
+  app.post("/api/admin/veritamap/seed-map", (req, res) => {
+    const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string || req.body?.secret);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const { mapId, instruments, defaultActive, dryRun } = req.body || {};
+    if (!mapId || typeof mapId !== "number") return res.status(400).json({ error: "mapId required" });
+    if (!Array.isArray(instruments) || instruments.length === 0) return res.status(400).json({ error: "instruments array required" });
+    const isDry = dryRun === true;
+    const dActive = (defaultActive === 0 || defaultActive === 1) ? defaultActive : 1;
+    const sqlite = (db as any).$client;
+    const map = sqlite.prepare("SELECT id, lab_id FROM veritamap_maps WHERE id = ?").get(Number(mapId)) as any;
+    if (!map) return res.status(404).json({ error: "map_not_found", mapId });
+
+    // Validate the ENTIRE payload up front. Every instrument needs a name and
+    // at least one test; every test needs a non-empty analyte and an
+    // allowlisted complexity (WAIVED/MODERATE/HIGH). Any bad row rejects the
+    // whole payload so a partial menu is never written.
+    for (const inst of instruments) {
+      const iname = String(inst?.name || "").trim();
+      if (!iname) return res.status(400).json({ error: "instrument_name_required" });
+      if (!Array.isArray(inst?.tests) || inst.tests.length === 0) return res.status(400).json({ error: "instrument_has_no_tests", instrument: iname });
+      for (const t of inst.tests) {
+        const a = String(t?.analyte || "").trim();
+        if (!a) return res.status(400).json({ error: "analyte_required", instrument: iname });
+        const cx = String(t?.complexity ?? "").trim().toUpperCase();
+        if (!cx) return res.status(400).json({ error: "complexity_required", instrument: iname, analyte: a });
+        if (!VERITAMAP_COMPLEXITY_VALUES.has(cx)) {
+          return res.status(400).json({ error: "complexity_invalid", instrument: iname, analyte: a, complexity: t?.complexity ?? null, allowed: Array.from(VERITAMAP_COMPLEXITY_VALUES) });
+        }
+      }
+    }
+
+    try {
+      const findInst = sqlite.prepare("SELECT id, instrument_name FROM veritamap_instruments WHERE map_id = ? AND lower(instrument_name) = lower(?) LIMIT 1");
+      const analytePresent = sqlite.prepare("SELECT 1 FROM veritamap_instrument_tests WHERE instrument_id = ? AND analyte = ? LIMIT 1");
+      const results: any[] = [];
+
+      if (isDry) {
+        for (const inst of instruments) {
+          const iname = String(inst.name).trim();
+          const row = findInst.get(Number(mapId), iname) as any;
+          let inserted = 0; let skipped = 0;
+          for (const t of inst.tests) {
+            const analyte = String(t.analyte).trim();
+            if (row && analytePresent.get(row.id, analyte)) skipped++; else inserted++;
+          }
+          results.push({ instrument: iname, instrumentId: row ? row.id : null, created: !row, inserted, skipped });
+        }
+      } else {
+        const createInst = sqlite.prepare("INSERT INTO veritamap_instruments (map_id, instrument_name, role, category, serial_number, nickname, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        const insertTest = sqlite.prepare("INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)");
+        const now = new Date().toISOString();
+        const tx = sqlite.transaction(() => {
+          for (const inst of instruments) {
+            const iname = String(inst.name).trim();
+            const serial = inst.serialNumber ? String(inst.serialNumber).trim() : null;
+            const category = inst.category ? String(inst.category).trim() : null;
+            let row = findInst.get(Number(mapId), iname) as any;
+            let created = false;
+            let instrumentId: number;
+            if (row) { instrumentId = row.id; }
+            else { instrumentId = Number(createInst.run(Number(mapId), iname, null, category, serial, null, now).lastInsertRowid); created = true; }
+            let inserted = 0; let skipped = 0;
+            for (const t of inst.tests) {
+              const analyte = String(t.analyte).trim();
+              const specialty = String(t.specialty || "").trim();
+              const complexity = String(t.complexity).trim().toUpperCase();
+              const active = (typeof t.active === "number" && (t.active === 0 || t.active === 1)) ? t.active : dActive;
+              const r = insertTest.run(instrumentId, Number(mapId), analyte, specialty, complexity, active);
+              if (r.changes === 1) inserted++; else skipped++;
+            }
+            results.push({ instrument: iname, instrumentId, created, inserted, skipped });
+          }
+        });
+        tx();
+        rebuildMapTests(Number(mapId));
+      }
+
+      const totals = results.reduce((acc, r) => { acc.inserted += r.inserted; acc.created += r.created ? 1 : 0; return acc; }, { inserted: 0, created: 0 });
+      const testCount = (sqlite.prepare("SELECT COUNT(*) AS n FROM veritamap_tests WHERE map_id = ?").get(Number(mapId)) as any).n;
+      const instCount = (sqlite.prepare("SELECT COUNT(*) AS n FROM veritamap_instruments WHERE map_id = ?").get(Number(mapId)) as any).n;
+      console.log("[seed-map] map=%d dryRun=%s instruments=%d created=%d inserted=%d", mapId, isDry, results.length, totals.created, totals.inserted);
+      res.json({ ok: true, dryRun: isDry, mapId, labId: map.lab_id, results, totals, mapInstrumentCount: instCount, mapTestCount: testCount });
+    } catch (err: any) {
+      console.error("[seed-map] Error:", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── ADMIN: Seed all remaining demo modules for Michael's lab ──
   // POST /api/admin/seed-all-modules?secret=$ADMIN_SECRET
   // Fills PI entries, productivity, veritatrack signoffs, competency
