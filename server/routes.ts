@@ -28002,6 +28002,79 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(out);
   });
 
+  // ── ADMIN: Restore linearity-exemption flags from a nightly snapshot ────
+  // 2026-07-31 (San Carlos): a map rebuild wiped the linearity_exempt_* flags
+  // on lab 2's map, so every combo read as "cal-ver required" (41/43 -> 41/287).
+  // This reapplies each exemption from a snapshot to the LIVE combo it matches
+  // by analyte x instrument name. Additive only: it sets the flags the snapshot
+  // recorded and never clears an exemption the live map already has. dryRun by
+  // default; pass dryRun:false to write. Returns before/after + match stats so
+  // the operator confirms the preview before applying.
+  app.post("/api/admin/restore-linearity-exemptions", (req, res) => {
+    const { secret, labId, snapshotId } = req.body || {};
+    const isDry = (req.body?.dryRun !== false);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    if (!labId || !snapshotId) return res.status(400).json({ error: "labId and snapshotId required" });
+    const sqlite = (db as any).$client;
+    const { getSnapshot } = require("./audit");
+    const snap = getSnapshot(Number(snapshotId));
+    if (!snap) return res.status(404).json({ error: `snapshot ${snapshotId} not found` });
+    let data: any;
+    try { data = JSON.parse(snap.modules_json); } catch (e: any) { return res.status(500).json({ error: "snapshot parse failed: " + e.message }); }
+    const insts = new Map<number, string>((data.instruments || []).map((i: any) => [i.id, i.instrument_name]));
+    const key = (analyte: string, instrName: string) => `${(analyte || "").trim().toLowerCase()}||${(instrName || "").trim().toLowerCase()}`;
+    // Snapshot exemption map (active exempt combos only).
+    const exMap = new Map<string, { mc: number; nc: number; wv: number; ot: string | null }>();
+    for (const r of (data.instrument_tests || [])) {
+      const anyEx = r.linearity_exempt_multical || r.linearity_exempt_noncal || r.linearity_exempt_waived || (r.linearity_exempt_other || "").trim();
+      if (!anyEx) continue;
+      if (!(r.active === 1 || r.active == null)) continue;
+      exMap.set(key(r.analyte, insts.get(r.instrument_id) || ""), {
+        mc: r.linearity_exempt_multical ? 1 : 0, nc: r.linearity_exempt_noncal ? 1 : 0,
+        wv: r.linearity_exempt_waived ? 1 : 0, ot: (r.linearity_exempt_other || "").trim() || null,
+      });
+    }
+    const live = sqlite.prepare(`
+      SELECT it.id, it.analyte, i.instrument_name,
+             it.linearity_exempt_multical AS mc, it.linearity_exempt_noncal AS nc,
+             it.linearity_exempt_waived AS wv, it.linearity_exempt_other AS ot
+      FROM veritamap_instrument_tests it
+      JOIN veritamap_instruments i ON i.id = it.instrument_id
+      JOIN veritamap_maps m ON m.id = it.map_id
+      WHERE m.lab_id = ? AND (it.active = 1 OR it.active IS NULL)
+    `).all(Number(labId)) as any[];
+    const isEx = (r: any) => !!(r.mc || r.nc || r.wv || (r.ot || "").trim());
+    const beforeExempt = live.filter(isEx).length;
+    const upd = sqlite.prepare("UPDATE veritamap_instrument_tests SET linearity_exempt_multical=?, linearity_exempt_noncal=?, linearity_exempt_waived=?, linearity_exempt_other=? WHERE id=?");
+    let matched = 0, wouldChange = 0, changed = 0;
+    const changeSample: string[] = [];
+    for (const r of live) {
+      const s = exMap.get(key(r.analyte, r.instrument_name));
+      if (!s) continue;
+      matched++;
+      const diff = (r.mc ? 1 : 0) !== s.mc || (r.nc ? 1 : 0) !== s.nc || (r.wv ? 1 : 0) !== s.wv || ((r.ot || "").trim() || null) !== s.ot;
+      if (diff) {
+        wouldChange++;
+        if (changeSample.length < 10) changeSample.push(`${r.analyte} @ ${r.instrument_name}`);
+        if (!isDry) { upd.run(s.mc, s.nc, s.wv, s.ot, r.id); changed++; }
+      }
+    }
+    const liveKeys = new Set(live.map((r) => key(r.analyte, r.instrument_name)));
+    const unmatched = Array.from(exMap.keys()).filter((k) => !liveKeys.has(k));
+    const afterExempt = isDry ? beforeExempt : (sqlite.prepare(`
+      SELECT COUNT(*) n FROM veritamap_instrument_tests it JOIN veritamap_maps m ON m.id=it.map_id
+      WHERE m.lab_id=? AND (it.active=1 OR it.active IS NULL)
+        AND (it.linearity_exempt_multical=1 OR it.linearity_exempt_noncal=1 OR it.linearity_exempt_waived=1 OR (it.linearity_exempt_other IS NOT NULL AND TRIM(it.linearity_exempt_other)<>''))
+    `).get(Number(labId)) as any).n;
+    res.json({
+      dryRun: isDry, snapshotId: Number(snapshotId), snapshotDate: snap.snapshot_date, labId: Number(labId),
+      snapshotExemptCombos: exMap.size, liveActiveCombos: live.length,
+      beforeExempt, matchedToSnapshot: matched, wouldChange, changed, afterExempt,
+      unmatchedSnapshotExemptCount: unmatched.length, unmatchedSample: unmatched.slice(0, 8),
+      changeSample,
+    });
+  });
+
   // ── ADMIN: Move a VeritaMap from one lab to a sibling lab ───────────────
   //
   // 2026-06-08: built to migrate San Carlos's CW Bylas map from
