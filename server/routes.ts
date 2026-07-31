@@ -29442,12 +29442,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           for (const inst of instruments) {
             const iname = String(inst.name).trim();
             const serial = inst.serialNumber ? String(inst.serialNumber).trim() : null;
-            const category = inst.category ? String(inst.category).trim() : null;
+            // role + category are NOT NULL on veritamap_instruments. Every
+            // instrument here is one of the lab's own analyzers, so role is
+            // 'Primary'; category defaults to the instrument's first-test
+            // specialty (a display grouping) unless the payload overrides it.
+            const category = (inst.category && String(inst.category).trim())
+              || (Array.isArray(inst.tests) && inst.tests[0] && String(inst.tests[0].specialty || "").trim())
+              || "Chemistry";
             let row = findInst.get(Number(mapId), iname) as any;
             let created = false;
             let instrumentId: number;
             if (row) { instrumentId = row.id; }
-            else { instrumentId = Number(createInst.run(Number(mapId), iname, null, category, serial, null, now).lastInsertRowid); created = true; }
+            else { instrumentId = Number(createInst.run(Number(mapId), iname, "Primary", category, serial, null, now).lastInsertRowid); created = true; }
             let inserted = 0; let skipped = 0;
             for (const t of inst.tests) {
               const analyte = String(t.analyte).trim();

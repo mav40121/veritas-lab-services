@@ -34,6 +34,16 @@ SHEET_SPECIALTY = {
     "Microbiology": "Microbiology",
 }
 
+# Director determination for rows the tracker left blank on complexity. This
+# is NOT a default: it records Michael Veri's 2026-07-31 call that Troy's
+# manual Hematology blood-smear reviews (interpretive differential / morphology
+# / platelet estimate) are HIGH complexity under CLIA. Keyed (sheet, analyte).
+DIRECTOR_COMPLEXITY_OVERRIDE = {
+    ("Hematology (2)", "Differential Count (Blood Smear)"): "HIGH",
+    ("Hematology (2)", "Platelet Estimate (Blood Smear)"): "HIGH",
+    ("Hematology (2)", "RBC Morphology (Blood Smear)"): "HIGH",
+}
+
 def map_complexity(raw):
     s = str(raw or "").strip().lower()
     if "waiv" in s: return "WAIVED"
@@ -72,7 +82,10 @@ for ws in wb.worksheets:
         cx = map_complexity(cx_raw)
         if cx is None:
             # Blank / unmappable complexity is a DIRECTOR call, never defaulted.
-            # Skip the row from the payload and surface it for sign-off.
+            # Apply an explicit director determination if one is on record;
+            # otherwise surface the row for sign-off and skip it.
+            cx = DIRECTOR_COMPLEXITY_OVERRIDE.get((ws.title, analyte))
+        if cx is None:
             needs_complexity.append(f"[{ws.title}] '{analyte}' on '{machine}' (stated: {cx_raw!r})")
             continue
         inst = instruments.setdefault(machine, {"serialNumber": None, "tests": {}})
