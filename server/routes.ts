@@ -10681,6 +10681,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       amrUnits: row.amr_units,
       censoringPolicy: row.censoring_policy,
       lifecycle_state: row.lifecycle_state,
+      // 2026-07-31 (San Carlos): the sign-off identity fields were added to the
+      // studies table + written by the finalize handler, but never mapped here,
+      // so every lab-scoped GET dropped them. Result: the study page rendered
+      // "Signed Off by [blank] on [blank]" and the PDF director-review block had
+      // no signer to print, even though the DB held finalized_signature.
+      finalized_at: row.finalized_at,
+      finalized_by_user_id: row.finalized_by_user_id,
+      finalized_signature: row.finalized_signature,
       amends_study_id: row.amends_study_id,
       archived_at: row.archived_at,
       archived_by_user_id: row.archived_by_user_id,
