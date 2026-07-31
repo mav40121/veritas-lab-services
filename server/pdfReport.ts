@@ -896,25 +896,58 @@ function excludedAndDeterminationHTML(study: any): string {
 // fresh page, so the signature stays on page 1). Omitting the arg yields the
 // original signature-only block.
 function directorReviewHTML(study?: any): string {
+  // 2026-07-31: when a study is electronically signed off (lifecycle_state
+  // 'finalized' with a captured signature), the review block now REFLECTS that
+  // sign-off \u2014 Accepted checked, the signer's name on the Signature/Print Name
+  // lines, and the finalized date \u2014 instead of printing an unsigned blank
+  // template. An unfinalized (draft) study, or a finalized one with no captured
+  // signer, still prints the blank wet-ink template so it can be signed by hand.
+  const finalized = !!study && String(study.lifecycle_state || "") === "finalized";
+  const signer = String((study && (study.finalized_signature ?? "")) || "").trim();
+  const signedOn = study && study.finalized_at ? String(study.finalized_at).slice(0, 10) : "";
+  const signed = finalized && !!signer;
+  // Only auto-mark "Accepted for patient testing" for a signed study whose
+  // statistical verdict is not FAIL. A signed FAIL still shows the signature +
+  // date (the review happened) but leaves the accept/not-accept boxes for the
+  // director to mark, so the report never asserts acceptance on a failed run.
+  const accepted = signed && String((study && study.status) || "").toLowerCase() !== "fail";
+
+  const acceptRow = accepted
+    ? `<span style="margin-right:18px;font-weight:700;color:#01696F;">\u2611 Accepted for patient testing</span>
+       <span style="color:#9a9a9a;">\u25CB Not accepted</span>`
+    : `<span style="margin-right:18px;">\u25CB Accepted for patient testing</span>
+       <span>\u25CB Not accepted</span>`;
+  const sigCell = signed
+    ? `<div style="font-family:'Segoe Script','Brush Script MT','Comic Sans MS',cursive;font-size:12pt;color:#0A3A3D;line-height:1;padding-top:2px;">${escapeHtml(signer)}</div>
+       <div style="font-size:6.5pt;color:#888;">Signature <span style="color:#01696F;">(electronically signed)</span></div>`
+    : `<div style="font-size:6.5pt;color:#888;margin-top:12px;">Signature</div>`;
+  const dateCell = signed
+    ? `<div style="font-size:8.5pt;color:#28251D;padding-top:3px;">${escapeHtml(signedOn)}</div>
+       <div style="font-size:6.5pt;color:#888;">Date</div>`
+    : `<div style="font-size:6.5pt;color:#888;margin-top:12px;">Date</div>`;
+  const nameCell = signed
+    ? `<div style="font-size:8.5pt;color:#28251D;">${escapeHtml(signer)}</div>
+       <div style="font-size:6.5pt;color:#888;">Print Name</div>`
+    : `<div style="font-size:6.5pt;color:#888;margin-top:8px;">Print Name</div>`;
+
   return `
   <div style="margin-top:4px;border:1px solid #D4D1CA;border-left:4px solid #01696F;border-radius:5px;padding:6px 12px;background:#FAFAF8;break-inside:avoid;page-break-inside:avoid;">
     <div style="font-size:8pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Laboratory Director or Designee Review</div>
     <p style="font-size:7.5pt;color:#28251D;line-height:1.4;margin:0 0 5px 0;font-style:italic;">"I have reviewed these results against my laboratory's established performance specifications and applicable regulatory requirements."</p>
     <div style="font-size:8pt;color:#28251D;margin-bottom:2px;">
-      <span style="margin-right:18px;">\u25CB Accepted for patient testing</span>
-      <span>\u25CB Not accepted</span>
+      ${acceptRow}
     </div>
     <div style="display:flex;gap:16px;margin-top:6px;">
       <div style="flex:3;border-bottom:1px solid #999;padding-bottom:2px;">
-        <div style="font-size:6.5pt;color:#888;margin-top:12px;">Signature</div>
+        ${sigCell}
       </div>
       <div style="flex:1;border-bottom:1px solid #999;padding-bottom:2px;">
-        <div style="font-size:6.5pt;color:#888;margin-top:12px;">Date</div>
+        ${dateCell}
       </div>
     </div>
     <div style="display:flex;gap:16px;margin-top:4px;">
       <div style="flex:3;border-bottom:1px solid #999;padding-bottom:2px;">
-        <div style="font-size:6.5pt;color:#888;margin-top:8px;">Print Name</div>
+        ${nameCell}
       </div>
       <div style="flex:1;border-bottom:1px solid #999;padding-bottom:2px;">
         <div style="font-size:6.5pt;color:#888;margin-top:8px;">Title</div>
