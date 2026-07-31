@@ -940,6 +940,32 @@ export function registerDemoLogin(app: any) {
 }
 
 
+// Resolve the active lab id from request CONTEXT (never the user's stored
+// default). Precedence: path scope > explicit ?labId > X-Active-Lab-Id header
+// > Referer URL. The X-Active-Lab-Id header is attached by the client
+// (authHeaders) on every request from a /labs/:id page and, unlike Referer,
+// survives referrer-policy stripping, so it is the reliable signal; Referer is
+// only a last-ditch fallback. Returns null when no context lab can be
+// determined so callers keep their own default/legacy fallback. The returned
+// id is a HINT only: every caller still validates ownership/membership/seat
+// before trusting it, so a forged header cannot widen access.
+function activeLabIdFromContext(req: any): number | null {
+  const pos = (v: any): number | null => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+  const scoped = pos(req?.scope?.labId); if (scoped) return scoped;
+  const q = pos(req?.query?.labId); if (q) return q;
+  const hdr = pos(req?.headers?.["x-active-lab-id"]); if (hdr) return hdr;
+  const ref = req?.headers?.referer;
+  if (ref) {
+    const m = String(ref).match(/\/labs\/(\d+)\//);
+    if (m) { const r = pos(m[1]); if (r) return r; }
+  }
+  return null;
+}
+
+
 // ── Per-module write gate for seat users ─────────────────────────────────────
 // Uses the shared resolver so client useIsReadOnly() and this middleware
 // agree on the answer. Drift between the two = UI says edit while API
@@ -960,16 +986,10 @@ function requireModuleEdit(module: string) {
     //
     // If the active lab cannot be determined, fall back to legacy global
     // behavior so unprefixed callers do not regress.
-    let activeLabId: number | null = null;
-    if (req.scope?.labId) {
-      activeLabId = Number(req.scope.labId);
-    } else if (req.query?.labId) {
-      const n = Number(req.query.labId);
-      if (Number.isFinite(n) && n > 0) activeLabId = n;
-    } else if (req.headers.referer) {
-      const m = String(req.headers.referer).match(/\/labs\/(\d+)\//);
-      if (m) activeLabId = Number(m[1]);
-    }
+    // Lab-context resolution unified through activeLabIdFromContext (scope >
+    // ?labId > X-Active-Lab-Id header > Referer). Membership/ownership is
+    // still validated below, so this only changes the SIGNAL, not access.
+    let activeLabId: number | null = activeLabIdFromContext(req);
 
     if (activeLabId) {
       // Owners of the active lab always pass through.
@@ -9821,11 +9841,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // own studies; seat holders in the active lab return the owner's
         // studies; no active-lab context falls back to legacy global
         // seat lookup.
-        let getActiveLabId: number | null = null;
-        if (req.headers.referer) {
-          const m = String(req.headers.referer).match(/\/labs\/(\d+)\//);
-          if (m) getActiveLabId = Number(m[1]);
-        }
+        const getActiveLabId: number | null = activeLabIdFromContext(req);
         let dataUserId = payload.userId;
         if (getActiveLabId) {
           const ownsLab = (db as any).$client.prepare(
@@ -9912,11 +9928,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // POST /api/studies handler). For multi-lab owners holding a seat in
     // someone else's lab, the unscoped seat lookup would otherwise export
     // the wrong owner's studies.
-    let exportActiveLabId: number | null = null;
-    if (req.headers.referer) {
-      const m = String(req.headers.referer).match(/\/labs\/(\d+)\//);
-      if (m) exportActiveLabId = Number(m[1]);
-    }
+    const exportActiveLabId: number | null = activeLabIdFromContext(req);
     let dataUserId = payload.userId;
     if (exportActiveLabId) {
       const ownsLab = (db as any).$client.prepare(
@@ -10278,11 +10290,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // effectiveUserId to the wrong owner — denying access to their
         // own studies, or worse, authorizing access to studies in the
         // other lab. Resolve active lab from Referer.
-        let getActiveLabId: number | null = null;
-        if (req.headers.referer) {
-          const m = String(req.headers.referer).match(/\/labs\/(\d+)\//);
-          if (m) getActiveLabId = Number(m[1]);
-        }
+        const getActiveLabId: number | null = activeLabIdFromContext(req);
         let effectiveUserId = payload.userId;
         if (getActiveLabId) {
           const ownsLab = (db as any).$client.prepare(
@@ -10394,11 +10402,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // the Referer URL. Owners of the active lab pass through. If no
         // active lab can be resolved, fall back to the legacy global
         // seat check.
-        let postActiveLabId: number | null = null;
-        if (req.headers.referer) {
-          const m = String(req.headers.referer).match(/\/labs\/(\d+)\//);
-          if (m) postActiveLabId = Number(m[1]);
-        }
+        const postActiveLabId: number | null = activeLabIdFromContext(req);
         let seatRow: any = null;
         if (postActiveLabId) {
           const ownsLab = (db as any).$client.prepare(
@@ -27292,15 +27296,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // a single static pointer — which caused the settings page to display
       // a different lab's CLIA/name than the one the user had selected.
       // Priority order: explicit query param > Referer URL > legacy fallback.
-      let activeLabId: number | null = null;
-      if (req.query?.labId) {
-        const n = Number(req.query.labId);
-        if (Number.isFinite(n) && n > 0) activeLabId = n;
-      }
-      if (!activeLabId && req.headers.referer) {
-        const m = String(req.headers.referer).match(/\/labs\/(\d+)\//);
-        if (m) activeLabId = Number(m[1]);
-      }
+      // Lab-context resolution unified through activeLabIdFromContext (scope >
+      // ?labId > X-Active-Lab-Id header > Referer). The header is set by the
+      // client on every request and survives referrer-policy stripping, so it
+      // no longer silently falls back to the user's default lab. Access to the
+      // resolved lab is still validated below before it is honored.
+      let activeLabId: number | null = activeLabIdFromContext(req);
       // Verify the user has access to this lab before honoring the param.
       // Access can come from three sources: (a) labs.owner_user_id direct
       // ownership, (b) lab_members row, or (c) user_seats row. Owners are
@@ -27425,15 +27426,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // mis-flags an owner of one lab as a seat user simply because they
       // hold a seat in some other lab. Re-derive seat-status per-lab
       // before applying the write gate.
-      let activeLabId: number | null = null;
-      if (req.query?.labId) {
-        const n = Number(req.query.labId);
-        if (Number.isFinite(n) && n > 0) activeLabId = n;
-      }
-      if (!activeLabId && req.headers.referer) {
-        const m = String(req.headers.referer).match(/\/labs\/(\d+)\//);
-        if (m) activeLabId = Number(m[1]);
-      }
+      // Lab-context resolution unified through activeLabIdFromContext (scope >
+      // ?labId > X-Active-Lab-Id header > Referer). The header is set by the
+      // client on every request and survives referrer-policy stripping, so it
+      // no longer silently falls back to the user's default lab. Access to the
+      // resolved lab is still validated below before it is honored.
+      let activeLabId: number | null = activeLabIdFromContext(req);
       if (activeLabId) {
         // Same access check as the GET handler above: owner OR lab_member
         // OR seat. Owners are NOT in lab_members; the previous version of
