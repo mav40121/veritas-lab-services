@@ -27608,9 +27608,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Validate preferred PT vendor
       const VALID_PT_VENDORS = ["cap", "api", "wslh", "none"];
       const ptVendor = VALID_PT_VENDORS.includes(preferredPtVendor) ? preferredPtVendor : "none";
-      (db as any).$client.prepare(
-        "UPDATE users SET clia_number = ?, clia_lab_name = ?, preferred_standards = ?, preferred_pt_vendor = ? WHERE id = ?"
-      ).run(normalizedClia || null, clia_lab_name || null, standardsJson, ptVendor, req.userId);
+      // Cross-lab identity-bleed fix (2026-07-31): mirror this lab's CLIA
+      // identity onto the caller's OWN users row only when the caller OWNS the
+      // lab being edited. A consultant/member editing a client lab still
+      // updates the labs row (above) but must never have the client's CLIA
+      // stamped onto their personal account -- which the admin report groups
+      // by (owner.clia_lab_name) and the PDF identity fallback reads. This is
+      // how "Troy Regional" landed on an account that only consults for Troy.
+      // The intra-owner case (an owner of several labs editing a non-home lab)
+      // is unchanged: it still reflects the most recently edited OWNED lab.
+      if (lab.owner_user_id === req.userId) {
+        (db as any).$client.prepare(
+          "UPDATE users SET clia_number = ?, clia_lab_name = ?, preferred_standards = ?, preferred_pt_vendor = ? WHERE id = ?"
+        ).run(normalizedClia || null, clia_lab_name || null, standardsJson, ptVendor, req.userId);
+      }
 
       res.json({ success: true });
     } catch (err: any) {

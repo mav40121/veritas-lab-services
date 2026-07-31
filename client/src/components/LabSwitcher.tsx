@@ -106,6 +106,22 @@ function useLabSwitcherState() {
       queryClient.refetchQueries({ queryKey: ["/api/labs/me"] }),
       queryClient.refetchQueries({ queryKey: ["/api/auth/me"] }),
     ]);
+    // Cross-lab data-bleed fix (2026-07-31): the query cache runs
+    // staleTime: Infinity (see lib/queryClient.ts), so any query cached for
+    // the lab we are leaving is served forever until its key changes. Lab-
+    // scoped pages key on the /labs/:id URL and refetch naturally, but
+    // queries whose lab is resolved SERVER-side from a non-lab-scoped key
+    // (/api/account/settings, /api/studies, dashboard tiles, etc.) keep
+    // showing the PREVIOUS lab's data after a switch. Evict every cached
+    // query EXCEPT the two identity queries we just refreshed (they power the
+    // switcher's `current` + the read-only resolver and must survive the
+    // navigation), so nothing can render stale cross-lab data.
+    queryClient.removeQueries({
+      predicate: (q) => {
+        const k = q.queryKey?.[0];
+        return k !== "/api/labs/me" && k !== "/api/auth/me";
+      },
+    });
     setLocation(withLabPrefix(location, m.labId));
   };
 
