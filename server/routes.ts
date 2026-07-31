@@ -2344,6 +2344,37 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, lab: updated });
   });
 
+  // Admin: designate (or clear) a lab's Laboratory Medical Director by email.
+  // Same effect as the owner-facing PUT /api/labs/:labId/medical-director, but
+  // ADMIN_SECRET-gated so it can be set for a client without their login.
+  // Stored by email so it works while the director is still a pending invite.
+  // Send an empty/absent email to clear. Returns before/after.
+  app.post("/api/admin/set-lab-medical-director", (req, res) => {
+    const { secret, labId, email, name } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!labId) return res.status(400).json({ error: "labId required" });
+    const sqlite = (db as any).$client;
+    const before = sqlite.prepare("SELECT id, medical_director_email, medical_director_name FROM labs WHERE id = ?").get(Number(labId)) as any;
+    if (!before) return res.status(404).json({ error: "Lab not found" });
+    const rawEmail = String(email ?? "").trim();
+    if (rawEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(rawEmail)) {
+      return res.status(400).json({ error: "Invalid email address" });
+    }
+    const nextEmail = rawEmail || null;
+    const nextName = rawEmail ? (String(name ?? "").trim() || null) : null;
+    try {
+      sqlite.prepare(
+        "UPDATE labs SET medical_director_email = ?, medical_director_name = ?, updated_at = ? WHERE id = ?"
+      ).run(nextEmail, nextName, new Date().toISOString(), Number(labId));
+    } catch (err: any) {
+      console.error("[admin/set-lab-medical-director] update failed:", err.message);
+      return res.status(500).json({ error: err.message || "Failed to set medical director" });
+    }
+    const after = sqlite.prepare("SELECT id, medical_director_email, medical_director_name FROM labs WHERE id = ?").get(Number(labId));
+    console.log(`[admin/set-lab-medical-director] lab_id=${labId}: ${before.medical_director_email ?? "(none)"} -> ${nextEmail ?? "(cleared)"}`);
+    res.json({ ok: true, before, after });
+  });
+
   // Admin: deactivate all user_seats rows where seat_user_id = ?. Used to
   // clean up stale seat rows left over from the prior Lisa-cascade incident
   // (an owner accidentally got invited as a seat under someone else's lab,
@@ -8936,8 +8967,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // (owner_user_id, seat_user_id) so the owner row (no matching seat)
     // falls back to 'active', which matches the counting-gate rule
     // (owner always counts against the active cap).
-    const lab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    const lab = sqlite.prepare("SELECT owner_user_id, medical_director_email, medical_director_name FROM labs WHERE id = ?").get(req.scope.labId) as any;
     const ownerUserId = lab?.owner_user_id ?? null;
+    // Designated Medical Director (may be an active member OR a pending
+    // invite): the client matches this email against members / pendingInvites
+    // to render the "Medical Director" badge on the right row.
+    const medicalDirector = lab?.medical_director_email
+      ? { email: String(lab.medical_director_email), name: lab.medical_director_name ? String(lab.medical_director_name) : null }
+      : null;
     const rows = sqlite.prepare(`
       SELECT lm.id AS membership_id, lm.user_id, lm.role, lm.is_primary_lab,
              lm.status, lm.accepted_at, lm.created_at, lm.last_active_at,
@@ -9010,7 +9047,46 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("[labs/:labId/members GET seatLimits] query failed:", err.message);
     }
 
-    res.json({ members: rows, pendingInvites, seatLimits, seatCounts });
+    res.json({ members: rows, pendingInvites, seatLimits, seatCounts, medicalDirector });
+  });
+
+  // PUT /api/labs/:labId/medical-director
+  //   Owner/admin designates (or clears) this lab's Laboratory Medical
+  //   Director. Identified by EMAIL so it can name someone who is still a
+  //   PENDING invite (no user account yet). VeritaPolicy approval steps with
+  //   required_role='medical_director' route to them once they are an ACTIVE
+  //   member (see resolveActiveMedicalDirectorUserId in
+  //   server/veritapolicyApproval.ts); until then the permissive fallback
+  //   keeps policy approvals unblocked. Send an empty email to clear.
+  app.put("/api/labs/:labId/medical-director", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id, medical_director_email, medical_director_name FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    const rawEmail = String(req.body?.email ?? "").trim();
+    const rawName = String(req.body?.name ?? "").trim();
+    if (rawEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(rawEmail)) {
+      return res.status(400).json({ error: "Invalid email address" });
+    }
+    const email = rawEmail || null;
+    const name = rawEmail ? (rawName || null) : null; // clearing the email clears the name
+    try {
+      sqlite.prepare(
+        "UPDATE labs SET medical_director_email = ?, medical_director_name = ?, updated_at = ? WHERE id = ?"
+      ).run(email, name, new Date().toISOString(), req.scope.labId);
+    } catch (err: any) {
+      console.error("[labs/:labId/medical-director] update failed:", err.message);
+      return res.status(500).json({ error: err.message || "Failed to set medical director" });
+    }
+    // Audit the designation change for surveyor traceability.
+    try {
+      sqlite.prepare(
+        "INSERT INTO lab_audit_log (lab_id, changed_by_user_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?)"
+      ).run(req.scope.labId, req.scope.userId ?? 0, "medical_director_email", lab.medical_director_email ?? null, email);
+    } catch (err: any) {
+      console.error("[labs/:labId/medical-director] audit write failed:", err.message);
+    }
+    res.json({ ok: true, medicalDirector: email ? { email, name } : null });
   });
 
   // POST /api/labs/:labId/seat-invites/:id/reissue
