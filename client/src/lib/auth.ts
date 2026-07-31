@@ -3,6 +3,11 @@ import type { SeatPermissions } from "@shared/schema";
 
 const TOKEN_KEY = "veritas_token";
 const USER_KEY  = "veritas_user";
+// Last lab the user explicitly SWITCHED to (LabSwitcher). Used as the
+// X-Active-Lab-Id fallback when the current URL has no /labs/:id prefix, so
+// authenticated requests from un-prefixed pages still carry the user's current
+// lab instead of leaving the server to resolve a possibly-stale default.
+const ACTIVE_LAB_KEY = "veritas_active_lab_id";
 
 let _token: string | null = null;
 let _user: AuthUser | null = null;
@@ -54,6 +59,8 @@ export function clearAuth() {
   try {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    // Never let one account's active lab leak into the next session.
+    localStorage.removeItem(ACTIVE_LAB_KEY);
   } catch {}
 }
 
@@ -73,10 +80,27 @@ function getActiveLabIdFromUrl(): number | null {
   return m ? Number(m[1]) : null;
 }
 
+// The lab the user last SWITCHED to, persisted so it survives navigation to an
+// un-prefixed page and page refreshes. LabSwitcher.switchTo sets this in the
+// same step it updates the server-side default lab, so the two stay aligned.
+export function setActiveLabId(labId: number): void {
+  try { localStorage.setItem(ACTIVE_LAB_KEY, String(labId)); } catch {}
+}
+function getPersistedActiveLabId(): number | null {
+  try {
+    const v = Number(localStorage.getItem(ACTIVE_LAB_KEY));
+    return Number.isFinite(v) && v > 0 ? v : null;
+  } catch { return null; }
+}
+
 export function authHeaders(): Record<string, string> {
   const h: Record<string, string> = {};
   if (_token) h.Authorization = `Bearer ${_token}`;
-  const labId = getActiveLabIdFromUrl();
+  // Prefer the lab in the URL (/labs/:id); fall back to the last switched lab
+  // so un-prefixed authenticated pages still tell the server which lab is
+  // active instead of letting it resolve to a possibly-stale default. The id
+  // is validated server-side (membership/ownership) before it is honored.
+  const labId = getActiveLabIdFromUrl() ?? getPersistedActiveLabId();
   if (labId) h["X-Active-Lab-Id"] = String(labId);
   return h;
 }
