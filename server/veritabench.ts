@@ -2566,6 +2566,155 @@ export function registerVeritaBenchRoutes(
     res.json({ success: true });
   });
 
+  // ── VeritaQA Phase 1: PI Plan + annual leadership review (TJC PI.02.01.01) ──
+  // One active, lab-level written PI plan per account. EP1 = the four method
+  // narratives + the improvement priorities; EP2 = the leadership review log,
+  // where next_review_due is stamped review_date + 12 months so "overdue" is
+  // computed, never silent.
+  const addMonthsIso = (dateStr: string, months: number): string | null => {
+    const d = new Date(`${dateStr}T00:00:00Z`);
+    if (isNaN(d.getTime())) return null;
+    d.setUTCMonth(d.getUTCMonth() + months);
+    return d.toISOString().slice(0, 10);
+  };
+
+  // GET /api/pi/plan - the active plan with its priorities, review log, and
+  // the computed review status (overdue when the last review's next_review_due
+  // has passed, or when the plan exists but was never reviewed).
+  app.get("/api/pi/plan", authMiddleware, (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const plan = sqlite.prepare(
+      "SELECT * FROM pi_plan WHERE account_id = ? AND status = 'active' ORDER BY id DESC LIMIT 1"
+    ).get(accountId) as any;
+    if (!plan) return res.json({ plan: null, priorities: [], reviews: [], review_status: null, completeness: null });
+    const priorities = sqlite.prepare(
+      "SELECT * FROM pi_plan_priority WHERE plan_id = ? AND account_id = ? ORDER BY sort_order ASC, id ASC"
+    ).all(plan.id, accountId) as any[];
+    const reviews = sqlite.prepare(
+      "SELECT * FROM pi_plan_review WHERE plan_id = ? AND account_id = ? ORDER BY review_date DESC, id DESC"
+    ).all(plan.id, accountId) as any[];
+    const last = reviews[0] || null;
+    const today = new Date().toISOString().slice(0, 10);
+    const review_status = {
+      never_reviewed: !last,
+      last_review_date: last?.review_date || null,
+      next_review_due: last?.next_review_due || null,
+      overdue: !last || (last.next_review_due != null && last.next_review_due < today),
+    };
+    const filled = (v: any) => !!(v && String(v).trim());
+    const completeness = {
+      measurement_methods: filled(plan.measurement_methods),
+      analysis_methods: filled(plan.analysis_methods),
+      remediation_methods: filled(plan.remediation_methods),
+      monitor_sustain_methods: filled(plan.monitor_sustain_methods),
+      priorities_count: priorities.length,
+      reviewed: !!last,
+    };
+    res.json({ plan, priorities, reviews, review_status, completeness });
+  });
+
+  // PUT /api/pi/plan - upsert the single active plan (create if none exists).
+  app.put("/api/pi/plan", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const b = req.body || {};
+    const now = new Date().toISOString();
+    const existing = sqlite.prepare(
+      "SELECT * FROM pi_plan WHERE account_id = ? AND status = 'active' ORDER BY id DESC LIMIT 1"
+    ).get(accountId) as any;
+    const pick = (k: string) => (b[k] !== undefined ? b[k] : existing ? existing[k] : null);
+    try {
+      if (existing) {
+        sqlite.prepare(
+          "UPDATE pi_plan SET title = ?, effective_year = ?, program_scope = ?, measurement_methods = ?, analysis_methods = ?, remediation_methods = ?, monitor_sustain_methods = ?, updated_at = ? WHERE id = ? AND account_id = ?"
+        ).run(pick("title"), pick("effective_year"), pick("program_scope"), pick("measurement_methods"), pick("analysis_methods"), pick("remediation_methods"), pick("monitor_sustain_methods"), now, existing.id, accountId);
+        return res.json(sqlite.prepare("SELECT * FROM pi_plan WHERE id = ?").get(existing.id));
+      }
+      const result = sqlite.prepare(
+        "INSERT INTO pi_plan (account_id, title, effective_year, status, program_scope, measurement_methods, analysis_methods, remediation_methods, monitor_sustain_methods, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)"
+      ).run(accountId, b.title ?? null, b.effective_year ?? null, b.program_scope ?? null, b.measurement_methods ?? null, b.analysis_methods ?? null, b.remediation_methods ?? null, b.monitor_sustain_methods ?? null, now, now);
+      res.json(sqlite.prepare("SELECT * FROM pi_plan WHERE id = ?").get(Number(result.lastInsertRowid)));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/pi/plan/priorities - add an improvement priority to the plan.
+  app.post("/api/pi/plan/priorities", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const { plan_id, process_name, stakeholder_requirements, goal, improvement_activities, linked_metric_id, linked_department_id, sort_order } = req.body || {};
+    if (!plan_id || !process_name || !String(process_name).trim()) return res.status(400).json({ error: "plan_id and process_name are required" });
+    const owns = sqlite.prepare("SELECT 1 FROM pi_plan WHERE id = ? AND account_id = ?").get(plan_id, accountId);
+    if (!owns) return res.status(404).json({ error: "Plan not found" });
+    const now = new Date().toISOString();
+    try {
+      const result = sqlite.prepare(
+        "INSERT INTO pi_plan_priority (plan_id, account_id, process_name, stakeholder_requirements, goal, improvement_activities, linked_metric_id, linked_department_id, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run(plan_id, accountId, process_name, stakeholder_requirements ?? null, goal ?? null, improvement_activities ?? null, linked_metric_id ?? null, linked_department_id ?? null, sort_order ?? 0, now);
+      res.json(sqlite.prepare("SELECT * FROM pi_plan_priority WHERE id = ?").get(Number(result.lastInsertRowid)));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // PUT /api/pi/plan/priorities/:id - update a priority (account-scoped).
+  app.put("/api/pi/plan/priorities/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const { id } = req.params;
+    const existing = sqlite.prepare("SELECT * FROM pi_plan_priority WHERE id = ? AND account_id = ?").get(id, accountId) as any;
+    if (!existing) return res.status(404).json({ error: "Priority not found" });
+    const b = req.body || {};
+    const pick = (k: string) => (b[k] !== undefined ? b[k] : existing[k]);
+    try {
+      sqlite.prepare(
+        "UPDATE pi_plan_priority SET process_name = ?, stakeholder_requirements = ?, goal = ?, improvement_activities = ?, linked_metric_id = ?, linked_department_id = ?, sort_order = ? WHERE id = ? AND account_id = ?"
+      ).run(pick("process_name"), pick("stakeholder_requirements"), pick("goal"), pick("improvement_activities"), pick("linked_metric_id"), pick("linked_department_id"), pick("sort_order"), id, accountId);
+      res.json(sqlite.prepare("SELECT * FROM pi_plan_priority WHERE id = ?").get(id));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // DELETE /api/pi/plan/priorities/:id - remove a priority (account-scoped).
+  app.delete("/api/pi/plan/priorities/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const { id } = req.params;
+    const existing = sqlite.prepare("SELECT * FROM pi_plan_priority WHERE id = ? AND account_id = ?").get(id, accountId);
+    if (!existing) return res.status(404).json({ error: "Priority not found" });
+    sqlite.prepare("DELETE FROM pi_plan_priority WHERE id = ?").run(id);
+    res.json({ success: true });
+  });
+
+  // POST /api/pi/plan/reviews - record an annual leadership review (EP2). The
+  // review log is append-only (an audit record); next_review_due is stamped
+  // 12 months out so the plan flags itself overdue.
+  app.post("/api/pi/plan/reviews", authMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const { plan_id, reviewed_by, reviewer_title, review_date, changes_summary } = req.body || {};
+    if (!plan_id || !reviewed_by || !String(reviewed_by).trim() || !review_date) {
+      return res.status(400).json({ error: "plan_id, reviewed_by, and review_date are required" });
+    }
+    const owns = sqlite.prepare("SELECT 1 FROM pi_plan WHERE id = ? AND account_id = ?").get(plan_id, accountId);
+    if (!owns) return res.status(404).json({ error: "Plan not found" });
+    const rd = String(review_date).slice(0, 10);
+    const next = addMonthsIso(rd, 12);
+    if (!next) return res.status(400).json({ error: "review_date must be a valid YYYY-MM-DD date" });
+    const now = new Date().toISOString();
+    try {
+      const result = sqlite.prepare(
+        "INSERT INTO pi_plan_review (plan_id, account_id, reviewed_by, reviewer_title, review_date, changes_summary, next_review_due, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run(plan_id, accountId, reviewed_by, reviewer_title ?? null, rd, changes_summary ?? null, next, now);
+      res.json(sqlite.prepare("SELECT * FROM pi_plan_review WHERE id = ?").get(Number(result.lastInsertRowid)));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // GET /api/pi/dashboard - computed dashboard data
   app.get("/api/pi/dashboard", authMiddleware, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
