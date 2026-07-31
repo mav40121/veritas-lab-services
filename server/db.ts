@@ -1993,6 +1993,20 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
   // rule): the column is added empty and only ever set by an explicit
   // PATCH from an owner/admin.
   ensure("parent_warehouse_lab_id", "ALTER TABLE labs ADD COLUMN parent_warehouse_lab_id INTEGER");
+
+  // 2026-07-31 — Laboratory Medical Director designation. Records WHO the
+  // lab's medical director is so (a) the Lab Members page can label them and
+  // (b) VeritaPolicy approval steps whose required_role = 'medical_director'
+  // route to that person instead of collapsing to "any member" (the prior
+  // Phase-2 fallback in server/veritapolicyApproval.ts). Stored by EMAIL, not
+  // user_id, so it can be set for someone who is still a PENDING invite (they
+  // have no user account yet); the approval engine resolves the email to an
+  // ACTIVE member at check time and, until that member exists, keeps the
+  // permissive fallback so no lab is ever locked out of policy approvals.
+  // Nullable, no backfill, set only by an explicit owner/admin (or admin
+  // endpoint) write — same non-destructive ALTER+DEFAULT discipline as above.
+  ensure("medical_director_email", "ALTER TABLE labs ADD COLUMN medical_director_email TEXT");
+  ensure("medical_director_name",  "ALTER TABLE labs ADD COLUMN medical_director_name TEXT");
 }
 
 // users.default_lab_id — bare-route redirect target (per doc Section 4).

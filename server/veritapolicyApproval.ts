@@ -237,6 +237,40 @@ export function seedDefaultWorkflowsIfEmpty(sqlite: any, labId: number): void {
   });
 }
 
+// Resolve the ACTIVE member who is this lab's designated Medical Director, if
+// any. The designation lives on labs.medical_director_email and may name a
+// person who is still a PENDING invite (no user account yet). We only treat a
+// director as "designated" for routing once that email matches an ACTIVE
+// lab_members row — i.e. the director has accepted and has a login. Until then
+// this returns null and callers keep the permissive fallback, so a lab is
+// never locked out of policy approvals while its director invite is pending.
+// Returns the director's user_id, or null when unset / not-yet-active.
+export function resolveActiveMedicalDirectorUserId(
+  sqlite: any,
+  labId: number
+): number | null {
+  try {
+    const lab = sqlite
+      .prepare("SELECT medical_director_email FROM labs WHERE id = ?")
+      .get(labId) as { medical_director_email?: string | null } | undefined;
+    const email = String(lab?.medical_director_email || "").trim().toLowerCase();
+    if (!email) return null;
+    const row = sqlite
+      .prepare(
+        `SELECT lm.user_id
+           FROM lab_members lm
+           JOIN users u ON u.id = lm.user_id
+          WHERE lm.lab_id = ? AND lm.status = 'active'
+            AND lower(u.email) = ?
+          LIMIT 1`
+      )
+      .get(labId, email) as { user_id?: number } | undefined;
+    return row && row.user_id != null ? Number(row.user_id) : null;
+  } catch {
+    return null;
+  }
+}
+
 // Resolve whether a user can approve a given workflow step. Returns
 // { ok: true } or { ok: false, reason } so callers can return a useful
 // 403 message to the client.
@@ -289,6 +323,28 @@ export function canUserApproveStep(
       return { ok: true };
     }
     return { ok: false, reason: "This step requires an active (writer) seat." };
+  }
+  // Designated Medical Director routing (tightens the Phase-2 collapse below
+  // for 'medical_director' steps). If this lab has named a medical director
+  // (labs.medical_director_email) AND that person is an ACTIVE member, the
+  // step routes strictly to them, with the lab owner or an admin allowed to
+  // sign as "or designee" (the CLIA "medical director or designee" standard;
+  // also prevents lock-out when the director is unavailable). If no active
+  // director is designated, fall through to the permissive rule below —
+  // unchanged behavior for every lab that has not set a director, and for a
+  // lab whose director is still a pending invite. Self-approval already guarded.
+  if (role === "medical_director") {
+    const mdUserId = resolveActiveMedicalDirectorUserId(sqlite, labId);
+    if (mdUserId != null) {
+      if (userId === mdUserId) return { ok: true };
+      if (member.role === "owner" || member.role === "admin") return { ok: true };
+      return {
+        ok: false,
+        reason:
+          "This step routes to the lab's designated Medical Director or an owner/admin designee.",
+      };
+    }
+    // No active designated director: fall through to the permissive rule.
   }
   // any_view_only_seat, medical_director, technical_consultant,
   // technical_supervisor all collapse to "any view-only seat" in Phase 2.
@@ -419,14 +475,26 @@ export function countEligibleReviewersForStep(
         WHERE lm.lab_id = ? AND lm.status = 'active'`
     )
     .all(labId, labId) as { user_id: number; role: string; seat_type: string }[];
+  // Mirror the strict Medical Director routing used by canUserApproveStep so
+  // the submit-time "zero eligible approvers" warning is accurate: when a
+  // designated director is active, only the director plus owner/admin
+  // designees count. Otherwise the medical_director step collapses to the
+  // permissive reviewer rule, same as before.
+  const mdUserId =
+    stepRow.required_role === "medical_director"
+      ? resolveActiveMedicalDirectorUserId(sqlite, labId)
+      : null;
   let count = 0;
   for (const m of members) {
     if (m.user_id === documentOwnerId && !stepRow.allow_self_approval) continue;
     if (stepRow.required_role === "any_active_seat") {
       if (m.seat_type === "active" || m.role === "owner" || m.role === "admin") count += 1;
+    } else if (stepRow.required_role === "medical_director" && mdUserId != null) {
+      if (m.user_id === mdUserId || m.role === "owner" || m.role === "admin") count += 1;
     } else {
-      // any_view_only_seat + CLIA role aliases all accept view_only OR
-      // active OR owner OR admin in Phase 2.
+      // any_view_only_seat + CLIA role aliases (incl. a medical_director step
+      // with no active designated director) accept view_only OR active OR
+      // owner OR admin in Phase 2.
       if (
         m.seat_type === "view_only" ||
         m.seat_type === "active" ||
