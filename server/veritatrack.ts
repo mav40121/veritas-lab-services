@@ -4,6 +4,7 @@ import { db } from "./db";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
 import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
+import { preserveMapLink, applyMapSignoffWriteback } from "./veritatrackMapSync";
 
 function trackLicenseCtx(req: any): LicenseContext {
   const u = req?.user || null;
@@ -500,11 +501,14 @@ export function registerVeritaTrackRoutes(
       if (status === 403) return res.status(403).json({ error: "You don't have access to this task's lab" });
       return res.status(404).json({ error: "Task not found" });
     }
-    const { name, category, instrument, owner, frequency, frequency_months, map_analyte, map_field, notes, active } = req.body;
+    const { name, category, instrument, owner, frequency, frequency_months, notes, active } = req.body;
     const freqMonths = frequency_months || frequencyToMonths(frequency || "Monthly");
+    // Keep the VeritaMap linkage when the edit form omits map_analyte/map_field,
+    // so a routine edit never silently unlinks an imported task from the map.
+    const link = preserveMapLink(req.body, existing as any);
     sqlite.prepare(
       "UPDATE veritatrack_tasks SET name=?,category=?,instrument=?,owner=?,frequency=?,frequency_months=?,map_analyte=?,map_field=?,notes=?,active=?,updated_at=datetime('now') WHERE id=?"
-    ).run(name, category || "Other", instrument || null, owner || null, frequency || "Monthly", freqMonths, map_analyte || null, map_field || null, notes || null, active !== false ? 1 : 0, taskId);
+    ).run(name, category || "Other", instrument || null, owner || null, frequency || "Monthly", freqMonths, link.map_analyte, link.map_field, notes || null, active !== false ? 1 : 0, taskId);
     const wasDeactivated = (existing as any).active === 1 && active === false;
     trackAudit({
       labId: (existing as any).lab_id ?? null, taskId,
@@ -557,40 +561,16 @@ export function registerVeritaTrackRoutes(
       detail: `Completed ${completed_date}${performed_by ? ` by ${performed_by}` : initials ? ` by ${initials}` : ""}`,
       byUserId: req.user?.userId ?? null,
     });
-    // If linked to a VeritaMap field, update it there too.
-    //
-    // Shape A class sweep (2026-06-08): prior code picked ONE map per user
-    // (LIMIT 1, ORDER BY updated_at DESC) which meant a multi-map lab's
-    // signoff writeback landed on whichever map happened to be most recently
-    // updated rather than every map whose test rows reference this analyte.
-    // Now we walk every map in the owner's lab and UPDATE every matching row.
-    // Compound Shape B fix on the same lines: lab-scope the map lookup via
-    // users.lab_id with a fallback to user_id when lab_id is null (legacy).
-    if (task.map_analyte && task.map_field) {
-      try {
-        const ownerLabRow = sqlite.prepare(
-          "SELECT lab_id FROM users WHERE id = ?"
-        ).get(userId) as { lab_id: number | null } | undefined;
-        const ownerLabId = ownerLabRow?.lab_id ?? null;
-        const maps = ownerLabId != null
-          ? sqlite.prepare(
-              "SELECT id FROM veritamap_maps WHERE lab_id = ?"
-            ).all(ownerLabId) as Array<{ id: number }>
-          : sqlite.prepare(
-              "SELECT id FROM veritamap_maps WHERE user_id = ?"
-            ).all(userId) as Array<{ id: number }>;
-        if (maps.length > 0) {
-          const allowed = ["last_cal_ver","last_method_comp","last_precision","last_sop_review"];
-          if (allowed.includes(task.map_field)) {
-            const placeholders = maps.map(() => "?").join(",");
-            sqlite.prepare(
-              `UPDATE veritamap_tests SET ${task.map_field} = ?, updated_at = datetime('now') WHERE map_id IN (${placeholders}) AND analyte = ?`
-            ).run(completed_date, ...maps.map(m => m.id), task.map_analyte);
-          }
-        }
-      } catch {}
-    }
-    res.json(sqlite.prepare("SELECT * FROM veritatrack_signoffs WHERE id = ?").get(r.lastInsertRowid));
+    // If linked to a VeritaMap field, write the date back and REPORT the result
+    // (map_sync) so a failed write-back is never silent. The helper walks every
+    // map in the owner's lab (Shape A/B: lab-scope via users.lab_id, fall back
+    // to user_id for legacy rows) and returns how many rows it changed plus a
+    // warning when 0 rows matched or the update threw.
+    const mapSync = (task.map_analyte && task.map_field)
+      ? applyMapSignoffWriteback(sqlite, userId, task.map_analyte, task.map_field, completed_date)
+      : null;
+    const signoff = sqlite.prepare("SELECT * FROM veritatrack_signoffs WHERE id = ?").get(r.lastInsertRowid);
+    res.json({ ...(signoff as any), map_sync: mapSync });
   });
 
   // DELETE a sign-off \u2014 Shape A guard via resolveRowForMutation.

@@ -20,6 +20,7 @@ import {
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { useToast } from "@/hooks/use-toast";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Task {
@@ -185,6 +186,7 @@ function SignoffDialog({ task, onDone, tasksKey, dashKey }: {
   task: Task; onDone: () => void; tasksKey: string; dashKey: string;
 }) {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [initials, setInitials] = useState("");
@@ -201,11 +203,21 @@ function SignoffDialog({ task, onDone, tasksKey, dashKey }: {
       if (!r.ok) throw new Error(await r.text());
       return r.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: [tasksKey] });
       qc.invalidateQueries({ queryKey: [dashKey] });
       setOpen(false);
       onDone();
+      // Surface the VeritaMap write-back result so a failed map update is never
+      // silent (an imported cal-ver task whose map link is broken, or whose
+      // analyte name no longer matches, records the sign-off but leaves the map
+      // red). See applyMapSignoffWriteback on the server.
+      const ms = data?.map_sync;
+      if (ms?.warning) {
+        toast({ title: "Sign-off saved, map not updated", description: ms.warning, variant: "destructive" });
+      } else if (ms?.linked && ms.updated > 0) {
+        toast({ title: "Sign-off saved", description: "The linked VeritaMap date was updated to your completion date." });
+      }
     },
   });
 
