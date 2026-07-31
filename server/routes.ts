@@ -2730,6 +2730,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ count: rows.length, rows });
   });
 
+  // Admin: reset a user's account-level CLIA identity (users.clia_number /
+  // clia_lab_name) to a lab's identity. The account-settings save mirrors the
+  // ACTIVE lab's CLIA onto the logged-in user's record ("keep user columns in
+  // sync for PDF generation"), so a multi-lab operator who saves settings while
+  // viewing a client's lab ends up with that client's CLIA on their own
+  // account. This copies a chosen lab's clia_number + lab_name back onto the
+  // user. Returns before/after so the write is visible.
+  app.post("/api/admin/reset-user-clia-to-lab", (req, res) => {
+    const { secret, userId, labId } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!userId || !labId) return res.status(400).json({ error: "userId and labId required" });
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?").get(Number(labId)) as any;
+    if (!lab) return res.status(404).json({ error: `Lab ${labId} not found` });
+    const before = sqlite.prepare("SELECT clia_number, clia_lab_name FROM users WHERE id = ?").get(Number(userId)) as any;
+    if (!before) return res.status(404).json({ error: `User ${userId} not found` });
+    sqlite.prepare("UPDATE users SET clia_number = ?, clia_lab_name = ? WHERE id = ?")
+      .run(lab.clia_number || null, lab.lab_name || null, Number(userId));
+    const after = sqlite.prepare("SELECT clia_number, clia_lab_name FROM users WHERE id = ?").get(Number(userId)) as any;
+    res.json({ ok: true, userId: Number(userId), from_lab: { id: lab.id, lab_name: lab.lab_name, clia_number: lab.clia_number }, before, after });
+  });
+
   // Admin: VeritaQC Phase 0 seed. Populates one Estradiol control lot for
   // the target lab, default per-lab rule settings, and Michael's actual
   // April 2026 QC runs from the operator's pre-existing Excel. Used to
