@@ -1,4 +1,4 @@
-type GA4EventName = 'begin_checkout' | 'select_item' | 'sign_up' | 'purchase' | 'invoice_request_submitted' | 'invoice_request_cta_click' | 'invoice_request_card_link_click' | 'system_quote_request_band_click';
+type GA4EventName = 'begin_checkout' | 'select_item' | 'sign_up' | 'purchase' | 'invoice_request_submitted' | 'invoice_request_cta_click' | 'invoice_request_card_link_click' | 'system_quote_request_band_click' | 'lead_capture';
 
 interface GA4EventParams {
   // begin_checkout / purchase / select_item
