@@ -13681,7 +13681,7 @@
   "Siemens Atellica CH 930": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 106,
+    "testCount": 118,
     "tests": {
       "Methotrexate": {
         "complexity": "MODERATE",
@@ -14106,13 +14106,61 @@
       "Vancomycin": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
+      },
+      "Creatinine, urine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Calcium, urine": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Glucose, urine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Magnesium, urine": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Amylase, urine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Sodium, urine": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium, urine": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Chloride, urine": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Phosphorus, urine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Urea nitrogen, urine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Uric acid, urine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "C-reactive protein, high sensitivity (hs-CRP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
       }
     }
   },
   "Siemens Atellica CI 1900": {
     "vendor": "Siemens Healthineers",
     "category": "Immunoassay",
-    "testCount": 123,
+    "testCount": 135,
     "tests": {
       "Dehydroepiandrosterone sulfate (DHEA-SO4)": {
         "complexity": "MODERATE",
@@ -14605,6 +14653,54 @@
       "Chloride": {
         "complexity": "MODERATE",
         "specialty": "Electrolytes"
+      },
+      "Creatinine, urine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Calcium, urine": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Glucose, urine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Magnesium, urine": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Amylase, urine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Sodium, urine": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium, urine": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Chloride, urine": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Phosphorus, urine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Urea nitrogen, urine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Uric acid, urine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "C-reactive protein, high sensitivity (hs-CRP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
       }
     }
   },
