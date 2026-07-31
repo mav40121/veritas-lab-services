@@ -4980,6 +4980,113 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pi_metrics_dept ON pi_metrics(
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pi_entries_metric ON pi_entries(metric_id, year, month)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pi_entries_account ON pi_entries(account_id, year)`); } catch {}
 
+// ── VeritaQA Phase 1 (2026-07-31): PI Plan + annual leadership review ─────────
+// Closes TJC PI.02.01.01, a Documentation standard the metric tracker did not
+// cover. The lab-level written performance-improvement plan (one active plan
+// per account) carries the standing PI methodology narratives (EP1: measure /
+// analyze / remediate / monitor-sustain), a list of improvement PRIORITIES
+// (each a process needing improvement with its stakeholder requirements, goal,
+// and activities), and a LEADERSHIP REVIEW log (EP2: leaders review >= annually
+// and update). next_review_due is stamped review_date + 12 months so overdue
+// is visible, not silent.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS pi_plan (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL,
+    title TEXT,
+    effective_year INTEGER,
+    status TEXT DEFAULT 'active',
+    program_scope TEXT,
+    measurement_methods TEXT,
+    analysis_methods TEXT,
+    remediation_methods TEXT,
+    monitor_sustain_methods TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(pi_plan)").all() as { name: string }[]).map((c) => c.name);
+  if (cols.length > 0) {
+    for (const [col, ddl] of [
+      ["title", "ALTER TABLE pi_plan ADD COLUMN title TEXT"],
+      ["effective_year", "ALTER TABLE pi_plan ADD COLUMN effective_year INTEGER"],
+      ["status", "ALTER TABLE pi_plan ADD COLUMN status TEXT DEFAULT 'active'"],
+      ["program_scope", "ALTER TABLE pi_plan ADD COLUMN program_scope TEXT"],
+      ["measurement_methods", "ALTER TABLE pi_plan ADD COLUMN measurement_methods TEXT"],
+      ["analysis_methods", "ALTER TABLE pi_plan ADD COLUMN analysis_methods TEXT"],
+      ["remediation_methods", "ALTER TABLE pi_plan ADD COLUMN remediation_methods TEXT"],
+      ["monitor_sustain_methods", "ALTER TABLE pi_plan ADD COLUMN monitor_sustain_methods TEXT"],
+      ["updated_at", "ALTER TABLE pi_plan ADD COLUMN updated_at TEXT"],
+    ] as [string, string][]) {
+      if (!cols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+    }
+  }
+}
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS pi_plan_priority (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id INTEGER NOT NULL,
+    account_id INTEGER NOT NULL,
+    process_name TEXT NOT NULL,
+    stakeholder_requirements TEXT,
+    goal TEXT,
+    improvement_activities TEXT,
+    linked_metric_id INTEGER,
+    linked_department_id INTEGER,
+    sort_order INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (plan_id) REFERENCES pi_plan(id) ON DELETE CASCADE
+  )
+`);
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(pi_plan_priority)").all() as { name: string }[]).map((c) => c.name);
+  if (cols.length > 0) {
+    for (const [col, ddl] of [
+      ["stakeholder_requirements", "ALTER TABLE pi_plan_priority ADD COLUMN stakeholder_requirements TEXT"],
+      ["goal", "ALTER TABLE pi_plan_priority ADD COLUMN goal TEXT"],
+      ["improvement_activities", "ALTER TABLE pi_plan_priority ADD COLUMN improvement_activities TEXT"],
+      ["linked_metric_id", "ALTER TABLE pi_plan_priority ADD COLUMN linked_metric_id INTEGER"],
+      ["linked_department_id", "ALTER TABLE pi_plan_priority ADD COLUMN linked_department_id INTEGER"],
+      ["sort_order", "ALTER TABLE pi_plan_priority ADD COLUMN sort_order INTEGER DEFAULT 0"],
+    ] as [string, string][]) {
+      if (!cols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+    }
+  }
+}
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS pi_plan_review (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id INTEGER NOT NULL,
+    account_id INTEGER NOT NULL,
+    reviewed_by TEXT NOT NULL,
+    reviewer_title TEXT,
+    review_date TEXT NOT NULL,
+    changes_summary TEXT,
+    next_review_due TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (plan_id) REFERENCES pi_plan(id) ON DELETE CASCADE
+  )
+`);
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(pi_plan_review)").all() as { name: string }[]).map((c) => c.name);
+  if (cols.length > 0) {
+    for (const [col, ddl] of [
+      ["reviewer_title", "ALTER TABLE pi_plan_review ADD COLUMN reviewer_title TEXT"],
+      ["changes_summary", "ALTER TABLE pi_plan_review ADD COLUMN changes_summary TEXT"],
+      ["next_review_due", "ALTER TABLE pi_plan_review ADD COLUMN next_review_due TEXT"],
+    ] as [string, string][]) {
+      if (!cols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+    }
+  }
+}
+
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pi_plan_account ON pi_plan(account_id, status)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pi_plan_priority_plan ON pi_plan_priority(plan_id, account_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pi_plan_review_plan ON pi_plan_review(plan_id, account_id)`); } catch {}
+
 // ── One-shot reconciliation: purge orphan veritamap_tests rows ───────────────
 // Background: prior to the fix in routes.ts, rebuildMapTests used
 // INSERT OR IGNORE only — it never deleted rows when an analyte was toggled
