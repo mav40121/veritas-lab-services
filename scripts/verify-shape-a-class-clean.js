@@ -71,6 +71,11 @@ const SINGLE_TENANT_TABLES = [
   "pi_departments",
   "pi_metrics",
   "pi_entries",
+  // VeritaQA Phase 1: the PI plan / priorities / leadership-review log are
+  // account-scoped by design, same as the rest of the PI module above.
+  "pi_plan",
+  "pi_plan_priority",
+  "pi_plan_review",
 ];
 
 // File-level allowlist: documentation files where the pattern appears
