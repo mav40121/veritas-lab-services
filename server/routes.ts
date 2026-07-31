@@ -16152,6 +16152,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // Admin — hard-delete a subscriber by email. Cleanup path for test/junk rows
+  // (e.g. a Playwright content-upgrade capture) that would otherwise skew the
+  // lead-capture experiment's per-source count. The public unsubscribe only
+  // soft-deactivates (active = 0), which still shows in the source tally.
+  app.delete("/api/admin/newsletter/subscriber", (req, res) => {
+    const { secret } = req.query;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const email = String(req.query.email || "").toLowerCase().trim();
+    if (!email || !email.includes("@")) return res.status(400).json({ error: "Valid email required" });
+    try {
+      const info = (db as any).$client.prepare(
+        "DELETE FROM newsletter_subscribers WHERE email = ?"
+      ).run(email);
+      res.json({ deleted: info.changes || 0, email });
+    } catch (err: any) {
+      console.error("[newsletter] admin delete error:", err);
+      res.status(500).json({ error: "Delete failed" });
+    }
+  });
+
   // Public one-click unsubscribe (CAN-SPAM). Stateless HMAC token over the email,
   // so the link cannot be forged and no per-user token needs storing. Flips the
   // subscriber to active = 0; the send path only targets active = 1.
