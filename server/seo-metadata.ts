@@ -20,6 +20,10 @@ import {
 export interface SEOMetadata {
   title: string;
   description: string;
+  // Optional per-route social share image (absolute URL). When set, static.ts
+  // overrides og:image + twitter:image for this route; otherwise the default
+  // /og-image.png from client/index.html is used.
+  ogImage?: string;
   // Optional per-route structured data (JSON-LD). When present, static.ts
   // injects it as one or more <script type="application/ld+json"> blocks into
   // the served HTML, alongside the site-wide @graph already in index.html.
@@ -150,14 +154,17 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   "/demo": {
     title: "Demo | VeritaAssure\u2122 Lab Compliance & Operations Software",
     description: "Explore VeritaAssure\u2122 in action. Choose from operations tools (productivity, staffing) or the full compliance suite (performance verification, inspection readiness, competency tracking).",
+    ogImage: `${BASE_URL}/demo-og.png`,
   },
   "/demo/operations": {
     title: "VeritaBench\u2122 Demo - Lab Productivity & Staffing Tools | VeritaAssure\u2122",
     description: "See VeritaBench\u2122 in action. Interactive productivity calculator, monthly tracking, and by-hour staffing analysis built for clinical laboratories.",
+    ogImage: `${BASE_URL}/demo-og.png`,
   },
   "/demo/compliance": {
     title: "Compliance Suite Demo | VeritaAssure\u2122 Lab Compliance Software",
     description: "Try the VeritaAssure\u2122 compliance demo. Explore VeritaCheck™ performance verification, VeritaScan™ inspection readiness, VeritaMap™ reportable ranges, and VeritaComp™ competency tracking.",
+    ogImage: `${BASE_URL}/demo-og.png`,
   },
   "/roadmap": {
     title: "Product Roadmap | VeritaAssure\u2122 Lab Compliance Software",
