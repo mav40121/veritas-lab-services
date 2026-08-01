@@ -361,8 +361,12 @@ export default function VeritaCheckPage() {
     }
   }, [search]);
 
-  // Plans that require a CLIA number before checkout
-  const CLIA_REQUIRED_PLANS = new Set(["clinic", "community", "hospital", "enterprise"]);
+  // Plans that require a CLIA number before checkout. NOTE: the Clinic tier's
+  // canonical plan string is "waived" (server/stripe.ts: waived -> Clinic
+  // $999/yr); "clinic" is a phantom string that is never actually assigned, so
+  // it was kept here for safety but "waived" is the one a real Clinic customer
+  // carries and must be present, or a Clinic purchaser skips the CLIA prompt.
+  const CLIA_REQUIRED_PLANS = new Set(["clinic", "waived", "community", "hospital", "enterprise"]);
 
   const handleBuy = async (priceType: string) => {
     if (!isLoggedIn) {

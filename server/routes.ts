@@ -28064,7 +28064,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           exempt_waived: cnt(`SELECT COUNT(*) n FROM veritamap_instrument_tests WHERE map_id IN (${ph}) AND linearity_exempt_waived=1`),
           exempt_other: cnt(`SELECT COUNT(*) n FROM veritamap_instrument_tests WHERE map_id IN (${ph}) AND linearity_exempt_other IS NOT NULL AND TRIM(linearity_exempt_other)<>''`),
           anyExempt: cnt(`SELECT COUNT(*) n FROM veritamap_instrument_tests WHERE map_id IN (${ph}) AND (linearity_exempt_multical=1 OR linearity_exempt_noncal=1 OR linearity_exempt_waived=1 OR (linearity_exempt_other IS NOT NULL AND TRIM(linearity_exempt_other)<>''))`),
-          createdRange: sqlite.prepare(`SELECT MIN(created_at) mn, MAX(created_at) mx, COUNT(DISTINCT date(created_at)) d FROM veritamap_instrument_tests WHERE map_id IN (${ph})`).get(...mapIds),
+          // NOTE: veritamap_instrument_tests has NO created_at column, so the
+          // former createdRange query threw "no such column: created_at" and
+          // the catch below aborted the ENTIRE instrumentTests block (the
+          // exemption counts above never reached the caller). Dropped.
         };
       }
       out.finalizedTotal = (sqlite.prepare("SELECT COUNT(*) n FROM studies WHERE lab_id = ? AND lifecycle_state='finalized'").get(labId) as any).n;
