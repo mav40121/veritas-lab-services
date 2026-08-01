@@ -166,9 +166,16 @@ export function registerVeritaOpsRoutes(
     const outputs = computeCprt(inputs as CprtInputs);
     const ownerId = req.ownerUserId ?? req.userId;
     const now = new Date().toISOString();
+    // Multi-lab: stamp the study with the SAME lab_id the account-scoped
+    // list filters on (resolveLegacyLabId), so a legacy-created study is
+    // visible instead of landing with a NULL lab_id that no list can see.
+    const labId = resolveLegacyLabId(sqlite, req);
+    if (!labId) {
+      return res.status(400).json({ error: "No active lab context; cannot create a CPRT study." });
+    }
     const result = sqlite.prepare(`
       INSERT INTO veritaops_test_cost_studies (
-        account_id, test_name, loinc, department, annual_volume,
+        account_id, lab_id, test_name, loinc, department, annual_volume,
         reagent_cost_per_test, calibrator_kit_cost, cals_per_year,
         qc_cost_per_run, qc_runs_per_year, other_supplies_per_test,
         tech_minutes_per_test, tech_loaded_hourly_rate,
@@ -178,7 +185,7 @@ export function registerVeritaOpsRoutes(
         cprt_l1, cprt_l2, cprt_l3, cprt_l4,
         notes, created_at, updated_at
       ) VALUES (
-        ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?,
         ?, ?, ?,
         ?, ?, ?,
         ?, ?,
@@ -189,7 +196,7 @@ export function registerVeritaOpsRoutes(
         ?, ?, ?
       )
     `).run(
-      ownerId, inputs.test_name, inputs.loinc ?? null, inputs.department ?? 'Core Lab', inputs.annual_volume ?? 0,
+      ownerId, labId, inputs.test_name, inputs.loinc ?? null, inputs.department ?? 'Core Lab', inputs.annual_volume ?? 0,
       inputs.reagent_cost_per_test ?? 0, inputs.calibrator_kit_cost ?? 0, inputs.cals_per_year ?? 0,
       inputs.qc_cost_per_run ?? 0, inputs.qc_runs_per_year ?? 0, inputs.other_supplies_per_test ?? 0,
       inputs.tech_minutes_per_test ?? 0, inputs.tech_loaded_hourly_rate ?? 0,
@@ -272,7 +279,6 @@ export function registerVeritaOpsRoutes(
     if (!hasOpsAccess(req.user, req.scope?.lab)) {
       return res.status(403).json({ error: "VeritaOps subscription required" });
     }
-    const ownerId = req.ownerUserId ?? req.userId;
     // Shape A guard: accept ownership or lab membership.
     const { row: study, status } = resolveRowForMutation<any>(
       sqlite, "veritaops_test_cost_studies", Number(req.params.id), req,
@@ -282,14 +288,21 @@ export function registerVeritaOpsRoutes(
       if (status === 403) return res.status(403).json({ error: "You don't have access to this study's lab" });
       return res.status(404).json({ error: "Study not found" });
     }
-    const ownerRow = sqlite.prepare(
-      "SELECT clia_lab_name, clia_number, name, email FROM users WHERE id = ?"
-    ).get(ownerId) as any;
+    // Multi-lab: resolve identity from the labs row for the study's OWN lab
+    // (study.lab_id), mirroring the lab-scoped PDF route, so a secondary lab
+    // no longer prints the account owner's lab name / CLIA.
+    const studyLabId = study.lab_id ?? resolveLegacyLabId(sqlite, req);
+    const labRow = studyLabId
+      ? sqlite.prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(studyLabId) as any
+      : null;
+    const userRow = sqlite.prepare(
+      "SELECT name, email FROM users WHERE id = ?"
+    ).get(req.userId) as any;
     try {
       const pdfBuffer = await generateCprtPdf(study, {
-        labName: ownerRow?.clia_lab_name || ownerRow?.name || "Laboratory",
-        cliaNumber: ownerRow?.clia_number || "Not on file",
-        preparedBy: ownerRow?.name || ownerRow?.email || null,
+        labName: labRow?.lab_name || "Laboratory",
+        cliaNumber: labRow?.clia_number || "Not on file",
+        preparedBy: userRow?.name || userRow?.email || null,
       });
       const safeName = String(study.test_name || "Study").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
       const datestamp = new Date().toISOString().slice(0, 10);
