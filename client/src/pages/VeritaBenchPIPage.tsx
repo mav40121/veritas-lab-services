@@ -327,13 +327,403 @@ function StarterLibraryPicker({
   );
 }
 
+// -- PI Plan tab (Phase 1: program plan + improvement priorities + annual
+//    leadership review). Backend: GET/PUT /api/pi/plan, POST/PUT/DELETE
+//    /api/pi/plan/priorities, POST /api/pi/plan/reviews (server/veritabench.ts).
+//    Account-scoped (no lab_id), so no lab-switching logic here.
+
+interface PIPlan {
+  id: number; title: string | null; effective_year: number | null;
+  program_scope: string | null; measurement_methods: string | null;
+  analysis_methods: string | null; remediation_methods: string | null;
+  monitor_sustain_methods: string | null;
+}
+interface PIPriority {
+  id: number; plan_id: number; process_name: string;
+  stakeholder_requirements: string | null; goal: string | null;
+  improvement_activities: string | null; linked_metric_id: number | null;
+  linked_department_id: number | null; sort_order: number;
+}
+interface PIReview {
+  id: number; reviewed_by: string; reviewer_title: string | null;
+  review_date: string; changes_summary: string | null; next_review_due: string | null;
+}
+interface PIReviewStatus {
+  never_reviewed: boolean; last_review_date: string | null;
+  next_review_due: string | null; overdue: boolean;
+}
+interface PlanMetricOpt { id: number; name: string; department_id: number; }
+
+function PlanTextarea({ label, value, onChange, disabled, placeholder }: {
+  label: string; value: string; onChange: (v: string) => void; disabled?: boolean; placeholder?: string;
+}) {
+  return (
+    <div>
+      <Label className="text-xs">{label}</Label>
+      <textarea
+        value={value}
+        disabled={disabled}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full min-h-[64px] rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-60"
+      />
+    </div>
+  );
+}
+
+function PIPlanTab({ readOnly, departments }: { readOnly: boolean; departments: PIDepartment[] }) {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [plan, setPlan] = useState<PIPlan | null>(null);
+  const [priorities, setPriorities] = useState<PIPriority[]>([]);
+  const [reviews, setReviews] = useState<PIReview[]>([]);
+  const [reviewStatus, setReviewStatus] = useState<PIReviewStatus | null>(null);
+  const [allMetrics, setAllMetrics] = useState<PlanMetricOpt[]>([]);
+
+  const [planForm, setPlanForm] = useState({
+    title: "", effective_year: String(new Date().getFullYear()), program_scope: "",
+    measurement_methods: "", analysis_methods: "", remediation_methods: "", monitor_sustain_methods: "",
+  });
+  const [savingPlan, setSavingPlan] = useState(false);
+
+  const [prioOpen, setPrioOpen] = useState(false);
+  const [prioEdit, setPrioEdit] = useState<PIPriority | null>(null);
+  const [prioForm, setPrioForm] = useState({ process_name: "", stakeholder_requirements: "", goal: "", improvement_activities: "", linked_department_id: "", linked_metric_id: "", sort_order: "0" });
+  const [savingPrio, setSavingPrio] = useState(false);
+  const [deletePrio, setDeletePrio] = useState<PIPriority | null>(null);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewForm, setReviewForm] = useState({ reviewed_by: "", reviewer_title: "", review_date: today, changes_summary: "" });
+  const [savingReview, setSavingReview] = useState(false);
+
+  async function loadPlan() {
+    try {
+      const res = await fetch(`${API_BASE}/api/pi/plan`, { headers: authHeaders() });
+      if (res.ok) {
+        const d = await res.json();
+        setPlan(d.plan);
+        setPriorities(d.priorities || []);
+        setReviews(d.reviews || []);
+        setReviewStatus(d.review_status);
+        if (d.plan) {
+          setPlanForm({
+            title: d.plan.title || "",
+            effective_year: d.plan.effective_year != null ? String(d.plan.effective_year) : String(new Date().getFullYear()),
+            program_scope: d.plan.program_scope || "",
+            measurement_methods: d.plan.measurement_methods || "",
+            analysis_methods: d.plan.analysis_methods || "",
+            remediation_methods: d.plan.remediation_methods || "",
+            monitor_sustain_methods: d.plan.monitor_sustain_methods || "",
+          });
+        }
+      }
+    } catch { /* surfaced via empty state */ } finally { setLoading(false); }
+  }
+
+  async function loadAllMetrics() {
+    try {
+      const lists = await Promise.all((departments || []).map(async (dept) => {
+        const res = await fetch(`${API_BASE}/api/pi/metrics?department_id=${dept.id}`, { headers: authHeaders() });
+        if (!res.ok) return [] as PlanMetricOpt[];
+        const ms = await res.json();
+        return (ms as any[]).map((m) => ({ id: m.id, name: m.name, department_id: dept.id }));
+      }));
+      setAllMetrics(lists.flat());
+    } catch { /* metric linkage is optional */ }
+  }
+
+  useEffect(() => { loadPlan(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  useEffect(() => { if (departments && departments.length) loadAllMetrics(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [departments]);
+
+  async function savePlan() {
+    setSavingPlan(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/pi/plan`, {
+        method: "PUT", headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: planForm.title.trim() || null,
+          effective_year: planForm.effective_year ? Number(planForm.effective_year) : null,
+          program_scope: planForm.program_scope.trim() || null,
+          measurement_methods: planForm.measurement_methods.trim() || null,
+          analysis_methods: planForm.analysis_methods.trim() || null,
+          remediation_methods: planForm.remediation_methods.trim() || null,
+          monitor_sustain_methods: planForm.monitor_sustain_methods.trim() || null,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) { toast({ title: "PI plan saved" }); await loadPlan(); }
+      else toast({ title: "Error", description: d.error || "Save failed", variant: "destructive" });
+    } finally { setSavingPlan(false); }
+  }
+
+  function openAddPrio() {
+    setPrioEdit(null);
+    setPrioForm({ process_name: "", stakeholder_requirements: "", goal: "", improvement_activities: "", linked_department_id: "", linked_metric_id: "", sort_order: String(priorities.length) });
+    setPrioOpen(true);
+  }
+  function openEditPrio(p: PIPriority) {
+    setPrioEdit(p);
+    setPrioForm({
+      process_name: p.process_name || "", stakeholder_requirements: p.stakeholder_requirements || "",
+      goal: p.goal || "", improvement_activities: p.improvement_activities || "",
+      linked_department_id: p.linked_department_id != null ? String(p.linked_department_id) : "",
+      linked_metric_id: p.linked_metric_id != null ? String(p.linked_metric_id) : "",
+      sort_order: String(p.sort_order ?? 0),
+    });
+    setPrioOpen(true);
+  }
+  async function savePrio() {
+    if (!plan) return;
+    if (!prioForm.process_name.trim()) { toast({ title: "Process name is required", variant: "destructive" }); return; }
+    setSavingPrio(true);
+    try {
+      const body = {
+        plan_id: plan.id, process_name: prioForm.process_name.trim(),
+        stakeholder_requirements: prioForm.stakeholder_requirements.trim() || null,
+        goal: prioForm.goal.trim() || null,
+        improvement_activities: prioForm.improvement_activities.trim() || null,
+        linked_department_id: prioForm.linked_department_id ? Number(prioForm.linked_department_id) : null,
+        linked_metric_id: prioForm.linked_metric_id ? Number(prioForm.linked_metric_id) : null,
+        sort_order: prioForm.sort_order ? Number(prioForm.sort_order) : 0,
+      };
+      const url = prioEdit ? `${API_BASE}/api/pi/plan/priorities/${prioEdit.id}` : `${API_BASE}/api/pi/plan/priorities`;
+      const res = await fetch(url, { method: prioEdit ? "PUT" : "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) { toast({ title: prioEdit ? "Priority updated" : "Priority added" }); setPrioOpen(false); await loadPlan(); }
+      else toast({ title: "Error", description: d.error || "Save failed", variant: "destructive" });
+    } finally { setSavingPrio(false); }
+  }
+  async function confirmDeletePrio() {
+    if (!deletePrio) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/pi/plan/priorities/${deletePrio.id}`, { method: "DELETE", headers: authHeaders() });
+      if (res.ok) { toast({ title: "Priority removed" }); setDeletePrio(null); await loadPlan(); }
+      else { const d = await res.json().catch(() => ({})); toast({ title: "Error", description: d.error, variant: "destructive" }); }
+    } catch { toast({ title: "Error", variant: "destructive" }); }
+  }
+  async function saveReview() {
+    if (!plan) return;
+    if (!reviewForm.reviewed_by.trim() || !reviewForm.review_date) { toast({ title: "Reviewer and date are required", variant: "destructive" }); return; }
+    setSavingReview(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/pi/plan/reviews`, {
+        method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan_id: plan.id, reviewed_by: reviewForm.reviewed_by.trim(),
+          reviewer_title: reviewForm.reviewer_title.trim() || null,
+          review_date: reviewForm.review_date, changes_summary: reviewForm.changes_summary.trim() || null,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) { toast({ title: "Leadership review recorded" }); setReviewOpen(false); setReviewForm({ reviewed_by: "", reviewer_title: "", review_date: today, changes_summary: "" }); await loadPlan(); }
+      else toast({ title: "Error", description: d.error || "Save failed", variant: "destructive" });
+    } finally { setSavingReview(false); }
+  }
+
+  const deptName = (id: number | null) => departments.find((d) => d.id === id)?.name || "";
+  const metricName = (id: number | null) => allMetrics.find((m) => m.id === id)?.name || "";
+
+  if (loading) return <div className="text-center py-12 text-muted-foreground">Loading...</div>;
+
+  return (
+    <div className="space-y-6" data-testid="pi-plan-tab">
+      {plan && reviewStatus && (
+        <div className={`rounded-lg border px-4 py-3 text-sm flex items-center gap-2 ${reviewStatus.overdue ? "border-[#A12C7B] bg-[#A12C7B]/5 text-[#A12C7B]" : "border-[#437A22] bg-[#437A22]/5 text-[#437A22]"}`} data-testid="pi-plan-review-banner">
+          <AlertTriangle size={16} className="shrink-0" />
+          <span>
+            {reviewStatus.never_reviewed
+              ? "No leadership review on record yet. The PI plan should be reviewed by leadership at least annually."
+              : reviewStatus.overdue
+              ? `Annual leadership review is overdue (was due ${reviewStatus.next_review_due}).`
+              : `Last reviewed ${reviewStatus.last_review_date}. Next leadership review due ${reviewStatus.next_review_due}.`}
+          </span>
+        </div>
+      )}
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">Performance Improvement Program Plan</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          {!plan && <p className="text-sm text-muted-foreground">No PI plan yet. Fill this in and save to create your program plan.</p>}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2">
+              <Label className="text-xs">Plan title</Label>
+              <Input value={planForm.title} disabled={readOnly} onChange={(e) => setPlanForm({ ...planForm, title: e.target.value })} placeholder="Laboratory Performance Improvement Plan" />
+            </div>
+            <div>
+              <Label className="text-xs">Effective year</Label>
+              <Input type="number" value={planForm.effective_year} disabled={readOnly} onChange={(e) => setPlanForm({ ...planForm, effective_year: e.target.value })} />
+            </div>
+          </div>
+          <PlanTextarea label="Program scope" value={planForm.program_scope} disabled={readOnly} onChange={(v) => setPlanForm({ ...planForm, program_scope: v })} placeholder="Which departments, processes, and populations the PI program covers." />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <PlanTextarea label="Measurement methods" value={planForm.measurement_methods} disabled={readOnly} onChange={(v) => setPlanForm({ ...planForm, measurement_methods: v })} placeholder="How performance is measured: metrics, data sources, frequency." />
+            <PlanTextarea label="Analysis methods" value={planForm.analysis_methods} disabled={readOnly} onChange={(v) => setPlanForm({ ...planForm, analysis_methods: v })} placeholder="How data is analyzed and compared to targets or benchmarks." />
+            <PlanTextarea label="Remediation methods" value={planForm.remediation_methods} disabled={readOnly} onChange={(v) => setPlanForm({ ...planForm, remediation_methods: v })} placeholder="How improvement actions are taken when a target is missed." />
+            <PlanTextarea label="Monitor and sustain methods" value={planForm.monitor_sustain_methods} disabled={readOnly} onChange={(v) => setPlanForm({ ...planForm, monitor_sustain_methods: v })} placeholder="How gains are monitored and sustained over time." />
+          </div>
+          {!readOnly && (
+            <div className="flex justify-end">
+              <Button onClick={savePlan} disabled={savingPlan}><Save size={14} className="mr-1.5" />{savingPlan ? "Saving..." : "Save plan"}</Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base">Improvement Priorities</CardTitle>
+          {!readOnly && plan && <Button size="sm" onClick={openAddPrio}><Plus size={14} className="mr-1.5" />Add priority</Button>}
+        </CardHeader>
+        <CardContent>
+          {!plan ? (
+            <p className="text-sm text-muted-foreground">Save the program plan first to add improvement priorities.</p>
+          ) : priorities.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No priorities yet. Add the processes leadership has prioritized for improvement.</p>
+          ) : (
+            <div className="space-y-3">
+              {priorities.map((p) => (
+                <div key={p.id} className="rounded-lg border p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="font-medium">{p.process_name}</div>
+                    {!readOnly && (
+                      <div className="flex gap-1 shrink-0">
+                        <Button size="sm" variant="ghost" onClick={() => openEditPrio(p)}><Edit2 size={13} /></Button>
+                        <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setDeletePrio(p)}><Trash2 size={13} /></Button>
+                      </div>
+                    )}
+                  </div>
+                  {p.goal && <div className="text-sm mt-1"><span className="text-muted-foreground">Goal:</span> {p.goal}</div>}
+                  {p.stakeholder_requirements && <div className="text-sm mt-1"><span className="text-muted-foreground">Stakeholder requirements:</span> {p.stakeholder_requirements}</div>}
+                  {p.improvement_activities && <div className="text-sm mt-1"><span className="text-muted-foreground">Activities:</span> {p.improvement_activities}</div>}
+                  {(p.linked_department_id || p.linked_metric_id) ? (
+                    <div className="text-xs text-muted-foreground mt-2 flex gap-3 flex-wrap">
+                      {p.linked_department_id ? <span>Dept: {deptName(p.linked_department_id)}</span> : null}
+                      {p.linked_metric_id ? <span>Metric: {metricName(p.linked_metric_id)}</span> : null}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base">Annual Leadership Review</CardTitle>
+          {!readOnly && plan && <Button size="sm" onClick={() => setReviewOpen(true)}><Plus size={14} className="mr-1.5" />Record review</Button>}
+        </CardHeader>
+        <CardContent>
+          {!plan ? (
+            <p className="text-sm text-muted-foreground">Save the program plan first to record a leadership review.</p>
+          ) : reviews.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No leadership reviews recorded yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs uppercase text-muted-foreground">
+                    <th className="py-2 pr-3">Date</th><th className="py-2 pr-3">Reviewed by</th><th className="py-2 pr-3">Title</th><th className="py-2 pr-3">Changes</th><th className="py-2 pr-3">Next due</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reviews.map((r) => (
+                    <tr key={r.id} className="border-b last:border-b-0">
+                      <td className="py-2 pr-3 whitespace-nowrap">{r.review_date}</td>
+                      <td className="py-2 pr-3">{r.reviewed_by}</td>
+                      <td className="py-2 pr-3">{r.reviewer_title || "—"}</td>
+                      <td className="py-2 pr-3">{r.changes_summary || "—"}</td>
+                      <td className="py-2 pr-3 whitespace-nowrap">{r.next_review_due || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={prioOpen} onOpenChange={setPrioOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>{prioEdit ? "Edit priority" : "Add improvement priority"}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label className="text-xs">Process name</Label><Input value={prioForm.process_name} onChange={(e) => setPrioForm({ ...prioForm, process_name: e.target.value })} placeholder="e.g., Critical value notification" /></div>
+            <PlanTextarea label="Stakeholder requirements" value={prioForm.stakeholder_requirements} onChange={(v) => setPrioForm({ ...prioForm, stakeholder_requirements: v })} />
+            <PlanTextarea label="Goal" value={prioForm.goal} onChange={(v) => setPrioForm({ ...prioForm, goal: v })} />
+            <PlanTextarea label="Improvement activities" value={prioForm.improvement_activities} onChange={(v) => setPrioForm({ ...prioForm, improvement_activities: v })} />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Linked department</Label>
+                <Select value={prioForm.linked_department_id || "none"} onValueChange={(v) => setPrioForm({ ...prioForm, linked_department_id: v === "none" ? "" : v, linked_metric_id: "" })}>
+                  <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {departments.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Linked metric</Label>
+                <Select value={prioForm.linked_metric_id || "none"} onValueChange={(v) => setPrioForm({ ...prioForm, linked_metric_id: v === "none" ? "" : v })}>
+                  <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {allMetrics.filter((m) => !prioForm.linked_department_id || m.department_id === Number(prioForm.linked_department_id)).map((m) => <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setPrioOpen(false)}>Cancel</Button>
+            <Button onClick={savePrio} disabled={savingPrio}>{savingPrio ? "Saving..." : (prioEdit ? "Save" : "Add")}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Record leadership review</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">Reviewed by</Label><Input value={reviewForm.reviewed_by} onChange={(e) => setReviewForm({ ...reviewForm, reviewed_by: e.target.value })} /></div>
+              <div><Label className="text-xs">Reviewer title</Label><Input value={reviewForm.reviewer_title} onChange={(e) => setReviewForm({ ...reviewForm, reviewer_title: e.target.value })} placeholder="Medical Director" /></div>
+            </div>
+            <div><Label className="text-xs">Review date</Label><Input type="date" value={reviewForm.review_date} onChange={(e) => setReviewForm({ ...reviewForm, review_date: e.target.value })} /></div>
+            <PlanTextarea label="Changes summary" value={reviewForm.changes_summary} onChange={(v) => setReviewForm({ ...reviewForm, changes_summary: v })} placeholder="What leadership reviewed and any changes made to the plan." />
+            <p className="text-xs text-muted-foreground">The next review is automatically stamped 12 months out.</p>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setReviewOpen(false)}>Cancel</Button>
+            <Button onClick={saveReview} disabled={savingReview}>{savingReview ? "Saving..." : "Record"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deletePrio} onOpenChange={(o) => !o && setDeletePrio(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this priority?</AlertDialogTitle>
+            <AlertDialogDescription>{deletePrio?.process_name} will be removed from the plan. This cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeletePrio} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Remove</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
 // -- Main Component -----------------------------------------------------------
 
 export default function VeritaBenchPIPage() {
   const { user, isLoggedIn } = useAuth();
   const readOnly = useIsReadOnly("veritabench");
   const { toast } = useToast();
-  const [tab, setTab] = useState<"dashboard" | "data">("dashboard");
+  const [tab, setTab] = useState<"dashboard" | "data" | "plan">("dashboard");
 
   // Data state
   const [departments, setDepartments] = useState<PIDepartment[]>([]);
@@ -833,7 +1223,12 @@ export default function VeritaBenchPIPage() {
         <button onClick={() => setTab("data")} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === "data" ? "border-[#01696F] text-[#01696F]" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
           <Activity size={14} className="inline mr-1.5" />Data Entry
         </button>
+        <button onClick={() => setTab("plan")} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === "plan" ? "border-[#01696F] text-[#01696F]" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+          <BookOpen size={14} className="inline mr-1.5" />Plan
+        </button>
       </div>
+
+      {tab === "plan" && <PIPlanTab readOnly={readOnly} departments={departments} />}
 
       {/* -- Dashboard Tab -------------------------------------------------- */}
       {tab === "dashboard" && (
