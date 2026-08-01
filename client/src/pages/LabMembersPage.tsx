@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, UserPlus, ShieldCheck, ShieldOff, Trash2, Crown, ArrowRightLeft, Clock, Link as LinkIcon, RotateCw, X, KeyRound, Copy, Check, MapPin } from "lucide-react";
+import { Loader2, UserPlus, ShieldCheck, ShieldOff, Trash2, Crown, ArrowRightLeft, Clock, Link as LinkIcon, RotateCw, X, KeyRound, Copy, Check, MapPin, Stethoscope } from "lucide-react";
 
 interface LabMember {
   membership_id: number;
@@ -82,6 +82,22 @@ function seatTypeBadge(seatType: "active" | "view_only") {
   );
 }
 
+// Designated Laboratory Medical Director badge. Shown on whichever member (or
+// pending invite) matches labs.medical_director_email. VeritaPolicy approval
+// steps that route to the medical director resolve to this person once they
+// are an active member.
+function medicalDirectorBadge(pending?: boolean) {
+  return (
+    <span
+      data-testid="medical-director-badge"
+      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border bg-teal-100 text-teal-900 border-teal-300"
+      title="Designated Laboratory Medical Director. Policy approvals that route to the medical director go to this person."
+    >
+      <Stethoscope size={11} /> Medical Director{pending ? " (invite pending)" : ""}
+    </span>
+  );
+}
+
 function fmtDate(s: string | null): string {
   if (!s) return "—";
   try { return new Date(s).toLocaleDateString(); } catch { return s; }
@@ -98,7 +114,7 @@ export default function LabMembersPage() {
   const isOwner = myRole === "owner";
   const canManage = myRole === "owner" || myRole === "admin";
 
-  const { data, isLoading } = useQuery<{ members: LabMember[]; pendingInvites?: PendingInvite[]; seatLimits?: SeatLimits; seatCounts?: SeatCounts }>({
+  const { data, isLoading } = useQuery<{ members: LabMember[]; pendingInvites?: PendingInvite[]; seatLimits?: SeatLimits; seatCounts?: SeatCounts; medicalDirector?: { email: string; name: string | null } | null }>({
     queryKey: [`/api/labs/${activeLabId}/members`],
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!activeLabId,
@@ -107,6 +123,10 @@ export default function LabMembersPage() {
   const pendingInvites = data?.pendingInvites || [];
   const seatLimits = data?.seatLimits;
   const seatCounts = data?.seatCounts;
+  // Designated Laboratory Medical Director (may be an active member or, as with
+  // a director who has not accepted yet, a pending invite). Matched by email.
+  const mdEmail = (data?.medicalDirector?.email || "").trim().toLowerCase();
+  const isMedicalDirector = (email?: string | null) => !!email && !!mdEmail && email.trim().toLowerCase() === mdEmail;
 
   // Invite form state
   const [inviteEmail, setInviteEmail] = useState("");
@@ -341,7 +361,10 @@ export default function LabMembersPage() {
                     return (
                       <tr key={`m-${m.membership_id}`} className="border-b last:border-b-0">
                         <td className="py-2 pr-3">
-                          <div className="font-medium">{m.name || m.email}{isSelf && <span className="text-xs text-muted-foreground ml-1">(you)</span>}</div>
+                          <div className="font-medium flex items-center gap-2 flex-wrap">
+                            {m.name || m.email}{isSelf && <span className="text-xs text-muted-foreground">(you)</span>}
+                            {isMedicalDirector(m.email) && medicalDirectorBadge()}
+                          </div>
                           {m.name && <div className="text-xs text-muted-foreground">{m.email}</div>}
                         </td>
                         <td className="py-2 pr-3">{roleBadge(m.role)}</td>
@@ -377,7 +400,10 @@ export default function LabMembersPage() {
                     return (
                       <tr key={`p-${inv.seat_id}`} className="border-b last:border-b-0 bg-amber-50/30">
                         <td className="py-2 pr-3">
-                          <div className="font-medium text-muted-foreground italic">{inv.seat_email}</div>
+                          <div className="font-medium text-muted-foreground italic flex items-center gap-2 flex-wrap">
+                            {inv.seat_email}
+                            {isMedicalDirector(inv.seat_email) && medicalDirectorBadge(true)}
+                          </div>
                           <div className="text-xs text-muted-foreground">
                             Invited {fmtDate(inv.invited_at)} ({daysPending}d ago)
                           </div>
