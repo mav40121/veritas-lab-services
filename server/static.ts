@@ -221,6 +221,20 @@ function injectSeoTags(html: string, routePath: string, meta: SEOMetadata): stri
     `<meta property="og:url" content="${canonicalUrl}"`,
   );
 
+  // Per-route OG / Twitter image override. The default og-image.png stays for
+  // every route that does not set ogImage; a route (e.g. /demo) that sets it
+  // gets its own social share card, fixing the link preview on shared URLs.
+  if (meta.ogImage) {
+    html = html.replace(
+      /<meta property="og:image" content="[^"]*"/,
+      `<meta property="og:image" content="${meta.ogImage}"`,
+    );
+    html = html.replace(
+      /<meta name="twitter:image" content="[^"]*"/,
+      `<meta name="twitter:image" content="${meta.ogImage}"`,
+    );
+  }
+
   // Replace canonical
   html = html.replace(
     /<link rel="canonical" href="[^"]*"/,
