@@ -89,6 +89,7 @@ function seatTypeBadge(seatType: "active" | "view_only") {
 function medicalDirectorBadge(pending?: boolean) {
   return (
     <span
+      data-testid="medical-director-badge"
       className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border bg-teal-100 text-teal-900 border-teal-300"
       title="Designated Laboratory Medical Director. Policy approvals that route to the medical director go to this person."
     >
