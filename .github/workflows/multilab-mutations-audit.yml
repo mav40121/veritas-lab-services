@@ -74,3 +74,12 @@ jobs:
         # matching server route, the silent SPA-fallback no-op class.
         # (Parking-lot #43.) See scripts/audit-labscoped-write-routes.mjs.
         run: node scripts/audit-labscoped-write-routes.mjs
+
+      - name: Run no-Referer-lab-resolution guard
+        # Fails CI if any NEW server code reads the Referer request header for
+        # lab context outside the single allowlisted fallback inside
+        # activeLabIdFromContext (server/routes.ts). Referer-based lab
+        # resolution was the root cause of the 2026-07-31 cross-lab data-bleed;
+        # lab context must come from scope / ?labId / X-Active-Lab-Id.
+        # See scripts/guard-no-referer-lab-resolution.js.
+        run: node scripts/guard-no-referer-lab-resolution.js
