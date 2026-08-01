@@ -615,6 +615,7 @@ export default function VeritaOpsAppPage() {
 
   const [studies, setStudies] = useState<CprtStudy[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editStudy, setEditStudy] = useState<CprtStudy | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CprtStudy | null>(null);
@@ -657,8 +658,17 @@ export default function VeritaOpsAppPage() {
   const loadStudies = useCallback(async () => {
     try {
       const res = await fetch(listUrl, { headers: authHeaders() });
-      if (res.ok) setStudies(await res.json());
-    } catch {} finally { setLoading(false); }
+      if (res.ok) {
+        setStudies(await res.json());
+        setLoadError(false);
+      } else {
+        // Distinguish a load failure from a genuinely empty lab: a 500/403
+        // must NOT render the "no studies yet" state as if the lab is empty.
+        setLoadError(true);
+      }
+    } catch {
+      setLoadError(true);
+    } finally { setLoading(false); }
   }, [listUrl]);
 
   useEffect(() => {
@@ -697,8 +707,13 @@ export default function VeritaOpsAppPage() {
       if (res.ok) {
         toast({ title: "Study deleted" });
         loadStudies();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "Delete failed", description: err.error || `HTTP ${res.status}`, variant: "destructive" });
       }
-    } catch {} finally { setDeleteTarget(null); }
+    } catch {
+      toast({ title: "Delete failed", description: "Network error", variant: "destructive" });
+    } finally { setDeleteTarget(null); }
   };
 
   const [generatingPdfId, setGeneratingPdfId] = useState<number | null>(null);
@@ -715,8 +730,18 @@ export default function VeritaOpsAppPage() {
       const { token } = await res.json();
       // Open via the shared token endpoint so the browser does the GET
       // download directly (avoids Adobe Acrobat blob-URL hijacking).
-      window.open(`${API_BASE}/api/pdf/${token}`, "_blank");
-      toast({ title: `PDF generated for ${study.test_name}` });
+      const win = window.open(`${API_BASE}/api/pdf/${token}`, "_blank");
+      if (win) {
+        toast({ title: `PDF generated for ${study.test_name}` });
+      } else {
+        // Popup blocked: the PDF WAS generated, but the browser blocked the
+        // new tab. Do NOT claim success; tell the user how to retrieve it.
+        toast({
+          title: "Popup blocked",
+          description: "Your browser blocked the PDF tab. Allow popups for this site, then click the PDF button again.",
+          variant: "destructive",
+        });
+      }
     } catch {
       toast({ title: "PDF generation failed", description: "Network error", variant: "destructive" });
     } finally {
@@ -796,6 +821,16 @@ export default function VeritaOpsAppPage() {
         <CardContent className="p-0">
           {loading ? (
             <div className="p-8 text-center text-muted-foreground">Loading studies...</div>
+          ) : loadError ? (
+            <div className="p-12 text-center" data-testid="cprt-load-error">
+              <div className="text-lg font-semibold mb-2">Couldn't load studies</div>
+              <p className="text-sm text-muted-foreground mb-4">
+                Something went wrong fetching your CPRT studies. This is a load error, not an empty lab.
+              </p>
+              <Button variant="outline" onClick={() => { setLoading(true); loadStudies(); }} data-testid="cprt-retry-load">
+                Retry
+              </Button>
+            </div>
           ) : studies.length === 0 ? (
             <div className="p-12 text-center">
               <Calculator size={40} className="text-muted-foreground mx-auto mb-4" />
