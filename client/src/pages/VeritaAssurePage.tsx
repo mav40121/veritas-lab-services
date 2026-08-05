@@ -8,9 +8,10 @@ import {
   FlaskConical, Map, ClipboardCheck, Award, Users, FileText,
   ChevronRight, CheckCircle2, Download, Shield, Play, CalendarDays,
   TestTubes, ClipboardList, Activity,
+  BarChart3, TrendingUp, Clock, Boxes, Calculator, Gauge,
 } from "lucide-react";
 
-const MODULES = [
+const COMPLIANCE_MODULES = [
   {
     href: "/veritacheck",
     label: "VeritaCheck™",
@@ -134,6 +135,75 @@ const MODULES = [
   },
 ];
 
+const OPERATIONS_MODULES = [
+  {
+    href: "/calculator",
+    label: "VeritaBench™",
+    desc: "Free quick benchmarking tool",
+    detail:
+      "One-page benchmarking against published productivity targets. Free. No sign-in. A quick pulse check on whether your lab's billable tests per paid hour fall inside, above, or below the published benchmark.",
+    badge: "Live",
+    badgeColor: "emerald",
+    icon: BarChart3,
+    color: "text-teal-600 bg-teal-500/10 border-teal-500/20",
+  },
+  {
+    href: "/veritabench",
+    label: "VeritaPace™",
+    desc: "Monthly data and trends",
+    detail:
+      "Month-over-month productivity tracking with billable tests, paid hours, FTE, overtime, and trend lines. Built for lab managers who report up to the C-suite on operational performance.",
+    badge: "Live",
+    badgeColor: "emerald",
+    icon: TrendingUp,
+    color: "text-blue-600 bg-blue-500/10 border-blue-500/20",
+  },
+  {
+    href: "/veritabench/staffing",
+    label: "VeritaShift™",
+    desc: "By-hour demand analysis",
+    detail:
+      "Hour-by-hour workload analysis for shift design and FTE planning. Shows where staffed capacity matches demand and where the gaps are. Useful for justifying coverage decisions to administration.",
+    badge: "Live",
+    badgeColor: "emerald",
+    icon: Clock,
+    color: "text-purple-600 bg-purple-500/10 border-purple-500/20",
+  },
+  {
+    href: "/veritabench/pi",
+    label: "VeritaQA™",
+    desc: "Department quality metrics",
+    detail:
+      "Performance Improvement dashboard for department-level quality indicators. Track metric trends, targets, and corrective actions. Designed to satisfy PI requirements without the spreadsheet burden.",
+    badge: "Live",
+    badgeColor: "emerald",
+    icon: Gauge,
+    color: "text-amber-600 bg-amber-500/10 border-amber-500/20",
+  },
+  {
+    href: "/veritastock",
+    label: "VeritaStock™",
+    desc: "Reagent and supply tracking",
+    detail:
+      "Lot tracking, expiration alerts, calculated par levels, FIFO rotation prompts, and burn-rate-based reorder triggers. Built to replace the spreadsheets most labs use today for inventory.",
+    badge: "Live",
+    badgeColor: "emerald",
+    icon: Boxes,
+    color: "text-orange-600 bg-orange-500/10 border-orange-500/20",
+  },
+  {
+    href: "/veritaops-app",
+    label: "VeritaOps™",
+    desc: "Cost per reportable test (CPRT)",
+    detail:
+      "Layered cost-per-reportable-test calculator: reagents and supplies, plus staff time, with capital depreciation and overhead as opt-in layers. Built on CLSI GP11-A cost accounting principles. Answers the build vs buy and charge-master questions with transparent math the laboratory director can defend.",
+    badge: "Live",
+    badgeColor: "emerald",
+    icon: Calculator,
+    color: "text-teal-600 bg-teal-500/10 border-teal-500/20",
+  },
+];
+
 const DOWNLOADS = [
   {
     title: "VeritaCheck™ CLSI Compliance Matrix",
@@ -167,9 +237,38 @@ function BadgePill({ label, color }: { label: string; color: string }) {
   );
 }
 
+function ModuleGrid({ modules }: { modules: typeof COMPLIANCE_MODULES }) {
+  return (
+    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {modules.map(({ href, label, desc, detail, badge, badgeColor, icon: Icon, color }) => (
+        <Link key={href} href={href}>
+          <Card className="h-full hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between mb-3">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center border ${color}`}>
+                  <Icon size={18} />
+                </div>
+                <BadgePill label={badge} color={badgeColor} />
+              </div>
+              <div className="font-semibold text-sm group-hover:text-primary transition-colors mb-0.5">
+                {label}
+              </div>
+              <div className="text-xs text-muted-foreground font-medium mb-2">{desc}</div>
+              <p className="text-xs text-muted-foreground leading-relaxed">{detail}</p>
+              <div className="mt-3 flex items-center gap-1 text-xs text-primary font-medium">
+                Learn more <ChevronRight size={11} />
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 export default function VeritaAssurePage() {
     const { isLoggedIn } = useAuth();
-    useSEO({ title: "VeritaAssure™ | Lab Compliance Software Suite for Clinical Laboratories", description: "The complete laboratory compliance platform. VeritaCheck™, VeritaMap™, VeritaScan™, VeritaTrack™, VeritaPolicy™, VeritaResponse™, and more - built by a lab professional who conducted 200+ Joint Commission surveys." });
+    useSEO({ title: "VeritaAssure™ | Complete Lab Compliance and Operations Software Suite", description: "The complete laboratory platform: seventeen modules across compliance and operations. VeritaCheck™, VeritaMap™, VeritaScan™, VeritaPolicy™, VeritaStock™, VeritaOps™, and more, built by a lab professional who conducted 200+ Joint Commission surveys." });
 return (
     <div className="min-h-screen bg-background">
 
@@ -180,18 +279,20 @@ return (
             variant="outline"
             className="mb-4 text-primary border-primary/30 bg-primary/5 font-medium"
           >
-            Compliance Suite
+            The Complete Suite
           </Badge>
           <h1 className="font-serif text-4xl sm:text-5xl font-bold tracking-tight mb-4 leading-tight">
             VeritaAssure&#8482;
           </h1>
           <p className="text-xl text-primary font-semibold mb-3">
-            Confidence and clarity for lab compliance.
+            Confidence and clarity for lab compliance and operations.
           </p>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed mb-8">
-            VeritaAssure&#8482; is the integrated lab compliance suite from Veritas Lab Services, LLC.
-            It unites performance verification, inspection readiness, test menu mapping, competency management,
-            personnel tracking, and certificate monitoring into one platform built by a former TJC laboratory surveyor with 200+ facility inspections.
+            VeritaAssure&#8482; is the integrated laboratory platform from Veritas Lab Services, LLC:
+            seventeen modules across two streams. Eleven compliance modules (performance verification,
+            inspection readiness, test menu mapping, competency, personnel, policy, and QC) and six
+            operations modules (productivity benchmarking, staffing, quality metrics, cost per reportable test,
+            and inventory). Built by a former TJC laboratory surveyor with 200+ facility inspections.
             Browser-based. No desktop software. No installation.
           </p>
           {!isLoggedIn && (
@@ -213,37 +314,28 @@ return (
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-14 space-y-16">
 
-        {/* Module Grid */}
+        {/* Module Grid — all seventeen modules, two streams under one suite */}
         <section>
-          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-6">
-            The Suite
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
+            Compliance
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {MODULES.map(({ href, label, desc, detail, badge, badgeColor, icon: Icon, color }) => (
-              <Link key={href} href={href}>
-                <Card className="h-full hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group">
-                  <CardContent className="p-5">
-                    <div className="flex items-start justify-between mb-3">
-                      <div
-                        className={`w-10 h-10 rounded-lg flex items-center justify-center border ${color}`}
-                      >
-                        <Icon size={18} />
-                      </div>
-                      <BadgePill label={badge} color={badgeColor} />
-                    </div>
-                    <div className="font-semibold text-sm group-hover:text-primary transition-colors mb-0.5">
-                      {label}
-                    </div>
-                    <div className="text-xs text-muted-foreground font-medium mb-2">{desc}</div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{detail}</p>
-                    <div className="mt-3 flex items-center gap-1 text-xs text-primary font-medium">
-                      Learn more <ChevronRight size={11} />
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
+          <p className="text-sm text-muted-foreground mb-6 max-w-2xl">
+            Eleven modules for staying inspection-ready: performance verification, test menu mapping,
+            competency, personnel, policy, QC, and more.
+          </p>
+          <ModuleGrid modules={COMPLIANCE_MODULES} />
+        </section>
+
+        {/* Operations stream */}
+        <section>
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
+            Operations
           </div>
+          <p className="text-sm text-muted-foreground mb-6 max-w-2xl">
+            Six modules for when the question is not whether the lab is compliant, but whether the lab is
+            running well: benchmarking, staffing, quality metrics, cost per reportable test, and inventory.
+          </p>
+          <ModuleGrid modules={OPERATIONS_MODULES} />
         </section>
 
         {/* Free Downloads */}
