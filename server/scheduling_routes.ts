@@ -36,12 +36,19 @@ import {
 const sqlite = (db as any).$client;
 
 function operatorNow(): { date: string; minute: number } {
-  // America/Phoenix is UTC-7 year-round (no DST). Use a fixed offset.
-  const nowMs = Date.now() - 7 * 60 * 60 * 1000;
-  const d = new Date(nowMs);
+  // Operator "now" in OPERATOR_TZ, DST-aware. Eastern observes DST, so a fixed
+  // offset would be wrong for half the year; Intl resolves the correct offset.
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: OPERATOR_TZ,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(new Date());
+  const get = (t: string) => parts.find((p) => p.type === t)?.value || "00";
+  let hh = parseInt(get("hour"), 10);
+  if (hh === 24) hh = 0; // some ICU builds emit 24 at midnight
   return {
-    date: d.toISOString().slice(0, 10),
-    minute: d.getUTCHours() * 60 + d.getUTCMinutes(),
+    date: `${get("year")}-${get("month")}-${get("day")}`,
+    minute: hh * 60 + parseInt(get("minute"), 10),
   };
 }
 
@@ -101,7 +108,7 @@ export function registerSchedulingRoutes(app: Express) {
       return res.status(400).json({ error: "from and to must be YYYY-MM-DD" });
     }
     const evt = sqlite.prepare(
-      "SELECT id, duration_minutes FROM schedule_event_types WHERE slug = ? AND active = 1"
+      "SELECT id, duration_minutes, slot_interval_minutes, synthetic_holds_per_day FROM schedule_event_types WHERE slug = ? AND active = 1"
     ).get(slug) as any;
     if (!evt) return res.status(404).json({ error: "Event type not found" });
 
@@ -128,6 +135,8 @@ export function registerSchedulingRoutes(app: Express) {
       fromDate: from,
       toDate: cappedTo,
       durationMinutes: evt.duration_minutes,
+      intervalMinutes: evt.slot_interval_minutes ?? undefined,
+      syntheticHoldsPerDay: evt.synthetic_holds_per_day ?? 0,
       rules,
       blackouts,
       bookings,
@@ -182,7 +191,7 @@ export function registerSchedulingRoutes(app: Express) {
     }
 
     const evt = sqlite.prepare(
-      "SELECT id, duration_minutes, title FROM schedule_event_types WHERE slug = ? AND active = 1"
+      "SELECT id, duration_minutes, title, slot_interval_minutes, synthetic_holds_per_day FROM schedule_event_types WHERE slug = ? AND active = 1"
     ).get(slug) as any;
     if (!evt) return res.status(404).json({ error: "Event type not found." });
 
@@ -212,6 +221,8 @@ export function registerSchedulingRoutes(app: Express) {
           fromDate: slotDate,
           toDate: slotDate,
           durationMinutes: evt.duration_minutes,
+          intervalMinutes: evt.slot_interval_minutes ?? undefined,
+          syntheticHoldsPerDay: evt.synthetic_holds_per_day ?? 0,
           rules,
           blackouts,
           bookings,

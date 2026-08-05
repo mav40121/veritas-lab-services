@@ -6129,9 +6129,9 @@ try {
   if (!existing) {
     sqlite.prepare(`INSERT INTO schedule_event_types (slug, title, duration_minutes, description, active) VALUES (?, ?, ?, ?, 1)`).run(
       "scoping-call",
-      "30-Minute Consulting Scoping Call",
-      30,
-      "No-cost, no-obligation 30-minute call to confirm whether the engagement fits, identify the right scope, and give a clear price before any paper changes hands."
+      "50-Minute Consulting Scoping Call",
+      50,
+      "No-cost, no-obligation 50-minute call to confirm whether the engagement fits, identify the right scope, and give a clear price before any paper changes hands."
     );
   }
 } catch {}
@@ -6139,7 +6139,27 @@ try {
 // Migration sentinel block per CLAUDE.md NEW DB TABLE RULE.
 {
   const eventCols = (sqlite.prepare("PRAGMA table_info(schedule_event_types)").all() as { name: string }[]).map((c) => c.name);
-  void eventCols;
+  // Slot cadence (start-to-start interval) can differ from session length, and a
+  // fixed number of daily holds can be reserved off the public calendar. Both
+  // are event-type config, added per the NEW DB TABLE RULE.
+  if (!eventCols.includes("slot_interval_minutes")) {
+    sqlite.prepare("ALTER TABLE schedule_event_types ADD COLUMN slot_interval_minutes INTEGER").run();
+  }
+  if (!eventCols.includes("synthetic_holds_per_day")) {
+    sqlite.prepare("ALTER TABLE schedule_event_types ADD COLUMN synthetic_holds_per_day INTEGER NOT NULL DEFAULT 0").run();
+  }
+  // One-time config for the scoping call: 50-minute sessions on a 60-minute
+  // cadence (10-min gap), holding up to 3 slots/day. Guarded on
+  // slot_interval_minutes IS NULL so it runs exactly once and never clobbers a
+  // later manual edit. Writes only config columns (no cascade from mutable data).
+  try {
+    sqlite.prepare(
+      "UPDATE schedule_event_types SET duration_minutes = 50, slot_interval_minutes = 60, synthetic_holds_per_day = 3, title = ?, description = ? WHERE slug = 'scoping-call' AND slot_interval_minutes IS NULL"
+    ).run(
+      "50-Minute Consulting Scoping Call",
+      "No-cost, no-obligation 50-minute call to confirm whether the engagement fits, identify the right scope, and give a clear price before any paper changes hands."
+    );
+  } catch {}
   const ruleCols = (sqlite.prepare("PRAGMA table_info(schedule_availability_rules)").all() as { name: string }[]).map((c) => c.name);
   void ruleCols;
   const blackoutCols = (sqlite.prepare("PRAGMA table_info(schedule_blackouts)").all() as { name: string }[]).map((c) => c.name);

@@ -148,7 +148,7 @@ export default function AdminSchedulingPage() {
       <section>
         <h2 className="font-serif text-xl font-bold mb-3">Recurring availability rules</h2>
         <p className="text-sm text-muted-foreground mb-3">
-          All times America/Phoenix (operator tz). Bookings only land in slots created by these rules.
+          All times America/New_York, Eastern (operator tz). Bookings only land in slots created by these rules.
         </p>
         <Card className="mb-4">
           <CardContent className="p-4 flex gap-3 flex-wrap items-end">

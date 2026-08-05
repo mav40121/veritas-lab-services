@@ -10,7 +10,7 @@
 //   4. Submit -> POST /api/scheduling/book.
 //   5. Confirmation screen with the booking token.
 //
-// All times are stored on the server in America/Phoenix (operator tz).
+// All times are stored on the server in America/New_York (operator tz).
 // This page shows each slot in BOTH operator tz and the booker's local
 // tz so there is no confusion about which time the booker is signing
 // up for.
@@ -60,23 +60,39 @@ function formatOperatorTime(date: string, time: string): string {
   return `${day} at ${h12}:${m < 10 ? "0" + m : m} ${ampm}`;
 }
 
+// UTC instant for a wall-clock (date + HH:MM) in a named IANA tz, DST-aware.
+// Guess-as-UTC then correct by the tz's actual offset at that instant; a second
+// pass settles the DST-boundary edge. Works for any operator tz (Eastern etc.),
+// unlike the prior fixed-offset assumption.
+function wallClockToUtc(date: string, time: string, tz: string): Date | null {
+  const [y, mo, d] = date.split("-").map((s) => parseInt(s, 10));
+  const [h, mi] = time.split(":").map((s) => parseInt(s, 10));
+  if ([y, mo, d, h, mi].some((n) => Number.isNaN(n))) return null;
+  const guess = Date.UTC(y, mo - 1, d, h, mi);
+  const offsetAt = (ms: number): number => {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+    }).formatToParts(new Date(ms));
+    const g = (t: string) => parseInt(parts.find((p) => p.type === t)?.value || "0", 10);
+    let hh = g("hour"); if (hh === 24) hh = 0;
+    const asUtc = Date.UTC(g("year"), g("month") - 1, g("day"), hh, g("minute"), g("second"));
+    return asUtc - ms;
+  };
+  let ms = guess - offsetAt(guess);
+  ms = guess - offsetAt(ms);
+  return new Date(ms);
+}
+
 function formatBookerLocalTime(date: string, time: string, operatorTz: string): string | null {
-  // Convert operator-tz slot to booker's local tz for display
+  // Convert operator-tz slot to the booker's local tz for display (DST-aware).
+  const utc = wallClockToUtc(date, time, operatorTz);
+  if (!utc) return null;
   try {
-    const [y, mo, d] = date.split("-").map((s) => parseInt(s, 10));
-    const [h, m] = time.split(":").map((s) => parseInt(s, 10));
-    // Phoenix is UTC-7 year-round. Build an ISO with that offset.
-    // (Phase 2 can swap this for a real tz lib if other event types
-    // need DST-aware operator tzs.)
-    const offsetIso = `${date}T${time}:00-07:00`;
-    void y; void mo; void d; void h; void m; void operatorTz;
-    const utc = new Date(offsetIso);
-    if (isNaN(utc.getTime())) return null;
-    const local = utc.toLocaleString(undefined, {
+    return utc.toLocaleString(undefined, {
       weekday: "short", month: "short", day: "numeric",
       hour: "numeric", minute: "2-digit", timeZoneName: "short",
     });
-    return local;
   } catch {
     return null;
   }
@@ -84,9 +100,9 @@ function formatBookerLocalTime(date: string, time: string, operatorTz: string): 
 
 export default function BookScopingCallPage() {
   useSEO({
-    title: "Book a 30-Minute Scoping Call | Veritas Lab Services",
+    title: "Book a 50-Minute Scoping Call | Veritas Lab Services",
     description:
-      "Schedule a no-cost 30-minute scoping call with Michael Veri, MS, MBA, MLS(ASCP), CPHQ, former TJC Laboratory Surveyor with 200+ surveys conducted. Confirms engagement fit, scope, and price before any paper changes hands.",
+      "Schedule a no-cost 50-minute scoping call with Michael Veri, MS, MBA, MLS(ASCP), CPHQ, former TJC Laboratory Surveyor with 200+ surveys conducted. Confirms engagement fit, scope, and price before any paper changes hands.",
   });
 
   const [eventType, setEventType] = useState<EventType | null>(null);
@@ -200,7 +216,7 @@ export default function BookScopingCallPage() {
             Schedule a call
           </Badge>
           <h1 className="font-serif text-3xl sm:text-4xl font-bold mb-3">
-            30-Minute Consulting Scoping Call
+            50-Minute Consulting Scoping Call
           </h1>
           <p className="text-muted-foreground text-base max-w-2xl leading-relaxed">
             No cost, no obligation. We confirm whether the engagement is the
@@ -220,11 +236,11 @@ export default function BookScopingCallPage() {
                 <CheckCircle2 size={48} className="text-primary mx-auto" />
                 <h2 className="font-serif text-2xl font-bold">Booking confirmed</h2>
                 <p className="text-muted-foreground">
-                  Your scoping call is set for <strong>{formatOperatorTime(confirmed.slot.date, confirmed.slot.start_time)}</strong> America/Phoenix.
+                  Your scoping call is set for <strong>{formatOperatorTime(confirmed.slot.date, confirmed.slot.start_time)}</strong> {eventType?.operator_tz || "America/New_York"}.
                 </p>
                 {bookerTz && (
                   <p className="text-sm text-muted-foreground">
-                    In your local tz: {formatBookerLocalTime(confirmed.slot.date, confirmed.slot.start_time, "America/Phoenix")}
+                    In your local tz: {formatBookerLocalTime(confirmed.slot.date, confirmed.slot.start_time, eventType?.operator_tz || "America/New_York")}
                   </p>
                 )}
                 <p className="text-sm text-muted-foreground">
@@ -325,7 +341,7 @@ export default function BookScopingCallPage() {
                       })}
                     </div>
                     <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
-                      <MapPin size={12} /> All times shown in America/Phoenix. Your local time appears below once you pick a slot.
+                      <MapPin size={12} /> All times shown in {eventType?.operator_tz || "America/New_York"}. Your local time appears below once you pick a slot.
                     </p>
                   </div>
                 )}
@@ -338,10 +354,10 @@ export default function BookScopingCallPage() {
                     <CardContent className="p-6 space-y-4">
                       <div className="border-b pb-3 mb-2">
                         <div className="text-sm text-muted-foreground">Selected slot</div>
-                        <div className="font-semibold">{formatOperatorTime(selectedSlot.date, selectedSlot.start_time)} America/Phoenix</div>
+                        <div className="font-semibold">{formatOperatorTime(selectedSlot.date, selectedSlot.start_time)} {eventType?.operator_tz || "America/New_York"}</div>
                         {bookerTz && (
                           <div className="text-xs text-muted-foreground mt-1">
-                            Your local: {formatBookerLocalTime(selectedSlot.date, selectedSlot.start_time, "America/Phoenix")}
+                            Your local: {formatBookerLocalTime(selectedSlot.date, selectedSlot.start_time, eventType?.operator_tz || "America/New_York")}
                           </div>
                         )}
                       </div>
