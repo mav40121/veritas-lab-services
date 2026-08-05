@@ -26,7 +26,9 @@ test.describe("VeritaStaff CLIA roles: TC available on high-complexity", () => {
     await page.getByRole("button", { name: /^Edit$/ }).first().click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText("CLIA Role Assignments")).toBeVisible();
-    // TC toggle must be present alongside the other roles.
-    await expect(dialog.getByRole("button", { name: "TC", exact: true })).toBeVisible();
+    // All six CLIA roles must be present regardless of lab complexity.
+    for (const role of ["LD", "CC", "TC", "TS", "GS", "TP"]) {
+      await expect(dialog.getByRole("button", { name: role, exact: true }), `role ${role}`).toBeVisible();
+    }
   });
 });
