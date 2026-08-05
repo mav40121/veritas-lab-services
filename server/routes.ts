@@ -1663,7 +1663,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/admin/set-plan", (req, res) => {
     const { secret, userId, labId, plan, credits } = req.body;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
-    const planCredits = ["annual", "starter", "professional", "lab", "complete", "waived", "community", "hospital", "large_hospital", "enterprise", "veritacheck_only"].includes(plan) ? 99999 : (credits ?? 0);
+    const planCredits = ["annual", "starter", "professional", "lab", "complete", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise", "veritacheck_only"].includes(plan) ? 99999 : (credits ?? 0);
     // Phase 4.4 dual-write: update the lab (authoritative) and the user
     // (legacy safety net). If labId is provided, target that lab directly;
     // otherwise resolve via the user's primary membership.
@@ -3698,7 +3698,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const plan = lab?.plan ?? user?.plan;
     return [
       "annual", "starter", "professional", "lab", "complete",
-      "waived", "community", "hospital", "large_hospital", "enterprise",
+      "clinic", "waived", "community", "hospital", "large_hospital", "enterprise",
     ].includes(plan) || (user?.userId && user.userId <= 11);
   }
 
@@ -4488,7 +4488,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!resend) return res.status(500).json({ error: "Resend not configured" });
 
     // Find all active lab account owners who have at least one active seat
-    const SEAT_PLANS = ["lab", "community", "hospital", "large_hospital", "enterprise", "complete"];
+    const SEAT_PLANS = ["clinic", "lab", "community", "hospital", "large_hospital", "enterprise", "complete"];
     const owners = db.$client.prepare(`
       SELECT DISTINCT u.user_id, u.email, u.name
       FROM users u
@@ -4883,7 +4883,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     try {
       if (action === 'set-plan') {
-        const planCredits = ["annual","starter","professional","lab","complete","waived","community","hospital","large_hospital","enterprise","veritacheck_only"].includes(plan) ? 99999 : (credits ?? 0);
+        const planCredits = ["annual","starter","professional","lab","complete","clinic","waived","community","hospital","large_hospital","enterprise","veritacheck_only"].includes(plan) ? 99999 : (credits ?? 0);
         storage.updateUserPlan(Number(userId), plan, planCredits);
         const user = storage.getUserById(Number(userId));
         return res.json({ ok: true, user: { id: user?.id, email: user?.email, plan: user?.plan, studyCredits: user?.studyCredits } });
@@ -5713,7 +5713,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     // Build checkout session targeting the new lab.
-    const SUITE_PLANS = new Set(["waived", "community", "hospital", "large_hospital"]);
+    const SUITE_PLANS = new Set(["clinic", "waived", "community", "hospital", "large_hospital"]);
     const successPath = SUITE_PLANS.has(priceType) ? "/getting-started" : "/veritacheck";
     try {
       const isSubscription = priceType !== "perStudy";
@@ -14876,7 +14876,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Check access: annual, lab, or veritascan plan
   function hasScanAccess(user: any, lab?: any) {
     const plan = lab?.plan ?? user?.plan;
-    return ["annual", "professional", "lab", "complete", "veritascan", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
+    return ["annual", "professional", "lab", "complete", "veritascan", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }
 
   // List scans for the user's ACTIVE lab.
@@ -16495,7 +16495,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     //     surface they actually purchased).
     //   - Suite plans (Clinic / Community / Hospital / Enterprise) land on
     //     /getting-started so the new tenant sees the onboarding flow.
-    const SUITE_PLANS = new Set(["waived", "community", "hospital", "large_hospital"]);
+    const SUITE_PLANS = new Set(["clinic", "waived", "community", "hospital", "large_hospital"]);
     const successPath = SUITE_PLANS.has(priceType) ? "/getting-started" : "/veritacheck";
     const successUrl = `${FRONTEND_URL}${successPath}?payment=success&type=${priceType}`;
     const cancelUrl = `${FRONTEND_URL}/veritacheck?payment=cancelled`;
@@ -16778,7 +16778,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               storage.addStudyCredits(userId, 1);
             }
             console.log("[webhook] Added study credit", { labId, userId });
-          } else if (["waived", "community", "hospital", "large_hospital", "enterprise", "veritacheck_only"].includes(priceType) && session.subscription) {
+          } else if (["clinic", "waived", "community", "hospital", "large_hospital", "enterprise", "veritacheck_only"].includes(priceType) && session.subscription) {
             if (labId) {
               (db as any).$client.prepare(
                 "UPDATE labs SET plan = ?, stripe_subscription_id = ?, subscription_status = 'active', subscription_expires_at = ?, plan_expires_at = ? WHERE id = ?"
@@ -16903,7 +16903,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── CUMSUM TRACKER ──────────────────────────────────────────────────────
   function hasCheckAccess(user: any, lab?: any) {
     const plan = lab?.plan ?? user?.plan;
-    return ["annual", "starter", "professional", "lab", "complete", "per_study", "waived", "community", "hospital", "large_hospital", "enterprise", "veritacheck_only"].includes(plan) || (user?.userId && user.userId <= 11);
+    return ["annual", "starter", "professional", "lab", "complete", "per_study", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise", "veritacheck_only"].includes(plan) || (user?.userId && user.userId <= 11);
   }
 
   // List trackers for user
@@ -20084,7 +20084,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   function hasCompetencyAccess(user: any, lab?: any) {
     const plan = lab?.plan ?? user?.plan;
-    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
+    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }
 
   // List programs
@@ -22462,7 +22462,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   function hasStaffAccess(user: any, lab?: any) {
     const plan = lab?.plan ?? user?.plan;
-    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
+    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }
 
   // CMS specialty list (for validation and labels)
@@ -25778,7 +25778,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   function hasLabCertAccess(user: any, lab?: any) {
     const plan = lab?.plan ?? user?.plan;
-    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
+    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }
 
   function scheduleReminders(certId: number, userId: number, expirationDate: string) {

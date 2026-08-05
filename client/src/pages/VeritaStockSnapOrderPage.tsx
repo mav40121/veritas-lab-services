@@ -74,7 +74,7 @@ export default function VeritaStockSnapOrderPage() {
     ? `/labs/${activeLabId}/veritastock`
     : "/veritastock";
 
-  const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
+  const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
   const loadItems = useCallback(async () => {
     try {

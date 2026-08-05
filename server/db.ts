@@ -5328,7 +5328,7 @@ if (process.env.SEED_USER_PLAN) {
   if (seedEmail && seedPlan) {
     const credits = parseInt(seedCredits || "0");
     // Never downgrade an existing paid plan on deploy
-    const PAID_PLANS = ["annual","professional","lab","complete","waived","community","hospital","large_hospital","enterprise","veritacheck_only"];
+    const PAID_PLANS = ["annual","professional","lab","complete","clinic","waived","community","hospital","large_hospital","enterprise","veritacheck_only"];
     const existing = sqlite.prepare("SELECT plan FROM users WHERE email = ?").get(seedEmail.toLowerCase()) as any;
     if (existing && PAID_PLANS.includes(existing.plan) && !PAID_PLANS.includes(seedPlan)) {
       console.log(`[seed] Skipped: ${seedEmail} already on paid plan '${existing.plan}', not overwriting with '${seedPlan}'`);

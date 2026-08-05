@@ -858,7 +858,7 @@ export default function VeritaTrackAppPage() {
   const [seeding, setSeeding] = useState(false);
   const [seedResult, setSeedResult] = useState<{ created: number; skipped: number } | null>(null);
 
-  const hasPlanAccess = ["annual","professional","lab","complete","waived","community","hospital","large_hospital","enterprise"].includes(user?.plan || "");
+  const hasPlanAccess = ["annual","professional","lab","complete","clinic","waived","community","hospital","large_hospital","enterprise"].includes(user?.plan || "");
 
   // Multi-Lab Tier 2 Phase 3.7b: route reads/writes through the active lab.
   const activeLabId = useActiveLabId();

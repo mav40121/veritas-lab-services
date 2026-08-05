@@ -887,7 +887,7 @@ export default function VeritaStockInventoryPage() {
 
   const isColumnVisible = (key: ToggleableColumnKey): boolean => !hiddenColumns.has(key);
 
-  const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
+  const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
   // Multi-Lab Tier 2 Phase 3.11b: lab-scope inventory reads/writes.
   const activeLabId = useActiveLabId();
