@@ -21,6 +21,7 @@ import { storePdfToken } from "./pdfTokens";
 import { buildIntacctCSV, preflightIntacct, type IntacctExportConfig, type VendorIdMap } from "./intacctExport";
 import { forecastFromGoal, chainGap, staffingGridFte, DEFAULT_HOURS_PER_FTE_YEAR } from "@shared/operationsForecast";
 import { generateLeverageReportPDF, type LeverageReportData } from "./leverageReport";
+import { generatePiReportPDF } from "./piReport";
 
 // PR 4 helper: builds a lower-cased-name keyed map of VendorRecordForPdf
 // from the lab's stock_vendors directory. The PDF renderer uses this to
@@ -2493,6 +2494,49 @@ export function registerVeritaBenchRoutes(
       `SELECT * FROM pi_entries WHERE metric_id IN (${placeholders}) AND year = ? AND account_id = ? ORDER BY month ASC`
     ).all(...ids, year, accountId);
     res.json(rows);
+  });
+
+  // POST /api/pi/metrics/:metricId/report - one-page monthly PDF for a single PI.
+  // Account-scoped: the metric ownership is validated (same tenant boundary as the
+  // entries upsert) before any data is read. Lab identity comes from the labs row.
+  app.post("/api/pi/metrics/:metricId/report", authMiddleware, async (req: any, res) => {
+    if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
+    const accountId = req.ownerUserId ?? req.userId;
+    const metricId = Number(req.params.metricId);
+    const year = Number(req.query.year) || new Date().getFullYear();
+    const metric = sqlite.prepare("SELECT * FROM pi_metrics WHERE id = ? AND account_id = ?").get(metricId, accountId) as any;
+    if (!metric) return res.status(404).json({ error: "Metric not found" });
+    try {
+      const entries = sqlite.prepare(
+        "SELECT year, month, value, volume, notes FROM pi_entries WHERE metric_id = ? AND account_id = ? AND year = ? ORDER BY month ASC"
+      ).all(metricId, accountId, year) as any[];
+      const dept = sqlite.prepare("SELECT name FROM pi_departments WHERE id = ?").get(metric.department_id) as any;
+      const labId = resolveOpsLabId(req);
+      const labRow: any = labId != null
+        ? sqlite.prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(labId)
+        : sqlite.prepare("SELECT lab_name, clia_number FROM labs WHERE owner_user_id = ? LIMIT 1").get(accountId);
+      const userRow: any = sqlite.prepare("SELECT name, email FROM users WHERE id = ?").get(req.userId);
+      const pdfBuffer = await generatePiReportPDF(
+        {
+          name: metric.name, unit: metric.unit, direction: metric.direction,
+          benchmark_green: metric.benchmark_green, benchmark_yellow: metric.benchmark_yellow,
+          benchmark_red: metric.benchmark_red, department: dept?.name ?? null,
+        },
+        entries,
+        {
+          labName: labRow?.lab_name ?? null,
+          cliaNumber: labRow?.clia_number ?? null,
+          preparedBy: userRow?.name || userRow?.email || null,
+          year,
+        }
+      );
+      const safe = String(metric.name || "PI").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
+      const token = storePdfToken(pdfBuffer, `PI_Report_${safe}_${year}.pdf`);
+      res.json({ token });
+    } catch (err: any) {
+      console.error("PI report PDF error:", err.message);
+      res.status(500).json({ error: "PDF generation failed", detail: err.message });
+    }
   });
 
   // POST /api/pi/entries - upsert entry (metric_id + year + month unique)
