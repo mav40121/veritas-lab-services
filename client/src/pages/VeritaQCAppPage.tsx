@@ -93,6 +93,57 @@ function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Inline Levey-Jennings chart for the selected control lot. Plots each logged
+// result as its SDI (value minus baseline mean, over SD) against the classic
+// Westgard zones: green within 2 SD, amber 2 to 3 SD, red beyond 3 SD. Points
+// that fired a rejection are drawn red. This is the on-screen companion to the
+// month-end PDF chart, so a tech (or a prospect on a demo) watches the chart
+// populate live instead of only seeing it after a download.
+function LeveyJenningsChart({ mean, sd, results }: { mean: number; sd: number; results: ResultRow[] }) {
+  if (!(sd > 0) || results.length === 0) {
+    return <div className="text-sm text-muted-foreground py-8 text-center">Log a QC result to see the Levey-Jennings chart.</div>;
+  }
+  const W = 560, H = 210, PL = 34, PR = 10, PT = 12, PB = 26;
+  const innerW = W - PL - PR, innerH = H - PT - PB;
+  const pts = [...results].reverse(); // results arrive newest-first; chronological left to right
+  const n = pts.length;
+  const sdMin = -4, sdMax = 4;
+  const yFor = (s: number) => PT + innerH * (1 - (s - sdMin) / (sdMax - sdMin));
+  const xFor = (i: number) => PL + (n === 1 ? innerW / 2 : (innerW * i) / (n - 1));
+  const bands = [
+    { a: -4, b: -3, fill: "#fde2e2" }, { a: -3, b: -2, fill: "#fef2cc" },
+    { a: -2, b: 2, fill: "#e3f2e1" }, { a: 2, b: 3, fill: "#fef2cc" },
+    { a: 3, b: 4, fill: "#fde2e2" },
+  ];
+  const sdis = pts.map(r => (r.result_value - mean) / sd);
+  const poly = sdis.map((s, i) => `${xFor(i)},${yFor(s)}`).join(" ");
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Levey-Jennings chart">
+      {bands.map((bd, i) => (
+        <rect key={i} x={PL} y={yFor(bd.b)} width={innerW} height={yFor(bd.a) - yFor(bd.b)} fill={bd.fill} />
+      ))}
+      {[-3, -2, -1, 0, 1, 2, 3].map(s => (
+        <line key={s} x1={PL} y1={yFor(s)} x2={PL + innerW} y2={yFor(s)} stroke={s === 0 ? "#01696F" : "#a0a0a0"} strokeWidth={s === 0 ? 1.2 : 0.5} strokeDasharray={s === 0 ? undefined : "2,2"} />
+      ))}
+      {[-3, -2, -1, 0, 1, 2, 3].map(s => (
+        <text key={s} x={PL - 4} y={yFor(s) + 3} fontSize="8" fill="#555" textAnchor="end">{s > 0 ? `+${s}` : s}</text>
+      ))}
+      <polyline points={poly} fill="none" stroke="#1a1a1a" strokeWidth={0.8} />
+      {sdis.map((s, i) => {
+        const rejected = pts[i].violations?.some(v => v.severity === "rejection");
+        const color = rejected || Math.abs(s) > 3 ? "#dc2626" : Math.abs(s) > 2 ? "#d97706" : "#16a34a";
+        return (
+          <circle key={i} cx={xFor(i)} cy={yFor(s)} r={3} fill={color} stroke="#fff" strokeWidth={0.6}>
+            <title>{`${pts[i].result_date}: ${pts[i].result_value} (SDI ${s.toFixed(2)})`}</title>
+          </circle>
+        );
+      })}
+      <text x={PL + innerW / 2} y={H - 6} fontSize="8" fill="#555" textAnchor="middle">Run sequence (oldest to newest, n={n})</text>
+      <text x="9" y={PT + innerH / 2} fontSize="8" fill="#555" textAnchor="middle" transform={`rotate(-90,9,${PT + innerH / 2})`}>SDI from mean</text>
+    </svg>
+  );
+}
+
 export default function VeritaQCAppPage() {
   const { user, isLoggedIn } = useAuth();
   const isReadOnly = useIsReadOnly("veritaqc");
@@ -471,7 +522,7 @@ export default function VeritaQCAppPage() {
         <Badge variant="outline" className="ml-2 text-xs">Phase 1 preview</Badge>
         <div className="ml-auto">
           <Button asChild variant="outline" size="sm">
-            <Link href={`/labs/${activeLabId}/veritaqc-app/review`}>Daily review</Link>
+            <Link href={`/labs/${activeLabId}/veritaqc-app/review`}>Review &amp; Sign-off</Link>
           </Button>
         </div>
       </div>
@@ -484,7 +535,7 @@ export default function VeritaQCAppPage() {
           "Add your control lots once: analyte, lot number, manufacturer mean and SD, SD interval.",
           "Each shift, log control results as you run them. The system shows you the Westgard decision in real time.",
           "When a rejection rule fires, file the required corrective action in the same screen before the run is released.",
-          "At month end, open the Daily Review page for each lot, generate the monthly PDF, sign the attestation block.",
+          "At month end, open the Review & Sign-off page for each lot, generate the monthly PDF, sign the attestation block.",
           "File the PDF in your QC binder or attach to your LIS record. Records retained per 42 CFR 493.1105.",
         ]}
       />
@@ -614,6 +665,17 @@ export default function VeritaQCAppPage() {
                   </div>
                 </>
               )}
+            </CardContent>
+          </Card>
+
+          <Card className="mb-4">
+            <CardHeader>
+              <CardTitle className="text-base">Levey-Jennings chart{selectedLot ? `: ${selectedLot.analyte} (${selectedLot.level})` : ""}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {selectedLot
+                ? <LeveyJenningsChart mean={selectedLot.mfr_mean} sd={selectedLot.mfr_sd} results={results} />
+                : <div className="text-sm text-muted-foreground py-8 text-center">Select a control lot to view its Levey-Jennings chart.</div>}
             </CardContent>
           </Card>
 

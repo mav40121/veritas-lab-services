@@ -364,7 +364,7 @@ export default function VeritaQCDailyReviewPage() {
     <div className="container max-w-5xl mx-auto py-8 px-4">
       <div className="mb-6 flex items-center gap-2">
         <ClipboardList className="h-6 w-6 text-primary" />
-        <h1 className="text-2xl font-bold">VeritaQC&#8482; Daily Review</h1>
+        <h1 className="text-2xl font-bold">VeritaQC&#8482; Review &amp; Sign-off</h1>
         <Badge variant="outline" className="ml-2 text-xs">Phase 1 preview</Badge>
         <div className="ml-auto">
           <Button asChild variant="outline" size="sm">
