@@ -16,7 +16,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Lock, Users, Activity, BarChart3, Save, Plus, Edit2, Trash2,
+  Lock, Users, Activity, BarChart3, Save, Plus, Edit2, Trash2, FileText,
   ChevronDown, ChevronRight, BookOpen, Library, AlertTriangle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -773,6 +773,32 @@ export default function VeritaBenchPIPage() {
   const [metricForm, setMetricForm] = useState({ name: "", unit: "%", direction: "lower_is_better", benchmark_green: "", benchmark_yellow: "", benchmark_red: "", is_tat: false, tat_start_event: "", tat_end_event: "", tat_threshold_minutes: "", measurement_methodology: "" });
   const [showMetricDialog, setShowMetricDialog] = useState(false);
   const [deleteMetricTarget, setDeleteMetricTarget] = useState<PIMetric | null>(null);
+  const [reportingId, setReportingId] = useState<number | null>(null);
+
+  async function handlePiReport(m: PIMetric) {
+    setReportingId(m.id);
+    try {
+      const res = await fetch(`${API_BASE}/api/pi/metrics/${m.id}/report?year=${year}`, {
+        method: "POST", headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "Report failed", description: err.error || `HTTP ${res.status}`, variant: "destructive" });
+        return;
+      }
+      const { token } = await res.json();
+      const win = window.open(`${API_BASE}/api/pdf/${token}`, "_blank");
+      if (win) {
+        toast({ title: `Report generated for ${m.name}` });
+      } else {
+        toast({ title: "Popup blocked", description: "Allow popups for this site, then click the report button again.", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Report failed", description: "Network error", variant: "destructive" });
+    } finally {
+      setReportingId(null);
+    }
+  }
 
   // Library browser dialog
   const [showLibraryDialog, setShowLibraryDialog] = useState(false);
@@ -1487,6 +1513,9 @@ export default function VeritaBenchPIPage() {
                                   </Button>
                                 );
                               })()}
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handlePiReport(m)} disabled={reportingId === m.id} title="Print monthly report (PDF)" data-testid={`pi-report-${m.id}`}>
+                                <FileText size={13} className={reportingId === m.id ? "animate-pulse" : ""} />
+                              </Button>
                               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditMetric(m)} disabled={readOnly}>
                                 <Edit2 size={13} />
                               </Button>
