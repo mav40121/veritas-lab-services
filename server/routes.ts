@@ -2871,6 +2871,87 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // Admin: import a full QC dataset (multiple analytes/levels/lots + daily
+  // results) into a lab. Generalizes the hardcoded qc-seed so a real prospect
+  // workbook can be prebuilt for a demo. Re-runnable: lots are find-or-create
+  // by (lab, analyte, lot_number); with replace=true a lot's existing results
+  // are cleared before insert so a re-run does not duplicate points. Westgard
+  // is computed on read from mfr_mean/mfr_sd, so no violation rows are written
+  // here; a default lab rule config is ensured (mirrors qc-seed).
+  app.post("/api/admin/qc-import", (req, res) => {
+    const { secret, labId, series, replace } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!labId) return res.status(400).json({ error: "labId required" });
+    if (!Array.isArray(series) || series.length === 0) return res.status(400).json({ error: "series[] required" });
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id, lab_name FROM labs WHERE id = ?").get(Number(labId)) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    const now = new Date().toISOString();
+
+    const existingSettings = sqlite.prepare(
+      "SELECT id FROM qc_rule_settings WHERE lab_id = ? AND analyte IS NULL"
+    ).get(Number(labId)) as any;
+    if (!existingSettings) {
+      sqlite.prepare(
+        "INSERT INTO qc_rule_settings (lab_id, analyte, bias_consecutive_count, trend_consecutive_count, enabled_rules_json, created_at, updated_at) VALUES (?, NULL, 10, 7, '[\"1-2s\",\"1-3s\",\"2-2s\",\"R-4s\",\"4-1s\",\"N-x\",\"N-T\"]', ?, ?)"
+      ).run(Number(labId), now, now);
+    }
+
+    const findLot = sqlite.prepare("SELECT id FROM qc_control_lots WHERE lab_id = ? AND analyte = ? AND lot_number = ?");
+    const insLot = sqlite.prepare(
+      "INSERT INTO qc_control_lots (lab_id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, opened_date, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)"
+    );
+    const delResults = sqlite.prepare("DELETE FROM qc_results WHERE control_lot_id = ?");
+    const insResult = sqlite.prepare(
+      "INSERT INTO qc_results (lab_id, control_lot_id, instrument, result_value, result_date, accepted_for_reporting, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)"
+    );
+
+    const out: any[] = [];
+    try {
+      sqlite.exec("BEGIN");
+      for (const s of (series as any[])) {
+        const analyte = String(s.analyte || "").trim();
+        const lotNumber = String(s.lot_number || "").trim();
+        const level = String(s.level || "mid").toLowerCase();
+        const mean = Number(s.mfr_mean);
+        const sd = Number(s.mfr_sd);
+        if (!analyte || !lotNumber || !Number.isFinite(mean) || !Number.isFinite(sd) || sd <= 0) {
+          throw new Error(`bad series: analyte=${analyte} lot=${lotNumber} mean=${mean} sd=${sd}`);
+        }
+        if (!["low", "mid", "high"].includes(level)) throw new Error(`bad level ${level}`);
+        const lotRow = findLot.get(Number(labId), analyte, lotNumber) as any;
+        let lotId: number;
+        if (lotRow) {
+          lotId = Number(lotRow.id);
+          if (replace) delResults.run(lotId);
+        } else {
+          const r = insLot.run(
+            Number(labId), analyte, level, lotNumber,
+            s.manufacturer ? String(s.manufacturer) : null,
+            mean, sd, Number(s.mfr_sd_interval) === 3 ? 3 : 2,
+            s.opened_date || null, now, now,
+          );
+          lotId = Number(r.lastInsertRowid);
+        }
+        let n = 0;
+        for (const pt of (s.results || [])) {
+          const v = Number(pt.value);
+          const d = String(pt.date || "");
+          if (!Number.isFinite(v) || !/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
+          insResult.run(Number(labId), lotId, s.instrument ? String(s.instrument) : null, v, d, now, now);
+          n++;
+        }
+        out.push({ analyte, level, lot_number: lotNumber, lot_id: lotId, results_inserted: n });
+      }
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[admin/qc-import] failed:", err.message);
+      return res.status(500).json({ error: err.message || "import failed" });
+    }
+    res.json({ ok: true, lab_id: Number(labId), lab_name: lab.lab_name, series: out });
+  });
+
   // Admin: dump the six VeritaQC tables for forensic verification. Optional
   // labId narrows lots/results/corrective_actions/period_reviews/rule_settings
   // to one lab; violations are always returned in full (small table).
