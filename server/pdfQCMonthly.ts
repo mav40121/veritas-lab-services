@@ -46,9 +46,9 @@ export interface MonthlyReviewPayload {
 }
 
 const CSS = `
-  body { font-family: Helvetica, Arial, sans-serif; color: #1a1a1a; margin: 0; padding: 16mm 14mm 22mm; font-size: 9pt; }
+  body { font-family: Helvetica, Arial, sans-serif; color: #1a1a1a; margin: 0; padding: 6mm 14mm 4mm; font-size: 9pt; }
   h1 { font-size: 14pt; margin: 0 0 2pt; color: #01696F; }
-  h2 { font-size: 11pt; margin: 12pt 0 4pt; color: #01696F; border-bottom: 1px solid #d0d0d0; padding-bottom: 2pt; }
+  h2 { font-size: 11pt; margin: 10pt 0 3pt; color: #01696F; border-bottom: 1px solid #d0d0d0; padding-bottom: 2pt; }
   .meta { font-size: 8pt; color: #555; margin-bottom: 6pt; }
   .meta b { color: #1a1a1a; }
   .narrative { font-size: 9pt; line-height: 1.35; margin: 4pt 0 6pt; }
@@ -63,9 +63,10 @@ const CSS = `
   .rule.warning { background: #fef2cc; color: #964219; }
   .pill { display: inline-block; padding: 1pt 5pt; border-radius: 8pt; font-size: 7pt; font-weight: 600; background: #e6f2f2; color: #01696F; }
   .ack { border: 1px solid #01696F; border-radius: 4pt; padding: 8pt 10pt; margin-top: 8pt; background: #f4fafa; }
-  .ack-row { display: flex; gap: 12pt; align-items: flex-end; margin-top: 6pt; font-size: 9pt; }
+  .ack-row { display: flex; gap: 16pt; align-items: flex-end; margin-top: 8pt; font-size: 9pt; }
+  .ack-row > div { flex: 1 1 0; min-width: 0; }
   .ack-label { font-size: 7.5pt; color: #555; text-transform: uppercase; letter-spacing: 0.5pt; }
-  .ack-value { border-bottom: 1px solid #1a1a1a; min-width: 110pt; padding-bottom: 1pt; min-height: 12pt; }
+  .ack-value { border-bottom: 1px solid #1a1a1a; padding-bottom: 2pt; min-height: 13pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .footer-disclaim { font-size: 7pt; color: #777; margin-top: 6pt; }
   svg { display: block; }
 `;
@@ -92,7 +93,7 @@ function renderLJSVG(results: MonthlyReviewResult[], mean: number, sd: number): 
   if (results.length === 0 || sd <= 0) {
     return `<div style="text-align:center;color:#888;padding:18pt 0;font-size:8pt">No accepted results to plot.</div>`;
   }
-  const W = 540, H = 180, PL = 36, PR = 8, PT = 10, PB = 22;
+  const W = 540, H = 150, PL = 36, PR = 8, PT = 10, PB = 22;
   const innerW = W - PL - PR, innerH = H - PT - PB;
   // Newest first arrives from caller; reverse to chronological left-to-right.
   const points = [...results].reverse();
@@ -247,10 +248,6 @@ export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
         <div>
           <div class="ack-label">Date</div>
           <div class="ack-value">${escapeHtml(p.reviewerDate)}</div>
-        </div>
-        <div>
-          <div class="ack-label">Acknowledged</div>
-          <div class="ack-value">${p.attestationAcknowledged ? "YES" : "____"}</div>
         </div>
       </div>
       <div style="margin-top:14pt">
