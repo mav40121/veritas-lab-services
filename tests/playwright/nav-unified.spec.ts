@@ -42,16 +42,17 @@ test.describe("Unified VeritaAssure nav", () => {
     await page.goto(BASE, { waitUntil: "networkidle" });
 
     await page.getByTestId("nav-hamburger").click();
+    const banner = page.getByRole("banner"); // scope to the nav header, not page CTAs
     // No separate top-level Operations group toggle.
-    await expect(page.getByRole("button", { name: /^Operations$/ })).toHaveCount(0);
+    await expect(banner.getByRole("button", { name: /^Operations$/ })).toHaveCount(0);
 
     // Expand the unified VeritaAssure group.
-    await page.getByRole("button", { name: /VeritaAssure/ }).click();
+    await banner.getByRole("button", { name: /VeritaAssure/ }).click();
 
     // Both stream sub-headers and one module from each stream are present.
-    await expect(page.getByText("Compliance", { exact: true })).toBeVisible();
-    await expect(page.getByText("Operations", { exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: /VeritaCheck/ })).toBeVisible();  // compliance
-    await expect(page.getByRole("link", { name: /VeritaStock/ })).toBeVisible();  // operations
+    await expect(banner.getByText("Compliance", { exact: true })).toBeVisible();
+    await expect(banner.getByText("Operations", { exact: true })).toBeVisible();
+    await expect(banner.getByRole("link", { name: "VeritaCheck™", exact: true })).toBeVisible();  // compliance
+    await expect(banner.getByRole("link", { name: "VeritaStock™", exact: true })).toBeVisible();  // operations
   });
 });
