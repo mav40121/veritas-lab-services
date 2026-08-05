@@ -2952,6 +2952,38 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, lab_id: Number(labId), lab_name: lab.lab_name, series: out });
   });
 
+  // Admin: hard-delete one QC control lot and all its dependent rows (results,
+  // rule violations, corrective actions). Used to remove seeded/demo lots from a
+  // lab, e.g. clearing the Estradiol demo seed before a real prospect demo.
+  app.post("/api/admin/qc-delete-lot", (req, res) => {
+    const { secret, labId, lotId } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!labId || !lotId) return res.status(400).json({ error: "labId and lotId required" });
+    const sqlite = (db as any).$client;
+    const lot = sqlite.prepare("SELECT id, analyte, lot_number FROM qc_control_lots WHERE id = ? AND lab_id = ?").get(Number(lotId), Number(labId)) as any;
+    if (!lot) return res.status(404).json({ error: "Lot not found for that lab" });
+    const resultIds = (sqlite.prepare("SELECT id FROM qc_results WHERE control_lot_id = ?").all(Number(lotId)) as any[]).map(r => r.id);
+    let cas = 0, viols = 0, results = 0, periodReviews = 0;
+    try {
+      sqlite.exec("BEGIN");
+      for (const rid of resultIds) {
+        cas += sqlite.prepare("DELETE FROM qc_corrective_actions WHERE qc_result_id = ?").run(rid).changes;
+        viols += sqlite.prepare("DELETE FROM qc_rule_violations WHERE qc_result_id = ?").run(rid).changes;
+      }
+      results = sqlite.prepare("DELETE FROM qc_results WHERE control_lot_id = ?").run(Number(lotId)).changes;
+      // qc_period_reviews FK the lot (control_lot_id); clear them too so the lot
+      // delete leaves no orphaned monthly-review rows (delete-cascade guard).
+      periodReviews = sqlite.prepare("DELETE FROM qc_period_reviews WHERE control_lot_id = ?").run(Number(lotId)).changes;
+      sqlite.prepare("DELETE FROM qc_control_lots WHERE id = ? AND lab_id = ?").run(Number(lotId), Number(labId));
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[admin/qc-delete-lot] failed:", err.message);
+      return res.status(500).json({ error: err.message || "delete failed" });
+    }
+    res.json({ ok: true, lab_id: Number(labId), deleted_lot: { id: lot.id, analyte: lot.analyte, lot_number: lot.lot_number }, results_deleted: results, violations_deleted: viols, corrective_actions_deleted: cas, period_reviews_deleted: periodReviews });
+  });
+
   // Admin: dump the six VeritaQC tables for forensic verification. Optional
   // labId narrows lots/results/corrective_actions/period_reviews/rule_settings
   // to one lab; violations are always returned in full (small table).
