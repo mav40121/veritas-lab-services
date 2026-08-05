@@ -985,13 +985,14 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
   }, [open, activeLabId]);
 
   const complexity = lab?.complexity || "high";
-  const availableRoles = (() => {
-    if (complexity === "moderate") return ["LD", "CC", "TC", "TP"];
-    // High-complexity labs also perform moderate-complexity testing, which
-    // requires a Technical Consultant (TC), so TC must be assignable here too.
-    if (complexity === "high") return ["LD", "CC", "TC", "TS", "GS", "TP"];
-    return ["LD", "CC", "TC", "TS", "GS", "TP"]; // both
-  })();
+  // All six CLIA roles are always assignable. Gating this picker by a single
+  // lab-complexity value hid roles the director legitimately needs: most labs
+  // hold a high-complexity certificate but also run moderate testing, so they
+  // need TC (moderate) alongside TS and GS (high) at the same time. The
+  // director assigns what applies; the per-role Minimum CLIA Qualifications box
+  // below already explains which complexity each role belongs to. Order matches
+  // PD_ROLE_ORDER.
+  const availableRoles = ["LD", "CC", "TC", "TS", "GS", "TP"];
 
   function toggleRole(role: string) {
     const existing = roles.filter((r) => r.role === role);
