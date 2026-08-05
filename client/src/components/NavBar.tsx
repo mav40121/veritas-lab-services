@@ -3,7 +3,7 @@ import { useTheme } from "@/components/ThemeProvider";
 import { useAuth } from "@/components/AuthContext";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, TestTube, User, LogOut, LayoutDashboard, Play, ListChecks, ShieldCheck, BarChart3 } from "lucide-react";
+import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, TestTube, User, LogOut, LayoutDashboard, Play, ListChecks, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { LabSwitcher, LabSwitcherMobile } from "@/components/LabSwitcher";
@@ -22,19 +22,54 @@ const mobileTopLinks: { href: string; label: string }[] = [
   { href: "/services", label: "Consulting" },
   { href: "/pricing", label: "Plans" },
 ];
-const mobileVeritaassureLinks: { href: string; label: string }[] = [
-  { href: "/veritaassure", label: "All Modules Overview" },
+// Single source of truth for the seventeen VeritaAssure modules, kept in the
+// two streams so the mobile menu can label them. Desktop renders them FLAT
+// (one menu, no Compliance/Operations split); mobile keeps the stream
+// sub-headers so the collapsible group still scans on a phone. The route ->
+// label mappings are the real marketing routes and must NOT be "corrected"
+// (VeritaBench lives at /calculator, VeritaPace at /veritabench, VeritaQA at
+// /veritabench/pi). CUMSUM is intentionally absent: it is a VeritaCheck study
+// type, not a standalone module, and must never appear as its own nav row.
+type NavLink = { href: string; label: string; header?: boolean };
+const complianceModules: NavLink[] = [
   { href: "/veritacheck", label: "VeritaCheck\u2122" },
-  { href: "/veritacheck/cumsum", label: "VeritaCheck\u2122 CUMSUM" },
-  { href: "/veritascan", label: "VeritaScan\u2122" },
   { href: "/veritamap", label: "VeritaMap\u2122" },
+  { href: "/veritascan", label: "VeritaScan\u2122" },
   { href: "/veritacomp", label: "VeritaComp\u2122" },
-  { href: "/veritastaff", label: "VeritaStaff\u2122" },
-  { href: "/veritapt", label: "VeritaPT\u2122" },
-  { href: "/veritalab", label: "VeritaLab\u2122" },
   { href: "/veritapolicy", label: "VeritaPolicy\u2122" },
-  { href: "/veritaqc-app", label: "VeritaQC\u2122" },
+  { href: "/veritastaff", label: "VeritaStaff\u2122" },
+  { href: "/veritalab", label: "VeritaLab\u2122" },
+  { href: "/veritapt", label: "VeritaPT\u2122" },
   { href: "/veritatrack", label: "VeritaTrack\u2122" },
+  { href: "/veritaresponse", label: "VeritaResponse\u2122" },
+  { href: "/veritaqc-app", label: "VeritaQC\u2122" },
+];
+const operationsModules: NavLink[] = [
+  { href: "/calculator", label: "VeritaBench\u2122" },
+  { href: "/veritabench", label: "VeritaPace\u2122" },
+  { href: "/veritabench/staffing", label: "VeritaShift\u2122" },
+  { href: "/veritabench/pi", label: "VeritaQA\u2122" },
+  { href: "/veritastock", label: "VeritaStock\u2122" },
+  { href: "/veritaops-app", label: "VeritaOps\u2122" },
+];
+const allModules: NavLink[] = [...complianceModules, ...operationsModules];
+// Routes that light the single VeritaAssure nav entry as active. Covers both
+// overview pages, every module route, and the legacy -app aliases wrapLegacy
+// redirects from, so the entry highlights everywhere it used to under the old
+// two-entry (VeritaAssure + Operations) split.
+const veritaassureActiveRoutes: string[] = [
+  "/veritaassure", "/operations",
+  ...allModules.map(m => m.href),
+  "/veritatrack-app", "/veritascan-app", "/veritamap-app", "/veritacomp-app",
+  "/veritapt/app", "/veritastaff-app", "/veritalab-app", "/veritapolicy-app",
+  "/veritacheck/cumsum",
+];
+const mobileVeritaassureLinks: NavLink[] = [
+  { href: "/veritaassure", label: "All Modules Overview" },
+  { href: "", label: "Compliance", header: true },
+  ...complianceModules,
+  { href: "", label: "Operations", header: true },
+  ...operationsModules,
 ];
 const mobileResourcesLinks: { href: string; label: string }[] = [
   { href: "/getting-started", label: "Getting Started" },
@@ -43,15 +78,6 @@ const mobileResourcesLinks: { href: string; label: string }[] = [
   { href: "/study-guide", label: "Study Guide" },
   { href: "/roadmap", label: "Roadmap" },
   { href: "/faq", label: "FAQ" },
-];
-const mobileOperationsLinks: { href: string; label: string }[] = [
-  { href: "/operations", label: "Operations Overview" },
-  { href: "/calculator", label: "VeritaBench\u2122" },
-  { href: "/veritabench", label: "VeritaPace\u2122" },
-  { href: "/veritabench/staffing", label: "VeritaShift\u2122" },
-  { href: "/veritabench/pi", label: "VeritaQA\u2122" },
-  { href: "/veritastock", label: "VeritaStock\u2122" },
-  { href: "/veritaops-app", label: "VeritaOps\u2122" },
 ];
 const mobileFooterLinks: { href: string; label: string }[] = [
   { href: "/team", label: "Our Team" },
@@ -168,19 +194,39 @@ export function NavBar() {
             Plans
           </Link>
 
-          {/* VeritaAssure — direct link to all-modules suite page */}
-          <Link
-            href="/veritaassure"
-            className={cn(
-              "flex items-center gap-1 px-2 py-1.5 rounded-md text-sm font-medium transition-colors",
-              ["/veritaassure","/veritacheck","/veritacheck/cumsum","/veritascan","/veritamap","/veritatrack","/veritatrack-app","/veritacomp","/veritastaff","/veritapt","/veritalab","/veritapolicy","/veritaqc-app","/veritaresponse","/book"].some(p => location === p || location.startsWith(p + "/"))
-                ? "text-foreground bg-secondary"
-                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-            )}
-          >
-            <ShieldCheck size={13} className="text-primary" />
-            VeritaAssure&#8482;
-          </Link>
+          {/* VeritaAssure — one flat menu of all seventeen modules. Compliance
+              and Operations are unified here (no separate Operations menu); the
+              stream split now lives only as sub-headers in the mobile group. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className={cn(
+                "flex items-center gap-1 px-2 py-1.5 rounded-md text-sm font-medium transition-colors",
+                veritaassureActiveRoutes.some(p => location === p || location.startsWith(p + "/"))
+                  ? "text-foreground bg-secondary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+              )}>
+                <ShieldCheck size={13} className="text-primary" />
+                VeritaAssure&#8482;
+                <ChevronDown size={12} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-[540px]">
+              <DropdownMenuItem asChild>
+                <Link href="/veritaassure" className="flex items-center gap-2 py-2 font-medium">
+                  <ShieldCheck size={15} className="text-primary shrink-0" />
+                  All Modules Overview
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <div className="grid grid-cols-2 gap-0.5 p-1">
+                {allModules.map(m => (
+                  <DropdownMenuItem asChild key={m.href}>
+                    <Link href={m.href} className="text-sm py-1.5">{m.label}</Link>
+                  </DropdownMenuItem>
+                ))}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Resources dropdown */}
           <DropdownMenu>
@@ -248,20 +294,6 @@ export function NavBar() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
-          {/* Operations — direct link to the operations tile page */}
-          <Link
-            href="/operations"
-            className={cn(
-              "flex items-center gap-1 px-2 py-1.5 rounded-md text-sm font-medium transition-colors",
-              ["/operations","/veritabench","/veritabench/staffing","/veritabench/pi","/veritastock","/veritaops-app","/calculator"].some(p => location === p || location.startsWith(p + "/"))
-                ? "text-foreground bg-secondary"
-                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-            )}
-          >
-            <BarChart3 size={13} className="text-primary" />
-            Operations
-          </Link>
 
           {/* Live Demo */}
           <Link href="/demo" className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-sm font-medium transition-colors bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20">
@@ -389,14 +421,6 @@ export function NavBar() {
               links={mobileResourcesLinks}
               onLinkClick={closeMobile}
             />
-            <MobileGroup
-              label="Operations"
-              icon={<BarChart3 size={14} className="text-primary" />}
-              expanded={mobileExpanded.has("ops")}
-              onToggle={() => toggleMobileGroup("ops")}
-              links={mobileOperationsLinks}
-              onLinkClick={closeMobile}
-            />
             </>)}
 
             {!onStockHost && (<>
@@ -433,8 +457,9 @@ export function NavBar() {
 }
 
 // MobileGroup — collapsible section for the mobile menu. Used for the
-// VeritaAssure, Resources, and Operations buckets so the first-open list
-// stays short. Indented sub-links match the desktop dropdown contents.
+// VeritaAssure and Resources buckets so the first-open list stays short.
+// A link with header:true renders as a non-clickable sub-label (used for the
+// Compliance / Operations stream headers inside the unified VeritaAssure group).
 function MobileGroup({
   label, icon, expanded, onToggle, links, onLinkClick,
 }: {
@@ -442,7 +467,7 @@ function MobileGroup({
   icon?: React.ReactNode;
   expanded: boolean;
   onToggle: () => void;
-  links: { href: string; label: string }[];
+  links: NavLink[];
   onLinkClick: () => void;
 }) {
   return (
@@ -465,12 +490,19 @@ function MobileGroup({
       </button>
       {expanded && (
         <div className="ml-4 mt-0.5 mb-1 flex flex-col gap-0.5 border-l border-border pl-2">
-          {links.map(({ href, label: linkLabel }) => (
-            <Link key={href} href={href} onClick={onLinkClick}
-              className="px-2 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
-              {linkLabel}
-            </Link>
-          ))}
+          {links.map(({ href, label: linkLabel, header }) =>
+            header ? (
+              <div key={`h-${linkLabel}`}
+                className="px-2 pt-2 pb-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground/70">
+                {linkLabel}
+              </div>
+            ) : (
+              <Link key={href} href={href} onClick={onLinkClick}
+                className="px-2 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                {linkLabel}
+              </Link>
+            )
+          )}
         </div>
       )}
     </div>
