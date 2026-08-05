@@ -13,11 +13,12 @@
 // Output:
 //   - Array of available slots: { date, start_time, end_time, duration }
 //
-// Operator tz is fixed: America/Phoenix per CLAUDE.md §0. Times stored
-// throughout are HH:MM strings in that tz. The client renders in the
-// browser tz at display time.
+// Operator tz: America/New_York (operator is in MA / Eastern). Times stored
+// throughout are HH:MM strings in that tz; the client renders in the browser
+// tz at display time. Eastern observes DST, so the "now" computation and the
+// ICS VTIMEZONE are DST-aware (unlike the prior fixed-offset Arizona tz).
 
-export const OPERATOR_TZ = "America/Phoenix";
+export const OPERATOR_TZ = "America/New_York";
 
 export interface AvailabilityRule {
   id: number;
@@ -85,10 +86,44 @@ function dayOfWeekFor(yyyyMmDd: string): number {
 }
 
 // ─── main ────────────────────────────────────────────────────────────────
+// ─── deterministic daily holds ─────────────────────────────────────────────
+// Reserve a fixed number of slots off the public calendar each day. The choice
+// is seeded by the date, so a given day always shows the SAME held slots (a slot
+// never flips available/blocked between page loads), and it self-maintains for
+// every future date with no seeding or upkeep.
+function hashStr(s: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h >>> 0;
+}
+
+function pickHeldStarts(date: string, gridStarts: number[], count: number): Set<number> {
+  const held = new Set<number>();
+  const n = Math.min(count, gridStarts.length);
+  if (n <= 0) return held;
+  const pool = gridStarts.slice();
+  let seed = hashStr(date + ":holds");
+  for (let k = 0; k < n; k++) {
+    seed = (Math.imul(seed, 1103515245) + 12345) >>> 0; // LCG step
+    const idx = seed % pool.length;
+    held.add(pool[idx]);
+    pool.splice(idx, 1);
+  }
+  return held;
+}
+
 export interface ComputeAvailabilityInput {
   fromDate: string;             // YYYY-MM-DD inclusive
   toDate: string;               // YYYY-MM-DD inclusive
-  durationMinutes: number;      // event-type duration
+  durationMinutes: number;      // session length
+  intervalMinutes?: number;     // slot cadence (start-to-start). Defaults to
+                                // durationMinutes (back-to-back). Larger leaves
+                                // a gap, e.g. 50-min sessions on a 60-min cadence.
+  syntheticHoldsPerDay?: number; // reserve up to this many slots/day off the
+                                 // public calendar (date-deterministic). 0 = off.
   rules: AvailabilityRule[];    // already filtered to the event type
   blackouts: Blackout[];        // operator tz
   bookings: Booking[];          // operator tz, status === "confirmed"
@@ -104,6 +139,8 @@ export function computeAvailability(input: ComputeAvailabilityInput): Slot[] {
     fromDate,
     toDate,
     durationMinutes,
+    intervalMinutes,
+    syntheticHoldsPerDay = 0,
     rules,
     blackouts,
     bookings,
@@ -111,6 +148,7 @@ export function computeAvailability(input: ComputeAvailabilityInput): Slot[] {
     nowOperator,
     busyTimes = [],
   } = input;
+  const step = intervalMinutes && intervalMinutes > 0 ? intervalMinutes : durationMinutes;
 
   const slots: Slot[] = [];
 
@@ -185,14 +223,33 @@ export function computeAvailability(input: ComputeAvailabilityInput): Slot[] {
       end: timeToMinutes(b.end),
     }));
 
+    // Full candidate-start grid for the day (used to pick deterministic holds).
+    const gridStarts: number[] = [];
+    for (const rule of dayRules) {
+      const rs = timeToMinutes(rule.start_time);
+      const re = timeToMinutes(rule.end_time);
+      for (let m = rs; m + durationMinutes <= re; m += step) gridStarts.push(m);
+    }
+    // Reserve N or N-1 holds for the day (N = syntheticHoldsPerDay), varying by
+    // date so it is not a fixed daily pattern; stable across refreshes.
+    let heldStarts = new Set<number>();
+    if (syntheticHoldsPerDay > 0 && gridStarts.length > 0) {
+      const wobble = hashStr(cursor + ":count") & 1; // 0 or 1
+      const holdCount = Math.max(0, syntheticHoldsPerDay - wobble);
+      heldStarts = pickHeldStarts(cursor, gridStarts, holdCount);
+    }
+
     // For each rule covering this dow, generate candidate slots
     for (const rule of dayRules) {
       const ruleStart = timeToMinutes(rule.start_time);
       const ruleEnd = timeToMinutes(rule.end_time);
 
-      for (let m = ruleStart; m + durationMinutes <= ruleEnd; m += durationMinutes) {
+      for (let m = ruleStart; m + durationMinutes <= ruleEnd; m += step) {
         const slotStart = m;
         const slotEnd = m + durationMinutes;
+
+        // Reserved (held) slot for this day
+        if (heldStarts.has(slotStart)) continue;
 
         // Skip if any conflict
         const hasBlackoutConflict = partialBlackouts.some((b) =>
@@ -268,19 +325,27 @@ export function buildBookingIcs(input: {
     "CALSCALE:GREGORIAN",
     "METHOD:REQUEST",
     "BEGIN:VTIMEZONE",
-    "TZID:America/Phoenix",
+    "TZID:America/New_York",
+    "BEGIN:DAYLIGHT",
+    "TZOFFSETFROM:-0500",
+    "TZOFFSETTO:-0400",
+    "TZNAME:EDT",
+    "DTSTART:19700308T020000",
+    "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU",
+    "END:DAYLIGHT",
     "BEGIN:STANDARD",
-    "DTSTART:19700101T000000",
-    "TZOFFSETFROM:-0700",
-    "TZOFFSETTO:-0700",
-    "TZNAME:MST",
+    "TZOFFSETFROM:-0400",
+    "TZOFFSETTO:-0500",
+    "TZNAME:EST",
+    "DTSTART:19701101T020000",
+    "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU",
     "END:STANDARD",
     "END:VTIMEZONE",
     "BEGIN:VEVENT",
     `UID:${uid}`,
     `DTSTAMP:${dtStamp}`,
-    `DTSTART;TZID=America/Phoenix:${fmt(slotDate, slotStart)}`,
-    `DTEND;TZID=America/Phoenix:${fmt(slotDate, slotEnd)}`,
+    `DTSTART;TZID=America/New_York:${fmt(slotDate, slotStart)}`,
+    `DTEND;TZID=America/New_York:${fmt(slotDate, slotEnd)}`,
     `SUMMARY:${summary}`,
     `DESCRIPTION:${description.replace(/\n/g, "\\n")}`,
     `LOCATION:${location}`,
