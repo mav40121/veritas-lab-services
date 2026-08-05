@@ -462,6 +462,10 @@ app.use((req, res, next) => {
   // /our-services -> /services (legacy marketing URL; SPA catch-all was returning soft-404)
   app.get('/our-services', (_req, res) => res.redirect(301, '/services'));
 
+  // /operations -> /veritaassure. The 6 operations modules were folded into the
+  // unified 17-module VeritaAssure suite page. 301 consolidates SEO link equity.
+  app.get('/operations', (_req, res) => res.redirect(301, '/veritaassure'));
+
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
