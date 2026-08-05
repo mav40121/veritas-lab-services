@@ -130,7 +130,7 @@ export default function VeritaLabAppPage() {
   const [docError, setDocError] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
+  const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
   // Multi-Lab Tier 2 Phase 3.8b: route entry-surface reads/writes through
   // the active lab. The list and POST flip; inner cert-id-keyed endpoints

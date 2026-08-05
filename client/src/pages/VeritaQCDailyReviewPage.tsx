@@ -103,7 +103,7 @@ export default function VeritaQCDailyReviewPage() {
   const hasPlanAccess = !!user && [
     "annual", "professional", "lab", "complete",
     "veritamap", "veritascan", "veritacomp",
-    "waived", "community", "hospital", "large_hospital", "enterprise",
+    "clinic", "waived", "community", "hospital", "large_hospital", "enterprise",
   ].includes(user.plan);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("any");
