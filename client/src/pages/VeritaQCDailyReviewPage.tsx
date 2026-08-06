@@ -50,10 +50,17 @@ interface RecentResult {
 }
 
 type StatusFilter = "any" | "with_violation" | "missing_ca";
+type DateFilter = "month" | "7d" | "30d" | "all";
 
-// Bound the results list to a single calendar month. The page is a monthly
-// review + sign-off, so the Month/Year the director is attesting to is the
-// one time concept that scopes everything shown.
+function dateNDaysAgoIso(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+// Bound the results list to a single calendar month, for the "Selected month"
+// date-range mode (the default). The Month/Year the director is attesting to
+// scope that view; the 7d/30d/all modes use a rolling window instead.
 function monthBounds(year: number, month: number): { since: string; until: string } {
   const mm = String(month).padStart(2, "0");
   const lastDay = new Date(year, month, 0).getDate();
@@ -114,6 +121,7 @@ export default function VeritaQCDailyReviewPage() {
   ].includes(user.plan);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("any");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("month");
   const [results, setResults] = useState<RecentResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -201,9 +209,15 @@ export default function VeritaQCDailyReviewPage() {
       const params = new URLSearchParams();
       params.set("status", statusFilter);
       params.set("limit", "500");
-      const { since, until } = monthBounds(reviewYear, reviewMonth);
-      params.set("since", since);
-      params.set("until", until);
+      if (dateFilter === "month") {
+        const { since, until } = monthBounds(reviewYear, reviewMonth);
+        params.set("since", since);
+        params.set("until", until);
+      } else if (dateFilter === "7d") {
+        params.set("since", dateNDaysAgoIso(7));
+      } else if (dateFilter === "30d") {
+        params.set("since", dateNDaysAgoIso(30));
+      }
       const res = await fetch(
         `${API_BASE}/api/labs/${activeLabId}/qc/recent?${params.toString()}`,
         { headers: authHeaders() },
@@ -313,7 +327,7 @@ export default function VeritaQCDailyReviewPage() {
       load();
       loadLots();
     }
-  }, [isLoggedIn, hasPlanAccess, activeLabId, statusFilter, reviewYear, reviewMonth]);
+  }, [isLoggedIn, hasPlanAccess, activeLabId, statusFilter, dateFilter, reviewYear, reviewMonth]);
 
   useEffect(() => {
     if (reviewLotId) loadPastReviews(reviewLotId);
@@ -382,7 +396,19 @@ export default function VeritaQCDailyReviewPage() {
 
       <Card className="mb-4">
         <CardContent className="py-4">
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Date range</div>
+              <Select value={dateFilter} onValueChange={(v) => setDateFilter(v as DateFilter)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="month">Selected month</SelectItem>
+                  <SelectItem value="7d">Last 7 days</SelectItem>
+                  <SelectItem value="30d">Last 30 days</SelectItem>
+                  <SelectItem value="all">All time</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div>
               <div className="text-xs text-muted-foreground mb-1">Month</div>
               <Select value={String(reviewMonth)} onValueChange={(v) => setReviewMonth(Number(v))}>
@@ -417,15 +443,20 @@ export default function VeritaQCDailyReviewPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="sm:col-span-2 grid grid-cols-2 gap-2 sm:gap-3 text-center">
-              <div className="rounded-md border border-border bg-muted/50 px-3 py-2">
-                <div className="text-xl font-bold tabular-nums">{totalRejections}</div>
-                <div className="text-xs text-muted-foreground">Rejection-rule fires this month</div>
-              </div>
-              <div className={`rounded-md border px-3 py-2 ${missingCA > 0 ? "border-red-500/30 bg-red-500/5" : "border-border bg-muted/50"}`}>
-                <div className={`text-xl font-bold tabular-nums ${missingCA > 0 ? "text-red-700" : ""}`}>{missingCA}</div>
-                <div className="text-xs text-muted-foreground">Missing corrective action</div>
-              </div>
+          </div>
+          {dateFilter !== "month" && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Showing a rolling window. Month and Year still set the period for the monthly PDF and attestation below. Pick Selected month to scope this list to {MONTH_NAMES[reviewMonth]} {reviewYear}.
+            </p>
+          )}
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 text-center mt-3">
+            <div className="rounded-md border border-border bg-muted/50 px-3 py-2">
+              <div className="text-xl font-bold tabular-nums">{totalRejections}</div>
+              <div className="text-xs text-muted-foreground">Rejection-rule fires in window</div>
+            </div>
+            <div className={`rounded-md border px-3 py-2 ${missingCA > 0 ? "border-red-500/30 bg-red-500/5" : "border-border bg-muted/50"}`}>
+              <div className={`text-xl font-bold tabular-nums ${missingCA > 0 ? "text-red-700" : ""}`}>{missingCA}</div>
+              <div className="text-xs text-muted-foreground">Missing corrective action</div>
             </div>
           </div>
         </CardContent>
@@ -451,7 +482,9 @@ export default function VeritaQCDailyReviewPage() {
           <CardContent className="py-8 text-center">
             <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-600 mb-2" />
             <p className="text-sm text-muted-foreground">
-              No QC results for {MONTH_NAMES[reviewMonth]} {reviewYear}. Try a different month or status.
+              {dateFilter === "month"
+                ? `No QC results for ${MONTH_NAMES[reviewMonth]} ${reviewYear}. Try a different month or status.`
+                : "No results match these filters. Try widening the date range or status."}
             </p>
           </CardContent>
         </Card>

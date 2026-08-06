@@ -28,10 +28,11 @@ test.describe("VeritaQC Review & Sign-off month scope", () => {
     await injectAuth(page, BASE, TOKEN);
     await page.goto(`${BASE}${REVIEW_URL}`, { waitUntil: "networkidle" });
 
-    // The top time control is Month + Year, not a "Last 30 days" date range.
+    // The Date range dropdown (defaulting to "Selected month") coexists with
+    // the Month + Year selectors that scope the month view.
+    await expect(page.getByText("Date range", { exact: true })).toBeVisible();
     await expect(page.getByText("Month", { exact: true })).toBeVisible();
     await expect(page.getByText("Year", { exact: true })).toBeVisible();
-    await expect(page.getByText(/Last 30 days/i)).toHaveCount(0);
 
     // A month with logged QC renders at least one lot card (no empty state).
     await page.getByRole("combobox").first().selectOption({ label: DATA_MONTH }).catch(() => {});
