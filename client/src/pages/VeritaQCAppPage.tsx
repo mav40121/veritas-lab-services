@@ -260,6 +260,17 @@ export default function VeritaQCAppPage() {
     if (selectedLotId) loadResults(selectedLotId);
   }, [selectedLotId, activeLabId]);
 
+  // Prefill the instrument from the selected lot's analyte when it encodes the
+  // analyzer (e.g. "PSA (FREND A)") so the tech does not retype it and it is
+  // clear which analyzer the run is for. Analytes with no embedded analyzer
+  // get an empty field the tech fills from the dropdown or free text.
+  useEffect(() => {
+    const lot = lots.find(l => l.id === selectedLotId);
+    const m = lot?.analyte.match(/\(([^)]+)\)\s*$/);
+    setFormInstrument(m ? m[1].trim() : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLotId]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!activeLabId || !selectedLotId) {
@@ -514,6 +525,14 @@ export default function VeritaQCAppPage() {
 
   const selectedLot = lots.find(l => l.id === selectedLotId) || null;
 
+  // Instrument helper: when the analyte name already carries the analyzer
+  // (e.g. "PSA (FREND A)"), pull it out to prefill/suggest it. The datalist on
+  // the form still allows free text for labs that record a distinct analyzer.
+  const instrumentSuggestions = Array.from(new Set(
+    [...lots.map(l => l.analyte.match(/\(([^)]+)\)\s*$/)?.[1] || ""), ...results.map(r => r.instrument || "")]
+      .map(s => s.trim()).filter(Boolean)
+  )).sort();
+
   return (
     <div className="container max-w-5xl mx-auto py-8 px-4">
       <div className="mb-6 flex items-center gap-2">
@@ -684,6 +703,15 @@ export default function VeritaQCAppPage() {
               <CardTitle className="text-base">Log a QC result</CardTitle>
             </CardHeader>
             <CardContent>
+              {selectedLot ? (
+                <div className="mb-3 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
+                  <span className="text-muted-foreground">Logging for </span>
+                  <span className="font-semibold">{selectedLot.analyte}</span>
+                  <span className="text-muted-foreground"> &middot; Lot {selectedLot.lot_number} &middot; {selectedLot.level}</span>
+                </div>
+              ) : (
+                <p className="mb-3 text-xs text-muted-foreground">Select a control lot above to log a result against it.</p>
+              )}
               {isReadOnly && (
                 <p className="mb-3 text-xs text-amber-700 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5">
                   Read-only access on this lab. Submit is disabled until the
@@ -729,11 +757,15 @@ export default function VeritaQCAppPage() {
                   <Label htmlFor="qc-instrument">Instrument</Label>
                   <Input
                     id="qc-instrument"
+                    list="qc-instruments"
                     value={formInstrument}
                     onChange={(e) => setFormInstrument(e.target.value)}
-                    placeholder="e.g. Atellica IM 1300"
+                    placeholder="Select or type the analyzer"
                     disabled={isReadOnly}
                   />
+                  <datalist id="qc-instruments">
+                    {instrumentSuggestions.map(inst => <option key={inst} value={inst} />)}
+                  </datalist>
                 </div>
                 <div>
                   <Label htmlFor="qc-runtime">Run time</Label>

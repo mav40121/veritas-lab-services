@@ -5388,6 +5388,7 @@ sqlite.exec(`
     result_date TEXT NOT NULL,
     run_time TEXT,
     operator_user_id INTEGER,
+    operator_staff_employee_id INTEGER,
     comment TEXT,
     accepted_for_reporting INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -5534,6 +5535,7 @@ try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as a
   ensure("qc_results", "operator_user_id",        "ALTER TABLE qc_results ADD COLUMN operator_user_id INTEGER");
   ensure("qc_results", "comment",                 "ALTER TABLE qc_results ADD COLUMN comment TEXT");
   ensure("qc_results", "accepted_for_reporting",  "ALTER TABLE qc_results ADD COLUMN accepted_for_reporting INTEGER NOT NULL DEFAULT 1");
+  ensure("qc_results", "operator_staff_employee_id", "ALTER TABLE qc_results ADD COLUMN operator_staff_employee_id INTEGER");
 
   ensure("qc_rule_violations", "detail",              "ALTER TABLE qc_rule_violations ADD COLUMN detail TEXT");
   ensure("qc_rule_violations", "related_result_ids",  "ALTER TABLE qc_rule_violations ADD COLUMN related_result_ids TEXT");
