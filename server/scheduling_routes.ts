@@ -428,4 +428,49 @@ export function registerSchedulingRoutes(app: Express) {
     `).all();
     res.json({ bookings: rows });
   });
+
+  // Admin backfill: log a past or off-platform meeting onto the bookings
+  // tracker. Unlike the public /book flow this does NOT validate against
+  // availability, so it accepts past dates and any time; it just records a
+  // meeting that already happened. Used to seed the tracker with demos and
+  // calls already run. Future availability is unaffected (computeAvailability
+  // only subtracts bookings on today-or-later dates).
+  app.post("/api/admin/scheduling/bookings", (req: any, res) => {
+    if (!requireAdmin(req, res)) return;
+    const b = req.body || {};
+    const slug = String(b.event_slug || "scoping-call").trim();
+    const slotDate = String(b.slot_date || "").trim();
+    const slotStart = String(b.slot_start || "12:00").trim();
+    const bookerName = String(b.booker_name || "").trim();
+    if (!isValidDate(slotDate)) return res.status(400).json({ error: "slot_date must be YYYY-MM-DD" });
+    if (!isValidTime(slotStart)) return res.status(400).json({ error: "slot_start must be HH:MM" });
+    if (!bookerName) return res.status(400).json({ error: "booker_name required" });
+    const evt = sqlite.prepare(
+      "SELECT id, duration_minutes FROM schedule_event_types WHERE slug = ?"
+    ).get(slug) as any;
+    if (!evt) return res.status(404).json({ error: `Unknown event type: ${slug}` });
+    let slotEnd = String(b.slot_end || "").trim();
+    if (!isValidTime(slotEnd)) {
+      const [sh, sm] = slotStart.split(":").map((s: string) => parseInt(s, 10));
+      const total = sh * 60 + sm + (evt.duration_minutes || 50);
+      const eh = Math.floor(total / 60) % 24;
+      const em = total % 60;
+      slotEnd = `${eh < 10 ? "0" + eh : eh}:${em < 10 ? "0" + em : em}`;
+    }
+    const token = makeConfirmationToken();
+    sqlite.prepare(`
+      INSERT INTO schedule_bookings
+        (event_type_id, slot_date, slot_start, slot_end, booker_tz, booker_name, booker_email, booker_phone, lab_name, role, topic, message, status, confirmation_token, ip_address, user_agent)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      evt.id, slotDate, slotStart, slotEnd,
+      b.booker_tz || null, bookerName, b.booker_email || null, b.booker_phone || null,
+      b.lab_name || null, b.role || null, b.topic || null, b.message || null,
+      String(b.status || "confirmed"), token, "(backfill)", "admin-backfill",
+    );
+    const row = sqlite.prepare(
+      "SELECT id, slot_date, slot_start, slot_end, booker_name, lab_name, topic, status FROM schedule_bookings WHERE confirmation_token = ?"
+    ).get(token);
+    res.json({ ok: true, booking: row });
+  });
 }
