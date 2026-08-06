@@ -45,6 +45,7 @@ interface RecentResult {
   result_date: string;
   run_time: string | null;
   accepted_for_reporting: number;
+  operator_name?: string | null;
   violations: ViolationRow[];
   corrective_actions: CARow[];
 }
@@ -520,7 +521,10 @@ export default function VeritaQCDailyReviewPage() {
                       const needsCA = hasRej && r.corrective_actions.length === 0;
                       return (
                         <tr key={r.id} className={`border-b last:border-b-0 ${needsCA ? "bg-red-500/5" : ""}`}>
-                          <td className="py-2 pr-2">{r.result_date}</td>
+                          <td className="py-2 pr-2">
+                            {r.result_date}
+                            {r.operator_name && <div className="text-[11px] text-muted-foreground">by {r.operator_name}</div>}
+                          </td>
                           <td className="py-2 pr-2 font-mono">{r.result_value}</td>
                           <td className="py-2 pr-2 text-muted-foreground">{r.instrument || "-"}</td>
                           <td className="py-2 pr-2">

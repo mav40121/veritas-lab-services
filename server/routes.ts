@@ -3194,6 +3194,87 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // ─── VeritaQC: Staff Portal QC entry ─────────────────────────────────────
+  // Running QC is a front-line staff job, so Staff Portal seats can record QC
+  // on their own lab. These mirror the writer endpoints above but authenticate
+  // via staffPortalAuthMiddleware (scoped to the staff seat's lab, never the
+  // URL) and stamp the individual staff member as the operator
+  // (operator_staff_employee_id) for a surveyor-defensible audit trail. The
+  // Westgard evaluation is the SAME evaluateWestgardForLot the writer path
+  // calls, so a staff-entered run is scored identically to a writer-entered one.
+  app.get("/api/staff-portal-session/qc/lots", staffPortalAuthMiddleware, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const lots = sqlite.prepare(
+      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, expiration_date, status FROM qc_control_lots WHERE lab_id = ? AND status = 'active' ORDER BY analyte ASC, lot_number ASC"
+    ).all(req.staffPortalLabId);
+    res.json({ lots });
+  });
+
+  app.get("/api/staff-portal-session/qc/results", staffPortalAuthMiddleware, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const lotId = parseInt(String((req.query || {}).control_lot_id || ""), 10);
+    if (!Number.isFinite(lotId)) return res.status(400).json({ error: "control_lot_id required" });
+    const lot = sqlite.prepare("SELECT id FROM qc_control_lots WHERE id = ? AND lab_id = ?").get(lotId, req.staffPortalLabId);
+    if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
+    const limit = Math.min(Number((req.query || {}).limit) || 20, 100);
+    const rows = sqlite.prepare(
+      "SELECT id, control_lot_id, instrument, result_value, result_date, run_time, accepted_for_reporting, created_at FROM qc_results WHERE lab_id = ? AND control_lot_id = ? ORDER BY result_date DESC, id DESC LIMIT ?"
+    ).all(req.staffPortalLabId, lotId, limit);
+    res.json({ results: rows });
+  });
+
+  app.post("/api/staff-portal-session/qc/results", staffPortalAuthMiddleware, (req: any, res) => {
+    const { control_lot_id, result_value, result_date, instrument, run_time, comment } = req.body || {};
+    if (!control_lot_id || result_value === undefined || result_value === null || !result_date) {
+      return res.status(400).json({ error: "control_lot_id, result_value, result_date required" });
+    }
+    if (!Number.isFinite(Number(result_value))) {
+      return res.status(400).json({ error: "result_value must be a finite number" });
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(result_date))) {
+      return res.status(400).json({ error: "result_date must be in YYYY-MM-DD format" });
+    }
+    const sqlite = (db as any).$client;
+    const lot = sqlite.prepare(
+      "SELECT id, analyte FROM qc_control_lots WHERE id = ? AND lab_id = ? AND status = 'active'"
+    ).get(Number(control_lot_id), req.staffPortalLabId) as any;
+    if (!lot) return res.status(404).json({ error: "Active control lot not found in this lab" });
+
+    const now = new Date().toISOString();
+    let newResultId: number;
+    try {
+      const ins = sqlite.prepare(
+        "INSERT INTO qc_results (lab_id, control_lot_id, instrument, result_value, result_date, run_time, operator_user_id, operator_staff_employee_id, comment, accepted_for_reporting, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)"
+      ).run(
+        req.staffPortalLabId, Number(control_lot_id), instrument || null, Number(result_value),
+        String(result_date), run_time || null, req.staffPortalUserId, req.staffPortalStaffEmployeeId || null,
+        comment || null, now, now,
+      );
+      newResultId = Number(ins.lastInsertRowid);
+    } catch (err: any) {
+      console.error("[staff-portal qc/results] insert failed:", err.message);
+      return res.status(500).json({ error: err.message || "Insert failed" });
+    }
+
+    const settings = sqlite.prepare(
+      "SELECT bias_consecutive_count, trend_consecutive_count FROM qc_rule_settings WHERE lab_id = ? AND (analyte = ? OR analyte IS NULL) ORDER BY (analyte IS NULL) ASC LIMIT 1"
+    ).get(req.staffPortalLabId, lot.analyte) as any;
+    const biasN = settings?.bias_consecutive_count ?? 10;
+    const trendN = settings?.trend_consecutive_count ?? 7;
+
+    const violations = evaluateWestgardForLot(sqlite, req.staffPortalLabId, Number(control_lot_id), newResultId, biasN, trendN);
+    const insertViol = sqlite.prepare(
+      "INSERT INTO qc_rule_violations (qc_result_id, rule_code, severity, detail, related_result_ids, evaluated_at) VALUES (?, ?, ?, ?, ?, ?)"
+    );
+    const storedViolations: any[] = [];
+    for (const v of violations) {
+      const r = insertViol.run(newResultId, v.rule_code, v.severity, v.detail, JSON.stringify(v.related_result_ids), now);
+      storedViolations.push({ id: Number(r.lastInsertRowid), ...v });
+    }
+    const requires_corrective_action = violations.some((v: any) => v.severity === "rejection");
+    res.json({ ok: true, result_id: newResultId, violations: storedViolations, requires_corrective_action });
+  });
+
   // ─── VeritaQC Phase 1B: entry-UI support endpoints ───────────────────────
   // Three reads/writes the tech-facing app page needs:
   //   GET  /api/labs/:labId/qc/lots
@@ -3388,7 +3469,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const limit = Math.min(Number(req.query.limit) || 100, 500);
     const sqlite = (db as any).$client;
     const params: any[] = [req.scope.labId];
-    let sql = "SELECT r.id, r.lab_id, r.control_lot_id, r.instrument, r.result_value, r.result_date, r.run_time, r.accepted_for_reporting, r.created_at, l.analyte, l.lot_number, l.level FROM qc_results r JOIN qc_control_lots l ON r.control_lot_id = l.id WHERE r.lab_id = ?";
+    let sql = "SELECT r.id, r.lab_id, r.control_lot_id, r.instrument, r.result_value, r.result_date, r.run_time, r.accepted_for_reporting, r.created_at, l.analyte, l.lot_number, l.level, r.operator_staff_employee_id, NULLIF(TRIM(COALESCE(se.first_name,'') || ' ' || COALESCE(se.last_name,'')), '') AS operator_name FROM qc_results r JOIN qc_control_lots l ON r.control_lot_id = l.id LEFT JOIN staff_employees se ON se.id = r.operator_staff_employee_id WHERE r.lab_id = ?";
     if (since) { sql += " AND r.result_date >= ?"; params.push(since); }
     if (until) { sql += " AND r.result_date <= ?"; params.push(until); }
     sql += " ORDER BY r.result_date DESC, r.id DESC LIMIT ?";
