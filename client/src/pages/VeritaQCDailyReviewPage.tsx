@@ -50,13 +50,20 @@ interface RecentResult {
 }
 
 type StatusFilter = "any" | "with_violation" | "missing_ca";
-type DateFilter = "7d" | "30d" | "all";
 
-function dateNDaysAgoIso(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
+// Bound the results list to a single calendar month. The page is a monthly
+// review + sign-off, so the Month/Year the director is attesting to is the
+// one time concept that scopes everything shown.
+function monthBounds(year: number, month: number): { since: string; until: string } {
+  const mm = String(month).padStart(2, "0");
+  const lastDay = new Date(year, month, 0).getDate();
+  return {
+    since: `${year}-${mm}-01`,
+    until: `${year}-${mm}-${String(lastDay).padStart(2, "0")}`,
+  };
 }
+
+const MONTH_NAMES = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 function severityColor(severity: string): string {
   return severity === "rejection"
@@ -107,7 +114,6 @@ export default function VeritaQCDailyReviewPage() {
   ].includes(user.plan);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("any");
-  const [dateFilter, setDateFilter] = useState<DateFilter>("30d");
   const [results, setResults] = useState<RecentResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -194,9 +200,10 @@ export default function VeritaQCDailyReviewPage() {
     try {
       const params = new URLSearchParams();
       params.set("status", statusFilter);
-      params.set("limit", "200");
-      if (dateFilter === "7d") params.set("since", dateNDaysAgoIso(7));
-      else if (dateFilter === "30d") params.set("since", dateNDaysAgoIso(30));
+      params.set("limit", "500");
+      const { since, until } = monthBounds(reviewYear, reviewMonth);
+      params.set("since", since);
+      params.set("until", until);
       const res = await fetch(
         `${API_BASE}/api/labs/${activeLabId}/qc/recent?${params.toString()}`,
         { headers: authHeaders() },
@@ -306,7 +313,7 @@ export default function VeritaQCDailyReviewPage() {
       load();
       loadLots();
     }
-  }, [isLoggedIn, hasPlanAccess, activeLabId, statusFilter, dateFilter]);
+  }, [isLoggedIn, hasPlanAccess, activeLabId, statusFilter, reviewYear, reviewMonth]);
 
   useEffect(() => {
     if (reviewLotId) loadPastReviews(reviewLotId);
@@ -375,15 +382,27 @@ export default function VeritaQCDailyReviewPage() {
 
       <Card className="mb-4">
         <CardContent className="py-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <div>
-              <div className="text-xs text-muted-foreground mb-1">Date range</div>
-              <Select value={dateFilter} onValueChange={(v) => setDateFilter(v as DateFilter)}>
+              <div className="text-xs text-muted-foreground mb-1">Month</div>
+              <Select value={String(reviewMonth)} onValueChange={(v) => setReviewMonth(Number(v))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="7d">Last 7 days</SelectItem>
-                  <SelectItem value="30d">Last 30 days</SelectItem>
-                  <SelectItem value="all">All time</SelectItem>
+                  {MONTH_NAMES.slice(1).map((name, i) => (
+                    <SelectItem key={i + 1} value={String(i + 1)}>{name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Year</div>
+              <Select value={String(reviewYear)} onValueChange={(v) => setReviewYear(Number(v))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[0, 1, 2].map(off => {
+                    const y = new Date().getFullYear() - off;
+                    return <SelectItem key={y} value={String(y)}>{y}</SelectItem>;
+                  })}
                 </SelectContent>
               </Select>
             </div>
@@ -401,7 +420,7 @@ export default function VeritaQCDailyReviewPage() {
             <div className="sm:col-span-2 grid grid-cols-2 gap-2 sm:gap-3 text-center">
               <div className="rounded-md border border-border bg-muted/50 px-3 py-2">
                 <div className="text-xl font-bold tabular-nums">{totalRejections}</div>
-                <div className="text-xs text-muted-foreground">Rejection-rule fires in window</div>
+                <div className="text-xs text-muted-foreground">Rejection-rule fires this month</div>
               </div>
               <div className={`rounded-md border px-3 py-2 ${missingCA > 0 ? "border-red-500/30 bg-red-500/5" : "border-border bg-muted/50"}`}>
                 <div className={`text-xl font-bold tabular-nums ${missingCA > 0 ? "text-red-700" : ""}`}>{missingCA}</div>
@@ -432,7 +451,7 @@ export default function VeritaQCDailyReviewPage() {
           <CardContent className="py-8 text-center">
             <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-600 mb-2" />
             <p className="text-sm text-muted-foreground">
-              No results match these filters. Try widening the date range or status.
+              No QC results for {MONTH_NAMES[reviewMonth]} {reviewYear}. Try a different month or status.
             </p>
           </CardContent>
         </Card>
@@ -570,7 +589,7 @@ export default function VeritaQCDailyReviewPage() {
           <p className="text-xs text-muted-foreground mb-3">
             Generate a per-lot monthly review PDF (CLSI C24-style: results, violations, corrective actions, Levey-Jennings chart, attestation block). Review the PDF, then file the attestation below.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
             <div>
               <div className="text-xs text-muted-foreground mb-1">Control lot</div>
               <Select value={reviewLotId ? String(reviewLotId) : ""} onValueChange={(v) => setReviewLotId(Number(v))}>
@@ -585,27 +604,11 @@ export default function VeritaQCDailyReviewPage() {
               </Select>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground mb-1">Year</div>
-              <Select value={String(reviewYear)} onValueChange={(v) => setReviewYear(Number(v))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {[0, 1, 2].map(off => {
-                    const y = new Date().getFullYear() - off;
-                    return <SelectItem key={y} value={String(y)}>{y}</SelectItem>;
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground mb-1">Month</div>
-              <Select value={String(reviewMonth)} onValueChange={(v) => setReviewMonth(Number(v))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {["January","February","March","April","May","June","July","August","September","October","November","December"].map((name, i) => (
-                    <SelectItem key={i + 1} value={String(i + 1)}>{name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="text-xs text-muted-foreground mb-1">Review period</div>
+              <div className="text-sm rounded border border-input bg-muted/40 px-3 py-2">
+                {MONTH_NAMES[reviewMonth]} {reviewYear}
+                <span className="text-xs text-muted-foreground"> &middot; set with the Month and Year selectors at the top</span>
+              </div>
             </div>
           </div>
           <div className="mb-3">

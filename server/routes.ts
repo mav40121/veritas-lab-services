@@ -3382,12 +3382,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/labs/:labId/qc/recent", authMiddleware, labScopeMiddleware, (req: any, res) => {
     const sinceRaw = String(req.query.since || "");
     const since = /^\d{4}-\d{2}-\d{2}$/.test(sinceRaw) ? sinceRaw : null;
+    const untilRaw = String(req.query.until || "");
+    const until = /^\d{4}-\d{2}-\d{2}$/.test(untilRaw) ? untilRaw : null;
     const status = String(req.query.status || "any");
     const limit = Math.min(Number(req.query.limit) || 100, 500);
     const sqlite = (db as any).$client;
     const params: any[] = [req.scope.labId];
     let sql = "SELECT r.id, r.lab_id, r.control_lot_id, r.instrument, r.result_value, r.result_date, r.run_time, r.accepted_for_reporting, r.created_at, l.analyte, l.lot_number, l.level FROM qc_results r JOIN qc_control_lots l ON r.control_lot_id = l.id WHERE r.lab_id = ?";
     if (since) { sql += " AND r.result_date >= ?"; params.push(since); }
+    if (until) { sql += " AND r.result_date <= ?"; params.push(until); }
     sql += " ORDER BY r.result_date DESC, r.id DESC LIMIT ?";
     params.push(limit);
     const results = sqlite.prepare(sql).all(...params) as any[];
