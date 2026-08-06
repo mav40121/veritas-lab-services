@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,9 @@ export default function VeritaCheckSignoffGroupsPage() {
   useSEO({ title: "Sign-off Groups | VeritaCheck", description: "Assign studies to a sign-off group and sign the group in one action." });
   const { toast } = useToast();
   const labRoute = useLabRoute();
+  const [, navigate] = useLocation();
+  // Match the Coverage map: clicking a study row opens the study's results page.
+  const openStudy = (id: number) => navigate(labRoute(`/study/${id}/results`));
   const labId = useActiveLabId();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [signOpen, setSignOpen] = useState(false);
@@ -119,7 +122,7 @@ export default function VeritaCheckSignoffGroupsPage() {
                 </thead>
                 <tbody>
                   {detail.members.map((m) => (
-                    <tr key={m.id} className="border-b border-border/60" data-testid={`member-${m.id}`}>
+                    <tr key={m.id} className="border-b border-border/60 cursor-pointer hover:bg-muted/40" onClick={() => openStudy(m.id)} title="Open study" data-testid={`member-${m.id}`}>
                       <td className="py-2 pr-3">{m.test_name}</td>
                       <td className="py-2 pr-3 text-muted-foreground">{m.instrument || "-"}</td>
                       <td className="py-2 pr-3 text-muted-foreground">{m.date}</td>
