@@ -74,7 +74,7 @@ export default function StaffPortalPage() {
   // "not on roster" message.
   const [session, setSession] = useState<StaffPortalSession | null>(null);
   const [activeEmployee, setActiveEmployee] = useState<PortalEmployee | null>(null);
-  const [activeModule, setActiveModule] = useState<"policies" | "inventory" | "audit" | "competency" | "quizzes" | null>(null);
+  const [activeModule, setActiveModule] = useState<"policies" | "inventory" | "audit" | "competency" | "quizzes" | "qc" | null>(null);
   const [bootstrapState, setBootstrapState] = useState<"loading" | "no-roster" | "no-auth" | "ready">("loading");
 
   useEffect(() => {
@@ -232,6 +232,17 @@ export default function StaffPortalPage() {
       />
     );
   }
+  if (activeModule === "qc") {
+    return (
+      <StaffPortalQcView
+        token={session.token}
+        employee={activeEmployee}
+        labName={session.lab.name}
+        onBack={() => setActiveModule(null)}
+        onSignOut={signOut}
+      />
+    );
+  }
 
   // 2026-06-09 Bugfix: techs land on the tile screen with no signal
   // that one tile has pending work. Fetch the three list endpoints once
@@ -250,13 +261,208 @@ export default function StaffPortalPage() {
   );
 }
 
+// ── Record QC view ────────────────────────────────────────────────────
+// Front-line staff record QC runs on their lab. Mirrors the writer QC entry
+// but goes through the staff-portal-session endpoints; the server attributes
+// every run to this staff member (operator_staff_employee_id) and runs the
+// SAME Westgard evaluation as the writer path, so scoring is identical.
+interface StaffQcLot { id: number; analyte: string; level: string; lot_number: string; mfr_mean: number; mfr_sd: number; status: string; }
+interface StaffQcResult { id: number; result_value: number; result_date: string; instrument: string | null; accepted_for_reporting: number; }
+
+function StaffPortalQcView({ token, employee, labName, onBack, onSignOut }: {
+  token: string;
+  employee: PortalEmployee;
+  labName: string;
+  onBack: () => void;
+  onSignOut: () => void;
+}) {
+  const h = { Authorization: `Bearer ${token}` };
+  const [lots, setLots] = useState<StaffQcLot[]>([]);
+  const [loadingLots, setLoadingLots] = useState(true);
+  const [lotId, setLotId] = useState<number | null>(null);
+  const [value, setValue] = useState("");
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [instrument, setInstrument] = useState("");
+  const [runTime, setRunTime] = useState("");
+  const [comment, setComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [recent, setRecent] = useState<StaffQcResult[]>([]);
+  const [msg, setMsg] = useState<{ kind: "ok" | "reject" | "error"; text: string } | null>(null);
+
+  const selected = lots.find(l => l.id === lotId) || null;
+  const instrumentSuggestions = Array.from(new Set(
+    lots.map(l => l.analyte.match(/\(([^)]+)\)\s*$/)?.[1] || "").map(s => s.trim()).filter(Boolean)
+  )).sort();
+
+  async function loadRecent(id: number) {
+    const d = await fetch(`/api/staff-portal-session/qc/results?control_lot_id=${id}&limit=10`, { headers: h })
+      .then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] }));
+    setRecent(d.results || []);
+  }
+
+  useEffect(() => {
+    fetch("/api/staff-portal-session/qc/lots", { headers: h })
+      .then(r => r.ok ? r.json() : { lots: [] })
+      .then(d => { setLots(d.lots || []); if (d.lots && d.lots.length) setLotId(d.lots[0].id); })
+      .catch(() => setLots([]))
+      .finally(() => setLoadingLots(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!lotId) { setRecent([]); return; }
+    const lot = lots.find(l => l.id === lotId);
+    const m = lot?.analyte.match(/\(([^)]+)\)\s*$/);
+    setInstrument(m ? m[1].trim() : "");
+    loadRecent(lotId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lotId]);
+
+  async function submit() {
+    if (!lotId) { setMsg({ kind: "error", text: "Pick a control lot first." }); return; }
+    const v = Number(value);
+    if (!value || Number.isNaN(v)) { setMsg({ kind: "error", text: "Result value must be a number." }); return; }
+    if (!date) { setMsg({ kind: "error", text: "Result date is required." }); return; }
+    setSubmitting(true); setMsg(null);
+    try {
+      const res = await fetch("/api/staff-portal-session/qc/results", {
+        method: "POST",
+        headers: { ...h, "Content-Type": "application/json" },
+        body: JSON.stringify({ control_lot_id: lotId, result_value: v, result_date: date, instrument: instrument || null, run_time: runTime || null, comment: comment || null }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setMsg({ kind: "error", text: data.error || "Submit failed." }); return; }
+      if (data.requires_corrective_action) {
+        const rules = (data.violations || []).filter((x: any) => x.severity === "rejection").map((x: any) => x.rule_code).join(", ");
+        setMsg({ kind: "reject", text: `Rejection: ${rules || "rule fired"}. This run is out of control. Notify your lab director; a corrective action is required before reporting.` });
+      } else {
+        const warn = (data.violations || []).filter((x: any) => x.severity === "warning").map((x: any) => x.rule_code);
+        setMsg({ kind: "ok", text: warn.length ? `Recorded. Warning flag: ${warn.join(", ")} (review, no rejection).` : "Recorded. In control." });
+      }
+      setValue(""); setComment("");
+      await loadRecent(lotId);
+    } catch {
+      setMsg({ kind: "error", text: "Network error. Try again." });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const inputCls = "w-full border border-input rounded-md px-3 py-2 text-sm bg-background";
+
+  return (
+    <div className="min-h-screen bg-background p-6">
+      <div className="max-w-2xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <button onClick={onBack} className="text-xs text-muted-foreground hover:underline">&larr; Back</button>
+            <div className="font-serif text-xl font-bold mt-1">Record QC</div>
+            <div className="text-xs text-muted-foreground">
+              {`${employee.first_name} ${employee.last_name}`} &middot; {labName}
+            </div>
+          </div>
+          <button onClick={onSignOut} className="text-xs text-muted-foreground hover:underline">Sign out</button>
+        </div>
+
+        {loadingLots ? (
+          <div className="text-sm text-muted-foreground">Loading control lots...</div>
+        ) : lots.length === 0 ? (
+          <div className="text-sm text-muted-foreground border border-border rounded-lg p-4">
+            No active control lots on this lab yet. Ask your lab director to add control lots in VeritaQC.
+          </div>
+        ) : (
+          <>
+            <div className="mb-4">
+              <label className="block text-xs text-muted-foreground mb-1">Control lot</label>
+              <select className={inputCls} value={lotId ?? ""} onChange={e => setLotId(Number(e.target.value))}>
+                {lots.map(l => <option key={l.id} value={l.id}>{l.analyte} &middot; Lot {l.lot_number} ({l.level})</option>)}
+              </select>
+            </div>
+
+            {selected && (
+              <div className="mb-4 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
+                <span className="text-muted-foreground">Logging for </span>
+                <span className="font-semibold">{selected.analyte}</span>
+                <span className="text-muted-foreground"> &middot; Lot {selected.lot_number} &middot; {selected.level} (mean {selected.mfr_mean}, SD {selected.mfr_sd})</span>
+              </div>
+            )}
+
+            {msg && (
+              <div className={"mb-4 rounded-md px-3 py-2 text-sm border " + (
+                msg.kind === "reject" ? "border-red-500/30 bg-red-500/10 text-red-700"
+                : msg.kind === "error" ? "border-amber-500/30 bg-amber-500/10 text-amber-800"
+                : "border-emerald-500/30 bg-emerald-500/10 text-emerald-700")}>
+                {msg.text}
+              </div>
+            )}
+
+            <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Result value *</label>
+                <input className={inputCls} type="number" step="any" value={value} onChange={e => setValue(e.target.value)} placeholder="e.g. 102.3" required />
+              </div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Result date *</label>
+                <input className={inputCls} type="date" value={date} onChange={e => setDate(e.target.value)} required />
+              </div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Instrument</label>
+                <input className={inputCls} list="sp-qc-instruments" value={instrument} onChange={e => setInstrument(e.target.value)} placeholder="Select or type the analyzer" />
+                <datalist id="sp-qc-instruments">
+                  {instrumentSuggestions.map(i => <option key={i} value={i} />)}
+                </datalist>
+              </div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Run time</label>
+                <input className={inputCls} type="time" value={runTime} onChange={e => setRunTime(e.target.value)} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs text-muted-foreground mb-1">Comment</label>
+                <textarea className={inputCls} rows={2} value={comment} onChange={e => setComment(e.target.value)} placeholder="Optional context (reagent lot, calibrator lot, note)" />
+              </div>
+              <div className="sm:col-span-2 flex justify-end">
+                <button type="submit" disabled={submitting} className="text-white font-semibold py-2 px-5 rounded-md disabled:opacity-60" style={{ backgroundColor: "#01696F" }}>
+                  {submitting ? "Submitting..." : "Submit result"}
+                </button>
+              </div>
+            </form>
+
+            {recent.length > 0 && (
+              <div className="mt-6">
+                <div className="text-xs text-muted-foreground mb-1">Recent results on this lot</div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-left text-xs text-muted-foreground border-b">
+                      <tr><th className="py-1.5 pr-2">Date</th><th className="py-1.5 pr-2">Value</th><th className="py-1.5 pr-2">Instrument</th><th className="py-1.5 pr-2">Accepted</th></tr>
+                    </thead>
+                    <tbody>
+                      {recent.map(r => (
+                        <tr key={r.id} className="border-b last:border-b-0">
+                          <td className="py-1.5 pr-2">{r.result_date}</td>
+                          <td className="py-1.5 pr-2 font-mono">{r.result_value}</td>
+                          <td className="py-1.5 pr-2 text-muted-foreground">{r.instrument || "-"}</td>
+                          <td className="py-1.5 pr-2">{r.accepted_for_reporting === 1 ? "yes" : "excluded"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── 2026-06-09 Tile screen w/ pending-count badges ────────────────────
 function TileScreenWithPendingCounts({
   session, employee, onPick, onSwitchEmployee, onSignOut,
 }: {
   session: StaffPortalSession;
   employee: PortalEmployee;
-  onPick: (m: "policies" | "competency" | "quizzes" | "inventory" | "audit") => void;
+  onPick: (m: "policies" | "competency" | "quizzes" | "inventory" | "audit" | "qc") => void;
   onSwitchEmployee: () => void;
   onSignOut: () => void;
 }) {
@@ -289,6 +495,7 @@ function TileScreenWithPendingCounts({
     { key: "policies" as const,    label: "Sign Policies",     available: true,                          pending: pending?.policies ?? null },
     { key: "competency" as const,  label: "Sign Competencies", available: true,                          pending: pending?.competencies ?? null },
     { key: "quizzes" as const,     label: "Take a Quiz",        available: true,                          pending: pending?.quizzes ?? null },
+    { key: "qc" as const,          label: "Record QC",          available: true,                          pending: null },
     { key: "inventory" as const,   label: "Adjust Inventory",   available: !!employee.can_adjust_inventory, pending: null },
     { key: "audit" as const,       label: "View Audit Trail",   available: !!employee.can_view_audit,       pending: null },
   ];

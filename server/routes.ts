@@ -3469,7 +3469,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const limit = Math.min(Number(req.query.limit) || 100, 500);
     const sqlite = (db as any).$client;
     const params: any[] = [req.scope.labId];
-    let sql = "SELECT r.id, r.lab_id, r.control_lot_id, r.instrument, r.result_value, r.result_date, r.run_time, r.accepted_for_reporting, r.created_at, l.analyte, l.lot_number, l.level FROM qc_results r JOIN qc_control_lots l ON r.control_lot_id = l.id WHERE r.lab_id = ?";
+    let sql = "SELECT r.id, r.lab_id, r.control_lot_id, r.instrument, r.result_value, r.result_date, r.run_time, r.accepted_for_reporting, r.created_at, l.analyte, l.lot_number, l.level, r.operator_staff_employee_id, NULLIF(TRIM(COALESCE(se.first_name,'') || ' ' || COALESCE(se.last_name,'')), '') AS operator_name FROM qc_results r JOIN qc_control_lots l ON r.control_lot_id = l.id LEFT JOIN staff_employees se ON se.id = r.operator_staff_employee_id WHERE r.lab_id = ?";
     if (since) { sql += " AND r.result_date >= ?"; params.push(since); }
     if (until) { sql += " AND r.result_date <= ?"; params.push(until); }
     sql += " ORDER BY r.result_date DESC, r.id DESC LIMIT ?";
