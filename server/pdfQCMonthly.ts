@@ -27,6 +27,7 @@ export interface MonthlyReviewResult {
   run_time: string | null;
   instrument: string | null;
   accepted_for_reporting: number;
+  operator_name?: string | null;
   violations: { rule_code: string; severity: string; detail: string | null }[];
   corrective_actions: { action_taken: string; status: string; taken_at: string }[];
 }
@@ -196,7 +197,7 @@ export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
        </table>`;
 
   const rowsHtml = p.results.length === 0
-    ? `<tr><td colspan="6" style="text-align:center;color:#888;padding:8pt">No results logged for this period.</td></tr>`
+    ? `<tr><td colspan="7" style="text-align:center;color:#888;padding:8pt">No results logged for this period.</td></tr>`
     : p.results.map(r => {
         const sdi = sd > 0 ? ((r.result_value - mean) / sd).toFixed(2) : "n/a";
         const rulesHtml = r.violations.length === 0
@@ -209,6 +210,7 @@ export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
           <td>${escapeHtml(r.instrument || "-")}</td>
           <td>${rulesHtml}</td>
           <td>${r.accepted_for_reporting === 1 ? "Accepted" : "Excluded"}</td>
+          <td>${escapeHtml(r.operator_name || "-")}</td>
         </tr>`;
       }).join("");
 
@@ -271,7 +273,7 @@ export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
 
     <h2>QC Runs (${p.results.length})</h2>
     <table>
-      <thead><tr><th>Date</th><th>Value</th><th>SDI</th><th>Instrument</th><th>Rules</th><th>Reporting</th></tr></thead>
+      <thead><tr><th>Date</th><th>Value</th><th>SDI</th><th>Instrument</th><th>Rules</th><th>Reporting</th><th>Operator</th></tr></thead>
       <tbody>${rowsHtml}</tbody>
     </table>
 

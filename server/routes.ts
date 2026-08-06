@@ -3576,7 +3576,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const nextMonthDate = new Date(year, month, 1); // month is 1-12, Date constructor expects 0-11 + 1
     const monthEnd = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, "0")}-01`;
     const rawResults = sqlite.prepare(
-      "SELECT id, result_value, result_date, run_time, instrument, accepted_for_reporting FROM qc_results WHERE lab_id = ? AND control_lot_id = ? AND result_date >= ? AND result_date < ? ORDER BY result_date DESC, id DESC"
+      "SELECT r.id, r.result_value, r.result_date, r.run_time, r.instrument, r.accepted_for_reporting, NULLIF(TRIM(COALESCE(se.first_name,'') || ' ' || COALESCE(se.last_name,'')), '') AS operator_name FROM qc_results r LEFT JOIN staff_employees se ON se.id = r.operator_staff_employee_id WHERE r.lab_id = ? AND r.control_lot_id = ? AND r.result_date >= ? AND r.result_date < ? ORDER BY r.result_date DESC, r.id DESC"
     ).all(req.scope.labId, controlLotId, monthStart, monthEnd) as any[];
     const resultIds = rawResults.map(r => r.id);
     let violationsByR: Record<number, any[]> = {};
@@ -3599,6 +3599,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       run_time: r.run_time,
       instrument: r.instrument,
       accepted_for_reporting: r.accepted_for_reporting,
+      operator_name: r.operator_name || null,
       violations: violationsByR[r.id] || [],
       corrective_actions: casByR[r.id] || [],
     }));
