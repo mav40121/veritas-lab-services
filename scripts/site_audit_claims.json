@@ -1,0 +1,4539 @@
+{
+  "pages": [
+    {
+      "file": "AccountSettingsPage.tsx",
+      "lines": 1014,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Account Settings"
+        },
+        {
+          "tag": "h1",
+          "text": "Account Settings"
+        },
+        {
+          "tag": "h3",
+          "text": "Preferred PT Vendor"
+        }
+      ],
+      "stats": [
+        {
+          "value": "TJC",
+          "label": "TJC"
+        },
+        {
+          "value": "CAP",
+          "label": "CAP"
+        },
+        {
+          "value": "AABB",
+          "label": "AABB"
+        },
+        {
+          "value": "COLA",
+          "label": "COLA"
+        },
+        {
+          "value": "CAP+AABB",
+          "label": "CAP + AABB"
+        },
+        {
+          "value": "CLIA",
+          "label": "CLIA only"
+        }
+      ],
+      "count_claims": [
+        "px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300\">Edit access to all modules</span>"
+      ],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaCheck",
+        "VeritaComp",
+        "VeritaLab",
+        "VeritaMap",
+        "VeritaPT",
+        "VeritaPace",
+        "VeritaPolicy",
+        "VeritaQA",
+        "VeritaResponse",
+        "VeritaScan",
+        "VeritaShift",
+        "VeritaStaff",
+        "VeritaStock",
+        "VeritaTrack"
+      ],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "AdminReportPage.tsx",
+      "lines": 1498,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "VeritaAssure™ Admin Report"
+        },
+        {
+          "tag": "h1",
+          "text": "VeritaAssure™ Admin Report"
+        },
+        {
+          "tag": "h3",
+          "text": "Pending Invites"
+        },
+        {
+          "tag": "h2",
+          "text": "User Activity"
+        },
+        {
+          "tag": "h3",
+          "text": "Recent actions ({data.audit.length})"
+        },
+        {
+          "tag": "h3",
+          "text": "Recent sessions ({data.sessions.length})"
+        }
+      ],
+      "stats": [
+        {
+          "value": "free",
+          "label": "Free"
+        },
+        {
+          "value": "per_study",
+          "label": "Per Study"
+        },
+        {
+          "value": "clinic",
+          "label": "Clinic ($499/yr - 2 seats)"
+        },
+        {
+          "value": "community",
+          "label": "Community ($999/yr - 5 seats)"
+        },
+        {
+          "value": "hospital",
+          "label": "Hospital ($1,999/yr - 15 seats)"
+        },
+        {
+          "value": "enterprise",
+          "label": "Enterprise ($2,999/yr - 25 seats)"
+        },
+        {
+          "value": "waived",
+          "label": "Waived"
+        },
+        {
+          "value": "large_hospital",
+          "label": "Large Hospital"
+        },
+        {
+          "value": "veritacheck_only",
+          "label": "VeritaCheck™ Only"
+        },
+        {
+          "value": "lab",
+          "label": "Lab"
+        }
+      ],
+      "count_claims": [
+        "label: \"Hospital ($1,999/yr - 15 seats)\" }, { value: \"enterprise\""
+      ],
+      "pricing_mentions": [
+        "$1,999/yr",
+        "$2,999/yr",
+        "$25/study",
+        "$499/yr",
+        "$999/yr"
+      ],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaCheck",
+        "VeritaComp",
+        "VeritaLab",
+        "VeritaMap",
+        "VeritaScan",
+        "VeritaStaff"
+      ],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "AdminSchedulingPage.tsx",
+      "lines": 265,
+      "seo_title": "Admin Scheduling | Veritas Lab Services",
+      "seo_description": "Internal scheduling admin.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Admin sign-in"
+        },
+        {
+          "tag": "h1",
+          "text": "Scheduling admin"
+        },
+        {
+          "tag": "h2",
+          "text": "Recurring availability rules"
+        },
+        {
+          "tag": "h2",
+          "text": "Blackouts"
+        },
+        {
+          "tag": "h2",
+          "text": "Bookings (200 most recent)"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "ArticleCalVerPage.tsx",
+      "lines": 332,
+      "seo_title": "CLIA Calibration Verification and Method Comparison Guide | Veritas Lab Services",
+      "seo_description": "A complete guide to CLIA calibration verification and method comparison requirements for clinical laboratories, including documentation and frequency requirements.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "CLIA Calibration Verification and Method Comparison: What Lab Managers Actually Need to Know"
+        },
+        {
+          "tag": "h2",
+          "text": "Why This Matters"
+        },
+        {
+          "tag": "h2",
+          "text": "Precision vs. Accuracy: The Foundation Everything Else Rests On"
+        },
+        {
+          "tag": "h2",
+          "text": "What Is Calibration Verification Under CLIA?"
+        },
+        {
+          "tag": "h3",
+          "text": "Two Major Exceptions: Where Labs Waste the Most Resources"
+        },
+        {
+          "tag": "h3",
+          "text": "You Don't Need Commercial Kits"
+        },
+        {
+          "tag": "h2",
+          "text": "What Is a Correlation / Method Comparison Study?"
+        },
+        {
+          "tag": "h2",
+          "text": "The Efficiency Play: Run Both Studies Simultaneously"
+        },
+        {
+          "tag": "h3",
+          "text": "Key Statistics to Evaluate"
+        },
+        {
+          "tag": "h2",
+          "text": "The Six-Month-Plus-Twenty-Day Rule: The Most Underused Compliance Tool"
+        },
+        {
+          "tag": "h3",
+          "text": "Completion = Sign-Off Date, Not Data Collection Date"
+        },
+        {
+          "tag": "h2",
+          "text": "Designing an Efficient Compliance Program"
+        },
+        {
+          "tag": "h2",
+          "text": "Frequently Asked Questions"
+        },
+        {
+          "tag": "h3",
+          "text": "{q}"
+        },
+        {
+          "tag": "h2",
+          "text": "Conclusion"
+        },
+        {
+          "tag": "h3",
+          "text": "Ready to run your next study?"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "s-center gap-1.5\"><User size={12} /> Michael Veri, Former Joint Commission Surveyor, CPHQ</span> <",
+        "\"The compliance window is six months PLUS twenty days from the director sign-off d",
+        "mark calendars for the exact six-month anniversary of the last study. This reflexive response, wh",
+        "2xl font-bold mt-10 mb-3\">The Six-Month-Plus-Twenty-Day Rule: The Most Underused Comp",
+        "atient results and then every six months thereafter. What most don't",
+        "on: <strong>laboratories have six months plus twenty days from the last completion date to finish the next study.</strong> </p>",
+        "e=\"text-muted-foreground\">Jan 15:</span> Last study signed off (completion date)",
+        "on study?\", a: \"Six months plus twenty days from the date your medical d",
+        "and the compliance window is six months plus twenty days from sign-off, these require",
+        "eri is a US Army veteran with 22 years of military leadership, former Joint Commission Laboratory Surveyor with 200+ facility inspect",
+        "sion Laboratory Surveyor with 200+ facility inspections, and CPHQ-certified healt"
+      ],
+      "pricing_mentions": [],
+      "credentials": [
+        "CPHQ"
+      ],
+      "module_mentions": [
+        "VeritaCheck",
+        "VeritaMap",
+        "VeritaScan"
+      ],
+      "internal_links": [
+        "/resources",
+        "/study-guide",
+        "/veritacheck"
+      ],
+      "external_links": [
+        "https://www.adlm.org",
+        "https://www.cms.gov/files/document/clia-brochure-calibration-and-calibration-verification-april-2006.pdf",
+        "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493",
+        "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255"
+      ],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "ArticleCLIACalVerRequirementsPage.tsx",
+      "lines": 192,
+      "seo_title": "Calibration Verification Requirements Under CLIA | Veritas Lab Services",
+      "seo_description": "Detailed breakdown of CLIA calibration verification requirements including frequency, documentation, acceptable performance criteria, and common surveyor findings.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Calibration Verification Requirements Under CLIA: What Every Lab Director Needs to Know"
+        },
+        {
+          "tag": "h2",
+          "text": "What the Regulation Requires"
+        },
+        {
+          "tag": "h2",
+          "text": "When You Must Verify Beyond the Six-Month Cycle"
+        },
+        {
+          "tag": "h2",
+          "text": "What Analytes Require It"
+        },
+        {
+          "tag": "h2",
+          "text": "What Your Documentation Must Include"
+        },
+        {
+          "tag": "h2",
+          "text": "Common Inspection Findings"
+        },
+        {
+          "tag": "h2",
+          "text": "A More Efficient Approach"
+        },
+        {
+          "tag": "h3",
+          "text": "Ready to run your next study?"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "Calibration verification is one of the most consistently cited deficiencies in CLIA and CAP laboratory inspections. This article covers what",
+        "s-center gap-1.5\"><User size={12} /> Michael Veri, Former Joint Commission Surveyor, CPHQ</span> <",
+        "t be performed at least every six months for all non-waived quantitat",
+        "n verification at least every six months for each quantitative test s",
+        "en You Must Verify Beyond the Six-Month Cycle</h2> <p>",
+        "performed outside the regular six-month cycle. </Callout>",
+        "ion was performed outside the six-month cycle. </p>",
+        "eri is a US Army veteran with 22 years of military leadership, former Joint Commission Laboratory Surveyor with 200+ facility inspect",
+        "sion Laboratory Surveyor with 200+ facility inspections, and CPHQ-certified healt"
+      ],
+      "pricing_mentions": [],
+      "credentials": [
+        "CPHQ"
+      ],
+      "module_mentions": [
+        "VeritaCheck"
+      ],
+      "internal_links": [
+        "/resources",
+        "/study-guide",
+        "/veritacheck"
+      ],
+      "external_links": [
+        "https://www.cms.gov/files/document/clia-brochure-calibration-and-calibration-verification-april-2006.pdf",
+        "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493"
+      ],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "ArticleCostPerReportablePage.tsx",
+      "lines": 334,
+      "seo_title": "What Your Tests Actually Cost: A Four-Layer CPRT Framework for Clinical Laboratories",
+      "seo_description": "The CLSI GP11-A four-layer cost-per-reportable-test (CPRT) framework: reagents, labor, equipment, overhead. Which layer answers which question, how to compare configurations honestly, and what to do this quarter.",
+      "headings": [
+        {
+          "tag": "h2",
+          "text": "{title}"
+        },
+        {
+          "tag": "h1",
+          "text": "What Your Tests Actually Cost: A Four-Layer CPRT Framework for Clinical Laboratories"
+        },
+        {
+          "tag": "h3",
+          "text": "Build your first CPRT study in VeritaOps™"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "<p> In twenty-three years of clinical laboratory work and more than two hundred surveys with The Joint Commission,",
+        "framework concrete, consider two CPRT studies of a sodium assay, run on",
+        "<li>Calibrator kit cost: $200; calibrations per year: 8</li> <li>QC",
+        "<li>Calibrator kit cost: $200; calibrations per year: 12</li> <li>QC",
+        "until it is operationalized. Three steps a laboratory director or operations manager can take in the next ninety days. </p>",
+        "ch reads at a glance whenever two studies are placed next to each ot"
+      ],
+      "pricing_mentions": [
+        "$0.05",
+        "$0.10",
+        "$0.40",
+        "$0.45",
+        "$0.66",
+        "$0.80",
+        "$1.11",
+        "$1.26",
+        "$1.56",
+        "$117,000",
+        "$176,484",
+        "$2.30",
+        "$2.35",
+        "$20,000",
+        "$200",
+        "$250,000",
+        "$45.00",
+        "$54.99",
+        "$55,733",
+        "$8"
+      ],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaOps"
+      ],
+      "internal_links": [
+        "/demo/operations",
+        "/operations",
+        "/pricing",
+        "/resources"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "ArticleInventoryManagementPage.tsx",
+      "lines": 312,
+      "seo_title": "Laboratory Inventory Management: A Practical Guide for Lab Directors | Veritas Lab Services",
+      "seo_description": "How to apply reorder point discipline to clinical lab inventory. Covers burn rate, lead time, safety stock, standing orders, and the formulas that prevent stockouts without overspending.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Laboratory Inventory Management: Stop Guessing, Start Using the Math"
+        },
+        {
+          "tag": "h2",
+          "text": "Why This Is a Quality Issue, Not Just a Logistics Issue"
+        },
+        {
+          "tag": "h2",
+          "text": "The Core Concepts"
+        },
+        {
+          "tag": "h3",
+          "text": "Order Units vs. Usage Units"
+        },
+        {
+          "tag": "h3",
+          "text": "Burn Rate"
+        },
+        {
+          "tag": "h3",
+          "text": "Lead Time"
+        },
+        {
+          "tag": "h3",
+          "text": "Safety Stock"
+        },
+        {
+          "tag": "h3",
+          "text": "Standing Orders"
+        },
+        {
+          "tag": "h2",
+          "text": "The Reorder Point: When to Order"
+        },
+        {
+          "tag": "h2",
+          "text": "How Much to Order"
+        },
+        {
+          "tag": "h2",
+          "text": "Building the System: What Every Lab Needs"
+        },
+        {
+          "tag": "h3",
+          "text": "An Inventory List"
+        },
+        {
+          "tag": "h3",
+          "text": "Physical Counts"
+        },
+        {
+          "tag": "h3",
+          "text": "Expiration Management"
+        },
+        {
+          "tag": "h3",
+          "text": "Survey Readiness"
+        },
+        {
+          "tag": "h2",
+          "text": "Quick Reference"
+        },
+        {
+          "tag": "h2",
+          "text": "Glossary"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "ts per day and each test uses one cartridge, your burn rate is 10 cartridges per day. </p> <Callou"
+      ],
+      "pricing_mentions": [],
+      "credentials": [
+        "CPHQ",
+        "MBA",
+        "MS"
+      ],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaStock"
+      ],
+      "internal_links": [
+        "/resources",
+        "/resources/clia-calibration-verification-method-comparison",
+        "/resources/tjc-laboratory-inspection-checklist-preparation",
+        "/veritaassure"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "ArticleManualLogsPage.tsx",
+      "lines": 180,
+      "seo_title": "Manual Logs: Why We Used Them, and Why Most Labs Should Stop | Veritas Lab Services",
+      "seo_description": "Manual logs were invented to solve a memory problem in labs that had one or two computers. In 2026, the log is the source of the error that 24-hour review was designed to catch. Here is when to retire it.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Manual Logs: Why We Used Them, and Why Most Labs Should Stop"
+        },
+        {
+          "tag": "h2",
+          "text": "Why the manual log exists"
+        },
+        {
+          "tag": "h2",
+          "text": "The hidden cost of the log"
+        },
+        {
+          "tag": "h2",
+          "text": "What changed"
+        },
+        {
+          "tag": "h2",
+          "text": "What direct entry buys you"
+        },
+        {
+          "tag": "h2",
+          "text": "When the log still earns its place"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "eri is a US Army veteran with 22 years of military leadership, former Joint Commission Laboratory Surveyor with 200+ facility inspect",
+        "sion Laboratory Surveyor with 200+ facility inspections, and CPHQ-certified healt"
+      ],
+      "pricing_mentions": [],
+      "credentials": [
+        "CPHQ",
+        "MBA",
+        "MS"
+      ],
+      "module_mentions": [
+        "VeritaCheck",
+        "VeritaComp",
+        "VeritaMap",
+        "VeritaScan"
+      ],
+      "internal_links": [
+        "/",
+        "/resources"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "ArticleMethodComparisonPage.tsx",
+      "lines": 193,
+      "seo_title": "How to Perform a Method Comparison Study for CLIA | Veritas Lab Services",
+      "seo_description": "Step-by-step guide to performing a CLIA-compliant method comparison study, including sample requirements, statistical analysis, and acceptable bias thresholds.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "How to Perform a Method Comparison Study in Your Clinical Laboratory"
+        },
+        {
+          "tag": "h2",
+          "text": "When a Method Comparison Is Required"
+        },
+        {
+          "tag": "h2",
+          "text": "Specimen Requirements"
+        },
+        {
+          "tag": "h2",
+          "text": "Running the Study"
+        },
+        {
+          "tag": "h2",
+          "text": "What Pass or Fail Means"
+        },
+        {
+          "tag": "h2",
+          "text": "Common Mistakes"
+        },
+        {
+          "tag": "h2",
+          "text": "Documentation for Your Inspection File"
+        },
+        {
+          "tag": "h3",
+          "text": "Ready to run your next study?"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "s-center gap-1.5\"><User size={12} /> Michael Veri, Former Joint Commission Surveyor, CPHQ</span> <",
+        "eri is a US Army veteran with 22 years of military leadership, former Joint Commission Laboratory Surveyor with 200+ facility inspect",
+        "sion Laboratory Surveyor with 200+ facility inspections, and CPHQ-certified healt"
+      ],
+      "pricing_mentions": [],
+      "credentials": [
+        "CPHQ"
+      ],
+      "module_mentions": [
+        "VeritaCheck"
+      ],
+      "internal_links": [
+        "/resources",
+        "/study-guide",
+        "/veritacheck"
+      ],
+      "external_links": [
+        "https://clsi.org/standards/products/method-evaluation/documents/ep09/",
+        "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493"
+      ],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "ArticlePrecisionInterpretationPage.tsx",
+      "lines": 242,
+      "seo_title": "Precision Verification Report Interpretation Guide | VeritaCheck",
+      "seo_description": "Plain-language guide to reading a VeritaCheck precision verification report: what mean, SD, CV, 95% CI, Pass/Fail/Uncertain, and vendor SD comparisons actually mean and how they map to 42 CFR §493 and CLSI EP15-A3 requirements.",
+      "headings": [
+        {
+          "tag": "h2",
+          "text": "{title}"
+        },
+        {
+          "tag": "h1",
+          "text": "Precision Verification Report Interpretation Guide"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaCheck"
+      ],
+      "internal_links": [
+        "/resources"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": [
+        {
+          "snippet": "is collected across a structured design — typically 5 days of 5 replicates each —",
+          "kind": "other"
+        },
+        {
+          "snippet": "<strong>42 CFR Part 493 Subpart I — Proficiency Testing Programs for Nonwai",
+          "kind": "other"
+        },
+        {
+          "snippet": "<strong>42 CFR §493.1253 — Establishment and verification of perfo",
+          "kind": "other"
+        },
+        {
+          "snippet": "<strong>CLSI EP15-A3 — User Verification of Precision and Esti",
+          "kind": "other"
+        },
+        {
+          "snippet": "<strong>ADLM — Association for Diagnostic and Laborato",
+          "kind": "other"
+        }
+      ]
+    },
+    {
+      "file": "ArticleTeaPage.tsx",
+      "lines": 306,
+      "seo_title": "CLIA Total Allowable Error: What Lab Directors Don't Know | Veritas Lab Services",
+      "seo_description": "Understanding total allowable error (TEa) in CLIA compliance. How to apply TEa to method verification studies and what surveyors look for in your documentation.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "CLIA Allowable Error (TEa): What It Is, Where to Find It, and Why Most Lab Directors Don't Know About It"
+        },
+        {
+          "tag": "h2",
+          "text": "The Pattern I Saw on Survey"
+        },
+        {
+          "tag": "h2",
+          "text": "What Is CLIA TEa?"
+        },
+        {
+          "tag": "h2",
+          "text": "Where to Find It in the CFR"
+        },
+        {
+          "tag": "h2",
+          "text": "Sample TEa Values: 2025 CLIA Final Rule"
+        },
+        {
+          "tag": "h2",
+          "text": "Why Manufacturer Criteria Aren't Always Sufficient"
+        },
+        {
+          "tag": "h2",
+          "text": "The ADLM Recommendation: Half of CLIA TEa"
+        },
+        {
+          "tag": "h2",
+          "text": "How to Apply TEa to Calibration Verification"
+        },
+        {
+          "tag": "h2",
+          "text": "Frequently Asked Questions"
+        },
+        {
+          "tag": "h3",
+          "text": "{q}"
+        },
+        {
+          "tag": "h2",
+          "text": "Conclusion"
+        },
+        {
+          "tag": "h3",
+          "text": "Look up your analytes now"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "relaxed mb-6\"> In four years and more than 200 inspections as a Joint Commission laboratory surveyor, I regularly encountered a",
+        "s-center gap-1.5\"><User size={12} /> Michael Veri, Former Joint Commission Surveyor, CPHQ</span> <",
+        "eri is a US Army veteran with 22 years of military leadership, former Joint Commission Laboratory Surveyor with 200+ facility inspect",
+        "sion Laboratory Surveyor with 200+ facility inspections, and CPHQ-certified healt"
+      ],
+      "pricing_mentions": [],
+      "credentials": [
+        "CPHQ"
+      ],
+      "module_mentions": [
+        "VeritaCheck",
+        "VeritaMap",
+        "VeritaScan"
+      ],
+      "internal_links": [
+        "/resources",
+        "/resources/clia-tea-lookup",
+        "/veritacheck"
+      ],
+      "external_links": [
+        "https://www.adlm.org",
+        "https://www.cms.gov",
+        "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493",
+        "https://www.westgard.com/clia-a-quality/quality-requirements/2024-clia-requirements.html"
+      ],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "ArticleTJCInspectionPage.tsx",
+      "lines": 206,
+      "seo_title": "TJC Laboratory Inspection Checklist and Preparation Guide | Veritas Lab Services",
+      "seo_description": "Prepare your clinical laboratory for a Joint Commission survey. Common findings, checklist items, and strategies from a former TJC laboratory surveyor.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Preparing for a TJC Laboratory Inspection: A Practical Checklist for Lab Directors"
+        },
+        {
+          "tag": "h2",
+          "text": "The Five Areas Surveyors Trace Most Consistently"
+        },
+        {
+          "tag": "h3",
+          "text": "Performance Verification Records"
+        },
+        {
+          "tag": "h3",
+          "text": "Proficiency Testing"
+        },
+        {
+          "tag": "h3",
+          "text": "Competency Assessments"
+        },
+        {
+          "tag": "h3",
+          "text": "Test Menu and Instrument Documentation"
+        },
+        {
+          "tag": "h3",
+          "text": "Policies and Procedures"
+        },
+        {
+          "tag": "h2",
+          "text": "How VeritaAssure™ Addresses Each Area"
+        },
+        {
+          "tag": "h2",
+          "text": "The 90-Day Rule"
+        },
+        {
+          "tag": "h3",
+          "text": "Ready to prepare for your next survey?"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "s-center gap-1.5\"><User size={12} /> Michael Veri, Former Joint Commission Surveyor, CPHQ</span> <",
+        "2xl font-bold mt-10 mb-3\">The Five Areas Surveyors Trace Most Consistently</",
+        "n verification at least every six months. Method comparison when a ne",
+        "scribes a method you replaced two years ago is a finding.",
+        "eri is a US Army veteran with 22 years of military leadership, former Joint Commission Laboratory Surveyor with 200+ facility inspect",
+        "sion Laboratory Surveyor with 200+ facility inspections, and CPHQ-certified healt"
+      ],
+      "pricing_mentions": [],
+      "credentials": [
+        "CPHQ"
+      ],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaCheck",
+        "VeritaComp",
+        "VeritaMap",
+        "VeritaScan"
+      ],
+      "internal_links": [
+        "/resources",
+        "/veritaassure",
+        "/veritascan"
+      ],
+      "external_links": [
+        "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493"
+      ],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "ArticleTrainingPage.tsx",
+      "lines": 243,
+      "seo_title": "How VeritaAssure™ Trains Lab Leaders | Veritas Lab Services",
+      "seo_description": "How VeritaAssure™ helps laboratory leaders build compliance knowledge and stay current with CLIA, Joint Commission, and COLA requirements.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "How VeritaAssure™ Trains the Next Generation of Lab Leaders"
+        },
+        {
+          "tag": "h2",
+          "text": "The Gap Between Bench Competence and Leadership Competence"
+        },
+        {
+          "tag": "h2",
+          "text": "Why Software Can Teach"
+        },
+        {
+          "tag": "h2",
+          "text": "The Curriculum Nobody Offers"
+        },
+        {
+          "tag": "h2",
+          "text": "Lab Management 101 and the Full Picture"
+        },
+        {
+          "tag": "h2",
+          "text": "A Practical Development Path"
+        },
+        {
+          "tag": "h3",
+          "text": "For a new lab director in their first 90 days:"
+        },
+        {
+          "tag": "h3",
+          "text": "For an experienced director developing a successor:"
+        },
+        {
+          "tag": "h2",
+          "text": "Built for the Leaders Who Come Next"
+        },
+        {
+          "tag": "h3",
+          "text": "See the curriculum in action."
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "st 90 days using a structured five-module path\", \"Heal",
+        "the bench for years, and then one day you are handed keys to a depa",
+        "A new director may have spent fifteen years mastering immunoassay method",
+        "trong>VeritaComp™ teaches the six CLIA elements.</strong> Most lab staff who",
+        "Assign the successor to own one module at a time. Start with Verita",
+        "eri is a US Army veteran with 22 years of military leadership, former Joint Commission Laboratory Surveyor with 200+ facility inspect",
+        "sion Laboratory Surveyor with 200+ facility inspections, and CPHQ-certified healt"
+      ],
+      "pricing_mentions": [],
+      "credentials": [
+        "CPHQ",
+        "MBA",
+        "MS"
+      ],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaCheck",
+        "VeritaComp",
+        "VeritaMap",
+        "VeritaScan",
+        "VeritaStaff"
+      ],
+      "internal_links": [
+        "/book",
+        "/demo",
+        "/resources"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "ArticleValidateVeritaCheckPage.tsx",
+      "lines": 205,
+      "seo_title": "How to Validate VeritaCheck™ for CLIA Compliance | Veritas Lab Services",
+      "seo_description": "Software validation documentation for VeritaCheck™ under CLIA requirements. How to validate laboratory information systems and comply with 42 CFR 493.1252.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "How to Validate VeritaCheck™ for Your Clinical Laboratory: A Step-by-Step Guide for Lab Directors"
+        },
+        {
+          "tag": "h2",
+          "text": "Why Software Validation Is Required"
+        },
+        {
+          "tag": "h2",
+          "text": "What Validating VeritaCheck™ Actually Means"
+        },
+        {
+          "tag": "h2",
+          "text": "Step-by-Step Validation Process"
+        },
+        {
+          "tag": "h3",
+          "text": "IQ - Installation Qualification"
+        },
+        {
+          "tag": "h3",
+          "text": "OQ - Operational Qualification"
+        },
+        {
+          "tag": "h3",
+          "text": "PQ - Performance Qualification"
+        },
+        {
+          "tag": "h2",
+          "text": "The Software Validation Template"
+        },
+        {
+          "tag": "h2",
+          "text": "How Long Does It Take?"
+        },
+        {
+          "tag": "h2",
+          "text": "What to Keep on File"
+        },
+        {
+          "tag": "h3",
+          "text": "A clean validation record is one less finding to worry about."
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "Q validation process in under two hours. Here is the step-by-step pr",
+        "s-center gap-1.5\"><User size={12} /> Michael Veri, Former Joint Commission Surveyor, CPHQ</span> <",
+        "ete the full process in under two hours\", \"A free So",
+        "labs can complete it in under two hours. </p> <",
+        "<p> Run one real study from your lab through Verita",
+        "ull IQ/OQ/PQ process in under two hours. The template is already str",
+        "rol policy, with a minimum of two years recommended to align with st",
+        "eri is a US Army veteran with 22 years of military leadership, former Joint Commission Laboratory Surveyor with 200+ facility inspect",
+        "sion Laboratory Surveyor with 200+ facility inspections, and CPHQ-certified healt"
+      ],
+      "pricing_mentions": [],
+      "credentials": [
+        "CPHQ"
+      ],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaCheck"
+      ],
+      "internal_links": [
+        "/resources",
+        "/veritacheck"
+      ],
+      "external_links": [
+        "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493"
+      ],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "ArticleWhyVeritaCheckPage.tsx",
+      "lines": 176,
+      "seo_title": "Why VeritaCheck™ vs. Legacy Verification Software | VeritaAssure",
+      "seo_description": "How VeritaCheck™ compares to legacy verification software on cost, time-to-first-study, integration breadth, and compliance defensibility. Authored for lab directors evaluating a tool change.",
+      "headings": [
+        {
+          "tag": "h3",
+          "text": "{props.title}"
+        },
+        {
+          "tag": "h1",
+          "text": "Why VeritaCheck™ vs. Legacy Verification Software"
+        },
+        {
+          "tag": "h2",
+          "text": "When to switch"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "ors evaluating a tool change. Four dimensions: cost, time-to-first-study, integration breadth, and co",
+        "ree testing technologists and one reviewer pays the legacy tool between $2,400 and $9,000 per year before any tech time is spent",
+        "VeritaCheck™ runs nine study types under one tool: Precis"
+      ],
+      "pricing_mentions": [
+        "$2,400",
+        "$25",
+        "$299",
+        "$3,000",
+        "$499",
+        "$5,000",
+        "$800",
+        "$9,000",
+        "$999"
+      ],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaCheck",
+        "VeritaComp",
+        "VeritaLab",
+        "VeritaMap",
+        "VeritaOps",
+        "VeritaPolicy",
+        "VeritaStock"
+      ],
+      "internal_links": [
+        "/demo/compliance",
+        "/pricing",
+        "/resources"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "BookPage.tsx",
+      "lines": 471,
+      "seo_title": "Book a Consultation | Veritas Lab Services",
+      "seo_description": "Schedule a consultation or demo with Michael Veri. Learn how VeritaAssure™ can help your laboratory stay compliant and survey-ready.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Lab Management 101"
+        },
+        {
+          "tag": "h2",
+          "text": "About the Book"
+        },
+        {
+          "tag": "h2",
+          "text": "The Book and the Software: A Complete Curriculum"
+        },
+        {
+          "tag": "h2",
+          "text": "Who This Book Is For"
+        },
+        {
+          "tag": "h2",
+          "text": "About the Author"
+        },
+        {
+          "tag": "h2",
+          "text": "What's Inside"
+        },
+        {
+          "tag": "h2",
+          "text": "Pricing Options"
+        },
+        {
+          "tag": "h2",
+          "text": "Accuracy and Precision Studies:What the Regulations Actually Require"
+        },
+        {
+          "tag": "h2",
+          "text": "Be the first to know"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "HQ\" }, { icon: <Users size={15} />, text: \"TJC Surveyor, 200+ facility inspections\" }, { icon: <Mic size={",
+        "founder of VeritaAssure™, the twelve-module clinical laboratory complian",
+        "ould have been caught in week one isn't found until month six. <em>Lab Management 101</",
+        "ulatory exposure, including a two-year bar from operating any CLIA-c",
+        "tency programs that teach the six CLIA elements by doing them.\" },",
+        "ip in civilian healthcare and twenty-two years of service in the United Sta",
+        "laboratory director, and for four years as a surveyor for The Joint Commission, conducting inspections at more than 200 healthca",
+        "ting inspections at more than 200 healthcare facilities across the country.",
+        "cludes real observations from 200+ TJC facility inspections: intelligence from the ot"
+      ],
+      "pricing_mentions": [
+        "$499",
+        "$69"
+      ],
+      "credentials": [
+        "CPHQ",
+        "MBA",
+        "MS"
+      ],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaCheck",
+        "VeritaComp",
+        "VeritaMap",
+        "VeritaScan"
+      ],
+      "internal_links": [
+        "/demo",
+        "/pricing",
+        "/veritacheck"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "BookScopingCallPage.tsx",
+      "lines": 419,
+      "seo_title": "Book a 30-Minute Scoping Call | Veritas Lab Services",
+      "seo_description": "Schedule a no-cost 30-minute scoping call with Michael Veri, MS, MBA, MLS(ASCP), CPHQ, former TJC Laboratory Surveyor with 200+ surveys conducted. Confirms engagement fit, scope, and price before any paper changes hands.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "30-Minute Consulting Scoping Call"
+        },
+        {
+          "tag": "h2",
+          "text": "Booking confirmed"
+        },
+        {
+          "tag": "h2",
+          "text": "Pick a day"
+        },
+        {
+          "tag": "h2",
+          "text": "Pick a time"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "TJC Laboratory Surveyor with 200+ surveys conducted. Confirms engagem"
+      ],
+      "pricing_mentions": [],
+      "credentials": [
+        "CPHQ",
+        "MBA",
+        "MS"
+      ],
+      "module_mentions": [],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "ContactPage.tsx",
+      "lines": 97,
+      "seo_title": "Contact | Veritas Lab Services",
+      "seo_description": "Get in touch with Veritas Lab Services. Questions about VeritaAssure™, laboratory consulting, or scheduling a demo.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Tell Us About Your Needs"
+        },
+        {
+          "tag": "h3",
+          "text": "Message sent!"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "ls promptly, typically within one business day.</p> </div>"
+      ],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaAssure"
+      ],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "CumsumPage.tsx",
+      "lines": 536,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h2",
+          "text": "VeritaCheck™ CUMSUM"
+        },
+        {
+          "tag": "h1",
+          "text": "CUMSUM Tracker: {selectedTracker.instrument_name}"
+        },
+        {
+          "tag": "h1",
+          "text": "VeritaCheck™ CUMSUM"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaCheck"
+      ],
+      "internal_links": [
+        "/login",
+        "/veritacheck"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "DashboardPage.tsx",
+      "lines": 264,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Study Dashboard"
+        },
+        {
+          "tag": "h3",
+          "text": "No studies yet"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaCheck",
+        "VeritaMap"
+      ],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "DemoCprtPage.tsx",
+      "lines": 315,
+      "seo_title": "VeritaOps™ CPRT Demo — Cost Per Reportable Test",
+      "seo_description": "Live demonstration of four-layer cost-per-reportable-test calculation. CLSI GP11-A conceptual model. Built for clinical lab directors and CFOs.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Cost Per Reportable Test"
+        },
+        {
+          "tag": "h2",
+          "text": "{SCENARIO.test_name} brought in-house from a reference lab"
+        },
+        {
+          "tag": "h3",
+          "text": "Which layer answers which question"
+        },
+        {
+          "tag": "h3",
+          "text": "What you get inside VeritaOps&trade;"
+        },
+        {
+          "tag": "h3",
+          "text": "Try this with your own test menu"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "<span style={{ fontSize: 12, color: \"#718096\", fontWeight: 500, marginLeft: 6 }}>tests / year</span> </span>",
+        "li>Side-by-side comparison of two studies (vendor A vs vendor B, bef"
+      ],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaOps"
+      ],
+      "internal_links": [
+        "/demo",
+        "/pricing"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": [
+        {
+          "snippet": "title: \"VeritaOps™ CPRT Demo — Cost Per Reportable Test\",",
+          "kind": "other"
+        }
+      ]
+    },
+    {
+      "file": "DemoLabPage.tsx",
+      "lines": 1413,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "See VeritaAssure&#8482; in Action"
+        },
+        {
+          "tag": "h3",
+          "text": "CUMSUM Trackers"
+        },
+        {
+          "tag": "h3",
+          "text": "{map.name}"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "ium\">90 days of Estradiol QC, one warning, one rejection, one signed monthly review.</p>",
+        "post-survey deficiencies into one tracked finding with a due-date clock per accreditor (CAP 30 days, TJC 60 days, CMS-2567 10 days, AABB even"
+      ],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaCheck",
+        "VeritaComp",
+        "VeritaLab",
+        "VeritaMap",
+        "VeritaPT",
+        "VeritaPolicy",
+        "VeritaQC",
+        "VeritaResponse",
+        "VeritaScan",
+        "VeritaStaff",
+        "VeritaTrack"
+      ],
+      "internal_links": [
+        "/demo/qc",
+        "/login",
+        "/veritalab",
+        "/veritapolicy"
+      ],
+      "external_links": [
+        "https://www.api-pt.com",
+        "https://www.cap.org/laboratory-improvement/proficiency-testing/find-a-pt-program"
+      ],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "DemoPage.tsx",
+      "lines": 1229,
+      "seo_title": "Demo | VeritaAssure\\u2122 Lab Compliance & Operations Software",
+      "seo_description": "Explore VeritaAssure\\u2122 in action. Choose from operations tools (productivity, staffing) or the full compliance suite (method verification, inspection readiness, competency tracking).",
+      "headings": [
+        {
+          "tag": "h4",
+          "text": "{title}"
+        },
+        {
+          "tag": "h4",
+          "text": "Staffing vs Demand Comparison"
+        },
+        {
+          "tag": "h4",
+          "text": "Recommended Staffing Grid"
+        },
+        {
+          "tag": "h1",
+          "text": "See VeritaBench{\"\\u2122\"} + VeritaOps{\"\\u2122\"} in Action"
+        },
+        {
+          "tag": "h2",
+          "text": "CPRT is not one number. It is four."
+        },
+        {
+          "tag": "h2",
+          "text": "Instant Lab Productivity Scorecard"
+        },
+        {
+          "tag": "h2",
+          "text": "Track Productivity Over Time"
+        },
+        {
+          "tag": "h2",
+          "text": "Optimize Staffing by the Hour"
+        },
+        {
+          "tag": "h2",
+          "text": "Smart Inventory Management"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "ext-xs text-muted-foreground\">15 months of productivity data, {sorte",
+        "gional Medical Center showing 15 months of improvement, from 0.191 d"
+      ],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaBench",
+        "VeritaOps",
+        "VeritaPace",
+        "VeritaShift"
+      ],
+      "internal_links": [
+        "/demo/cprt"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "DemoQcPage.tsx",
+      "lines": 382,
+      "seo_title": "VeritaQC™ Demo — Westgard QC + Monthly Attestation",
+      "seo_description": "Live walkthrough of VeritaQC: daily QC entry, Westgard rule evaluation, corrective action capture, and monthly review attestation. Phase 1 preview.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Westgard QC + monthly attestation"
+        },
+        {
+          "tag": "h2",
+          "text": "{LOT.analyte} &middot; Lot {LOT.lot_number} ({LOT.level})"
+        },
+        {
+          "tag": "h3",
+          "text": "What you get inside VeritaQC&trade;"
+        },
+        {
+          "tag": "h3",
+          "text": "Try VeritaQC&trade; with your own analytes"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "with corrective action filed. One signed monthly review. </p>"
+      ],
+      "pricing_mentions": [],
+      "credentials": [
+        "MD"
+      ],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaQC"
+      ],
+      "internal_links": [
+        "/demo",
+        "/pricing"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": [
+        {
+          "snippet": "title: \"VeritaQC™ Demo — Westgard QC + Monthly Attestation\",",
+          "kind": "other"
+        }
+      ]
+    },
+    {
+      "file": "DemoSelectorPage.tsx",
+      "lines": 257,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Experience VeritaAssure&#8482;"
+        },
+        {
+          "tag": "h2",
+          "text": "{mod.label}"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaBench",
+        "VeritaCheck",
+        "VeritaOps"
+      ],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "FAQPage.tsx",
+      "lines": 355,
+      "seo_title": "FAQ | VeritaAssure™ Lab Compliance Software",
+      "seo_description": "Frequently asked questions about VeritaAssure™, CLIA compliance software, method verification, and laboratory inspection readiness tools.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Frequently Asked Questions"
+        },
+        {
+          "tag": "h3",
+          "text": "{cat.category}"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "oratories. The suite includes twelve modules covering performance verification, inspection readiness, competency, policy management, test menu mappin",
+        "urveyor, conducting more than 200 laboratory surveys across the country. He buil",
+        "a: \"The suite includes twelve production modules: VeritaCheck\\u2122 (perform",
+        "TJC laboratory surveyor with 200+ facility inspections. Includes an executive su",
+        "uments and email threads into one tracked finding with a due-date clock per accreditor (CAP 30 days, TJC 60 days, CMS-2567 10 days, AABB even",
+        "r year breaks even after just 12 studies and includes all VeritaChe",
+        "ithin 30 days of that charge. One refund per customer; applies to the initial charge only, not renewals or per-study purchases.\", },"
+      ],
+      "pricing_mentions": [
+        "$1,999/yr",
+        "$2,999/yr",
+        "$25",
+        "$299",
+        "$499/yr",
+        "$999/yr"
+      ],
+      "credentials": [
+        "CPHQ",
+        "MBA",
+        "MS"
+      ],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaCheck"
+      ],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "FoundingLabApplyPage.tsx",
+      "lines": 193,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h2",
+          "text": "Application received"
+        },
+        {
+          "tag": "h1",
+          "text": "Founding Lab Program"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [
+        "$2,125/yr",
+        "$4,995/yr",
+        "$999/yr"
+      ],
+      "credentials": [],
+      "module_mentions": [],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "GettingStartedPage.tsx",
+      "lines": 361,
+      "seo_title": "Getting Started | VeritaAssure™ Lab Compliance Software",
+      "seo_description": "Get started with VeritaAssure™. Follow the step-by-step onboarding guide to set up your laboratory compliance platform.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Getting Started with VeritaAssure&#8482;"
+        },
+        {
+          "tag": "h1",
+          "text": "Getting Started with VeritaAssure&#8482;"
+        },
+        {
+          "tag": "h3",
+          "text": "{step.title}"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "-relaxed mb-3\"> One-page reference mapping all 6 VeritaCheck&#8482; study types to CLSI, CLIA, CAP, an"
+      ],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaComp",
+        "VeritaLab",
+        "VeritaMap",
+        "VeritaScan",
+        "VeritaStaff"
+      ],
+      "internal_links": [
+        "/api/downloads/clsi-compliance-matrix",
+        "/api/downloads/software-validation-template",
+        "/login"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "HomePage.tsx",
+      "lines": 425,
+      "seo_title": "VeritaAssure™ Lab Compliance Software | Veritas Lab Services",
+      "seo_description": "VeritaAssure™ is the all-in-one compliance platform for clinical laboratories. Performance verification, inspection readiness, PT, competency tracking.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "You spent years mastering the science. Nobody taught you the compliance."
+        },
+        {
+          "tag": "h2",
+          "text": "Meet VeritaAssure™"
+        },
+        {
+          "tag": "h3",
+          "text": "VeritaAssure™ Tools"
+        },
+        {
+          "tag": "h3",
+          "text": "VeritaAssure™ Consulting"
+        },
+        {
+          "tag": "h3",
+          "text": "VeritaAssure™ Together"
+        },
+        {
+          "tag": "h2",
+          "text": "Our Mission"
+        },
+        {
+          "tag": "h2",
+          "text": "Available Services"
+        },
+        {
+          "tag": "h3",
+          "text": "{title}"
+        },
+        {
+          "tag": "h2",
+          "text": "The studies your lab has always run, finally done right."
+        },
+        {
+          "tag": "h2",
+          "text": "Built to Teach. Built to Lead."
+        },
+        {
+          "tag": "h3",
+          "text": "For New Directors"
+        },
+        {
+          "tag": "h3",
+          "text": "For Developing Leaders"
+        },
+        {
+          "tag": "h3",
+          "text": "For Health Systems"
+        },
+        {
+          "tag": "h2",
+          "text": "Watch the entire compliance workflow, live."
+        },
+        {
+          "tag": "h2",
+          "text": "Published Work"
+        }
+      ],
+      "stats": [
+        {
+          "value": "200+",
+          "label": "Facilities surveyed"
+        },
+        {
+          "value": "12",
+          "label": "Software Modules"
+        },
+        {
+          "value": "168",
+          "label": "Compliance items tracked"
+        },
+        {
+          "value": "22 yrs",
+          "label": "Industry experience"
+        }
+      ],
+      "count_claims": [
+        "oint Commission Surveyor with 200+ facility inspections.\" }, { icon: BarChart3,",
+        "const stats = [ { value: \"200+\", label: \"Facilities surveyed\" }, { value: \"12\", label",
+        "ties surveyed\" }, { value: \"12\", label: \"Software Modules\" }, { value: \"168\", label",
+        "VeritaAssure™ is a suite of twelve purpose-built modules covering every regulatory r",
+        "es hands-on consulting with a twelve-module software suite to give your",
+        "mb-3\"> The twelve VeritaAssure™ modules (VeritaCheck™, VeritaMap™,",
+        "{ icon: CheckCircle2, text: \"200+ facility inspections\" }, { ico",
+        "Assign supervisors to own one module at a time. They learn the re"
+      ],
+      "pricing_mentions": [],
+      "credentials": [
+        "CPHQ",
+        "MBA",
+        "MS"
+      ],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaBench",
+        "VeritaCheck",
+        "VeritaComp",
+        "VeritaLab",
+        "VeritaMap",
+        "VeritaPT",
+        "VeritaPolicy",
+        "VeritaResponse",
+        "VeritaScan",
+        "VeritaStaff",
+        "VeritaStock",
+        "VeritaTrack"
+      ],
+      "internal_links": [
+        "/contact",
+        "/demo",
+        "/pricing",
+        "/resources/how-veritaassure-trains-lab-leaders",
+        "/services",
+        "/team",
+        "/veritacheck"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "JoinPage.tsx",
+      "lines": 213,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h2",
+          "text": "{message}"
+        },
+        {
+          "tag": "h2",
+          "text": "You've been invited to join {invite.labName}"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "LabMembersPage.tsx",
+      "lines": 464,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Lab Members"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [
+        "$99",
+        "$99/yr"
+      ],
+      "credentials": [],
+      "module_mentions": [],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": [
+        {
+          "snippet": "if (!s) return \"—\";",
+          "kind": "literal-placeholder"
+        },
+        {
+          "snippet": ": `Seat created. Email delivery failed — share the invite link manually.` });",
+          "kind": "other"
+        },
+        {
+          "snippet": "{!canManage && \" — read-only view. Only the owner or an ad",
+          "kind": "other"
+        }
+      ]
+    },
+    {
+      "file": "LoginPage.tsx",
+      "lines": 521,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "VeritaAssure&#8482; Account"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [
+        "MD",
+        "MS"
+      ],
+      "module_mentions": [],
+      "internal_links": [
+        "/reset-password"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "not-found.tsx",
+      "lines": 33,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "404 Page Not Found"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "OperationsPage.tsx",
+      "lines": 174,
+      "seo_title": "Operations | VeritaBench, VeritaPace, VeritaShift, VeritaQA, VeritaStock, VeritaOps",
+      "seo_description": "Operational tools for clinical laboratories: productivity benchmarking, monthly trend tracking, by-hour demand analysis, department quality metrics, and reagent and supply tracking.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Operations"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaBench",
+        "VeritaOps",
+        "VeritaPace",
+        "VeritaQA",
+        "VeritaShift",
+        "VeritaStock"
+      ],
+      "internal_links": [
+        "/demo",
+        "/login"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "PricingPage.tsx",
+      "lines": 590,
+      "seo_title": "Pricing | VeritaAssure™ Lab Compliance Software",
+      "seo_description": "Simple annual pricing for clinical laboratory compliance software. Plans for individual labs, community hospitals, regional hospitals, and enterprise health systems.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Simple, Transparent Pricing"
+        },
+        {
+          "tag": "h3",
+          "text": "★ Founding Lab Program"
+        },
+        {
+          "tag": "h3",
+          "text": "{plan.name}"
+        },
+        {
+          "tag": "h3",
+          "text": "30-Day Money-Back Guarantee"
+        },
+        {
+          "tag": "h2",
+          "text": "Compare Plans"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "rything in Community\", \"15 active seats included ($333/seat)\", \"Additional seats at"
+      ],
+      "pricing_mentions": [
+        "$2,125",
+        "$25",
+        "$25,",
+        "$299",
+        "$3",
+        "$333",
+        "$333/seat",
+        "$4,995",
+        "$425",
+        "$425/seat",
+        "$499",
+        "$500",
+        "$500/seat",
+        "$99",
+        "$999"
+      ],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaCheck",
+        "VeritaQA"
+      ],
+      "internal_links": [
+        "/contact",
+        "/contact?subject=System+tier+quote",
+        "/founding-lab/apply",
+        "/terms",
+        "/veritacheck"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "PrivacyPage.tsx",
+      "lines": 88,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Privacy Policy"
+        },
+        {
+          "tag": "h2",
+          "text": "1. Overview"
+        },
+        {
+          "tag": "h2",
+          "text": "2. Information We Collect"
+        },
+        {
+          "tag": "h2",
+          "text": "3. What We Do Not Collect"
+        },
+        {
+          "tag": "h2",
+          "text": "4. How We Use Your Information"
+        },
+        {
+          "tag": "h2",
+          "text": "5. Data Storage and Security"
+        },
+        {
+          "tag": "h2",
+          "text": "6. Third-Party Services"
+        },
+        {
+          "tag": "h2",
+          "text": "7. Data Retention"
+        },
+        {
+          "tag": "h2",
+          "text": "8. Your Rights"
+        },
+        {
+          "tag": "h2",
+          "text": "9. Cookies"
+        },
+        {
+          "tag": "h2",
+          "text": "10. Children's Privacy"
+        },
+        {
+          "tag": "h2",
+          "text": "11. Changes to This Policy"
+        },
+        {
+          "tag": "h2",
+          "text": "12. Contact"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaCheck"
+      ],
+      "internal_links": [],
+      "external_links": [
+        "https://railway.app/legal/privacy",
+        "https://stripe.com/privacy"
+      ],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "ProductivityCalculatorPage.tsx",
+      "lines": 331,
+      "seo_title": "VeritaBench\\u2122 | Free Lab Productivity Scorecard | VeritaAssure\\u2122",
+      "seo_description": "Free VeritaBench\\u2122 benchmarking tool. Enter monthly billable volume and paid hours to instantly score your lab's productivity against Clinic, Community, and Hospital peer groups.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "VeritaBench{\"\\u2122\"}"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaBench",
+        "VeritaPace"
+      ],
+      "internal_links": [
+        "/pricing"
+      ],
+      "external_links": [
+        "https://www.medlabmag.com/article/1575/?search=michael%20veri"
+      ],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "RequestInvoicePage.tsx",
+      "lines": 348,
+      "seo_title": "Request an Invoice | VeritaAssure\\u2122",
+      "seo_description": "Request an invoice for VeritaAssure\\u2122. For AP departments that need to process an invoice before payment.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Request an Invoice"
+        },
+        {
+          "tag": "h2",
+          "text": "Request received"
+        },
+        {
+          "tag": "h1",
+          "text": "Request an Invoice"
+        }
+      ],
+      "stats": [
+        {
+          "value": "veritacheck",
+          "label": "VeritaCheck\\u2122 Unlimited ($299/yr)"
+        },
+        {
+          "value": "clinic",
+          "label": "Clinic - $499/yr"
+        },
+        {
+          "value": "community",
+          "label": "Community - $999/yr"
+        },
+        {
+          "value": "hospital",
+          "label": "Hospital - $1,999/yr"
+        },
+        {
+          "value": "enterprise",
+          "label": "Enterprise - $2,999/yr"
+        }
+      ],
+      "count_claims": [],
+      "pricing_mentions": [
+        "$1,999/yr",
+        "$2,999/yr",
+        "$299/yr",
+        "$499/yr",
+        "$999/yr"
+      ],
+      "credentials": [],
+      "module_mentions": [],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "ResetPasswordPage.tsx",
+      "lines": 168,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h2",
+          "text": "Password updated"
+        },
+        {
+          "tag": "h2",
+          "text": "Check your email"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [],
+      "internal_links": [
+        "/login"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "ResourcesPage.tsx",
+      "lines": 333,
+      "seo_title": "Resources | CLIA Compliance Guides for Clinical Laboratories",
+      "seo_description": "Free guides and articles on CLIA compliance, method verification, calibration verification, proficiency testing, and laboratory inspection preparation.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Clinical Laboratory Knowledge Base"
+        },
+        {
+          "tag": "h2",
+          "text": "{article.title}"
+        },
+        {
+          "tag": "h3",
+          "text": "{article.title}"
+        },
+        {
+          "tag": "h2",
+          "text": "Put the knowledge to work."
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "w About It\", summary: \"In 200+ inspections as a Joint Commission surveyor, most lab directors evalua",
+        "\"Calibration verification is one of the most consistently cited deficiencies in CLIA and CAP inspections. This article covers what",
+        "mission surveyor explains the five areas surveyors trace most consistently a",
+        "te. Most labs finish in under two hours.\", category: \"Software V",
+        "oint Commission Surveyor with 200+ facility inspections. No filler, no generic ad",
+        "trix\", desc: \"One-page landscape reference mapping all 6 VeritaCheck™ study types to CLSI, CLIA (42 CFR)"
+      ],
+      "pricing_mentions": [
+        "$299",
+        "$3,000",
+        "$800"
+      ],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaCheck",
+        "VeritaOps"
+      ],
+      "internal_links": [
+        "/veritacheck"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "RoadmapPage.tsx",
+      "lines": 196,
+      "seo_title": "Product Roadmap | VeritaAssure™ Lab Compliance Software",
+      "seo_description": "See what is coming next for VeritaAssure™. Upcoming features for clinical laboratory compliance, quality management, and accreditation readiness.",
+      "headings": [
+        {
+          "tag": "h2",
+          "text": "{label}"
+        },
+        {
+          "tag": "h3",
+          "text": "{item.title}"
+        },
+        {
+          "tag": "h1",
+          "text": "Product Roadmap"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "scription: \"Manages all three CLIA competency types: technical (6-element assessment per method group),"
+      ],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaCheck",
+        "VeritaComp",
+        "VeritaLab",
+        "VeritaMap",
+        "VeritaPT",
+        "VeritaPolicy",
+        "VeritaScan",
+        "VeritaStaff",
+        "VeritaStock"
+      ],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "ServicesPage.tsx",
+      "lines": 577,
+      "seo_title": "Services | Veritas Lab Services Laboratory Consulting",
+      "seo_description": "Laboratory consulting led by Michael Veri, MS, MBA, MLS(ASCP), CPHQ, former TJC Laboratory Surveyor with 200+ surveys conducted nationally. Mock inspections, productivity analysis, CLIA director coverage, and leadership coaching.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Laboratory Consulting from a Former TJC Surveyor"
+        },
+        {
+          "tag": "h2",
+          "text": "Current Availability"
+        },
+        {
+          "tag": "h2",
+          "text": "Who you will be working with"
+        },
+        {
+          "tag": "h2",
+          "text": "Engagements"
+        },
+        {
+          "tag": "h3",
+          "text": "{heading}"
+        },
+        {
+          "tag": "h4",
+          "text": "{title}"
+        },
+        {
+          "tag": "h2",
+          "text": "How an engagement starts"
+        },
+        {
+          "tag": "h3",
+          "text": "No-cost scoping call"
+        },
+        {
+          "tag": "h3",
+          "text": "Written scope and fixed price"
+        },
+        {
+          "tag": "h3",
+          "text": "Availability"
+        },
+        {
+          "tag": "h2",
+          "text": "Tools we use in engagements"
+        },
+        {
+          "tag": "h3",
+          "text": "VeritaCheck™ and the VeritaAssure™ Suite"
+        },
+        {
+          "tag": "h2",
+          "text": "Start with a 30-minute scoping call"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "s needed\", pricing: \"$15,000 to $25,000 per month\", description:",
+        "TJC Laboratory Surveyor with 200+ surveys conducted nationally. Mock",
+        "Surveyor with over 200 surveys conducted nationally, forme",
+        "inical laboratory director of 12 years, and author of Lab",
+        "Michael Veri spent 12 years as a clinical laboratory dir",
+        "onducted over 200 surveys at hospitals, reference lab",
+        "text-sm\"> 200+ TJC surveys conducted nationally",
+        "text-sm\"> 12 years as a clinical laboratory dir",
+        "account plus two years if you ever cancel.",
+        "the life of the account plus two years\", ].map("
+      ],
+      "pricing_mentions": [
+        "$12,000",
+        "$15,000",
+        "$18,000",
+        "$2,500",
+        "$25",
+        "$25,000",
+        "$299",
+        "$4,000",
+        "$400",
+        "$5,000",
+        "$5,500",
+        "$600",
+        "$7,500",
+        "$999"
+      ],
+      "credentials": [
+        "CPHQ",
+        "MBA",
+        "MS"
+      ],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaCheck"
+      ],
+      "internal_links": [
+        "/book/scoping-call",
+        "/contact",
+        "/veritacheck"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "StudyGuidePage.tsx",
+      "lines": 555,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h2",
+          "text": "{title}"
+        },
+        {
+          "tag": "h3",
+          "text": "What it is"
+        },
+        {
+          "tag": "h3",
+          "text": "How it works"
+        },
+        {
+          "tag": "h3",
+          "text": "When to run it"
+        },
+        {
+          "tag": "h3",
+          "text": "Pass / Fail criteria"
+        },
+        {
+          "tag": "h3",
+          "text": "Official references"
+        },
+        {
+          "tag": "h1",
+          "text": "Which study does your lab need?"
+        },
+        {
+          "tag": "h2",
+          "text": "At a glance"
+        },
+        {
+          "tag": "h2",
+          "text": "Additional resources"
+        },
+        {
+          "tag": "h2",
+          "text": "Ready to run a study?"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "This guide explains all six study types supported by VeritaChe",
+        "lytes on a single analyzer in one study\" what=\"Multi-ana",
+        "6\">VeritaCheck™ automates all six study types, no desktop software,"
+      ],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaCheck"
+      ],
+      "internal_links": [
+        "/veritacheck"
+      ],
+      "external_links": [
+        "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493"
+      ],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "StudyResultsPage.tsx",
+      "lines": 2394,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "{study.testName}"
+        },
+        {
+          "tag": "h3",
+          "text": "{compName} vs. {primaryName}"
+        },
+        {
+          "tag": "h2",
+          "text": "{isAuthError ? \"Sign in required\" : \"Study not found\"}"
+        },
+        {
+          "tag": "h1",
+          "text": "{study.testName}"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "Interp} agreement between the two methods for ${study.testName}. The Deming regres"
+      ],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaCheck"
+      ],
+      "internal_links": [
+        "/veritacheck"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": [
+        {
+          "snippet": "n == null || !Number.isFinite(n) ? \"—\" : n.toFixed(digits);",
+          "kind": "literal-placeholder"
+        },
+        {
+          "snippet": "n == null || !Number.isFinite(n) ? \"—\" : `${n.toFixed(digits)}%`;",
+          "kind": "literal-placeholder"
+        },
+        {
+          "snippet": "{study.instrument || \"—\"} · {study.date} · Analyst: {study.anal",
+          "kind": "literal-placeholder"
+        },
+        {
+          "snippet": "yst || \"—\"}",
+          "kind": "literal-placeholder"
+        },
+        {
+          "snippet": "td className=\"p-2 font-mono\">{r.lot || \"—\"}</td>",
+          "kind": "literal-placeholder"
+        },
+        {
+          "snippet": "e=\"p-2 text-right font-mono\">{r.day ?? \"—\"}</td>",
+          "kind": "literal-placeholder"
+        },
+        {
+          "snippet": "e=\"p-2 text-right font-mono\">{r.run ?? \"—\"}</td>",
+          "kind": "literal-placeholder"
+        },
+        {
+          "snippet": "td className=\"p-2 font-mono\">{r.lot || \"—\"}</td>",
+          "kind": "literal-placeholder"
+        },
+        {
+          "snippet": "e=\"p-2 text-right font-mono\">{r.day ?? \"—\"}</td>",
+          "kind": "literal-placeholder"
+        },
+        {
+          "snippet": "e=\"p-2 text-right font-mono\">{r.run ?? \"—\"}</td>",
+          "kind": "literal-placeholder"
+        },
+        {
+          "snippet": "td className=\"p-2 font-mono\">{r.lot || \"—\"}</td>",
+          "kind": "literal-placeholder"
+        }
+      ]
+    },
+    {
+      "file": "SurveyorViewPage.tsx",
+      "lines": 309,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Surveyor view"
+        },
+        {
+          "tag": "h2",
+          "text": "{viewDoc.title}"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "TeaLookupPage.tsx",
+      "lines": 288,
+      "seo_title": "CLIA TEa Lookup Tool | Total Allowable Error by Analyte | Veritas Lab Services",
+      "seo_description": "Look up total allowable error (TEa) limits by analyte for CLIA compliance. Reference values from CLIA proficiency testing criteria and RCPA quality specifications.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "CLIA Allowable Error (TEa) Lookup"
+        },
+        {
+          "tag": "h2",
+          "text": "Want to understand how TEa applies to your studies?"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaCheck"
+      ],
+      "internal_links": [
+        "/resources",
+        "/resources/clia-tea-what-lab-directors-dont-know",
+        "/veritacheck"
+      ],
+      "external_links": [
+        "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493"
+      ],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "TeamPage.tsx",
+      "lines": 102,
+      "seo_title": "Our Team | Veritas Lab Services",
+      "seo_description": "Meet Michael Veri, MS, MBA, MLS(ASCP), CPHQ - laboratory compliance expert, former Joint Commission surveyor, and founder of Veritas Lab Services.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Meet the Team"
+        },
+        {
+          "tag": "h2",
+          "text": "Michael Veri"
+        },
+        {
+          "tag": "h3",
+          "text": "Credentials & Experience"
+        },
+        {
+          "tag": "h3",
+          "text": "Publications & Resources"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "s)\" }, { icon: Star, text: \"200+ healthcare facility inspections\" }, { icon: BookOpen, t",
+        "nguished US Army veteran with 22 years of service and over a decade",
+        "healthcare sector. Leveraging four years as a Joint Commission (TJC) Surveyor, he has conducted regulato",
+        "ance inspections at more than 200 healthcare facilities across the country.",
+        "is inspection experience. The twelve-module suite is live at veritaslabs"
+      ],
+      "pricing_mentions": [],
+      "credentials": [
+        "CPHQ",
+        "MBA",
+        "MS"
+      ],
+      "module_mentions": [
+        "VeritaAssure"
+      ],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "TermsPage.tsx",
+      "lines": 80,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Terms of Service"
+        },
+        {
+          "tag": "h2",
+          "text": "1. Acceptance of Terms"
+        },
+        {
+          "tag": "h2",
+          "text": "2. Description of Service"
+        },
+        {
+          "tag": "h2",
+          "text": "3. Intended Users"
+        },
+        {
+          "tag": "h2",
+          "text": "4. Disclaimer of Medical Advice"
+        },
+        {
+          "tag": "h2",
+          "text": "5. User Responsibilities"
+        },
+        {
+          "tag": "h2",
+          "text": "6. Account Security"
+        },
+        {
+          "tag": "h2",
+          "text": "7. Payment, Subscriptions, and Refunds"
+        },
+        {
+          "tag": "h2",
+          "text": "8. Intellectual Property"
+        },
+        {
+          "tag": "h2",
+          "text": "9. Limitation of Liability"
+        },
+        {
+          "tag": "h2",
+          "text": "10. Indemnification"
+        },
+        {
+          "tag": "h2",
+          "text": "11. Modifications"
+        },
+        {
+          "tag": "h2",
+          "text": "12. Governing Law"
+        },
+        {
+          "tag": "h2",
+          "text": "13. Contact"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "the amount you paid us in the 12 months preceding the claim.</p>"
+      ],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaCheck",
+        "VeritaScan"
+      ],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "TrustPage.tsx",
+      "lines": 104,
+      "seo_title": "Trust & Security | Veritas Lab Services",
+      "seo_description": "How VeritaAssure™ protects your laboratory data: hosting, encryption, multi-lab isolation, PHI-free design, subprocessors, and HIPAA BAA availability.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Trust & Security"
+        },
+        {
+          "tag": "h2",
+          "text": "1. Overview"
+        },
+        {
+          "tag": "h2",
+          "text": "2. Where Your Data Lives"
+        },
+        {
+          "tag": "h2",
+          "text": "3. How Your Data Is Protected"
+        },
+        {
+          "tag": "h2",
+          "text": "4. What We Do Not Store"
+        },
+        {
+          "tag": "h2",
+          "text": "5. Account and Customer Isolation"
+        },
+        {
+          "tag": "h2",
+          "text": "6. Subprocessors"
+        },
+        {
+          "tag": "h2",
+          "text": "7. Error Monitoring"
+        },
+        {
+          "tag": "h2",
+          "text": "8. Backups and Disaster Recovery"
+        },
+        {
+          "tag": "h2",
+          "text": "9. Compliance Certifications"
+        },
+        {
+          "tag": "h2",
+          "text": "10. HIPAA Business Associate Agreement"
+        },
+        {
+          "tag": "h2",
+          "text": "11. Reporting Security Issues"
+        },
+        {
+          "tag": "h2",
+          "text": "12. Contact"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "gzip-compressed, retained for two years (730 days), and pruned automatically.",
+        "up run is validated against a five-point integrity check (file size, SQLite structural integrity, user count, study count, table count); anomali",
+        "ide a current snapshot within five business days.</p> </section>",
+        "ll acknowledge receipt within five business days and provide an update on remediation within thirty days for confirmed issues. We do"
+      ],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaAssure"
+      ],
+      "internal_links": [
+        "/privacy"
+      ],
+      "external_links": [
+        "https://railway.app/legal/privacy",
+        "https://resend.com/legal/privacy-policy",
+        "https://sentry.io/privacy/",
+        "https://stripe.com/privacy",
+        "https://trust.railway.com",
+        "https://www.cloudflare.com/privacypolicy/"
+      ],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaAssurePage.tsx",
+      "lines": 368,
+      "seo_title": "VeritaAssure™ | Lab Compliance Software Suite for Clinical Laboratories",
+      "seo_description": "The complete laboratory compliance platform. VeritaCheck™, VeritaMap™, VeritaScan™, VeritaTrack™, VeritaPolicy™, VeritaResponse™, and more - built by a lab professional who conducted 200+ Joint Commission surveys.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "VeritaAssure&#8482;"
+        },
+        {
+          "tag": "h2",
+          "text": "Why VeritaAssure&#8482;"
+        },
+        {
+          "tag": "h2",
+          "text": "Ready to see VeritaAssure&#8482; in action?"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "uments and email threads into one tracked finding with a due-date clock per accreditor (CAP 30 days, TJC 60 days, CMS-2567 10 days, AABB even",
+        "\", price: \"$1,999/yr\", note: \"15 seats, regional hospital labs\" },",
+        "ab professional who conducted 200+ Joint Commission surveys.\" }); return ( <div cla",
+        "d certificate monitoring into one platform built by a former TJC laboratory surveyor with 200+ facility inspections. Browser-base",
+        "TJC laboratory surveyor with 200+ facility inspections.\", \"3-5x le"
+      ],
+      "pricing_mentions": [
+        "$1,999/yr",
+        "$2,999/yr",
+        "$25",
+        "$299/yr",
+        "$499/yr",
+        "$999/yr"
+      ],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaCheck",
+        "VeritaComp",
+        "VeritaLab",
+        "VeritaMap",
+        "VeritaPT",
+        "VeritaPolicy",
+        "VeritaQC",
+        "VeritaResponse",
+        "VeritaScan",
+        "VeritaStaff",
+        "VeritaTrack"
+      ],
+      "internal_links": [
+        "/demo",
+        "/login",
+        "/pricing"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaBenchPage.tsx",
+      "lines": 616,
+      "seo_title": "VeritaPace\\u2122 | Monthly Lab Productivity Tracker | VeritaAssure\\u2122",
+      "seo_description": "Track monthly lab productivity with VeritaPace\\u2122. Billable tests per paid hour benchmarking, FTE and overtime analysis, and peer comparisons. Included with VeritaAssure\\u2122 Suite plans.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "VeritaPace{\"\\u2122\"}"
+        },
+        {
+          "tag": "h2",
+          "text": "Upgrade to access VeritaPace{\"\\u2122\"}"
+        },
+        {
+          "tag": "h1",
+          "text": "VeritaPace™"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "TJC laboratory surveyor with 200+ facility inspections. </p>"
+      ],
+      "pricing_mentions": [
+        "$499/yr"
+      ],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaBench",
+        "VeritaPace"
+      ],
+      "internal_links": [
+        "/calculator",
+        "/login",
+        "/pricing"
+      ],
+      "external_links": [
+        "https://www.medlabmag.com/article/1575/?search=michael%20veri"
+      ],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaBenchPIPage.tsx",
+      "lines": 1089,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h2",
+          "text": "Sign in to access VeritaQA{\"\\u2122\"}"
+        },
+        {
+          "tag": "h2",
+          "text": "Upgrade to access VeritaQA{\"\\u2122\"}"
+        },
+        {
+          "tag": "h1",
+          "text": "Set Up Your PI Program"
+        },
+        {
+          "tag": "h1",
+          "text": "VeritaQA™"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaQA"
+      ],
+      "internal_links": [
+        "/login",
+        "/pricing"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaBenchStaffingPage.tsx",
+      "lines": 697,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h2",
+          "text": "Staffing Studies"
+        },
+        {
+          "tag": "h3",
+          "text": "{mt === \"received\" ? \"Samples Received\" : mt === \"verified\" ? \"Samples Verified\" : \"Staff on Duty\"}"
+        },
+        {
+          "tag": "h3",
+          "text": "{title}"
+        },
+        {
+          "tag": "h3",
+          "text": "Staffing vs Demand Comparison"
+        },
+        {
+          "tag": "h3",
+          "text": "Recommended Staffing (FTEs)"
+        },
+        {
+          "tag": "h2",
+          "text": "Sign in to access VeritaShift™"
+        },
+        {
+          "tag": "h2",
+          "text": "Upgrade to access VeritaShift™"
+        },
+        {
+          "tag": "h1",
+          "text": "{selectedStudy.name}"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "per hour / throughput rate)). One tech is appropriate during genuine low-volume hours; the director adjusts upward"
+      ],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaShift"
+      ],
+      "internal_links": [
+        "/login",
+        "/pricing"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaCheckPage.tsx",
+      "lines": 3405,
+      "seo_title": "VeritaCheck™ | CLIA Performance Verification Software for Clinical Labs",
+      "seo_description": "Run EP studies for accuracy, precision, reportable range, and reference ranges. Generates director-signed, survey-ready verification documentation.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "VeritaCheck{\"™\"}"
+        },
+        {
+          "tag": "h1",
+          "text": "The studies your lab has always run, finally done right."
+        },
+        {
+          "tag": "h2",
+          "text": "Ready to Run Unlimited Studies?"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "dy \"Single study run\": \"Run one calibration verification, method comparison, or other EP study. Generates a complete signed",
+        "s - the same expertise behind 200+ facility inspections as a Joint Commission Surveyor.\", \"Lab Management 101 b",
+        "features: [\"15 seats included\", \"Everything in Co",
+        "TJC laboratory surveyor with 200+ inspections. VeritaCheck{\"\\u2122\"} pr",
+        "the data is collected within one run or one day. </"
+      ],
+      "pricing_mentions": [
+        "$1,999",
+        "$2,999",
+        "$25",
+        "$299",
+        "$299/yr",
+        "$499",
+        "$499/yr",
+        "$999"
+      ],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaCheck",
+        "VeritaComp",
+        "VeritaMap",
+        "VeritaMapMapPage",
+        "VeritaScan",
+        "VeritaStaff"
+      ],
+      "internal_links": [
+        "/login",
+        "/pricing",
+        "/study-guide"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaCheckVerificationPage.tsx",
+      "lines": 941,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h2",
+          "text": "Instrument Verification Packages"
+        },
+        {
+          "tag": "h3",
+          "text": "No verification packages yet"
+        },
+        {
+          "tag": "h3",
+          "text": "{verification.instrument_name}"
+        }
+      ],
+      "stats": [
+        {
+          "value": "new_instrument",
+          "label": "New instrument (first of this type in lab)"
+        },
+        {
+          "value": "new_analyte",
+          "label": "New analyte added to existing instrument"
+        },
+        {
+          "value": "second_unit",
+          "label": "Second unit of same make/model"
+        },
+        {
+          "value": "replacement",
+          "label": "Replacement instrument (same make/model)"
+        }
+      ],
+      "count_claims": [
+        "xs text-muted-foreground\">All four elements are required by default. You",
+        "a separate director sign-off. One study design covers all units.</p>"
+      ],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaMap"
+      ],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaCompAppPage.tsx",
+      "lines": 3486,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Sign in to access VeritaComp{\"™\"}"
+        },
+        {
+          "tag": "h1",
+          "text": "VeritaComp{\"™\"} Access Required"
+        },
+        {
+          "tag": "h1",
+          "text": "VeritaComp{\"™\"}"
+        },
+        {
+          "tag": "h1",
+          "text": "{program.name}"
+        },
+        {
+          "tag": "h3",
+          "text": "Element 6: Problem-Solving Quizzes"
+        },
+        {
+          "tag": "h1",
+          "text": "${esc(title)}"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "r testing personnel using the six CLIA-required elements at 42 CFR 493.1235. Tracks I",
+        "\"Document each of the six elements as you observe or test the s"
+      ],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaComp",
+        "VeritaMap"
+      ],
+      "internal_links": [
+        "/login",
+        "/veritacomp"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaCompPage.tsx",
+      "lines": 365,
+      "seo_title": "VeritaComp\\u2122 | Laboratory Competency Assessment Software",
+      "seo_description": "Manage the six CLIA competency elements for every lab employee. Track assessments, generate PDF documentation, and stay survey-ready year-round.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "VeritaComp{\"™\"}"
+        },
+        {
+          "tag": "h2",
+          "text": "Three Competency Types. One System."
+        },
+        {
+          "tag": "h3",
+          "text": "{ct.title}"
+        },
+        {
+          "tag": "h2",
+          "text": "VeritaComp{\"™\"} Teaches the Six CLIA Elements"
+        },
+        {
+          "tag": "h2",
+          "text": "What is VeritaComp{\"™\"}?"
+        },
+        {
+          "tag": "h2",
+          "text": "How It Works"
+        },
+        {
+          "tag": "h2",
+          "text": "Pricing"
+        },
+        {
+          "tag": "h2",
+          "text": "Who This Is For"
+        },
+        {
+          "tag": "h2",
+          "text": "Ready to manage competency the right way?"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "TJC laboratory surveyor with 200+ facility inspections\", ]; export default func",
+        "re\", description: \"Manage the six CLIA competency elements for every lab employee. Trac",
+        "TJC laboratory surveyor with 200+ facility inspections. </p>",
+        "\">VeritaComp{\"™\"} Teaches the Six CLIA Elements</h2> <p className=",
+        "Competency assessment is one of the most frequently cited deficiencies during TJC and CAP laboratory surveys. The requirement is decepti"
+      ],
+      "pricing_mentions": [
+        "$499/year",
+        "$499/yr"
+      ],
+      "credentials": [],
+      "module_mentions": [],
+      "internal_links": [
+        "/login",
+        "/pricing",
+        "/veritamap",
+        "/veritascan"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaLabAppPage.tsx",
+      "lines": 714,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h2",
+          "text": "Sign in to access VeritaLab{\"™\"}"
+        },
+        {
+          "tag": "h2",
+          "text": "Upgrade to access VeritaLab{\"™\"}"
+        },
+        {
+          "tag": "h1",
+          "text": "VeritaLab{\"™\"} - Certificate Tracking"
+        },
+        {
+          "tag": "h3",
+          "text": "No certificates yet"
+        },
+        {
+          "tag": "h3",
+          "text": "{cert.cert_name}"
+        }
+      ],
+      "stats": [
+        {
+          "value": "clia",
+          "label": "CLIA Certificate"
+        },
+        {
+          "value": "cap",
+          "label": "CAP Accreditation"
+        },
+        {
+          "value": "tjc",
+          "label": "TJC Accreditation"
+        },
+        {
+          "value": "state_license",
+          "label": "State Laboratory License"
+        },
+        {
+          "value": "lab_director_license",
+          "label": "Lab Director License"
+        },
+        {
+          "value": "other",
+          "label": "Other"
+        }
+      ],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaLab"
+      ],
+      "internal_links": [
+        "/login",
+        "/veritacheck"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaLabPage.tsx",
+      "lines": 205,
+      "seo_title": "VeritaLab\\u2122 | Laboratory Certificate and Document Storage Software",
+      "seo_description": "Centralized storage for laboratory accreditation certificates, licenses, and compliance documents. Never scramble for paperwork during a survey again.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "VeritaLab{\"™\"}"
+        },
+        {
+          "tag": "h2",
+          "text": "What VeritaLab{\"™\"} Does"
+        },
+        {
+          "tag": "h3",
+          "text": "{card.title}"
+        },
+        {
+          "tag": "h2",
+          "text": "Key Features"
+        },
+        {
+          "tag": "h2",
+          "text": "How It Works"
+        },
+        {
+          "tag": "h3",
+          "text": "{s.title}"
+        },
+        {
+          "tag": "h2",
+          "text": "Ready to track your certificates?"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "viewed certificate records at 200+ facilities\", ]; export default funct",
+        "TJC laboratory surveyor with 200+ facility inspections. </p>"
+      ],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaAssure"
+      ],
+      "internal_links": [
+        "/login"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaMapAppPage.tsx",
+      "lines": 429,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Sign in to access VeritaMap™"
+        },
+        {
+          "tag": "h1",
+          "text": "VeritaMap™"
+        },
+        {
+          "tag": "h3",
+          "text": "No maps yet"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaCheck",
+        "VeritaComp",
+        "VeritaMap",
+        "VeritaMapMapPage",
+        "VeritaPT",
+        "VeritaTrack"
+      ],
+      "internal_links": [
+        "/login",
+        "/veritamap"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaMapBuildPage.tsx",
+      "lines": 2167,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Step 1: Add Your Instruments"
+        },
+        {
+          "tag": "h2",
+          "text": "Add Instrument"
+        },
+        {
+          "tag": "h2",
+          "text": "{instruments.length} instrument{instruments.length !== 1 ? \"s\" : \"\"} added"
+        },
+        {
+          "tag": "h1",
+          "text": "{currentRole} Instruments: Select Tests"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "lly review and respond within one business day. In the meantime, you"
+      ],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaCheck",
+        "VeritaComp",
+        "VeritaMap",
+        "VeritaMapMapPage",
+        "VeritaPT",
+        "VeritaTrack"
+      ],
+      "internal_links": [
+        "/veritamap"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaMapLabwidePage.tsx",
+      "lines": 498,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Sign in to access VeritaMap"
+        },
+        {
+          "tag": "h1",
+          "text": "Whole-lab menu"
+        },
+        {
+          "tag": "h3",
+          "text": "No maps yet"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaCheck",
+        "VeritaComp",
+        "VeritaMap",
+        "VeritaMapMapPage",
+        "VeritaPT",
+        "VeritaTrack"
+      ],
+      "internal_links": [
+        "/login"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaMapMapPage.tsx",
+      "lines": 2445,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "{mapDetail.name}"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaCheck",
+        "VeritaComp",
+        "VeritaMap",
+        "VeritaMapBuildPage",
+        "VeritaMapMapPage",
+        "VeritaPT",
+        "VeritaTrack"
+      ],
+      "internal_links": [
+        "/veritacheck"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaMapPage.tsx",
+      "lines": 353,
+      "seo_title": "VeritaMap™ | Clinical Laboratory Test Menu Mapping Software",
+      "seo_description": "Map your complete laboratory test menu with instrument assignments, reference ranges, and critical values. Built for CLIA compliance and accreditation surveys.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "VeritaMap™"
+        },
+        {
+          "tag": "h2",
+          "text": "What is VeritaMap™?"
+        },
+        {
+          "tag": "h2",
+          "text": "12 Regulatory Data Points Per Test"
+        },
+        {
+          "tag": "h2",
+          "text": "What's Included"
+        },
+        {
+          "tag": "h2",
+          "text": "Pricing"
+        },
+        {
+          "tag": "h2",
+          "text": "Who This Is For"
+        },
+        {
+          "tag": "h2",
+          "text": "Ready to map your test menu?"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "§493.1255(b)(3)\",desc: \"When two or more instruments run the same test, correlation studies are required.\" }, { col:",
+        "TJC laboratory surveyor with 200+ facility inspections. </p>",
+        "uires linearity verification, one click opens VeritaCheck™ to run the study. When it flags a competency",
+        "<FlaskConical size={12} />VeritaCheck™ - run linearity & correlation studies </Link>"
+      ],
+      "pricing_mentions": [
+        "$499",
+        "$499/year",
+        "$499/yr"
+      ],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaCheck",
+        "VeritaMap",
+        "VeritaScan"
+      ],
+      "internal_links": [
+        "/login",
+        "/pricing",
+        "/veritacheck",
+        "/veritascan"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaMapResourcesPage.tsx",
+      "lines": 201,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Reference Literature"
+        },
+        {
+          "tag": "h2",
+          "text": "{section.heading}"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaCheck",
+        "VeritaComp",
+        "VeritaMap",
+        "VeritaPT",
+        "VeritaTrack"
+      ],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaOpsAppPage.tsx",
+      "lines": 918,
+      "seo_title": "VeritaOps - Cost Per Reportable Test (CPRT)",
+      "seo_description": "Layered cost-per-reportable-test calculator for clinical laboratories. CLSI GP11-A aligned.",
+      "headings": [
+        {
+          "tag": "h4",
+          "text": "Test identity"
+        },
+        {
+          "tag": "h4",
+          "text": "L1: Reagents and supplies"
+        },
+        {
+          "tag": "h4",
+          "text": "L2: Direct labor"
+        },
+        {
+          "tag": "h4",
+          "text": "CPRT comparison"
+        },
+        {
+          "tag": "h4",
+          "text": "Annual cost at deepest enabled layer"
+        },
+        {
+          "tag": "h2",
+          "text": "Sign in to use VeritaOps"
+        },
+        {
+          "tag": "h2",
+          "text": "VeritaOps requires a paid plan"
+        },
+        {
+          "tag": "h1",
+          "text": "VeritaOps{\"™\"}"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "you type.\", \"Select two studies and click Compare to see t"
+      ],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaOps"
+      ],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": [
+        {
+          "snippet": "let deltaLabel = \"—\";",
+          "kind": "literal-placeholder"
+        },
+        {
+          "snippet": "nnual != null ? fmtCurrency(aAnnual) : \"—\"}",
+          "kind": "literal-placeholder"
+        },
+        {
+          "snippet": "nnual != null ? fmtCurrency(bAnnual) : \"—\"}",
+          "kind": "literal-placeholder"
+        },
+        {
+          "snippet": "<span className=\"text-muted-foreground\">—</span>}",
+          "kind": "other"
+        },
+        {
+          "snippet": "<span className=\"text-muted-foreground\">—</span>}",
+          "kind": "other"
+        },
+        {
+          "snippet": "tCurrency(deepest * s.annual_volume) : \"—\"}",
+          "kind": "literal-placeholder"
+        }
+      ]
+    },
+    {
+      "file": "VeritaPolicyAppPage.tsx",
+      "lines": 835,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h2",
+          "text": "Sign in to access VeritaPolicy&#8482;"
+        },
+        {
+          "tag": "h2",
+          "text": "Upgrade to access VeritaPolicy&#8482;"
+        },
+        {
+          "tag": "h1",
+          "text": "VeritaPolicy&#8482;"
+        },
+        {
+          "tag": "h2",
+          "text": "Policy Library"
+        },
+        {
+          "tag": "h3",
+          "text": "{bulkConfirm.markNa ? \"Mark section as N/A?\" : \"Mark section as Applicable?\"}"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaPolicy"
+      ],
+      "internal_links": [
+        "/pricing"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaPolicyCompliancePage.tsx",
+      "lines": 622,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Compliance Dashboard"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaPolicyCompliancePage"
+      ],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaPolicyMyPoliciesPage.tsx",
+      "lines": 2032,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "My Policies"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "placeholder=\"One sentence about what this policy covers.\" />",
+        "<SelectItem value=\"12\">12 months</SelectItem>",
+        "oc?.review_interval_months ?? 12} months. Typed name plus password is"
+      ],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaPolicy",
+        "VeritaPolicyMyPoliciesPage"
+      ],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": [
+        {
+          "snippet": "Step {p.step_order} — {p.step_name} (",
+          "kind": "other"
+        }
+      ]
+    },
+    {
+      "file": "VeritaPolicyPage.tsx",
+      "lines": 276,
+      "seo_title": "VeritaPolicy™ | Laboratory Policy and Procedure Management Software",
+      "seo_description": "Version-controlled policy and procedure management for clinical laboratories. Track staff acknowledgments, manage document review cycles, and stay survey-ready.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "VeritaPolicy&#8482;"
+        },
+        {
+          "tag": "h2",
+          "text": "Built for {profile.short}-Accredited Labs"
+        },
+        {
+          "tag": "h3",
+          "text": "{card.title}"
+        },
+        {
+          "tag": "h2",
+          "text": "Everything Included"
+        },
+        {
+          "tag": "h2",
+          "text": "Ready for your next {profile.surveyTerm}?"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "ld your lab's policy library. One policy can satisfy multiple ${profi",
+        "ss, Complete, N/A\", `Link one policy document to multiple ${profi",
+        "TJC laboratory surveyor with 200+ facility inspections. </p>"
+      ],
+      "pricing_mentions": [],
+      "credentials": [
+        "CPHQ"
+      ],
+      "module_mentions": [
+        "VeritaPolicy"
+      ],
+      "internal_links": [
+        "/pricing"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaPTAppPage.tsx",
+      "lines": 772,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h2",
+          "text": "VeritaPT™"
+        },
+        {
+          "tag": "h2",
+          "text": "VeritaPT™"
+        },
+        {
+          "tag": "h1",
+          "text": "VeritaPT™"
+        }
+      ],
+      "stats": [
+        {
+          "value": "split_sample_external",
+          "label": "Split sample, external reference lab"
+        },
+        {
+          "value": "split_sample_internal",
+          "label": "Split sample, different method/instrument internally"
+        },
+        {
+          "value": "blind_replicate",
+          "label": "Blind replicate testing of patient samples"
+        },
+        {
+          "value": "calibration_verif_material",
+          "label": "Calibration verification material with assigned values"
+        },
+        {
+          "value": "peer_group",
+          "label": "Peer-group comparison (assayed control + peer statistics)"
+        },
+        {
+          "value": "manufacturer_material",
+          "label": "Manufacturer-assayed control material with target values"
+        },
+        {
+          "value": "clinical_correlation",
+          "label": "Clinical correlation review (qualitative tests only)"
+        },
+        {
+          "value": "other",
+          "label": "Other documented method approved by lab director"
+        }
+      ],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaMap",
+        "VeritaPT"
+      ],
+      "internal_links": [
+        "/veritamap"
+      ],
+      "external_links": [
+        "https://www.api-pt.com",
+        "https://www.cap.org/laboratory-improvement/proficiency-testing/find-a-pt-program"
+      ],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaPTPage.tsx",
+      "lines": 208,
+      "seo_title": "VeritaPT™ | Proficiency Testing Gap Analyzer for Clinical Labs",
+      "seo_description": "Identify PT coverage gaps in your laboratory test menu. Ensure every analyte has a proficiency testing program and stay compliant with CLIA PT requirements.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "VeritaPT™"
+        },
+        {
+          "tag": "h2",
+          "text": "What VeritaPT™ Tracks"
+        },
+        {
+          "tag": "h2",
+          "text": "How It Works"
+        },
+        {
+          "tag": "h2",
+          "text": "Regulatory Framework"
+        },
+        {
+          "tag": "h2",
+          "text": "Ready to track PT the right way?"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "TJC laboratory surveyor with 200+ facility inspections. </p>",
+        "foreground text-center mb-10\">Four steps from enrollment to surveyor-ready report.</p>"
+      ],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaPT",
+        "VeritaScan"
+      ],
+      "internal_links": [
+        "/demo",
+        "/login",
+        "/register"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaQCAppPage.tsx",
+      "lines": 903,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h2",
+          "text": "Sign in to use VeritaQC&#8482;"
+        },
+        {
+          "tag": "h2",
+          "text": "VeritaQC&#8482; requires a subscription"
+        },
+        {
+          "tag": "h1",
+          "text": "VeritaQC&#8482;"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaAssure",
+        "VeritaLabAppPage",
+        "VeritaQC"
+      ],
+      "internal_links": [
+        "/login",
+        "/pricing"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaQCDailyReviewPage.tsx",
+      "lines": 533,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h2",
+          "text": "Sign in to review QC"
+        },
+        {
+          "tag": "h2",
+          "text": "VeritaQC&#8482; requires a subscription"
+        },
+        {
+          "tag": "h1",
+          "text": "VeritaQC&#8482; Daily Review"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [],
+      "internal_links": [
+        "/login",
+        "/pricing"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaResponseAppPage.tsx",
+      "lines": 500,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h2",
+          "text": "VeritaResponse&trade;"
+        },
+        {
+          "tag": "h1",
+          "text": "VeritaResponse&trade;"
+        }
+      ],
+      "stats": [
+        {
+          "value": "CAP",
+          "label": "CAP"
+        },
+        {
+          "value": "TJC",
+          "label": "TJC"
+        },
+        {
+          "value": "CMS",
+          "label": "CMS (CLIA-2567)"
+        },
+        {
+          "value": "AABB",
+          "label": "AABB"
+        },
+        {
+          "value": "COLA",
+          "label": "COLA"
+        },
+        {
+          "value": "Other",
+          "label": "Other"
+        }
+      ],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaResponse"
+      ],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaResponseFindingPage.tsx",
+      "lines": 1047,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h2",
+          "text": "VeritaResponse&trade;"
+        },
+        {
+          "tag": "h2",
+          "text": "Finding not found"
+        },
+        {
+          "tag": "h1",
+          "text": "{finding.accreditor} Finding {finding.finding_number || `#${finding.id}`}"
+        }
+      ],
+      "stats": [
+        {
+          "value": "CAP",
+          "label": "CAP"
+        },
+        {
+          "value": "TJC",
+          "label": "TJC"
+        },
+        {
+          "value": "CMS",
+          "label": "CMS (CLIA-2567)"
+        },
+        {
+          "value": "AABB",
+          "label": "AABB"
+        },
+        {
+          "value": "COLA",
+          "label": "COLA"
+        },
+        {
+          "value": "Other",
+          "label": "Other"
+        },
+        {
+          "value": "open",
+          "label": "Open"
+        },
+        {
+          "value": "drafting",
+          "label": "Drafting"
+        },
+        {
+          "value": "submitted",
+          "label": "Submitted"
+        },
+        {
+          "value": "accepted",
+          "label": "Accepted"
+        },
+        {
+          "value": "rejected_resubmit",
+          "label": "Rejected (resubmit)"
+        },
+        {
+          "value": "closed",
+          "label": "Closed"
+        }
+      ],
+      "count_claims": [
+        "> TJC submits one ESC per Requirement for Improvement through Joint Commission Connect under the Survey Process post-survey workflow"
+      ],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaCheck",
+        "VeritaResponse"
+      ],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaScanAppPage.tsx",
+      "lines": 490,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Sign in to access VeritaScan™"
+        },
+        {
+          "tag": "h1",
+          "text": "VeritaScan™ Access Required"
+        },
+        {
+          "tag": "h1",
+          "text": "VeritaScan™"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaScan"
+      ],
+      "internal_links": [
+        "/login",
+        "/veritascan"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaScanPage.tsx",
+      "lines": 337,
+      "seo_title": "VeritaScan™ | Laboratory Inspection Readiness Checklist Software",
+      "seo_description": "168-item TJC-standard inspection checklist for clinical laboratories. Track your readiness, identify gaps, and walk into every survey prepared.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "VeritaScan™"
+        },
+        {
+          "tag": "h2",
+          "text": "What is VeritaScan™?"
+        },
+        {
+          "tag": "h2",
+          "text": "What's Included"
+        },
+        {
+          "tag": "h2",
+          "text": "10 Domains, 168 Items"
+        },
+        {
+          "tag": "h2",
+          "text": "How It Works"
+        },
+        {
+          "tag": "h2",
+          "text": "Pricing"
+        },
+        {
+          "tag": "h2",
+          "text": "Who This Is For"
+        },
+        {
+          "tag": "h2",
+          "text": "Ready to assess your lab?"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "re Manual\", items: 22, desc: \"Completeness, bench accessibility, biennial review, required SOP elements, change control\" }, { num:",
+        "by a 4-year TJC surveyor with 200+ facility inspections\", \"Exportable: share wi",
+        "cted inspections at more than 200 facilities. </p>"
+      ],
+      "pricing_mentions": [
+        "$499/year",
+        "$499/yr"
+      ],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaCheck",
+        "VeritaMap",
+        "VeritaScan"
+      ],
+      "internal_links": [
+        "/login",
+        "/pricing",
+        "/veritacheck"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaScanScanPage.tsx",
+      "lines": 1106,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "{scanMeta?.name ?? \"Loading…\"}"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [],
+      "internal_links": [],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaStaffAppPage.tsx",
+      "lines": 1351,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h2",
+          "text": "Sign in to use VeritaStaff{\"™\"}"
+        },
+        {
+          "tag": "h2",
+          "text": "VeritaStaff{\"™\"} requires a Professional plan or above"
+        },
+        {
+          "tag": "h1",
+          "text": "VeritaStaff{\"™\"}"
+        },
+        {
+          "tag": "h3",
+          "text": "No employees yet"
+        },
+        {
+          "tag": "h1",
+          "text": "{employee.last_name}, {employee.first_name}{employee.middle_initial ? ` ${employee.middle_initial}.` : \"\"}"
+        },
+        {
+          "tag": "h3",
+          "text": "Employee Information"
+        },
+        {
+          "tag": "h3",
+          "text": "CLIA Role Assignments"
+        },
+        {
+          "tag": "h3",
+          "text": "Competency Schedule"
+        }
+      ],
+      "stats": [
+        {
+          "value": "TJC",
+          "label": "The Joint Commission (TJC)"
+        },
+        {
+          "value": "CAP",
+          "label": "College of American Pathologists (CAP)"
+        },
+        {
+          "value": "COLA",
+          "label": "COLA"
+        },
+        {
+          "value": "CLIA_ONLY",
+          "label": "CLIA Only"
+        },
+        {
+          "value": "OTHER",
+          "label": "Other"
+        }
+      ],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaComp",
+        "VeritaMap",
+        "VeritaStaff"
+      ],
+      "internal_links": [
+        "/login",
+        "/veritastaff"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaStaffPage.tsx",
+      "lines": 241,
+      "seo_title": "VeritaStaff\\u2122 | Laboratory Staff Roster and HR Compliance Software",
+      "seo_description": "Maintain your laboratory staff roster with credentials, training records, and compliance tracking. Stay organized for Joint Commission and CLIA surveys.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "VeritaStaff{\"™\"}"
+        },
+        {
+          "tag": "h2",
+          "text": "What VeritaStaff{\"™\"} Does"
+        },
+        {
+          "tag": "h3",
+          "text": "{card.title}"
+        },
+        {
+          "tag": "h2",
+          "text": "CLIA Role Assignments"
+        },
+        {
+          "tag": "h2",
+          "text": "Key Features"
+        },
+        {
+          "tag": "h2",
+          "text": "How It Works"
+        },
+        {
+          "tag": "h3",
+          "text": "{s.title}"
+        },
+        {
+          "tag": "h2",
+          "text": "Ready to manage your lab personnel?"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "TJC laboratory surveyor with 200+ facility inspections\", ]; const FEATURE_CARDS",
+        "TJC laboratory surveyor with 200+ facility inspections. </p>"
+      ],
+      "pricing_mentions": [
+        "$499/yr"
+      ],
+      "credentials": [],
+      "module_mentions": [],
+      "internal_links": [
+        "/login"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaStockPage.tsx",
+      "lines": 1451,
+      "seo_title": "VeritaStock\\u2122 | Laboratory Inventory & Reagent Management",
+      "seo_description": "Track reagent and supply inventory with burn-rate-aware par levels, lead-time-aware reorder alerts, and expiration tracking. Included with VeritaAssure\\u2122 Suite plans.",
+      "headings": [
+        {
+          "tag": "h4",
+          "text": "Item Details"
+        },
+        {
+          "tag": "h4",
+          "text": "Unit Configuration"
+        },
+        {
+          "tag": "h4",
+          "text": "Consumption and Ordering"
+        },
+        {
+          "tag": "h4",
+          "text": "Standing Order"
+        },
+        {
+          "tag": "h4",
+          "text": "Current Status"
+        },
+        {
+          "tag": "h4",
+          "text": "Notes"
+        },
+        {
+          "tag": "h1",
+          "text": "VeritaStock{\"\\u2122\"}"
+        },
+        {
+          "tag": "h1",
+          "text": "VeritaStock{\"\\u2122\"} Inventory Manager"
+        },
+        {
+          "tag": "h1",
+          "text": "VeritaStock{\"™\"}"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "TJC laboratory surveyor with 200+ facility inspections. </p>"
+      ],
+      "pricing_mentions": [
+        "$499/yr"
+      ],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaStock"
+      ],
+      "internal_links": [
+        "/login"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaStockSnapOrderPage.tsx",
+      "lines": 359,
+      "seo_title": "Snap Order - VeritaStock",
+      "seo_description": "Generate an emergency manual order PDF, grouped by vendor.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "Snap Order"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaStock"
+      ],
+      "internal_links": [
+        "/pricing"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaTrackAppPage.tsx",
+      "lines": 921,
+      "seo_title": "",
+      "seo_description": "",
+      "headings": [
+        {
+          "tag": "h2",
+          "text": "VeritaTrack™"
+        },
+        {
+          "tag": "h1",
+          "text": "VeritaTrack™"
+        },
+        {
+          "tag": "h3",
+          "text": "No tasks yet"
+        }
+      ],
+      "stats": [],
+      "count_claims": [],
+      "pricing_mentions": [],
+      "credentials": [],
+      "module_mentions": [
+        "VeritaMap",
+        "VeritaPolicy",
+        "VeritaTrack"
+      ],
+      "internal_links": [
+        "/pricing"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    },
+    {
+      "file": "VeritaTrackPage.tsx",
+      "lines": 113,
+      "seo_title": "VeritaTrack\\u2122 | Laboratory QC Task Tracking & Sign-off",
+      "seo_description": "Track recurring QC tasks, daily checks, maintenance, and quality sign-offs across your lab. Due-date alerts, full sign-off history, and Excel export. Included with VeritaAssure\\u2122 Suite plans.",
+      "headings": [
+        {
+          "tag": "h1",
+          "text": "VeritaTrack{\"\\u2122\"}"
+        }
+      ],
+      "stats": [],
+      "count_claims": [
+        "TJC laboratory surveyor with 200+ facility inspections. </p>"
+      ],
+      "pricing_mentions": [
+        "$499/yr"
+      ],
+      "credentials": [],
+      "module_mentions": [],
+      "internal_links": [
+        "/login"
+      ],
+      "external_links": [],
+      "todos": [],
+      "em_dashes_outside_comments": []
+    }
+  ],
+  "summary": {}
+}
