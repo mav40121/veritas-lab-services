@@ -31,9 +31,11 @@ export function preserveMapLink(
 export const MAP_SIGNOFF_FIELDS = ["last_cal_ver", "last_method_comp", "last_precision", "last_sop_review"];
 
 // Write a sign-off date back to every matching VeritaMap test row for the
-// owner's lab and REPORT the outcome. `sqlite` is a better-sqlite3 handle.
+// SIGN-OFF's lab (signoffLabId, resolved by the caller from task.lab_id) and
+// REPORT the outcome. `sqlite` is a better-sqlite3 handle.
 export function applyMapSignoffWriteback(
   sqlite: any,
+  signoffLabId: number | null,
   userId: number,
   mapAnalyte: string,
   mapField: string,
@@ -43,10 +45,14 @@ export function applyMapSignoffWriteback(
     return { linked: true, updated: 0, warning: `Sign-off recorded. The linked map field "${mapField}" is not one the map tracks, so the map was not changed.` };
   }
   try {
-    const ownerLabRow = sqlite.prepare("SELECT lab_id FROM users WHERE id = ?").get(userId) as { lab_id: number | null } | undefined;
-    const ownerLabId = ownerLabRow?.lab_id ?? null;
-    const maps = ownerLabId != null
-      ? sqlite.prepare("SELECT id FROM veritamap_maps WHERE lab_id = ?").all(ownerLabId) as Array<{ id: number }>
+    // #107-class fix (2026-08-10): scope the writeback to the sign-off's own lab
+    // (signoffLabId = task.lab_id), NOT the owner's home lab (users.lab_id).
+    // users.lab_id can drift from the active lab, so a multi-lab owner signing
+    // off a map-linked task on Lab B was writing the completion date onto Lab A's
+    // veritamap_tests and never updating Lab B. The user_id fallback stays for
+    // legacy rows whose lab cannot be resolved.
+    const maps = signoffLabId != null
+      ? sqlite.prepare("SELECT id FROM veritamap_maps WHERE lab_id = ?").all(signoffLabId) as Array<{ id: number }>
       : sqlite.prepare("SELECT id FROM veritamap_maps WHERE user_id = ?").all(userId) as Array<{ id: number }>;
     if (maps.length === 0) {
       return { linked: true, updated: 0, warning: "Sign-off recorded, but no VeritaMap was found for this lab to update." };

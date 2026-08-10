@@ -563,12 +563,14 @@ export function registerVeritaTrackRoutes(
       byUserId: req.user?.userId ?? null,
     });
     // If linked to a VeritaMap field, write the date back and REPORT the result
-    // (map_sync) so a failed write-back is never silent. The helper walks every
-    // map in the owner's lab (Shape A/B: lab-scope via users.lab_id, fall back
-    // to user_id for legacy rows) and returns how many rows it changed plus a
-    // warning when 0 rows matched or the update threw.
+    // (map_sync) so a failed write-back is never silent. #107-class fix: the
+    // helper scopes to the sign-off's OWN lab (signoffLabId = task.lab_id), not
+    // the owner's home lab (users.lab_id, which drifts for multi-lab owners and
+    // wrote the date onto the wrong lab's map). Falls back to user_id only for
+    // legacy rows whose lab cannot resolve; returns how many rows it changed
+    // plus a warning when 0 matched or the update threw.
     const mapSync = (task.map_analyte && task.map_field)
-      ? applyMapSignoffWriteback(sqlite, userId, task.map_analyte, task.map_field, completed_date)
+      ? applyMapSignoffWriteback(sqlite, signoffLabId, userId, task.map_analyte, task.map_field, completed_date)
       : null;
     const signoff = sqlite.prepare("SELECT * FROM veritatrack_signoffs WHERE id = ?").get(r.lastInsertRowid);
     res.json({ ...(signoff as any), map_sync: mapSync });
