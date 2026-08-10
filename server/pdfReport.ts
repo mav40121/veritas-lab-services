@@ -8,6 +8,7 @@
 
 import puppeteer from "puppeteer";
 import { stampPdfAuthor } from "./pdfMeta";
+import { labLocalDate } from "./dateLocal";
 import type { Study } from "@shared/schema";
 import { existsSync as _teaExistsSync, readFileSync as _teaReadFileSync } from "fs";
 import { resolve as _teaResolve } from "path";
@@ -904,7 +905,7 @@ function directorReviewHTML(study?: any): string {
   // signer, still prints the blank wet-ink template so it can be signed by hand.
   const finalized = !!study && String(study.lifecycle_state || "") === "finalized";
   const signer = String((study && (study.finalized_signature ?? "")) || "").trim();
-  const signedOn = study && study.finalized_at ? String(study.finalized_at).slice(0, 10) : "";
+  const signedOn = labLocalDate(study?.finalized_at);
   const signed = finalized && !!signer;
   // Only auto-mark "Accepted for patient testing" for a signed study whose
   // statistical verdict is not FAIL. A signed FAIL still shows the signature +
@@ -5984,7 +5985,7 @@ function buildCms2567HTML(input: Cms2567Input): string {
   const monitoringPlan = escHtml(finding.monitoring_plan || "").replace(/\n/g, "<br>");
   const completionDate = escHtml(finding.completion_date || "");
   const signedBy = escHtml(finding.signed_by || "");
-  const signedAt = finding.signed_at ? escHtml(String(finding.signed_at).slice(0, 16).replace("T", " ")) : "";
+  const signedAt = finding.signed_at ? escHtml(labLocalDate(finding.signed_at, true)) : "";
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>CMS-2567 Plan of Correction - ${findingNum}</title>
 <style>
@@ -6187,7 +6188,7 @@ function buildCapResponseHTML(input: Cms2567Input): string {
   const monitoringPlan = escHtml(finding.monitoring_plan || "").replace(/\n/g, "<br>");
   const completionDate = escHtml(finding.completion_date || "");
   const signedBy = escHtml(finding.signed_by || "");
-  const signedAt = finding.signed_at ? escHtml(String(finding.signed_at).slice(0, 16).replace("T", " ")) : "";
+  const signedAt = finding.signed_at ? escHtml(labLocalDate(finding.signed_at, true)) : "";
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>CAP Plan of Correction Response - ${findingNum}</title>
 <style>
@@ -6375,7 +6376,7 @@ function buildTjcEscHTML(input: Cms2567Input): string {
   const monitoringPlan = escHtml(finding.monitoring_plan || "").replace(/\n/g, "<br>");
   const completionDate = escHtml(finding.completion_date || "");
   const signedBy = escHtml(finding.signed_by || "");
-  const signedAt = finding.signed_at ? escHtml(String(finding.signed_at).slice(0, 16).replace("T", " ")) : "";
+  const signedAt = finding.signed_at ? escHtml(labLocalDate(finding.signed_at, true)) : "";
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>TJC Evidence of Standards Compliance - ${findingNum}</title>
 <style>
@@ -6565,7 +6566,7 @@ function buildColaResponseHTML(input: Cms2567Input): string {
   const monitoringPlan = escHtml(finding.monitoring_plan || "").replace(/\n/g, "<br>");
   const completionDate = escHtml(finding.completion_date || "");
   const signedBy = escHtml(finding.signed_by || "");
-  const signedAt = finding.signed_at ? escHtml(String(finding.signed_at).slice(0, 16).replace("T", " ")) : "";
+  const signedAt = finding.signed_at ? escHtml(labLocalDate(finding.signed_at, true)) : "";
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>COLA Consultative Response - ${findingNum}</title>
 <style>
@@ -6754,7 +6755,7 @@ function buildAabbNerHTML(input: Cms2567Input): string {
   const monitoringPlan = escHtml(finding.monitoring_plan || "").replace(/\n/g, "<br>");
   const completionDate = escHtml(finding.completion_date || "");
   const signedBy = escHtml(finding.signed_by || "");
-  const signedAt = finding.signed_at ? escHtml(String(finding.signed_at).slice(0, 16).replace("T", " ")) : "";
+  const signedAt = finding.signed_at ? escHtml(labLocalDate(finding.signed_at, true)) : "";
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>AABB Nonconforming Event Report - ${findingNum}</title>
 <style>
