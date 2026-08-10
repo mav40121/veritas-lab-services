@@ -694,24 +694,22 @@ export default function VeritaQCAppPage() {
               {selectedLot && results.length > 0 && (
                 <label className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
                   Points
-                  <select
+                  <input
+                    type="number"
+                    min={1}
+                    max={200}
                     value={chartPoints}
                     onChange={(e) => setChartPoints(e.target.value)}
-                    className="border border-input rounded-md bg-background px-2 py-1 text-xs"
+                    className="w-16 border border-input rounded-md bg-background px-2 py-1 text-xs"
                     aria-label="Number of Levey-Jennings points to show"
-                  >
-                    <option value="20">20</option>
-                    <option value="30">30</option>
-                    <option value="50">50</option>
-                    <option value="100">100</option>
-                    <option value="all">All</option>
-                  </select>
+                    title="Points to show (1 to 200)"
+                  />
                 </label>
               )}
             </CardHeader>
             <CardContent>
               {selectedLot
-                ? <LeveyJenningsChart mean={selectedLot.mfr_mean} sd={selectedLot.mfr_sd} results={chartPoints === "all" ? results : results.slice(0, Number(chartPoints))} />
+                ? <LeveyJenningsChart mean={selectedLot.mfr_mean} sd={selectedLot.mfr_sd} results={results.slice(0, Math.max(1, Math.min(200, parseInt(chartPoints, 10) || 30)))} />
                 : <div className="text-sm text-muted-foreground py-8 text-center">Select a control lot to view its Levey-Jennings chart.</div>}
             </CardContent>
           </Card>

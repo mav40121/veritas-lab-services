@@ -31,8 +31,8 @@ test.describe("VeritaQC Levey-Jennings: points control", () => {
     await expect(page.locator("svg[aria-label='Levey-Jennings chart']")).toBeVisible();
     await expect(page.getByText(/Run sequence \(oldest to newest, n=\d+\)/)).toBeVisible();
 
-    // Narrowing to 20 caps the visible points at 20 (for a lot with >= 20 results).
-    await points.selectOption("20");
+    // Typing any number sets the visible points (for a lot with >= 20 results).
+    await points.fill("20");
     await expect(page.getByText("Run sequence (oldest to newest, n=20)")).toBeVisible();
   });
 });
