@@ -2,38 +2,11 @@ import { Switch, Route, Router, useLocation, Redirect } from "wouter";
 const VeritaCheckVerificationPage = lazy(() => import("@/pages/VeritaCheckVerificationPage"));
 const ArticleInventoryManagementPage = lazy(() => import("@/pages/ArticleInventoryManagementPage"));
 import { QueryClientProvider } from "@tanstack/react-query";
-import { useEffect, useState, lazy as reactLazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
+import { useEffect, useState, Suspense } from "react";
 
-// Self-heal stale lazy chunks after a deploy. When a dynamic import() fails
-// because the hashed chunk from a previous build is gone (a new deploy shipped
-// while this tab was open), force ONE full reload to fetch the fresh
-// index.html + chunk list. sessionStorage guards against an infinite reload
-// loop if a chunk is genuinely broken; the flag clears on any successful
-// import so a later deploy self-heals again. This is why lazy routes showed
-// "Something went wrong" after a run of deploys. All lazy() calls below use
-// this wrapper (the react import is aliased to reactLazy).
-function lazy<T extends ComponentType<any>>(
-  factory: () => Promise<{ default: T }>,
-): LazyExoticComponent<T> {
-  return reactLazy(async () => {
-    try {
-      const mod = await factory();
-      try { sessionStorage.removeItem("chunk-reload-once"); } catch { /* ignore */ }
-      return mod;
-    } catch (err) {
-      let alreadyReloaded = true;
-      try {
-        alreadyReloaded = sessionStorage.getItem("chunk-reload-once") === "1";
-        if (!alreadyReloaded) sessionStorage.setItem("chunk-reload-once", "1");
-      } catch { /* sessionStorage unavailable: fall through and rethrow */ }
-      if (!alreadyReloaded) {
-        window.location.reload();
-        return { default: (() => null) as unknown as T };
-      }
-      throw err;
-    }
-  });
-}
+// Self-heal stale lazy chunks after a deploy: retry the import (cutover
+// propagation), then reload once for a truly gone chunk. See @/lib/lazyChunk.
+import { lazyWithReload as lazy } from "@/lib/lazyChunk";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
