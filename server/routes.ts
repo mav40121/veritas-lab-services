@@ -16,6 +16,7 @@ import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
+import { labLocalDate } from "./dateLocal";
 import { buildWasteReport, generateWasteReportPDF, generateWasteReportExcel, type WasteEventRow, type WasteReportContext } from "./wasteReport";
 import { entireLabFlag, sanitizeSpecialties, expandEntireLabRoles, cms209Gaps } from "./cms209Roles";
 import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution, analyteMatch } from "./veritacheckCoverage";
@@ -79,7 +80,7 @@ function licenseCtxFromReq(req: any, productName?: string): LicenseContext {
       licensee: labName || u.name || u.email,
       email: u.email,
       plan: u.plan,
-      issueDate: new Date().toISOString().slice(0, 10),
+      issueDate: labLocalDate(new Date().toISOString()),
       productName,
     };
   }
@@ -91,7 +92,7 @@ function licenseCtxFromReq(req: any, productName?: string): LicenseContext {
     licensee: "Demo Preview",
     email: ipHash,
     plan: "demo",
-    issueDate: new Date().toISOString().slice(0, 10),
+    issueDate: labLocalDate(new Date().toISOString()),
     productName,
   };
 }
@@ -11752,7 +11753,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               licensee: cliaLabName || idUser.name || idUser.email,
               email: idUser.email,
               plan: idUser.plan,
-              issueDate: new Date().toISOString().slice(0, 10),
+              issueDate: labLocalDate(new Date().toISOString()),
             };
           }
         } catch (err: any) {

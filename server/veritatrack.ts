@@ -5,6 +5,7 @@ import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
 import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
 import { preserveMapLink, applyMapSignoffWriteback } from "./veritatrackMapSync";
+import { labLocalDate } from "./dateLocal";
 
 function trackLicenseCtx(req: any): LicenseContext {
   const u = req?.user || null;
@@ -18,14 +19,14 @@ function trackLicenseCtx(req: any): LicenseContext {
       licensee: row?.clia_lab_name || u.name || u.email,
       email: u.email,
       plan: u.plan,
-      issueDate: new Date().toISOString().slice(0, 10),
+      issueDate: labLocalDate(new Date().toISOString()),
     };
   }
   const ipRaw = (req?.ip || req?.headers?.["x-forwarded-for"] || "").toString();
   const ipHash = ipRaw
     ? "ip-" + crypto.createHash("sha256").update(ipRaw).digest("hex").slice(0, 8)
     : "anonymous";
-  return { licensee: "Demo Preview", email: ipHash, plan: "demo", issueDate: new Date().toISOString().slice(0, 10) };
+  return { licensee: "Demo Preview", email: ipHash, plan: "demo", issueDate: labLocalDate(new Date().toISOString()) };
 }
 
 function frequencyToMonths(freq: string): number {
