@@ -3288,7 +3288,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/labs/:labId/qc/lots", authMiddleware, labScopeMiddleware, (req: any, res) => {
     const sqlite = (db as any).$client;
     const lots = sqlite.prepare(
-      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, status, created_at, updated_at FROM qc_control_lots WHERE lab_id = ? ORDER BY (status = 'active') DESC, analyte ASC, lot_number ASC"
+      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, status, prior_lot_id, created_at, updated_at FROM qc_control_lots WHERE lab_id = ? ORDER BY (status = 'active') DESC, analyte ASC, lot_number ASC"
     ).all(req.scope.labId);
     res.json({ lots });
   });
@@ -3407,9 +3407,158 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).run(s, new Date().toISOString(), id);
 
     const updated = sqlite.prepare(
-      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, status, created_at, updated_at FROM qc_control_lots WHERE id = ?"
+      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, status, prior_lot_id, created_at, updated_at FROM qc_control_lots WHERE id = ?"
     ).get(id);
     return res.json({ ok: true, lot: updated });
+  });
+
+  // POST /api/labs/:labId/qc/control-lots/:id/changeover — start a replacement
+  // lot for the SAME control line (analyte + level) as :id. This is the lot
+  // changeover workflow: a new lot has its own manufacturer mean/SD, so QC
+  // re-baselines onto it (a shift is expected and correct). The new lot links
+  // to the prior via prior_lot_id, and by default the prior lot is retired so
+  // exactly one lot stays active per line. Analyte + level are carried forward
+  // from the prior lot and cannot be changed here (a different analyte/level is
+  // a new control lot, not a changeover). Both writes run in one transaction so
+  // a failure never leaves two active lots or an orphaned link.
+  //
+  // Body: lot_number*, mfr_mean*, mfr_sd*, mfr_sd_interval?, manufacturer?,
+  //       mfr_range_low?, mfr_range_high?, expiration_date?, opened_date?,
+  //       retire_prior? (default true).
+  // Returns 409 on the (lab_id, analyte, lot_number) UNIQUE violation.
+  app.post("/api/labs/:labId/qc/control-lots/:id/changeover", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const priorId = Number(req.params.id);
+    if (!Number.isFinite(priorId) || priorId <= 0) {
+      return res.status(400).json({ error: "valid :id required" });
+    }
+    const sqlite = (db as any).$client;
+    const prior = sqlite.prepare(
+      "SELECT id, analyte, level, lot_number, manufacturer, mfr_sd_interval FROM qc_control_lots WHERE id = ? AND lab_id = ?"
+    ).get(priorId, req.scope.labId) as any;
+    if (!prior) return res.status(404).json({ error: "Prior control lot not found in this lab" });
+
+    const {
+      lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval,
+      mfr_range_low, mfr_range_high, expiration_date, opened_date, retire_prior,
+    } = req.body || {};
+
+    if (!lot_number || typeof lot_number !== "string" || !lot_number.trim()) {
+      return res.status(400).json({ error: "lot_number required" });
+    }
+    if (String(lot_number).trim() === String(prior.lot_number)) {
+      return res.status(400).json({ error: "New lot number must differ from the prior lot" });
+    }
+    const meanN = Number(mfr_mean);
+    const sdN = Number(mfr_sd);
+    if (!Number.isFinite(meanN)) {
+      return res.status(400).json({ error: "mfr_mean must be a number" });
+    }
+    if (!Number.isFinite(sdN) || sdN <= 0) {
+      return res.status(400).json({ error: "mfr_sd must be a positive number" });
+    }
+    const sdInt = Number(mfr_sd_interval) === 3 ? 3 : (Number(prior.mfr_sd_interval) === 3 ? 3 : 2);
+    const rangeLow = mfr_range_low != null && mfr_range_low !== "" ? Number(mfr_range_low) : null;
+    const rangeHigh = mfr_range_high != null && mfr_range_high !== "" ? Number(mfr_range_high) : null;
+    if (rangeLow != null && !Number.isFinite(rangeLow)) {
+      return res.status(400).json({ error: "mfr_range_low must be a number if provided" });
+    }
+    if (rangeHigh != null && !Number.isFinite(rangeHigh)) {
+      return res.status(400).json({ error: "mfr_range_high must be a number if provided" });
+    }
+    const retirePrior = retire_prior === undefined ? true : !!retire_prior;
+    const now = new Date().toISOString();
+
+    try {
+      const run = sqlite.transaction(() => {
+        const ins = sqlite.prepare(
+          "INSERT INTO qc_control_lots (lab_id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, status, prior_lot_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)"
+        ).run(
+          req.scope.labId,
+          prior.analyte,
+          prior.level,
+          String(lot_number).trim(),
+          manufacturer ? String(manufacturer).trim() : (prior.manufacturer || null),
+          meanN, sdN, sdInt, rangeLow, rangeHigh,
+          expiration_date || null, opened_date || null,
+          priorId, now, now,
+        );
+        const newId = Number(ins.lastInsertRowid);
+        if (retirePrior) {
+          sqlite.prepare("UPDATE qc_control_lots SET status = 'retired', updated_at = ? WHERE id = ?").run(now, priorId);
+        }
+        return newId;
+      });
+      const newId = run();
+      const cols = "id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, status, prior_lot_id, created_at, updated_at";
+      const newLot = sqlite.prepare(`SELECT ${cols} FROM qc_control_lots WHERE id = ?`).get(newId);
+      const updatedPrior = sqlite.prepare(`SELECT ${cols} FROM qc_control_lots WHERE id = ?`).get(priorId);
+      return res.json({ ok: true, lot: newLot, prior: updatedPrior });
+    } catch (err: any) {
+      if (err && (err.code === "SQLITE_CONSTRAINT_UNIQUE" || /UNIQUE constraint/i.test(err.message || ""))) {
+        return res.status(409).json({
+          error: `A control lot with analyte "${prior.analyte}" and lot number "${String(lot_number).trim()}" already exists for this lab.`,
+        });
+      }
+      console.error("[qc/changeover] failed:", err.message);
+      return res.status(500).json({ error: err.message || "Changeover failed" });
+    }
+  });
+
+  // GET /api/labs/:labId/qc/line?analyte=&level= — continuous cross-lot history
+  // for one control line (analyte + level). Returns the ordered lots of the
+  // line plus every result across those lots as one chronological series, with
+  // each point's SDI computed against ITS OWN lot's mean/SD (so a lot change
+  // re-baselines rather than smearing one mean across two materials). The
+  // client draws a vertical shift marker wherever control_lot_id changes
+  // between consecutive points. Powers the "Span all lots" Levey-Jennings view.
+  app.get("/api/labs/:labId/qc/line", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const analyte = String(req.query.analyte || "").trim();
+    const level = String(req.query.level || "").trim().toLowerCase();
+    if (!analyte) return res.status(400).json({ error: "analyte required" });
+    if (!["low", "mid", "high"].includes(level)) {
+      return res.status(400).json({ error: "level must be low, mid, or high" });
+    }
+    const sqlite = (db as any).$client;
+    // Lots of this line in creation chronology (created_at always exists and
+    // reflects the changeover order; a replacement lot is inserted after its
+    // prior). opened_date is user-entered and may be null, so it is not the
+    // ordering key.
+    const lots = sqlite.prepare(
+      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, expiration_date, opened_date, status, prior_lot_id, created_at FROM qc_control_lots WHERE lab_id = ? AND analyte = ? AND level = ? ORDER BY created_at ASC, id ASC"
+    ).all(req.scope.labId, analyte, level) as any[];
+    if (lots.length === 0) return res.json({ analyte, level, lots: [], points: [] });
+    const lotIds = lots.map(l => l.id);
+    const ph = lotIds.map(() => "?").join(",");
+    // Every result across the line, joined to its lot's mean/SD. Cap at the most
+    // recent 1000 to bound the payload, then re-sort ascending so the chart runs
+    // oldest to newest. (1000 covers years of daily multi-level QC on one line.)
+    const rows = sqlite.prepare(
+      "SELECT r.id, r.control_lot_id, l.lot_number, r.result_value, r.result_date, r.run_time, r.instrument, r.accepted_for_reporting, l.mfr_mean, l.mfr_sd FROM qc_results r JOIN qc_control_lots l ON r.control_lot_id = l.id WHERE r.lab_id = ? AND r.control_lot_id IN (" + ph + ") ORDER BY r.result_date DESC, r.id DESC LIMIT 1000"
+    ).all(req.scope.labId, ...lotIds).reverse() as any[];
+    // Rejection flags for point coloring (same shape as the per-lot endpoint).
+    const rejected = new Set<number>();
+    if (rows.length > 0) {
+      const rph = rows.map(() => "?").join(",");
+      const vrows = sqlite.prepare(
+        "SELECT DISTINCT qc_result_id FROM qc_rule_violations WHERE severity = 'rejection' AND qc_result_id IN (" + rph + ")"
+      ).all(...rows.map(r => r.id)) as any[];
+      for (const v of vrows) rejected.add(v.qc_result_id);
+    }
+    const points = rows.map(r => ({
+      id: r.id,
+      control_lot_id: r.control_lot_id,
+      lot_number: r.lot_number,
+      result_value: r.result_value,
+      result_date: r.result_date,
+      run_time: r.run_time,
+      instrument: r.instrument,
+      accepted_for_reporting: r.accepted_for_reporting,
+      mfr_mean: r.mfr_mean,
+      mfr_sd: r.mfr_sd,
+      sdi: r.mfr_sd > 0 ? (r.result_value - r.mfr_mean) / r.mfr_sd : 0,
+      is_rejection: rejected.has(r.id),
+    }));
+    res.json({ analyte, level, lots, points });
   });
 
   app.get("/api/labs/:labId/qc/results", authMiddleware, labScopeMiddleware, (req: any, res) => {

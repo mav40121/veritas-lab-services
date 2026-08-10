@@ -5373,9 +5373,11 @@ sqlite.exec(`
     expiration_date TEXT,
     opened_date TEXT,
     status TEXT NOT NULL DEFAULT 'active',
+    prior_lot_id INTEGER,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (lab_id) REFERENCES labs(id),
+    FOREIGN KEY (prior_lot_id) REFERENCES qc_control_lots(id),
     UNIQUE(lab_id, analyte, lot_number)
   );
 
@@ -5529,6 +5531,11 @@ try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as a
   ensure("qc_control_lots", "expiration_date",    "ALTER TABLE qc_control_lots ADD COLUMN expiration_date TEXT");
   ensure("qc_control_lots", "opened_date",        "ALTER TABLE qc_control_lots ADD COLUMN opened_date TEXT");
   ensure("qc_control_lots", "status",             "ALTER TABLE qc_control_lots ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  // prior_lot_id links a replacement lot to the lot it succeeds, forming a
+  // per-(analyte, level) changeover chain. NULL = the first lot of a line.
+  // SQLite cannot add a FK via ALTER; the column carries the reference and the
+  // FK is declared in the CREATE TABLE for fresh boots.
+  ensure("qc_control_lots", "prior_lot_id",        "ALTER TABLE qc_control_lots ADD COLUMN prior_lot_id INTEGER");
 
   ensure("qc_results", "instrument",              "ALTER TABLE qc_results ADD COLUMN instrument TEXT");
   ensure("qc_results", "run_time",                "ALTER TABLE qc_results ADD COLUMN run_time TEXT");
