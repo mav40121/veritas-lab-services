@@ -171,6 +171,26 @@ def check_file(rel, fpath):
         if 'enterprise' not in arr:
             ERRORS.append(f"[{rel}] Plan allowlist has 'large_hospital' but missing 'enterprise' -- add it")
 
+    # Clinic-gate rule: any bare-string plan allowlist that names 2+ current tiers
+    # must also name 'clinic'. Clinic is the current entry tier; omitting it 403s
+    # clinic labs out of the module. This bit Troy Regional, then recurred in
+    # hasVeritaCheckAccess / hasTrackAccess / hasPTAccess -- all missed by the
+    # 'large_hospital].includes' regex above because they live in named constants
+    # (ALLOWED_PLANS) or multi-line arrays not immediately followed by '.includes'.
+    # Match the array literal itself, regardless of how it is consumed.
+    # Gate on is_ts (suffix check) not is_source: is_source derives from
+    # rel.startswith("server/"), which is False on Windows (backslash paths),
+    # so is_source would silently skip this guard on a local Windows run.
+    if is_ts:
+        for m in re.finditer(r'\[([^\[\]]*)\]', content):
+            arr = m.group(1)
+            if '{' in arr:
+                continue  # object/display array, not an entitlement allowlist
+            tier_hits = sum(t in arr for t in ('"community"', '"hospital"', '"large_hospital"', '"waived"'))
+            if tier_hits >= 2 and '"clinic"' not in arr:
+                snippet = ' '.join(arr.split())[:80]
+                ERRORS.append(f"[{rel}] Plan allowlist names current tiers but not 'clinic' -- clinic labs 403 (clinic-gate rule): [{snippet} ...]")
+
     # ── 5. PDF COMPLIANCE (pdfReport.ts only) ────────────────────────────────
     if "pdfReport" in rel:
         # Must reference CLIA

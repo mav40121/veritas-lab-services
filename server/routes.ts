@@ -26878,7 +26878,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── VERITAPT - Proficiency Testing Tracker ─────────────────────────────
   function hasPTAccess(user: any, lab?: any) {
     const plan = lab?.plan ?? user?.plan;
-    return ["annual", "professional", "lab", "complete"].includes(plan);
+    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }
 
   // List enrollments for user
