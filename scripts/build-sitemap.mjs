@@ -70,7 +70,17 @@ const lastmodFor = (path) => gitDate(compToFile[pathToComp[path]]);
 // --- public route set from seoMetadataMap ---
 const meta = readFileSync(META, "utf8");
 const metaKeys = [...meta.matchAll(/^\s*"(\/[^"]*)":\s*\{/gm)].map((m) => m[1]);
-const publicRoutes = metaKeys.filter((p) => !isAppRoute(p));
+// Non-content utility routes that stay live and keep serving their SEO tags, but
+// must NOT be advertised in the sitemap: they return a thin shell Google reads as
+// a Soft 404. They are NOT removed from seoMetadataMap. (veritabench slugs are a
+// separate judgment call, left in per the handoff.)
+const SITEMAP_EXCLUDE = new Set([
+  "/privacy", "/terms", "/security", "/trust",                                 // legal, priority 0.3, never rank
+  "/demo", "/demo/qc", "/demo/cprt", "/demo/operations", "/demo/compliance",   // interactive demos
+  "/founding-lab/apply", "/book", "/book/scoping-call", "/getting-started",     // forms / utility
+  "/roadmap", "/study-guide",
+]);
+const publicRoutes = metaKeys.filter((p) => !isAppRoute(p) && !SITEMAP_EXCLUDE.has(p));
 
 // --- parse the existing sitemap into ordered sections, preserving curation ---
 const existing = existsSync(SITEMAP) ? readFileSync(SITEMAP, "utf8") : "";
@@ -100,6 +110,7 @@ if (mode === "check") {
   for (const p of publicRoutes) if (!committedPaths.has(p)) problems.push(`MISSING public route (run --write): ${p}`);
   for (const s of sections) for (const e of s.entries) {
     if (isAppRoute(e.path)) problems.push(`APP/AUTH route must not be in the sitemap: ${e.path}`);
+    if (SITEMAP_EXCLUDE.has(e.path)) problems.push(`Excluded non-content route must not be in the sitemap: ${e.path}`);
     if (!e.lastmod || !/^\d{4}-\d{2}-\d{2}$/.test(e.lastmod)) warnings.push(`no <lastmod>: ${e.path}`);
   }
   warnings.forEach((w) => console.warn("  (warn) " + w));
@@ -118,7 +129,7 @@ const maxDate = (a, b) => (!a ? b : !b ? a : b > a ? b : a);
 const dropped = [];
 for (const s of sections) {
   s.entries = s.entries.filter((e) => {
-    if (isAppRoute(e.path)) { dropped.push(e.path); return false; }
+    if (isAppRoute(e.path) || SITEMAP_EXCLUDE.has(e.path)) { dropped.push(e.path); return false; }
     e.lastmod = maxDate(e.lastmod, lastmodFor(e.path)); // only ever forward
     return true;
   });
