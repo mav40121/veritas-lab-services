@@ -84,8 +84,8 @@ function appendixGraphsRow(...svgs: string[]): string {
 
 // ── Plan gate ─────────────────────────────────────────────────────────────────
 const ALLOWED_PLANS = [
-  "annual", "professional", "lab", "complete", "waived",
-  "community", "hospital", "large_hospital", "enterprise",
+  "annual", "professional", "lab", "complete", "waived", "clinic",
+  "community", "hospital", "large_hospital", "enterprise", "veritacheck_only",
 ];
 
 function hasVeritaCheckAccess(user: any): boolean {

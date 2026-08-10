@@ -86,7 +86,7 @@ export function registerVeritaTrackRoutes(
   function hasTrackAccess(user: any, lab?: any) {
     const plan = lab?.plan ?? user?.plan;
     return [
-      "annual","professional","lab","complete","waived",
+      "annual","professional","lab","complete","waived","clinic",
       "community","hospital","large_hospital","enterprise",
     ].includes(plan);
   }
