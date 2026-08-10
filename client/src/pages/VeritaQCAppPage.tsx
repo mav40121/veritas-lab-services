@@ -998,68 +998,6 @@ export default function VeritaQCAppPage() {
           </Card>
 
           <Card className="mb-4">
-            <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between space-y-0 gap-2 sm:gap-3">
-              <CardTitle className="text-base">
-                Levey-Jennings chart{selectedLot ? `: ${selectedLot.analyte} (${selectedLot.level})` : ""}
-                {showContinuous ? " · all lots" : selectedLot ? ` · lot ${selectedLot.lot_number}` : ""}
-              </CardTitle>
-              <div className="flex items-center gap-3 shrink-0">
-                {lineHasMultipleLots && (
-                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer" title="Plot every lot on this control line as one continuous chart, with a marker at each changeover">
-                    <input
-                      type="checkbox"
-                      checked={spanAllLots}
-                      onChange={(e) => setSpanAllLots(e.target.checked)}
-                      aria-label="Span all lots (continuous Levey-Jennings across lot changes)"
-                    />
-                    Span all lots
-                  </label>
-                )}
-                {selectedLot && !showContinuous && results.length > 0 && (
-                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    Points
-                    <input
-                      type="number"
-                      min={1}
-                      max={200}
-                      value={chartPoints}
-                      onChange={(e) => setChartPoints(e.target.value)}
-                      className="w-16 border border-input rounded-md bg-background px-2 py-1 text-xs"
-                      aria-label="Number of Levey-Jennings points to show"
-                      title="Points to show (1 to 200)"
-                    />
-                  </label>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              {!selectedLot ? (
-                <div className="text-sm text-muted-foreground py-8 text-center">Select a control lot to view its Levey-Jennings chart.</div>
-              ) : showContinuous ? (
-                loadingLine ? (
-                  <div className="text-sm text-muted-foreground py-8 text-center">Loading cross-lot history...</div>
-                ) : lineError ? (
-                  <div className="text-sm py-6 text-center">
-                    <p className="text-destructive font-medium mb-1">Couldn't load the cross-lot history.</p>
-                    <Button size="sm" variant="outline" onClick={() => loadLineResults(selectedLot.analyte, selectedLot.level)}>Retry</Button>
-                  </div>
-                ) : lineData && lineData.points.length > 0 ? (
-                  <>
-                    <ContinuousLeveyJenningsChart points={lineData.points} />
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Every point is measured against its own lot's mean and SD, so the chart re-centers at a lot change. The dashed marker shows each changeover for {selectedLot.analyte} ({selectedLot.level}).
-                    </p>
-                  </>
-                ) : (
-                  <div className="text-sm text-muted-foreground py-8 text-center">No results across this control line's lots yet.</div>
-                )
-              ) : (
-                <LeveyJenningsChart mean={selectedLot.mfr_mean} sd={selectedLot.mfr_sd} results={results.slice(0, Math.max(1, Math.min(200, parseInt(chartPoints, 10) || 30)))} />
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="mb-4">
             <CardHeader>
               <CardTitle className="text-base">Log a QC result</CardTitle>
             </CardHeader>
@@ -1155,6 +1093,68 @@ export default function VeritaQCAppPage() {
                   </Button>
                 </div>
               </form>
+            </CardContent>
+          </Card>
+
+          <Card className="mb-4">
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between space-y-0 gap-2 sm:gap-3">
+              <CardTitle className="text-base">
+                Levey-Jennings chart{selectedLot ? `: ${selectedLot.analyte} (${selectedLot.level})` : ""}
+                {showContinuous ? " · all lots" : selectedLot ? ` · lot ${selectedLot.lot_number}` : ""}
+              </CardTitle>
+              <div className="flex items-center gap-3 shrink-0">
+                {lineHasMultipleLots && (
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer" title="Plot every lot on this control line as one continuous chart, with a marker at each changeover">
+                    <input
+                      type="checkbox"
+                      checked={spanAllLots}
+                      onChange={(e) => setSpanAllLots(e.target.checked)}
+                      aria-label="Span all lots (continuous Levey-Jennings across lot changes)"
+                    />
+                    Span all lots
+                  </label>
+                )}
+                {selectedLot && !showContinuous && results.length > 0 && (
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    Points
+                    <input
+                      type="number"
+                      min={1}
+                      max={200}
+                      value={chartPoints}
+                      onChange={(e) => setChartPoints(e.target.value)}
+                      className="w-16 border border-input rounded-md bg-background px-2 py-1 text-xs"
+                      aria-label="Number of Levey-Jennings points to show"
+                      title="Points to show (1 to 200)"
+                    />
+                  </label>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {!selectedLot ? (
+                <div className="text-sm text-muted-foreground py-8 text-center">Select a control lot to view its Levey-Jennings chart.</div>
+              ) : showContinuous ? (
+                loadingLine ? (
+                  <div className="text-sm text-muted-foreground py-8 text-center">Loading cross-lot history...</div>
+                ) : lineError ? (
+                  <div className="text-sm py-6 text-center">
+                    <p className="text-destructive font-medium mb-1">Couldn't load the cross-lot history.</p>
+                    <Button size="sm" variant="outline" onClick={() => loadLineResults(selectedLot.analyte, selectedLot.level)}>Retry</Button>
+                  </div>
+                ) : lineData && lineData.points.length > 0 ? (
+                  <>
+                    <ContinuousLeveyJenningsChart points={lineData.points} />
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Every point is measured against its own lot's mean and SD, so the chart re-centers at a lot change. The dashed marker shows each changeover for {selectedLot.analyte} ({selectedLot.level}).
+                    </p>
+                  </>
+                ) : (
+                  <div className="text-sm text-muted-foreground py-8 text-center">No results across this control line's lots yet.</div>
+                )
+              ) : (
+                <LeveyJenningsChart mean={selectedLot.mfr_mean} sd={selectedLot.mfr_sd} results={results.slice(0, Math.max(1, Math.min(200, parseInt(chartPoints, 10) || 30)))} />
+              )}
             </CardContent>
           </Card>
 
