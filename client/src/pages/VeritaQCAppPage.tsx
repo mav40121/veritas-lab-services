@@ -15,7 +15,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { AlertTriangle, CheckCircle2, Lock, FlaskConical, LineChart } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -33,7 +33,32 @@ interface ControlLot {
   mfr_range_low: number | null;
   mfr_range_high: number | null;
   expiration_date: string | null;
+  opened_date: string | null;
   status: string;
+  prior_lot_id: number | null;
+  created_at: string;
+}
+
+// One point on the continuous cross-lot Levey-Jennings series. SDI is computed
+// server-side against the point's OWN lot's mean/SD, so a lot change re-centers.
+interface LinePoint {
+  id: number;
+  control_lot_id: number;
+  lot_number: string;
+  result_value: number;
+  result_date: string;
+  mfr_mean: number;
+  mfr_sd: number;
+  sdi: number;
+  is_rejection: boolean;
+  accepted_for_reporting: number;
+}
+
+interface LineData {
+  analyte: string;
+  level: string;
+  lots: ControlLot[];
+  points: LinePoint[];
 }
 
 interface ViolationRow {
@@ -144,6 +169,88 @@ function LeveyJenningsChart({ mean, sd, results }: { mean: number; sd: number; r
   );
 }
 
+// Continuous cross-lot Levey-Jennings chart. Plots every result of a control
+// line (analyte + level) across all its lots in one chronological series. Each
+// point's SDI is measured against its OWN lot's mean/SD (computed server-side),
+// so a lot change re-centers rather than smearing one baseline across two
+// materials. A vertical dashed marker + lot-number label sits at every
+// changeover, and each lot's segment gets a faint alternating tint so the "shift"
+// from one lot to the next is legible at a glance. This is the surveyor-facing
+// proof that QC continuity was maintained through a lot changeover.
+function ContinuousLeveyJenningsChart({ points }: { points: LinePoint[] }) {
+  if (points.length === 0) {
+    return <div className="text-sm text-muted-foreground py-8 text-center">No results across this control line's lots yet.</div>;
+  }
+  const W = 620, H = 224, PL = 34, PR = 10, PT = 14, PB = 40;
+  const innerW = W - PL - PR, innerH = H - PT - PB;
+  const n = points.length;
+  const sdMin = -4, sdMax = 4;
+  const yFor = (s: number) => PT + innerH * (1 - (s - sdMin) / (sdMax - sdMin));
+  const xFor = (i: number) => PL + (n === 1 ? innerW / 2 : (innerW * i) / (n - 1));
+  const bands = [
+    { a: -4, b: -3, fill: "#fde2e2" }, { a: -3, b: -2, fill: "#fef2cc" },
+    { a: -2, b: 2, fill: "#e3f2e1" }, { a: 2, b: 3, fill: "#fef2cc" },
+    { a: 3, b: 4, fill: "#fde2e2" },
+  ];
+  // Contiguous runs of the same lot => segments; boundaries between them are the
+  // changeover markers.
+  const segments: { lotId: number; lotNumber: string; start: number; end: number }[] = [];
+  points.forEach((p, i) => {
+    const last = segments[segments.length - 1];
+    if (last && last.lotId === p.control_lot_id) last.end = i;
+    else segments.push({ lotId: p.control_lot_id, lotNumber: p.lot_number, start: i, end: i });
+  });
+  const lotCount = segments.length;
+  const poly = points.map((p, i) => `${xFor(i)},${yFor(p.sdi)}`).join(" ");
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Continuous Levey-Jennings chart across lots">
+      {bands.map((bd, i) => (
+        <rect key={`b${i}`} x={PL} y={yFor(bd.b)} width={innerW} height={yFor(bd.a) - yFor(bd.b)} fill={bd.fill} />
+      ))}
+      {/* Alternating faint tint per lot segment so the changeover is obvious. */}
+      {segments.map((seg, si) => {
+        if (si % 2 === 0) return null;
+        const x0 = seg.start === 0 ? PL : (xFor(seg.start - 1) + xFor(seg.start)) / 2;
+        const x1 = seg.end === n - 1 ? PL + innerW : (xFor(seg.end) + xFor(seg.end + 1)) / 2;
+        return <rect key={`seg${si}`} x={x0} y={PT} width={Math.max(0, x1 - x0)} height={innerH} fill="#0f172a" opacity={0.045} />;
+      })}
+      {[-3, -2, -1, 0, 1, 2, 3].map(s => (
+        <line key={`z${s}`} x1={PL} y1={yFor(s)} x2={PL + innerW} y2={yFor(s)} stroke={s === 0 ? "#01696F" : "#a0a0a0"} strokeWidth={s === 0 ? 1.2 : 0.5} strokeDasharray={s === 0 ? undefined : "2,2"} />
+      ))}
+      {[-3, -2, -1, 0, 1, 2, 3].map(s => (
+        <text key={`zl${s}`} x={PL - 4} y={yFor(s) + 3} fontSize="8" fill="#555" textAnchor="end">{s > 0 ? `+${s}` : s}</text>
+      ))}
+      {/* Changeover markers: a vertical dashed rule at each lot boundary. */}
+      {segments.slice(1).map((seg, si) => {
+        const x = (xFor(seg.start - 1) + xFor(seg.start)) / 2;
+        return (
+          <g key={`m${si}`}>
+            <line x1={x} y1={PT} x2={x} y2={PT + innerH} stroke="#b45309" strokeWidth={1.1} strokeDasharray="3,2" />
+            <text x={x} y={PT + 8} fontSize="7.5" fill="#b45309" textAnchor="middle" fontWeight="600">lot change</text>
+          </g>
+        );
+      })}
+      <polyline points={poly} fill="none" stroke="#1a1a1a" strokeWidth={0.8} />
+      {points.map((p, i) => {
+        const s = p.sdi;
+        const color = p.is_rejection || Math.abs(s) > 3 ? "#dc2626" : Math.abs(s) > 2 ? "#d97706" : "#16a34a";
+        return (
+          <circle key={i} cx={xFor(i)} cy={yFor(s)} r={2.6} fill={color} stroke="#fff" strokeWidth={0.6}>
+            <title>{`${p.result_date} · Lot ${p.lot_number}: ${p.result_value} (SDI ${s.toFixed(2)})`}</title>
+          </circle>
+        );
+      })}
+      {/* Per-lot label centered under each segment. */}
+      {segments.map((seg, si) => {
+        const cx = (xFor(seg.start) + xFor(seg.end)) / 2;
+        return <text key={`sl${si}`} x={cx} y={H - 16} fontSize="7.5" fill="#334155" textAnchor="middle" fontWeight="600">Lot {seg.lotNumber}</text>;
+      })}
+      <text x={PL + innerW / 2} y={H - 4} fontSize="8" fill="#555" textAnchor="middle">Continuous across {lotCount} lot{lotCount === 1 ? "" : "s"} &middot; n={n} (oldest to newest)</text>
+      <text x="9" y={PT + innerH / 2} fontSize="8" fill="#555" textAnchor="middle" transform={`rotate(-90,9,${PT + innerH / 2})`}>SDI from mean</text>
+    </svg>
+  );
+}
+
 export default function VeritaQCAppPage() {
   const { user, isLoggedIn } = useAuth();
   const isReadOnly = useIsReadOnly("veritaqc");
@@ -207,6 +314,27 @@ export default function VeritaQCAppPage() {
   const [addLotSubmitting, setAddLotSubmitting] = useState(false);
   const [retireSubmitting, setRetireSubmitting] = useState(false);
 
+  // Continuous cross-lot ("Span all lots") view state. When on, the chart plots
+  // the whole control line (analyte + level) across every lot with a shift
+  // marker at each changeover, fetched from GET /qc/line.
+  const [spanAllLots, setSpanAllLots] = useState(false);
+  const [lineData, setLineData] = useState<LineData | null>(null);
+  const [loadingLine, setLoadingLine] = useState(false);
+  const [lineError, setLineError] = useState(false);
+
+  // Changeover ("Start new lot") dialog state. Creates a replacement lot on the
+  // same control line via POST /qc/control-lots/:id/changeover.
+  const [changeoverOpen, setChangeoverOpen] = useState(false);
+  const [coLotNumber, setCoLotNumber] = useState("");
+  const [coManufacturer, setCoManufacturer] = useState("");
+  const [coMean, setCoMean] = useState("");
+  const [coSd, setCoSd] = useState("");
+  const [coSdInterval, setCoSdInterval] = useState<"2" | "3">("2");
+  const [coExpiration, setCoExpiration] = useState("");
+  const [coOpened, setCoOpened] = useState(todayIsoDate());
+  const [coRetirePrior, setCoRetirePrior] = useState(true);
+  const [coSubmitting, setCoSubmitting] = useState(false);
+
   async function loadLots() {
     if (!activeLabId) return;
     setLoadingLots(true);
@@ -253,6 +381,27 @@ export default function VeritaQCAppPage() {
     }
   }
 
+  async function loadLineResults(analyte: string, level: string) {
+    if (!activeLabId) return;
+    setLoadingLine(true);
+    setLineError(false);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/labs/${activeLabId}/qc/line?analyte=${encodeURIComponent(analyte)}&level=${encodeURIComponent(level)}`,
+        { headers: authHeaders() },
+      );
+      if (!res.ok) throw new Error(`line ${res.status}`);
+      const data = await res.json();
+      setLineData(data);
+    } catch (err) {
+      console.error("Failed to load line history:", err);
+      setLineError(true);
+      setLineData(null);
+    } finally {
+      setLoadingLine(false);
+    }
+  }
+
   useEffect(() => {
     if (isLoggedIn && hasPlanAccess && activeLabId) loadLots();
   }, [isLoggedIn, hasPlanAccess, activeLabId]);
@@ -260,6 +409,15 @@ export default function VeritaQCAppPage() {
   useEffect(() => {
     if (selectedLotId) loadResults(selectedLotId);
   }, [selectedLotId, activeLabId]);
+
+  // When the continuous view is on, (re)load the whole control line for the
+  // selected lot's analyte + level. Re-runs on lot switch and after a changeover
+  // (which moves selectedLotId to the new lot).
+  useEffect(() => {
+    const lot = lots.find(l => l.id === selectedLotId);
+    if (spanAllLots && lot) loadLineResults(lot.analyte, lot.level);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spanAllLots, selectedLotId, lots]);
 
   // Prefill the instrument from the selected lot's analyte when it encodes the
   // analyzer (e.g. "PSA (FREND A)") so the tech does not retype it and it is
@@ -312,6 +470,8 @@ export default function VeritaQCAppPage() {
       setFormComment("");
       // Reload the table so the new row shows up at the top
       await loadResults(selectedLotId);
+      // If the continuous view is open, refresh it too so the new point lands.
+      if (spanAllLots && selectedLot) loadLineResults(selectedLot.analyte, selectedLot.level);
       if (data.requires_corrective_action) {
         const firstRejection = data.violations.find(v => v.severity === "rejection") || null;
         setCaForResultId(data.result_id);
@@ -475,6 +635,94 @@ export default function VeritaQCAppPage() {
     }
   }
 
+  function resetChangeoverForm() {
+    setCoLotNumber("");
+    setCoManufacturer("");
+    setCoMean("");
+    setCoSd("");
+    setCoSdInterval("2");
+    setCoExpiration("");
+    setCoOpened(todayIsoDate());
+    setCoRetirePrior(true);
+  }
+
+  // Open the changeover dialog pre-filled with metadata carried from the prior
+  // lot (manufacturer, SD interval). The new mean/SD are intentionally blank:
+  // they are the new material's assigned values and must be entered fresh.
+  function openChangeover() {
+    const lot = lots.find(l => l.id === selectedLotId);
+    resetChangeoverForm();
+    if (lot) {
+      setCoManufacturer(lot.manufacturer || "");
+      setCoSdInterval(String(lot.mfr_sd_interval) === "3" ? "3" : "2");
+    }
+    setChangeoverOpen(true);
+  }
+
+  async function handleChangeover() {
+    if (!activeLabId || !selectedLotId) return;
+    if (!coLotNumber.trim()) {
+      toast({ title: "New lot number is required", variant: "destructive" });
+      return;
+    }
+    const meanN = Number(coMean);
+    const sdN = Number(coSd);
+    if (!Number.isFinite(meanN)) {
+      toast({ title: "Manufacturer mean must be a number", variant: "destructive" });
+      return;
+    }
+    if (!Number.isFinite(sdN) || sdN <= 0) {
+      toast({ title: "Manufacturer SD must be a positive number", variant: "destructive" });
+      return;
+    }
+    setCoSubmitting(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/labs/${activeLabId}/qc/control-lots/${selectedLotId}/changeover`,
+        {
+          method: "POST",
+          headers: { ...authHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({
+            lot_number: coLotNumber.trim(),
+            manufacturer: coManufacturer.trim() || null,
+            mfr_mean: meanN,
+            mfr_sd: sdN,
+            mfr_sd_interval: Number(coSdInterval),
+            expiration_date: coExpiration || null,
+            opened_date: coOpened || null,
+            retire_prior: coRetirePrior,
+          }),
+        },
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({
+          title: res.status === 409 ? "Duplicate lot" : "Could not start new lot",
+          description: err.error || `HTTP ${res.status}`,
+          variant: "destructive",
+        });
+        return;
+      }
+      const data = await res.json();
+      toast({
+        title: `Started lot ${data.lot.lot_number}`,
+        description: coRetirePrior
+          ? `Replaces lot ${data.prior.lot_number} (retired). QC re-baselines onto the new mean/SD.`
+          : `New lot active alongside lot ${data.prior.lot_number}.`,
+      });
+      resetChangeoverForm();
+      setChangeoverOpen(false);
+      await loadLots();
+      // Land on the new lot so the tech logs against it immediately.
+      setSelectedLotId(data.lot.id);
+      if (spanAllLots) loadLineResults(data.lot.analyte, data.lot.level);
+    } catch (err: any) {
+      toast({ title: err.message || "Could not start new lot", variant: "destructive" });
+    } finally {
+      setCoSubmitting(false);
+    }
+  }
+
   // ── Render gates ─────────────────────────────────────────────────────
   if (!isLoggedIn) {
     return (
@@ -525,6 +773,39 @@ export default function VeritaQCAppPage() {
   }
 
   const selectedLot = lots.find(l => l.id === selectedLotId) || null;
+
+  // Group lots into control lines (analyte + level). Within a line, order
+  // newest-first so the current lot sits at the top of its group. "Current" =
+  // the newest active lot of the line (or the newest lot if none are active).
+  const lineGroups = (() => {
+    const map = new Map<string, ControlLot[]>();
+    for (const l of lots) {
+      const key = `${l.analyte}|||${l.level}`;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(l);
+    }
+    const byNewest = (a: ControlLot, b: ControlLot) => {
+      const ao = a.opened_date || "", bo = b.opened_date || "";
+      if (ao !== bo) return ao < bo ? 1 : -1;
+      if (a.created_at !== b.created_at) return a.created_at < b.created_at ? 1 : -1;
+      return b.id - a.id;
+    };
+    const groups = Array.from(map.values()).map(ls => {
+      const ordered = [...ls].sort(byNewest);
+      const currentId = (ordered.find(l => l.status === "active") || ordered[0]).id;
+      return { analyte: ls[0].analyte, level: ls[0].level, lots: ordered, currentId };
+    });
+    groups.sort((a, b) => a.analyte === b.analyte ? a.level.localeCompare(b.level) : a.analyte.localeCompare(b.analyte));
+    return groups;
+  })();
+  const selectedLine = selectedLot
+    ? lineGroups.find(g => g.analyte === selectedLot.analyte && g.level === selectedLot.level) || null
+    : null;
+  const lineHasMultipleLots = !!selectedLine && selectedLine.lots.length > 1;
+  const showContinuous = spanAllLots && lineHasMultipleLots;
+  const priorLot = selectedLot?.prior_lot_id
+    ? lots.find(l => l.id === selectedLot.prior_lot_id) || null
+    : null;
 
   // Instrument helper: when the analyte name already carries the analyzer
   // (e.g. "PSA (FREND A)"), pull it out to prefill/suggest it. The datalist on
@@ -627,14 +908,26 @@ export default function VeritaQCAppPage() {
               >
                 <SelectTrigger><SelectValue placeholder="Pick a lot..." /></SelectTrigger>
                 <SelectContent>
-                  {lots.map(lot => (
-                    <SelectItem key={lot.id} value={String(lot.id)}>
-                      {lot.analyte} &middot; Lot {lot.lot_number} ({lot.level})
-                      {lot.status !== "active" ? ` [${lot.status}]` : ""}
-                    </SelectItem>
+                  {lineGroups.map(g => (
+                    <SelectGroup key={`${g.analyte}|||${g.level}`}>
+                      <SelectLabel>{g.analyte} &middot; {g.level}</SelectLabel>
+                      {g.lots.map(lot => (
+                        <SelectItem key={lot.id} value={String(lot.id)}>
+                          Lot {lot.lot_number}
+                          {lot.id === g.currentId ? " · current" : ""}
+                          {lot.status !== "active" ? ` · ${lot.status}` : ""}
+                          {lot.opened_date ? ` · opened ${lot.opened_date}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
                   ))}
                 </SelectContent>
               </Select>
+              {selectedLine && selectedLine.lots.length > 1 && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {selectedLine.lots.length} lots on this control line. Pick any lot to see its history, or turn on <span className="font-medium text-foreground">Span all lots</span> on the chart to view them continuously with a shift marker at each changeover.
+                </p>
+              )}
               {selectedLot && (
                 <>
                   <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-muted-foreground">
@@ -649,7 +942,17 @@ export default function VeritaQCAppPage() {
                       )}
                     </div>
                   </div>
-                  <div className="mt-3 flex items-center gap-2">
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {selectedLine && selectedLot.id === selectedLine.currentId && (
+                      <Button
+                        size="sm"
+                        onClick={openChangeover}
+                        disabled={isReadOnly || coSubmitting}
+                        title="Start a replacement lot on this control line"
+                      >
+                        Start new lot
+                      </Button>
+                    )}
                     {selectedLot.status === "active" ? (
                       <>
                         <Button
@@ -683,34 +986,76 @@ export default function VeritaQCAppPage() {
                       Status: <span className="font-medium text-foreground">{selectedLot.status}</span>
                     </span>
                   </div>
+                  {priorLot && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Changeover: replaces lot <span className="font-medium text-foreground">{priorLot.lot_number}</span>{" "}
+                      (prior mean {priorLot.mfr_mean}, SD {priorLot.mfr_sd}). QC re-baselines onto this lot's mean/SD.
+                    </p>
+                  )}
                 </>
               )}
             </CardContent>
           </Card>
 
           <Card className="mb-4">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-3">
-              <CardTitle className="text-base">Levey-Jennings chart{selectedLot ? `: ${selectedLot.analyte} (${selectedLot.level})` : ""}</CardTitle>
-              {selectedLot && results.length > 0 && (
-                <label className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
-                  Points
-                  <input
-                    type="number"
-                    min={1}
-                    max={200}
-                    value={chartPoints}
-                    onChange={(e) => setChartPoints(e.target.value)}
-                    className="w-16 border border-input rounded-md bg-background px-2 py-1 text-xs"
-                    aria-label="Number of Levey-Jennings points to show"
-                    title="Points to show (1 to 200)"
-                  />
-                </label>
-              )}
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between space-y-0 gap-2 sm:gap-3">
+              <CardTitle className="text-base">
+                Levey-Jennings chart{selectedLot ? `: ${selectedLot.analyte} (${selectedLot.level})` : ""}
+                {showContinuous ? " · all lots" : selectedLot ? ` · lot ${selectedLot.lot_number}` : ""}
+              </CardTitle>
+              <div className="flex items-center gap-3 shrink-0">
+                {lineHasMultipleLots && (
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer" title="Plot every lot on this control line as one continuous chart, with a marker at each changeover">
+                    <input
+                      type="checkbox"
+                      checked={spanAllLots}
+                      onChange={(e) => setSpanAllLots(e.target.checked)}
+                      aria-label="Span all lots (continuous Levey-Jennings across lot changes)"
+                    />
+                    Span all lots
+                  </label>
+                )}
+                {selectedLot && !showContinuous && results.length > 0 && (
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    Points
+                    <input
+                      type="number"
+                      min={1}
+                      max={200}
+                      value={chartPoints}
+                      onChange={(e) => setChartPoints(e.target.value)}
+                      className="w-16 border border-input rounded-md bg-background px-2 py-1 text-xs"
+                      aria-label="Number of Levey-Jennings points to show"
+                      title="Points to show (1 to 200)"
+                    />
+                  </label>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
-              {selectedLot
-                ? <LeveyJenningsChart mean={selectedLot.mfr_mean} sd={selectedLot.mfr_sd} results={results.slice(0, Math.max(1, Math.min(200, parseInt(chartPoints, 10) || 30)))} />
-                : <div className="text-sm text-muted-foreground py-8 text-center">Select a control lot to view its Levey-Jennings chart.</div>}
+              {!selectedLot ? (
+                <div className="text-sm text-muted-foreground py-8 text-center">Select a control lot to view its Levey-Jennings chart.</div>
+              ) : showContinuous ? (
+                loadingLine ? (
+                  <div className="text-sm text-muted-foreground py-8 text-center">Loading cross-lot history...</div>
+                ) : lineError ? (
+                  <div className="text-sm py-6 text-center">
+                    <p className="text-destructive font-medium mb-1">Couldn't load the cross-lot history.</p>
+                    <Button size="sm" variant="outline" onClick={() => loadLineResults(selectedLot.analyte, selectedLot.level)}>Retry</Button>
+                  </div>
+                ) : lineData && lineData.points.length > 0 ? (
+                  <>
+                    <ContinuousLeveyJenningsChart points={lineData.points} />
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Every point is measured against its own lot's mean and SD, so the chart re-centers at a lot change. The dashed marker shows each changeover for {selectedLot.analyte} ({selectedLot.level}).
+                    </p>
+                  </>
+                ) : (
+                  <div className="text-sm text-muted-foreground py-8 text-center">No results across this control line's lots yet.</div>
+                )
+              ) : (
+                <LeveyJenningsChart mean={selectedLot.mfr_mean} sd={selectedLot.mfr_sd} results={results.slice(0, Math.max(1, Math.min(200, parseInt(chartPoints, 10) || 30)))} />
+              )}
             </CardContent>
           </Card>
 
@@ -1088,6 +1433,87 @@ export default function VeritaQCAppPage() {
               }
             >
               {addLotSubmitting ? "Saving..." : "Add control lot"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Changeover dialog: start a replacement lot on the selected control
+          line. analyte + level are fixed (carried from the prior lot); the new
+          mean/SD are the incoming material's assigned values, entered fresh. */}
+      <Dialog open={changeoverOpen} onOpenChange={(o) => { if (!o) resetChangeoverForm(); setChangeoverOpen(o); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Start new lot</DialogTitle>
+            <DialogDescription>
+              {selectedLot
+                ? <>Replacement lot for <span className="font-medium text-foreground">{selectedLot.analyte}</span> &middot; {selectedLot.level}. The new lot becomes current{coRetirePrior ? " and the prior lot is retired" : ""}. QC re-baselines onto the new mean and SD.</>
+                : "Select a control lot first."}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedLot && (
+            <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+              Replacing lot <span className="font-medium text-foreground">{selectedLot.lot_number}</span> (mean {selectedLot.mfr_mean}, SD {selectedLot.mfr_sd}, &plusmn;{selectedLot.mfr_sd_interval} SD). Analyte and level carry forward and cannot change here.
+            </div>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="co-lot-number">New lot number <span className="text-red-600">*</span></Label>
+              <Input id="co-lot-number" value={coLotNumber} onChange={(e) => setCoLotNumber(e.target.value)} placeholder="e.g. 303072" autoFocus />
+            </div>
+            <div>
+              <Label htmlFor="co-manufacturer">Manufacturer</Label>
+              <Input id="co-manufacturer" value={coManufacturer} onChange={(e) => setCoManufacturer(e.target.value)} placeholder="Carried from prior lot" />
+            </div>
+            <div>
+              <Label htmlFor="co-mean">New mfr mean <span className="text-red-600">*</span></Label>
+              <Input id="co-mean" type="number" step="any" value={coMean} onChange={(e) => setCoMean(e.target.value)} placeholder="e.g. 4.1" />
+            </div>
+            <div>
+              <Label htmlFor="co-sd">New mfr SD <span className="text-red-600">*</span></Label>
+              <Input id="co-sd" type="number" step="any" value={coSd} onChange={(e) => setCoSd(e.target.value)} placeholder="e.g. 0.3" />
+            </div>
+            <div>
+              <Label htmlFor="co-sd-interval">SD interval</Label>
+              <Select value={coSdInterval} onValueChange={(v) => setCoSdInterval(v as "2" | "3")}>
+                <SelectTrigger id="co-sd-interval"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="2">&plusmn;2 SD (default)</SelectItem>
+                  <SelectItem value="3">&plusmn;3 SD</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="co-opened">Opened date</Label>
+              <Input id="co-opened" type="date" value={coOpened} onChange={(e) => setCoOpened(e.target.value)} />
+            </div>
+            <div className="sm:col-span-2">
+              <Label htmlFor="co-exp">Expiration date</Label>
+              <Input id="co-exp" type="date" value={coExpiration} onChange={(e) => setCoExpiration(e.target.value)} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" checked={coRetirePrior} onChange={(e) => setCoRetirePrior(e.target.checked)} className="mt-1" />
+                <span>
+                  Retire the prior lot (recommended). Keeps one active lot per control
+                  line. Uncheck only to run both lots in parallel during a crossover study.
+                </span>
+              </label>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-2">
+            <Button
+              variant="outline"
+              onClick={() => { resetChangeoverForm(); setChangeoverOpen(false); }}
+              disabled={coSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleChangeover}
+              disabled={coSubmitting || !coLotNumber.trim() || !coMean || !coSd}
+            >
+              {coSubmitting ? "Starting..." : "Start new lot"}
             </Button>
           </div>
         </DialogContent>
