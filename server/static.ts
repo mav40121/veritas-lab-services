@@ -304,6 +304,18 @@ function injectSeoTags(html: string, routePath: string, meta: SEOMetadata): stri
       .join("");
     if (qa) noscriptInner += `<section><h2>Frequently Asked Questions</h2>${qa}</section>`;
   }
+  // Soft-404 fix: FAQ-less article routes otherwise get only the generic shell in
+  // the noscript. Render the Article node's articleBody so the raw HTML carries real
+  // crawlable content. Guarded on "no FAQ node" because FAQ'd articles already fold
+  // the FAQ text into articleBody (enrichArticleBodies), which would double-render.
+  if (!faqNode) {
+    const articleNode = jsonLdBlocks.find(
+      (b) => (b as Record<string, unknown>)?.["@type"] === "Article",
+    ) as { articleBody?: string } | undefined;
+    if (articleNode?.articleBody && articleNode.articleBody.length > 0) {
+      noscriptInner += `<article>${articleNode.articleBody}</article>`;
+    }
+  }
   html = html.replace('<div id="root"></div>', `<div id="root"><noscript>${noscriptInner}</noscript></div>`);
 
   // Inject per-route JSON-LD (e.g. Article, FAQPage, DefinedTerm) when provided,
