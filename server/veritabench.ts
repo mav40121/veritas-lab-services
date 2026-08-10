@@ -10,6 +10,7 @@ import { logCount } from "./countLedger";
 import { addLot, reconcileLots } from "./inventoryLots";
 import { resolveLegacyLabId } from "./labAccessGuard";
 import { DEMO_USER_EMAIL } from "./constants";
+import { labLocalDate } from "./dateLocal";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
 import { generateReorderListPDF, generateReorderListExcel, generateSnapOrderPDF, type ReorderItem, type SnapOrderItem, type VendorRecordForPdf } from "./orderDocument";
@@ -124,7 +125,7 @@ function bencheLicenseCtx(req: any): LicenseContext {
       licensee: row?.clia_lab_name || u.name || u.email,
       email: u.email,
       plan: u.plan,
-      issueDate: new Date().toISOString().slice(0, 10),
+      issueDate: labLocalDate(new Date().toISOString()),
     };
   }
   const ipRaw = (req?.ip || req?.headers?.["x-forwarded-for"] || "").toString();
@@ -135,7 +136,7 @@ function bencheLicenseCtx(req: any): LicenseContext {
     licensee: "Demo Preview",
     email: ipHash,
     plan: "demo",
-    issueDate: new Date().toISOString().slice(0, 10),
+    issueDate: labLocalDate(new Date().toISOString()),
   };
 }
 
