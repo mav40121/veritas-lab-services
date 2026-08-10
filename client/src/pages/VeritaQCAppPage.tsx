@@ -164,6 +164,7 @@ export default function VeritaQCAppPage() {
   const [selectedLotId, setSelectedLotId] = useState<number | null>(null);
 
   const [results, setResults] = useState<ResultRow[]>([]);
+  const [chartPoints, setChartPoints] = useState<string>("30"); // visible LJ points; "all" shows every loaded point
   const [loadingResults, setLoadingResults] = useState(false);
   const [resultsError, setResultsError] = useState(false);
 
@@ -237,7 +238,7 @@ export default function VeritaQCAppPage() {
     setResults([]);
     try {
       const res = await fetch(
-        `${API_BASE}/api/labs/${activeLabId}/qc/results?control_lot_id=${lotId}&limit=20`,
+        `${API_BASE}/api/labs/${activeLabId}/qc/results?control_lot_id=${lotId}&limit=200`,
         { headers: authHeaders() },
       );
       if (!res.ok) throw new Error(`results ${res.status}`);
@@ -688,12 +689,29 @@ export default function VeritaQCAppPage() {
           </Card>
 
           <Card className="mb-4">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-3">
               <CardTitle className="text-base">Levey-Jennings chart{selectedLot ? `: ${selectedLot.analyte} (${selectedLot.level})` : ""}</CardTitle>
+              {selectedLot && results.length > 0 && (
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+                  Points
+                  <select
+                    value={chartPoints}
+                    onChange={(e) => setChartPoints(e.target.value)}
+                    className="border border-input rounded-md bg-background px-2 py-1 text-xs"
+                    aria-label="Number of Levey-Jennings points to show"
+                  >
+                    <option value="20">20</option>
+                    <option value="30">30</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="all">All</option>
+                  </select>
+                </label>
+              )}
             </CardHeader>
             <CardContent>
               {selectedLot
-                ? <LeveyJenningsChart mean={selectedLot.mfr_mean} sd={selectedLot.mfr_sd} results={results} />
+                ? <LeveyJenningsChart mean={selectedLot.mfr_mean} sd={selectedLot.mfr_sd} results={chartPoints === "all" ? results : results.slice(0, Number(chartPoints))} />
                 : <div className="text-sm text-muted-foreground py-8 text-center">Select a control lot to view its Levey-Jennings chart.</div>}
             </CardContent>
           </Card>
@@ -826,7 +844,7 @@ export default function VeritaQCAppPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {results.map(r => (
+                      {results.slice(0, 20).map(r => (
                         <tr key={r.id} className="border-b last:border-b-0">
                           <td className="py-2 pr-2">{r.result_date}</td>
                           <td className="py-2 pr-2 font-mono">{r.result_value}</td>
