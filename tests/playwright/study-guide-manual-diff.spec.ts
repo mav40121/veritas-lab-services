@@ -23,8 +23,8 @@ test.describe("Study Guide: Manual Differential (Rümke) study type", () => {
     }
     await page.goto(`${BASE}/study-guide`, { waitUntil: "networkidle" });
 
-    // Hero now says eleven study types (was ten before manual_diff).
-    await expect(page.getByText(/eleven study types supported by VeritaCheck/i)).toBeVisible();
+    // Hero says fourteen study types (the study guide's audited count).
+    await expect(page.getByText(/fourteen study types supported by VeritaCheck/i)).toBeVisible();
 
     // At-a-glance table row + detailed card both surface the Rümke study.
     const rumke = page.getByText(/Manual Differential \(R.mke/i);
