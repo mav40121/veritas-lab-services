@@ -317,6 +317,37 @@ app.use((req, res, next) => {
     console.error("[veritatrack-reminders] Scheduler setup error:", err.message);
   }
 
+  // Schedule daily VeritaPT submission-deadline reminder dispatch at midnight
+  // UTC (MLC-2b). Per-lab opt-in (pt_reminder_config.enabled); idempotent via
+  // pt_reminder_log dedup; no-op when RESEND_API_KEY is unset.
+  try {
+    const { runPtReminders } = await import("./ptReminders");
+    const schedulePtReminders = () => {
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setUTCHours(24, 0, 0, 0);
+      const msUntilMidnight = midnight.getTime() - now.getTime();
+      setTimeout(() => {
+        console.log("[pt-reminders] Running due-date reminder dispatch...");
+        runPtReminders().catch((err) =>
+          console.error("[pt-reminders] Run failed:", err?.message || err)
+        );
+        setInterval(() => {
+          console.log("[pt-reminders] Running due-date reminder dispatch...");
+          runPtReminders().catch((err) =>
+            console.error("[pt-reminders] Run failed:", err?.message || err)
+          );
+        }, 24 * 60 * 60 * 1000);
+      }, msUntilMidnight);
+      console.log(
+        `[pt-reminders] Due-date reminder dispatch scheduled in ${Math.round(msUntilMidnight / 60000)} minutes`
+      );
+    };
+    schedulePtReminders();
+  } catch (err: any) {
+    console.error("[pt-reminders] Scheduler setup error:", err.message);
+  }
+
   // Schedule nightly off-site database backup at 04:00 UTC. Env-gated:
   // if GOOGLE_DRIVE_SA_JSON or GOOGLE_DRIVE_BACKUP_FOLDER_ID is unset
   // the run is a no-op. 04:00 chosen to clear the midnight UTC snapshot
