@@ -578,6 +578,7 @@ sqlite.exec(`
     sdi REAL,
     pass_fail TEXT NOT NULL DEFAULT 'pending',
     notes TEXT,
+    submission_due_date TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -3297,6 +3298,9 @@ for (const t of ["staff_employees", "staff_roles"]) {
   const cols = (sqlite.prepare("PRAGMA table_info(pt_events)").all() as any[]).map(c => c.name);
   if (!cols.includes("tested_by_employee_id")) {
     try { sqlite.exec("ALTER TABLE pt_events ADD COLUMN tested_by_employee_id INTEGER REFERENCES staff_employees(id)"); } catch {}
+    // MLC-2 (2026-08-11): PT submission-deadline tracking. Nullable date the PT
+    // result is due to the program; drives overdue/upcoming surfacing + reminders.
+    try { sqlite.exec("ALTER TABLE pt_events ADD COLUMN submission_due_date TEXT"); } catch {}
   }
   try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_pt_events_tested_by ON pt_events(tested_by_employee_id)"); } catch {}
 }
