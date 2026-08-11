@@ -27124,7 +27124,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Create event (auto-calculate SDI if peer_mean and peer_sd provided)
   app.post("/api/veritapt/events", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
     if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
-    const { enrollment_id, event_id, event_name, event_date, analyte, your_result, your_method, peer_mean, peer_sd, peer_n, acceptable_low, acceptable_high, pass_fail, notes, tested_by_employee_id } = req.body;
+    const { enrollment_id, event_id, event_name, event_date, analyte, your_result, your_method, peer_mean, peer_sd, peer_n, acceptable_low, acceptable_high, pass_fail, notes, tested_by_employee_id, submission_due_date } = req.body;
     if (!enrollment_id || !event_date || !analyte?.trim()) {
       return res.status(400).json({ error: "Enrollment, event date, and analyte are required" });
     }
@@ -27136,8 +27136,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const now = new Date().toISOString();
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const result = (db as any).$client.prepare(
-      "INSERT INTO pt_events (enrollment_id, user_id, event_id, event_name, event_date, analyte, your_result, your_method, peer_mean, peer_sd, peer_n, acceptable_low, acceptable_high, sdi, pass_fail, notes, tested_by_employee_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-    ).run(enrollment_id, dataUserId, event_id || null, event_name || null, event_date, analyte.trim(), your_result ?? null, your_method || null, peer_mean ?? null, peer_sd ?? null, peer_n ?? null, acceptable_low ?? null, acceptable_high ?? null, sdi, pass_fail || 'pending', notes || null, tested_by_employee_id ? Number(tested_by_employee_id) : null, now, now);
+      "INSERT INTO pt_events (enrollment_id, user_id, event_id, event_name, event_date, analyte, your_result, your_method, peer_mean, peer_sd, peer_n, acceptable_low, acceptable_high, sdi, pass_fail, notes, submission_due_date, tested_by_employee_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(enrollment_id, dataUserId, event_id || null, event_name || null, event_date, analyte.trim(), your_result ?? null, your_method || null, peer_mean ?? null, peer_sd ?? null, peer_n ?? null, acceptable_low ?? null, acceptable_high ?? null, sdi, pass_fail || 'pending', notes || null, submission_due_date || null, tested_by_employee_id ? Number(tested_by_employee_id) : null, now, now);
     // write-path Shape A (resolver unification): tag via resolveLegacyLabId —
     // the SAME resolver the events list read uses (now active-lab-aware) — so
     // a multi-lab owner's new event always appears in the lab they created it in.
@@ -27154,7 +27154,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const existing = userCanAccessLabRow('pt_events', req.params.id, req);
     if (!existing) return res.status(404).json({ error: "Event not found" });
-    const { enrollment_id, event_id, event_name, event_date, analyte, your_result, your_method, peer_mean, peer_sd, peer_n, acceptable_low, acceptable_high, pass_fail, notes, tested_by_employee_id } = req.body;
+    const { enrollment_id, event_id, event_name, event_date, analyte, your_result, your_method, peer_mean, peer_sd, peer_n, acceptable_low, acceptable_high, pass_fail, notes, tested_by_employee_id, submission_due_date } = req.body;
     const finalResult = your_result !== undefined ? your_result : existing.your_result;
     const finalPeerMean = peer_mean !== undefined ? peer_mean : existing.peer_mean;
     const finalPeerSd = peer_sd !== undefined ? peer_sd : existing.peer_sd;
@@ -27164,7 +27164,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     const now = new Date().toISOString();
     (db as any).$client.prepare(
-      "UPDATE pt_events SET enrollment_id = ?, event_id = ?, event_name = ?, event_date = ?, analyte = ?, your_result = ?, your_method = ?, peer_mean = ?, peer_sd = ?, peer_n = ?, acceptable_low = ?, acceptable_high = ?, sdi = ?, pass_fail = ?, notes = ?, tested_by_employee_id = ?, updated_at = ? WHERE id = ?"
+      "UPDATE pt_events SET enrollment_id = ?, event_id = ?, event_name = ?, event_date = ?, analyte = ?, your_result = ?, your_method = ?, peer_mean = ?, peer_sd = ?, peer_n = ?, acceptable_low = ?, acceptable_high = ?, sdi = ?, pass_fail = ?, notes = ?, submission_due_date = ?, tested_by_employee_id = ?, updated_at = ? WHERE id = ?"
     ).run(
       enrollment_id ?? existing.enrollment_id, event_id !== undefined ? event_id : existing.event_id,
       event_name !== undefined ? event_name : existing.event_name, event_date ?? existing.event_date,
@@ -27173,6 +27173,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       acceptable_low !== undefined ? acceptable_low : existing.acceptable_low,
       acceptable_high !== undefined ? acceptable_high : existing.acceptable_high,
       sdi, pass_fail ?? existing.pass_fail, notes !== undefined ? notes : existing.notes,
+      submission_due_date !== undefined ? (submission_due_date || null) : existing.submission_due_date,
       tested_by_employee_id !== undefined ? (tested_by_employee_id ? Number(tested_by_employee_id) : null) : existing.tested_by_employee_id,
       now, req.params.id
     );

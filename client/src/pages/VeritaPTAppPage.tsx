@@ -104,6 +104,8 @@ export default function VeritaPTAppPage() {
   const [newEventPassFail, setNewEventPassFail] = useState<"pending" | "pass" | "fail">("pending");
   const [newEventTestedBy, setNewEventTestedBy] = useState<string>("");
   const [newEventNotes, setNewEventNotes] = useState("");
+  const [newEventDueDate, setNewEventDueDate] = useState(""); // MLC-2 submission deadline
+  const [ptEvents, setPtEvents] = useState<any[]>([]); // MLC-2: events, for deadline surfacing
   const [staffRoster, setStaffRoster] = useState<Array<{ id: number; first_name: string; last_name: string; middle_initial: string | null; title: string | null }>>([]);
   const [saving, setSaving] = useState(false);
 
@@ -138,6 +140,11 @@ export default function VeritaPTAppPage() {
       setSummary(covData.summary ?? null);
       setEnrollments(Array.isArray(enrollData) ? enrollData : []);
       setAaRecords(Array.isArray(aaaData) ? aaaData : []);
+      // MLC-2: fetch PT events (lab-scoped) to surface submission deadlines.
+      try {
+        const evRes = await fetch(`${API_BASE}/api/veritapt/events`, { headers: authHeaders() });
+        setPtEvents(evRes.ok ? await evRes.json() : []);
+      } catch { setPtEvents([]); }
       // Wave C1: fetch the per-analyte trend states. Lab-scoped via
       // PR #626 endpoint. 403 (no PT plan access) silently hides the
       // banner; the rest of the page renders identically.
@@ -378,6 +385,40 @@ export default function VeritaPTAppPage() {
           </Button>
         </div>
       </div>
+
+      {/* MLC-2: PT submission-deadline banner. Pending events whose submission
+          due-date is overdue or within 14 days. A missed PT submission is a hard
+          CLIA failure (42 CFR 493.803), so it sits above the trend banner.
+          Self-hides when nothing is due. */}
+      {(() => {
+        const today = new Date().toISOString().slice(0, 10);
+        const daysTo = (d: string) => Math.round((Date.parse(d + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) / 86400000);
+        const pending = ptEvents.filter(e => e.submission_due_date && (e.pass_fail === "pending" || !e.pass_fail));
+        const overdue = pending.filter(e => daysTo(e.submission_due_date) < 0).sort((a, b) => a.submission_due_date.localeCompare(b.submission_due_date));
+        const soon = pending.filter(e => { const d = daysTo(e.submission_due_date); return d >= 0 && d <= 14; }).sort((a, b) => a.submission_due_date.localeCompare(b.submission_due_date));
+        if (overdue.length === 0 && soon.length === 0) return null;
+        const hasOverdue = overdue.length > 0;
+        return (
+          <div className={`rounded-xl border p-4 ${hasOverdue ? "border-red-300/60 bg-red-50 dark:bg-red-950/30 dark:border-red-900/40" : "border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900/40"}`}>
+            <div className={`text-sm font-semibold ${hasOverdue ? "text-red-700 dark:text-red-300" : "text-amber-700 dark:text-amber-300"}`}>
+              PT submission deadlines: {overdue.length} overdue, {soon.length} due within 14 days
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              A missed PT submission is an unsuccessful participation under 42 CFR 493.803. Submit results to your program before the due date.
+            </div>
+            <ul className="mt-2 space-y-1 text-xs">
+              {overdue.map(e => {
+                const n = Math.abs(daysTo(e.submission_due_date));
+                return <li key={`od-${e.id}`} className="text-red-700 dark:text-red-300"><span className="font-medium">{e.analyte}</span>: overdue by {n} day{n === 1 ? "" : "s"} (due {e.submission_due_date})</li>;
+              })}
+              {soon.map(e => {
+                const n = daysTo(e.submission_due_date);
+                return <li key={`ds-${e.id}`} className="text-amber-700 dark:text-amber-300"><span className="font-medium">{e.analyte}</span>: due in {n} day{n === 1 ? "" : "s"} ({e.submission_due_date})</li>;
+              })}
+            </ul>
+          </div>
+        );
+      })()}
 
       {/* Wave C1 (VeritaPT move-1): PT trend banner. Surfaces the
           AT-RISK / WATCH counts from PR #626 /trends endpoint as the
@@ -1029,6 +1070,16 @@ export default function VeritaPTAppPage() {
               </div>
             </div>
             <div>
+              <label className="block text-xs font-medium mb-1">Submission due date</label>
+              <input
+                type="date"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={newEventDueDate}
+                onChange={e => setNewEventDueDate(e.target.value)}
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">Date results are due to the PT program. Drives the overdue/upcoming deadline banner. Optional.</p>
+            </div>
+            <div>
               <label className="block text-xs font-medium mb-1">Notes</label>
               <textarea
                 rows={2}
@@ -1060,6 +1111,7 @@ export default function VeritaPTAppPage() {
                       pass_fail: newEventPassFail,
                       tested_by_employee_id: newEventTestedBy ? Number(newEventTestedBy) : null,
                       notes: newEventNotes || null,
+                      submission_due_date: newEventDueDate || null,
                     }),
                   });
                   if (r.ok) {
@@ -1072,6 +1124,7 @@ export default function VeritaPTAppPage() {
                     setNewEventPassFail("pending");
                     setNewEventTestedBy("");
                     setNewEventNotes("");
+                    setNewEventDueDate("");
                     fetchData();
                   }
                 } finally {
