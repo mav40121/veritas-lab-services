@@ -3349,6 +3349,53 @@ sqlite.exec(`
   } catch {}
 }
 
+// MLC-1 (2026-08-11): Equipment / instrument maintenance module. Per-instrument
+// records with a next-due date, and an append-only maintenance-event log
+// (calibration / preventive maintenance / service / repair / function check).
+// Maps to CLIA competency Element 4 and the VeritaScan Equipment & Maintenance
+// domain. Instrument names can mirror the VeritaMap instrument menu.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS lab_equipment (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    instrument_name TEXT NOT NULL,
+    manufacturer TEXT,
+    model TEXT,
+    serial_number TEXT,
+    location TEXT,
+    pm_interval_days INTEGER,
+    next_due_date TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS equipment_maintenance_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    equipment_id INTEGER NOT NULL,
+    lab_id INTEGER NOT NULL,
+    event_type TEXT NOT NULL,
+    event_date TEXT NOT NULL,
+    performed_by TEXT,
+    next_due_date TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_lab_equipment_lab ON lab_equipment(lab_id);
+  CREATE INDEX IF NOT EXISTS idx_equip_events_equip ON equipment_maintenance_events(equipment_id);
+  CREATE INDEX IF NOT EXISTS idx_equip_events_lab ON equipment_maintenance_events(lab_id);
+`);
+// PRAGMA migration block per the New DB Table Rule (CLAUDE.md §8).
+{
+  try {
+    const eqCols = (sqlite.prepare("PRAGMA table_info(lab_equipment)").all() as { name: string }[]).map(c => c.name);
+    void eqCols; // Future ALTER TABLE lab_equipment ADD COLUMN ... blocks go here.
+    const evCols = (sqlite.prepare("PRAGMA table_info(equipment_maintenance_events)").all() as { name: string }[]).map(c => c.name);
+    void evCols; // Future ALTER TABLE equipment_maintenance_events ADD COLUMN ... blocks go here.
+  } catch {}
+}
+
 // Multi-Lab Tier 2 — Phase 3.5 (VeritaComp module):
 // Three top-level user_id tables: competency_programs, competency_employees,
 // competency_quizzes. All other competency_* tables scope through one of

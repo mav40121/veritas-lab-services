@@ -19391,6 +19391,98 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     (db as any).$client.prepare("DELETE FROM pt_enrollments_v2 WHERE id = ?").run(req.params.id);
     res.json({ success: true });
   });
+  // ── MLC-1: Equipment / instrument maintenance ──────────────────────────────
+  // Per-instrument records with a next-due date + an append-only maintenance
+  // event log. Lab-scoped; gated on the same suite plan set as the other
+  // modules. maintenance_status is derived from next_due_date at read time.
+  function hasEquipmentAccess(user: any, lab?: any) {
+    const plan = lab?.plan ?? user?.plan;
+    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
+  }
+  function equipmentStatus(nextDue: string | null): string {
+    if (!nextDue) return "none";
+    const today = new Date().toISOString().slice(0, 10);
+    const days = Math.round((Date.parse(nextDue + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) / 86400000);
+    if (days < 0) return "overdue";
+    if (days <= 30) return "due_soon";
+    return "ok";
+  }
+  const EQUIP_EVENT_TYPES = ["calibration", "preventive_maintenance", "service", "repair", "function_check"];
+
+  app.get("/api/labs/:labId/equipment", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
+    const sqlite = (db as any).$client;
+    const rows = sqlite.prepare("SELECT * FROM lab_equipment WHERE lab_id = ? AND status <> 'retired' ORDER BY instrument_name ASC").all(req.scope.labId) as any[];
+    res.json(rows.map(r => ({ ...r, maintenance_status: equipmentStatus(r.next_due_date) })));
+  });
+  app.post("/api/labs/:labId/equipment", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
+    const { instrument_name, manufacturer, model, serial_number, location, pm_interval_days, next_due_date, notes } = req.body || {};
+    if (!instrument_name || !String(instrument_name).trim()) return res.status(400).json({ error: "instrument_name required" });
+    const sqlite = (db as any).$client; const now = new Date().toISOString();
+    const ins = sqlite.prepare("INSERT INTO lab_equipment (lab_id, instrument_name, manufacturer, model, serial_number, location, pm_interval_days, next_due_date, status, notes, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,'active',?,?,?)")
+      .run(req.scope.labId, String(instrument_name).trim(), manufacturer || null, model || null, serial_number || null, location || null,
+           pm_interval_days != null && pm_interval_days !== "" ? Number(pm_interval_days) : null, next_due_date || null, notes || null, now, now);
+    const row = sqlite.prepare("SELECT * FROM lab_equipment WHERE id = ?").get(ins.lastInsertRowid) as any;
+    res.json({ ...row, maintenance_status: equipmentStatus(row.next_due_date) });
+  });
+  app.put("/api/labs/:labId/equipment/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
+    const id = Number(req.params.id); const sqlite = (db as any).$client;
+    const ex = sqlite.prepare("SELECT * FROM lab_equipment WHERE id = ? AND lab_id = ?").get(id, req.scope.labId) as any;
+    if (!ex) return res.status(404).json({ error: "Equipment not found in this lab" });
+    const b = req.body || {}; const now = new Date().toISOString();
+    const keep = (v: any, cur: any) => (v !== undefined ? v : cur);
+    sqlite.prepare("UPDATE lab_equipment SET instrument_name=?, manufacturer=?, model=?, serial_number=?, location=?, pm_interval_days=?, next_due_date=?, status=?, notes=?, updated_at=? WHERE id=?")
+      .run(
+        b.instrument_name !== undefined ? String(b.instrument_name).trim() : ex.instrument_name,
+        keep(b.manufacturer, ex.manufacturer), keep(b.model, ex.model), keep(b.serial_number, ex.serial_number),
+        keep(b.location, ex.location),
+        b.pm_interval_days !== undefined ? (b.pm_interval_days !== "" ? Number(b.pm_interval_days) : null) : ex.pm_interval_days,
+        b.next_due_date !== undefined ? (b.next_due_date || null) : ex.next_due_date,
+        keep(b.status, ex.status), keep(b.notes, ex.notes), now, id,
+      );
+    const row = sqlite.prepare("SELECT * FROM lab_equipment WHERE id = ?").get(id) as any;
+    res.json({ ...row, maintenance_status: equipmentStatus(row.next_due_date) });
+  });
+  app.delete("/api/labs/:labId/equipment/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
+    const id = Number(req.params.id); const sqlite = (db as any).$client;
+    const ex = sqlite.prepare("SELECT id FROM lab_equipment WHERE id = ? AND lab_id = ?").get(id, req.scope.labId);
+    if (!ex) return res.status(404).json({ error: "Equipment not found in this lab" });
+    sqlite.prepare("DELETE FROM equipment_maintenance_events WHERE equipment_id = ?").run(id);
+    sqlite.prepare("DELETE FROM lab_equipment WHERE id = ?").run(id);
+    res.json({ ok: true });
+  });
+  app.get("/api/labs/:labId/equipment/:id/events", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
+    const id = Number(req.params.id); const sqlite = (db as any).$client;
+    const ex = sqlite.prepare("SELECT id FROM lab_equipment WHERE id = ? AND lab_id = ?").get(id, req.scope.labId);
+    if (!ex) return res.status(404).json({ error: "Equipment not found in this lab" });
+    res.json(sqlite.prepare("SELECT * FROM equipment_maintenance_events WHERE equipment_id = ? ORDER BY event_date DESC, id DESC").all(id));
+  });
+  app.post("/api/labs/:labId/equipment/:id/events", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
+    const id = Number(req.params.id); const sqlite = (db as any).$client;
+    const ex = sqlite.prepare("SELECT * FROM lab_equipment WHERE id = ? AND lab_id = ?").get(id, req.scope.labId) as any;
+    if (!ex) return res.status(404).json({ error: "Equipment not found in this lab" });
+    const { event_type, event_date, performed_by, next_due_date, notes } = req.body || {};
+    if (!EQUIP_EVENT_TYPES.includes(event_type)) return res.status(400).json({ error: "event_type must be one of " + EQUIP_EVENT_TYPES.join(", ") });
+    if (!event_date) return res.status(400).json({ error: "event_date required" });
+    const now = new Date().toISOString();
+    // next_due: explicit value wins; else event_date + the instrument's PM interval.
+    let nextDue: string | null = next_due_date || null;
+    if (!nextDue && ex.pm_interval_days) {
+      const d = new Date(event_date + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + Number(ex.pm_interval_days));
+      nextDue = d.toISOString().slice(0, 10);
+    }
+    sqlite.prepare("INSERT INTO equipment_maintenance_events (equipment_id, lab_id, event_type, event_date, performed_by, next_due_date, notes, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)")
+      .run(id, req.scope.labId, event_type, event_date, performed_by || null, nextDue, notes || null, now, now);
+    if (nextDue) sqlite.prepare("UPDATE lab_equipment SET next_due_date = ?, updated_at = ? WHERE id = ?").run(nextDue, now, id);
+    const row = sqlite.prepare("SELECT * FROM lab_equipment WHERE id = ?").get(id) as any;
+    res.json({ ...row, maintenance_status: equipmentStatus(row.next_due_date) });
+  });
+
   // MLC-2b: VeritaPT submission-deadline reminder config (lab-scoped). Drives the
   // nightly engine in server/ptReminders.ts. Validation + defaults mirror the
   // VeritaTrack reminder-config helpers so the two cannot drift.
