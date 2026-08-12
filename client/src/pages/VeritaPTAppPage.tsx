@@ -65,6 +65,76 @@ const AAA_METHODS: { value: string; label: string }[] = [
 
 type FilterType = "all" | "gaps" | "covered" | "aaa" | "waived";
 
+// MLC-2b: PT deadline email-reminder settings. Enable, set the lead window and
+// recipients; the nightly engine (server/ptReminders.ts) reads this per lab.
+function PtRemindersPanel({ ptApi }: { ptApi: string }) {
+  const [enabled, setEnabled] = useState(false);
+  const [leadDays, setLeadDays] = useState(14);
+  const [recipients, setRecipients] = useState(""); // comma-separated emails
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const r = await fetch(`${ptApi}/reminder-config`, { headers: authHeaders() });
+        if (r.ok && live) {
+          const d = await r.json();
+          setEnabled(!!d.enabled);
+          setLeadDays(d.lead_days ?? 14);
+          setRecipients((d.recipients || []).map((x: any) => x.email).join(", "));
+        }
+      } finally { if (live) setLoading(false); }
+    })();
+    return () => { live = false; };
+  }, [ptApi]);
+
+  const save = async () => {
+    setSaving(true); setSaved(false);
+    try {
+      const recips = recipients.split(",").map(s => s.trim()).filter(Boolean).map(email => ({ email }));
+      const r = await fetch(`${ptApi}/reminder-config`, {
+        method: "PUT",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled, lead_days: leadDays, overdue_cadence_days: 2, recipients: recips }),
+      });
+      if (r.ok) setSaved(true);
+    } finally { setSaving(false); }
+  };
+
+  if (loading) return null;
+  return (
+    <div className="rounded-xl border border-dashed p-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <div className="text-sm font-semibold">PT deadline email reminders</div>
+          <div className="text-xs text-muted-foreground mt-0.5">Email a digest of PT submissions approaching or overdue their due date. Overdue items repeat every 2 days until the event is recorded. Sent to the lab owner if no recipients are set.</div>
+        </div>
+        <label className="flex items-center gap-2 text-sm shrink-0">
+          <input type="checkbox" checked={enabled} onChange={e => { setEnabled(e.target.checked); setSaved(false); }} />
+          Enabled
+        </label>
+      </div>
+      <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium mb-1">Remind within (days before due)</label>
+          <input type="number" min={1} max={60} value={leadDays} onChange={e => { setLeadDays(Number(e.target.value) || 14); setSaved(false); }} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium mb-1">Recipients (comma-separated emails)</label>
+          <input type="text" value={recipients} onChange={e => { setRecipients(e.target.value); setSaved(false); }} placeholder="Defaults to the lab owner if blank" className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+        </div>
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        <Button size="sm" className="bg-[#006064] hover:bg-[#004d50] text-white" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save reminder settings"}</Button>
+        {saved && <span className="text-xs text-emerald-600">Saved.</span>}
+      </div>
+    </div>
+  );
+}
+
 export default function VeritaPTAppPage() {
   const labRoute = useLabRoute();
   const { user } = useAuth();
@@ -419,6 +489,8 @@ export default function VeritaPTAppPage() {
           </div>
         );
       })()}
+
+      <PtRemindersPanel ptApi={ptApi} />
 
       {/* Wave C1 (VeritaPT move-1): PT trend banner. Surfaces the
           AT-RISK / WATCH counts from PR #626 /trends endpoint as the
