@@ -117,7 +117,7 @@ export async function runNightlyExemptionGuard(): Promise<void> {
     ).join("");
     await resend.emails.send({
       from: "VeritaAssure System <info@veritaslabservices.com>",
-      to: "info@veritaslabservices.com",
+      to: ["info@veritaslabservices.com", "verilabguy@gmail.com"],
       subject: `[VeritaAssure] Linearity-exemption DROP: ${result.drops.length} map(s)`,
       html: `<p>The nightly guard found <strong>${result.drops.length}</strong> VeritaMap(s) whose count of active linearity/cal-ver exemptions fell sharply between the last two nightly snapshots. A drop like this usually means the exemption flags were wiped (as on San Carlos 2026-07-31 and 2026-08-01), which makes those combos read "Cal Ver / Linearity required" in the coverage view.</p>
              <p>Recover with a dry-run then apply of <code>POST /api/admin/restore-linearity-exemptions {labId, snapshotId, dryRun}</code> using a snapshot from before the drop. If the drop was intentional, ignore.</p>
