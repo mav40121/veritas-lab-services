@@ -32,6 +32,7 @@ const mobileTopLinks: { href: string; label: string }[] = [
 // type, not a standalone module, and must never appear as its own nav row.
 type NavLink = { href: string; label: string; header?: boolean };
 const complianceModules: NavLink[] = [
+  { href: "/readiness", label: "Inspection Readiness" },
   { href: "/veritacheck", label: "VeritaCheck\u2122" },
   { href: "/veritamap", label: "VeritaMap\u2122" },
   { href: "/veritascan", label: "VeritaScan\u2122" },
