@@ -12967,15 +12967,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!targetInst || !sourceInst) return res.status(404).json({ error: "Instrument not found" });
       const sourceTests = (db as any).$client.prepare("SELECT * FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ?").all(sourceInstId, mapId) as any[];
       const existingAnalytes = new Set(((db as any).$client.prepare("SELECT analyte FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ?").all(targetInstId, mapId) as any[]).map((r: any) => r.analyte.toLowerCase().trim()));
-      let copied = 0; let skipped = 0;
+      let copied = 0; let updated = 0;
       const insertStmt = (db as any).$client.prepare("INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)");
+      // When the target already carries this analyte (e.g. a backup instrument
+      // pre-seeded with the full menu, all inactive), copying must bring the
+      // SOURCE's active selection forward -- sync the active flag rather than
+      // skipping the row and leaving the backup at 0 active.
+      const updateStmt = (db as any).$client.prepare("UPDATE veritamap_instrument_tests SET active = ? WHERE instrument_id = ? AND map_id = ? AND lower(trim(analyte)) = ?");
       for (const t of sourceTests) {
-        if (existingAnalytes.has((t.analyte || '').toLowerCase().trim())) { skipped++; continue; }
-        insertStmt.run(targetInstId, mapId, t.analyte, t.specialty, t.complexity, t.active ?? 1);
-        copied++;
+        const key = (t.analyte || '').toLowerCase().trim();
+        if (existingAnalytes.has(key)) {
+          updateStmt.run(t.active ?? 1, targetInstId, mapId, key);
+          updated++;
+        } else {
+          insertStmt.run(targetInstId, mapId, t.analyte, t.specialty, t.complexity, t.active ?? 1);
+          copied++;
+        }
       }
       rebuildMapTests(mapId);
-      res.json({ ok: true, sourceInstrumentName: sourceInst.instrument_name, copied, skipped, message: `Copied ${copied} test${copied !== 1 ? 's' : ''} from ${sourceInst.instrument_name}. ${skipped} already present and skipped.` });
+      const total = copied + updated;
+      res.json({ ok: true, sourceInstrumentName: sourceInst.instrument_name, copied, updated, message: `Brought forward ${total} test${total !== 1 ? 's' : ''} from ${sourceInst.instrument_name}${updated ? ` (${copied} added, ${updated} updated to match).` : '.'}` });
     } catch (err: any) {
       console.error(`[VeritaMap] Error copying instrument tests:`, err);
       res.status(500).json({ error: err.message || "Failed to copy tests" });
@@ -13006,6 +13017,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const beforeTests = (db as any).$client.prepare("SELECT analyte, specialty, complexity, active FROM veritamap_instrument_tests WHERE instrument_id = ?").all(req.params.instId);
       const instrRow = (db as any).$client.prepare("SELECT instrument_name FROM veritamap_instruments WHERE id = ?").get(req.params.instId) as any;
       logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritamap", action: beforeTests.length === 0 ? "create" : "update", entityType: "instrument_tests", entityId: req.params.instId, entityLabel: instrRow?.instrument_name ?? `instrument_${req.params.instId}`, before: beforeTests, after: tests, ipAddress: req.ip });
+      const exSnapshot = captureInstrumentExemptions(req.params.instId, req.params.id);
       (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ?").run(req.params.instId, req.params.id);
       const stmt = (db as any).$client.prepare("INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)");
       const bulk = (db as any).$client.transaction((tests: any[]) => {
@@ -13015,6 +13027,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }
       });
       bulk(tests);
+      restoreInstrumentExemptions(req.params.instId, req.params.id, exSnapshot);
       rebuildMapTests(req.params.id);
       res.json({ ok: true, count: tests.length });
     } catch (err: any) {
@@ -13776,32 +13789,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           ).all(targetInstId, mapId) as any[]).map((r: any) => r.analyte.toLowerCase().trim())
         );
 
-        // Insert missing tests (merge only, skip if analyte already exists on target)
+        // Merge: insert missing analytes, and for analytes already on the target
+        // (e.g. a backup instrument pre-seeded with the full menu, all inactive)
+        // sync the SOURCE's active selection forward instead of skipping the row
+        // and leaving the backup at 0 active.
         let copied = 0;
-        let skipped = 0;
+        let updated = 0;
 
         const insertStmt = (db as any).$client.prepare(
           "INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)"
         );
+        const updateStmt = (db as any).$client.prepare(
+          "UPDATE veritamap_instrument_tests SET active = ? WHERE instrument_id = ? AND map_id = ? AND lower(trim(analyte)) = ?"
+        );
 
         for (const t of sourceTests) {
-          if (existingAnalytes.has((t.analyte || '').toLowerCase().trim())) {
-            skipped++;
-            continue;
+          const key = (t.analyte || '').toLowerCase().trim();
+          if (existingAnalytes.has(key)) {
+            updateStmt.run(t.active ?? 1, targetInstId, mapId, key);
+            updated++;
+          } else {
+            insertStmt.run(targetInstId, mapId, t.analyte, t.specialty, t.complexity, t.active ?? 1);
+            copied++;
           }
-          insertStmt.run(targetInstId, mapId, t.analyte, t.specialty, t.complexity, t.active ?? 1);
-          copied++;
         }
 
         // Rebuild merged map tests
         rebuildMapTests(mapId);
 
+        const total = copied + updated;
         res.json({
           ok: true,
           sourceInstrumentName: sourceInst.instrument_name,
           copied,
-          skipped,
-          message: `Copied ${copied} test${copied !== 1 ? 's' : ''} from ${sourceInst.instrument_name}. ${skipped} already present and skipped.`
+          updated,
+          message: `Brought forward ${total} test${total !== 1 ? 's' : ''} from ${sourceInst.instrument_name}${updated ? ` (${copied} added, ${updated} updated to match).` : '.'}`
         });
       } catch (err: any) {
         console.error(`[VeritaMap] Error copying instrument tests:`, err);
@@ -13870,7 +13892,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         after: tests,
         ipAddress: req.ip,
       });
-      // Replace all tests for this instrument
+      // Replace all tests for this instrument (preserving linearity exemptions)
+      const exSnapshot = captureInstrumentExemptions(req.params.instId, req.params.id);
       (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ?").run(req.params.instId, req.params.id);
       const stmt = (db as any).$client.prepare(
         "INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)"
@@ -13882,6 +13905,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }
       });
       bulk(tests);
+      restoreInstrumentExemptions(req.params.instId, req.params.id, exSnapshot);
       // Rebuild the merged veritamap_tests from all instruments
       rebuildMapTests(req.params.id);
       const savedCount = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ?").get(req.params.instId, req.params.id).cnt;
@@ -13964,6 +13988,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       contactEmail: isFree ? CAP_MESSAGE_CONTACT : null,
     });
   });
+
+  // Preserve the lab-entered linearity-exemption flags across an instrument
+  // test-menu save. The build wizard saves a menu by DELETE + reinsert of the
+  // instrument's rows (analyte/specialty/complexity/active only), which silently
+  // dropped the four linearity_exempt_* columns -- the source of the recurring
+  // San Carlos "cal-ver required" coverage wipe (2026-07-31 and 2026-08-01, both
+  // recovered from a nightly snapshot). Capture the exemptions keyed by analyte
+  // before the wipe, then re-apply them to the rebuilt rows.
+  type ExemptSnap = { k: string; mc: number; nc: number; wv: number; ot: string | null };
+  function captureInstrumentExemptions(instId: string | number, mapId: string | number): ExemptSnap[] {
+    return ((db as any).$client.prepare(
+      "SELECT lower(trim(analyte)) AS k, linearity_exempt_multical AS mc, linearity_exempt_noncal AS nc, linearity_exempt_waived AS wv, linearity_exempt_other AS ot FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ?"
+    ).all(instId, mapId) as any[]).filter((r) => r.mc || r.nc || r.wv || (r.ot || "").trim());
+  }
+  function restoreInstrumentExemptions(instId: string | number, mapId: string | number, snap: ExemptSnap[]): number {
+    if (!snap.length) return 0;
+    const upd = (db as any).$client.prepare(
+      "UPDATE veritamap_instrument_tests SET linearity_exempt_multical = ?, linearity_exempt_noncal = ?, linearity_exempt_waived = ?, linearity_exempt_other = ? WHERE instrument_id = ? AND map_id = ? AND lower(trim(analyte)) = ?"
+    );
+    let n = 0;
+    for (const e of snap) n += upd.run(e.mc ? 1 : 0, e.nc ? 1 : 0, e.wv ? 1 : 0, (e.ot || "").trim() || null, instId, mapId, e.k).changes;
+    return n;
+  }
 
   // Helper: rebuild merged map tests from instrument tests
   function rebuildMapTests(mapId: string | number) {
