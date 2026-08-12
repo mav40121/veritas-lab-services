@@ -24455,6 +24455,101 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // verdict. Each underlying signal anchors to its own §493 cite via
   // the existing tiles; the dashboard tile carries no new regulatory
   // claim. The footer in the UI says so.
+  // ── MLC-3: cross-module inspection-readiness rollup ────────────────────────
+  // One aggregate per lab: a status per module (ok / attention / overdue) from
+  // each module's own data, plus a lab-level roll-up. Counters MyLabCompliance's
+  // "one login, real-time readiness" pitch. Each module block is independently
+  // try/caught so one query failing never blanks the whole pane.
+  function hasReadinessAccess(user: any, lab?: any) {
+    const plan = lab?.plan ?? user?.plan;
+    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
+  }
+  function computeLabReadiness(client: any, labId: number) {
+    const today = new Date().toISOString().slice(0, 10);
+    const daysTo = (d: string) => Math.round((Date.parse(d + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) / 86400000);
+    const modules: any[] = [];
+    const push = (key: string, label: string, overdue: number, dueSoon: number, total: number, unit: string) => {
+      const status = overdue > 0 ? "overdue" : dueSoon > 0 ? "attention" : "ok";
+      const headline = overdue > 0 ? `${overdue} overdue${dueSoon > 0 ? `, ${dueSoon} due soon` : ""}`
+        : dueSoon > 0 ? `${dueSoon} due soon`
+        : total > 0 ? `${total} ${unit}, all current`
+        : `No ${unit} tracked`;
+      modules.push({ key, label, status, overdue, due_soon: dueSoon, total, headline });
+    };
+    // Equipment maintenance (next_due_date; due-soon within 30d)
+    try {
+      const rows = client.prepare("SELECT next_due_date FROM lab_equipment WHERE lab_id = ? AND status <> 'retired'").all(labId) as any[];
+      let od = 0, ds = 0; for (const r of rows) { if (!r.next_due_date) continue; const d = daysTo(r.next_due_date); if (d < 0) od++; else if (d <= 30) ds++; }
+      push("equipment", "Equipment maintenance", od, ds, rows.length, "instruments");
+    } catch {}
+    // PT submission deadlines (pending events; due-soon within 14d)
+    try {
+      const rows = client.prepare("SELECT submission_due_date FROM pt_events WHERE lab_id = ? AND pass_fail = 'pending' AND submission_due_date IS NOT NULL AND TRIM(submission_due_date) <> ''").all(labId) as any[];
+      let od = 0, ds = 0; for (const r of rows) { const d = daysTo(r.submission_due_date); if (d < 0) od++; else if (d <= 14) ds++; }
+      push("pt_deadlines", "PT submission deadlines", od, ds, rows.length, "pending submissions");
+    } catch {}
+    // QC corrective actions (rejection violations with no CA filed)
+    try {
+      const miss = client.prepare("SELECT COUNT(*) AS n FROM qc_rule_violations v WHERE v.severity = 'rejection' AND v.qc_result_id IN (SELECT id FROM qc_results WHERE lab_id = ?) AND NOT EXISTS (SELECT 1 FROM qc_corrective_actions ca WHERE ca.qc_result_id = v.qc_result_id)").get(labId).n as number;
+      const lots = client.prepare("SELECT COUNT(*) AS n FROM qc_control_lots WHERE lab_id = ? AND status = 'active'").get(labId).n as number;
+      push("qc", "QC corrective actions", miss, 0, lots, "active lots");
+    } catch {}
+    // Certificate expirations (lab_certificates keyed by the lab owner; due-soon 60d)
+    try {
+      const owner = client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+      if (owner?.owner_user_id) {
+        const rows = client.prepare("SELECT expiration_date FROM lab_certificates WHERE user_id = ? AND is_active = 1 AND expiration_date IS NOT NULL AND TRIM(expiration_date) <> ''").all(owner.owner_user_id) as any[];
+        let od = 0, ds = 0; for (const r of rows) { const d = daysTo(String(r.expiration_date).slice(0, 10)); if (d < 0) od++; else if (d <= 60) ds++; }
+        push("certificates", "Certificate expirations", od, ds, rows.length, "certificates");
+      }
+    } catch {}
+    // Competency (testing staff whose next assessment is overdue; due-soon 30d).
+    // Mirrors the next-due classification used by /compliance/score.
+    try {
+      const emps = client.prepare(
+        "SELECT s.initial_completed_at, s.six_month_due_at, s.six_month_completed_at, s.first_annual_due_at, s.first_annual_completed_at, s.annual_due_at, e.hire_date FROM staff_employees e LEFT JOIN staff_competency_schedules s ON s.employee_id = e.id WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1"
+      ).all(labId) as any[];
+      let od = 0, ds = 0;
+      for (const e of emps) {
+        let nd: string | null = null;
+        if (!e.initial_completed_at) nd = e.hire_date ? new Date(Date.parse(e.hire_date) + 90 * 86400000).toISOString().slice(0, 10) : today;
+        else if (e.six_month_due_at && !e.six_month_completed_at) nd = String(e.six_month_due_at).slice(0, 10);
+        else if (e.first_annual_due_at && !e.first_annual_completed_at) nd = String(e.first_annual_due_at).slice(0, 10);
+        else if (e.annual_due_at) nd = String(e.annual_due_at).slice(0, 10);
+        if (nd) { const d = daysTo(nd); if (d < 0) od++; else if (d <= 30) ds++; }
+      }
+      push("competency", "Competency assessments", od, ds, emps.length, "testing staff");
+    } catch {}
+
+    const modules_ok = modules.filter(m => m.status === "ok").length;
+    const overdue_items = modules.reduce((a, m) => a + m.overdue, 0);
+    const attention_items = modules.reduce((a, m) => a + m.overdue + m.due_soon, 0);
+    return {
+      modules,
+      overall: {
+        modules_total: modules.length, modules_ok, attention_items, overdue_items,
+        status: overdue_items > 0 ? "overdue" : attention_items > 0 ? "attention" : "ok",
+      },
+    };
+  }
+  app.get("/api/labs/:labId/readiness", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasReadinessAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "A VeritaAssure subscription is required" });
+    const client = (db as any).$client;
+    const lab = client.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    res.json({ lab_id: req.scope.labId, lab_name: lab?.lab_name, clia_number: lab?.clia_number, ...computeLabReadiness(client, req.scope.labId) });
+  });
+  // System-tier multi-lab rollup: the same readiness across every lab the user
+  // can access, from one login.
+  app.get("/api/readiness/rollup", authMiddleware, (req: any, res) => {
+    if (!hasReadinessAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "A VeritaAssure subscription is required" });
+    const client = (db as any).$client;
+    const userId = req.user?.userId;
+    const labs = client.prepare(
+      "SELECT DISTINCT l.id, l.lab_name, l.clia_number FROM labs l JOIN lab_members m ON m.lab_id = l.id WHERE m.user_id = ? AND m.status = 'active' ORDER BY l.lab_name ASC"
+    ).all(userId) as any[];
+    res.json(labs.map(l => ({ lab_id: l.id, lab_name: l.lab_name, clia_number: l.clia_number, ...computeLabReadiness(client, l.id) })));
+  });
+
   app.get("/api/labs/:labId/compliance/score", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab) && !hasStaffAccess(req.user, req.scope?.lab)) {
       return res.status(403).json({ error: "VeritaComp™ or VeritaStaff™ subscription required" });
