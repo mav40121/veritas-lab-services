@@ -432,6 +432,32 @@ app.use((req, res, next) => {
     console.error("[veritamap-consistency] Scheduler setup error:", err.message);
   }
 
+  // Schedule nightly linearity-exemption drop guard at 05:00 UTC (after the
+  // 04:00 snapshot the guard reads from). Read-only: compares each lab's two
+  // most recent snapshots and emails info@ if a map's active-exemption count
+  // fell sharply, so an exemption WIPE (San Carlos 2026-07-31 / 2026-08-01) is
+  // caught the next morning instead of weeks later by the client.
+  try {
+    const { runNightlyExemptionGuard } = await import("./veritamapExemptionGuard");
+    const scheduleExemptionGuard = () => {
+      const now = new Date();
+      const next = new Date(now);
+      next.setUTCHours(5, 0, 0, 0);
+      if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
+      const msUntil = next.getTime() - now.getTime();
+      setTimeout(() => {
+        runNightlyExemptionGuard().catch((err) => console.error("[exemption-guard] Run failed:", err?.message || err));
+        setInterval(() => {
+          runNightlyExemptionGuard().catch((err) => console.error("[exemption-guard] Run failed:", err?.message || err));
+        }, 24 * 60 * 60 * 1000);
+      }, msUntil);
+      console.log(`[exemption-guard] Nightly check scheduled in ${Math.round(msUntil / 60000)} minutes`);
+    };
+    scheduleExemptionGuard();
+  } catch (err: any) {
+    console.error("[exemption-guard] Scheduler setup error:", err.message);
+  }
+
   // Nightly VeritaStock demo reset at 07:00 UTC (midnight America/Phoenix).
   // Restores the five San Carlos locations to the canonical baseline so the
   // self-serve demo self-heals each night. ONLY scheduled on the VeritaStock

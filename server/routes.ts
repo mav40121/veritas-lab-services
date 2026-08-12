@@ -28888,6 +28888,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(auditVeritamapConsistency((db as any).$client));
   });
 
+  // On-demand path for the nightly linearity-exemption drop guard. Read-only:
+  // compares each lab's two most recent snapshots and reports maps whose active
+  // exemption count fell sharply (a wipe). Same audit the 05:00 UTC job runs.
+  app.get("/api/admin/veritamap/exemption-drop-audit", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const { auditExemptionDrops } = require("./veritamapExemptionGuard");
+    res.json(auditExemptionDrops((db as any).$client));
+  });
+
   // Targeted admin correction of a study's display name (test_name). Fixes a typo
   // that breaks VeritaCheck Coverage analyte matching (e.g. "Cannabinoides (THC)"
   // -> "Cannabinoids (THC)"). id-scoped; returns before/after.
