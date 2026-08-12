@@ -61,6 +61,65 @@ function statusBadge(s: string) {
   return <Badge variant="outline" className="text-muted-foreground">No schedule</Badge>;
 }
 
+// MLC-1 Phase 2: equipment maintenance-due email-reminder settings. The nightly
+// engine (server/equipmentReminders.ts) reads this per lab.
+function EquipmentRemindersPanel({ apiBase }: { apiBase: string }) {
+  const [enabled, setEnabled] = useState(false);
+  const [leadDays, setLeadDays] = useState(14);
+  const [recipients, setRecipients] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const r = await fetch(`${apiBase}/reminder-config`, { headers: authHeaders() });
+        if (r.ok && live) {
+          const d = await r.json();
+          setEnabled(!!d.enabled); setLeadDays(d.lead_days ?? 14);
+          setRecipients((d.recipients || []).map((x: any) => x.email).join(", "));
+        }
+      } finally { if (live) setLoading(false); }
+    })();
+    return () => { live = false; };
+  }, [apiBase]);
+
+  const save = async () => {
+    setSaving(true); setSaved(false);
+    try {
+      const recips = recipients.split(",").map(s => s.trim()).filter(Boolean).map(email => ({ email }));
+      const r = await fetch(`${apiBase}/reminder-config`, {
+        method: "PUT", headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled, lead_days: leadDays, overdue_cadence_days: 7, recipients: recips }),
+      });
+      if (r.ok) setSaved(true);
+    } finally { setSaving(false); }
+  };
+
+  if (loading) return null;
+  return (
+    <div className="rounded-xl border border-dashed p-4 mb-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <div className="text-sm font-semibold">Maintenance-due email reminders</div>
+          <div className="text-xs text-muted-foreground mt-0.5">Email a digest of instruments approaching or overdue their next-due date. Overdue items repeat weekly until the maintenance is logged. Sent to the lab owner if no recipients are set.</div>
+        </div>
+        <label className="flex items-center gap-2 text-sm shrink-0"><input type="checkbox" checked={enabled} onChange={e => { setEnabled(e.target.checked); setSaved(false); }} /> Enabled</label>
+      </div>
+      <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div><Label className="text-xs">Remind within (days before due)</Label><Input type="number" min={1} max={90} value={leadDays} onChange={e => { setLeadDays(Number(e.target.value) || 14); setSaved(false); }} /></div>
+        <div><Label className="text-xs">Recipients (comma-separated emails)</Label><Input value={recipients} onChange={e => { setRecipients(e.target.value); setSaved(false); }} placeholder="Defaults to the lab owner if blank" /></div>
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        <Button size="sm" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save reminder settings"}</Button>
+        {saved && <span className="text-xs text-emerald-600">Saved.</span>}
+      </div>
+    </div>
+  );
+}
+
 export default function EquipmentAppPage() {
   const { user, isLoggedIn } = useAuth();
   const isReadOnly = useIsReadOnly("veritascan");
@@ -239,6 +298,8 @@ export default function EquipmentAppPage() {
           <div className="text-xs text-muted-foreground mt-1">Instrument calibration and preventive maintenance support CLIA 42 CFR 493.1254 and competency Element 4. Log the completed maintenance to clear each item.</div>
         </div>
       )}
+
+      <EquipmentRemindersPanel apiBase={`${API_BASE}/api/labs/${activeLabId}/equipment`} />
 
       <Card>
         <CardHeader><CardTitle className="text-base">Instruments</CardTitle></CardHeader>

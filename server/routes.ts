@@ -19426,6 +19426,46 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const row = sqlite.prepare("SELECT * FROM lab_equipment WHERE id = ?").get(ins.lastInsertRowid) as any;
     res.json({ ...row, maintenance_status: equipmentStatus(row.next_due_date) });
   });
+  // MLC-1 Phase 2: equipment maintenance-due reminder config (lab-scoped). Drives
+  // the nightly engine in server/equipmentReminders.ts. Registered BEFORE
+  // /equipment/:id so the literal "reminder-config" segment is not captured by :id.
+  function readEquipmentReminderConfig(labId: number) {
+    const sqlite = (db as any).$client;
+    const row = sqlite.prepare("SELECT * FROM equipment_reminder_config WHERE lab_id = ?").get(labId) as any;
+    let recipients: any[] = [];
+    try { recipients = row ? JSON.parse(row.recipients_json || "[]") : []; } catch { recipients = []; }
+    return { lab_id: labId, enabled: row ? !!row.enabled : false, lead_days: row ? row.lead_days : 14, overdue_cadence_days: row ? row.overdue_cadence_days : 7, recipients, configured: !!row };
+  }
+  function writeEquipmentReminderConfig(labId: number, body: any) {
+    const sqlite = (db as any).$client;
+    const { enabled, lead_days, overdue_cadence_days, recipients } = body || {};
+    const enabledInt = enabled ? 1 : 0;
+    const lead = Math.max(1, Math.min(90, Number.isFinite(+lead_days) ? Math.round(+lead_days) : 14));
+    const cadence = Math.max(1, Math.min(30, Number.isFinite(+overdue_cadence_days) ? Math.round(+overdue_cadence_days) : 7));
+    let recips: { email: string; name?: string }[] = [];
+    if (Array.isArray(recipients)) {
+      recips = recipients
+        .map((r: any) => (typeof r === "string" ? { email: r } : { email: r?.email, name: r?.name }))
+        .filter((r: any) => r.email && typeof r.email === "string" && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(r.email))
+        .map((r: any) => ({ email: String(r.email).trim(), ...(r.name ? { name: String(r.name).trim() } : {}) }));
+    }
+    const now = new Date().toISOString();
+    const existing = sqlite.prepare("SELECT id FROM equipment_reminder_config WHERE lab_id = ?").get(labId) as any;
+    if (existing) {
+      sqlite.prepare("UPDATE equipment_reminder_config SET enabled=?, lead_days=?, overdue_cadence_days=?, recipients_json=?, updated_at=? WHERE lab_id=?").run(enabledInt, lead, cadence, JSON.stringify(recips), now, labId);
+    } else {
+      sqlite.prepare("INSERT INTO equipment_reminder_config (lab_id, enabled, lead_days, overdue_cadence_days, recipients_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?)").run(labId, enabledInt, lead, cadence, JSON.stringify(recips), now, now);
+    }
+    return { lab_id: labId, enabled: !!enabledInt, lead_days: lead, overdue_cadence_days: cadence, recipients: recips, configured: true };
+  }
+  app.get("/api/labs/:labId/equipment/reminder-config", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
+    res.json(readEquipmentReminderConfig(req.scope.labId));
+  });
+  app.put("/api/labs/:labId/equipment/reminder-config", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
+    res.json(writeEquipmentReminderConfig(req.scope.labId, req.body));
+  });
   app.put("/api/labs/:labId/equipment/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
     const id = Number(req.params.id); const sqlite = (db as any).$client;
