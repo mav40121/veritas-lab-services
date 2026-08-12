@@ -3396,6 +3396,42 @@ sqlite.exec(`
   } catch {}
 }
 
+// MLC-1 Phase 2: equipment maintenance-due reminders. Per-lab config + dedup/
+// audit send-log, mirroring pt_reminder_config / veritatrack_reminder_config.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS equipment_reminder_config (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL UNIQUE,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    lead_days INTEGER NOT NULL DEFAULT 14,
+    overdue_cadence_days INTEGER NOT NULL DEFAULT 7,
+    recipients_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS equipment_reminder_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    equipment_id INTEGER NOT NULL,
+    lab_id INTEGER NOT NULL,
+    reminder_kind TEXT NOT NULL,
+    due_date TEXT,
+    sent_on TEXT NOT NULL,
+    recipient_email TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_equip_rem_log_equip ON equipment_reminder_log(equipment_id, reminder_kind);
+  CREATE INDEX IF NOT EXISTS idx_equip_rem_log_lab ON equipment_reminder_log(lab_id);
+`);
+// PRAGMA migration block per the New DB Table Rule (CLAUDE.md §8).
+{
+  try {
+    const cfgCols = (sqlite.prepare("PRAGMA table_info(equipment_reminder_config)").all() as { name: string }[]).map(c => c.name);
+    void cfgCols; // Future ALTER TABLE equipment_reminder_config ADD COLUMN ... blocks go here.
+    const logCols = (sqlite.prepare("PRAGMA table_info(equipment_reminder_log)").all() as { name: string }[]).map(c => c.name);
+    void logCols; // Future ALTER TABLE equipment_reminder_log ADD COLUMN ... blocks go here.
+  } catch {}
+}
+
 // Multi-Lab Tier 2 — Phase 3.5 (VeritaComp module):
 // Three top-level user_id tables: competency_programs, competency_employees,
 // competency_quizzes. All other competency_* tables scope through one of
