@@ -5864,6 +5864,9 @@ sqlite.exec(`
     -- on download and for the signed_document_hash captured at signature.
     file_hash_sha256 TEXT NOT NULL,
     change_summary TEXT,
+    -- 1 = major revision: its approval is restricted to the lab's designated
+    -- Medical Director only (no owner/admin "or designee" fallback). 0 = normal.
+    is_major_revision INTEGER NOT NULL DEFAULT 0,
     uploaded_by INTEGER NOT NULL,
     uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
   )
@@ -6046,7 +6049,7 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_surveyor_links_token ON
   if (!docsCols.includes("quiz_requires_pass")) sqlite.exec("ALTER TABLE policy_documents ADD COLUMN quiz_requires_pass INTEGER");
   if (!docsCols.includes("quiz_pass_threshold")) sqlite.exec("ALTER TABLE policy_documents ADD COLUMN quiz_pass_threshold INTEGER");
   const versionsCols = (sqlite.prepare("PRAGMA table_info(policy_versions)").all() as { name: string }[]).map((c) => c.name);
-  void versionsCols;
+  if (!versionsCols.includes("is_major_revision")) sqlite.exec("ALTER TABLE policy_versions ADD COLUMN is_major_revision INTEGER NOT NULL DEFAULT 0");
   const workflowsCols = (sqlite.prepare("PRAGMA table_info(policy_approval_workflows)").all() as { name: string }[]).map((c) => c.name);
   void workflowsCols;
   const stepsCols = (sqlite.prepare("PRAGMA table_info(policy_approval_steps)").all() as { name: string }[]).map((c) => c.name);
