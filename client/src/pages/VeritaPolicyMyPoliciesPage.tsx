@@ -47,6 +47,7 @@ import {
   Clock,
   History,
   Archive,
+  FolderInput,
 } from "lucide-react";
 
 interface Manual {
@@ -431,6 +432,21 @@ export default function VeritaPolicyMyPoliciesPage() {
     setRenameManualId(doc.manual_id ? String(doc.manual_id) : "");
   };
 
+  // ── Move to a different manual (any status, incl. approved) ──────────────
+  // The pencil "edit metadata" dialog is draft-only, so approved policies had
+  // no way to be re-filed. This is a dedicated Move action on every row. Radix
+  // Select cannot use "" as an item value, so Unassigned uses a sentinel that
+  // maps to a null manual_id (the PATCH endpoint treats null as "move to
+  // Unassigned"). Sends only manualId, so an approved title/description and the
+  // approval status are left untouched.
+  const MOVE_UNASSIGNED = "__unassigned__";
+  const [moveDoc, setMoveDoc] = useState<PolicyDocument | null>(null);
+  const [moveManualId, setMoveManualId] = useState<string>(MOVE_UNASSIGNED);
+  const openMove = (doc: PolicyDocument) => {
+    setMoveDoc(doc);
+    setMoveManualId(doc.manual_id ? String(doc.manual_id) : MOVE_UNASSIGNED);
+  };
+
   // ── Phase 7: search + new-version upload + version history ───────────
   const [searchQ, setSearchQ] = useState("");
 
@@ -743,6 +759,35 @@ export default function VeritaPolicyMyPoliciesPage() {
     onError: (err: any) =>
       toast({
         title: "Save failed",
+        description: String(err?.message || err),
+        variant: "destructive",
+      }),
+  });
+
+  const moveMutation = useMutation({
+    mutationFn: async () => {
+      if (!moveDoc) throw new Error("No document");
+      const manualId =
+        moveManualId === MOVE_UNASSIGNED ? null : Number(moveManualId);
+      const res = await apiRequest(
+        "PATCH",
+        `/api/labs/${activeLabId}/veritapolicy/documents/${moveDoc.id}`,
+        { manualId }
+      );
+      return res.json();
+    },
+    onSuccess: () => {
+      const target =
+        moveManualId === MOVE_UNASSIGNED
+          ? "Unassigned"
+          : manuals.find((m) => String(m.id) === moveManualId)?.name || "manual";
+      toast({ title: "Moved", description: `Now filed under ${target}.` });
+      setMoveDoc(null);
+      invalidateAll();
+    },
+    onError: (err: any) =>
+      toast({
+        title: "Move failed",
         description: String(err?.message || err),
         variant: "destructive",
       }),
@@ -1245,6 +1290,14 @@ export default function VeritaPolicyMyPoliciesPage() {
                             }}
                           >
                             <Archive size={12} />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => openMove(doc)}
+                            title="Move to a different manual"
+                          >
+                            <FolderInput size={12} />
                           </Button>
                           {doc.status === "draft" && (
                             <>
@@ -2252,6 +2305,67 @@ export default function VeritaPolicyMyPoliciesPage() {
                 <Loader2 className="animate-spin mr-1" size={14} />
               )}
               Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Move to a different manual modal ──────────────────────────── */}
+      <Dialog
+        open={!!moveDoc}
+        onOpenChange={(open) => {
+          if (!open) setMoveDoc(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Move to a different manual</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {moveDoc && (
+              <p className="text-sm text-muted-foreground">{moveDoc.title}</p>
+            )}
+            <div>
+              <Label className="text-xs">Manual</Label>
+              <Select value={moveManualId} onValueChange={setMoveManualId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Unassigned" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={MOVE_UNASSIGNED}>Unassigned</SelectItem>
+                  {manuals.map((m) => (
+                    <SelectItem key={m.id} value={String(m.id)}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Filing only. This does not change the policy content, its
+                approval, or its review date.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMoveDoc(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => moveMutation.mutate()}
+              disabled={
+                moveMutation.isPending ||
+                (moveDoc
+                  ? moveManualId ===
+                    (moveDoc.manual_id
+                      ? String(moveDoc.manual_id)
+                      : MOVE_UNASSIGNED)
+                  : true)
+              }
+            >
+              {moveMutation.isPending && (
+                <Loader2 className="animate-spin mr-1" size={14} />
+              )}
+              Move
             </Button>
           </DialogFooter>
         </DialogContent>
