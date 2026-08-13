@@ -271,6 +271,25 @@ export function resolveActiveMedicalDirectorUserId(
   }
 }
 
+// True when a policy version is flagged as a MAJOR revision. A major revision's
+// medical_director step is restricted to the actual designated Medical Director
+// with the owner/admin "or designee" fallback removed (per the lab's policy that
+// substantive changes require the director personally). Set at upload time.
+export function isVersionMajorRevision(
+  sqlite: any,
+  versionId: number | null | undefined
+): boolean {
+  if (versionId == null) return false;
+  try {
+    const row = sqlite
+      .prepare("SELECT is_major_revision FROM policy_versions WHERE id = ?")
+      .get(versionId) as { is_major_revision?: number } | undefined;
+    return !!(row && Number(row.is_major_revision) === 1);
+  } catch {
+    return false;
+  }
+}
+
 // Resolve whether a user can approve a given workflow step. Returns
 // { ok: true } or { ok: false, reason } so callers can return a useful
 // 403 message to the client.
@@ -285,6 +304,9 @@ export function canUserApproveStep(
       specific_user_id: number | null;
       allow_self_approval: number;
     };
+    // When true, a medical_director step is restricted to the designated
+    // Medical Director only (no owner/admin designee, no permissive fallback).
+    isMajorRevision?: boolean;
   }
 ): { ok: true } | { ok: false; reason: string } {
   const { userId, labId, documentOwnerId, stepRow } = args;
@@ -335,6 +357,24 @@ export function canUserApproveStep(
   // lab whose director is still a pending invite. Self-approval already guarded.
   if (role === "medical_director") {
     const mdUserId = resolveActiveMedicalDirectorUserId(sqlite, labId);
+    // Major revision: strictly the designated Medical Director, no designee,
+    // no permissive fall-through. If none is designated, no one can approve.
+    if (args.isMajorRevision) {
+      if (mdUserId == null) {
+        return {
+          ok: false,
+          reason:
+            "This is a major revision. It requires the lab's designated Medical Director to approve, but no active Medical Director is designated. Set one in policy settings.",
+        };
+      }
+      return userId === mdUserId
+        ? { ok: true }
+        : {
+            ok: false,
+            reason:
+              "This is a major revision. Only the lab's designated Medical Director may approve it (no designee).",
+          };
+    }
     if (mdUserId != null) {
       if (userId === mdUserId) return { ok: true };
       if (member.role === "owner" || member.role === "admin") return { ok: true };
@@ -448,6 +488,9 @@ export function countEligibleReviewersForStep(
       specific_user_id: number | null;
       allow_self_approval: number;
     };
+    // Mirror canUserApproveStep: a major revision's medical_director step only
+    // counts the designated Medical Director (no owner/admin designee).
+    isMajorRevision?: boolean;
   }
 ): number {
   const { labId, documentOwnerId, stepRow } = args;
@@ -489,6 +532,10 @@ export function countEligibleReviewersForStep(
     if (m.user_id === documentOwnerId && !stepRow.allow_self_approval) continue;
     if (stepRow.required_role === "any_active_seat") {
       if (m.seat_type === "active" || m.role === "owner" || m.role === "admin") count += 1;
+    } else if (stepRow.required_role === "medical_director" && args.isMajorRevision) {
+      // Major revision: only the designated Medical Director counts. If none is
+      // designated (mdUserId null), no one is eligible -> count stays 0.
+      if (mdUserId != null && m.user_id === mdUserId) count += 1;
     } else if (stepRow.required_role === "medical_director" && mdUserId != null) {
       if (m.user_id === mdUserId || m.role === "owner" || m.role === "admin") count += 1;
     } else {

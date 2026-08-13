@@ -250,6 +250,7 @@ export default function VeritaPolicyMyPoliciesPage() {
   const [uploadDescription, setUploadDescription] = useState("");
   const [uploadManualId, setUploadManualId] = useState<string>("");
   const [uploadReviewMonths, setUploadReviewMonths] = useState<string>("12");
+  const [uploadIsMajor, setUploadIsMajor] = useState(false);
   const [uploadingProgress, setUploadingProgress] = useState(false);
 
   const resetUpload = () => {
@@ -258,6 +259,7 @@ export default function VeritaPolicyMyPoliciesPage() {
     setUploadDescription("");
     setUploadManualId("");
     setUploadReviewMonths("12");
+    setUploadIsMajor(false);
   };
 
   const uploadDoc = async () => {
@@ -273,6 +275,7 @@ export default function VeritaPolicyMyPoliciesPage() {
       if (uploadDescription.trim()) fd.append("description", uploadDescription.trim());
       if (uploadManualId) fd.append("manual_id", uploadManualId);
       if (uploadReviewMonths) fd.append("review_interval_months", uploadReviewMonths);
+      fd.append("is_major_revision", uploadIsMajor ? "1" : "0");
       const token = localStorage.getItem("veritas_token") || "";
       const res = await fetch(
         `/api/labs/${activeLabId}/veritapolicy/documents`,
@@ -434,12 +437,14 @@ export default function VeritaPolicyMyPoliciesPage() {
   const [newVersionDoc, setNewVersionDoc] = useState<PolicyDocument | null>(null);
   const [newVersionFile, setNewVersionFile] = useState<File | null>(null);
   const [newVersionSummary, setNewVersionSummary] = useState("");
+  const [newVersionIsMajor, setNewVersionIsMajor] = useState(false);
   const [newVersionUploading, setNewVersionUploading] = useState(false);
 
   const openNewVersion = (doc: PolicyDocument) => {
     setNewVersionDoc(doc);
     setNewVersionFile(null);
     setNewVersionSummary("");
+    setNewVersionIsMajor(false);
   };
 
   const uploadNewVersion = async () => {
@@ -452,6 +457,7 @@ export default function VeritaPolicyMyPoliciesPage() {
       const fd = new FormData();
       fd.append("file", newVersionFile);
       if (newVersionSummary.trim()) fd.append("change_summary", newVersionSummary.trim());
+      fd.append("is_major_revision", newVersionIsMajor ? "1" : "0");
       const token = localStorage.getItem("veritas_token") || "";
       const res = await fetch(
         `/api/labs/${activeLabId}/veritapolicy/documents/${newVersionDoc.id}/versions`,
@@ -1424,6 +1430,19 @@ export default function VeritaPolicyMyPoliciesPage() {
                 </Select>
               </div>
             </div>
+            <div className="pt-1">
+              <label className="flex items-start gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={uploadIsMajor}
+                  onChange={(e) => setUploadIsMajor(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-medium">Major revision.</span> Requires the lab's designated Medical Director to approve. No owner or admin designee.
+                </span>
+              </label>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setUploadOpen(false)}>
@@ -1915,6 +1934,19 @@ export default function VeritaPolicyMyPoliciesPage() {
                 rows={2}
                 placeholder="e.g., Updated critical value list per MEC review Q2 2026."
               />
+            </div>
+            <div className="pt-1">
+              <label className="flex items-start gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={newVersionIsMajor}
+                  onChange={(e) => setNewVersionIsMajor(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-medium">Major revision.</span> Requires the lab's designated Medical Director to approve. No owner or admin designee.
+                </span>
+              </label>
             </div>
           </div>
           <DialogFooter>

@@ -31573,6 +31573,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     canUserApproveStep,
     getCurrentPendingStep,
     countEligibleReviewersForStep,
+    isVersionMajorRevision,
     isPolicyExpired,
     POLICY_EXPIRED_RESPONSE,
   } = await import("./veritapolicyApproval");
@@ -31830,12 +31831,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(500).json({ error: "Failed to persist file" });
       }
       const fileHash = hashBuffer(req.file.buffer);
+      const isMajorRev = ["1", "true", "yes", "on"].includes(
+        String(req.body?.is_major_revision ?? "").toLowerCase().trim()
+      ) ? 1 : 0;
       const verInsert = sqlite
         .prepare(
           `INSERT INTO policy_versions
              (document_id, version_number, file_path, file_format, file_size_bytes,
-              file_hash_sha256, change_summary, uploaded_by, uploaded_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+              file_hash_sha256, change_summary, is_major_revision, uploaded_by, uploaded_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
         )
         .run(
           documentId,
@@ -31845,6 +31849,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           req.file.size,
           fileHash,
           (req.body?.change_summary as string | undefined) || "Initial upload",
+          isMajorRev,
           req.userId
         );
       const versionId = Number(verInsert.lastInsertRowid);
@@ -32652,16 +32657,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
       const sqlite = (db as any).$client;
       const doc = sqlite
-        .prepare("SELECT lab_id, owner_user_id FROM policy_documents WHERE id = ?")
+        .prepare("SELECT lab_id, owner_user_id, current_version_id FROM policy_documents WHERE id = ?")
         .get(id) as any;
       if (!doc) return res.status(404).json({ error: "Not found" });
       if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
       const pending = getCurrentPendingStep(sqlite, id);
+      const isMajorRevision = isVersionMajorRevision(sqlite, doc.current_version_id);
       if (!pending.step) {
         return res.json({
           step: null,
           totalSteps: pending.totalSteps,
           completedSteps: pending.completedSteps,
+          isMajorRevision,
           canCurrentUserApprove: false,
           reason: "No pending step",
         });
@@ -32671,11 +32678,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         labId: req.scope.labId,
         documentOwnerId: doc.owner_user_id,
         stepRow: pending.step,
+        isMajorRevision,
       });
       res.json({
         step: pending.step,
         totalSteps: pending.totalSteps,
         completedSteps: pending.completedSteps,
+        isMajorRevision,
         canCurrentUserApprove: check.ok,
         reason: check.ok ? null : check.reason,
       });
@@ -32732,6 +32741,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         labId: req.scope.labId,
         documentOwnerId: doc.owner_user_id,
         stepRow: pending.step,
+        isMajorRevision: isVersionMajorRevision(sqlite, doc.current_version_id),
       });
       if (!check.ok) return res.status(403).json({ error: check.reason });
       // Pull the file hash from the current version for non-repudiation.
@@ -32845,6 +32855,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         labId: req.scope.labId,
         documentOwnerId: doc.owner_user_id,
         stepRow: pending.step,
+        isMajorRevision: isVersionMajorRevision(sqlite, doc.current_version_id),
       });
       if (!check.ok) return res.status(403).json({ error: check.reason });
       const ver = sqlite
@@ -32950,10 +32961,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       const sqlite = (db as any).$client;
       const doc = sqlite
-        .prepare("SELECT lab_id, owner_user_id FROM policy_documents WHERE id = ?")
+        .prepare("SELECT lab_id, owner_user_id, current_version_id FROM policy_documents WHERE id = ?")
         .get(id) as any;
       if (!doc) return res.status(404).json({ error: "Not found" });
       if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const isMajorRevision = isVersionMajorRevision(sqlite, doc.current_version_id);
       const wf = sqlite
         .prepare(
           "SELECT lab_id FROM policy_approval_workflows WHERE id = ? AND archived_at IS NULL"
@@ -32979,6 +32991,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           labId: req.scope.labId,
           documentOwnerId: doc.owner_user_id,
           stepRow: s,
+          isMajorRevision,
         }),
       }));
       const minCount = perStep.length === 0 ? 0 : perStep.reduce((m, p) => Math.min(m, p.eligible_count), Infinity);
@@ -33342,13 +33355,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(500).json({ error: "Failed to persist file" });
       }
       const fileHash = hashBuffer(req.file.buffer);
+      const isMajorRev = ["1", "true", "yes", "on"].includes(
+        String(req.body?.is_major_revision ?? "").toLowerCase().trim()
+      ) ? 1 : 0;
       const verInsert = sqlite
         .prepare(
           `INSERT INTO policy_versions
              (document_id, version_number, file_path, file_format,
               file_size_bytes, file_hash_sha256, change_summary,
-              uploaded_by, uploaded_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+              is_major_revision, uploaded_by, uploaded_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
         )
         .run(
           id,
@@ -33358,6 +33374,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           req.file.size,
           fileHash,
           (req.body?.change_summary as string | undefined) || `Version ${nextVer}`,
+          isMajorRev,
           req.userId
         );
       const versionId = Number(verInsert.lastInsertRowid);
@@ -34846,7 +34863,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const sqlite = (db as any).$client;
       const inReviewDocs = sqlite
         .prepare(
-          `SELECT id, title, owner_user_id, workflow_id, manual_id, updated_at
+          `SELECT id, title, owner_user_id, workflow_id, manual_id, current_version_id, updated_at
              FROM policy_documents
             WHERE lab_id = ? AND status = 'in_review' AND archived_at IS NULL`
         )
@@ -34855,17 +34872,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       for (const d of inReviewDocs) {
         const p = getCurrentPendingStep(sqlite, d.id);
         if (!p.step) continue;
+        const isMajorRevision = isVersionMajorRevision(sqlite, d.current_version_id);
         const check = canUserApproveStep(sqlite, {
           userId: req.userId,
           labId: req.scope.labId,
           documentOwnerId: d.owner_user_id,
           stepRow: p.step,
+          isMajorRevision,
         });
         if (!check.ok) continue;
         pending.push({
           document_id: d.id,
           title: d.title,
           manual_id: d.manual_id,
+          is_major_revision: isMajorRevision,
           updated_at: d.updated_at,
           step_id: p.step.id,
           step_name: p.step.step_name,
