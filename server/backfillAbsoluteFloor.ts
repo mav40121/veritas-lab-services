@@ -205,6 +205,18 @@ export const NAME_MAP: Record<string, string | null> = {
   "IRON, TOTAL (FE)": "Iron, Total",
   "TOTAL IRON BINDING CAPACITY, DIRECT (DTIBC)": "Total Iron Binding Capacity (TIBC)",
   "PT": "Prothrombin Time (PT)",
+  // Plain "Hemoglobin"/"HGB" is the CBC analyte (±4% per the 2022 final rule),
+  // NOT glycated "Hemoglobin A1c (HbA1c)" (±8%). Without these exact mappings,
+  // the substring fallback below collapses "Hemoglobin" into the earlier-
+  // inserted A1c entry and mis-assigns 8% (Troy Regional, 2026-08-14).
+  "Hemoglobin": "CBC - Hemoglobin",
+  "HGB": "CBC - Hemoglobin",
+  "Hgb": "CBC - Hemoglobin",
+  // Same substring-collapse class: plain "Thyroxine"/"T4" is Total T4, but the
+  // substring fallback collapses it into the earlier "Free Thyroxine (Free T4)".
+  // ("FREE T4" already maps to Free Thyroxine above, so free T4 is unaffected.)
+  "Thyroxine": "Thyroxine (T4)",
+  "T4": "Thyroxine (T4)",
   "LIPASE": null,
   "BILIRUBIN, UNBOUND": null,
   "BILIRUBIN, DIRECT": null,
@@ -328,7 +340,7 @@ export function backfillAbsoluteFloorOnStartup(): void {
     // or older code paths that hardcoded the wrong preset.
     const all = sqlite
       .prepare(
-        "SELECT id, test_name, clia_allowable_error, tea_is_percentage, clia_absolute_floor, clia_absolute_unit, tea_unit FROM studies"
+        "SELECT id, test_name, clia_allowable_error, tea_is_percentage, clia_absolute_floor, clia_absolute_unit, tea_unit, clia_preset_label FROM studies"
       )
       .all() as Array<{
         id: number;
@@ -338,6 +350,7 @@ export function backfillAbsoluteFloorOnStartup(): void {
         clia_absolute_floor: number | null;
         clia_absolute_unit: string | null;
         tea_unit: string | null;
+        clia_preset_label: string | null;
       }>;
 
     const updateTea = sqlite.prepare(
@@ -347,6 +360,11 @@ export function backfillAbsoluteFloorOnStartup(): void {
     const FP_TOL = 1e-9;
     let corrected = 0;
     for (const s of all) {
+      // Respect an explicit preset selection: if the user picked a TEa preset,
+      // that stored value is authoritative and the self-heal must not re-derive
+      // it from the free-text test_name (the "Hemoglobin" -> "Hemoglobin A1c"
+      // 4%->8% collapse). Legacy rows with no preset label still self-heal.
+      if (s.clia_preset_label != null && String(s.clia_preset_label).trim() !== "") continue;
       const canonical = resolveCanonicalAnalyte(s.test_name);
       if (!canonical) continue;
       const canonicalTea = teaByAnalyte.get(canonical);
