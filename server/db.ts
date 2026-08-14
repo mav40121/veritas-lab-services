@@ -5692,6 +5692,13 @@ try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as a
 
   ensure("qc_period_reviews", "attestation_acknowledged", "ALTER TABLE qc_period_reviews ADD COLUMN attestation_acknowledged INTEGER NOT NULL DEFAULT 0");
   ensure("qc_period_reviews", "review_notes",             "ALTER TABLE qc_period_reviews ADD COLUMN review_notes TEXT");
+  // Two-signature monthly QC review (MedStar): after the reviewer/technical
+  // consultant files the attestation, the designated Medical Director co-signs.
+  // Per-lab opt-in on labs.qc_md_cosign_required; the MD signoff lands here.
+  ensure("qc_period_reviews", "md_signed_at",         "ALTER TABLE qc_period_reviews ADD COLUMN md_signed_at TEXT");
+  ensure("qc_period_reviews", "md_signed_by_user_id", "ALTER TABLE qc_period_reviews ADD COLUMN md_signed_by_user_id INTEGER");
+  ensure("qc_period_reviews", "md_signed_name",       "ALTER TABLE qc_period_reviews ADD COLUMN md_signed_name TEXT");
+  ensure("labs", "qc_md_cosign_required",             "ALTER TABLE labs ADD COLUMN qc_md_cosign_required INTEGER NOT NULL DEFAULT 0");
 
   ensure("qc_rule_settings", "analyte",                    "ALTER TABLE qc_rule_settings ADD COLUMN analyte TEXT");
 

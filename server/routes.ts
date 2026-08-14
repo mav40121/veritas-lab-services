@@ -3690,9 +3690,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(controlLotId, req.scope.labId) as any;
     if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
     const rows = sqlite.prepare(
-      "SELECT id, period_year, period_month, reviewed_by_user_id, reviewed_at, attestation_acknowledged, review_notes FROM qc_period_reviews WHERE lab_id = ? AND control_lot_id = ? ORDER BY period_year DESC, period_month DESC"
+      "SELECT id, period_year, period_month, reviewed_by_user_id, reviewed_at, attestation_acknowledged, review_notes, md_signed_at, md_signed_by_user_id, md_signed_name FROM qc_period_reviews WHERE lab_id = ? AND control_lot_id = ? ORDER BY period_year DESC, period_month DESC"
     ).all(req.scope.labId, controlLotId) as any[];
-    res.json({ reviews: rows });
+    const cosignRequired = !!(sqlite.prepare("SELECT qc_md_cosign_required FROM labs WHERE id = ?").get(req.scope.labId) as any)?.qc_md_cosign_required;
+    const md = sqlite.prepare("SELECT lm.user_id FROM lab_members lm JOIN users u ON u.id = lm.user_id JOIN labs l ON l.id = lm.lab_id WHERE lm.lab_id = ? AND lm.status = 'active' AND l.medical_director_email IS NOT NULL AND lower(u.email) = lower(l.medical_director_email) LIMIT 1").get(req.scope.labId) as any;
+    res.json({ reviews: rows, mdCosignRequired: cosignRequired, isMedicalDirector: !!md && md.user_id === req.userId });
   });
 
   app.post("/api/labs/:labId/qc/period-reviews", authMiddleware, labScopeMiddleware, (req: any, res) => {
@@ -3723,6 +3725,87 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, review: row });
   });
 
+  // POST /api/labs/:labId/qc/md-cosign-setting — owner/admin toggle for whether
+  // monthly QC reviews require a Medical Director co-signature after the
+  // reviewer (technical consultant) files the attestation. Per-lab (MedStar).
+  app.post("/api/labs/:labId/qc/md-cosign-setting", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
+    const required = ["1", "true", "yes", "on", true, 1].includes(req.body?.required) ? 1 : 0;
+    const sqlite = (db as any).$client;
+    sqlite.prepare("UPDATE labs SET qc_md_cosign_required = ? WHERE id = ?").run(required, req.scope.labId);
+    res.json({ ok: true, required: !!required });
+  });
+
+  // POST /api/labs/:labId/qc/period-reviews/md-cosign — the lab's designated
+  // Medical Director co-signs a filed monthly review. Only the MD may co-sign,
+  // and only after the reviewer has filed the attestation.
+  app.post("/api/labs/:labId/qc/period-reviews/md-cosign", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const { control_lot_id, period_year, period_month, typed_name } = req.body || {};
+    if (!control_lot_id || !period_year || !period_month) {
+      return res.status(400).json({ error: "control_lot_id, period_year, period_month required" });
+    }
+    const sqlite = (db as any).$client;
+    const md = sqlite.prepare("SELECT lm.user_id, u.name FROM lab_members lm JOIN users u ON u.id = lm.user_id JOIN labs l ON l.id = lm.lab_id WHERE lm.lab_id = ? AND lm.status = 'active' AND l.medical_director_email IS NOT NULL AND lower(u.email) = lower(l.medical_director_email) LIMIT 1").get(req.scope.labId) as any;
+    if (!md) return res.status(409).json({ error: "No active Medical Director is designated for this lab. Set one in the lab's medical director settings." });
+    if (md.user_id !== req.userId) return res.status(403).json({ error: "Only the lab's designated Medical Director may co-sign." });
+    const review = sqlite.prepare("SELECT id, attestation_acknowledged FROM qc_period_reviews WHERE lab_id = ? AND control_lot_id = ? AND period_year = ? AND period_month = ?").get(req.scope.labId, Number(control_lot_id), Number(period_year), Number(period_month)) as any;
+    if (!review || review.attestation_acknowledged !== 1) return res.status(409).json({ error: "The reviewer must file the attestation before the Medical Director can co-sign." });
+    const signedName = (String(typed_name || "").trim()) || md.name || "Medical Director";
+    sqlite.prepare("UPDATE qc_period_reviews SET md_signed_at = datetime('now'), md_signed_by_user_id = ?, md_signed_name = ? WHERE id = ?").run(req.userId, signedName, review.id);
+    res.json({ ok: true });
+  });
+
+  // Assemble the monthly-review payload for one control lot + period. Used by
+  // the all-lots combined PDF below; mirrors the inline assembly in the
+  // single-lot endpoint (kept separate to avoid touching that compliance path).
+  function buildMonthlyReviewPayload(sqlite: any, labId: number, lot: any, lab: any, year: number, month: number, reviewerName: string): MonthlyReviewPayload {
+    const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
+    const nextMonthDate = new Date(year, month, 1);
+    const monthEnd = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, "0")}-01`;
+    const rawResults = sqlite.prepare(
+      "SELECT r.id, r.result_value, r.result_date, r.run_time, r.instrument, r.accepted_for_reporting, NULLIF(TRIM(COALESCE(se.first_name,'') || ' ' || COALESCE(se.last_name,'')), '') AS operator_name FROM qc_results r LEFT JOIN staff_employees se ON se.id = r.operator_staff_employee_id WHERE r.lab_id = ? AND r.control_lot_id = ? AND r.result_date >= ? AND r.result_date < ? AND r.voided_at IS NULL ORDER BY r.result_date DESC, r.id DESC"
+    ).all(labId, lot.id, monthStart, monthEnd) as any[];
+    const resultIds = rawResults.map((r: any) => r.id);
+    const violationsByR: Record<number, any[]> = {};
+    const casByR: Record<number, any[]> = {};
+    if (resultIds.length > 0) {
+      const placeholders = resultIds.map(() => "?").join(",");
+      const vs = sqlite.prepare("SELECT id, qc_result_id, rule_code, severity, detail FROM qc_rule_violations WHERE qc_result_id IN (" + placeholders + ")").all(...resultIds) as any[];
+      for (const v of vs) (violationsByR[v.qc_result_id] = violationsByR[v.qc_result_id] || []).push(v);
+      const cs = sqlite.prepare("SELECT id, qc_result_id, action_taken, status, taken_at FROM qc_corrective_actions WHERE qc_result_id IN (" + placeholders + ")").all(...resultIds) as any[];
+      for (const c of cs) (casByR[c.qc_result_id] = casByR[c.qc_result_id] || []).push(c);
+    }
+    const results: MonthlyReviewResult[] = rawResults.map((r: any) => ({
+      id: r.id, result_value: r.result_value, result_date: r.result_date, run_time: r.run_time,
+      instrument: r.instrument, accepted_for_reporting: r.accepted_for_reporting, operator_name: r.operator_name || null,
+      violations: violationsByR[r.id] || [], corrective_actions: casByR[r.id] || [],
+    }));
+    const accepted = sqlite.prepare("SELECT result_value FROM qc_results WHERE lab_id = ? AND control_lot_id = ? AND accepted_for_reporting = 1 AND voided_at IS NULL").all(labId, lot.id) as { result_value: number }[];
+    let baselineMean: number | null = null;
+    let baselineSD: number | null = null;
+    if (accepted.length >= 2) {
+      const vals = accepted.map((a: any) => a.result_value);
+      const m = vals.reduce((a: number, b: number) => a + b, 0) / vals.length;
+      const v = vals.reduce((s: number, x: number) => s + (x - m) ** 2, 0) / (vals.length - 1);
+      const sd = Math.sqrt(v);
+      if (sd > 0) { baselineMean = m; baselineSD = sd; }
+    }
+    const cosignRequired = !!(sqlite.prepare("SELECT qc_md_cosign_required FROM labs WHERE id = ?").get(labId) as any)?.qc_md_cosign_required;
+    const mdReview = sqlite.prepare("SELECT md_signed_name, md_signed_at FROM qc_period_reviews WHERE lab_id = ? AND control_lot_id = ? AND period_year = ? AND period_month = ?").get(labId, lot.id, year, month) as any;
+    return {
+      lab: { id: lab.id, lab_name: lab.lab_name, clia_number: lab.clia_number },
+      lot: { id: lot.id, analyte: lot.analyte, level: lot.level, lot_number: lot.lot_number, manufacturer: lot.manufacturer, mfr_mean: lot.mfr_mean, mfr_sd: lot.mfr_sd, mfr_sd_interval: lot.mfr_sd_interval },
+      periodYear: year, periodMonth: month, results, baselineMean, baselineSD,
+      reviewerName: reviewerName || "Pending signature",
+      reviewerTitle: "Medical director or designee",
+      reviewerDate: new Date().toISOString().slice(0, 10),
+      attestationAcknowledged: false,
+      mdCosignRequired: cosignRequired,
+      mdSignedName: mdReview?.md_signed_name || null,
+      mdSignedDate: mdReview?.md_signed_at ? String(mdReview.md_signed_at).slice(0, 10) : null,
+    };
+  }
+
   app.get("/api/labs/:labId/qc/period-reviews/pdf", authMiddleware, labScopeMiddleware, async (req: any, res) => {
     const controlLotId = req.query.control_lot_id ? Number(req.query.control_lot_id) : null;
     const year = Number(req.query.year);
@@ -3738,78 +3821,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const lab = sqlite.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
     if (!lab) return res.status(404).json({ error: "Lab not found" });
 
-    // Date window: first day of month inclusive, first day of next month exclusive
-    const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
-    const nextMonthDate = new Date(year, month, 1); // month is 1-12, Date constructor expects 0-11 + 1
-    const monthEnd = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, "0")}-01`;
-    const rawResults = sqlite.prepare(
-      "SELECT r.id, r.result_value, r.result_date, r.run_time, r.instrument, r.accepted_for_reporting, NULLIF(TRIM(COALESCE(se.first_name,'') || ' ' || COALESCE(se.last_name,'')), '') AS operator_name FROM qc_results r LEFT JOIN staff_employees se ON se.id = r.operator_staff_employee_id WHERE r.lab_id = ? AND r.control_lot_id = ? AND r.result_date >= ? AND r.result_date < ? AND r.voided_at IS NULL ORDER BY r.result_date DESC, r.id DESC"
-    ).all(req.scope.labId, controlLotId, monthStart, monthEnd) as any[];
-    const resultIds = rawResults.map(r => r.id);
-    let violationsByR: Record<number, any[]> = {};
-    let casByR: Record<number, any[]> = {};
-    if (resultIds.length > 0) {
-      const placeholders = resultIds.map(() => "?").join(",");
-      const vs = sqlite.prepare(
-        "SELECT id, qc_result_id, rule_code, severity, detail FROM qc_rule_violations WHERE qc_result_id IN (" + placeholders + ")"
-      ).all(...resultIds) as any[];
-      for (const v of vs) (violationsByR[v.qc_result_id] = violationsByR[v.qc_result_id] || []).push(v);
-      const cs = sqlite.prepare(
-        "SELECT id, qc_result_id, action_taken, status, taken_at FROM qc_corrective_actions WHERE qc_result_id IN (" + placeholders + ")"
-      ).all(...resultIds) as any[];
-      for (const c of cs) (casByR[c.qc_result_id] = casByR[c.qc_result_id] || []).push(c);
-    }
-    const results: MonthlyReviewResult[] = rawResults.map(r => ({
-      id: r.id,
-      result_value: r.result_value,
-      result_date: r.result_date,
-      run_time: r.run_time,
-      instrument: r.instrument,
-      accepted_for_reporting: r.accepted_for_reporting,
-      operator_name: r.operator_name || null,
-      violations: violationsByR[r.id] || [],
-      corrective_actions: casByR[r.id] || [],
-    }));
-
-    // Compute baseline mean/SD from all accepted-for-reporting history on
-    // this lot (across all time). Falls back to manufacturer values if no
-    // accepted history exists yet (n<2 or sd==0).
-    const accepted = sqlite.prepare(
-      "SELECT result_value FROM qc_results WHERE lab_id = ? AND control_lot_id = ? AND accepted_for_reporting = 1 AND voided_at IS NULL"
-    ).all(req.scope.labId, controlLotId) as { result_value: number }[];
-    let baselineMean: number | null = null;
-    let baselineSD: number | null = null;
-    if (accepted.length >= 2) {
-      const vals = accepted.map(a => a.result_value);
-      const m = vals.reduce((a, b) => a + b, 0) / vals.length;
-      const v = vals.reduce((s, x) => s + (x - m) ** 2, 0) / (vals.length - 1);
-      const sd = Math.sqrt(v);
-      if (sd > 0) {
-        baselineMean = m;
-        baselineSD = sd;
-      }
-    }
-
-    // Reviewer identity comes from the authenticated user record. Title is
-    // not stored on users today; the attestation block uses the generic
-    // "Medical director or designee" phrasing per CLAUDE.md §5.
+    // Reviewer identity comes from the authenticated user record. The payload
+    // (results, baseline, MD co-sign fields) is assembled by the shared helper.
     const reviewer = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
-    const payload: MonthlyReviewPayload = {
-      lab: { id: lab.id, lab_name: lab.lab_name, clia_number: lab.clia_number },
-      lot: {
-        id: lot.id, analyte: lot.analyte, level: lot.level, lot_number: lot.lot_number,
-        manufacturer: lot.manufacturer, mfr_mean: lot.mfr_mean, mfr_sd: lot.mfr_sd, mfr_sd_interval: lot.mfr_sd_interval,
-      },
-      periodYear: year,
-      periodMonth: month,
-      results,
-      baselineMean,
-      baselineSD,
-      reviewerName: reviewer?.name || "Pending signature",
-      reviewerTitle: "Medical director or designee",
-      reviewerDate: new Date().toISOString().slice(0, 10),
-      attestationAcknowledged: false,
-    };
+    const payload = buildMonthlyReviewPayload(sqlite, req.scope.labId, lot, lab, year, month, reviewer?.name || "Pending signature");
     try {
       const buf = await renderMonthlyReviewPDF(payload);
       res.setHeader("Content-Type", "application/pdf");
@@ -3819,6 +3834,50 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (err: any) {
       console.error("[qc/period-reviews/pdf] render failed:", err.message);
       res.status(500).json({ error: err.message || "PDF render failed" });
+    }
+  });
+
+  // GET /api/labs/:labId/qc/period-reviews/pdf-all?year=&month=
+  // One combined monthly-review PDF for every active control lot with results in
+  // the period, so the reviewer files one document instead of clicking through
+  // each lot. Lots with no QC that month are skipped.
+  app.get("/api/labs/:labId/qc/period-reviews/pdf-all", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    const year = Number(req.query.year);
+    const month = Number(req.query.month);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+      return res.status(400).json({ error: "year, month (1-12) required" });
+    }
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    const lots = sqlite.prepare(
+      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval FROM qc_control_lots WHERE lab_id = ? AND status = 'active' ORDER BY analyte, level, lot_number"
+    ).all(req.scope.labId) as any[];
+    if (lots.length === 0) return res.status(404).json({ error: "No active control lots in this lab" });
+    const reviewer = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
+    const reviewerName = reviewer?.name || "Pending signature";
+    try {
+      const { PDFDocument } = await import("pdf-lib");
+      const merged = await PDFDocument.create();
+      let included = 0;
+      for (const lot of lots) {
+        const payload = buildMonthlyReviewPayload(sqlite, req.scope.labId, lot, lab, year, month, reviewerName);
+        if (payload.results.length === 0) continue;
+        const buf = await renderMonthlyReviewPDF(payload);
+        const doc = await PDFDocument.load(buf);
+        const pages = await merged.copyPages(doc, doc.getPageIndices());
+        pages.forEach((p) => merged.addPage(p));
+        included++;
+      }
+      if (included === 0) return res.status(404).json({ error: "No QC results for any lot in this period" });
+      const out = Buffer.from(await merged.save());
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="VeritaQC_Monthly_Review_ALL_LOTS_${year}-${String(month).padStart(2, "0")}.pdf"`);
+      res.setHeader("Content-Length", out.length);
+      res.send(out);
+    } catch (err: any) {
+      console.error("[qc/period-reviews/pdf-all] failed:", err.message);
+      res.status(500).json({ error: err.message || "Combined PDF render failed" });
     }
   });
 

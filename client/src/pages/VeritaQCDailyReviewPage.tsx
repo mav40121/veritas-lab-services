@@ -200,6 +200,10 @@ export default function VeritaQCDailyReviewPage() {
   const [reviewMonth, setReviewMonth] = useState<number>(new Date().getMonth() + 1);
   const [pastReviews, setPastReviews] = useState<PeriodReview[]>([]);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingAllPdf, setDownloadingAllPdf] = useState(false);
+  const [mdCosignRequired, setMdCosignRequired] = useState(false);
+  const [isMd, setIsMd] = useState(false);
+  const [cosigning, setCosigning] = useState(false);
   const [filing, setFiling] = useState(false);
   const [reviewNotes, setReviewNotes] = useState("");
 
@@ -264,6 +268,8 @@ export default function VeritaQCDailyReviewPage() {
       if (res.ok) {
         const data = await res.json();
         setPastReviews(data.reviews || []);
+        setMdCosignRequired(!!data.mdCosignRequired);
+        setIsMd(!!data.isMedicalDirector);
       }
     } catch (err) {
       console.error("Failed to load past reviews:", err);
@@ -290,6 +296,73 @@ export default function VeritaQCDailyReviewPage() {
       toast({ title: err.message || "Download failed", variant: "destructive" });
     } finally {
       setDownloadingPdf(false);
+    }
+  }
+
+  // Download one combined PDF covering every active lot with results this period.
+  async function handleDownloadAllPdf() {
+    if (!activeLabId) return;
+    setDownloadingAllPdf(true);
+    try {
+      const url = `${API_BASE}/api/labs/${activeLabId}/qc/period-reviews/pdf-all?year=${reviewYear}&month=${reviewMonth}`;
+      const res = await fetch(url, { headers: authHeaders() });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: err.error || "Combined PDF generation failed", variant: "destructive" });
+        return;
+      }
+      const blob = await res.blob();
+      saveAs(blob, `VeritaQC_Monthly_Review_ALL_LOTS_${reviewYear}-${String(reviewMonth).padStart(2, "0")}.pdf`);
+      toast({ title: "All-lots PDF downloaded", description: "One combined document for every lot with QC this period." });
+    } catch (err: any) {
+      toast({ title: err.message || "Download failed", variant: "destructive" });
+    } finally {
+      setDownloadingAllPdf(false);
+    }
+  }
+
+  // Owner/admin toggle: require a Medical Director co-signature on monthly reviews.
+  async function handleToggleCosign(required: boolean) {
+    if (!activeLabId) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/qc/md-cosign-setting`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ required }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: err.error || "Could not update the setting", variant: "destructive" });
+        return;
+      }
+      setMdCosignRequired(required);
+      toast({ title: required ? "Medical Director co-signature now required" : "Medical Director co-signature not required" });
+    } catch (err: any) {
+      toast({ title: err.message || "Update failed", variant: "destructive" });
+    }
+  }
+
+  // The designated Medical Director co-signs the filed attestation for this period.
+  async function handleCosign() {
+    if (!activeLabId || !reviewLotId) return;
+    setCosigning(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/qc/period-reviews/md-cosign`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ control_lot_id: reviewLotId, period_year: reviewYear, period_month: reviewMonth }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: err.error || "Co-signature failed", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Co-signed as Medical Director" });
+      await loadPastReviews(reviewLotId);
+    } catch (err: any) {
+      toast({ title: err.message || "Co-signature failed", variant: "destructive" });
+    } finally {
+      setCosigning(false);
     }
   }
 
@@ -662,6 +735,10 @@ export default function VeritaQCDailyReviewPage() {
               <FileDown className="h-4 w-4 mr-1" />
               {downloadingPdf ? "Generating..." : "Download monthly PDF"}
             </Button>
+            <Button onClick={handleDownloadAllPdf} disabled={downloadingAllPdf} variant="outline" title="One combined PDF for every active lot with results this period">
+              <FileDown className="h-4 w-4 mr-1" />
+              {downloadingAllPdf ? "Generating..." : "Download all lots"}
+            </Button>
             <ConfirmDialog
               title="File monthly attestation?"
               message={`Confirm you have reviewed the monthly QC PDF for this lot and period and documented corrective actions for every out-of-control run.${missingCA > 0 ? ` Note: ${missingCA} rejection(s) in the current view still have no corrective action.` : ""}`}
@@ -673,6 +750,27 @@ export default function VeritaQCDailyReviewPage() {
               </Button>
             </ConfirmDialog>
           </div>
+
+          <label className="flex items-start gap-2 text-xs text-muted-foreground mt-3 cursor-pointer">
+            <input type="checkbox" checked={mdCosignRequired} onChange={(e) => handleToggleCosign(e.target.checked)} className="mt-0.5" />
+            <span>Require a Medical Director co-signature after the reviewer files (two-signature review). Owner or admin sets this; it applies to every lot in this lab.</span>
+          </label>
+
+          {mdCosignRequired && (() => {
+            const cur = pastReviews.find((r: any) => r.period_year === reviewYear && r.period_month === reviewMonth) as any;
+            if (!cur || cur.attestation_acknowledged !== 1) {
+              return <div className="text-xs text-muted-foreground mt-2">After the reviewer files the attestation, the designated Medical Director co-signs.</div>;
+            }
+            if (cur.md_signed_at) {
+              return <div className="text-xs text-emerald-700 mt-2">Medical Director co-signed by {cur.md_signed_name || "the director"} on {new Date(cur.md_signed_at).toLocaleDateString()}.</div>;
+            }
+            return (
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                <span className="text-xs text-amber-700">Awaiting Medical Director co-signature.</span>
+                {isMd && <Button size="sm" variant="outline" onClick={handleCosign} disabled={cosigning}>{cosigning ? "Co-signing..." : "Co-sign as Medical Director"}</Button>}
+              </div>
+            );
+          })()}
 
           {pastReviews.length > 0 && (
             <div className="mt-4">
