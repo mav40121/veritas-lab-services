@@ -44,6 +44,12 @@ export interface MonthlyReviewPayload {
   reviewerTitle: string;
   reviewerDate: string; // ISO date
   attestationAcknowledged: boolean;
+  // Two-signature review: when the lab requires a Medical Director co-signature,
+  // a second signature block is added. mdSignedName/mdSignedDate populate once
+  // the designated MD co-signs; otherwise the block prints a blank co-signature.
+  mdCosignRequired?: boolean;
+  mdSignedName?: string | null;
+  mdSignedDate?: string | null;
 }
 
 const CSS = `
@@ -256,6 +262,24 @@ export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
         <div class="ack-label">Signature</div>
         <div style="border-bottom:1px solid #333;height:22pt"></div>
       </div>
+      ${p.mdCosignRequired ? `
+      <div style="margin-top:16pt;border-top:1px dashed #999;padding-top:10pt">
+        <div style="font-size:8pt;line-height:1.4">The laboratory Medical Director has reviewed the quality control for this period and concurs with the reviewer's attestation above.</div>
+        <div class="ack-row">
+          <div>
+            <div class="ack-label">Medical Director</div>
+            <div class="ack-value">${escapeHtml(p.mdSignedName || "Pending Medical Director co-signature")}</div>
+          </div>
+          <div>
+            <div class="ack-label">Date</div>
+            <div class="ack-value">${escapeHtml(p.mdSignedDate || "")}</div>
+          </div>
+        </div>
+        <div style="margin-top:14pt">
+          <div class="ack-label">Signature</div>
+          <div style="border-bottom:1px solid #333;height:22pt"></div>
+        </div>
+      </div>` : ""}
     </div>`;
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaQC Monthly Review</title><style>${CSS}</style></head><body>
