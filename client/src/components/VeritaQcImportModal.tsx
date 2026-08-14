@@ -451,8 +451,8 @@ export function VeritaQcImportModal({ open, onOpenChange, labId, defaultAnalyte,
             <div className="space-y-1">
               <Label className="text-xs">Assigned value (target) for this level</Label>
               <Input
-                type="number"
-                step="any"
+                type="text"
+                inputMode="decimal"
                 value={assignedValueInput}
                 onChange={(e) => setAssignedValueInput(e.target.value)}
                 placeholder={selectedLevel ? String(selectedLevel.target_value) : "Lot mean will be used if blank"}
