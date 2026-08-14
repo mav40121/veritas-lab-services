@@ -14145,13 +14145,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return { ok: false as const, status: 403, error: "Caller has no lab_id assigned" };
     }
     const row = (db as any).$client.prepare(`
-      SELECT u_a.lab_id AS a_lab_id, u_b.lab_id AS b_lab_id
+      SELECT vm_a.lab_id AS a_lab_id, vm_b.lab_id AS b_lab_id
       FROM veritamap_tests vt_a
       JOIN veritamap_maps vm_a ON vm_a.id = vt_a.map_id
-      JOIN users u_a ON u_a.id = vm_a.user_id
       JOIN veritamap_tests vt_b ON vt_b.id = ?
       JOIN veritamap_maps vm_b ON vm_b.id = vt_b.map_id
-      JOIN users u_b ON u_b.id = vm_b.user_id
       WHERE vt_a.id = ?
     `).get(testBId, testAId);
     if (!row) {
@@ -14184,9 +14182,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     // Confirm caller owns the test (lab_id match)
     const ownership = (db as any).$client.prepare(`
-      SELECT u.lab_id FROM veritamap_tests vt
+      SELECT vm.lab_id FROM veritamap_tests vt
       JOIN veritamap_maps vm ON vm.id = vt.map_id
-      JOIN users u ON u.id = vm.user_id
       WHERE vt.id = ?
     `).get(testId);
     if (!ownership) return res.status(404).json({ error: "Test not found" });
@@ -14247,11 +14244,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       FROM veritamap_test_correlations c
       JOIN veritamap_tests ta ON ta.id = c.test_a_id
       JOIN veritamap_maps ma ON ma.id = ta.map_id
-      JOIN users ua ON ua.id = ma.user_id
       JOIN veritamap_tests tb ON tb.id = c.test_b_id
       JOIN veritamap_maps mb ON mb.id = tb.map_id
-      JOIN users ub ON ub.id = mb.user_id
-      WHERE ua.lab_id = ? AND ub.lab_id = ?
+      WHERE ma.lab_id = ? AND mb.lab_id = ?
         AND (c.next_due IS NULL OR c.next_due <= ?)
       ORDER BY c.next_due ASC NULLS FIRST
     `).all(callerLabId, callerLabId, cutoff);
@@ -14275,9 +14270,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     // Confirm caller's lab owns the source test
     const ownership = (db as any).$client.prepare(`
-      SELECT u.lab_id FROM veritamap_tests vt
+      SELECT vm.lab_id FROM veritamap_tests vt
       JOIN veritamap_maps vm ON vm.id = vt.map_id
-      JOIN users u ON u.id = vm.user_id
       WHERE vt.id = ?
     `).get(testId);
     if (!ownership) return res.status(404).json({ error: "Test not found" });
@@ -14294,8 +14288,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         CASE WHEN vt.id = ? THEN 1 ELSE 0 END AS is_self
       FROM veritamap_tests vt
       JOIN veritamap_maps vm ON vm.id = vt.map_id
-      JOIN users u ON u.id = vm.user_id
-      WHERE u.lab_id = ?
+      WHERE vm.lab_id = ?
       ORDER BY (vt.id = ?) DESC, vm.name, vt.specialty, vt.analyte
     `).all(testId, callerLabId, testId);
 
