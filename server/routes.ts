@@ -3046,7 +3046,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   ): WestgardViolation[] {
     // Pull all accepted history (including the new result) in insert order.
     const history = sqlite.prepare(
-      "SELECT id, result_value FROM qc_results WHERE lab_id = ? AND control_lot_id = ? AND accepted_for_reporting = 1 ORDER BY result_date ASC, id ASC"
+      "SELECT id, result_value FROM qc_results WHERE lab_id = ? AND control_lot_id = ? AND accepted_for_reporting = 1 AND voided_at IS NULL ORDER BY result_date ASC, id ASC"
     ).all(labId, controlLotId) as { id: number; result_value: number }[];
     // Establish mean and SD from the PRIOR history (excluding the new result).
     // If we included the new point in the baseline, an outlier would inflate
@@ -3573,7 +3573,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(controlLotId, req.scope.labId) as any;
     if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
     const results = sqlite.prepare(
-      "SELECT id, lab_id, control_lot_id, instrument, result_value, result_date, run_time, operator_user_id, comment, accepted_for_reporting, created_at FROM qc_results WHERE lab_id = ? AND control_lot_id = ? ORDER BY result_date DESC, id DESC LIMIT ?"
+      "SELECT id, lab_id, control_lot_id, instrument, result_value, result_date, run_time, operator_user_id, comment, accepted_for_reporting, created_at, voided_at, voided_by_user_id, void_reason FROM qc_results WHERE lab_id = ? AND control_lot_id = ? ORDER BY result_date DESC, id DESC LIMIT ?"
     ).all(req.scope.labId, controlLotId, limit) as any[];
     if (results.length === 0) return res.json({ results: [], analyte: lot.analyte });
     const ids = results.map(r => r.id);
@@ -3600,6 +3600,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       corrective_actions: caByResult[r.id] || [],
     }));
     res.json({ results: enriched, analyte: lot.analyte });
+  });
+
+  // POST /api/labs/:labId/qc/results/:id/void — soft-delete a QC result with a
+  // required reason (wrong lot, wrong level, mis-keyed run). The row stays with
+  // who/when/why for the audit trail, but drops out of the chart, calculated
+  // stats, Westgard history, and the monthly review.
+  app.post("/api/labs/:labId/qc/results/:id/void", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+    const reason = String(req.body?.reason ?? "").trim();
+    if (!reason) return res.status(400).json({ error: "A reason is required to void a QC result" });
+    const sqlite = (db as any).$client;
+    const row = sqlite.prepare("SELECT id, voided_at FROM qc_results WHERE id = ? AND lab_id = ?").get(id, req.scope.labId) as any;
+    if (!row) return res.status(404).json({ error: "QC result not found in this lab" });
+    if (row.voided_at) return res.status(409).json({ error: "This result is already voided" });
+    sqlite.prepare("UPDATE qc_results SET voided_at = datetime('now'), voided_by_user_id = ?, void_reason = ? WHERE id = ?").run(req.userId, reason, id);
+    res.json({ ok: true, id });
   });
 
   // VeritaQC Phase 1C: cross-lot daily-review feed. Returns enriched results
@@ -3726,7 +3743,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const nextMonthDate = new Date(year, month, 1); // month is 1-12, Date constructor expects 0-11 + 1
     const monthEnd = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, "0")}-01`;
     const rawResults = sqlite.prepare(
-      "SELECT r.id, r.result_value, r.result_date, r.run_time, r.instrument, r.accepted_for_reporting, NULLIF(TRIM(COALESCE(se.first_name,'') || ' ' || COALESCE(se.last_name,'')), '') AS operator_name FROM qc_results r LEFT JOIN staff_employees se ON se.id = r.operator_staff_employee_id WHERE r.lab_id = ? AND r.control_lot_id = ? AND r.result_date >= ? AND r.result_date < ? ORDER BY r.result_date DESC, r.id DESC"
+      "SELECT r.id, r.result_value, r.result_date, r.run_time, r.instrument, r.accepted_for_reporting, NULLIF(TRIM(COALESCE(se.first_name,'') || ' ' || COALESCE(se.last_name,'')), '') AS operator_name FROM qc_results r LEFT JOIN staff_employees se ON se.id = r.operator_staff_employee_id WHERE r.lab_id = ? AND r.control_lot_id = ? AND r.result_date >= ? AND r.result_date < ? AND r.voided_at IS NULL ORDER BY r.result_date DESC, r.id DESC"
     ).all(req.scope.labId, controlLotId, monthStart, monthEnd) as any[];
     const resultIds = rawResults.map(r => r.id);
     let violationsByR: Record<number, any[]> = {};
@@ -3758,7 +3775,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // this lot (across all time). Falls back to manufacturer values if no
     // accepted history exists yet (n<2 or sd==0).
     const accepted = sqlite.prepare(
-      "SELECT result_value FROM qc_results WHERE lab_id = ? AND control_lot_id = ? AND accepted_for_reporting = 1"
+      "SELECT result_value FROM qc_results WHERE lab_id = ? AND control_lot_id = ? AND accepted_for_reporting = 1 AND voided_at IS NULL"
     ).all(req.scope.labId, controlLotId) as { result_value: number }[];
     let baselineMean: number | null = null;
     let baselineSD: number | null = null;
