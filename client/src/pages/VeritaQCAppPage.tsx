@@ -92,6 +92,9 @@ interface ResultRow {
   run_time: string | null;
   operator_user_id: number | null;
   comment: string | null;
+  voided_at: string | null;
+  voided_by_user_id: number | null;
+  void_reason: string | null;
   accepted_for_reporting: number;
   created_at: string;
   violations: ViolationRow[];
@@ -396,6 +399,33 @@ export default function VeritaQCAppPage() {
       setResultsError(true);
     } finally {
       setLoadingResults(false);
+    }
+  }
+
+  // Void (soft-delete) a QC result: wrong lot, wrong level, mis-keyed run. The
+  // row stays in the audit trail but drops off the chart, stats, Westgard, and
+  // the monthly review. A reason is required.
+  async function voidResult(r: ResultRow) {
+    if (!activeLabId) return;
+    const reason = window.prompt(
+      `Void this QC result?\n\n${r.result_value} on ${r.result_date}\n\nEnter a reason (wrong lot, wrong level, mis-keyed run). It stays in the audit trail but no longer counts toward the chart, statistics, or monthly review.`
+    );
+    if (reason == null) return; // cancelled
+    if (!reason.trim()) {
+      toast({ title: "A reason is required to void a result", variant: "destructive" });
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/qc/results/${r.id}/void`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      if (!res.ok) throw new Error(`void ${res.status}`);
+      toast({ title: "Result voided" });
+      if (selectedLotId) await loadResults(selectedLotId);
+    } catch (err) {
+      toast({ title: "Void failed", description: String(err), variant: "destructive" });
     }
   }
 
@@ -1170,7 +1200,7 @@ export default function VeritaQCAppPage() {
                   <div className="text-sm text-muted-foreground py-8 text-center">No results across this control line's lots yet.</div>
                 )
               ) : (
-                <LeveyJenningsChart mean={selectedLot.mfr_mean} sd={selectedLot.mfr_sd} results={results.slice(0, Math.max(1, Math.min(200, parseInt(chartPoints, 10) || 30)))} />
+                <LeveyJenningsChart mean={selectedLot.mfr_mean} sd={selectedLot.mfr_sd} results={results.filter(r => !r.voided_at).slice(0, Math.max(1, Math.min(200, parseInt(chartPoints, 10) || 30)))} />
               )}
             </CardContent>
           </Card>
@@ -1202,13 +1232,14 @@ export default function VeritaQCAppPage() {
                         <th className="py-2 pr-2">Rules fired</th>
                         <th className="py-2 pr-2">CA filed</th>
                         <th className="py-2 pr-2">Accepted</th>
+                        <th className="py-2 pr-2"></th>
                       </tr>
                     </thead>
                     <tbody>
                       {results.slice(0, 20).map(r => (
-                        <tr key={r.id} className="border-b last:border-b-0">
+                        <tr key={r.id} className={`border-b last:border-b-0 ${r.voided_at ? "opacity-60" : ""}`}>
                           <td className="py-2 pr-2">{r.result_date}</td>
-                          <td className="py-2 pr-2 font-mono">{r.result_value}</td>
+                          <td className={`py-2 pr-2 font-mono ${r.voided_at ? "line-through" : ""}`}>{r.result_value}</td>
                           <td className="py-2 pr-2 text-muted-foreground">{r.instrument || "-"}</td>
                           <td className="py-2 pr-2 text-xs text-muted-foreground max-w-[16rem] truncate" title={r.comment || undefined}>{r.comment || "-"}</td>
                           <td className="py-2 pr-2">
@@ -1234,6 +1265,13 @@ export default function VeritaQCAppPage() {
                               <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-label="accepted" />
                             ) : (
                               <span className="text-xs text-amber-700">excluded</span>
+                            )}
+                          </td>
+                          <td className="py-2 pr-2 text-right">
+                            {r.voided_at ? (
+                              <span className="text-xs text-muted-foreground italic" title={r.void_reason ? `Voided: ${r.void_reason}` : "Voided"}>Voided</span>
+                            ) : (
+                              <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive h-7 px-2" onClick={() => voidResult(r)} title="Void this result (wrong lot, wrong level, or mis-keyed run)">Void</Button>
                             )}
                           </td>
                         </tr>

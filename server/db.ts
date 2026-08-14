@@ -5683,6 +5683,13 @@ try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as a
   ensure("qc_corrective_actions", "follow_up_notes",       "ALTER TABLE qc_corrective_actions ADD COLUMN follow_up_notes TEXT");
   ensure("qc_corrective_actions", "nce_reference",         "ALTER TABLE qc_corrective_actions ADD COLUMN nce_reference TEXT");
 
+  // Soft-delete (void) a QC result: wrong lot, wrong level, mis-keyed run. The
+  // row stays for the audit trail but drops out of the chart, stats, Westgard
+  // history, and the monthly review. voided_at != NULL means voided.
+  ensure("qc_results", "voided_at",         "ALTER TABLE qc_results ADD COLUMN voided_at TEXT");
+  ensure("qc_results", "voided_by_user_id", "ALTER TABLE qc_results ADD COLUMN voided_by_user_id INTEGER");
+  ensure("qc_results", "void_reason",       "ALTER TABLE qc_results ADD COLUMN void_reason TEXT");
+
   ensure("qc_period_reviews", "attestation_acknowledged", "ALTER TABLE qc_period_reviews ADD COLUMN attestation_acknowledged INTEGER NOT NULL DEFAULT 0");
   ensure("qc_period_reviews", "review_notes",             "ALTER TABLE qc_period_reviews ADD COLUMN review_notes TEXT");
 
