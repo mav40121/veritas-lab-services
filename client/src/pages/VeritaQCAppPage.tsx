@@ -150,7 +150,7 @@ function LeveyJenningsChart({ mean, sd, results }: { mean: number; sd: number; r
   const fmtStat = (x: number) => !Number.isFinite(x) ? "-" : Math.abs(x) >= 100 ? x.toFixed(0) : Math.abs(x) >= 10 ? x.toFixed(1) : Math.abs(x) >= 1 ? x.toFixed(2) : x.toFixed(3);
   return (
     <>
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Levey-Jennings chart">
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Levey-Jennings chart" className="text-muted-foreground">
       {bands.map((bd, i) => (
         <rect key={i} x={PL} y={yFor(bd.b)} width={innerW} height={yFor(bd.a) - yFor(bd.b)} fill={bd.fill} />
       ))}
@@ -158,7 +158,7 @@ function LeveyJenningsChart({ mean, sd, results }: { mean: number; sd: number; r
         <line key={s} x1={PL} y1={yFor(s)} x2={PL + innerW} y2={yFor(s)} stroke={s === 0 ? "#01696F" : "#a0a0a0"} strokeWidth={s === 0 ? 1.2 : 0.5} strokeDasharray={s === 0 ? undefined : "2,2"} />
       ))}
       {[-3, -2, -1, 0, 1, 2, 3].map(s => (
-        <text key={s} x={PL - 4} y={yFor(s) + 3} fontSize="8" fill="#555" textAnchor="end">{s > 0 ? `+${s}` : s}</text>
+        <text key={s} x={PL - 4} y={yFor(s) + 3} fontSize="8" fill="currentColor" textAnchor="end">{s > 0 ? `+${s}` : s}</text>
       ))}
       <polyline points={poly} fill="none" stroke="#1a1a1a" strokeWidth={0.8} />
       {sdis.map((s, i) => {
@@ -170,8 +170,8 @@ function LeveyJenningsChart({ mean, sd, results }: { mean: number; sd: number; r
           </circle>
         );
       })}
-      <text x={PL + innerW / 2} y={H - 6} fontSize="8" fill="#555" textAnchor="middle">Run sequence (oldest to newest, n={n})</text>
-      <text x="9" y={PT + innerH / 2} fontSize="8" fill="#555" textAnchor="middle" transform={`rotate(-90,9,${PT + innerH / 2})`}>SDI from mean</text>
+      <text x={PL + innerW / 2} y={H - 6} fontSize="8" fill="currentColor" textAnchor="middle">Run sequence (oldest to newest, n={n})</text>
+      <text x="9" y={PT + innerH / 2} fontSize="8" fill="currentColor" textAnchor="middle" transform={`rotate(-90,9,${PT + innerH / 2})`}>SDI from mean</text>
     </svg>
     <div className="flex items-start justify-between gap-4 mt-1 px-1 text-xs">
       <div>
@@ -221,7 +221,7 @@ function ContinuousLeveyJenningsChart({ points }: { points: LinePoint[] }) {
   const lotCount = segments.length;
   const poly = points.map((p, i) => `${xFor(i)},${yFor(p.sdi)}`).join(" ");
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Continuous Levey-Jennings chart across lots">
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Continuous Levey-Jennings chart across lots" className="text-muted-foreground">
       {bands.map((bd, i) => (
         <rect key={`b${i}`} x={PL} y={yFor(bd.b)} width={innerW} height={yFor(bd.a) - yFor(bd.b)} fill={bd.fill} />
       ))}
@@ -236,7 +236,7 @@ function ContinuousLeveyJenningsChart({ points }: { points: LinePoint[] }) {
         <line key={`z${s}`} x1={PL} y1={yFor(s)} x2={PL + innerW} y2={yFor(s)} stroke={s === 0 ? "#01696F" : "#a0a0a0"} strokeWidth={s === 0 ? 1.2 : 0.5} strokeDasharray={s === 0 ? undefined : "2,2"} />
       ))}
       {[-3, -2, -1, 0, 1, 2, 3].map(s => (
-        <text key={`zl${s}`} x={PL - 4} y={yFor(s) + 3} fontSize="8" fill="#555" textAnchor="end">{s > 0 ? `+${s}` : s}</text>
+        <text key={`zl${s}`} x={PL - 4} y={yFor(s) + 3} fontSize="8" fill="currentColor" textAnchor="end">{s > 0 ? `+${s}` : s}</text>
       ))}
       {/* Changeover markers: a vertical dashed rule at each lot boundary. */}
       {segments.slice(1).map((seg, si) => {
@@ -263,8 +263,8 @@ function ContinuousLeveyJenningsChart({ points }: { points: LinePoint[] }) {
         const cx = (xFor(seg.start) + xFor(seg.end)) / 2;
         return <text key={`sl${si}`} x={cx} y={H - 16} fontSize="7.5" fill="#334155" textAnchor="middle" fontWeight="600">Lot {seg.lotNumber}</text>;
       })}
-      <text x={PL + innerW / 2} y={H - 4} fontSize="8" fill="#555" textAnchor="middle">Continuous across {lotCount} lot{lotCount === 1 ? "" : "s"} &middot; n={n} (oldest to newest)</text>
-      <text x="9" y={PT + innerH / 2} fontSize="8" fill="#555" textAnchor="middle" transform={`rotate(-90,9,${PT + innerH / 2})`}>SDI from mean</text>
+      <text x={PL + innerW / 2} y={H - 4} fontSize="8" fill="currentColor" textAnchor="middle">Continuous across {lotCount} lot{lotCount === 1 ? "" : "s"} &middot; n={n} (oldest to newest)</text>
+      <text x="9" y={PT + innerH / 2} fontSize="8" fill="currentColor" textAnchor="middle" transform={`rotate(-90,9,${PT + innerH / 2})`}>SDI from mean</text>
     </svg>
   );
 }
