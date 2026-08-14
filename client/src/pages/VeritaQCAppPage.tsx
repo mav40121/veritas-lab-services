@@ -142,7 +142,14 @@ function LeveyJenningsChart({ mean, sd, results }: { mean: number; sd: number; r
   ];
   const sdis = pts.map(r => (r.result_value - mean) / sd);
   const poly = sdis.map((s, i) => `${xFor(i)},${yFor(s)}`).join(" ");
+  // Calculated mean/SD of the plotted values (sample SD, n-1), shown next to the
+  // programmed manufacturer mean/SD so the tech can compare the two at a glance.
+  const vals = pts.map(r => r.result_value);
+  const calcMean = vals.reduce((a, b) => a + b, 0) / vals.length;
+  const calcSd = vals.length > 1 ? Math.sqrt(vals.reduce((a, b) => a + Math.pow(b - calcMean, 2), 0) / (vals.length - 1)) : 0;
+  const fmtStat = (x: number) => !Number.isFinite(x) ? "-" : Math.abs(x) >= 100 ? x.toFixed(0) : Math.abs(x) >= 10 ? x.toFixed(1) : Math.abs(x) >= 1 ? x.toFixed(2) : x.toFixed(3);
   return (
+    <>
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Levey-Jennings chart">
       {bands.map((bd, i) => (
         <rect key={i} x={PL} y={yFor(bd.b)} width={innerW} height={yFor(bd.a) - yFor(bd.b)} fill={bd.fill} />
@@ -159,13 +166,24 @@ function LeveyJenningsChart({ mean, sd, results }: { mean: number; sd: number; r
         const color = rejected || Math.abs(s) > 3 ? "#dc2626" : Math.abs(s) > 2 ? "#d97706" : "#16a34a";
         return (
           <circle key={i} cx={xFor(i)} cy={yFor(s)} r={3} fill={color} stroke="#fff" strokeWidth={0.6}>
-            <title>{`${pts[i].result_date}: ${pts[i].result_value} (SDI ${s.toFixed(2)})`}</title>
+            <title>{`${pts[i].result_date}: ${pts[i].result_value} (SDI ${s.toFixed(2)})${pts[i].comment ? ` · ${pts[i].comment}` : ""}`}</title>
           </circle>
         );
       })}
       <text x={PL + innerW / 2} y={H - 6} fontSize="8" fill="#555" textAnchor="middle">Run sequence (oldest to newest, n={n})</text>
       <text x="9" y={PT + innerH / 2} fontSize="8" fill="#555" textAnchor="middle" transform={`rotate(-90,9,${PT + innerH / 2})`}>SDI from mean</text>
     </svg>
+    <div className="flex items-start justify-between gap-4 mt-1 px-1 text-xs">
+      <div>
+        <div className="font-medium text-muted-foreground">Programmed (manufacturer)</div>
+        <div className="font-mono text-foreground">Mean {fmtStat(mean)} · SD {fmtStat(sd)}</div>
+      </div>
+      <div className="text-right">
+        <div className="font-medium text-muted-foreground">Calculated (n={n})</div>
+        <div className="font-mono text-foreground">Mean {fmtStat(calcMean)} · SD {fmtStat(calcSd)}</div>
+      </div>
+    </div>
+    </>
   );
 }
 
@@ -1032,8 +1050,8 @@ export default function VeritaQCAppPage() {
                   <Label htmlFor="qc-value">Result value <span className="text-red-600">*</span></Label>
                   <Input
                     id="qc-value"
-                    type="number"
-                    step="any"
+                    type="text"
+                    inputMode="decimal"
                     value={formValue}
                     onChange={(e) => setFormValue(e.target.value)}
                     placeholder="e.g. 102.3"
@@ -1118,9 +1136,8 @@ export default function VeritaQCAppPage() {
                   <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     Points
                     <input
-                      type="number"
-                      min={1}
-                      max={200}
+                      type="text"
+                      inputMode="numeric"
                       value={chartPoints}
                       onChange={(e) => setChartPoints(e.target.value)}
                       className="w-16 border border-input rounded-md bg-background px-2 py-1 text-xs"
@@ -1181,6 +1198,7 @@ export default function VeritaQCAppPage() {
                         <th className="py-2 pr-2">Date</th>
                         <th className="py-2 pr-2">Value</th>
                         <th className="py-2 pr-2">Instrument</th>
+                        <th className="py-2 pr-2">Notes</th>
                         <th className="py-2 pr-2">Rules fired</th>
                         <th className="py-2 pr-2">CA filed</th>
                         <th className="py-2 pr-2">Accepted</th>
@@ -1192,6 +1210,7 @@ export default function VeritaQCAppPage() {
                           <td className="py-2 pr-2">{r.result_date}</td>
                           <td className="py-2 pr-2 font-mono">{r.result_value}</td>
                           <td className="py-2 pr-2 text-muted-foreground">{r.instrument || "-"}</td>
+                          <td className="py-2 pr-2 text-xs text-muted-foreground max-w-[16rem] truncate" title={r.comment || undefined}>{r.comment || "-"}</td>
                           <td className="py-2 pr-2">
                             {r.violations.length === 0 ? (
                               <span className="text-xs text-muted-foreground">none</span>
@@ -1367,8 +1386,8 @@ export default function VeritaQCAppPage() {
               <Label htmlFor="new-mean">Mfr mean <span className="text-red-600">*</span></Label>
               <Input
                 id="new-mean"
-                type="number"
-                step="any"
+                type="text"
+                inputMode="decimal"
                 value={newMfrMean}
                 onChange={(e) => setNewMfrMean(e.target.value)}
                 placeholder="e.g. 102.5"
@@ -1378,8 +1397,8 @@ export default function VeritaQCAppPage() {
               <Label htmlFor="new-sd">Mfr SD <span className="text-red-600">*</span></Label>
               <Input
                 id="new-sd"
-                type="number"
-                step="any"
+                type="text"
+                inputMode="decimal"
                 value={newMfrSd}
                 onChange={(e) => setNewMfrSd(e.target.value)}
                 placeholder="e.g. 3.2"
@@ -1467,11 +1486,11 @@ export default function VeritaQCAppPage() {
             </div>
             <div>
               <Label htmlFor="co-mean">New mfr mean <span className="text-red-600">*</span></Label>
-              <Input id="co-mean" type="number" step="any" value={coMean} onChange={(e) => setCoMean(e.target.value)} placeholder="e.g. 4.1" />
+              <Input id="co-mean" type="text" inputMode="decimal" value={coMean} onChange={(e) => setCoMean(e.target.value)} placeholder="e.g. 4.1" />
             </div>
             <div>
               <Label htmlFor="co-sd">New mfr SD <span className="text-red-600">*</span></Label>
-              <Input id="co-sd" type="number" step="any" value={coSd} onChange={(e) => setCoSd(e.target.value)} placeholder="e.g. 0.3" />
+              <Input id="co-sd" type="text" inputMode="decimal" value={coSd} onChange={(e) => setCoSd(e.target.value)} placeholder="e.g. 0.3" />
             </div>
             <div>
               <Label htmlFor="co-sd-interval">SD interval</Label>
