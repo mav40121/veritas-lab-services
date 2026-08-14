@@ -14137,8 +14137,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Helper: resolve the caller's lab_id and confirm both tests share it
   // Returns { ok: true } if authorized, or { ok: false, status, error } otherwise.
-  function authorizeCorrelationPair(callerUserId: number, testAId: number, testBId: number) {
-    const callerLabId = (db as any).$client.prepare("SELECT lab_id FROM users WHERE id = ?").get(callerUserId)?.lab_id;
+  function authorizeCorrelationPair(callerUserId: number, req: any, testAId: number, testBId: number) {
+    // Active lab (validated for membership), not users.lab_id: a multi-lab user
+    // working in a non-home lab must correlate that lab's tests, not the home lab's.
+    const callerLabId = resolveActiveLabForRequest(callerUserId, req)?.id;
     if (!callerLabId) {
       return { ok: false as const, status: 403, error: "Caller has no lab_id assigned" };
     }
@@ -14170,7 +14172,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // List all correlations for one test. Returns enriched partner info for badge rendering.
   app.get("/api/veritamap/correlations", authMiddleware, (req: any, res) => {
     const callerUserId = req.user.userId;
-    const callerLabId = (db as any).$client.prepare("SELECT lab_id FROM users WHERE id = ?").get(callerUserId)?.lab_id;
+    // Scope to the ACTIVE lab (X-Active-Lab-Id header / body), validated for the
+    // caller's membership, not users.lab_id (the home lab). The old home-lab read
+    // showed one lab's correlations on every other lab's VeritaMap page.
+    const callerLabId = resolveActiveLabForRequest(callerUserId, req)?.id;
     if (!callerLabId) return res.status(403).json({ error: "Caller has no lab_id assigned" });
     const testIdRaw = req.query.test_id;
     if (!testIdRaw) return res.status(400).json({ error: "test_id query param required" });
@@ -14221,7 +14226,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Dashboard widget query. Returns correlations due within N days for the caller's lab.
   app.get("/api/veritamap/correlations/due-soon", authMiddleware, (req: any, res) => {
     const callerUserId = req.user.userId;
-    const callerLabId = (db as any).$client.prepare("SELECT lab_id FROM users WHERE id = ?").get(callerUserId)?.lab_id;
+    // Scope to the ACTIVE lab (X-Active-Lab-Id header / body), validated for the
+    // caller's membership, not users.lab_id (the home lab). The old home-lab read
+    // showed one lab's correlations on every other lab's VeritaMap page.
+    const callerLabId = resolveActiveLabForRequest(callerUserId, req)?.id;
     if (!callerLabId) return res.status(403).json({ error: "Caller has no lab_id assigned" });
     const days = Math.max(0, Math.min(365, parseInt(String(req.query.days ?? "60"), 10) || 60));
     const cutoff = new Date(Date.now() + days * 86400_000).toISOString().slice(0, 10);
@@ -14256,7 +14264,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Optional ?q= filter is matched against analyte (case-insensitive substring).
   app.get("/api/veritamap/correlations/candidate-partners", authMiddleware, (req: any, res) => {
     const callerUserId = req.user.userId;
-    const callerLabId = (db as any).$client.prepare("SELECT lab_id FROM users WHERE id = ?").get(callerUserId)?.lab_id;
+    // Scope to the ACTIVE lab (X-Active-Lab-Id header / body), validated for the
+    // caller's membership, not users.lab_id (the home lab). The old home-lab read
+    // showed one lab's correlations on every other lab's VeritaMap page.
+    const callerLabId = resolveActiveLabForRequest(callerUserId, req)?.id;
     if (!callerLabId) return res.status(403).json({ error: "Caller has no lab_id assigned" });
     const testId = parseInt(String(req.query.test_id ?? ""), 10);
     if (!Number.isFinite(testId)) return res.status(400).json({ error: "test_id query param required" });
@@ -14317,7 +14328,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(400).json({ error: "test_a_id and test_b_id must be integers" });
     }
     const [aId, bId] = normalizePair(aRaw, bRaw);
-    const auth = authorizeCorrelationPair(callerUserId, aId, bId);
+    const auth = authorizeCorrelationPair(callerUserId, req, aId, bId);
     if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
 
     const correlationId = b.id != null ? parseInt(b.id, 10) : null;
@@ -14405,7 +14416,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ error: `Invalid pair: ${JSON.stringify(p)}` });
       }
       const [lo, hi] = normalizePair(a, x);
-      const auth = authorizeCorrelationPair(callerUserId, lo, hi);
+      const auth = authorizeCorrelationPair(callerUserId, req, lo, hi);
       if (!auth.ok) return res.status(auth.status).json({ error: `${auth.error} (pair ${lo}↔${hi})` });
       normalized.push([lo, hi]);
     }
@@ -14483,7 +14494,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).all(groupId);
     if (pairs.length === 0) return res.status(404).json({ error: "Group not found or empty" });
     for (const p of pairs) {
-      const auth = authorizeCorrelationPair(callerUserId, p.test_a_id, p.test_b_id);
+      const auth = authorizeCorrelationPair(callerUserId, req, p.test_a_id, p.test_b_id);
       if (!auth.ok) return res.status(auth.status).json({ error: `${auth.error} (pair ${p.test_a_id}\u2194${p.test_b_id})` });
     }
 
@@ -14528,7 +14539,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(id);
     if (!existing) return res.status(404).json({ error: "Correlation not found" });
 
-    const auth = authorizeCorrelationPair(callerUserId, existing.test_a_id, existing.test_b_id);
+    const auth = authorizeCorrelationPair(callerUserId, req, existing.test_a_id, existing.test_b_id);
     if (!auth.ok) return res.status(auth.status).json({ error: auth.error });
 
     (db as any).$client.prepare("DELETE FROM veritamap_test_correlations WHERE id = ?").run(id);
