@@ -145,7 +145,7 @@ export function PolicyQuizAuthorDialog({ labId, documentId, documentTitle, open,
               <div className="mt-2 flex items-center gap-2">
                 <span className="text-xs">Passing threshold you set</span>
                 <Input
-                  type="number"
+                  type="text" inputMode="decimal"
                   min={1}
                   max={100}
                   value={threshold}

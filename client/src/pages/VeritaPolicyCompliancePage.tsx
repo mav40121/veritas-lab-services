@@ -572,7 +572,7 @@ export default function VeritaPolicyCompliancePage() {
             <div>
               <Label className="text-xs">Expires in</Label>
               <Input
-                type="number"
+                type="text" inputMode="decimal"
                 min={1}
                 max={90}
                 value={createDays}

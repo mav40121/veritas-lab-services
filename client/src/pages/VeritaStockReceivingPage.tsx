@@ -269,7 +269,7 @@ export default function VeritaStockReceivingPage() {
                     <td className="px-3 py-2">{it.on_order_expected_date || <span className="text-muted-foreground">-</span>}</td>
                     <td className="px-3 py-2 text-right">
                       <Input
-                        type="number" min={0} className="w-24 h-8 text-right ml-auto"
+                        type="text" inputMode="decimal" min={0} className="w-24 h-8 text-right ml-auto"
                         placeholder={String(it.on_order_qty)}
                         value={receiveQ[it.id] ?? ""}
                         onChange={(e) => setReceiveQ((p) => ({ ...p, [it.id]: e.target.value }))}

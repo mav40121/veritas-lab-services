@@ -494,7 +494,7 @@ export default function VeritaStockEnterprisePage() {
                     <td className="text-center p-2">
                       {transferReady && srcCell ? (
                         <Input
-                          type="number" min="0" max={srcCell.count_on_hand} value={raw}
+                          type="text" inputMode="decimal" min="0" max={srcCell.count_on_hand} value={raw}
                           onChange={(e) => setQty(r.key, e.target.value)}
                           className={`h-8 w-20 mx-auto text-center ${over ? "border-red-400 text-red-600" : ""}`}
                           placeholder="0"

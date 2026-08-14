@@ -145,7 +145,7 @@ export default function FoundingLabApplyPage() {
             </div>
             <div>
               <Label htmlFor="approximateSeatCount">Approximate active seats</Label>
-              <Input id="approximateSeatCount" type="number" min={1} value={approximateSeatCount}
+              <Input id="approximateSeatCount" type="text" inputMode="decimal" min={1} value={approximateSeatCount}
                 onChange={e => setApproximateSeatCount(e.target.value)} placeholder="e.g., 8" />
             </div>
           </div>

@@ -399,7 +399,7 @@ function StaffPortalQcView({ token, employee, labName, onBack, onSignOut }: {
             <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-muted-foreground mb-1">Result value *</label>
-                <input className={inputCls} type="number" step="any" value={value} onChange={e => setValue(e.target.value)} placeholder="e.g. 102.3" required />
+                <input className={inputCls} type="text" inputMode="decimal" step="any" value={value} onChange={e => setValue(e.target.value)} placeholder="e.g. 102.3" required />
               </div>
               <div>
                 <label className="block text-xs text-muted-foreground mb-1">Result date *</label>
@@ -1113,7 +1113,7 @@ function StaffPortalInventoryView({
                   </label>
                   <input
                     id="sp-inventory-new-qty"
-                    type="number"
+                    type="text"
                     inputMode="numeric"
                     min={0}
                     step={1}

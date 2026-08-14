@@ -807,14 +807,14 @@ function RemindersPanel({ trackApi, cfgKey }: { trackApi: string; cfgKey: string
       <div className="rounded-2xl border border-border p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="text-xs font-medium text-foreground">Start reminding (days before due)</label>
-          <Input type="number" min={1} max={60} value={leadDays}
+          <Input type="text" inputMode="decimal" min={1} max={60} value={leadDays}
             onChange={e => setLeadDays(Math.max(1, Math.min(60, Number(e.target.value) || 14)))}
             className="h-8 text-sm mt-1 w-28" data-testid="lead-days-input" />
           <p className="text-[11px] text-muted-foreground mt-1">Approaching reminders fire on a 14, 7, 3, 1 day schedule within this window.</p>
         </div>
         <div>
           <label className="text-xs font-medium text-foreground">Overdue reminder every (days)</label>
-          <Input type="number" min={1} max={30} value={cadence}
+          <Input type="text" inputMode="decimal" min={1} max={30} value={cadence}
             onChange={e => setCadence(Math.max(1, Math.min(30, Number(e.target.value) || 2)))}
             className="h-8 text-sm mt-1 w-28" data-testid="cadence-input" />
           <p className="text-[11px] text-muted-foreground mt-1">Once a task is overdue, it repeats on this cadence until signed off.</p>

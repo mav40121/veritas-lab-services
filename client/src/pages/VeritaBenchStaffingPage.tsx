@@ -250,7 +250,7 @@ function DataGrid({ studyId, data, onSave, readOnly, weekNum, metricTypes, allDa
                         return (
                           <td key={d} className={`border p-0 ${isOutlier ? "bg-yellow-100 dark:bg-yellow-900/30" : ""}`}>
                             <input
-                              type="number"
+                              type="text" inputMode="decimal"
                               className="w-full px-1.5 py-0.5 text-center bg-transparent border-none outline-none text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                               value={val || ""}
                               onChange={e => handleChange(mt, d, h, e.target.value)}
@@ -474,7 +474,7 @@ function AnalysisView({ data, studyName }: { data: HourlyDataItem[]; studyName: 
           <div className="flex items-center gap-2">
             <label className="text-xs text-muted-foreground whitespace-nowrap">Throughput rate:</label>
             <input
-              type="number"
+              type="text" inputMode="decimal"
               className="w-16 px-2 py-1 text-xs border rounded text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               value={throughputRate}
               onChange={e => { const v = parseFloat(e.target.value); if (v > 0) setThroughputRate(v); }}
@@ -927,9 +927,9 @@ export default function VeritaBenchStaffingPage() {
                     <tr key={i} className="border-b border-muted/60">
                       <td className="py-1 pr-2"><Input className="h-8" value={l.label} onChange={e => updateGridLine(i, "label", e.target.value)} disabled={readOnly} placeholder="DS Tech" /></td>
                       <td className="pr-2"><Input className="h-8 w-24" value={l.role} onChange={e => updateGridLine(i, "role", e.target.value)} disabled={readOnly} placeholder="Tech" /></td>
-                      <td className="pr-2"><Input className="h-8 w-16 text-right" type="number" value={l.hours_per_shift} onChange={e => updateGridLine(i, "hours_per_shift", e.target.value)} disabled={readOnly} /></td>
-                      <td className="pr-2"><Input className="h-8 w-16 text-right" type="number" value={l.days_per_week} onChange={e => updateGridLine(i, "days_per_week", e.target.value)} disabled={readOnly} /></td>
-                      <td className="pr-2"><Input className="h-8 w-16 text-right" type="number" value={l.over_under} onChange={e => updateGridLine(i, "over_under", e.target.value)} disabled={readOnly} /></td>
+                      <td className="pr-2"><Input className="h-8 w-16 text-right" type="text" inputMode="decimal" value={l.hours_per_shift} onChange={e => updateGridLine(i, "hours_per_shift", e.target.value)} disabled={readOnly} /></td>
+                      <td className="pr-2"><Input className="h-8 w-16 text-right" type="text" inputMode="decimal" value={l.days_per_week} onChange={e => updateGridLine(i, "days_per_week", e.target.value)} disabled={readOnly} /></td>
+                      <td className="pr-2"><Input className="h-8 w-16 text-right" type="text" inputMode="decimal" value={l.over_under} onChange={e => updateGridLine(i, "over_under", e.target.value)} disabled={readOnly} /></td>
                       <td className="pr-2 text-right font-mono">{wk || 0}</td>
                       <td><Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeGridLine(i)} disabled={readOnly}><Trash2 size={13} /></Button></td>
                     </tr>
