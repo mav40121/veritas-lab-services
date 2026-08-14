@@ -51,14 +51,29 @@ const ROLE_BADGE_CLASS: Record<string, string> = {
   owner: "bg-amber-100 text-amber-900 border-amber-300",
   admin: "bg-teal-100 text-teal-900 border-teal-300",
   staff: "bg-slate-100 text-slate-700 border-slate-300",
+  // A designated Medical Director is a distinct class: it is disrespectful to
+  // render the lab's director as "Staff". Rendered for the member whose email
+  // matches labs.medical_director_email.
+  medical_director: "bg-teal-100 text-teal-900 border-teal-300",
+};
+
+const ROLE_LABEL: Record<string, string> = {
+  owner: "Owner",
+  admin: "Admin",
+  staff: "Staff",
+  medical_director: "Medical Director",
 };
 
 function roleBadge(role: string) {
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border ${ROLE_BADGE_CLASS[role] || ROLE_BADGE_CLASS.staff}`}>
+    <span
+      title={role === "medical_director" ? "Designated Laboratory Medical Director. Policy approvals that route to the medical director go to this person." : undefined}
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border ${ROLE_BADGE_CLASS[role] || ROLE_BADGE_CLASS.staff}`}
+    >
       {role === "owner" && <Crown size={11} />}
       {role === "admin" && <ShieldCheck size={11} />}
-      {role.charAt(0).toUpperCase() + role.slice(1)}
+      {role === "medical_director" && <Stethoscope size={11} />}
+      {ROLE_LABEL[role] || (role.charAt(0).toUpperCase() + role.slice(1))}
     </span>
   );
 }
@@ -363,11 +378,10 @@ export default function LabMembersPage() {
                         <td className="py-2 pr-3">
                           <div className="font-medium flex items-center gap-2 flex-wrap">
                             {m.name || m.email}{isSelf && <span className="text-xs text-muted-foreground">(you)</span>}
-                            {isMedicalDirector(m.email) && medicalDirectorBadge()}
                           </div>
                           {m.name && <div className="text-xs text-muted-foreground">{m.email}</div>}
                         </td>
-                        <td className="py-2 pr-3">{roleBadge(m.role)}</td>
+                        <td className="py-2 pr-3">{roleBadge(isMedicalDirector(m.email) ? "medical_director" : m.role)}</td>
                         <td className="py-2 pr-3">{seatTypeBadge(m.seat_type || "active")}</td>
                         <td className="py-2 pr-3 text-muted-foreground">{fmtDate(m.last_active_at || m.accepted_at)}</td>
                         <td className="py-2 pr-3 text-right space-x-1">
