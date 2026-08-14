@@ -3723,6 +3723,52 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, review: row });
   });
 
+  // Assemble the monthly-review payload for one control lot + period. Used by
+  // the all-lots combined PDF below; mirrors the inline assembly in the
+  // single-lot endpoint (kept separate to avoid touching that compliance path).
+  function buildMonthlyReviewPayload(sqlite: any, labId: number, lot: any, lab: any, year: number, month: number, reviewerName: string): MonthlyReviewPayload {
+    const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
+    const nextMonthDate = new Date(year, month, 1);
+    const monthEnd = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, "0")}-01`;
+    const rawResults = sqlite.prepare(
+      "SELECT r.id, r.result_value, r.result_date, r.run_time, r.instrument, r.accepted_for_reporting, NULLIF(TRIM(COALESCE(se.first_name,'') || ' ' || COALESCE(se.last_name,'')), '') AS operator_name FROM qc_results r LEFT JOIN staff_employees se ON se.id = r.operator_staff_employee_id WHERE r.lab_id = ? AND r.control_lot_id = ? AND r.result_date >= ? AND r.result_date < ? AND r.voided_at IS NULL ORDER BY r.result_date DESC, r.id DESC"
+    ).all(labId, lot.id, monthStart, monthEnd) as any[];
+    const resultIds = rawResults.map((r: any) => r.id);
+    const violationsByR: Record<number, any[]> = {};
+    const casByR: Record<number, any[]> = {};
+    if (resultIds.length > 0) {
+      const placeholders = resultIds.map(() => "?").join(",");
+      const vs = sqlite.prepare("SELECT id, qc_result_id, rule_code, severity, detail FROM qc_rule_violations WHERE qc_result_id IN (" + placeholders + ")").all(...resultIds) as any[];
+      for (const v of vs) (violationsByR[v.qc_result_id] = violationsByR[v.qc_result_id] || []).push(v);
+      const cs = sqlite.prepare("SELECT id, qc_result_id, action_taken, status, taken_at FROM qc_corrective_actions WHERE qc_result_id IN (" + placeholders + ")").all(...resultIds) as any[];
+      for (const c of cs) (casByR[c.qc_result_id] = casByR[c.qc_result_id] || []).push(c);
+    }
+    const results: MonthlyReviewResult[] = rawResults.map((r: any) => ({
+      id: r.id, result_value: r.result_value, result_date: r.result_date, run_time: r.run_time,
+      instrument: r.instrument, accepted_for_reporting: r.accepted_for_reporting, operator_name: r.operator_name || null,
+      violations: violationsByR[r.id] || [], corrective_actions: casByR[r.id] || [],
+    }));
+    const accepted = sqlite.prepare("SELECT result_value FROM qc_results WHERE lab_id = ? AND control_lot_id = ? AND accepted_for_reporting = 1 AND voided_at IS NULL").all(labId, lot.id) as { result_value: number }[];
+    let baselineMean: number | null = null;
+    let baselineSD: number | null = null;
+    if (accepted.length >= 2) {
+      const vals = accepted.map((a: any) => a.result_value);
+      const m = vals.reduce((a: number, b: number) => a + b, 0) / vals.length;
+      const v = vals.reduce((s: number, x: number) => s + (x - m) ** 2, 0) / (vals.length - 1);
+      const sd = Math.sqrt(v);
+      if (sd > 0) { baselineMean = m; baselineSD = sd; }
+    }
+    return {
+      lab: { id: lab.id, lab_name: lab.lab_name, clia_number: lab.clia_number },
+      lot: { id: lot.id, analyte: lot.analyte, level: lot.level, lot_number: lot.lot_number, manufacturer: lot.manufacturer, mfr_mean: lot.mfr_mean, mfr_sd: lot.mfr_sd, mfr_sd_interval: lot.mfr_sd_interval },
+      periodYear: year, periodMonth: month, results, baselineMean, baselineSD,
+      reviewerName: reviewerName || "Pending signature",
+      reviewerTitle: "Medical director or designee",
+      reviewerDate: new Date().toISOString().slice(0, 10),
+      attestationAcknowledged: false,
+    };
+  }
+
   app.get("/api/labs/:labId/qc/period-reviews/pdf", authMiddleware, labScopeMiddleware, async (req: any, res) => {
     const controlLotId = req.query.control_lot_id ? Number(req.query.control_lot_id) : null;
     const year = Number(req.query.year);
@@ -3819,6 +3865,50 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (err: any) {
       console.error("[qc/period-reviews/pdf] render failed:", err.message);
       res.status(500).json({ error: err.message || "PDF render failed" });
+    }
+  });
+
+  // GET /api/labs/:labId/qc/period-reviews/pdf-all?year=&month=
+  // One combined monthly-review PDF for every active control lot with results in
+  // the period, so the reviewer files one document instead of clicking through
+  // each lot. Lots with no QC that month are skipped.
+  app.get("/api/labs/:labId/qc/period-reviews/pdf-all", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    const year = Number(req.query.year);
+    const month = Number(req.query.month);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+      return res.status(400).json({ error: "year, month (1-12) required" });
+    }
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    const lots = sqlite.prepare(
+      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval FROM qc_control_lots WHERE lab_id = ? AND status = 'active' ORDER BY analyte, level, lot_number"
+    ).all(req.scope.labId) as any[];
+    if (lots.length === 0) return res.status(404).json({ error: "No active control lots in this lab" });
+    const reviewer = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
+    const reviewerName = reviewer?.name || "Pending signature";
+    try {
+      const { PDFDocument } = await import("pdf-lib");
+      const merged = await PDFDocument.create();
+      let included = 0;
+      for (const lot of lots) {
+        const payload = buildMonthlyReviewPayload(sqlite, req.scope.labId, lot, lab, year, month, reviewerName);
+        if (payload.results.length === 0) continue;
+        const buf = await renderMonthlyReviewPDF(payload);
+        const doc = await PDFDocument.load(buf);
+        const pages = await merged.copyPages(doc, doc.getPageIndices());
+        pages.forEach((p) => merged.addPage(p));
+        included++;
+      }
+      if (included === 0) return res.status(404).json({ error: "No QC results for any lot in this period" });
+      const out = Buffer.from(await merged.save());
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="VeritaQC_Monthly_Review_ALL_LOTS_${year}-${String(month).padStart(2, "0")}.pdf"`);
+      res.setHeader("Content-Length", out.length);
+      res.send(out);
+    } catch (err: any) {
+      console.error("[qc/period-reviews/pdf-all] failed:", err.message);
+      res.status(500).json({ error: err.message || "Combined PDF render failed" });
     }
   });
 

@@ -200,6 +200,7 @@ export default function VeritaQCDailyReviewPage() {
   const [reviewMonth, setReviewMonth] = useState<number>(new Date().getMonth() + 1);
   const [pastReviews, setPastReviews] = useState<PeriodReview[]>([]);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingAllPdf, setDownloadingAllPdf] = useState(false);
   const [filing, setFiling] = useState(false);
   const [reviewNotes, setReviewNotes] = useState("");
 
@@ -290,6 +291,28 @@ export default function VeritaQCDailyReviewPage() {
       toast({ title: err.message || "Download failed", variant: "destructive" });
     } finally {
       setDownloadingPdf(false);
+    }
+  }
+
+  // Download one combined PDF covering every active lot with results this period.
+  async function handleDownloadAllPdf() {
+    if (!activeLabId) return;
+    setDownloadingAllPdf(true);
+    try {
+      const url = `${API_BASE}/api/labs/${activeLabId}/qc/period-reviews/pdf-all?year=${reviewYear}&month=${reviewMonth}`;
+      const res = await fetch(url, { headers: authHeaders() });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: err.error || "Combined PDF generation failed", variant: "destructive" });
+        return;
+      }
+      const blob = await res.blob();
+      saveAs(blob, `VeritaQC_Monthly_Review_ALL_LOTS_${reviewYear}-${String(reviewMonth).padStart(2, "0")}.pdf`);
+      toast({ title: "All-lots PDF downloaded", description: "One combined document for every lot with QC this period." });
+    } catch (err: any) {
+      toast({ title: err.message || "Download failed", variant: "destructive" });
+    } finally {
+      setDownloadingAllPdf(false);
     }
   }
 
@@ -661,6 +684,10 @@ export default function VeritaQCDailyReviewPage() {
             <Button onClick={handleDownloadPdf} disabled={!reviewLotId || downloadingPdf} variant="outline">
               <FileDown className="h-4 w-4 mr-1" />
               {downloadingPdf ? "Generating..." : "Download monthly PDF"}
+            </Button>
+            <Button onClick={handleDownloadAllPdf} disabled={downloadingAllPdf} variant="outline" title="One combined PDF for every active lot with results this period">
+              <FileDown className="h-4 w-4 mr-1" />
+              {downloadingAllPdf ? "Generating..." : "Download all lots"}
             </Button>
             <ConfirmDialog
               title="File monthly attestation?"
