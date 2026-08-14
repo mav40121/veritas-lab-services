@@ -341,7 +341,7 @@ export default function CumsumPage() {
                 <div className="grid sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
                     <Label>Year</Label>
-                    <Input type="number" value={entryYear} onChange={e => setEntryYear(parseInt(e.target.value) || new Date().getFullYear())} />
+                    <Input type="text" inputMode="decimal" value={entryYear} onChange={e => setEntryYear(parseInt(e.target.value) || new Date().getFullYear())} />
                   </div>
                   {!isInstallLot && (
                     <div className="space-y-1.5">

@@ -382,7 +382,7 @@ export default function InventoryKioskPage() {
               </div>
               <div className="mt-3 flex items-center gap-2">
                 <input
-                  type="number" inputMode="numeric" min={0} step={1}
+                  type="text" inputMode="numeric" min={0} step={1}
                   value={pendingVal}
                   onChange={(e) => setPending(prev => ({ ...prev, [item.id]: e.target.value }))}
                   className="h-10 w-28 px-3 border border-slate-300 rounded-md text-base"

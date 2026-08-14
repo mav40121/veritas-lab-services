@@ -587,11 +587,11 @@ export default function VeritaBenchPage() {
                 <div className="space-y-3">
                   <div className="space-y-1">
                     <Label className="text-xs">Productivity goal (productive hr / billable test)</Label>
-                    <Input type="number" step="0.001" value={fcGoal} onChange={e => setFcGoal(e.target.value)} placeholder="0.12" disabled={readOnly} />
+                    <Input type="text" inputMode="decimal" step="0.001" value={fcGoal} onChange={e => setFcGoal(e.target.value)} placeholder="0.12" disabled={readOnly} />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Forecasted annual volume (billable tests)</Label>
-                    <Input type="number" value={fcVolume} onChange={e => setFcVolume(e.target.value)} placeholder="450000" disabled={readOnly} />
+                    <Input type="text" inputMode="decimal" value={fcVolume} onChange={e => setFcVolume(e.target.value)} placeholder="450000" disabled={readOnly} />
                     {fcTrailing > 0 && (
                       <div className="text-xs text-muted-foreground">
                         Trailing 12 months: {fcTrailing.toLocaleString()}
@@ -602,11 +602,11 @@ export default function VeritaBenchPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <Label className="text-xs">Hours per FTE / year</Label>
-                      <Input type="number" value={fcHoursPerFte} onChange={e => setFcHoursPerFte(e.target.value)} placeholder="2080" disabled={readOnly} />
+                      <Input type="text" inputMode="decimal" value={fcHoursPerFte} onChange={e => setFcHoursPerFte(e.target.value)} placeholder="2080" disabled={readOnly} />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">Staffing-model FTE need {fcStaffFromGrid ? "" : "(optional)"}</Label>
-                      <Input type="number" step="0.1" value={fcStaffFte} onChange={e => { setFcStaffFte(e.target.value); setFcStaffFromGrid(false); }} placeholder="28.3" disabled={readOnly} />
+                      <Input type="text" inputMode="decimal" step="0.1" value={fcStaffFte} onChange={e => { setFcStaffFte(e.target.value); setFcStaffFromGrid(false); }} placeholder="28.3" disabled={readOnly} />
                       {fcStaffFromGrid && <div className="text-[10px] text-[#01696F]">from staffing grid (VeritaShift)</div>}
                     </div>
                   </div>
@@ -779,27 +779,27 @@ export default function VeritaBenchPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Billable Tests</Label>
-                <Input type="number" value={fBillable} onChange={e => setFBillable(e.target.value)} placeholder="e.g. 36000" />
+                <Input type="text" inputMode="decimal" value={fBillable} onChange={e => setFBillable(e.target.value)} placeholder="e.g. 36000" />
               </div>
               <div className="space-y-1.5">
                 <Label>Productive Hours</Label>
-                <Input type="number" value={fProdHours} onChange={e => setFProdHours(e.target.value)} placeholder="e.g. 5200" />
+                <Input type="text" inputMode="decimal" value={fProdHours} onChange={e => setFProdHours(e.target.value)} placeholder="e.g. 5200" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Non-Productive Hours</Label>
-                <Input type="number" value={fNonProdHours} onChange={e => setFNonProdHours(e.target.value)} placeholder="e.g. 800" />
+                <Input type="text" inputMode="decimal" value={fNonProdHours} onChange={e => setFNonProdHours(e.target.value)} placeholder="e.g. 800" />
               </div>
               <div className="space-y-1.5">
                 <Label>Overtime Hours</Label>
-                <Input type="number" value={fOTHours} onChange={e => setFOTHours(e.target.value)} placeholder="e.g. 400" />
+                <Input type="text" inputMode="decimal" value={fOTHours} onChange={e => setFOTHours(e.target.value)} placeholder="e.g. 400" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Total FTEs</Label>
-                <Input type="number" value={fFTEs} onChange={e => setFFTEs(e.target.value)} placeholder="e.g. 15" step={0.5} />
+                <Input type="text" inputMode="decimal" value={fFTEs} onChange={e => setFFTEs(e.target.value)} placeholder="e.g. 15" step={0.5} />
               </div>
               <div className="space-y-1.5">
                 <Label>Facility Type</Label>

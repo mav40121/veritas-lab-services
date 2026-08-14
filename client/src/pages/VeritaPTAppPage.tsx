@@ -120,7 +120,7 @@ function PtRemindersPanel({ ptApi }: { ptApi: string }) {
       <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-medium mb-1">Remind within (days before due)</label>
-          <input type="number" min={1} max={60} value={leadDays} onChange={e => { setLeadDays(Number(e.target.value) || 14); setSaved(false); }} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+          <input type="text" inputMode="decimal" min={1} max={60} value={leadDays} onChange={e => { setLeadDays(Number(e.target.value) || 14); setSaved(false); }} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
         </div>
         <div>
           <label className="block text-xs font-medium mb-1">Recipients (comma-separated emails)</label>
@@ -800,7 +800,7 @@ export default function VeritaPTAppPage() {
                 <div className="space-y-1">
                   <Label className="text-xs">Year Enrolled</Label>
                   <Input
-                    type="number"
+                    type="text" inputMode="decimal"
                     value={newYear}
                     onChange={(e) => setNewYear(e.target.value)}
                     className="h-8 text-sm"
@@ -965,7 +965,7 @@ export default function VeritaPTAppPage() {
                 <div className="space-y-1">
                   <Label className="text-xs">Frequency per year (min 2)</Label>
                   <Input
-                    type="number"
+                    type="text" inputMode="decimal"
                     value={newAaaFrequency}
                     onChange={(e) => setNewAaaFrequency(e.target.value)}
                     className="h-8 text-sm"
@@ -1080,7 +1080,7 @@ export default function VeritaPTAppPage() {
               <div>
                 <label className="block text-xs font-medium mb-1">Your result</label>
                 <input
-                  type="number"
+                  type="text" inputMode="decimal"
                   step="any"
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   value={newEventYourResult}
@@ -1090,7 +1090,7 @@ export default function VeritaPTAppPage() {
               <div>
                 <label className="block text-xs font-medium mb-1">Peer mean</label>
                 <input
-                  type="number"
+                  type="text" inputMode="decimal"
                   step="any"
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   value={newEventPeerMean}
@@ -1100,7 +1100,7 @@ export default function VeritaPTAppPage() {
               <div>
                 <label className="block text-xs font-medium mb-1">Peer SD</label>
                 <input
-                  type="number"
+                  type="text" inputMode="decimal"
                   step="any"
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   value={newEventPeerSd}

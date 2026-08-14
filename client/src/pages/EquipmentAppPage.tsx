@@ -109,7 +109,7 @@ function EquipmentRemindersPanel({ apiBase }: { apiBase: string }) {
         <label className="flex items-center gap-2 text-sm shrink-0"><input type="checkbox" checked={enabled} onChange={e => { setEnabled(e.target.checked); setSaved(false); }} /> Enabled</label>
       </div>
       <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div><Label className="text-xs">Remind within (days before due)</Label><Input type="number" min={1} max={90} value={leadDays} onChange={e => { setLeadDays(Number(e.target.value) || 14); setSaved(false); }} /></div>
+        <div><Label className="text-xs">Remind within (days before due)</Label><Input type="text" inputMode="decimal" min={1} max={90} value={leadDays} onChange={e => { setLeadDays(Number(e.target.value) || 14); setSaved(false); }} /></div>
         <div><Label className="text-xs">Recipients (comma-separated emails)</Label><Input value={recipients} onChange={e => { setRecipients(e.target.value); setSaved(false); }} placeholder="Defaults to the lab owner if blank" /></div>
       </div>
       <div className="mt-3 flex items-center gap-3">
@@ -370,7 +370,7 @@ export default function EquipmentAppPage() {
             <div><Label htmlFor="eq-model">Model</Label><Input id="eq-model" value={model} onChange={e => setModel(e.target.value)} /></div>
             <div><Label htmlFor="eq-serial">Serial number</Label><Input id="eq-serial" value={serial} onChange={e => setSerial(e.target.value)} /></div>
             <div><Label htmlFor="eq-loc">Location</Label><Input id="eq-loc" value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Main lab bench 2" /></div>
-            <div><Label htmlFor="eq-int">PM interval (days)</Label><Input id="eq-int" type="number" min={1} value={interval} onChange={e => setInterval_(e.target.value)} placeholder="e.g. 365" /></div>
+            <div><Label htmlFor="eq-int">PM interval (days)</Label><Input id="eq-int" type="text" inputMode="decimal" min={1} value={interval} onChange={e => setInterval_(e.target.value)} placeholder="e.g. 365" /></div>
             <div><Label htmlFor="eq-due">Next due date</Label><Input id="eq-due" type="date" value={nextDue} onChange={e => setNextDue(e.target.value)} /></div>
           </div>
           <div className="flex justify-end gap-2 mt-2">

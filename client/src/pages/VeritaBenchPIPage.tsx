@@ -552,7 +552,7 @@ function PIPlanTab({ readOnly, departments }: { readOnly: boolean; departments: 
             </div>
             <div>
               <Label className="text-xs">Effective year</Label>
-              <Input type="number" value={planForm.effective_year} disabled={readOnly} onChange={(e) => setPlanForm({ ...planForm, effective_year: e.target.value })} />
+              <Input type="text" inputMode="decimal" value={planForm.effective_year} disabled={readOnly} onChange={(e) => setPlanForm({ ...planForm, effective_year: e.target.value })} />
             </div>
           </div>
           <PlanTextarea label="Program scope" value={planForm.program_scope} disabled={readOnly} onChange={(v) => setPlanForm({ ...planForm, program_scope: v })} placeholder="Which departments, processes, and populations the PI program covers." />
@@ -1466,7 +1466,7 @@ export default function VeritaBenchPIPage() {
                           </td>
                           <td className="px-3 py-2">
                             <Input
-                              type="number"
+                              type="text" inputMode="decimal"
                               step="any"
                               className="text-right font-mono h-8"
                               value={vals.value}
@@ -1477,7 +1477,7 @@ export default function VeritaBenchPIPage() {
                           </td>
                           <td className="px-3 py-2">
                             <Input
-                              type="number"
+                              type="text" inputMode="decimal"
                               className="text-right font-mono h-8"
                               value={vals.volume}
                               onChange={e => setEntryValues(prev => ({ ...prev, [m.id]: { ...prev[m.id], volume: e.target.value } }))}
@@ -1575,21 +1575,21 @@ export default function VeritaBenchPIPage() {
                   <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: "#437A22" }} />
                   Green Threshold
                 </Label>
-                <Input type="number" step="any" value={metricForm.benchmark_green} onChange={e => setMetricForm(f => ({ ...f, benchmark_green: e.target.value }))} placeholder="-" />
+                <Input type="text" inputMode="decimal" step="any" value={metricForm.benchmark_green} onChange={e => setMetricForm(f => ({ ...f, benchmark_green: e.target.value }))} placeholder="-" />
               </div>
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1">
                   <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: "#964219" }} />
                   Yellow Threshold
                 </Label>
-                <Input type="number" step="any" value={metricForm.benchmark_yellow} onChange={e => setMetricForm(f => ({ ...f, benchmark_yellow: e.target.value }))} placeholder="-" />
+                <Input type="text" inputMode="decimal" step="any" value={metricForm.benchmark_yellow} onChange={e => setMetricForm(f => ({ ...f, benchmark_yellow: e.target.value }))} placeholder="-" />
               </div>
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1">
                   <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: "#A12C7B" }} />
                   Red Threshold
                 </Label>
-                <Input type="number" step="any" value={metricForm.benchmark_red} onChange={e => setMetricForm(f => ({ ...f, benchmark_red: e.target.value }))} placeholder="-" />
+                <Input type="text" inputMode="decimal" step="any" value={metricForm.benchmark_red} onChange={e => setMetricForm(f => ({ ...f, benchmark_red: e.target.value }))} placeholder="-" />
               </div>
             </div>
 
@@ -1632,7 +1632,7 @@ export default function VeritaBenchPIPage() {
                   </div>
                   <div className="space-y-1.5">
                     <Label>Goal threshold (minutes)</Label>
-                    <Input type="number" step="any" value={metricForm.tat_threshold_minutes} onChange={e => setMetricForm(f => ({ ...f, tat_threshold_minutes: e.target.value }))} placeholder="e.g. 60" />
+                    <Input type="text" inputMode="decimal" step="any" value={metricForm.tat_threshold_minutes} onChange={e => setMetricForm(f => ({ ...f, tat_threshold_minutes: e.target.value }))} placeholder="e.g. 60" />
                   </div>
                 </div>
               )}

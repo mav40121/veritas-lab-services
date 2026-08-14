@@ -257,7 +257,7 @@ function StudyDialog({
     <div className="space-y-1.5">
       <Label className="text-xs">{label}</Label>
       <Input
-        type="number"
+        type="text" inputMode="decimal"
         step={step}
         value={(form[k] as any) ?? 0}
         onChange={(e) => setField(k, e.target.value === "" ? 0 : Number(e.target.value))}
@@ -324,7 +324,7 @@ function StudyDialog({
               <div className="space-y-1.5 col-span-2">
                 <Label>Annual volume (tests/year)</Label>
                 <Input
-                  type="number"
+                  type="text" inputMode="decimal"
                   step="1"
                   value={form.annual_volume ?? 0}
                   onChange={(e) => setField("annual_volume", e.target.value === "" ? 0 : Number(e.target.value))}

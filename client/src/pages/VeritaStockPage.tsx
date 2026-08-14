@@ -11,6 +11,7 @@ import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -510,7 +511,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
               </div>
               <div className="space-y-1.5">
                 <Label>Units per Order Unit</Label>
-                <Input type="number" min={1} value={form.units_per_order_unit ?? 1} onChange={(e) => setForm({ ...form, units_per_order_unit: parseInt(e.target.value) || 1 })} />
+                <Input type="text" inputMode="decimal" min={1} value={form.units_per_order_unit ?? 1} onChange={(e) => setForm({ ...form, units_per_order_unit: parseInt(e.target.value) || 1 })} />
               </div>
             </div>
             {/* 2026-06-09: Count unit + pack size. What you physically count
@@ -528,7 +529,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
               <div className="space-y-1.5">
                 <Label>Pack Size ({form.usage_unit ?? "each"}s per {form.count_unit ?? form.order_unit ?? "each"})</Label>
                 <Input
-                  type="number"
+                  type="text" inputMode="decimal"
                   min={1}
                   value={form.units_per_count_unit ?? 1}
                   onChange={(e) => setForm({ ...form, units_per_count_unit: parseInt(e.target.value) || 1 })}
@@ -548,7 +549,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
                   <Input
-                    type="number"
+                    type="text" inputMode="decimal"
                     min={0}
                     step="0.01"
                     className="pl-6"
@@ -577,19 +578,19 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Burn Rate ({usageUnit}s/day)</Label>
-                <Input type="number" min={0} step={0.5} value={form.burn_rate ?? 0} onChange={(e) => setForm({ ...form, burn_rate: parseFloat(e.target.value) || 0 })} />
+                <DecimalInput value={form.burn_rate ?? 0} onChangeNumber={(n) => setForm({ ...form, burn_rate: n })} fallback={0} min={0} />
               </div>
               <div className="space-y-1.5">
                 <Label>Lead Time (days)</Label>
-                <Input type="number" min={0} value={form.lead_time_days ?? 5} onChange={(e) => setForm({ ...form, lead_time_days: parseInt(e.target.value) || 0 })} />
+                <Input type="text" inputMode="decimal" min={0} value={form.lead_time_days ?? 5} onChange={(e) => setForm({ ...form, lead_time_days: parseInt(e.target.value) || 0 })} />
               </div>
               <div className="space-y-1.5">
                 <Label>Safety Stock (days)</Label>
-                <Input type="number" min={0} value={form.safety_stock_days ?? 3} onChange={(e) => setForm({ ...form, safety_stock_days: parseInt(e.target.value) || 0 })} />
+                <Input type="text" inputMode="decimal" min={0} value={form.safety_stock_days ?? 3} onChange={(e) => setForm({ ...form, safety_stock_days: parseInt(e.target.value) || 0 })} />
               </div>
               <div className="space-y-1.5">
                 <Label>Desired Days of Stock</Label>
-                <Input type="number" min={0} value={form.desired_days_of_stock ?? 30} onChange={(e) => setForm({ ...form, desired_days_of_stock: parseInt(e.target.value) || 0 })} />
+                <Input type="text" inputMode="decimal" min={0} value={form.desired_days_of_stock ?? 30} onChange={(e) => setForm({ ...form, desired_days_of_stock: parseInt(e.target.value) || 0 })} />
               </div>
             </div>
             {/* Calculated preview */}
@@ -695,7 +696,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Quantity on Hand ({usageUnit}s)</Label>
-                <Input type="number" min={0} value={form.quantity_on_hand ?? 0} onChange={(e) => setForm({ ...form, quantity_on_hand: parseInt(e.target.value) || 0 })} />
+                <Input type="text" inputMode="decimal" min={0} value={form.quantity_on_hand ?? 0} onChange={(e) => setForm({ ...form, quantity_on_hand: parseInt(e.target.value) || 0 })} />
               </div>
               <div className="space-y-1.5">
                 <Label>Expiration Date</Label>
@@ -708,7 +709,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
             <div className="grid grid-cols-3 gap-3 mt-3">
               <div className="space-y-1.5">
                 <Label>On Order ({usageUnit}s)</Label>
-                <Input type="number" min={0} value={form.on_order_qty ?? 0} onChange={(e) => {
+                <Input type="text" inputMode="decimal" min={0} value={form.on_order_qty ?? 0} onChange={(e) => {
                   // Entering a quantity auto-stamps the order-placed date (today) and
                   // an expected arrival of placed + programmed lead time, both still
                   // editable. This is what lets the lab verify lead times later: the
@@ -2868,12 +2869,11 @@ export default function VeritaStockInventoryPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Quantity received ({receiveTarget.usage_unit}s)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={receiveTarget.on_order_qty || 0}
+                <DecimalInput
                   value={receiveQty}
-                  onChange={(e) => setReceiveQty(parseFloat(e.target.value) || 0)}
+                  onChangeNumber={setReceiveQty}
+                  fallback={0}
+                  min={0}
                   data-testid="receive-qty-input"
                 />
                 <p className="text-xs text-muted-foreground">
@@ -2964,12 +2964,11 @@ export default function VeritaStockInventoryPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Quantity ({writeOffTarget.usage_unit}s)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={writeOffTarget.quantity_on_hand || 0}
+                  <DecimalInput
                     value={writeOffQty}
-                    onChange={(e) => setWriteOffQty(parseFloat(e.target.value) || 0)}
+                    onChangeNumber={setWriteOffQty}
+                    fallback={0}
+                    min={0}
                     data-testid="writeoff-qty-input"
                   />
                 </div>

@@ -6,6 +6,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation, useSearch, useRoute, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -3072,16 +3073,16 @@ return (
                       </div>
                       <div className="space-y-1.5"><Label>Analyte Name</Label><Input placeholder="e.g. Troponin I" value={sensAnalyteName} onChange={e => setSensAnalyteName(e.target.value)} /></div>
                       <div className="space-y-1.5"><Label>Units</Label><Input placeholder="e.g. ng/mL" value={sensUnits} onChange={e => setSensUnits(e.target.value)} /></div>
-                      <div className="space-y-1.5"><Label>LoQ CV Threshold (%)</Label><Input type="number" step="any" min={1} max={50} value={sensCvThreshold} onChange={e => setSensCvThreshold(parseFloat(e.target.value) || 20)} /></div>
-                      <div className="space-y-1.5"><Label>LoQ |Bias| Threshold (%)</Label><Input type="number" step="any" min={1} max={50} value={sensBiasThreshold} onChange={e => setSensBiasThreshold(parseFloat(e.target.value) || 25)} /></div>
+                      <div className="space-y-1.5"><Label>LoQ CV Threshold (%)</Label><DecimalInput value={sensCvThreshold} onChangeNumber={setSensCvThreshold} fallback={20} /></div>
+                      <div className="space-y-1.5"><Label>LoQ |Bias| Threshold (%)</Label><DecimalInput value={sensBiasThreshold} onChangeNumber={setSensBiasThreshold} fallback={25} /></div>
                     </div>
                     {sensMode === "verification" && (
                       <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/50 p-3 space-y-3">
                         <p className="text-sm font-medium text-amber-900 dark:text-amber-200">Manufacturer's Published Claims</p>
                         <div className="grid sm:grid-cols-3 gap-3">
-                          <div className="space-y-1.5"><Label className="text-xs">Claimed LoB</Label><Input type="number" step="any" placeholder="e.g. 0.010" value={sensMfgLob} onChange={e => setSensMfgLob(e.target.value)} /></div>
-                          <div className="space-y-1.5"><Label className="text-xs">Claimed LoD</Label><Input type="number" step="any" placeholder="e.g. 0.020" value={sensMfgLod} onChange={e => setSensMfgLod(e.target.value)} /></div>
-                          <div className="space-y-1.5"><Label className="text-xs">Claimed LoQ</Label><Input type="number" step="any" placeholder="e.g. 0.040" value={sensMfgLoq} onChange={e => setSensMfgLoq(e.target.value)} /></div>
+                          <div className="space-y-1.5"><Label className="text-xs">Claimed LoB</Label><Input type="text" inputMode="decimal" step="any" placeholder="e.g. 0.010" value={sensMfgLob} onChange={e => setSensMfgLob(e.target.value)} /></div>
+                          <div className="space-y-1.5"><Label className="text-xs">Claimed LoD</Label><Input type="text" inputMode="decimal" step="any" placeholder="e.g. 0.020" value={sensMfgLod} onChange={e => setSensMfgLod(e.target.value)} /></div>
+                          <div className="space-y-1.5"><Label className="text-xs">Claimed LoQ</Label><Input type="text" inputMode="decimal" step="any" placeholder="e.g. 0.040" value={sensMfgLoq} onChange={e => setSensMfgLoq(e.target.value)} /></div>
                         </div>
                       </div>
                     )}
@@ -3169,7 +3170,7 @@ return (
                         {customMode && (
                           <div className="space-y-2">
                             <div className="flex items-center gap-2">
-                              <Input type="number" step="0.005" min="0.01" max="0.5" value={customClia} onChange={e => setCustomClia(parseFloat(e.target.value) || 0.15)} className="max-w-[120px]" data-testid="custom-tea-percent" />
+                              <DecimalInput value={customClia} onChangeNumber={setCustomClia} fallback={0.15} className="max-w-[120px]" data-testid="custom-tea-percent" />
                               <span className="text-sm text-muted-foreground">= {(customClia * 100).toFixed(1)}% allowable error</span>
                             </div>
                             {/* Dual criterion: optional absolute floor + unit. At low concentrations
@@ -3178,7 +3179,7 @@ return (
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-sm text-muted-foreground">or &plusmn;</span>
                               <Input
-                                type="number" step="any" min="0"
+                                type="text" inputMode="decimal" step="any" min="0"
                                 placeholder="absolute"
                                 value={customAbsFloor ?? ""}
                                 onChange={e => { const v = e.target.value.trim(); setCustomAbsFloor(v === "" ? null : (Number.isFinite(parseFloat(v)) ? parseFloat(v) : null)); }}
@@ -3269,7 +3270,7 @@ return (
                         </Select>
                       </div>
                       <div className="space-y-1.5"><Label>Number of Specimens</Label>
-                        <Input type="number" min={3} max={100} value={lotNumSpecimens} onChange={e => {
+                        <Input type="text" inputMode="decimal" min={3} max={100} value={lotNumSpecimens} onChange={e => {
                           const n = Math.max(3, Math.min(100, parseInt(e.target.value) || 20));
                           setLotNumSpecimens(n);
                           setLotData(prev => {
@@ -3298,8 +3299,8 @@ return (
                             {lotData.map((dp, idx) => (
                               <tr key={idx} className="border-b border-border/50">
                                 <td className="py-1.5 pr-4"><Input value={dp.specimenId} onChange={e => { const d = [...lotData]; d[idx] = { ...d[idx], specimenId: e.target.value }; setLotData(d); }} className="h-8 text-sm w-24" /></td>
-                                <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="-" value={dp.currentLot ?? ""} onChange={e => { const d = [...lotData]; d[idx] = { ...d[idx], currentLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotData(d); }} className="h-8 text-sm w-28" /></td>
-                                <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="-" value={dp.newLot ?? ""} onChange={e => { const d = [...lotData]; d[idx] = { ...d[idx], newLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotData(d); }} className="h-8 text-sm w-28" /></td>
+                                <td className="py-1.5 pr-4"><Input type="text" inputMode="decimal" step="any" placeholder="-" value={dp.currentLot ?? ""} onChange={e => { const d = [...lotData]; d[idx] = { ...d[idx], currentLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotData(d); }} className="h-8 text-sm w-28" /></td>
+                                <td className="py-1.5 pr-4"><Input type="text" inputMode="decimal" step="any" placeholder="-" value={dp.newLot ?? ""} onChange={e => { const d = [...lotData]; d[idx] = { ...d[idx], newLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotData(d); }} className="h-8 text-sm w-28" /></td>
                               </tr>
                             ))}
                           </tbody>
@@ -3320,8 +3321,8 @@ return (
                               {lotDataAbnormal.map((dp, idx) => (
                                 <tr key={idx} className="border-b border-border/50">
                                   <td className="py-1.5 pr-4"><Input value={dp.specimenId} onChange={e => { const d = [...lotDataAbnormal]; d[idx] = { ...d[idx], specimenId: e.target.value }; setLotDataAbnormal(d); }} className="h-8 text-sm w-24" /></td>
-                                  <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="-" value={dp.currentLot ?? ""} onChange={e => { const d = [...lotDataAbnormal]; d[idx] = { ...d[idx], currentLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotDataAbnormal(d); }} className="h-8 text-sm w-28" /></td>
-                                  <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="-" value={dp.newLot ?? ""} onChange={e => { const d = [...lotDataAbnormal]; d[idx] = { ...d[idx], newLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotDataAbnormal(d); }} className="h-8 text-sm w-28" /></td>
+                                  <td className="py-1.5 pr-4"><Input type="text" inputMode="decimal" step="any" placeholder="-" value={dp.currentLot ?? ""} onChange={e => { const d = [...lotDataAbnormal]; d[idx] = { ...d[idx], currentLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotDataAbnormal(d); }} className="h-8 text-sm w-28" /></td>
+                                  <td className="py-1.5 pr-4"><Input type="text" inputMode="decimal" step="any" placeholder="-" value={dp.newLot ?? ""} onChange={e => { const d = [...lotDataAbnormal]; d[idx] = { ...d[idx], newLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotDataAbnormal(d); }} className="h-8 text-sm w-28" /></td>
                                 </tr>
                               ))}
                             </tbody>
@@ -3344,19 +3345,19 @@ return (
                         <div className="space-y-1.5"><Label>Reagent Expiration</Label><Input type="date" value={ptReagentExp} onChange={e => setPtReagentExp(e.target.value)} /></div>
                       </div>
                       <div className="grid sm:grid-cols-3 gap-4">
-                        <div className="space-y-1.5"><Label>ISI Value</Label><Input type="number" step="0.01" value={ptISI} onChange={e => setPtISI(parseFloat(e.target.value) || 0.97)} /></div>
-                        <div className="space-y-1.5"><Label>PT RI Low (sec)</Label><Input type="number" step="0.1" value={ptRILow} onChange={e => setPtRILow(parseFloat(e.target.value) || 10)} /></div>
-                        <div className="space-y-1.5"><Label>PT RI High (sec)</Label><Input type="number" step="0.1" value={ptRIHigh} onChange={e => setPtRIHigh(parseFloat(e.target.value) || 14)} /></div>
+                        <div className="space-y-1.5"><Label>ISI Value</Label><DecimalInput value={ptISI} onChangeNumber={setPtISI} fallback={0.97} /></div>
+                        <div className="space-y-1.5"><Label>PT RI Low (sec)</Label><DecimalInput value={ptRILow} onChangeNumber={setPtRILow} fallback={10} /></div>
+                        <div className="space-y-1.5"><Label>PT RI High (sec)</Label><DecimalInput value={ptRIHigh} onChangeNumber={setPtRIHigh} fallback={14} /></div>
                       </div>
                       <div className="grid sm:grid-cols-2 gap-4">
-                        <div className="space-y-1.5"><Label>INR RI Low</Label><Input type="number" step="0.1" value={ptINRRILow} onChange={e => setPtINRRILow(parseFloat(e.target.value) || 0.9)} /></div>
-                        <div className="space-y-1.5"><Label>INR RI High</Label><Input type="number" step="0.1" value={ptINRRIHigh} onChange={e => setPtINRRIHigh(parseFloat(e.target.value) || 1.2)} /></div>
+                        <div className="space-y-1.5"><Label>INR RI Low</Label><DecimalInput value={ptINRRILow} onChangeNumber={setPtINRRILow} fallback={0.9} /></div>
+                        <div className="space-y-1.5"><Label>INR RI High</Label><DecimalInput value={ptINRRIHigh} onChangeNumber={setPtINRRIHigh} fallback={1.2} /></div>
                       </div>
                       <div className="space-y-2">
                         <div className="text-sm font-medium">Normal Patient PT Results (seconds)</div>
                         <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
                           {ptModule1Data.map((v, i) => (
-                            <Input key={i} type="number" step="any" placeholder="-" value={v ?? ""}
+                            <Input key={i} type="text" inputMode="decimal" step="any" placeholder="-" value={v ?? ""}
                               onChange={e => { const d = [...ptModule1Data]; d[i] = e.target.value === "" ? null as any : parseFloat(e.target.value); setPtModule1Data(d); }}
                               className="h-8 text-xs text-center" />
                           ))}
@@ -3376,19 +3377,19 @@ return (
                             <div className="space-y-1.5"><Label>Reagent Expiration</Label><Input type="date" value={blk.reagentExp} onChange={e => patchPtInstrument(ai, { reagentExp: e.target.value })} /></div>
                           </div>
                           <div className="grid sm:grid-cols-3 gap-4">
-                            <div className="space-y-1.5"><Label>ISI Value</Label><Input type="number" step="0.01" value={blk.isi} onChange={e => patchPtInstrument(ai, { isi: parseFloat(e.target.value) || 0.97 })} /></div>
-                            <div className="space-y-1.5"><Label>PT RI Low (sec)</Label><Input type="number" step="0.1" value={blk.ptRILow} onChange={e => patchPtInstrument(ai, { ptRILow: parseFloat(e.target.value) || 10 })} /></div>
-                            <div className="space-y-1.5"><Label>PT RI High (sec)</Label><Input type="number" step="0.1" value={blk.ptRIHigh} onChange={e => patchPtInstrument(ai, { ptRIHigh: parseFloat(e.target.value) || 14 })} /></div>
+                            <div className="space-y-1.5"><Label>ISI Value</Label><Input type="text" inputMode="decimal" step="0.01" value={blk.isi} onChange={e => patchPtInstrument(ai, { isi: parseFloat(e.target.value) || 0.97 })} /></div>
+                            <div className="space-y-1.5"><Label>PT RI Low (sec)</Label><Input type="text" inputMode="decimal" step="0.1" value={blk.ptRILow} onChange={e => patchPtInstrument(ai, { ptRILow: parseFloat(e.target.value) || 10 })} /></div>
+                            <div className="space-y-1.5"><Label>PT RI High (sec)</Label><Input type="text" inputMode="decimal" step="0.1" value={blk.ptRIHigh} onChange={e => patchPtInstrument(ai, { ptRIHigh: parseFloat(e.target.value) || 14 })} /></div>
                           </div>
                           <div className="grid sm:grid-cols-2 gap-4">
-                            <div className="space-y-1.5"><Label>INR RI Low</Label><Input type="number" step="0.1" value={blk.inrRILow} onChange={e => patchPtInstrument(ai, { inrRILow: parseFloat(e.target.value) || 0.9 })} /></div>
-                            <div className="space-y-1.5"><Label>INR RI High</Label><Input type="number" step="0.1" value={blk.inrRIHigh} onChange={e => patchPtInstrument(ai, { inrRIHigh: parseFloat(e.target.value) || 1.2 })} /></div>
+                            <div className="space-y-1.5"><Label>INR RI Low</Label><Input type="text" inputMode="decimal" step="0.1" value={blk.inrRILow} onChange={e => patchPtInstrument(ai, { inrRILow: parseFloat(e.target.value) || 0.9 })} /></div>
+                            <div className="space-y-1.5"><Label>INR RI High</Label><Input type="text" inputMode="decimal" step="0.1" value={blk.inrRIHigh} onChange={e => patchPtInstrument(ai, { inrRIHigh: parseFloat(e.target.value) || 1.2 })} /></div>
                           </div>
                           <div className="space-y-2">
                             <div className="text-sm font-medium">Normal Patient PT Results (seconds)</div>
                             <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
                               {blk.ptValues.map((v, ci) => (
-                                <Input key={ci} type="number" step="any" placeholder="-" value={v ?? ""} onChange={e => setPtInstrumentValue(ai, ci, e.target.value === "" ? null : parseFloat(e.target.value))} className="h-8 text-xs text-center" />
+                                <Input key={ci} type="text" inputMode="decimal" step="any" placeholder="-" value={v ?? ""} onChange={e => setPtInstrumentValue(ai, ci, e.target.value === "" ? null : parseFloat(e.target.value))} className="h-8 text-xs text-center" />
                               ))}
                             </div>
                             {blk.ptValues.filter(v => v !== null && !isNaN(v as number)).length < 20 && <p className="text-xs text-amber-500">Minimum 20 normal specimens recommended</p>}
@@ -3406,7 +3407,7 @@ return (
                       <div className="grid sm:grid-cols-3 gap-4">
                         <div className="space-y-1.5"><Label>Instrument 1 (X)</Label><Input value={ptInstrumentName} onChange={e => setPtInstrumentName(e.target.value)} /></div>
                         <div className="space-y-1.5"><Label>Instrument 2 (Y)</Label><Input value={ptInstrument2Name} onChange={e => setPtInstrument2Name(e.target.value)} /></div>
-                        <div className="space-y-1.5"><Label>TEa %</Label><Input type="number" step="1" value={(ptModule2TEa * 100)} onChange={e => setPtModule2TEa((parseFloat(e.target.value) || 20) / 100)} /><span className="text-xs text-muted-foreground">Default: 20% for PT</span></div>
+                        <div className="space-y-1.5"><Label>TEa %</Label><Input type="text" inputMode="decimal" step="1" value={(ptModule2TEa * 100)} onChange={e => setPtModule2TEa((parseFloat(e.target.value) || 20) / 100)} /><span className="text-xs text-muted-foreground">Default: 20% for PT</span></div>
                       </div>
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
@@ -3419,8 +3420,8 @@ return (
                             {ptModule2Data.map((dp, idx) => (
                               <tr key={idx} className="border-b border-border/50">
                                 <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">{dp.id}</span></td>
-                                <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="-" value={dp.x ?? ""} onChange={e => { const d = [...ptModule2Data]; d[idx] = { ...d[idx], x: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule2Data(d); }} className="h-8 text-sm w-28" /></td>
-                                <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="-" value={dp.y ?? ""} onChange={e => { const d = [...ptModule2Data]; d[idx] = { ...d[idx], y: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule2Data(d); }} className="h-8 text-sm w-28" /></td>
+                                <td className="py-1.5 pr-4"><Input type="text" inputMode="decimal" step="any" placeholder="-" value={dp.x ?? ""} onChange={e => { const d = [...ptModule2Data]; d[idx] = { ...d[idx], x: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule2Data(d); }} className="h-8 text-sm w-28" /></td>
+                                <td className="py-1.5 pr-4"><Input type="text" inputMode="decimal" step="any" placeholder="-" value={dp.y ?? ""} onChange={e => { const d = [...ptModule2Data]; d[idx] = { ...d[idx], y: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule2Data(d); }} className="h-8 text-sm w-28" /></td>
                               </tr>
                             ))}
                           </tbody>
@@ -3443,7 +3444,7 @@ return (
                         <div className="grid sm:grid-cols-3 gap-4">
                           <div className="space-y-1.5"><Label>Old Lot #</Label><Input value={ptOldLotNum} onChange={e => setPtOldLotNum(e.target.value)} /></div>
                           <div className="space-y-1.5"><Label>Old Lot Expiration</Label><Input type="date" value={ptOldLotExp} onChange={e => setPtOldLotExp(e.target.value)} /></div>
-                          <div className="space-y-1.5"><Label>TEa %</Label><Input type="number" step="1" value={(ptModule3TEa * 100)} onChange={e => setPtModule3TEa((parseFloat(e.target.value) || 20) / 100)} /></div>
+                          <div className="space-y-1.5"><Label>TEa %</Label><Input type="text" inputMode="decimal" step="1" value={(ptModule3TEa * 100)} onChange={e => setPtModule3TEa((parseFloat(e.target.value) || 20) / 100)} /></div>
                         </div>
                         <p className="text-xs text-muted-foreground">Run old lot first, then new lot on same specimens sequentially.</p>
                         <div className="overflow-x-auto">
@@ -3457,8 +3458,8 @@ return (
                               {ptModule3Data.map((dp, idx) => (
                                 <tr key={idx} className="border-b border-border/50">
                                   <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">{dp.id}</span></td>
-                                  <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="-" value={dp.x ?? ""} onChange={e => { const d = [...ptModule3Data]; d[idx] = { ...d[idx], x: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule3Data(d); }} className="h-8 text-sm w-28" /></td>
-                                  <td className="py-1.5 pr-4"><Input type="number" step="any" placeholder="-" value={dp.y ?? ""} onChange={e => { const d = [...ptModule3Data]; d[idx] = { ...d[idx], y: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule3Data(d); }} className="h-8 text-sm w-28" /></td>
+                                  <td className="py-1.5 pr-4"><Input type="text" inputMode="decimal" step="any" placeholder="-" value={dp.x ?? ""} onChange={e => { const d = [...ptModule3Data]; d[idx] = { ...d[idx], x: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule3Data(d); }} className="h-8 text-sm w-28" /></td>
+                                  <td className="py-1.5 pr-4"><Input type="text" inputMode="decimal" step="any" placeholder="-" value={dp.y ?? ""} onChange={e => { const d = [...ptModule3Data]; d[idx] = { ...d[idx], y: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule3Data(d); }} className="h-8 text-sm w-28" /></td>
                                 </tr>
                               ))}
                             </tbody>
@@ -3547,7 +3548,7 @@ return (
                       <div className="grid sm:grid-cols-3 gap-4">
                         <div className="space-y-1.5"><Label>Date Range Start</Label><Input type="date" value={qcDateStart} onChange={e => setQcDateStart(e.target.value)} /></div>
                         <div className="space-y-1.5"><Label>Date Range End</Label><Input type="date" value={qcDateEnd} onChange={e => setQcDateEnd(e.target.value)} /></div>
-                        <div className="space-y-1.5"><Label>Runs per Level</Label><Input type="number" min={5} max={30} value={qcNumRuns} onChange={e => setQcNumRuns(Math.max(5, Math.min(30, parseInt(e.target.value) || 15)))} /></div>
+                        <div className="space-y-1.5"><Label>Runs per Level</Label><Input type="text" inputMode="decimal" min={5} max={30} value={qcNumRuns} onChange={e => setQcNumRuns(Math.max(5, Math.min(30, parseInt(e.target.value) || 15)))} /></div>
                       </div>
                       {/* Opt-in sections per the lot-change family redesign:
                           crossover bias check (CLSI C24-Ed4 accelerated path)
@@ -3610,7 +3611,7 @@ return (
                                 <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Vendor (package insert)</div>
                                 <Label className="text-xs">Mean:</Label>
                                 <Input
-                                  type="number" step="any" placeholder="-"
+                                  type="text" inputMode="decimal" step="any" placeholder="-"
                                   value={vendor?.mean ?? ""}
                                   onChange={e => setQcVendorValues({
                                     ...qcVendorValues,
@@ -3623,7 +3624,7 @@ return (
                                 />
                                 <Label className="text-xs">SD:</Label>
                                 <Input
-                                  type="number" step="any" placeholder="-"
+                                  type="text" inputMode="decimal" step="any" placeholder="-"
                                   value={vendor?.sd ?? ""}
                                   onChange={e => setQcVendorValues({
                                     ...qcVendorValues,
@@ -3650,7 +3651,7 @@ return (
                                     <div className="text-[10px] text-muted-foreground uppercase tracking-wide">New lot</div>
                                     <div className="grid grid-cols-5 sm:grid-cols-10 gap-1">
                                       {Array.from({ length: qcNumRuns }).map((_, ri) => (
-                                        <Input key={ri} type="number" step="any" placeholder="-"
+                                        <Input key={ri} type="text" inputMode="decimal" step="any" placeholder="-"
                                           value={!isNaN(runs[ri]) ? runs[ri] : ""}
                                           onChange={e => {
                                             const updated = [...(qcRunData[key] || Array(qcNumRuns).fill(NaN))];
@@ -3666,7 +3667,7 @@ return (
                                       <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Prior lot (crossover)</div>
                                       <div className="grid grid-cols-5 sm:grid-cols-10 gap-1">
                                         {Array.from({ length: qcNumRuns }).map((_, ri) => (
-                                          <Input key={ri} type="number" step="any" placeholder="-"
+                                          <Input key={ri} type="text" inputMode="decimal" step="any" placeholder="-"
                                             value={!isNaN(priorRuns[ri]) ? priorRuns[ri] : ""}
                                             onChange={e => {
                                               const updated = [...(qcPriorLotRuns[key] || Array(qcNumRuns).fill(NaN))];
@@ -3708,8 +3709,8 @@ return (
                     <CardContent className="space-y-4">
                       <div className="grid sm:grid-cols-3 gap-4">
                         <div className="space-y-1.5"><Label>Instrument</Label><Input value={maInstrument} onChange={e => setMaInstrument(e.target.value)} /></div>
-                        <div className="space-y-1.5"><Label>ISI (New Lot)</Label><Input type="number" step="0.01" value={maISI} onChange={e => setMaISI(parseFloat(e.target.value) || 0.97)} /></div>
-                        <div className="space-y-1.5"><Label>Normal Patient Mean PT (sec)</Label><Input type="number" step="0.1" value={maNormalMeanPT} onChange={e => setMaNormalMeanPT(parseFloat(e.target.value) || 12)} /></div>
+                        <div className="space-y-1.5"><Label>ISI (New Lot)</Label><DecimalInput value={maISI} onChangeNumber={setMaISI} fallback={0.97} /></div>
+                        <div className="space-y-1.5"><Label>Normal Patient Mean PT (sec)</Label><DecimalInput value={maNormalMeanPT} onChangeNumber={setMaNormalMeanPT} fallback={12} /></div>
                       </div>
                       <div className="grid sm:grid-cols-3 gap-4">
                         <div className="space-y-1.5"><Label>New PT Lot #</Label><Input value={maNewLotPT} onChange={e => setMaNewLotPT(e.target.value)} /></div>
@@ -3731,9 +3732,9 @@ return (
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="space-y-1.5"><Label>PT TEa %</Label><Input type="number" step="1" value={maTeaPT * 100} onChange={e => setMaTeaPT((parseFloat(e.target.value) || 20) / 100)} /></div>
-                        <div className="space-y-1.5"><Label>APTT TEa %</Label><Input type="number" step="1" value={maTeaAPTT * 100} onChange={e => setMaTeaAPTT((parseFloat(e.target.value) || 15) / 100)} /></div>
-                        <div className="space-y-1.5"><Label>Fib TEa %</Label><Input type="number" step="1" value={maTeaFib * 100} onChange={e => setMaTeaFib((parseFloat(e.target.value) || 20) / 100)} /></div>
+                        <div className="space-y-1.5"><Label>PT TEa %</Label><Input type="text" inputMode="decimal" step="1" value={maTeaPT * 100} onChange={e => setMaTeaPT((parseFloat(e.target.value) || 20) / 100)} /></div>
+                        <div className="space-y-1.5"><Label>APTT TEa %</Label><Input type="text" inputMode="decimal" step="1" value={maTeaAPTT * 100} onChange={e => setMaTeaAPTT((parseFloat(e.target.value) || 15) / 100)} /></div>
+                        <div className="space-y-1.5"><Label>Fib TEa %</Label><Input type="text" inputMode="decimal" step="1" value={maTeaFib * 100} onChange={e => setMaTeaFib((parseFloat(e.target.value) || 20) / 100)} /></div>
                       </div>
                     </CardContent>
                   </Card>
@@ -3803,10 +3804,10 @@ return (
                     <div className="grid sm:grid-cols-2 gap-4">
                       <div className="space-y-1.5"><Label>Analyte Name</Label><Input placeholder="e.g. Sodium" value={refAnalyte} onChange={e => setRefAnalyte(e.target.value)} /></div>
                       <div className="space-y-1.5"><Label>Units</Label><Input placeholder="e.g. mmol/L" value={refUnits} onChange={e => setRefUnits(e.target.value)} /></div>
-                      <div className="space-y-1.5"><Label>Reference Range Low *</Label><Input type="number" step="any" placeholder="e.g. 135" value={refLow} onChange={e => setRefLow(e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
-                      <div className="space-y-1.5"><Label>Reference Range High *</Label><Input type="number" step="any" placeholder="e.g. 145" value={refHigh} onChange={e => setRefHigh(e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
+                      <div className="space-y-1.5"><Label>Reference Range Low *</Label><Input type="text" inputMode="decimal" step="any" placeholder="e.g. 135" value={refLow} onChange={e => setRefLow(e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
+                      <div className="space-y-1.5"><Label>Reference Range High *</Label><Input type="text" inputMode="decimal" step="any" placeholder="e.g. 145" value={refHigh} onChange={e => setRefHigh(e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
                       <div className="space-y-1.5"><Label>Number of Specimens</Label>
-                        <Input type="number" min={20} max={200} value={refNumSpecimens} onChange={e => {
+                        <Input type="text" inputMode="decimal" min={20} max={200} value={refNumSpecimens} onChange={e => {
                           const n = Math.max(20, Math.min(200, parseInt(e.target.value) || 20));
                           setRefNumSpecimens(n);
                           setRefData(prev => {
@@ -3910,7 +3911,7 @@ return (
                                   </td>
                                   <td className="py-1.5 pr-4">
                                     <Input
-                                      type="number"
+                                      type="text" inputMode="decimal"
                                       step="any"
                                       placeholder="-"
                                       value={dp.value ?? ""}
@@ -4042,7 +4043,7 @@ return (
                               </div>
                               <div className="space-y-1"><Label className="text-xs">Assigned Value ({abUnits || "units"})</Label>
                                 <Input
-                                  type="number"
+                                  type="text" inputMode="decimal"
                                   step="any"
                                   value={lv.assignedValue ?? ""}
                                   onChange={e => {
@@ -4061,7 +4062,7 @@ return (
                                 return (
                                   <Input
                                     key={repIdx}
-                                    type="number"
+                                    type="text" inputMode="decimal"
                                     step="any"
                                     placeholder={`#${repIdx + 1}`}
                                     value={val === undefined || val === null || isNaN(val) ? "" : val}
@@ -4153,7 +4154,7 @@ return (
                       <div className="space-y-1.5">
                         <Label>Manufacturer Claimed AMR Low ({linUnits || "units"}) <span className="text-xs text-muted-foreground">(optional)</span></Label>
                         <Input
-                          type="number" step="any" placeholder="e.g. 5"
+                          type="text" inputMode="decimal" step="any" placeholder="e.g. 5"
                           value={linClaimedLow}
                           onChange={e => setLinClaimedLow(e.target.value === "" ? "" : parseFloat(e.target.value))}
                           data-testid="input-lin-claimed-low"
@@ -4162,7 +4163,7 @@ return (
                       <div className="space-y-1.5">
                         <Label>Manufacturer Claimed AMR High ({linUnits || "units"}) <span className="text-xs text-muted-foreground">(optional)</span></Label>
                         <Input
-                          type="number" step="any" placeholder="e.g. 500"
+                          type="text" inputMode="decimal" step="any" placeholder="e.g. 500"
                           value={linClaimedHigh}
                           onChange={e => setLinClaimedHigh(e.target.value === "" ? "" : parseFloat(e.target.value))}
                           data-testid="input-lin-claimed-high"
@@ -4201,7 +4202,7 @@ return (
                               </div>
                               <div className="space-y-1"><Label className="text-xs">Assigned Value ({linUnits || "units"})</Label>
                                 <Input
-                                  type="number"
+                                  type="text" inputMode="decimal"
                                   step="any"
                                   value={lv.assignedValue ?? ""}
                                   onChange={e => {
@@ -4220,7 +4221,7 @@ return (
                                 return (
                                   <Input
                                     key={repIdx}
-                                    type="number"
+                                    type="text" inputMode="decimal"
                                     step="any"
                                     placeholder={`#${repIdx + 1}`}
                                     value={val === undefined || val === null || isNaN(val) ? "" : val}
@@ -4274,10 +4275,10 @@ return (
                       <div className="space-y-1.5"><Label>Analyte Name</Label><Input placeholder="e.g. Glucose" value={rrAnalyte} onChange={e => setRrAnalyte(e.target.value)} data-testid="input-rr-analyte" /></div>
                       <div className="space-y-1.5"><Label>Units</Label><Input placeholder="e.g. mg/dL" value={rrUnits} onChange={e => setRrUnits(e.target.value)} data-testid="input-rr-units" /></div>
                       <div className="space-y-1.5"><Label>Claimed Range Low ({rrUnits || "units"})</Label>
-                        <Input type="number" step="any" placeholder="e.g. 20" value={rrClaimedLow} onChange={e => setRrClaimedLow(e.target.value === "" ? "" : parseFloat(e.target.value))} data-testid="input-rr-claimed-low" />
+                        <Input type="text" inputMode="decimal" step="any" placeholder="e.g. 20" value={rrClaimedLow} onChange={e => setRrClaimedLow(e.target.value === "" ? "" : parseFloat(e.target.value))} data-testid="input-rr-claimed-low" />
                       </div>
                       <div className="space-y-1.5"><Label>Claimed Range High ({rrUnits || "units"})</Label>
-                        <Input type="number" step="any" placeholder="e.g. 500" value={rrClaimedHigh} onChange={e => setRrClaimedHigh(e.target.value === "" ? "" : parseFloat(e.target.value))} data-testid="input-rr-claimed-high" />
+                        <Input type="text" inputMode="decimal" step="any" placeholder="e.g. 500" value={rrClaimedHigh} onChange={e => setRrClaimedHigh(e.target.value === "" ? "" : parseFloat(e.target.value))} data-testid="input-rr-claimed-high" />
                       </div>
                     </div>
                     <div className="grid sm:grid-cols-2 gap-4">
@@ -4339,7 +4340,7 @@ return (
                               </div>
                               <div className="space-y-1"><Label className="text-xs">Assigned Value ({rrUnits || "units"})</Label>
                                 <Input
-                                  type="number"
+                                  type="text" inputMode="decimal"
                                   step="any"
                                   value={lv.assignedValue ?? ""}
                                   onChange={e => {
@@ -4358,7 +4359,7 @@ return (
                                 return (
                                   <Input
                                     key={repIdx}
-                                    type="number"
+                                    type="text" inputMode="decimal"
                                     step="any"
                                     placeholder={`#${repIdx + 1}`}
                                     value={val === undefined || val === null || isNaN(val) ? "" : val}
@@ -4430,7 +4431,7 @@ return (
                           <div className="flex items-center gap-2">
                             <Label className="text-xs shrink-0">Expected Concentration</Label>
                             <Input
-                              type="number"
+                              type="text" inputMode="decimal"
                               step="any"
                               value={lvl.expectedConcentration}
                               onChange={e => {
@@ -4507,13 +4508,13 @@ return (
                         <p className="text-xs text-muted-foreground">For structured multi-day precision studies per CLSI EP15. Specify days, runs per day, and replicates per run.</p>
                         <div className="grid grid-cols-3 gap-3">
                           <div className="space-y-1"><Label className="text-xs">Days</Label>
-                            <Input type="number" min={1} max={20} value={precisionDays} onChange={e => setPrecisionDays(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))} className="h-8 text-sm" />
+                            <Input type="text" inputMode="decimal" min={1} max={20} value={precisionDays} onChange={e => setPrecisionDays(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))} className="h-8 text-sm" />
                           </div>
                           <div className="space-y-1"><Label className="text-xs">Runs / Day</Label>
-                            <Input type="number" min={1} max={3} value={precisionRunsPerDay} onChange={e => setPrecisionRunsPerDay(Math.max(1, Math.min(3, parseInt(e.target.value) || 1)))} className="h-8 text-sm" />
+                            <Input type="text" inputMode="decimal" min={1} max={3} value={precisionRunsPerDay} onChange={e => setPrecisionRunsPerDay(Math.max(1, Math.min(3, parseInt(e.target.value) || 1)))} className="h-8 text-sm" />
                           </div>
                           <div className="space-y-1"><Label className="text-xs">Replicates / Run</Label>
-                            <Input type="number" min={1} max={5} value={precisionReplicatesPerRun} onChange={e => setPrecisionReplicatesPerRun(Math.max(1, Math.min(5, parseInt(e.target.value) || 1)))} className="h-8 text-sm" />
+                            <Input type="text" inputMode="decimal" min={1} max={5} value={precisionReplicatesPerRun} onChange={e => setPrecisionReplicatesPerRun(Math.max(1, Math.min(5, parseInt(e.target.value) || 1)))} className="h-8 text-sm" />
                           </div>
                         </div>
                       </div>
@@ -4558,28 +4559,28 @@ return (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
                             <div>
                               <Label className="text-[11px]">Vendor Within-Run SD</Label>
-                              <Input type="number" step="any" placeholder="e.g. 1.57"
+                              <Input type="text" inputMode="decimal" step="any" placeholder="e.g. 1.57"
                                 value={precisionVendorSd}
                                 onChange={e => setPrecisionVendorSd(e.target.value)}
                                 className="h-7 text-xs mt-1" />
                             </div>
                             <div>
                               <Label className="text-[11px]">Concentration at Vendor SD (optional)</Label>
-                              <Input type="number" step="any" placeholder="e.g. 25"
+                              <Input type="text" inputMode="decimal" step="any" placeholder="e.g. 25"
                                 value={precisionVendorSdConc}
                                 onChange={e => setPrecisionVendorSdConc(e.target.value)}
                                 className="h-7 text-xs mt-1" />
                             </div>
                             <div>
                               <Label className="text-[11px]">Target Mean</Label>
-                              <Input type="number" step="any" placeholder="e.g. 23.6"
+                              <Input type="text" inputMode="decimal" step="any" placeholder="e.g. 23.6"
                                 value={precisionTargetMean}
                                 onChange={e => setPrecisionTargetMean(e.target.value)}
                                 className="h-7 text-xs mt-1" />
                             </div>
                             <div>
                               <Label className="text-[11px]">Target CV (%)</Label>
-                              <Input type="number" step="any" placeholder="e.g. 7.5"
+                              <Input type="text" inputMode="decimal" step="any" placeholder="e.g. 7.5"
                                 value={precisionTargetCv}
                                 onChange={e => setPrecisionTargetCv(e.target.value)}
                                 className="h-7 text-xs mt-1" />

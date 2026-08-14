@@ -552,7 +552,7 @@ export default function InventoryCountWorkflow({
               New count ({countUnit}s)
             </label>
             <input
-              type="number"
+              type="text"
               inputMode="numeric"
               min={0}
               step={1}

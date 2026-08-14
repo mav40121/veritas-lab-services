@@ -103,7 +103,7 @@ export default function ManualDifferentialForm({
                 <Button key={n} type="button" size="sm" variant={cellsCounted === n ? "default" : "outline"}
                   onClick={() => setCellsCounted(n)} data-testid={`md-cells-${n}`}>{n}</Button>
               ))}
-              <Input type="number" min={1} value={cellsCounted} onChange={(e) => setCellsCounted(Math.max(1, Math.floor(Number(e.target.value) || 0)))}
+              <Input type="text" inputMode="decimal" min={1} value={cellsCounted} onChange={(e) => setCellsCounted(Math.max(1, Math.floor(Number(e.target.value) || 0)))}
                 className="max-w-[100px]" data-testid="md-cells-counted" />
             </div>
           </div>
@@ -136,11 +136,11 @@ export default function ManualDifferentialForm({
                       <Input value={r.name} onChange={(e) => setRow(i, { name: e.target.value })} className="h-8 min-w-[130px]" data-testid={`md-row-${i}-name`} />
                     </td>
                     <td className="py-1.5 px-2">
-                      <Input type="number" min={0} value={r.manualCount} onChange={(e) => setRow(i, { manualCount: e.target.value })} className="h-8 max-w-[90px]" data-testid={`md-row-${i}-count`} />
+                      <Input type="text" inputMode="decimal" min={0} value={r.manualCount} onChange={(e) => setRow(i, { manualCount: e.target.value })} className="h-8 max-w-[90px]" data-testid={`md-row-${i}-count`} />
                     </td>
                     <td className="py-1.5 px-2 text-muted-foreground">{r.manualCount === "" ? "-" : fmt(ev.manualPct) + "%"}</td>
                     <td className="py-1.5 px-2">
-                      <Input type="number" min={0} step="any" value={r.referencePct} onChange={(e) => setRow(i, { referencePct: e.target.value })} className="h-8 max-w-[90px]" data-testid={`md-row-${i}-ref`} />
+                      <Input type="text" inputMode="decimal" min={0} step="any" value={r.referencePct} onChange={(e) => setRow(i, { referencePct: e.target.value })} className="h-8 max-w-[90px]" data-testid={`md-row-${i}-ref`} />
                     </td>
                     <td className="py-1.5 px-2 text-muted-foreground text-xs">{r.manualCount === "" ? "-" : `${fmt(ev.ciLoPct)} - ${fmt(ev.ciHiPct)}%`}</td>
                     <td className="py-1.5 px-2">

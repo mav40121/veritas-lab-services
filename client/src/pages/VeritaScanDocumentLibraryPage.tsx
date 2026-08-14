@@ -472,7 +472,7 @@ function DefaultRow({ typeValue, typeLabel, initialDays, onSave }: {
     <div className="flex items-center gap-3">
       <Label className="text-sm w-48">{typeLabel}</Label>
       <Input
-        type="number"
+        type="text" inputMode="decimal"
         min={0}
         max={3650}
         value={val}

@@ -133,7 +133,7 @@ export function StudyAmrDialog({
             <Label htmlFor="amr-low" className="text-xs">AMR low</Label>
             <Input
               id="amr-low"
-              type="number"
+              type="text" inputMode="decimal"
               step="any"
               value={low}
               onChange={(e) => setLow(e.target.value)}
@@ -145,7 +145,7 @@ export function StudyAmrDialog({
             <Label htmlFor="amr-high" className="text-xs">AMR high</Label>
             <Input
               id="amr-high"
-              type="number"
+              type="text" inputMode="decimal"
               step="any"
               value={high}
               onChange={(e) => setHigh(e.target.value)}

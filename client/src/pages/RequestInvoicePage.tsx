@@ -240,7 +240,7 @@ export default function RequestInvoicePage() {
               <Label htmlFor="seats">Seats *</Label>
               <Input
                 id="seats"
-                type="number"
+                type="text" inputMode="decimal"
                 min={1}
                 max={100}
                 value={form.seats}

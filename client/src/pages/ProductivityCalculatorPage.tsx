@@ -168,7 +168,7 @@ export default function ProductivityCalculatorPage() {
                 <div className="space-y-4 p-4 rounded-lg bg-muted/50">
                   <div className="space-y-1.5">
                     <Label>Number of FTEs</Label>
-                    <Input type="number" placeholder="e.g. 15" value={ftes} onChange={e => setFtes(e.target.value)} min={0} step={0.5} />
+                    <Input type="text" inputMode="decimal" placeholder="e.g. 15" value={ftes} onChange={e => setFtes(e.target.value)} min={0} step={0.5} />
                   </div>
                   <div className="space-y-1.5">
                     <Label>Productive % ({productivePct}%)</Label>
@@ -184,18 +184,18 @@ export default function ProductivityCalculatorPage() {
               ) : (
                 <div className="space-y-1.5">
                   <Label>Monthly Productive Hours</Label>
-                  <Input type="number" placeholder="e.g. 5200" value={productiveHours} onChange={e => setProductiveHours(e.target.value)} min={0} />
+                  <Input type="text" inputMode="decimal" placeholder="e.g. 5200" value={productiveHours} onChange={e => setProductiveHours(e.target.value)} min={0} />
                 </div>
               )}
 
               <div className="space-y-1.5">
                 <Label>Monthly Billable Tests</Label>
-                <Input type="number" placeholder="e.g. 36000" value={billableTests} onChange={e => setBillableTests(e.target.value)} min={0} />
+                <Input type="text" inputMode="decimal" placeholder="e.g. 36000" value={billableTests} onChange={e => setBillableTests(e.target.value)} min={0} />
               </div>
 
               <div className="space-y-1.5">
                 <Label>Average Hourly Labor Rate ($)</Label>
-                <Input type="number" placeholder="35" value={hourlyRate} onChange={e => setHourlyRate(e.target.value)} min={0} step={0.5} />
+                <Input type="text" inputMode="decimal" placeholder="35" value={hourlyRate} onChange={e => setHourlyRate(e.target.value)} min={0} step={0.5} />
               </div>
             </CardContent>
           </Card>

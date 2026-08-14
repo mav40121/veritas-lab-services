@@ -407,7 +407,7 @@ export function VerificationAnalytesPanel({ verificationId, onAnalytesChanged }:
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="ana-tea" className="text-xs">TEa value</Label>
-                <Input id="ana-tea" type="number" step="any" value={form.tea_value} onChange={(e) => setForm({ ...form, tea_value: e.target.value })} placeholder="e.g. 10" />
+                <Input id="ana-tea" type="text" inputMode="decimal" step="any" value={form.tea_value} onChange={(e) => setForm({ ...form, tea_value: e.target.value })} placeholder="e.g. 10" />
               </div>
               <div>
                 <Label htmlFor="ana-tea-units" className="text-xs">TEa units</Label>
@@ -425,11 +425,11 @@ export function VerificationAnalytesPanel({ verificationId, onAnalytesChanged }:
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label htmlFor="ana-amr-lo" className="text-xs">AMR low</Label>
-                <Input id="ana-amr-lo" type="number" step="any" value={form.amr_low} onChange={(e) => setForm({ ...form, amr_low: e.target.value })} />
+                <Input id="ana-amr-lo" type="text" inputMode="decimal" step="any" value={form.amr_low} onChange={(e) => setForm({ ...form, amr_low: e.target.value })} />
               </div>
               <div>
                 <Label htmlFor="ana-amr-hi" className="text-xs">AMR high</Label>
-                <Input id="ana-amr-hi" type="number" step="any" value={form.amr_high} onChange={(e) => setForm({ ...form, amr_high: e.target.value })} />
+                <Input id="ana-amr-hi" type="text" inputMode="decimal" step="any" value={form.amr_high} onChange={(e) => setForm({ ...form, amr_high: e.target.value })} />
               </div>
               <div>
                 <Label htmlFor="ana-amr-units" className="text-xs">AMR units</Label>
