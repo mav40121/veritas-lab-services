@@ -21,7 +21,18 @@ import {
  * If test_name does not resolve to a canonical analyte (e.g. a non-CFR analyte
  * like Lipase), the input values are preserved unchanged.
  */
-function enforceCanonicalTea<T extends Partial<InsertStudy> & { testName: string }>(study: T): T {
+export function enforceCanonicalTea<T extends Partial<InsertStudy> & { testName: string }>(study: T): T {
+  // Trust an explicit preset selection. When the user picks a CLIA TEa preset in
+  // the dropdown, cliaAllowableError already carries that preset's exact,
+  // authoritative value (and a "Lab-defined" preset carries the lab's own
+  // value). Re-deriving the TEa from the free-text testName here is what let a
+  // plain "Hemoglobin" study substring-collapse into "Hemoglobin A1c" and
+  // overwrite the selected 4% with 8% (Troy Regional, 2026-08-14). A chosen
+  // preset is the source of truth; the guard below is only for legacy/free-text
+  // rows that carry no preset label.
+  const presetLabel = (study as any).cliaPresetLabel;
+  if (presetLabel != null && String(presetLabel).trim() !== "") return study;
+
   const canonical = resolveCanonicalAnalyte(study.testName);
   if (!canonical) return study;
   const tea = teaByAnalyte.get(canonical);
