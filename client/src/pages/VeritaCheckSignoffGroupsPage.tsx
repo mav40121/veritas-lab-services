@@ -24,6 +24,17 @@ function verdictBadge(status: string) {
   return <span className="text-xs text-muted-foreground">{(status || "-").toUpperCase()}</span>;
 }
 
+// A group reads as signed when it was sign-and-locked as a batch (stored
+// status) OR when every member study has since been signed one at a time on
+// its own results page. The stored `status` column only flips on the batch
+// "Sign and Lock all" action, so signing members individually used to leave the
+// badge stuck on "Open" even at "N of N signed" (SCAHC report, 2026-08-15). The
+// raw `status` is left untouched so the add-to-group pickers and the add/remove
+// gates still treat an unlocked group as addable.
+function isSignedFromCounts(status: string, total: number, finalized: number) {
+  return status === "signed" || (total > 0 && finalized === total);
+}
+
 export default function VeritaCheckSignoffGroupsPage() {
   useSEO({ title: "Sign-off Groups | VeritaCheck", description: "Assign studies to a sign-off group and sign the group in one action." });
   const { toast } = useToast();
@@ -85,7 +96,7 @@ export default function VeritaCheckSignoffGroupsPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-sm">{g.name}</span>
-                  {g.status === "signed"
+                  {isSignedFromCounts(g.status, g.total, g.finalized)
                     ? <Badge variant="outline" className="text-xs border-emerald-500/40 text-emerald-600"><Lock size={10} className="mr-1" />Signed</Badge>
                     : <Badge variant="outline" className="text-xs">Open</Badge>}
                   {g.due_date && <span className="text-xs text-muted-foreground">due {g.due_date}</span>}
@@ -105,9 +116,9 @@ export default function VeritaCheckSignoffGroupsPage() {
                 <div className="font-semibold">{detail.name}</div>
                 <div className="text-xs text-muted-foreground">{detail.members.length} {detail.members.length === 1 ? "study" : "studies"}{detail.due_date ? ` · due ${detail.due_date}` : ""}</div>
               </div>
-              {detail.status === "open"
-                ? <Button disabled={draftCount === 0} onClick={() => setSignOpen(true)} data-testid="button-sign-group"><Lock size={14} className="mr-2" />Sign and Lock all{draftCount ? ` (${draftCount})` : ""}</Button>
-                : <Badge variant="outline" className="text-emerald-600 border-emerald-500/40"><CheckCircle2 size={12} className="mr-1" />Signed</Badge>}
+              {isSignedFromCounts(detail.status, detail.members.length, detail.members.length - draftCount)
+                ? <Badge variant="outline" className="text-emerald-600 border-emerald-500/40"><CheckCircle2 size={12} className="mr-1" />Signed</Badge>
+                : <Button disabled={draftCount === 0} onClick={() => setSignOpen(true)} data-testid="button-sign-group"><Lock size={14} className="mr-2" />Sign and Lock all{draftCount ? ` (${draftCount})` : ""}</Button>}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
