@@ -48,6 +48,8 @@ import {
   History,
   Archive,
   FolderInput,
+  MessageSquare,
+  Trash2,
 } from "lucide-react";
 
 interface Manual {
@@ -93,6 +95,17 @@ interface PendingStepInfo {
   reason: string | null;
 }
 
+interface PolicyNote {
+  id: number;
+  author_user_id: number;
+  author_name: string;
+  // null when the note has been removed (tombstone); the row still renders.
+  body: string | null;
+  created_at: string;
+  deleted_at: string | null;
+  can_delete: boolean;
+}
+
 interface PolicyDocument {
   id: number;
   lab_id: number;
@@ -110,6 +123,8 @@ interface PolicyDocument {
   current_file_format: string | null;
   current_uploaded_at: string | null;
   manual_name: string | null;
+  // Count of non-deleted discussion notes, for the row's Notes badge.
+  note_count?: number;
   created_at: string;
   updated_at: string;
   // Phase 2.1: in_review rows include these so the UI can render
@@ -506,6 +521,47 @@ export default function VeritaPolicyMyPoliciesPage() {
 
   // Version history loaded into the View modal alongside signoffs.
   const [viewVersions, setViewVersions] = useState<any[]>([]);
+
+  // ── Per-policy notes (discussion thread) ────────────────────────────────
+  const [notesDoc, setNotesDoc] = useState<PolicyDocument | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const notesUrl =
+    notesDoc && activeLabId
+      ? `/api/labs/${activeLabId}/veritapolicy/documents/${notesDoc.id}/notes`
+      : null;
+  const {
+    data: notesData,
+    isLoading: notesLoading,
+    error: notesErr,
+  } = useQuery<{ notes: PolicyNote[] }>({
+    queryKey: [notesUrl],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!notesUrl,
+  });
+  const notes = notesData?.notes || [];
+  const closeNotes = () => {
+    setNotesDoc(null);
+    setNoteDraft("");
+  };
+  const addNoteMut = useMutation({
+    mutationFn: (body: string) => apiRequest("POST", notesUrl!, { body }),
+    onSuccess: () => {
+      setNoteDraft("");
+      queryClient.invalidateQueries({ queryKey: [notesUrl] });
+      invalidateAll(); // refresh the list so the note-count badge updates
+    },
+    onError: (e: any) =>
+      toast({ title: "Could not add note", description: String(e?.message || e), variant: "destructive" }),
+  });
+  const deleteNoteMut = useMutation({
+    mutationFn: (noteId: number) => apiRequest("DELETE", `${notesUrl}/${noteId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [notesUrl] });
+      invalidateAll();
+    },
+    onError: (e: any) =>
+      toast({ title: "Could not remove note", description: String(e?.message || e), variant: "destructive" }),
+  });
 
   // ── Phase 5: recertify ─────────────────────────────────────────────────
   // Helper: days until next_review_date, negative if overdue.
@@ -1299,6 +1355,16 @@ export default function VeritaPolicyMyPoliciesPage() {
                           >
                             <FolderInput size={12} />
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setNotesDoc(doc)}
+                            title="Notes and discussion for this policy"
+                            data-testid={`btn-notes-${doc.id}`}
+                          >
+                            <MessageSquare size={12} className={doc.note_count ? "mr-1" : ""} />
+                            {doc.note_count ? doc.note_count : ""}
+                          </Button>
                           {doc.status === "draft" && (
                             <>
                               <Button
@@ -1757,6 +1823,97 @@ export default function VeritaPolicyMyPoliciesPage() {
           <DialogFooter>
             <Button variant="outline" onClick={closeAuditTrail}>Close</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Notes / discussion modal ───────────────────────────────── */}
+      <Dialog open={!!notesDoc} onOpenChange={(o) => { if (!o) closeNotes(); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare size={16} /> Notes
+              {notesDoc && <span className="text-sm font-normal text-muted-foreground">: {notesDoc.title}</span>}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[55vh] overflow-y-auto">
+            <p className="text-xs text-muted-foreground">
+              Discussion for this policy, visible to your lab members. Notes are recorded in the audit trail. They are not the formal approval or rejection reason, which is captured when you approve or reject.
+            </p>
+            {notesLoading && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground p-4">
+                <Loader2 size={14} className="animate-spin" /> Loading notes...
+              </div>
+            )}
+            {notesErr && (
+              <div className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded px-2 py-2">
+                {String((notesErr as any)?.message || notesErr)}
+              </div>
+            )}
+            {!notesLoading && !notesErr && notes.length === 0 && (
+              <div className="text-sm text-muted-foreground p-4">No notes yet. Start the conversation below.</div>
+            )}
+            {notes.length > 0 && (
+              <ol className="space-y-1.5" data-testid="policy-notes-list">
+                {notes.map((n) => (
+                  <li
+                    key={n.id}
+                    className="border border-border rounded px-2.5 py-2 text-sm bg-muted/40"
+                    data-testid={`policy-note-${n.id}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="font-medium">{n.author_name}</span>
+                        <span className="text-muted-foreground text-xs"> at {fmtDate(n.created_at)}</span>
+                      </div>
+                      {n.can_delete && !n.deleted_at && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-1 text-muted-foreground hover:text-destructive"
+                          title="Remove this note"
+                          disabled={deleteNoteMut.isPending}
+                          onClick={() => {
+                            if (confirm("Remove this note? It will show as removed and stay in the record.")) {
+                              deleteNoteMut.mutate(n.id);
+                            }
+                          }}
+                          data-testid={`policy-note-delete-${n.id}`}
+                        >
+                          <Trash2 size={13} />
+                        </Button>
+                      )}
+                    </div>
+                    {n.deleted_at ? (
+                      <div className="italic text-muted-foreground text-xs mt-0.5">note removed</div>
+                    ) : (
+                      <div className="whitespace-pre-wrap break-words mt-0.5">{n.body}</div>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+          <div className="space-y-2 pt-1">
+            <Textarea
+              placeholder="Write a note..."
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+              rows={3}
+              maxLength={5000}
+              data-testid="policy-note-input"
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={closeNotes}>Close</Button>
+              <Button
+                disabled={!noteDraft.trim() || addNoteMut.isPending}
+                onClick={() => addNoteMut.mutate(noteDraft.trim())}
+                data-testid="policy-note-add"
+              >
+                {addNoteMut.isPending ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Send size={14} className="mr-1" />}
+                Add note
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
