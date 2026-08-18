@@ -31812,7 +31812,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
                   v.version_number AS current_version_number,
                   v.file_format AS current_file_format,
                   v.uploaded_at AS current_uploaded_at,
-                  m.name AS manual_name
+                  m.name AS manual_name,
+                  (SELECT COUNT(*) FROM policy_document_notes n
+                    WHERE n.document_id = d.id AND n.deleted_at IS NULL) AS note_count
              FROM policy_documents d
              LEFT JOIN policy_versions v ON v.id = d.current_version_id
              LEFT JOIN policy_manuals m ON m.id = d.manual_id
@@ -33115,6 +33117,141 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         userAgent: req.headers["user-agent"] as string | undefined,
       });
       res.json({ ok: true, archived: id });
+    }
+  );
+
+  // ── Per-policy notes (2026-08-17) ───────────────────────────────────────
+  //
+  // Free-form discussion thread on a policy document, distinct from the
+  // formal approve/reject reason in policy_signoffs.comment. Any lab member
+  // with access can READ the thread; posting and removing are writer-member
+  // actions (requireWriteAccess + requireModuleEdit). Each add is mirrored
+  // into policy_audit_log so the conversation stays surveyor-visible. Notes
+  // are soft-deleted: a removed note becomes a tombstone (body withheld,
+  // deleted_at set), never a hard delete.
+
+  // GET notes — any lab member with access to the lab.
+  app.get(
+    "/api/labs/:labId/veritapolicy/documents/:id/notes",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const doc = sqlite
+        .prepare("SELECT lab_id, owner_user_id FROM policy_documents WHERE id = ?")
+        .get(id) as { lab_id: number; owner_user_id: number } | undefined;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const rows = sqlite
+        .prepare(
+          `SELECT n.id, n.author_user_id, n.author_name, n.body, n.created_at, n.deleted_at,
+                  u.name AS user_name
+             FROM policy_document_notes n
+             LEFT JOIN users u ON u.id = n.author_user_id
+            WHERE n.document_id = ?
+            ORDER BY n.created_at ASC, n.id ASC`
+        )
+        .all(id) as any[];
+      const notes = rows.map((n) => ({
+        id: n.id,
+        author_user_id: n.author_user_id,
+        author_name: n.author_name || n.user_name || `User ${n.author_user_id}`,
+        // A removed note is a tombstone: the body is withheld, deleted_at set.
+        body: n.deleted_at ? null : n.body,
+        created_at: n.created_at,
+        deleted_at: n.deleted_at,
+        // Only the note's author or the policy owner may remove it.
+        can_delete: !n.deleted_at && (n.author_user_id === req.userId || doc.owner_user_id === req.userId),
+      }));
+      res.json({ notes });
+    }
+  );
+
+  // POST a note — writer members only.
+  app.post(
+    "/api/labs/:labId/veritapolicy/documents/:id/notes",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const body = typeof req.body?.body === "string" ? req.body.body.trim() : "";
+      if (!body) return res.status(400).json({ error: "Note text required" });
+      if (body.length > 5000) return res.status(400).json({ error: "Note too long (5000 character max)" });
+      const sqlite = (db as any).$client;
+      const doc = sqlite
+        .prepare("SELECT lab_id FROM policy_documents WHERE id = ?")
+        .get(id) as { lab_id: number } | undefined;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const author = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as { name: string } | undefined;
+      const authorName = author?.name || `User ${req.userId}`;
+      const result = sqlite
+        .prepare(
+          `INSERT INTO policy_document_notes (lab_id, document_id, author_user_id, author_name, body)
+           VALUES (?, ?, ?, ?, ?)`
+        )
+        .run(req.scope.labId, id, req.userId, authorName, body);
+      const noteId = Number(result.lastInsertRowid);
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        documentId: id,
+        userId: req.userId,
+        action: "note_added",
+        details: { note_id: noteId },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
+      const row = sqlite
+        .prepare("SELECT id, author_user_id, author_name, body, created_at, deleted_at FROM policy_document_notes WHERE id = ?")
+        .get(noteId) as any;
+      res.status(201).json({
+        note: {
+          id: row.id,
+          author_user_id: row.author_user_id,
+          author_name: row.author_name,
+          body: row.body,
+          created_at: row.created_at,
+          deleted_at: null,
+          can_delete: true,
+        },
+      });
+    }
+  );
+
+  // DELETE (soft) a note — the note's author or the policy owner only.
+  app.delete(
+    "/api/labs/:labId/veritapolicy/documents/:id/notes/:noteId",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      const noteId = Number(req.params.noteId);
+      if (!Number.isFinite(id) || !Number.isFinite(noteId)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const doc = sqlite
+        .prepare("SELECT lab_id, owner_user_id FROM policy_documents WHERE id = ?")
+        .get(id) as { lab_id: number; owner_user_id: number } | undefined;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const note = sqlite
+        .prepare("SELECT id, document_id, author_user_id, deleted_at FROM policy_document_notes WHERE id = ?")
+        .get(noteId) as { id: number; document_id: number; author_user_id: number; deleted_at: string | null } | undefined;
+      if (!note || note.document_id !== id) return res.status(404).json({ error: "Note not found" });
+      if (note.deleted_at) return res.status(409).json({ error: "Already removed" });
+      if (note.author_user_id !== req.userId && doc.owner_user_id !== req.userId) {
+        return res.status(403).json({ error: "Only the note author or the policy owner can remove a note" });
+      }
+      sqlite
+        .prepare("UPDATE policy_document_notes SET deleted_at = datetime('now'), deleted_by_user_id = ? WHERE id = ?")
+        .run(req.userId, noteId);
+      res.json({ ok: true, removed: noteId });
     }
   );
 

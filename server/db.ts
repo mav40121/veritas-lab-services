@@ -6023,6 +6023,41 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_audit_lab ON policy_aud
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_audit_doc ON policy_audit_log(document_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_audit_user ON policy_audit_log(user_id)`); } catch {}
 
+// Per-policy discussion notes (2026-08-17). Free-form back-and-forth on a
+// policy document among writer lab members, distinct from the formal
+// approve/reject reason captured in policy_signoffs.comment. Notes are
+// soft-deleted (deleted_at) so a removed note leaves a "note removed"
+// tombstone and the record stays intact for the audit trail. Author is a
+// lab member (users.id); Staff Portal participation is a later phase.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_document_notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    document_id INTEGER NOT NULL,
+    author_user_id INTEGER NOT NULL,
+    -- Snapshot of the author's display name at post time, so the thread
+    -- reads correctly even if the user is later renamed or removed.
+    author_name TEXT NOT NULL,
+    body TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    deleted_at TEXT,
+    deleted_by_user_id INTEGER
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_notes_doc ON policy_document_notes(document_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_notes_lab ON policy_document_notes(lab_id)`); } catch {}
+// New DB Table rule: ALTER migrations so a table that predates this block
+// (partial deploy) still gains every column on the live server. A duplicate
+// column on a fresh table throws and is swallowed, matching the file idiom.
+for (const alterSql of [
+  "ALTER TABLE policy_document_notes ADD COLUMN author_name TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE policy_document_notes ADD COLUMN created_at TEXT",
+  "ALTER TABLE policy_document_notes ADD COLUMN deleted_at TEXT",
+  "ALTER TABLE policy_document_notes ADD COLUMN deleted_by_user_id INTEGER",
+]) {
+  try { sqlite.exec(alterSql); } catch {}
+}
+
 // Phase 8 — surveyor public-link table. Lab owner generates a signed
 // URL a surveyor can use to browse approved policies without an
 // account. Auto-expires; lab admin can revoke at any time.
