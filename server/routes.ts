@@ -11,6 +11,7 @@ import { resolveSignupPlan } from "./signupPlan";
 import { db, PLAN_SEATS, PLAN_VIEW_ONLY_SEATS, PLAN_PRICES, PLAN_BED_RANGES, suggestTierFromBeds } from "./db";
 import { computeUsageQty, validateTransfer, validateBatch, matchKey, countOnHand, scopeEnterpriseLocations } from "./enterpriseTransfer";
 import { sendNewsletter, verifyUnsubscribeToken, resolveRecipients } from "./newsletter";
+import { registerScheduleRoutes } from "./schedule";
 import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice, getSeatPriceForTier, VC_UNLIMITED_FIRST_YEAR_COUPON, getViewOnlyAddOnConfig } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
@@ -3129,6 +3130,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     return violations;
   }
+
+  // VeritaShift Scheduler (Phase 1) routes.
+  registerScheduleRoutes(app, authMiddleware, labScopeMiddleware, requireWriteAccess);
 
   app.post("/api/labs/:labId/qc/results", authMiddleware, labScopeMiddleware, (req: any, res) => {
     const { control_lot_id, result_value, result_date, instrument, run_time, comment } = req.body || {};
