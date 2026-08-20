@@ -1237,6 +1237,62 @@ if (!docLinkColsFinal.includes("notes")) sqlite.exec("ALTER TABLE document_check
 const docDefaultsCols = (sqlite.prepare("PRAGMA table_info(lab_document_type_defaults)").all() as { name: string }[]).map(c => c.name);
 if (!docDefaultsCols.includes("default_review_days")) sqlite.exec("ALTER TABLE lab_document_type_defaults ADD COLUMN default_review_days INTEGER");
 
+// ── VeritaShift Scheduler (Phase 1: shift-level coverage; competency OFF) ──
+// Brand-new tables, keyed by the main labs.id (labScopeMiddleware scope).
+// `department` is nullable now; it is only populated when a lab turns on the
+// future competency-specific-scheduling toggle. schedule_assignments.staff_employee_id
+// is a plain integer (VeritaStaff staff_employees.id) resolved via
+// owner -> staff_labs -> staff_employees; no hard FK across the two lab models.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS schedule_shift_defs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    min_staff INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS schedule_periods (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft',
+    published_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS schedule_assignments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    period_id INTEGER NOT NULL,
+    staff_employee_id INTEGER NOT NULL,
+    shift_def_id INTEGER NOT NULL,
+    work_date TEXT NOT NULL,
+    department TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_sched_shiftdefs_lab ON schedule_shift_defs(lab_id);
+  CREATE INDEX IF NOT EXISTS idx_sched_periods_lab ON schedule_periods(lab_id);
+  CREATE INDEX IF NOT EXISTS idx_sched_assign_period ON schedule_assignments(period_id);
+  CREATE INDEX IF NOT EXISTS idx_sched_assign_lab ON schedule_assignments(lab_id);
+`);
+// Column guards (NEW DB TABLE RULE): literal per-table so the migration audit
+// sees them, and so an older partial table on the live volume gets its columns.
+const schedShiftCols = (sqlite.prepare("PRAGMA table_info(schedule_shift_defs)").all() as { name: string }[]).map(c => c.name);
+if (!schedShiftCols.includes("min_staff")) sqlite.exec("ALTER TABLE schedule_shift_defs ADD COLUMN min_staff INTEGER NOT NULL DEFAULT 1");
+if (!schedShiftCols.includes("sort_order")) sqlite.exec("ALTER TABLE schedule_shift_defs ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0");
+if (!schedShiftCols.includes("active")) sqlite.exec("ALTER TABLE schedule_shift_defs ADD COLUMN active INTEGER NOT NULL DEFAULT 1");
+const schedPeriodCols = (sqlite.prepare("PRAGMA table_info(schedule_periods)").all() as { name: string }[]).map(c => c.name);
+if (!schedPeriodCols.includes("status")) sqlite.exec("ALTER TABLE schedule_periods ADD COLUMN status TEXT NOT NULL DEFAULT 'draft'");
+if (!schedPeriodCols.includes("published_at")) sqlite.exec("ALTER TABLE schedule_periods ADD COLUMN published_at TEXT");
+const schedAssignCols = (sqlite.prepare("PRAGMA table_info(schedule_assignments)").all() as { name: string }[]).map(c => c.name);
+if (!schedAssignCols.includes("department")) sqlite.exec("ALTER TABLE schedule_assignments ADD COLUMN department TEXT");
+
 // Add specimen_info column to competency_assessment_items if upgrading
 const compItemCols = sqlite.prepare("PRAGMA table_info(competency_assessment_items)").all() as { name: string }[];
 const compItemColNames = compItemCols.map((c) => c.name);
