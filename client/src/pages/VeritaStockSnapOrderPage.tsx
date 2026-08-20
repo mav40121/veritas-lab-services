@@ -61,6 +61,10 @@ export default function VeritaStockSnapOrderPage() {
   const [filterVendor, setFilterVendor] = useState<string>(initialVendor);
   const [snap, setSnap] = useState<Record<number, { qty: string; unit: string }>>({});
   const [generating, setGenerating] = useState(false);
+  // Order-level metadata typed by the operator; carried onto the generated PDF.
+  const [poNumber, setPoNumber] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [nameReason, setNameReason] = useState("");
 
   const inventoryListUrl = activeLabId
     ? `${API_BASE}/api/labs/${activeLabId}/inventory`
@@ -176,7 +180,12 @@ export default function VeritaStockSnapOrderPage() {
       const res = await fetch(snapOrderUrl, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ items: orderRows }),
+        body: JSON.stringify({
+          items: orderRows,
+          po_number: poNumber.trim(),
+          account_number: accountNumber.trim(),
+          name_reason: nameReason.trim(),
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -247,6 +256,46 @@ export default function VeritaStockSnapOrderPage() {
           </div>
         </div>
       </div>
+
+      {/* Order details: PO #, Account #, Name & Reason. Optional; printed on the PDF. */}
+      <Card className="mb-4">
+        <CardContent className="p-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">PO #</label>
+              <Input
+                value={poNumber}
+                onChange={(e) => setPoNumber(e.target.value)}
+                placeholder="Purchase order number"
+                disabled={readOnly}
+                data-testid="snap-po-number"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Account #</label>
+              <Input
+                value={accountNumber}
+                onChange={(e) => setAccountNumber(e.target.value)}
+                placeholder="Account number"
+                disabled={readOnly}
+                data-testid="snap-account-number"
+              />
+            </div>
+          </div>
+          <div className="mt-3">
+            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Name &amp; Reason for Snap Order</label>
+            <textarea
+              value={nameReason}
+              onChange={(e) => setNameReason(e.target.value)}
+              placeholder="Who is placing this order and why (e.g., outbreak surge, supply-chain disruption)"
+              disabled={readOnly}
+              rows={2}
+              className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              data-testid="snap-name-reason"
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Search + vendor filter + totals */}
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">

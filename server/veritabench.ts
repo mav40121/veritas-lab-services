@@ -1075,6 +1075,9 @@ export function registerVeritaBenchRoutes(
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const requestedItems = Array.isArray(req.body?.items) ? req.body.items : [];
+    const poNumber = typeof req.body?.po_number === "string" ? req.body.po_number.trim().slice(0, 100) : "";
+    const accountNumber = typeof req.body?.account_number === "string" ? req.body.account_number.trim().slice(0, 100) : "";
+    const nameReason = typeof req.body?.name_reason === "string" ? req.body.name_reason.trim().slice(0, 600) : "";
     const valid = requestedItems
       .filter((r: any) => typeof r?.id === "number" && typeof r?.snap_qty === "number" && r.snap_qty > 0)
       .map((r: any) => ({ id: Number(r.id), snap_qty: Number(r.snap_qty), snap_unit: typeof r.snap_unit === "string" ? r.snap_unit : null }));
@@ -1134,7 +1137,7 @@ export function registerVeritaBenchRoutes(
       }
 
       const snapLabRow = sqlite.prepare("SELECT lab_id FROM users WHERE id = ?").get(accountId) as any;
-      const pdfBuffer = await generateSnapOrderPDF(items, { labName, cliaNumber, preparedBy, vendorRecords: buildVendorRecordMap(snapLabRow?.lab_id || null) });
+      const pdfBuffer = await generateSnapOrderPDF(items, { labName, cliaNumber, preparedBy, poNumber, accountNumber, nameReason, vendorRecords: buildVendorRecordMap(snapLabRow?.lab_id || null) });
       const datestamp = new Date().toISOString().slice(0, 10);
       const filename = `VeritaStock_SnapOrder_${datestamp}.pdf`;
       const token = storePdfToken(pdfBuffer, filename);
@@ -3269,6 +3272,9 @@ export function registerVeritaBenchRoutes(
     app.post("/api/labs/:labId/inventory/snap-order/pdf", authMiddleware, labScopeMiddleware, async (req: any, res) => {
       if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
       const requestedItems = Array.isArray(req.body?.items) ? req.body.items : [];
+      const poNumber = typeof req.body?.po_number === "string" ? req.body.po_number.trim().slice(0, 100) : "";
+      const accountNumber = typeof req.body?.account_number === "string" ? req.body.account_number.trim().slice(0, 100) : "";
+      const nameReason = typeof req.body?.name_reason === "string" ? req.body.name_reason.trim().slice(0, 600) : "";
       const valid = requestedItems
         .filter((r: any) => typeof r?.id === "number" && typeof r?.snap_qty === "number" && r.snap_qty > 0)
         .map((r: any) => ({ id: Number(r.id), snap_qty: Number(r.snap_qty), snap_unit: typeof r.snap_unit === "string" ? r.snap_unit : null }));
@@ -3319,6 +3325,9 @@ export function registerVeritaBenchRoutes(
           labName: labRow?.lab_name || null,
           cliaNumber: labRow?.clia_number || null,
           preparedBy: userRow?.name || userRow?.email || null,
+          poNumber,
+          accountNumber,
+          nameReason,
           vendorRecords: buildVendorRecordMap(req.scope.labId),
         });
         const datestamp = new Date().toISOString().slice(0, 10);

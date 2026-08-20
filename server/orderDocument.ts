@@ -61,6 +61,11 @@ export interface ReorderLabContext {
   labName?: string | null;
   cliaNumber?: string | null;
   preparedBy?: string | null;  // user.full_name from the requester
+  // Snap Order form metadata typed by the operator at generation time.
+  // Optional; the calculated reorder document leaves these undefined.
+  poNumber?: string | null;
+  accountNumber?: string | null;
+  nameReason?: string | null;
   // Active client-side filters at generation time. Surfaces in the PDF/XLSX
   // so readers can tell at a glance whether they are looking at the FULL
   // lab reorder list or a filtered subset (e.g., "Vendor: fisher"). Empty
@@ -755,6 +760,8 @@ function snapHeaderHTML(ctx: ReorderLabContext, totalItems: number, totalVendors
     <div class="header-right">
       <div style="font-weight:600;color:${DARK};">Generated: ${today()}</div>
       <div>${totalItems} item${totalItems === 1 ? "" : "s"} across ${totalVendors} vendor${totalVendors === 1 ? "" : "s"}</div>
+      ${ctx.poNumber ? `<div style="font-weight:600;color:${DARK};margin-top:2px;">PO #: ${escapeHtml(ctx.poNumber)}</div>` : ""}
+      ${ctx.accountNumber ? `<div>Account #: ${escapeHtml(ctx.accountNumber)}</div>` : ""}
     </div>
   </div>
   <div class="report-title" style="color:#92400E;">VeritaStock&trade; Snap Order</div>
@@ -768,6 +775,7 @@ function snapHeaderHTML(ctx: ReorderLabContext, totalItems: number, totalVendors
 
 function snapSignatureBlockHTML(ctx: ReorderLabContext): string {
   const preparedBy = ctx.preparedBy ? escapeHtml(ctx.preparedBy) : "";
+  const nameReason = ctx.nameReason ? escapeHtml(ctx.nameReason).replace(/\n/g, "<br>") : "";
   return `
   <div style="margin-top:8px;border:1px solid #D4D1CA;border-left:4px solid #92400E;border-radius:5px;padding:6px 12px;background:#FFF8E1;break-inside:avoid;page-break-inside:avoid;">
     <div style="font-size:8pt;font-weight:700;color:#92400E;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">${STOCK_DEPLOYMENT ? "Materials Manager or Designee Approval (Manual Order)" : "Laboratory Director or Designee Approval (Manual Order)"}</div>
@@ -795,7 +803,8 @@ function snapSignatureBlockHTML(ctx: ReorderLabContext): string {
     </div>
     <div style="display:flex;gap:16px;margin-top:4px;">
       <div style="flex:4;border-bottom:1px solid #999;padding-bottom:2px;">
-        <div style="font-size:6.5pt;color:#888;margin-top:8px;">Reason for snap order</div>
+        ${nameReason ? `<div style="font-size:8pt;color:${DARK};line-height:1.35;margin-top:2px;">${nameReason}</div>` : `<div style="margin-top:8px;">&nbsp;</div>`}
+        <div style="font-size:6.5pt;color:#888;margin-top:2px;">Name &amp; Reason for snap order</div>
       </div>
     </div>
     ${preparedBy ? `<div style="font-size:7pt;color:${MUTED};margin-top:6px;">Prepared by: ${preparedBy}</div>` : ""}
