@@ -25,10 +25,14 @@ test.describe("VeritaShift Staffing Grid: Adj column removed", () => {
     // The Staffing Grid card mounts.
     await expect(page.getByText("Staffing Grid", { exact: true })).toBeVisible({ timeout: 15000 });
 
-    // The retired Adj column header must be gone; Hr/shift, Days/wk, Weekly remain.
-    await expect(page.getByRole("columnheader", { name: "Adj", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("columnheader", { name: "Weekly", exact: true })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Days/wk", exact: true })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Hr/shift", exact: true })).toBeVisible();
+    // The grid header row: Hr/shift, Days/wk, Weekly remain; the retired Adj is gone.
+    // (this table renders <th> without columnheader role semantics, so assert on the
+    // header row text rather than getByRole.)
+    const header = page.locator("table thead tr").first();
+    await expect(header).toBeVisible();
+    await expect(header).toContainText("Hr/shift");
+    await expect(header).toContainText("Days/wk");
+    await expect(header).toContainText("Weekly");
+    await expect(header).not.toContainText("Adj");
   });
 });
