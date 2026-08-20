@@ -17,7 +17,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const SERVER_FILES = ["server/routes.ts", "server/veritacheck_verification.ts"];
+const SERVER_FILES = ["server/routes.ts", "server/veritacheck_verification.ts", "server/schedule.ts"];
 const CLIENT_DIR = "client/src";
 
 // Known false positives (path templates that are dynamic or intentionally
