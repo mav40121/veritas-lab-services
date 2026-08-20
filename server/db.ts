@@ -4105,8 +4105,10 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_productivity_forecasts_lab ON 
 
 // ── VeritaShift: Staffing Grid lines (leverage chain, Phase 3) ──────────────────
 // Lab-scoped shift grid (mirrors the LTSHealth Staff Management Tool "Staffing Grid"
-// sheet). Each line: hours_per_shift x days_per_week + over_under = weekly hours; the
-// sum / (hours_per_fte / 52) is the staffing-model FTE need fed into the forecast gap.
+// sheet). Each line: hours_per_shift x days_per_week = weekly hours; the sum /
+// (hours_per_fte / 52) is the staffing-model FTE need fed into the forecast gap.
+// over_under is a RETIRED column (removed from the UI/formula 2026-08-20); kept as an
+// inert legacy field (DEFAULT 0, no longer read or written) to avoid a boot-time DROP.
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS staffing_grid_lines (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

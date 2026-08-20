@@ -264,9 +264,9 @@ export function registerVeritaBenchRoutes(
     // Staffing-grid FTE (Phase 3): when the lab has a shift grid, it drives the gap;
     // otherwise fall back to the manually-entered staffing_model_fte.
     const gridLines: any[] = labId != null
-      ? sqlite.prepare("SELECT hours_per_shift, days_per_week, over_under FROM staffing_grid_lines WHERE account_id = ? AND lab_id = ?").all(accountId, labId)
-      : sqlite.prepare("SELECT hours_per_shift, days_per_week, over_under FROM staffing_grid_lines WHERE account_id = ? AND lab_id IS NULL").all(accountId);
-    const grid = staffingGridFte(gridLines.map((l) => ({ hoursPerShift: l.hours_per_shift, daysPerWeek: l.days_per_week, overUnder: l.over_under })), hoursPerFteYear);
+      ? sqlite.prepare("SELECT hours_per_shift, days_per_week FROM staffing_grid_lines WHERE account_id = ? AND lab_id = ?").all(accountId, labId)
+      : sqlite.prepare("SELECT hours_per_shift, days_per_week FROM staffing_grid_lines WHERE account_id = ? AND lab_id IS NULL").all(accountId);
+    const grid = staffingGridFte(gridLines.map((l) => ({ hoursPerShift: l.hours_per_shift, daysPerWeek: l.days_per_week })), hoursPerFteYear);
     const staffingFte = gridLines.length > 0 ? grid.fteNeed : (saved?.staffing_model_fte ?? null);
     const staffingSource = gridLines.length > 0 ? "grid" : (saved?.staffing_model_fte != null ? "manual" : "none");
     const gap = computed && staffingFte != null
@@ -314,7 +314,7 @@ export function registerVeritaBenchRoutes(
       ? sqlite.prepare("SELECT hours_per_fte FROM productivity_forecasts WHERE account_id = ? AND lab_id = ?").get(accountId, labId)
       : sqlite.prepare("SELECT hours_per_fte FROM productivity_forecasts WHERE account_id = ? AND lab_id IS NULL").get(accountId);
     const hoursPerFteYear = fc?.hours_per_fte ?? DEFAULT_HOURS_PER_FTE_YEAR;
-    const grid = staffingGridFte(lines.map((l) => ({ hoursPerShift: l.hours_per_shift, daysPerWeek: l.days_per_week, overUnder: l.over_under })), hoursPerFteYear);
+    const grid = staffingGridFte(lines.map((l) => ({ hoursPerShift: l.hours_per_shift, daysPerWeek: l.days_per_week })), hoursPerFteYear);
     return { lines, weeklyHours: grid.weeklyHours, fteNeed: grid.fteNeed, hoursPerFteYear };
   };
 
@@ -334,8 +334,8 @@ export function registerVeritaBenchRoutes(
       const tx = sqlite.transaction(() => {
         if (labId != null) sqlite.prepare("DELETE FROM staffing_grid_lines WHERE account_id = ? AND lab_id = ?").run(accountId, labId);
         else sqlite.prepare("DELETE FROM staffing_grid_lines WHERE account_id = ? AND lab_id IS NULL").run(accountId);
-        const ins = sqlite.prepare("INSERT INTO staffing_grid_lines (account_id, lab_id, label, role, hours_per_shift, days_per_week, over_under, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        lines.forEach((l, i) => ins.run(accountId, labId, l.label ?? null, l.role ?? null, Number(l.hours_per_shift) || 0, Number(l.days_per_week) || 0, Number(l.over_under) || 0, i, now, now));
+        const ins = sqlite.prepare("INSERT INTO staffing_grid_lines (account_id, lab_id, label, role, hours_per_shift, days_per_week, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        lines.forEach((l, i) => ins.run(accountId, labId, l.label ?? null, l.role ?? null, Number(l.hours_per_shift) || 0, Number(l.days_per_week) || 0, i, now, now));
       });
       tx();
       res.json(buildGridResponse(accountId, labId));
