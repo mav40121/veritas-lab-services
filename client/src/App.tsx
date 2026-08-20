@@ -108,6 +108,7 @@ const VeritaStockPage = lazy(() => import("@/pages/VeritaStockPage"));
 const VeritaStockTrendsPage = lazy(() => import("@/pages/VeritaStockTrendsPage"));
 const VeritaStockVendorsPage = lazy(() => import("@/pages/VeritaStockVendorsPage"));
 const VeritaStockSnapOrderPage = lazy(() => import("@/pages/VeritaStockSnapOrderPage"));
+const VeritaShiftSchedulerPage = lazy(() => import("@/pages/VeritaShiftSchedulerPage"));
 const VeritaStockReceivingPage = lazy(() => import("@/pages/VeritaStockReceivingPage"));
 const VeritaStockAuditTrailPage = lazy(() => import("@/pages/VeritaStockAuditTrailPage"));
 const VeritaStockEnterprisePage = lazy(() => import("@/pages/VeritaStockEnterprisePage"));
@@ -438,6 +439,7 @@ function AppContent() {
           <Route path="/calculator" component={ProductivityCalculatorPage} />
           <Route path="/veritabench" component={VeritaBenchPage} />
           <Route path="/veritabench/staffing" component={VeritaBenchStaffingPage} />
+          <Route path="/veritabench/scheduler">{wrapLegacy(VeritaShiftSchedulerPage)}</Route>
           <Route path="/veritabench/pi" component={VeritaBenchPIPage} />
           <Route path="/veritastock">{wrapLegacy(VeritaStockPage)}</Route>
           <Route path="/veritastock/trends">{wrapLegacy(VeritaStockTrendsPage)}</Route>
@@ -517,6 +519,7 @@ function AppContent() {
           <Route path="/labs/:labId/veritastock/enterprise" component={VeritaStockEnterprisePage} />
           <Route path="/labs/:labId/veritastock/vendors" component={VeritaStockVendorsPage} />
           <Route path="/labs/:labId/veritaops-app" component={VeritaOpsAppPage} />
+          <Route path="/labs/:labId/veritabench/scheduler" component={VeritaShiftSchedulerPage} />
           <Route path="/labs/:labId/account/settings" component={AccountSettingsPage} />
           <Route path="/labs/:labId/members" component={LabMembersPage} />
           {/* Bare /members is a natural guessed URL (it 404'd on Michael
