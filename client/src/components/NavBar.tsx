@@ -50,6 +50,7 @@ const operationsModules: NavLink[] = [
   { href: "/calculator", label: "VeritaBench\u2122" },
   { href: "/veritabench", label: "VeritaPace\u2122" },
   { href: "/veritabench/staffing", label: "VeritaShift\u2122" },
+  { href: "/veritabench/scheduler", label: "Shift Scheduler" },
   { href: "/veritabench/pi", label: "VeritaQA\u2122" },
   { href: "/veritastock", label: "VeritaStock\u2122" },
   { href: "/veritaops-app", label: "VeritaOps\u2122" },
