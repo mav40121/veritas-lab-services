@@ -637,15 +637,15 @@ export default function VeritaBenchStaffingPage() {
   const labQ = labId != null ? `?labId=${labId}` : "";
 
   // Staffing grid (leverage chain, Phase 3): the shift build that produces the FTE need.
-  const [gridLines, setGridLines] = useState<Array<{ label: string; role: string; hours_per_shift: string; days_per_week: string; over_under: string }>>([]);
+  const [gridLines, setGridLines] = useState<Array<{ label: string; role: string; hours_per_shift: string; days_per_week: string }>>([]);
   const [gridHoursPerFte, setGridHoursPerFte] = useState<number>(2080);
   const [gridSaving, setGridSaving] = useState(false);
   const gridComputed = useMemo(() => {
-    const lines = gridLines.map((l) => ({ hoursPerShift: parseFloat(l.hours_per_shift) || 0, daysPerWeek: parseFloat(l.days_per_week) || 0, overUnder: parseFloat(l.over_under) || 0 }));
+    const lines = gridLines.map((l) => ({ hoursPerShift: parseFloat(l.hours_per_shift) || 0, daysPerWeek: parseFloat(l.days_per_week) || 0 }));
     return staffingGridFte(lines, gridHoursPerFte);
   }, [gridLines, gridHoursPerFte]);
   const updateGridLine = (i: number, field: string, val: string) => setGridLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, [field]: val } : l)));
-  const addGridLine = () => setGridLines((ls) => [...ls, { label: "", role: "", hours_per_shift: "", days_per_week: "", over_under: "" }]);
+  const addGridLine = () => setGridLines((ls) => [...ls, { label: "", role: "", hours_per_shift: "", days_per_week: "" }]);
   const removeGridLine = (i: number) => setGridLines((ls) => ls.filter((_, idx) => idx !== i));
 
   async function loadGrid() {
@@ -658,7 +658,6 @@ export default function VeritaBenchStaffingPage() {
         label: l.label ?? "", role: l.role ?? "",
         hours_per_shift: l.hours_per_shift != null ? String(l.hours_per_shift) : "",
         days_per_week: l.days_per_week != null ? String(l.days_per_week) : "",
-        over_under: l.over_under != null ? String(l.over_under) : "",
       })));
     } catch { setLoadError(true); }
   }
@@ -668,7 +667,7 @@ export default function VeritaBenchStaffingPage() {
     try {
       const lines = gridLines
         .filter((l) => l.label || l.hours_per_shift || l.days_per_week)
-        .map((l) => ({ label: l.label || null, role: l.role || null, hours_per_shift: l.hours_per_shift ? parseFloat(l.hours_per_shift) : 0, days_per_week: l.days_per_week ? parseFloat(l.days_per_week) : 0, over_under: l.over_under ? parseFloat(l.over_under) : 0 }));
+        .map((l) => ({ label: l.label || null, role: l.role || null, hours_per_shift: l.hours_per_shift ? parseFloat(l.hours_per_shift) : 0, days_per_week: l.days_per_week ? parseFloat(l.days_per_week) : 0 }));
       const res = await fetch(`${API_BASE}/api/staffing-grid${labQ}`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
@@ -905,7 +904,7 @@ export default function VeritaBenchStaffingPage() {
         </CardHeader>
         <CardContent>
           <p className="text-xs text-muted-foreground mb-3">
-            The shift build that produces the FTE need fed into the VeritaPace forecast. Hours per shift x days per week + adjustment = weekly hours; total / {(gridHoursPerFte / 52).toFixed(0)} hr per FTE.
+            The shift build that produces the FTE need fed into the VeritaPace forecast. Hours per shift x days per week = weekly hours; total / {(gridHoursPerFte / 52).toFixed(0)} hr per FTE.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -915,28 +914,26 @@ export default function VeritaBenchStaffingPage() {
                   <th className="pr-2">Role</th>
                   <th className="pr-2 text-right">Hr/shift</th>
                   <th className="pr-2 text-right">Days/wk</th>
-                  <th className="pr-2 text-right">Adj</th>
                   <th className="pr-2 text-right">Weekly</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {gridLines.map((l, i) => {
-                  const wk = (parseFloat(l.hours_per_shift) || 0) * (parseFloat(l.days_per_week) || 0) + (parseFloat(l.over_under) || 0);
+                  const wk = (parseFloat(l.hours_per_shift) || 0) * (parseFloat(l.days_per_week) || 0);
                   return (
                     <tr key={i} className="border-b border-muted/60">
                       <td className="py-1 pr-2"><Input className="h-8" value={l.label} onChange={e => updateGridLine(i, "label", e.target.value)} disabled={readOnly} placeholder="DS Tech" /></td>
                       <td className="pr-2"><Input className="h-8 w-24" value={l.role} onChange={e => updateGridLine(i, "role", e.target.value)} disabled={readOnly} placeholder="Tech" /></td>
                       <td className="pr-2"><Input className="h-8 w-16 text-right" type="text" inputMode="decimal" value={l.hours_per_shift} onChange={e => updateGridLine(i, "hours_per_shift", e.target.value)} disabled={readOnly} /></td>
                       <td className="pr-2"><Input className="h-8 w-16 text-right" type="text" inputMode="decimal" value={l.days_per_week} onChange={e => updateGridLine(i, "days_per_week", e.target.value)} disabled={readOnly} /></td>
-                      <td className="pr-2"><Input className="h-8 w-16 text-right" type="text" inputMode="decimal" value={l.over_under} onChange={e => updateGridLine(i, "over_under", e.target.value)} disabled={readOnly} /></td>
                       <td className="pr-2 text-right font-mono">{wk || 0}</td>
                       <td><Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeGridLine(i)} disabled={readOnly}><Trash2 size={13} /></Button></td>
                     </tr>
                   );
                 })}
                 {gridLines.length === 0 && (
-                  <tr><td colSpan={7} className="py-4 text-center text-xs text-muted-foreground">No positions yet. Add the shifts that staff the lab to compute the FTE need.</td></tr>
+                  <tr><td colSpan={6} className="py-4 text-center text-xs text-muted-foreground">No positions yet. Add the shifts that staff the lab to compute the FTE need.</td></tr>
                 )}
               </tbody>
             </table>

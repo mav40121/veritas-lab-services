@@ -92,16 +92,13 @@ export function chainGap(input: ChainGapInput): ChainGapResult {
 
 // The staffing model (Phase 3): the shift grid that produces the FTE need fed into
 // chainGap. Mirrors the LTSHealth Staff Management Tool "Staffing Grid" sheet: each
-// position line is hours/shift x days/week (+ an over-under weekly-hours adjustment),
-// summed to weekly hours, divided by weekly hours per FTE (hoursPerFteYear / 52, i.e.
-// 40 at 2080). This is coverage-built, so it typically exceeds the demand-driven FTE
-// budget; that difference is the gap.
+// position line is hours/shift x days/week, summed to weekly hours, divided by weekly
+// hours per FTE (hoursPerFteYear / 52, i.e. 40 at 2080). This is coverage-built, so it
+// typically exceeds the demand-driven FTE budget; that difference is the gap.
 
 export interface StaffingGridLine {
   hoursPerShift: number;
   daysPerWeek: number;
-  /** Manual weekly-hours adjustment (the tool's over/under column). */
-  overUnder?: number;
 }
 
 export interface StaffingGridResult {
@@ -117,7 +114,7 @@ export interface StaffingGridResult {
 export function staffingGridFte(lines: StaffingGridLine[], hoursPerFteYear = DEFAULT_HOURS_PER_FTE_YEAR): StaffingGridResult {
   const weeklyHoursPerFte = hoursPerFteYear / WEEKS_PER_YEAR; // 40 at 2080
   const weeklyHours = (lines || []).reduce(
-    (sum, l) => sum + ((Number(l.hoursPerShift) || 0) * (Number(l.daysPerWeek) || 0) + (Number(l.overUnder) || 0)),
+    (sum, l) => sum + ((Number(l.hoursPerShift) || 0) * (Number(l.daysPerWeek) || 0)),
     0,
   );
   const fteNeed = weeklyHoursPerFte > 0 ? weeklyHours / weeklyHoursPerFte : 0;
