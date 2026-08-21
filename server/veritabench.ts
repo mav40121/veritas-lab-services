@@ -3307,6 +3307,7 @@ export function registerVeritaBenchRoutes(
               quantity_on_hand: row.quantity_on_hand || 0,
               snap_qty: v.snap_qty,
               snap_unit: v.snap_unit || row.order_unit || row.unit || "each",
+              snap_price: v.snap_price || null,
             } as SnapOrderItem;
           })
           .filter((x: any): x is SnapOrderItem => x !== null);
