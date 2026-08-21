@@ -1080,7 +1080,7 @@ export function registerVeritaBenchRoutes(
     const nameReason = typeof req.body?.name_reason === "string" ? req.body.name_reason.trim().slice(0, 600) : "";
     const valid = requestedItems
       .filter((r: any) => typeof r?.id === "number" && typeof r?.snap_qty === "number" && r.snap_qty > 0)
-      .map((r: any) => ({ id: Number(r.id), snap_qty: Number(r.snap_qty), snap_unit: typeof r.snap_unit === "string" ? r.snap_unit : null }));
+      .map((r: any) => ({ id: Number(r.id), snap_qty: Number(r.snap_qty), snap_unit: typeof r.snap_unit === "string" ? r.snap_unit : null, snap_price: typeof r.snap_price === "string" ? r.snap_price.trim().slice(0, 40) : (r.snap_price != null ? String(r.snap_price).slice(0, 40) : null) }));
     if (valid.length === 0) {
       return res.status(400).json({ error: "No items with snap_qty > 0 submitted." });
     }
@@ -1109,6 +1109,7 @@ export function registerVeritaBenchRoutes(
             quantity_on_hand: row.quantity_on_hand || 0,
             snap_qty: v.snap_qty,
             snap_unit: v.snap_unit || row.order_unit || row.unit || "each",
+            snap_price: v.snap_price || null,
           } as SnapOrderItem;
         })
         .filter((x: any): x is SnapOrderItem => x !== null);
@@ -3277,7 +3278,7 @@ export function registerVeritaBenchRoutes(
       const nameReason = typeof req.body?.name_reason === "string" ? req.body.name_reason.trim().slice(0, 600) : "";
       const valid = requestedItems
         .filter((r: any) => typeof r?.id === "number" && typeof r?.snap_qty === "number" && r.snap_qty > 0)
-        .map((r: any) => ({ id: Number(r.id), snap_qty: Number(r.snap_qty), snap_unit: typeof r.snap_unit === "string" ? r.snap_unit : null }));
+        .map((r: any) => ({ id: Number(r.id), snap_qty: Number(r.snap_qty), snap_unit: typeof r.snap_unit === "string" ? r.snap_unit : null, snap_price: typeof r.snap_price === "string" ? r.snap_price.trim().slice(0, 40) : (r.snap_price != null ? String(r.snap_price).slice(0, 40) : null) }));
       if (valid.length === 0) {
         return res.status(400).json({ error: "No items with snap_qty > 0 submitted." });
       }

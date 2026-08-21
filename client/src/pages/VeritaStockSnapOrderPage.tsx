@@ -59,7 +59,7 @@ export default function VeritaStockSnapOrderPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterVendor, setFilterVendor] = useState<string>(initialVendor);
-  const [snap, setSnap] = useState<Record<number, { qty: string; unit: string }>>({});
+  const [snap, setSnap] = useState<Record<number, { qty: string; unit: string; price?: string }>>({});
   const [generating, setGenerating] = useState(false);
   // Order-level metadata typed by the operator; carried onto the generated PDF.
   const [poNumber, setPoNumber] = useState("");
@@ -126,7 +126,7 @@ export default function VeritaStockSnapOrderPage() {
       if (trimmed === "" || trimmed === "0") {
         delete next[id];
       } else {
-        next[id] = { qty: trimmed, unit: prev[id]?.unit || defaultUnit };
+        next[id] = { qty: trimmed, unit: prev[id]?.unit || defaultUnit, price: prev[id]?.price };
       }
       return next;
     });
@@ -139,9 +139,22 @@ export default function VeritaStockSnapOrderPage() {
     });
   };
 
+  // Optional per-item price the operator types (e.g. the BD price the rep asks
+  // for on every order). Prints on the Snap Order PDF; only ships for rows with
+  // an Order Qty > 0. Kept as free text so "12.50", "$12.50", or "12.50/case"
+  // all pass through as entered.
+  const setPrice = (id: number, price: string, defaultUnit: string) => {
+    setSnap((prev) => {
+      const cur = prev[id];
+      const clean = price.slice(0, 40);
+      if (!cur && !clean) return prev;
+      return { ...prev, [id]: { qty: cur?.qty || "", unit: cur?.unit || defaultUnit, price: clean } };
+    });
+  };
+
   const orderRows = useMemo(() => {
     return Object.entries(snap)
-      .map(([id, v]) => ({ id: Number(id), snap_qty: Number(v.qty), snap_unit: v.unit }))
+      .map(([id, v]) => ({ id: Number(id), snap_qty: Number(v.qty), snap_unit: v.unit, snap_price: v.price || "" }))
       .filter((r) => r.snap_qty > 0);
   }, [snap]);
 
@@ -359,6 +372,7 @@ export default function VeritaStockSnapOrderPage() {
                     <th className="text-right px-3 py-2 font-semibold">On Hand</th>
                     <th className="text-right px-3 py-2 font-semibold">Order Qty</th>
                     <th className="text-left px-3 py-2 font-semibold">Order Unit</th>
+                    <th className="text-right px-3 py-2 font-semibold">Price</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -401,6 +415,18 @@ export default function VeritaStockSnapOrderPage() {
                               {SNAP_UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
                             </SelectContent>
                           </Select>
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            value={selected?.price ?? ""}
+                            onChange={(e) => setPrice(it.id, e.target.value, defaultUnit)}
+                            placeholder="$"
+                            className="w-24 text-right ml-auto"
+                            disabled={readOnly}
+                            data-testid={`snap-price-${it.id}`}
+                          />
                         </td>
                       </tr>
                     );

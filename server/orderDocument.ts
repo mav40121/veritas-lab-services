@@ -700,11 +700,14 @@ export interface SnapOrderItem {
   quantity_on_hand: number;
   snap_qty: number;          // The manual order quantity entered by the user
   snap_unit: string;          // Unit the order is expressed in (defaults to order_unit, falls back to unit, then "each")
+  snap_price?: string | null; // Optional per-item price the operator types in (e.g. the BD price the rep asks for); printed as entered
 }
 
 function snapVendorSectionHTML(vendor: string, items: SnapOrderItem[], ctx?: ReorderLabContext): string {
   const rows = items.map((it, idx) => {
     const stripe = idx % 2 === 1 ? "background:#FAFBFD;" : "";
+    const pp = (it.snap_price || "").trim();
+    const priceCell = !pp ? "" : (/^[0-9][0-9.,]*$/.test(pp) ? `$${escapeHtml(pp)}` : escapeHtml(pp));
     return `<tr style="${stripe}">
       <td>${escapeHtml(it.item_name)}</td>
       <td>${escapeHtml(it.catalog_number || "—")}</td>
@@ -712,6 +715,7 @@ function snapVendorSectionHTML(vendor: string, items: SnapOrderItem[], ctx?: Reo
       <td>${escapeHtml(it.department || "—")}</td>
       <td style="text-align:right;">${it.quantity_on_hand} ${escapeHtml(it.unit || "")}</td>
       <td style="text-align:right;font-weight:700;color:${TEAL};">${it.snap_qty} ${escapeHtml(it.snap_unit)}</td>
+      <td style="text-align:right;">${priceCell}</td>
       <td style="text-align:center;width:60px;border:1px solid #D4D1CA;background:white;">&nbsp;</td>
     </tr>`;
   }).join("");
@@ -732,6 +736,7 @@ function snapVendorSectionHTML(vendor: string, items: SnapOrderItem[], ctx?: Reo
           <th style="text-align:left;">Department</th>
           <th style="text-align:right;">On Hand</th>
           <th style="text-align:right;">Order Qty</th>
+          <th style="text-align:right;">Price</th>
           <th style="text-align:center;">Confirmed Qty</th>
         </tr>
       </thead>
