@@ -2986,6 +2986,71 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, lab_id: Number(labId), deleted_lot: { id: lot.id, analyte: lot.analyte, lot_number: lot.lot_number }, results_deleted: results, violations_deleted: viols, corrective_actions_deleted: cas, period_reviews_deleted: periodReviews });
   });
 
+  // Admin: correct a mistyped/mislabeled QC control lot NUMBER (label-only fix).
+  // Re-labels the lot to newLotNumber; the attached qc_results (values, dates,
+  // voids) are left completely untouched. Used when a control lot was entered
+  // under the wrong number and must match the lab's real control material (e.g.
+  // Gameday lab 19, where three Level-1 lots were mis-entered and had to match the
+  // client's source QC file). Enforces the UNIQUE(lab_id, analyte, lot_number) key
+  // so a rename can never collide with an existing lot on the same line.
+  app.post("/api/admin/qc-correct-lot-number", (req, res) => {
+    const { secret, labId, lotId, newLotNumber } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!labId || !lotId || typeof newLotNumber !== "string" || !newLotNumber.trim()) {
+      return res.status(400).json({ error: "labId, lotId, and non-empty newLotNumber required" });
+    }
+    const newLot = newLotNumber.trim();
+    const sqlite = (db as any).$client;
+    const lot = sqlite.prepare(
+      "SELECT id, analyte, level, lot_number FROM qc_control_lots WHERE id = ? AND lab_id = ?"
+    ).get(Number(lotId), Number(labId)) as any;
+    if (!lot) return res.status(404).json({ error: "Lot not found for that lab" });
+    if (lot.lot_number === newLot) {
+      return res.json({ ok: true, unchanged: true, lab_id: Number(labId), lot: { id: lot.id, analyte: lot.analyte, level: lot.level, old_lot_number: lot.lot_number, new_lot_number: newLot } });
+    }
+    // Guard the UNIQUE(lab_id, analyte, lot_number) key: a DIFFERENT lot for the
+    // same lab + analyte must not already carry the target number.
+    const clash = sqlite.prepare(
+      "SELECT id FROM qc_control_lots WHERE lab_id = ? AND analyte = ? AND lot_number = ? AND id != ?"
+    ).get(Number(labId), lot.analyte, newLot, Number(lotId)) as any;
+    if (clash) {
+      return res.status(409).json({ error: `Another lot (id ${clash.id}) for ${lot.analyte} already uses lot ${newLot}` });
+    }
+    const info = sqlite.prepare(
+      "UPDATE qc_control_lots SET lot_number = ?, updated_at = ? WHERE id = ? AND lab_id = ?"
+    ).run(newLot, new Date().toISOString(), Number(lotId), Number(labId));
+    res.json({ ok: true, lab_id: Number(labId), rows_updated: info.changes, lot: { id: lot.id, analyte: lot.analyte, level: lot.level, old_lot_number: lot.lot_number, new_lot_number: newLot } });
+  });
+
+  // Admin: hard-delete ONE QC result row (and its dependent rule-violation /
+  // corrective-action rows). Used to expunge a stray entry that was never a real
+  // QC run, e.g. a point keyed during a live demo on a real client lab. Real QC
+  // results are VOIDED (soft-delete) through the lab UI, not hard-deleted; this
+  // admin path exists only for removing demo/erroneous artifacts.
+  app.post("/api/admin/qc-delete-result", (req, res) => {
+    const { secret, labId, resultId } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!labId || !resultId) return res.status(400).json({ error: "labId and resultId required" });
+    const sqlite = (db as any).$client;
+    const row = sqlite.prepare(
+      "SELECT id, control_lot_id, result_date, result_value FROM qc_results WHERE id = ? AND lab_id = ?"
+    ).get(Number(resultId), Number(labId)) as any;
+    if (!row) return res.status(404).json({ error: "Result not found for that lab" });
+    let cas = 0, viols = 0, deleted = 0;
+    try {
+      sqlite.exec("BEGIN");
+      cas = sqlite.prepare("DELETE FROM qc_corrective_actions WHERE qc_result_id = ?").run(Number(resultId)).changes;
+      viols = sqlite.prepare("DELETE FROM qc_rule_violations WHERE qc_result_id = ?").run(Number(resultId)).changes;
+      deleted = sqlite.prepare("DELETE FROM qc_results WHERE id = ? AND lab_id = ?").run(Number(resultId), Number(labId)).changes;
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[admin/qc-delete-result] failed:", err.message);
+      return res.status(500).json({ error: err.message || "delete failed" });
+    }
+    res.json({ ok: true, lab_id: Number(labId), deleted, violations_deleted: viols, corrective_actions_deleted: cas, result: { id: row.id, control_lot_id: row.control_lot_id, result_date: row.result_date, result_value: row.result_value } });
+  });
+
   // Admin: dump the six VeritaQC tables for forensic verification. Optional
   // labId narrows lots/results/corrective_actions/period_reviews/rule_settings
   // to one lab; violations are always returned in full (small table).
