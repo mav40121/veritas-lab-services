@@ -599,19 +599,28 @@ function calcCompliance(tests: TestRecord[]): {
 // ── Intelligence computation (client-side fallback) ───────────────────────────
 
 function computeIntelligence(tests: TestRecord[]): IntelligenceData {
-  const correlationsRequired = tests
+  const nonWaived = tests.filter((t) => t.complexity !== "WAIVED");
+  // The panel is a live worklist that must AGREE WITH THE GRID: an item drops off
+  // as soon as its study lands (a completed VeritaCheck study stamps the map date).
+  // So "required" here means OUTSTANDING, not the total regulatory requirement.
+  // Correlations outstanding: analyte reported on 2+ instruments whose method
+  // comparison is not current (needs a comparison per 42 CFR 493.1281).
+  const correlationsRequired = nonWaived
     .filter(
-      (t) => t.complexity !== "WAIVED" && t.instruments && t.instruments.length >= 2
+      (t) =>
+        t.instruments &&
+        t.instruments.length >= 2 &&
+        getDateStatus(t.last_method_comp, 6) !== "ok"
     )
     .map((t) => ({ analyte: t.analyte, instruments: t.instruments }));
 
-  const calVerRequired = tests.filter(
-    (t) => t.complexity !== "WAIVED"
+  // Cal verifications outstanding: non-waived tests whose cal ver is not current.
+  const calVerRequired = nonWaived.filter(
+    (t) => getDateStatus(t.last_cal_ver, 6) !== "ok"
   ).length;
 
-  const compliantTests = tests.filter(
+  const compliantTests = nonWaived.filter(
     (t) =>
-      t.complexity !== "WAIVED" &&
       getDateStatus(t.last_cal_ver, 6) === "ok" &&
       getDateStatus(t.last_method_comp, 6) === "ok"
   ).length;
@@ -2186,8 +2195,16 @@ export default function VeritaMapMapPage() {
   }, [mapApiBase]);
 
   // Intelligence — use API data or compute client-side from localTests
+  // Compute the panel from the LIVE local tests so it agrees with the grid and
+  // updates the moment a study stamps a date. The server intelligence
+  // (intelligenceRaw) hardcodes compliantTests=0 and returns the static total
+  // requirement rather than what is still outstanding, so it is only a loading
+  // fallback for the brief window before local tests hydrate.
   const intelligence: IntelligenceData = useMemo(
-    () => intelligenceRaw ?? computeIntelligence(localTests),
+    () =>
+      localTests.length > 0
+        ? computeIntelligence(localTests)
+        : intelligenceRaw ?? computeIntelligence(localTests),
     [intelligenceRaw, localTests]
   );
 
