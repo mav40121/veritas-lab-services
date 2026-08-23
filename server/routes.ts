@@ -20,7 +20,7 @@ import { storePdfToken, claimPdfToken } from "./pdfTokens";
 import { labLocalDate } from "./dateLocal";
 import { buildWasteReport, generateWasteReportPDF, generateWasteReportExcel, type WasteEventRow, type WasteReportContext } from "./wasteReport";
 import { entireLabFlag, sanitizeSpecialties, expandEntireLabRoles, cms209Gaps } from "./cms209Roles";
-import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution, analyteMatch } from "./veritacheckCoverage";
+import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution, analyteMatch, stampMapDatesFromStudies } from "./veritacheckCoverage";
 import { buildCoverageReportRows, generateCoverageReportExcel } from "./coverageReport";
 import { CATEGORY_TO_MAP_FIELD, analyteFromTaskName, MAP_SIGNOFF_FIELDS } from "./veritatrackMapSync";
 import { evaluateManualDiff } from "./rumke";
@@ -11286,6 +11286,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     );
     autoAttributeCoverageAnalyte(studyId, payload.cliaPresetLabel);
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId) as any;
+    // Stamp the VeritaMap grid's date column from this study (advance-only); see
+    // the POST create path. Keyed off the study's own lab_id so it works on both
+    // the lab-scoped and legacy edit routes. Never blocks the save.
+    try { if (updated?.lab_id != null) stampMapDatesFromStudies((db as any).$client, Number(updated.lab_id)); } catch (err: any) { console.warn('[veritamap-stamp] update failed:', err?.message); }
     res.json({ ...updated, needsCoverageAttribution: studyNeedsAttribution((db as any).$client, updated?.lab_id, updated?.study_type, updated?.test_name, updated?.coverage_analyte ?? null) });
   });
 
@@ -11520,6 +11524,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Phase 2 challenge hint: read coverage_analyte AFTER auto-attribution so a
     // silently-attributed study does not prompt.
     const _ca = ((db as any).$client.prepare("SELECT coverage_analyte FROM studies WHERE id = ?").get(study.id) as any)?.coverage_analyte ?? null;
+    // Stamp the VeritaMap grid's date column from this study so the map reflects
+    // the work the Coverage Report already counts (previously the grid stayed
+    // blank after a study). Advance-only; wrapped so a stamp failure never blocks
+    // the study save.
+    try { stampMapDatesFromStudies((db as any).$client, req.scope.labId); } catch (err: any) { console.warn('[veritamap-stamp] create failed:', err?.message); }
     res.json({ ...study, lab_id: req.scope.labId, needsCoverageAttribution: studyNeedsAttribution((db as any).$client, req.scope.labId, study.studyType, study.testName, _ca) });
   });
 
@@ -11602,6 +11611,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     );
     autoAttributeCoverageAnalyte(studyId, payload.cliaPresetLabel);
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId) as any;
+    // Stamp the VeritaMap grid's date column from this study (advance-only); see
+    // the POST create path. Keyed off the study's own lab_id so it works on both
+    // the lab-scoped and legacy edit routes. Never blocks the save.
+    try { if (updated?.lab_id != null) stampMapDatesFromStudies((db as any).$client, Number(updated.lab_id)); } catch (err: any) { console.warn('[veritamap-stamp] update failed:', err?.message); }
     res.json({ ...updated, needsCoverageAttribution: studyNeedsAttribution((db as any).$client, updated?.lab_id, updated?.study_type, updated?.test_name, updated?.coverage_analyte ?? null) });
   });
 
@@ -30311,6 +30324,38 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
     } catch (err: any) {
       console.error('[seed-instrument-menu] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Admin: backfill the VeritaMap grid's date columns (last_cal_ver /
+  // last_method_comp / last_precision) from existing VeritaCheck studies for one
+  // lab (labId) or every lab (omit labId), so maps built + studied BEFORE the
+  // study->grid stamp shipped light up. Advance-only, idempotent, dryRun-able.
+  // Delegates to stampMapDatesFromStudies (the same computation the Coverage
+  // Report uses), so the grid and the report cannot disagree.
+  app.post("/api/admin/veritamap/backfill-from-studies", (req, res) => {
+    const { secret, labId, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const sqlite = (db as any).$client;
+    try {
+      const labIds: number[] = labId != null
+        ? [Number(labId)]
+        : (sqlite.prepare("SELECT DISTINCT lab_id FROM veritamap_maps WHERE lab_id IS NOT NULL").all() as Array<{ lab_id: number }>).map((r) => r.lab_id);
+      let totalStamped = 0;
+      const byField: Record<string, number> = {};
+      const perLab: Array<{ labId: number; stamped: number; byField: Record<string, number> }> = [];
+      for (const lid of labIds) {
+        const r = stampMapDatesFromStudies(sqlite, lid, { dryRun: dryRun === true });
+        if (r.stamped > 0) {
+          totalStamped += r.stamped;
+          perLab.push({ labId: lid, stamped: r.stamped, byField: r.byField });
+          for (const [k, v] of Object.entries(r.byField)) byField[k] = (byField[k] || 0) + v;
+        }
+      }
+      res.json({ ok: true, dryRun: dryRun === true, labsScanned: labIds.length, totalStamped, byField, perLab: perLab.slice(0, 50) });
+    } catch (err: any) {
+      console.error("[admin/veritamap/backfill-from-studies] failed:", err.message);
       res.status(500).json({ error: err.message });
     }
   });
