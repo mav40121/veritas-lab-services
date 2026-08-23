@@ -1,6 +1,19 @@
 import { useState, useEffect } from "react";
 import { ChevronDown, ChevronUp, X, Info } from "lucide-react";
 
+// Maps a module key to its getting-started tutorial video stem in
+// /public/tutorials/<stem>.mp4 (same-origin static asset, silent H.264).
+// Keep in sync with the files in that folder. Most are identity; the
+// /veritabench page renders the VeritaPace productivity view, so its
+// "How VeritaBench works" card plays the matching VeritaPace walkthrough.
+const TUTORIAL_VIDEO: Record<string, string> = {
+  veritamap: "veritamap", veritacheck: "veritacheck", veritascan: "veritascan",
+  veritatrack: "veritatrack", veritapt: "veritapt", veritaops: "veritaops",
+  veritacomp: "veritacomp", veritapolicy: "veritapolicy", veritastaff: "veritastaff",
+  veritalab: "veritalab", veritaqc: "veritaqc", veritastock: "veritastock",
+  veritaresponse: "veritaresponse", veritabench: "veritapace",
+};
+
 // Customer-only onboarding card. Renders at the top of each module app
 // page with "What it does" + "How to use it" content. Dismissible per
 // (user, module) via localStorage. Defaults expanded on first visit.
@@ -27,6 +40,9 @@ export function ModuleHowToCard({
   const lsKey = `module-howto-dismissed-${moduleKey}`;
   const [dismissed, setDismissed] = useState(false);
   const [expanded, setExpanded] = useState(true);
+  const [videoFailed, setVideoFailed] = useState(false);
+  const videoStem = TUTORIAL_VIDEO[moduleKey];
+  const hasVideo = !!videoStem && !videoFailed;
 
   useEffect(() => {
     if (typeof window !== "undefined" && localStorage.getItem(lsKey) === "1") {
@@ -75,6 +91,23 @@ export function ModuleHowToCard({
       </div>
       {expanded && (
         <div className="px-4 pb-4 pt-1 space-y-3 text-sm">
+          {hasVideo && (
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: accent }}>
+                Getting started
+              </div>
+              <video
+                controls
+                playsInline
+                preload="metadata"
+                className="w-full rounded-md border"
+                style={{ borderColor: `${accent}33` }}
+                onError={() => setVideoFailed(true)}
+              >
+                <source src={`/tutorials/${videoStem}.mp4`} type="video/mp4" />
+              </video>
+            </div>
+          )}
           <div>
             <div className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: accent }}>
               What it does

@@ -75,6 +75,7 @@ const mobileVeritaassureLinks: NavLink[] = [
   ...operationsModules,
 ];
 const mobileResourcesLinks: { href: string; label: string }[] = [
+  { href: "/learn", label: "Video Library" },
   { href: "/getting-started", label: "Getting Started" },
   { href: "/resources", label: "Articles" },
   { href: "/book", label: "Lab Management 101 Book" },
@@ -236,7 +237,7 @@ export function NavBar() {
             <DropdownMenuTrigger asChild>
               <button className={cn(
                 "flex items-center gap-1 px-2 py-1.5 rounded-md text-sm font-medium transition-colors",
-                ["/resources","/faq","/book","/study-guide","/roadmap","/getting-started"].some(p => location.startsWith(p))
+                ["/learn","/resources","/faq","/book","/study-guide","/roadmap","/getting-started"].some(p => location.startsWith(p))
                   ? "text-foreground bg-secondary"
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary"
               )}>
@@ -245,6 +246,15 @@ export function NavBar() {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuItem asChild>
+                <Link href="/learn" className="flex items-start gap-2 py-2">
+                  <Play size={15} className="mt-0.5 text-primary shrink-0" />
+                  <div>
+                    <div className="text-sm font-medium">Video Library</div>
+                    <div className="text-xs text-muted-foreground">See every module in about 30 seconds</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/getting-started" className="flex items-start gap-2 py-2">
                   <ListChecks size={15} className="mt-0.5 text-primary shrink-0" />
