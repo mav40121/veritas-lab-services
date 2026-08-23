@@ -616,7 +616,7 @@ function AdequacyPanel({ study, readOnly, onAttested }: {
 }
 
 // ── Main Page Component ─────────────────────────────────────────────────────
-export default function VeritaBenchStaffingPage() {
+export default function VeritaShiftPage() {
   const { user, isLoggedIn } = useAuth();
   const readOnly = useIsReadOnly("veritabench");
   const { toast } = useToast();
@@ -630,7 +630,7 @@ export default function VeritaBenchStaffingPage() {
 
   const hasPlanAccess = user && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "clinic", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
-  // Active lab for scoping staffing studies (see VeritaBenchPage for rationale).
+  // Active lab for scoping staffing studies (see VeritaPacePage for rationale).
   const activeLabIdFromUrl = useActiveLabId();
   const { data: memberships } = useMemberships();
   const labId = activeLabIdFromUrl ?? memberships?.find((m) => m.isPrimaryLab)?.labId ?? memberships?.[0]?.labId ?? null;

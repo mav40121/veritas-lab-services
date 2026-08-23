@@ -84,7 +84,7 @@ function productivePct(pm: ProductivityMonth): number | null {
   return (pm.productive_hours / (pm.productive_hours + pm.non_productive_hours)) * 100;
 }
 
-export default function VeritaBenchPage() {
+export default function VeritaPacePage() {
   const { user, isLoggedIn } = useAuth();
   const readOnly = useIsReadOnly("veritabench");
   const { toast } = useToast();

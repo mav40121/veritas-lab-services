@@ -1,6 +1,6 @@
 // tests/playwright/veritabench-pi-plan-tab.spec.ts
 //
-// Gate 3 step 8 receipt for the VeritaQA PI Plan tab (VeritaBenchPIPage). The
+// Gate 3 step 8 receipt for the VeritaQA PI Plan tab (VeritaQAPage). The
 // new "Plan" tab surfaces the program plan, improvement priorities, and the
 // annual leadership-review log (backend: /api/pi/plan* in server/veritabench.ts).
 // Token-gated interaction drives the tab; the unauth check guards the route.
