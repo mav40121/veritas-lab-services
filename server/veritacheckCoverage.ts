@@ -283,6 +283,95 @@ export function computeCoverageForLab(sqlite: any, labId: number): CoverageResul
   return computeCoverageFrom(instruments, combos, studies);
 }
 
+// The three VeritaMap grid date columns a VeritaCheck study can stamp. Allowlisted
+// BEFORE any name is interpolated into SQL, so only these columns are ever written.
+export const MAP_STUDY_DATE_FIELDS = ["last_cal_ver", "last_method_comp", "last_precision"];
+
+// Stamp the VeritaMap grid's per-analyte date columns (last_cal_ver / last_method_comp
+// / last_precision) from the lab's VeritaCheck studies, so the map reflects the work
+// the Coverage Report already counts instead of staying blank. cal_ver + linearity ->
+// last_cal_ver and method_comparison -> last_method_comp are taken straight from
+// computeCoverageFrom() (the SAME computation the Coverage Report uses, so the two
+// surfaces cannot disagree); precision -> last_precision is matched here by the same
+// matchesAnalyte() the engine uses (the coverage engine does not model precision).
+// ADVANCE-ONLY: never overwrites a newer date already on the map (a manual entry or a
+// VeritaTrack sign-off). dryRun computes the same counts and writes nothing. `sqlite`
+// is a better-sqlite3 handle.
+export function stampMapDatesFromStudies(
+  sqlite: any,
+  labId: number,
+  opts: { dryRun?: boolean } = {},
+): { stamped: number; byField: Record<string, number>; samples: Array<{ analyte: string; field: string; date: string; rows: number }> } {
+  const maps = sqlite.prepare("SELECT id FROM veritamap_maps WHERE lab_id = ?").all(labId) as Array<{ id: number }>;
+  if (maps.length === 0) return { stamped: 0, byField: {}, samples: [] };
+  const mapIds = maps.map((m) => m.id);
+  const ph = mapIds.map(() => "?").join(",");
+  const instruments = sqlite.prepare(
+    `SELECT i.id, i.instrument_name, i.nickname, i.serial_number FROM veritamap_instruments i WHERE i.map_id IN (${ph})`
+  ).all(...mapIds) as Instrument[];
+  const combos = sqlite.prepare(
+    `SELECT it.id, it.analyte, it.specialty, it.instrument_id,
+            it.linearity_exempt_multical, it.linearity_exempt_noncal,
+            it.linearity_exempt_waived, it.linearity_exempt_other
+     FROM veritamap_instrument_tests it WHERE it.map_id IN (${ph}) AND (it.active = 1 OR it.active IS NULL)`
+  ).all(...mapIds) as Combo[];
+  const studies = sqlite.prepare(
+    `SELECT id, test_name, instrument, study_type, status, lifecycle_state, date, coverage_analyte
+     FROM studies WHERE lab_id = ? AND archived_at IS NULL`
+  ).all(labId) as Study[];
+  const cov = computeCoverageFrom(instruments, combos, studies);
+  const dateById = new Map<number, string>();
+  for (const s of studies) if (s.date) dateById.set(s.id, String(s.date).slice(0, 10));
+
+  // analyte -> field -> latest date to write
+  const want: Record<string, Record<string, string>> = {};
+  const put = (analyte: string, field: string, date?: string) => {
+    if (!date) return;
+    const d = String(date).slice(0, 10);
+    (want[analyte] ||= {});
+    if (!want[analyte][field] || want[analyte][field] < d) want[analyte][field] = d;
+  };
+  for (const r of cov.rows) {
+    if (r.linearityStatus === "covered") for (const sid of r.studyIds) put(r.analyte, "last_cal_ver", dateById.get(sid));
+  }
+  for (const mc of cov.methodComparisons) {
+    if (mc.hasStudy && mc.studyId != null) put(mc.analyte, "last_method_comp", dateById.get(mc.studyId));
+  }
+  const mapAnalytes = Array.from(new Set(combos.map((c) => c.analyte)));
+  for (const s of studies) {
+    if (s.study_type !== "precision") continue;
+    for (const a of mapAnalytes) if (matchesAnalyte(s, a)) put(a, "last_precision", s.date);
+  }
+
+  let stamped = 0;
+  const byField: Record<string, number> = {};
+  const samples: Array<{ analyte: string; field: string; date: string; rows: number }> = [];
+  const countStale = (analyte: string, field: string, date: string): number =>
+    (sqlite.prepare(
+      `SELECT COUNT(*) AS c FROM veritamap_tests WHERE map_id IN (${ph}) AND analyte = ? AND (${field} IS NULL OR ${field} = '' OR ${field} < ?)`
+    ).get(...mapIds, analyte, date) as { c: number }).c;
+  const apply = sqlite.transaction(() => {
+    for (const [analyte, fields] of Object.entries(want)) {
+      for (const [field, date] of Object.entries(fields)) {
+        if (!MAP_STUDY_DATE_FIELDS.includes(field)) continue; // guard before interpolation
+        const n = countStale(analyte, field, date);
+        if (n > 0 && !opts.dryRun) {
+          sqlite.prepare(
+            `UPDATE veritamap_tests SET ${field} = ?, updated_at = datetime('now') WHERE map_id IN (${ph}) AND analyte = ? AND (${field} IS NULL OR ${field} = '' OR ${field} < ?)`
+          ).run(date, ...mapIds, analyte, date);
+        }
+        if (n > 0) {
+          stamped += n;
+          byField[field] = (byField[field] || 0) + n;
+          if (samples.length < 25) samples.push({ analyte, field, date, rows: n });
+        }
+      }
+    }
+  });
+  apply();
+  return { stamped, byField, samples };
+}
+
 // Sets the four linearity-exemption fields on one instrument_test, scoped to the
 // lab (the test must belong to a map owned by this lab). Returns false when the
 // test is not found in the lab. "other" is trimmed; empty -> stored NULL so a
