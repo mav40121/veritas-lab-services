@@ -139,7 +139,14 @@ export function scopeEnterpriseLocations<T extends { id: number; parent_warehous
 ): T[] {
   const warehouseId = resolveWarehouseId(baseLab);
   const group = ownerLabs.filter((l) => inWarehouseGroup(l, warehouseId));
-  return group.length >= 2 ? group : ownerLabs;
+  // Scope to the base lab's warehouse group. A standalone lab with no links has a
+  // group of just itself (inWarehouseGroup self-matches), so it correctly scopes
+  // to ITSELF. The old owner-wide fallback (`ownerLabs`) leaked: a multi-lab owner
+  // who owns several UNRELATED labs (e.g. an account with many demo/comped client
+  // labs) saw one lab's inventory aggregated onto another's page. A real
+  // multi-location enterprise must set parent_warehouse_lab_id links (as SCAHC
+  // does), which produces group.length >= 2 and the full group here.
+  return group;
 }
 
 export function validateBatch(i: BatchGuardInput): BatchGuardResult {
