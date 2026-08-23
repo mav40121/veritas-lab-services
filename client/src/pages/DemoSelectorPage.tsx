@@ -59,10 +59,11 @@ const modules = [
 
 const inputStyle: CSSProperties = {
   width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: "14px",
-  border: "1px solid #cbd5e0", borderRadius: "8px", outline: "none", fontFamily: "inherit",
+  border: "1px solid hsl(var(--border))", borderRadius: "8px", outline: "none", fontFamily: "inherit",
+  background: "hsl(var(--background))", color: "hsl(var(--foreground))",
 };
 const labelStyle: CSSProperties = {
-  display: "block", fontSize: "13px", fontWeight: 600, color: "#2d3748", marginBottom: "5px",
+  display: "block", fontSize: "13px", fontWeight: 600, color: "hsl(var(--foreground))", marginBottom: "5px",
 };
 
 export default function DemoSelectorPage() {
@@ -102,7 +103,7 @@ export default function DemoSelectorPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f8fafb" }}>
+    <div style={{ minHeight: "100vh", background: "hsl(var(--background))" }}>
       {/* Hero */}
       <div
         style={{
@@ -186,13 +187,13 @@ export default function DemoSelectorPage() {
             role="button"
             tabIndex={0}
             style={{
-              background: "#ffffff",
+              background: "hsl(var(--card))",
               borderRadius: "16px",
               boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)",
               padding: "36px 32px 32px",
               cursor: "pointer",
               transition: "transform 0.2s ease, box-shadow 0.2s ease",
-              border: `2px solid transparent`,
+              border: `2px solid hsl(var(--border))`,
               display: "flex",
               flexDirection: "column" as const,
             }}
@@ -206,7 +207,7 @@ export default function DemoSelectorPage() {
               (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
               (e.currentTarget as HTMLElement).style.boxShadow =
                 "0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)";
-              (e.currentTarget as HTMLElement).style.borderColor = "transparent";
+              (e.currentTarget as HTMLElement).style.borderColor = "hsl(var(--border))";
             }}
           >
             {/* Icon + Badge row */}
@@ -216,14 +217,14 @@ export default function DemoSelectorPage() {
                 <div style={{ fontSize: "12px", fontWeight: 600, color: mod.color, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "2px" }}>
                   {mod.brand}
                 </div>
-                <h2 style={{ fontSize: "22px", fontWeight: 700, color: "#1a1a1a", margin: 0 }}>
+                <h2 style={{ fontSize: "22px", fontWeight: 700, color: "hsl(var(--foreground))", margin: 0 }}>
                   {mod.label}
                 </h2>
               </div>
             </div>
 
             {/* Description */}
-            <p style={{ fontSize: "15px", lineHeight: 1.6, color: "#4a5568", margin: "0 0 20px", flex: 1 }}>
+            <p style={{ fontSize: "15px", lineHeight: 1.6, color: "hsl(var(--muted-foreground))", margin: "0 0 20px", flex: 1 }}>
               {mod.description}
             </p>
 
@@ -234,7 +235,7 @@ export default function DemoSelectorPage() {
                   key={i}
                   style={{
                     fontSize: "14px",
-                    color: "#2d3748",
+                    color: "hsl(var(--foreground))",
                     padding: "6px 0",
                     display: "flex",
                     alignItems: "center",
@@ -301,8 +302,8 @@ export default function DemoSelectorPage() {
 
       {/* Bottom note */}
       <div style={{ textAlign: "center", padding: "0 20px 48px" }}>
-        <p style={{ fontSize: "14px", color: "#718096", maxWidth: "500px", margin: "0 auto" }}>
-          Questions? <a href="mailto:info@veritaslabservices.com" style={{ color: "#01696F" }}>info@veritaslabservices.com</a>
+        <p style={{ fontSize: "14px", color: "hsl(var(--muted-foreground))", maxWidth: "500px", margin: "0 auto" }}>
+          Questions? <a href="mailto:info@veritaslabservices.com" style={{ color: "hsl(var(--primary))" }}>info@veritaslabservices.com</a>
         </p>
       </div>
 
@@ -314,12 +315,12 @@ export default function DemoSelectorPage() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{ background: "#ffffff", borderRadius: "16px", maxWidth: "480px", width: "100%", padding: "28px", boxShadow: "0 12px 48px rgba(0,0,0,0.24)", maxHeight: "90vh", overflowY: "auto" }}
+            style={{ background: "hsl(var(--card))", borderRadius: "16px", maxWidth: "480px", width: "100%", padding: "28px", boxShadow: "0 12px 48px rgba(0,0,0,0.24)", maxHeight: "90vh", overflowY: "auto" }}
           >
             {status === "sent" ? (
               <div style={{ textAlign: "center", padding: "12px 0" }}>
-                <h2 style={{ fontSize: "20px", fontWeight: 700, color: "#01696F", margin: "0 0 10px" }}>Thanks, we will be in touch</h2>
-                <p style={{ fontSize: "14px", color: "#4a5568", lineHeight: 1.6, margin: "0 0 20px" }}>
+                <h2 style={{ fontSize: "20px", fontWeight: 700, color: "hsl(var(--primary))", margin: "0 0 10px" }}>Thanks, we will be in touch</h2>
+                <p style={{ fontSize: "14px", color: "hsl(var(--muted-foreground))", lineHeight: 1.6, margin: "0 0 20px" }}>
                   Your request reached the team at info@veritaslabservices.com. We will reply to schedule a live walkthrough.
                 </p>
                 <button
@@ -332,10 +333,10 @@ export default function DemoSelectorPage() {
             ) : (
               <form onSubmit={submitDemoRequest}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "6px" }}>
-                  <h2 style={{ fontSize: "20px", fontWeight: 700, color: "#1a1a1a", margin: 0 }}>Request a live demo</h2>
-                  <button type="button" onClick={() => setShowForm(false)} aria-label="Close" style={{ background: "none", border: "none", fontSize: "24px", lineHeight: 1, color: "#a0aec0", cursor: "pointer" }}>&times;</button>
+                  <h2 style={{ fontSize: "20px", fontWeight: 700, color: "hsl(var(--foreground))", margin: 0 }}>Request a live demo</h2>
+                  <button type="button" onClick={() => setShowForm(false)} aria-label="Close" style={{ background: "none", border: "none", fontSize: "24px", lineHeight: 1, color: "hsl(var(--muted-foreground))", cursor: "pointer" }}>&times;</button>
                 </div>
-                <p style={{ fontSize: "13px", color: "#718096", margin: "0 0 18px", lineHeight: 1.5 }}>
+                <p style={{ fontSize: "13px", color: "hsl(var(--muted-foreground))", margin: "0 0 18px", lineHeight: 1.5 }}>
                   Tell us a little about your lab and we will schedule a walkthrough.
                 </p>
                 <div style={{ marginBottom: "14px" }}>
@@ -368,8 +369,8 @@ export default function DemoSelectorPage() {
                 >
                   {status === "sending" ? "Sending..." : "Send request"}
                 </button>
-                <p style={{ fontSize: "12px", color: "#a0aec0", textAlign: "center", margin: "12px 0 0" }}>
-                  Or email <a href="mailto:info@veritaslabservices.com" style={{ color: "#01696F" }}>info@veritaslabservices.com</a>
+                <p style={{ fontSize: "12px", color: "hsl(var(--muted-foreground))", textAlign: "center", margin: "12px 0 0" }}>
+                  Or email <a href="mailto:info@veritaslabservices.com" style={{ color: "hsl(var(--primary))" }}>info@veritaslabservices.com</a>
                 </p>
               </form>
             )}
