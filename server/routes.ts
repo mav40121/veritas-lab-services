@@ -22,7 +22,7 @@ import { buildWasteReport, generateWasteReportPDF, generateWasteReportExcel, typ
 import { entireLabFlag, sanitizeSpecialties, expandEntireLabRoles, cms209Gaps } from "./cms209Roles";
 import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution, analyteMatch } from "./veritacheckCoverage";
 import { buildCoverageReportRows, generateCoverageReportExcel } from "./coverageReport";
-import { CATEGORY_TO_MAP_FIELD, analyteFromTaskName } from "./veritatrackMapSync";
+import { CATEGORY_TO_MAP_FIELD, analyteFromTaskName, MAP_SIGNOFF_FIELDS } from "./veritatrackMapSync";
 import { evaluateManualDiff } from "./rumke";
 import { auditVeritamapConsistency } from "./veritamapConsistency";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
@@ -3062,33 +3062,42 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // is guaranteed to resolve. Idempotent (re-run links 0). Pass {dryRun:true} to
   // preview, optional {labId} to scope to one lab.
   app.post("/api/admin/veritatrack/backfill-map-links", (req, res) => {
-    const { secret, labId, dryRun } = req.body || {};
+    const { secret, labId, dryRun, stampDates } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     const sqlite = (db as any).$client;
     const onlyLab = labId != null ? Number(labId) : null;
+    const doStamp = stampDates !== false; // default: also stamp map dates from sign-offs
     try {
       const rows = sqlite.prepare(
         `SELECT id, lab_id, name, category FROM veritatrack_tasks
           WHERE active = 1
             AND (map_analyte IS NULL OR map_analyte = '' OR map_field IS NULL OR map_field = '')`
       ).all() as Array<{ id: number; lab_id: number | null; name: string; category: string }>;
-      // Cache each lab's live map-analyte set so we hit veritamap_tests once per lab.
+      // Cache each lab's map ids (for the date write) and analyte set (for the match).
+      const labMapIds = new Map<number, number[]>();
+      const mapIdsForLab = (lid: number): number[] => {
+        const cached = labMapIds.get(lid);
+        if (cached) return cached;
+        const ids = (sqlite.prepare("SELECT id FROM veritamap_maps WHERE lab_id = ?").all(lid) as Array<{ id: number }>).map(m => m.id);
+        labMapIds.set(lid, ids);
+        return ids;
+      };
       const labAnalytes = new Map<number, Set<string>>();
       const analytesForLab = (lid: number): Set<string> => {
         const cached = labAnalytes.get(lid);
         if (cached) return cached;
-        const maps = sqlite.prepare("SELECT id FROM veritamap_maps WHERE lab_id = ?").all(lid) as Array<{ id: number }>;
+        const ids = mapIdsForLab(lid);
         const set = new Set<string>();
-        if (maps.length) {
-          const ph = maps.map(() => "?").join(",");
-          for (const r of sqlite.prepare(`SELECT DISTINCT analyte FROM veritamap_tests WHERE map_id IN (${ph})`).all(...maps.map((m: { id: number }) => m.id)) as Array<{ analyte: string }>) {
+        if (ids.length) {
+          const ph = ids.map(() => "?").join(",");
+          for (const r of sqlite.prepare(`SELECT DISTINCT analyte FROM veritamap_tests WHERE map_id IN (${ph})`).all(...ids) as Array<{ analyte: string }>) {
             if (r.analyte) set.add(r.analyte);
           }
         }
         labAnalytes.set(lid, set);
         return set;
       };
-      const toApply: Array<{ id: number; analyte: string; field: string }> = [];
+      const toApply: Array<{ id: number; lab_id: number; analyte: string; field: string }> = [];
       let skippedNoField = 0, skippedNoMatch = 0;
       const byCategory: Record<string, number> = {};
       const samples: Array<{ id: number; lab_id: number | null; category: string; analyte: string; map_field: string }> = [];
@@ -3098,18 +3107,59 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         if (!field) { skippedNoField++; continue; }
         const analyte = analyteFromTaskName(t.name);
         if (!analyte || t.lab_id == null || !analytesForLab(t.lab_id).has(analyte)) { skippedNoMatch++; continue; }
-        toApply.push({ id: t.id, analyte, field });
+        toApply.push({ id: t.id, lab_id: t.lab_id, analyte, field });
         byCategory[t.category] = (byCategory[t.category] || 0) + 1;
         if (samples.length < 25) samples.push({ id: t.id, lab_id: t.lab_id, category: t.category, analyte, map_field: field });
       }
-      if (!dryRun && toApply.length) {
-        const upd = sqlite.prepare("UPDATE veritatrack_tasks SET map_analyte = ?, map_field = ?, updated_at = datetime('now') WHERE id = ?");
-        const applyAll = sqlite.transaction((items: Array<{ id: number; analyte: string; field: string }>) => {
-          for (const it of items) upd.run(it.analyte, it.field, it.id);
-        });
-        applyAll(toApply);
+
+      // Date propagation: for each task we are linking, carry its latest REAL
+      // sign-off date onto the map field so verifications already completed turn
+      // the coverage map green (a link alone only helps FUTURE sign-offs). This is
+      // exactly what applyMapSignoffWriteback would have written had the link
+      // existed. Advance-only: never overwrite a newer date already on the map
+      // (e.g. one entered by hand). Field names come from CATEGORY_TO_MAP_FIELD, all
+      // of which are in MAP_SIGNOFF_FIELDS, but re-check before interpolating.
+      const latestSignoff = sqlite.prepare("SELECT MAX(completed_date) AS d FROM veritatrack_signoffs WHERE task_id = ?");
+      let mapCellsDated = 0;
+      const dateSamples: Array<{ id: number; analyte: string; field: string; date: string; rows: number }> = [];
+      const plannedStamps: Array<{ field: string; date: string; mapIds: number[]; analyte: string }> = [];
+      if (doStamp) {
+        for (const it of toApply) {
+          if (!MAP_SIGNOFF_FIELDS.includes(it.field)) continue;
+          const d = (latestSignoff.get(it.id) as { d: string | null } | undefined)?.d;
+          if (!d) continue;
+          const mapIds = mapIdsForLab(it.lab_id);
+          if (!mapIds.length) continue;
+          const ph = mapIds.map(() => "?").join(",");
+          const n = (sqlite.prepare(
+            `SELECT COUNT(*) AS c FROM veritamap_tests
+              WHERE map_id IN (${ph}) AND analyte = ?
+                AND (${it.field} IS NULL OR ${it.field} = '' OR ${it.field} < ?)`
+          ).get(...mapIds, it.analyte, d) as { c: number }).c;
+          if (n > 0) {
+            mapCellsDated += n;
+            plannedStamps.push({ field: it.field, date: d, mapIds, analyte: it.analyte });
+            if (dateSamples.length < 15) dateSamples.push({ id: it.id, analyte: it.analyte, field: it.field, date: d, rows: n });
+          }
+        }
       }
-      res.json({ ok: true, dryRun: !!dryRun, labId: onlyLab, scanned: rows.length, linked: toApply.length, skippedNoField, skippedNoMatch, byCategory, samples });
+
+      if (!dryRun && (toApply.length || plannedStamps.length)) {
+        const linkUpd = sqlite.prepare("UPDATE veritatrack_tasks SET map_analyte = ?, map_field = ?, updated_at = datetime('now') WHERE id = ?");
+        const applyAll = sqlite.transaction(() => {
+          for (const it of toApply) linkUpd.run(it.analyte, it.field, it.id);
+          for (const s of plannedStamps) {
+            const ph = s.mapIds.map(() => "?").join(",");
+            sqlite.prepare(
+              `UPDATE veritamap_tests SET ${s.field} = ?, updated_at = datetime('now')
+                WHERE map_id IN (${ph}) AND analyte = ?
+                  AND (${s.field} IS NULL OR ${s.field} = '' OR ${s.field} < ?)`
+            ).run(s.date, ...s.mapIds, s.analyte, s.date);
+          }
+        });
+        applyAll();
+      }
+      res.json({ ok: true, dryRun: !!dryRun, stampDates: doStamp, labId: onlyLab, scanned: rows.length, linked: toApply.length, mapCellsDated, skippedNoField, skippedNoMatch, byCategory, samples, dateSamples });
     } catch (err: any) {
       console.error("[admin/veritatrack/backfill-map-links] failed:", err.message);
       return res.status(500).json({ error: err.message || "backfill failed" });
