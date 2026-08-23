@@ -3,15 +3,14 @@ import { ChevronDown, ChevronUp, X, Info } from "lucide-react";
 
 // Maps a module key to its getting-started tutorial video stem in
 // /public/tutorials/<stem>.mp4 (same-origin static asset, silent H.264).
-// Keep in sync with the files in that folder. Most are identity; the
-// /veritabench page renders the VeritaPace productivity view, so its
-// "How VeritaBench works" card plays the matching VeritaPace walkthrough.
+// Keep in sync with the files in that folder (identity mapping). The
+// productivity module keys as "veritapace" (its page lives at /veritabench).
 const TUTORIAL_VIDEO: Record<string, string> = {
   veritamap: "veritamap", veritacheck: "veritacheck", veritascan: "veritascan",
   veritatrack: "veritatrack", veritapt: "veritapt", veritaops: "veritaops",
   veritacomp: "veritacomp", veritapolicy: "veritapolicy", veritastaff: "veritastaff",
   veritalab: "veritalab", veritaqc: "veritaqc", veritastock: "veritastock",
-  veritaresponse: "veritaresponse", veritabench: "veritapace",
+  veritaresponse: "veritaresponse", veritapace: "veritapace",
 };
 
 // Customer-only onboarding card. Renders at the top of each module app
