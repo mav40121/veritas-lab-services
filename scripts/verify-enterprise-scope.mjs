@@ -1,12 +1,13 @@
 // scripts/verify-enterprise-scope.mjs
 //
-// Gate 3 receipt for the enterprise roll-up scoping change
-// (server/enterpriseTransfer.ts scopeEnterpriseLocations, used by the
-// /veritastock/enterprise/rollup route). The roll-up used to show every lab an
-// owner has; it now narrows to the warehouse group (a warehouse + the
-// stockrooms whose parent_warehouse_lab_id points at it), with a fallback to
-// the full owner list when no warehouse links exist so legacy enterprises that
-// never set parent_warehouse_lab_id are never broken.
+// Gate 3 receipt for scopeEnterpriseLocations (server/enterpriseTransfer.ts),
+// used by the VeritaStock enterprise reads (rollup, team, expired-on-shelf,
+// transfers). The roll-up narrows to the base lab's warehouse group (a warehouse
+// + the stockrooms whose parent_warehouse_lab_id points at it). A standalone lab
+// with no links scopes to ITSELF. The old code fell back to the FULL owner list
+// when a lab had no warehouse group, which leaked: a multi-lab owner who owns
+// several UNRELATED labs saw one lab's inventory aggregated onto another's page
+// (caught on the Riverpoint tutorial sandbox showing "Michaels Lab" items).
 //
 // Mirrors the pure helpers. Run: node scripts/verify-enterprise-scope.mjs
 
@@ -20,7 +21,7 @@ function inWarehouseGroup(lab, warehouseId) {
 function scopeEnterpriseLocations(baseLab, ownerLabs) {
   const warehouseId = resolveWarehouseId(baseLab);
   const group = ownerLabs.filter((l) => inWarehouseGroup(l, warehouseId));
-  return group.length >= 2 ? group : ownerLabs;
+  return group; // standalone lab -> [baseLab]; linked enterprise -> the group
 }
 
 const ids = (arr) => arr.map((l) => l.id).sort((a, b) => a - b).join(",");
@@ -47,8 +48,8 @@ const cases = [
     base: W(8), owner: OWNER_LABS, expect: "8,9",
   },
   {
-    name: "Legacy unlinked enterprise (2 labs, no links) falls back to owner-wide",
-    base: W(2), owner: [W(2), W(6)], expect: "2,6",
+    name: "Two unlinked labs under one owner -> base lab scopes to ITSELF (no leak)",
+    base: W(2), owner: [W(2), W(6)], expect: "2",
   },
   {
     name: "Linked SCAHC group (lab 6 points to warehouse 2) -> just those two",
@@ -59,8 +60,12 @@ const cases = [
     base: W(5), owner: [W(5)], expect: "5",
   },
   {
-    name: "Standalone lab among groups falls back to owner-wide (not a demo surface)",
-    base: W(99), owner: OWNER_LABS, expect: ids(OWNER_LABS),
+    name: "Standalone lab among groups scopes to itself (no cross-group bleed)",
+    base: W(99), owner: OWNER_LABS, expect: "99",
+  },
+  {
+    name: "THE BUG: owner of 6 unrelated standalone labs -> each scopes to itself",
+    base: W(22), owner: [W(3), W(7), W(14), W(18), W(21), W(22)], expect: "22",
   },
 ];
 

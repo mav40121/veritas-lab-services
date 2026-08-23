@@ -520,6 +520,9 @@ function AppContent() {
           <Route path="/labs/:labId/veritastock/vendors" component={VeritaStockVendorsPage} />
           <Route path="/labs/:labId/veritaops-app" component={VeritaOpsAppPage} />
           <Route path="/labs/:labId/veritabench/scheduler" component={VeritaShiftSchedulerPage} />
+          <Route path="/labs/:labId/veritabench/staffing" component={VeritaBenchStaffingPage} />
+          <Route path="/labs/:labId/veritabench/pi" component={VeritaBenchPIPage} />
+          <Route path="/labs/:labId/veritabench" component={VeritaBenchPage} />
           <Route path="/labs/:labId/account/settings" component={AccountSettingsPage} />
           <Route path="/labs/:labId/members" component={LabMembersPage} />
           {/* Bare /members is a natural guessed URL (it 404'd on Michael

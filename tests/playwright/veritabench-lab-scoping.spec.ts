@@ -1,40 +1,42 @@
 // tests/playwright/veritabench-lab-scoping.spec.ts
 //
-// Phase 1 of the operations leverage chain: VeritaBench/Pace (productivity_months)
-// and VeritaShift (staffing_studies) now scope their data by the active lab.
-// /veritabench has no /labs/:id URL prefix, so each page resolves the active lab
-// from the primary-lab membership and sends it as ?labId on the productivity and
-// staffing requests. The server dual-writes lab_id and scopes reads to that lab
-// (with an account-only fallback when no labId is sent).
+// Gate 3 step 8 (browser) evidence for the VeritaBench lab-scoping fix.
+// /veritabench and its tabs (staffing, scheduler, pi) were NOT in
+// LAB_SCOPABLE_PATHS and had no /labs/:labId/* variants (except scheduler), so
+// on those routes useActiveLabId() was null and the page fell back to the user's
+// PRIMARY lab -- a multi-lab owner viewing a secondary lab saw the wrong lab's
+// operations data (caught in the tutorial-video QA: /veritabench showed
+// "Michaels Lab" instead of the active sandbox). This adds the /veritabench entry
+// to LAB_SCOPABLE_PATHS + the lab-scoped routes; this spec asserts the new
+// /labs/:labId/veritabench route resolves (not a 404) so useActiveLabId() reads
+// the lab from the URL.
 //
-// This spec asserts the outgoing productivity request carries ?labId. It requires
-// PW_TOKEN (an owner JWT; a multi-lab owner makes the scoping meaningful) and skips
-// otherwise so it stays green in the compile-only CI gate.
-//
-// Env: PW_BASE (default production www), PW_TOKEN (owner JWT).
+// Read-only, non-mutating. Needs PW_TOKEN; skips otherwise.
+// Env: PW_BASE (default production www), PW_TOKEN, PW_MAP_LAB_ID (default 22).
 
 import { test, expect } from "@playwright/test";
 import { injectAuth } from "./_auth";
 
 const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
 const TOKEN = process.env.PW_TOKEN || "";
+const LAB_ID = process.env.PW_MAP_LAB_ID || "22";
 
-test.describe("VeritaBench: operations data is lab-scoped", () => {
-  test("productivity request carries ?labId for the active lab", async ({ page }) => {
+test.describe("VeritaBench is lab-scoped by URL", () => {
+  test("/labs/:labId/veritabench resolves and renders (not a 404)", async ({ page }) => {
     if (!TOKEN) {
-      test.skip(true, "No PW_TOKEN provided (compile-time gate run).");
+      test.skip(true, "No PW_TOKEN provided (compile-only gate run).");
       return;
     }
     await injectAuth(page, BASE, TOKEN);
+    await page.goto(`${BASE}/labs/${LAB_ID}/veritabench`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(2500);
 
-    await page.goto(`${BASE}/veritabench`);
-
-    // The page may fire an initial account-scoped load before memberships resolve,
-    // then a lab-scoped load once the active lab is known. Wait for the scoped one.
-    const scopedReq = await page.waitForRequest(
-      (r) => r.url().includes("/api/productivity") && /[?&]labId=\d+/.test(r.url()),
-      { timeout: 20000 }
-    );
-    expect(scopedReq.url()).toMatch(/[?&]labId=\d+/);
+    const body = (await page.textContent("body")) || "";
+    // The new lab-scoped route must resolve to the VeritaBench/VeritaPace page,
+    // not the client 404 fallback.
+    expect(body).not.toContain("404 Page Not Found");
+    expect(/VeritaBench|VeritaPace|Productivity|Forecast from Goal/i.test(body)).toBeTruthy();
+    // The URL must keep the lab prefix so useActiveLabId() reads it.
+    await expect(page).toHaveURL(new RegExp(`/labs/${LAB_ID}/veritabench`));
   });
 });

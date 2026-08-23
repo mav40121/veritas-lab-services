@@ -23,6 +23,7 @@ const LAB_SCOPABLE_PATHS: readonly string[] = [
   "/veritapolicy-app",
   "/veritaqc-app",
   "/veritaops-app",
+  "/veritabench",
   "/veritacheck",
   "/veritacheck/cumsum",
   "/veritastock",
