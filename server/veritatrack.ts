@@ -4,7 +4,7 @@ import { db } from "./db";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
 import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
-import { preserveMapLink, applyMapSignoffWriteback } from "./veritatrackMapSync";
+import { preserveMapLink, applyMapSignoffWriteback, deriveMapLink, analyteFromTaskName } from "./veritatrackMapSync";
 import { labLocalDate } from "./dateLocal";
 
 function trackLicenseCtx(req: any): LicenseContext {
@@ -475,13 +475,23 @@ export function registerVeritaTrackRoutes(
     if (!name) return res.status(400).json({ error: "name required" });
     const freqMonths = frequency_months || frequencyToMonths(frequency || "Monthly");
     const now = new Date().toISOString();
-    const r = sqlite.prepare(
-      "INSERT INTO veritatrack_tasks (user_id,name,category,instrument,owner,frequency,frequency_months,map_analyte,map_field,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
-    ).run(userId, name, category || "Other", instrument || null, owner || null, frequency || "Monthly", freqMonths, map_analyte || null, map_field || null, notes || null, now, now);
     // write-path Shape A (resolver unification PR B): tag via the SAME shared
     // resolveLegacyLabId the tasks list read uses, so write==read in every
     // branch (validated active lab -> default lab -> first membership).
     const newLabId = resolveLegacyLabId(sqlite, req) ?? null;
+    // Auto-link to the VeritaMap when the caller OMITTED the linkage (both fields
+    // undefined) but the category is map-tracked and the analyte matches a live map
+    // row. Closes the gap that let bulk-imported Precision Verification tasks land
+    // unlinked, so their sign-offs silently never reached the map. An explicit null
+    // still means "leave unlinked" (respected, since we only derive on undefined).
+    let ma = map_analyte, mf = map_field;
+    if (mf === undefined && ma === undefined) {
+      const derived = deriveMapLink(sqlite, newLabId, category, analyteFromTaskName(name));
+      if (derived) { ma = derived.map_analyte; mf = derived.map_field; }
+    }
+    const r = sqlite.prepare(
+      "INSERT INTO veritatrack_tasks (user_id,name,category,instrument,owner,frequency,frequency_months,map_analyte,map_field,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
+    ).run(userId, name, category || "Other", instrument || null, owner || null, frequency || "Monthly", freqMonths, ma || null, mf || null, notes || null, now, now);
     try {
       sqlite.prepare("UPDATE veritatrack_tasks SET lab_id = ? WHERE id = ?").run(newLabId, r.lastInsertRowid);
     } catch {}
@@ -1037,9 +1047,18 @@ export function registerVeritaTrackRoutes(
       const now = new Date().toISOString();
       const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
       const userIdForRow = ownerRow?.owner_user_id ?? req.userId;
+      // Auto-link to the VeritaMap when the caller omitted the linkage but the
+      // category is map-tracked and the analyte matches a live map row (see the
+      // legacy POST above for the full rationale). Explicit null still leaves it
+      // unlinked, since we only derive when both fields are undefined.
+      let ma = map_analyte, mf = map_field;
+      if (mf === undefined && ma === undefined) {
+        const derived = deriveMapLink(sqlite, req.scope.labId, category, analyteFromTaskName(name));
+        if (derived) { ma = derived.map_analyte; mf = derived.map_field; }
+      }
       const r = sqlite.prepare(
         "INSERT INTO veritatrack_tasks (user_id,lab_id,name,category,instrument,owner,frequency,frequency_months,map_analyte,map_field,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
-      ).run(userIdForRow, req.scope.labId, name, category || "Other", instrument || null, owner || null, frequency || "Monthly", freqMonths, map_analyte || null, map_field || null, notes || null, now, now);
+      ).run(userIdForRow, req.scope.labId, name, category || "Other", instrument || null, owner || null, frequency || "Monthly", freqMonths, ma || null, mf || null, notes || null, now, now);
       trackAudit({ labId: req.scope.labId, taskId: Number(r.lastInsertRowid), event: "task_created", detail: `${name} (${frequency || "Monthly"})`, byUserId: req.user?.userId ?? null });
       res.json(sqlite.prepare("SELECT * FROM veritatrack_tasks WHERE id = ?").get(r.lastInsertRowid));
     });

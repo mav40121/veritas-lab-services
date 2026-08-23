@@ -22,6 +22,7 @@ import { buildWasteReport, generateWasteReportPDF, generateWasteReportExcel, typ
 import { entireLabFlag, sanitizeSpecialties, expandEntireLabRoles, cms209Gaps } from "./cms209Roles";
 import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution, analyteMatch } from "./veritacheckCoverage";
 import { buildCoverageReportRows, generateCoverageReportExcel } from "./coverageReport";
+import { CATEGORY_TO_MAP_FIELD, analyteFromTaskName } from "./veritatrackMapSync";
 import { evaluateManualDiff } from "./rumke";
 import { auditVeritamapConsistency } from "./veritamapConsistency";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
@@ -3049,6 +3050,70 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(500).json({ error: err.message || "delete failed" });
     }
     res.json({ ok: true, lab_id: Number(labId), deleted, violations_deleted: viols, corrective_actions_deleted: cas, result: { id: row.id, control_lot_id: row.control_lot_id, result_date: row.result_date, result_value: row.result_value } });
+  });
+
+  // Admin: backfill VeritaMap links on VeritaTrack tasks that were created without
+  // one (the class behind the 2026-07-29 SCAHC report: a Precision Verification
+  // sign-off never reached the map because the task carried no map_analyte/map_field).
+  // Repairs existing rows only; the create-path auto-link in veritatrack.ts prevents
+  // NEW unlinked-but-linkable tasks. Sets a link ONLY when the task's category is one
+  // of the four map-tracked categories AND the analyte parsed from the task name
+  // EXACTLY matches a live veritamap_tests row on the task's lab, so a later sign-off
+  // is guaranteed to resolve. Idempotent (re-run links 0). Pass {dryRun:true} to
+  // preview, optional {labId} to scope to one lab.
+  app.post("/api/admin/veritatrack/backfill-map-links", (req, res) => {
+    const { secret, labId, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const onlyLab = labId != null ? Number(labId) : null;
+    try {
+      const rows = sqlite.prepare(
+        `SELECT id, lab_id, name, category FROM veritatrack_tasks
+          WHERE active = 1
+            AND (map_analyte IS NULL OR map_analyte = '' OR map_field IS NULL OR map_field = '')`
+      ).all() as Array<{ id: number; lab_id: number | null; name: string; category: string }>;
+      // Cache each lab's live map-analyte set so we hit veritamap_tests once per lab.
+      const labAnalytes = new Map<number, Set<string>>();
+      const analytesForLab = (lid: number): Set<string> => {
+        const cached = labAnalytes.get(lid);
+        if (cached) return cached;
+        const maps = sqlite.prepare("SELECT id FROM veritamap_maps WHERE lab_id = ?").all(lid) as Array<{ id: number }>;
+        const set = new Set<string>();
+        if (maps.length) {
+          const ph = maps.map(() => "?").join(",");
+          for (const r of sqlite.prepare(`SELECT DISTINCT analyte FROM veritamap_tests WHERE map_id IN (${ph})`).all(...maps.map((m: { id: number }) => m.id)) as Array<{ analyte: string }>) {
+            if (r.analyte) set.add(r.analyte);
+          }
+        }
+        labAnalytes.set(lid, set);
+        return set;
+      };
+      const toApply: Array<{ id: number; analyte: string; field: string }> = [];
+      let skippedNoField = 0, skippedNoMatch = 0;
+      const byCategory: Record<string, number> = {};
+      const samples: Array<{ id: number; lab_id: number | null; category: string; analyte: string; map_field: string }> = [];
+      for (const t of rows) {
+        if (onlyLab != null && t.lab_id !== onlyLab) continue;
+        const field = CATEGORY_TO_MAP_FIELD[t.category];
+        if (!field) { skippedNoField++; continue; }
+        const analyte = analyteFromTaskName(t.name);
+        if (!analyte || t.lab_id == null || !analytesForLab(t.lab_id).has(analyte)) { skippedNoMatch++; continue; }
+        toApply.push({ id: t.id, analyte, field });
+        byCategory[t.category] = (byCategory[t.category] || 0) + 1;
+        if (samples.length < 25) samples.push({ id: t.id, lab_id: t.lab_id, category: t.category, analyte, map_field: field });
+      }
+      if (!dryRun && toApply.length) {
+        const upd = sqlite.prepare("UPDATE veritatrack_tasks SET map_analyte = ?, map_field = ?, updated_at = datetime('now') WHERE id = ?");
+        const applyAll = sqlite.transaction((items: Array<{ id: number; analyte: string; field: string }>) => {
+          for (const it of items) upd.run(it.analyte, it.field, it.id);
+        });
+        applyAll(toApply);
+      }
+      res.json({ ok: true, dryRun: !!dryRun, labId: onlyLab, scanned: rows.length, linked: toApply.length, skippedNoField, skippedNoMatch, byCategory, samples });
+    } catch (err: any) {
+      console.error("[admin/veritatrack/backfill-map-links] failed:", err.message);
+      return res.status(500).json({ error: err.message || "backfill failed" });
+    }
   });
 
   // Admin: dump the six VeritaQC tables for forensic verification. Optional

@@ -30,6 +30,60 @@ export function preserveMapLink(
 // is interpolated into SQL, so only these columns can ever be written.
 export const MAP_SIGNOFF_FIELDS = ["last_cal_ver", "last_method_comp", "last_precision", "last_sop_review"];
 
+// Canonical VeritaTrack category -> VeritaMap date column. ONLY these categories
+// correspond to a field the VeritaMap coverage view reads; every other category
+// (QC Review, Equipment Calibration, HIPAA, Blood Bank Alarm Checks, ...) has no
+// map field and is intentionally left unlinked. Both the "Correlation" category
+// and its "Correlation / Method Comparison" label map to last_method_comp; both
+// "Policy Review" and the "SOP Review" label map to last_sop_review, so the map
+// can be derived from either the stored category or a generated task label.
+export const CATEGORY_TO_MAP_FIELD: Record<string, string> = {
+  "Calibration Verification": "last_cal_ver",
+  "Correlation": "last_method_comp",
+  "Correlation / Method Comparison": "last_method_comp",
+  "Precision Verification": "last_precision",
+  "Policy Review": "last_sop_review",
+  "SOP Review": "last_sop_review",
+};
+
+// Parse the analyte out of a generated task name of the form "<Label> - <Analyte>"
+// (e.g. "Precision Verification - Glucose" -> "Glucose"). Splits on the FIRST
+// " - " so analyte names that themselves contain a hyphen (e.g. "25-hydroxyvitamin
+// D (25-OH-D)") survive intact. Returns null when the name has no " - " separator.
+export function analyteFromTaskName(name: string | null | undefined): string | null {
+  if (!name) return null;
+  const idx = name.indexOf(" - ");
+  if (idx < 0) return null;
+  return name.slice(idx + 3).trim() || null;
+}
+
+// Derive the {map_analyte, map_field} a task SHOULD carry when the caller did not
+// supply a link. Returns null (leave unlinked) when the category is not map-tracked,
+// the analyte cannot be resolved, the lab has no map, or the analyte is not on the
+// lab's map. It links ONLY on an EXACT analyte match against a live veritamap_tests
+// row, so a later sign-off's write-back (which matches by exact analyte string) is
+// guaranteed to find its row instead of silently updating zero rows. `sqlite` is a
+// better-sqlite3 handle.
+export function deriveMapLink(
+  sqlite: any,
+  labId: number | null | undefined,
+  category: string | null | undefined,
+  analyte: string | null | undefined,
+): { map_analyte: string; map_field: string } | null {
+  if (labId == null) return null;
+  const field = category ? CATEGORY_TO_MAP_FIELD[category] : undefined;
+  if (!field) return null;
+  const a = (analyte || "").trim();
+  if (!a) return null;
+  const maps = sqlite.prepare("SELECT id FROM veritamap_maps WHERE lab_id = ?").all(labId) as Array<{ id: number }>;
+  if (maps.length === 0) return null;
+  const placeholders = maps.map(() => "?").join(",");
+  const hit = sqlite.prepare(
+    `SELECT 1 FROM veritamap_tests WHERE map_id IN (${placeholders}) AND analyte = ? LIMIT 1`
+  ).get(...maps.map((m: { id: number }) => m.id), a);
+  return hit ? { map_analyte: a, map_field: field } : null;
+}
+
 // Write a sign-off date back to every matching VeritaMap test row for the
 // SIGN-OFF's lab (signoffLabId, resolved by the caller from task.lab_id) and
 // REPORT the outcome. `sqlite` is a better-sqlite3 handle.
