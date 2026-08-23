@@ -99,6 +99,7 @@ const RoadmapPage = lazy(() => import("@/pages/RoadmapPage"));
 const GettingStartedPage = lazy(() => import("@/pages/GettingStartedPage"));
 const AccountSettingsPage = lazy(() => import("@/pages/AccountSettingsPage"));
 const VeritaAssurePage = lazy(() => import("@/pages/VeritaAssurePage"));
+const LearnPage = lazy(() => import("@/pages/LearnPage"));
 const AdminReportPage = lazy(() => import("@/pages/AdminReportPage"));
 const JoinPage = lazy(() => import("@/pages/JoinPage"));
 const ProductivityCalculatorPage = lazy(() => import("@/pages/ProductivityCalculatorPage"));
@@ -451,6 +452,7 @@ function AppContent() {
           <Route path="/veritaops-app">{wrapLegacy(VeritaOpsAppPage)}</Route>
           <Route path="/roadmap" component={RoadmapPage} />
           <Route path="/veritaassure" component={VeritaAssurePage} />
+          <Route path="/learn" component={LearnPage} />
           {/* Operations folded into the unified /veritaassure suite page. Server
               301s /operations (server/index.ts); this covers in-app SPA nav. */}
           <Route path="/operations">{() => <Redirect to="/veritaassure" />}</Route>
