@@ -719,7 +719,7 @@ function PIPlanTab({ readOnly, departments }: { readOnly: boolean; departments: 
 
 // -- Main Component -----------------------------------------------------------
 
-export default function VeritaBenchPIPage() {
+export default function VeritaQAPage() {
   const { user, isLoggedIn } = useAuth();
   const readOnly = useIsReadOnly("veritabench");
   const { toast } = useToast();

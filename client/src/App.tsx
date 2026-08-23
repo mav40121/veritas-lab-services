@@ -103,8 +103,8 @@ const LearnPage = lazy(() => import("@/pages/LearnPage"));
 const AdminReportPage = lazy(() => import("@/pages/AdminReportPage"));
 const JoinPage = lazy(() => import("@/pages/JoinPage"));
 const ProductivityCalculatorPage = lazy(() => import("@/pages/ProductivityCalculatorPage"));
-const VeritaBenchPage = lazy(() => import("@/pages/VeritaBenchPage"));
-const VeritaBenchStaffingPage = lazy(() => import("@/pages/VeritaBenchStaffingPage"));
+const VeritaPacePage = lazy(() => import("@/pages/VeritaPacePage"));
+const VeritaShiftPage = lazy(() => import("@/pages/VeritaShiftPage"));
 const VeritaStockPage = lazy(() => import("@/pages/VeritaStockPage"));
 const VeritaStockTrendsPage = lazy(() => import("@/pages/VeritaStockTrendsPage"));
 const VeritaStockVendorsPage = lazy(() => import("@/pages/VeritaStockVendorsPage"));
@@ -119,7 +119,7 @@ const VeritaOpsAppPage = lazy(() => import("@/pages/VeritaOpsAppPage"));
 const LabMembersPage = lazy(() => import("@/pages/LabMembersPage"));
 const FoundingLabApplyPage = lazy(() => import("@/pages/FoundingLabApplyPage"));
 const StaffPortalPage = lazy(() => import("@/pages/StaffPortalPage"));
-const VeritaBenchPIPage = lazy(() => import("@/pages/VeritaBenchPIPage"));
+const VeritaQAPage = lazy(() => import("@/pages/VeritaQAPage"));
 const RequestInvoicePage = lazy(() => import("@/pages/RequestInvoicePage"));
 import { OnboardingBanner } from "@/components/OnboardingBanner";
 
@@ -438,10 +438,10 @@ function AppContent() {
           <Route path="/veritapolicy">{wrapLegacy(VeritaPolicyPage, "/veritapolicy-app")}</Route>
           <Route path="/veritacheck/cumsum">{wrapLegacy(CumsumPage)}</Route>
           <Route path="/calculator" component={ProductivityCalculatorPage} />
-          <Route path="/veritabench" component={VeritaBenchPage} />
-          <Route path="/veritabench/staffing" component={VeritaBenchStaffingPage} />
+          <Route path="/veritabench" component={VeritaPacePage} />
+          <Route path="/veritabench/staffing" component={VeritaShiftPage} />
           <Route path="/veritabench/scheduler">{wrapLegacy(VeritaShiftSchedulerPage)}</Route>
-          <Route path="/veritabench/pi" component={VeritaBenchPIPage} />
+          <Route path="/veritabench/pi" component={VeritaQAPage} />
           <Route path="/veritastock">{wrapLegacy(VeritaStockPage)}</Route>
           <Route path="/veritastock/trends">{wrapLegacy(VeritaStockTrendsPage)}</Route>
           <Route path="/veritastock/snap-order">{wrapLegacy(VeritaStockSnapOrderPage)}</Route>
@@ -522,9 +522,9 @@ function AppContent() {
           <Route path="/labs/:labId/veritastock/vendors" component={VeritaStockVendorsPage} />
           <Route path="/labs/:labId/veritaops-app" component={VeritaOpsAppPage} />
           <Route path="/labs/:labId/veritabench/scheduler" component={VeritaShiftSchedulerPage} />
-          <Route path="/labs/:labId/veritabench/staffing" component={VeritaBenchStaffingPage} />
-          <Route path="/labs/:labId/veritabench/pi" component={VeritaBenchPIPage} />
-          <Route path="/labs/:labId/veritabench" component={VeritaBenchPage} />
+          <Route path="/labs/:labId/veritabench/staffing" component={VeritaShiftPage} />
+          <Route path="/labs/:labId/veritabench/pi" component={VeritaQAPage} />
+          <Route path="/labs/:labId/veritabench" component={VeritaPacePage} />
           <Route path="/labs/:labId/account/settings" component={AccountSettingsPage} />
           <Route path="/labs/:labId/members" component={LabMembersPage} />
           {/* Bare /members is a natural guessed URL (it 404'd on Michael
