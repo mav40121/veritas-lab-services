@@ -388,9 +388,9 @@ export default function VeritaBenchPage() {
                   </p>
                 </div>
       <ModuleHowToCard
-        moduleKey="veritabench"
-        moduleName="VeritaBench™"
-        whatItDoes="VeritaBench is the productivity calculator. Tracks productive hours per billable test, compares to published reference ranges by facility type (community hospital, large trauma center, reference lab), surfaces month-over-month trend, and feeds the staffing-by-hour analysis."
+        moduleKey="veritapace"
+        moduleName="VeritaPace™"
+        whatItDoes="VeritaPace is the monthly productivity tracker. It turns your billable test counts and productive hours into productive-hours-per-billable-test, compares that to published reference ranges by facility type (community hospital, large trauma center, reference lab), and surfaces month-over-month and year-over-year trend for lab leadership."
         howToUse={[
           "Enter monthly billable test count and productive hours for each month you want to track.",
           "The dashboard shows your productive-hours-per-billable-test ratio versus the reference range for your facility type (lower is more efficient).",
