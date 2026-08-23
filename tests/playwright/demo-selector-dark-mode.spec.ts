@@ -54,3 +54,27 @@ test.describe("/demo selector follows the theme in dark mode", () => {
     await ctx.close();
   });
 });
+
+// The QC and CPRT demo sub-pages had the same inline-light-hex root cause.
+// Their first content card sits under an <h2>; in dark mode that card must
+// resolve to the dark --card token, not white.
+for (const route of ["/demo/qc", "/demo/cprt"]) {
+  test.describe(`${route} follows the theme in dark mode`, () => {
+    test("first content card is dark under colorScheme dark", async ({ browser }) => {
+      const ctx = await browser.newContext({ colorScheme: "dark" });
+      const page = await ctx.newPage();
+      await page.goto(`${BASE}${route}`, { waitUntil: "networkidle" });
+      await page.waitForTimeout(1200);
+      expect((await page.textContent("body")) || "").not.toContain("404 Page Not Found");
+
+      const bg = await page
+        .getByRole("heading", { level: 2 })
+        .first()
+        .evaluate((el) => getComputedStyle(el.parentElement as Element).backgroundColor);
+      const [r, g, b] = channels(bg);
+      expect(bg, `${route} card bg in dark mode was ${bg}`).not.toBe("rgb(255, 255, 255)");
+      expect(r + g + b, `${route} card bg ${bg} should be dark`).toBeLessThan(240);
+      await ctx.close();
+    });
+  });
+}

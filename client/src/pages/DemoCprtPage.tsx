@@ -103,7 +103,7 @@ export default function DemoCprtPage() {
   const capitalVerdict = comparison(layers.l3, REFERENCE_LAB_QUOTE);
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f8fafb" }}>
+    <div style={{ minHeight: "100vh", background: "hsl(var(--background))" }}>
       {/* Hero */}
       <div style={{ background: `linear-gradient(135deg, ${TEAL} 0%, #014d52 100%)`, padding: "56px 24px 64px", textAlign: "center" }}>
         <div style={{
@@ -124,30 +124,30 @@ export default function DemoCprtPage() {
         </p>
       </div>
 
-      <div style={{ maxWidth: 960, margin: "-32px auto 0", padding: "0 20px 60px", position: "relative", zIndex: 1 }}>
+      <div style={{ maxWidth: 960, margin: "-32px auto 0", padding: "0 20px 60px", position: "relative", zIndex: 1, color: "hsl(var(--foreground))" }}>
         {/* Scenario card */}
-        <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: "28px 28px 24px", marginBottom: 24 }}>
+        <div style={{ background: "hsl(var(--card))", borderRadius: 14, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: "28px 28px 24px", marginBottom: 24 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: TEAL, letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 6 }}>
             Worked scenario
           </div>
-          <h2 style={{ fontSize: 22, fontWeight: 700, color: "#1a1a1a", margin: "0 0 8px" }}>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: "hsl(var(--foreground))", margin: "0 0 8px" }}>
             {SCENARIO.test_name} brought in-house from a reference lab
           </h2>
-          <p style={{ fontSize: 14, color: "#4a5568", lineHeight: 1.55, margin: "0 0 18px" }}>
+          <p style={{ fontSize: 14, color: "hsl(var(--muted-foreground))", lineHeight: 1.55, margin: "0 0 18px" }}>
             Reagent cost on the invoice looks favorable. The analyzer was already on the floor.
             The reference lab was charging <strong>{fmt(REFERENCE_LAB_QUOTE)}</strong> per result.
             The decision was made on the reagent number alone. Then volume came in at 180 tests per year.
           </p>
 
           {/* Volume slider */}
-          <div style={{ background: "#f8fafb", border: "1px solid #e2e8f0", borderRadius: 10, padding: "16px 18px", marginBottom: 18 }}>
+          <div style={{ background: "hsl(var(--muted))", border: "1px solid hsl(var(--border))", borderRadius: 10, padding: "16px 18px", marginBottom: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-              <label htmlFor="vol" style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a" }}>
+              <label htmlFor="vol" style={{ fontSize: 13, fontWeight: 600, color: "hsl(var(--foreground))" }}>
                 Annual reportable volume
               </label>
               <span style={{ fontSize: 22, fontWeight: 700, color: TEAL, fontVariantNumeric: "tabular-nums" }}>
                 {volume.toLocaleString()}
-                <span style={{ fontSize: 12, color: "#718096", fontWeight: 500, marginLeft: 6 }}>tests / year</span>
+                <span style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", fontWeight: 500, marginLeft: 6 }}>tests / year</span>
               </span>
             </div>
             <input
@@ -160,7 +160,7 @@ export default function DemoCprtPage() {
               onChange={(e) => setVolume(Number(e.target.value))}
               style={{ width: "100%", accentColor: TEAL }}
             />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#a0aec0", marginTop: 4 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "hsl(var(--muted-foreground))", marginTop: 4 }}>
               <span>50</span><span>2,500</span><span>5,000</span><span>7,500</span><span>10,000</span>
             </div>
           </div>
@@ -172,9 +172,9 @@ export default function DemoCprtPage() {
             gap: 12,
           }}>
             {[
-              { label: "L1 Reagents + supplies", value: layers.l1, color: "#4a5568" },
+              { label: "L1 Reagents + supplies", value: layers.l1, color: "#64748b" },
               { label: "L2 + direct labor", value: layers.l2, color: TEAL },
-              { label: "L3 + equipment", value: layers.l3, color: "#1e40af" },
+              { label: "L3 + equipment", value: layers.l3, color: "#3b82f6" },
               { label: "L4 + overhead", value: layers.l4, color: "#7c3aed" },
             ].map((l) => (
               <div key={l.label} style={{
@@ -184,10 +184,10 @@ export default function DemoCprtPage() {
                 <div style={{ fontSize: 11, fontWeight: 700, color: l.color, letterSpacing: "0.3px", textTransform: "uppercase", marginBottom: 4 }}>
                   {l.label.split(" ")[0]}
                 </div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: "#1a1a1a", fontVariantNumeric: "tabular-nums" }}>
+                <div style={{ fontSize: 24, fontWeight: 700, color: "hsl(var(--foreground))", fontVariantNumeric: "tabular-nums" }}>
                   {fmt(l.value)}
                 </div>
-                <div style={{ fontSize: 11, color: "#718096", marginTop: 2 }}>
+                <div style={{ fontSize: 11, color: "hsl(var(--muted-foreground))", marginTop: 2 }}>
                   {l.label.split(" ").slice(1).join(" ")}
                 </div>
               </div>
@@ -200,10 +200,10 @@ export default function DemoCprtPage() {
               <div style={{ fontSize: 11, fontWeight: 700, color: insourceVerdict.color, letterSpacing: "0.3px", textTransform: "uppercase" }}>
                 L2 vs reference-lab quote ({fmt(REFERENCE_LAB_QUOTE)})
               </div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: "#1a1a1a", marginTop: 4 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "hsl(var(--foreground))", marginTop: 4 }}>
                 {insourceVerdict.label}
               </div>
-              <div style={{ fontSize: 12, color: "#4a5568", marginTop: 2 }}>
+              <div style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", marginTop: 2 }}>
                 Marginal in-house cost: {fmt(layers.l2)} per result
               </div>
             </div>
@@ -211,16 +211,16 @@ export default function DemoCprtPage() {
               <div style={{ fontSize: 11, fontWeight: 700, color: capitalVerdict.color, letterSpacing: "0.3px", textTransform: "uppercase" }}>
                 L3 vs reference-lab quote (capital justification)
               </div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: "#1a1a1a", marginTop: 4 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "hsl(var(--foreground))", marginTop: 4 }}>
                 {capitalVerdict.label}
               </div>
-              <div style={{ fontSize: 12, color: "#4a5568", marginTop: 2 }}>
+              <div style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", marginTop: 2 }}>
                 All-in cost: {fmt(layers.l3)} per result
               </div>
             </div>
           </div>
 
-          <p style={{ fontSize: 12, color: "#718096", marginTop: 16, lineHeight: 1.55 }}>
+          <p style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", marginTop: 16, lineHeight: 1.55 }}>
             Pull the volume slider down to 180 and look at L2 vs the reference lab. At that volume the
             decision to insource looks negative even before equipment is in the math. Slide up to 5,000
             and the same test crosses over to favoring in-house at both L2 and L3.
@@ -228,11 +228,11 @@ export default function DemoCprtPage() {
         </div>
 
         {/* Layer reference cards */}
-        <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: "28px", marginBottom: 24 }}>
+        <div style={{ background: "hsl(var(--card))", borderRadius: 14, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: "28px", marginBottom: 24 }}>
           <h3 style={{ fontSize: 18, fontWeight: 700, color: TEAL, margin: "0 0 4px" }}>
             Which layer answers which question
           </h3>
-          <p style={{ fontSize: 13, color: "#718096", margin: "0 0 18px" }}>
+          <p style={{ fontSize: 13, color: "hsl(var(--muted-foreground))", margin: "0 0 18px" }}>
             The marginal-cost question and the capital-justification question are not the same question.
             They do not use the same layer.
           </p>
@@ -240,18 +240,18 @@ export default function DemoCprtPage() {
             {LAYER_NOTES.map((n) => (
               <div key={n.layer} style={{
                 display: "grid", gridTemplateColumns: "60px 1fr", gap: 14,
-                padding: "14px 16px", border: "1px solid #e2e8f0", borderRadius: 10,
-                background: "#fafbfc",
+                padding: "14px 16px", border: "1px solid hsl(var(--border))", borderRadius: 10,
+                background: "hsl(var(--muted))",
               }}>
                 <div style={{ fontSize: 22, fontWeight: 800, color: TEAL, fontVariantNumeric: "tabular-nums" }}>
                   {n.layer}
                 </div>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a" }}>{n.title}</div>
-                  <div style={{ fontSize: 13, color: "#4a5568", marginTop: 4, fontStyle: "italic" }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "hsl(var(--foreground))" }}>{n.title}</div>
+                  <div style={{ fontSize: 13, color: "hsl(var(--muted-foreground))", marginTop: 4, fontStyle: "italic" }}>
                     {n.question}
                   </div>
-                  <div style={{ fontSize: 12, color: "#718096", marginTop: 6 }}>
+                  <div style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", marginTop: 6 }}>
                     {n.example}
                   </div>
                 </div>
@@ -261,11 +261,11 @@ export default function DemoCprtPage() {
         </div>
 
         {/* Side-by-side preview */}
-        <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: "28px", marginBottom: 24 }}>
+        <div style={{ background: "hsl(var(--card))", borderRadius: 14, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: "28px", marginBottom: 24 }}>
           <h3 style={{ fontSize: 18, fontWeight: 700, color: TEAL, margin: "0 0 8px" }}>
             What you get inside VeritaOps&trade;
           </h3>
-          <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 14, color: "#2d3748", lineHeight: 1.7 }}>
+          <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 14, color: "hsl(var(--foreground))", lineHeight: 1.7 }}>
             <li>Per-test CPRT studies in this four-layer GP11-A structure, saved per lab, retired and revised on a documented cycle.</li>
             <li>Side-by-side comparison of two studies (vendor A vs vendor B, before vs after a process change, insource vs send-out).</li>
             <li>One-page internal PDF your finance team can actually read, with the layer values, the assumptions, and the calculation date.</li>

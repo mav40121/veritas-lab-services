@@ -176,7 +176,7 @@ export default function DemoQcPage() {
   const missingCA = RUNS.filter(r => r.rule?.severity === "rejection" && !r.ca).length;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f8fafb" }}>
+    <div style={{ minHeight: "100vh", background: "hsl(var(--background))" }}>
       {/* Hero */}
       <div style={{ background: `linear-gradient(135deg, ${GREEN_OK} 0%, #128a3e 100%)`, padding: "56px 24px 64px", textAlign: "center" }}>
         <div style={{
@@ -197,52 +197,54 @@ export default function DemoQcPage() {
         </p>
       </div>
 
-      <div style={{ maxWidth: 960, margin: "-32px auto 0", padding: "0 20px 60px", position: "relative", zIndex: 1 }}>
+      <div style={{ maxWidth: 960, margin: "-32px auto 0", padding: "0 20px 60px", position: "relative", zIndex: 1, color: "hsl(var(--foreground))" }}>
         {/* Lot card */}
-        <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: "24px 28px", marginBottom: 18 }}>
+        <div style={{ background: "hsl(var(--card))", borderRadius: 14, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: "24px 28px", marginBottom: 18 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: TEAL, letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 6 }}>
             Control lot
           </div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: "#1a1a1a", margin: "0 0 10px" }}>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: "hsl(var(--foreground))", margin: "0 0 10px" }}>
             {LOT.analyte} &middot; Lot {LOT.lot_number} ({LOT.level})
           </h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, fontSize: 13, color: "#4a5568" }}>
-            <div><span style={{ fontWeight: 600, color: "#1a1a1a" }}>Mfr mean:</span> {LOT.mfr_mean}</div>
-            <div><span style={{ fontWeight: 600, color: "#1a1a1a" }}>Mfr SD:</span> {LOT.mfr_sd}</div>
-            <div><span style={{ fontWeight: 600, color: "#1a1a1a" }}>SD interval:</span> &plusmn;{LOT.mfr_sd_interval}</div>
-            <div><span style={{ fontWeight: 600, color: "#1a1a1a" }}>Lab mean:</span> {BASELINE_MEAN}</div>
-            <div><span style={{ fontWeight: 600, color: "#1a1a1a" }}>Lab SD:</span> {BASELINE_SD}</div>
-            <div><span style={{ fontWeight: 600, color: "#1a1a1a" }}>Manufacturer:</span> {LOT.manufacturer}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, fontSize: 13, color: "hsl(var(--muted-foreground))" }}>
+            <div><span style={{ fontWeight: 600, color: "hsl(var(--foreground))" }}>Mfr mean:</span> {LOT.mfr_mean}</div>
+            <div><span style={{ fontWeight: 600, color: "hsl(var(--foreground))" }}>Mfr SD:</span> {LOT.mfr_sd}</div>
+            <div><span style={{ fontWeight: 600, color: "hsl(var(--foreground))" }}>SD interval:</span> &plusmn;{LOT.mfr_sd_interval}</div>
+            <div><span style={{ fontWeight: 600, color: "hsl(var(--foreground))" }}>Lab mean:</span> {BASELINE_MEAN}</div>
+            <div><span style={{ fontWeight: 600, color: "hsl(var(--foreground))" }}>Lab SD:</span> {BASELINE_SD}</div>
+            <div><span style={{ fontWeight: 600, color: "hsl(var(--foreground))" }}>Manufacturer:</span> {LOT.manufacturer}</div>
           </div>
         </div>
 
         {/* Summary tiles */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 18 }}>
-          <div style={{ background: "#fff", borderRadius: 12, padding: "16px 18px", boxShadow: "0 2px 12px rgba(0,0,0,0.05)", textAlign: "center" }}>
-            <div style={{ fontSize: 28, fontWeight: 700, color: "#1a1a1a", fontVariantNumeric: "tabular-nums" }}>90</div>
-            <div style={{ fontSize: 12, color: "#718096", marginTop: 2 }}>Runs in window</div>
+          <div style={{ background: "hsl(var(--card))", borderRadius: 12, padding: "16px 18px", boxShadow: "0 2px 12px rgba(0,0,0,0.05)", textAlign: "center" }}>
+            <div style={{ fontSize: 28, fontWeight: 700, color: "hsl(var(--foreground))", fontVariantNumeric: "tabular-nums" }}>90</div>
+            <div style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", marginTop: 2 }}>Runs in window</div>
           </div>
-          <div style={{ background: "#fff", borderRadius: 12, padding: "16px 18px", boxShadow: "0 2px 12px rgba(0,0,0,0.05)", textAlign: "center" }}>
+          <div style={{ background: "hsl(var(--card))", borderRadius: 12, padding: "16px 18px", boxShadow: "0 2px 12px rgba(0,0,0,0.05)", textAlign: "center" }}>
             <div style={{ fontSize: 28, fontWeight: 700, color: AMBER_WARN, fontVariantNumeric: "tabular-nums" }}>{totalWarn}</div>
-            <div style={{ fontSize: 12, color: "#718096", marginTop: 2 }}>Warning rules fired</div>
+            <div style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", marginTop: 2 }}>Warning rules fired</div>
           </div>
-          <div style={{ background: "#fff", borderRadius: 12, padding: "16px 18px", boxShadow: "0 2px 12px rgba(0,0,0,0.05)", textAlign: "center" }}>
+          <div style={{ background: "hsl(var(--card))", borderRadius: 12, padding: "16px 18px", boxShadow: "0 2px 12px rgba(0,0,0,0.05)", textAlign: "center" }}>
             <div style={{ fontSize: 28, fontWeight: 700, color: RED_REJECT, fontVariantNumeric: "tabular-nums" }}>{totalRej}</div>
-            <div style={{ fontSize: 12, color: "#718096", marginTop: 2 }}>Rejection rules fired</div>
+            <div style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", marginTop: 2 }}>Rejection rules fired</div>
           </div>
-          <div style={{ background: "#fff", borderRadius: 12, padding: "16px 18px", boxShadow: "0 2px 12px rgba(0,0,0,0.05)", textAlign: "center" }}>
+          <div style={{ background: "hsl(var(--card))", borderRadius: 12, padding: "16px 18px", boxShadow: "0 2px 12px rgba(0,0,0,0.05)", textAlign: "center" }}>
             <div style={{ fontSize: 28, fontWeight: 700, color: missingCA > 0 ? RED_REJECT : GREEN_OK, fontVariantNumeric: "tabular-nums" }}>{missingCA}</div>
-            <div style={{ fontSize: 12, color: "#718096", marginTop: 2 }}>Missing corrective action</div>
+            <div style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", marginTop: 2 }}>Missing corrective action</div>
           </div>
         </div>
 
         {/* LJ chart */}
-        <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: "20px 24px 14px", marginBottom: 18 }}>
+        <div style={{ background: "hsl(var(--card))", borderRadius: 14, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: "20px 24px 14px", marginBottom: 18 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: TEAL, letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 8 }}>
             Levey-Jennings Chart
           </div>
-          <LJChart />
-          <div style={{ fontSize: 11, color: "#718096", marginTop: 6, display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ background: "#fff", borderRadius: 8, padding: "10px 6px" }}>
+            <LJChart />
+          </div>
+          <div style={{ fontSize: 11, color: "hsl(var(--muted-foreground))", marginTop: 6, display: "flex", gap: 16, flexWrap: "wrap" }}>
             <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 5, background: GREEN_OK, marginRight: 4 }} />Within 2 SD</span>
             <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 5, background: AMBER_WARN, marginRight: 4 }} />2-3 SD (warning band)</span>
             <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 5, background: RED_REJECT, marginRight: 4 }} />Beyond 3 SD (rejection)</span>
@@ -250,38 +252,38 @@ export default function DemoQcPage() {
         </div>
 
         {/* Recent runs table */}
-        <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: "20px 24px", marginBottom: 18 }}>
+        <div style={{ background: "hsl(var(--card))", borderRadius: 14, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: "20px 24px", marginBottom: 18 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: TEAL, letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 12 }}>
             Recent runs (last 14)
           </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
-                <tr style={{ textAlign: "left", color: "#718096", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.3px" }}>
-                  <th style={{ padding: "8px 6px", borderBottom: "1px solid #e2e8f0" }}>Date</th>
-                  <th style={{ padding: "8px 6px", borderBottom: "1px solid #e2e8f0" }}>Value</th>
-                  <th style={{ padding: "8px 6px", borderBottom: "1px solid #e2e8f0" }}>SDI</th>
-                  <th style={{ padding: "8px 6px", borderBottom: "1px solid #e2e8f0" }}>Rules</th>
-                  <th style={{ padding: "8px 6px", borderBottom: "1px solid #e2e8f0" }}>CA</th>
-                  <th style={{ padding: "8px 6px", borderBottom: "1px solid #e2e8f0" }}>Accepted</th>
+                <tr style={{ textAlign: "left", color: "hsl(var(--muted-foreground))", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.3px" }}>
+                  <th style={{ padding: "8px 6px", borderBottom: "1px solid hsl(var(--border))" }}>Date</th>
+                  <th style={{ padding: "8px 6px", borderBottom: "1px solid hsl(var(--border))" }}>Value</th>
+                  <th style={{ padding: "8px 6px", borderBottom: "1px solid hsl(var(--border))" }}>SDI</th>
+                  <th style={{ padding: "8px 6px", borderBottom: "1px solid hsl(var(--border))" }}>Rules</th>
+                  <th style={{ padding: "8px 6px", borderBottom: "1px solid hsl(var(--border))" }}>CA</th>
+                  <th style={{ padding: "8px 6px", borderBottom: "1px solid hsl(var(--border))" }}>Accepted</th>
                 </tr>
               </thead>
               <tbody>
                 {RUNS.map((r, i) => {
                   const sdi = ((r.value - BASELINE_MEAN) / BASELINE_SD).toFixed(2);
-                  const bg = r.rule?.severity === "rejection" ? "#fff5f5" : "#fff";
+                  const bg = r.rule?.severity === "rejection" ? `${RED_REJECT}14` : "transparent";
                   return (
                     <tr key={i} style={{ background: bg }}>
-                      <td style={{ padding: "8px 6px", borderBottom: "1px solid #f1f5f9" }}>{r.date}</td>
-                      <td style={{ padding: "8px 6px", borderBottom: "1px solid #f1f5f9", fontFamily: "monospace" }}>{r.value}</td>
-                      <td style={{ padding: "8px 6px", borderBottom: "1px solid #f1f5f9", fontFamily: "monospace" }}>{sdi}</td>
-                      <td style={{ padding: "8px 6px", borderBottom: "1px solid #f1f5f9" }}>
-                        {r.rule ? <span style={severityChip(r.rule.severity)}>{r.rule.code}</span> : <span style={{ color: "#a0aec0" }}>none</span>}
+                      <td style={{ padding: "8px 6px", borderBottom: "1px solid hsl(var(--border))" }}>{r.date}</td>
+                      <td style={{ padding: "8px 6px", borderBottom: "1px solid hsl(var(--border))", fontFamily: "monospace" }}>{r.value}</td>
+                      <td style={{ padding: "8px 6px", borderBottom: "1px solid hsl(var(--border))", fontFamily: "monospace" }}>{sdi}</td>
+                      <td style={{ padding: "8px 6px", borderBottom: "1px solid hsl(var(--border))" }}>
+                        {r.rule ? <span style={severityChip(r.rule.severity)}>{r.rule.code}</span> : <span style={{ color: "hsl(var(--muted-foreground))" }}>none</span>}
                       </td>
-                      <td style={{ padding: "8px 6px", borderBottom: "1px solid #f1f5f9", color: "#4a5568" }}>
+                      <td style={{ padding: "8px 6px", borderBottom: "1px solid hsl(var(--border))", color: "hsl(var(--muted-foreground))" }}>
                         {r.ca ? "1 action" : "-"}
                       </td>
-                      <td style={{ padding: "8px 6px", borderBottom: "1px solid #f1f5f9" }}>
+                      <td style={{ padding: "8px 6px", borderBottom: "1px solid hsl(var(--border))" }}>
                         {r.accepted ? <span style={{ color: GREEN_OK, fontWeight: 700 }}>&#10003;</span> :
                           <span style={{ color: AMBER_WARN, fontSize: 11 }}>excluded</span>}
                       </td>
@@ -294,58 +296,58 @@ export default function DemoQcPage() {
         </div>
 
         {/* Corrective Action log */}
-        <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: "20px 24px", marginBottom: 18 }}>
+        <div style={{ background: "hsl(var(--card))", borderRadius: 14, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: "20px 24px", marginBottom: 18 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: TEAL, letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 12 }}>
             Corrective Actions Log
           </div>
           {RUNS.filter(r => r.ca).map((r, i) => (
-            <div key={i} style={{ border: `1px solid ${RED_REJECT}30`, background: "#fff5f5", borderRadius: 8, padding: "12px 14px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12, color: "#4a5568" }}>
+            <div key={i} style={{ border: `1px solid ${RED_REJECT}30`, background: `${RED_REJECT}14`, borderRadius: 8, padding: "12px 14px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12, color: "hsl(var(--muted-foreground))" }}>
                 <span><strong>{r.date}</strong> &middot; value {r.value} &middot; rule {r.rule?.code}</span>
                 <span style={{ color: GREEN_OK, fontWeight: 700, textTransform: "uppercase", fontSize: 11 }}>{r.ca?.status}</span>
               </div>
-              <div style={{ fontSize: 13, color: "#1a1a1a", lineHeight: 1.5 }}>{r.ca?.action_taken}</div>
+              <div style={{ fontSize: 13, color: "hsl(var(--foreground))", lineHeight: 1.5 }}>{r.ca?.action_taken}</div>
             </div>
           ))}
         </div>
 
         {/* Monthly review attestation */}
-        <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: "24px 28px", marginBottom: 18, border: `1px solid ${TEAL}30` }}>
+        <div style={{ background: "hsl(var(--card))", borderRadius: 14, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: "24px 28px", marginBottom: 18, border: `1px solid ${TEAL}30` }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: TEAL, letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 8 }}>
             Monthly Review Attestation
           </div>
-          <p style={{ fontSize: 13, color: "#4a5568", lineHeight: 1.55, margin: "0 0 12px" }}>
+          <p style={{ fontSize: 13, color: "hsl(var(--muted-foreground))", lineHeight: 1.55, margin: "0 0 12px" }}>
             The medical director or designee attests that all QC runs in this period have been reviewed,
             that corrective actions taken at the time of each event are appropriately documented above,
             and that any unresolved issues have been escalated to the laboratory director or designee
             under the lab's non-conformance event process.
           </p>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr 1fr", gap: 14, alignItems: "end", paddingTop: 12, borderTop: "1px solid #e2e8f0" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr 1fr", gap: 14, alignItems: "end", paddingTop: 12, borderTop: "1px solid hsl(var(--border))" }}>
             <div>
-              <div style={{ fontSize: 10, color: "#718096", textTransform: "uppercase", letterSpacing: "0.5px" }}>Reviewer</div>
-              <div style={{ fontSize: 14, color: "#1a1a1a", fontWeight: 600, marginTop: 4, borderBottom: "1px solid #1a1a1a", paddingBottom: 2 }}>Dr. Sarah Mitchell, MD</div>
+              <div style={{ fontSize: 10, color: "hsl(var(--muted-foreground))", textTransform: "uppercase", letterSpacing: "0.5px" }}>Reviewer</div>
+              <div style={{ fontSize: 14, color: "hsl(var(--foreground))", fontWeight: 600, marginTop: 4, borderBottom: "1px solid hsl(var(--foreground))", paddingBottom: 2 }}>Dr. Sarah Mitchell, MD</div>
             </div>
             <div>
-              <div style={{ fontSize: 10, color: "#718096", textTransform: "uppercase", letterSpacing: "0.5px" }}>Title</div>
-              <div style={{ fontSize: 14, color: "#1a1a1a", marginTop: 4, borderBottom: "1px solid #1a1a1a", paddingBottom: 2 }}>Medical Director</div>
+              <div style={{ fontSize: 10, color: "hsl(var(--muted-foreground))", textTransform: "uppercase", letterSpacing: "0.5px" }}>Title</div>
+              <div style={{ fontSize: 14, color: "hsl(var(--foreground))", marginTop: 4, borderBottom: "1px solid hsl(var(--foreground))", paddingBottom: 2 }}>Medical Director</div>
             </div>
             <div>
-              <div style={{ fontSize: 10, color: "#718096", textTransform: "uppercase", letterSpacing: "0.5px" }}>Date</div>
-              <div style={{ fontSize: 14, color: "#1a1a1a", marginTop: 4, borderBottom: "1px solid #1a1a1a", paddingBottom: 2 }}>2026-05-02</div>
+              <div style={{ fontSize: 10, color: "hsl(var(--muted-foreground))", textTransform: "uppercase", letterSpacing: "0.5px" }}>Date</div>
+              <div style={{ fontSize: 14, color: "hsl(var(--foreground))", marginTop: 4, borderBottom: "1px solid hsl(var(--foreground))", paddingBottom: 2 }}>2026-05-02</div>
             </div>
             <div>
-              <div style={{ fontSize: 10, color: "#718096", textTransform: "uppercase", letterSpacing: "0.5px" }}>Acknowledged</div>
-              <div style={{ fontSize: 14, color: GREEN_OK, fontWeight: 700, marginTop: 4, borderBottom: "1px solid #1a1a1a", paddingBottom: 2 }}>YES</div>
+              <div style={{ fontSize: 10, color: "hsl(var(--muted-foreground))", textTransform: "uppercase", letterSpacing: "0.5px" }}>Acknowledged</div>
+              <div style={{ fontSize: 14, color: GREEN_OK, fontWeight: 700, marginTop: 4, borderBottom: "1px solid hsl(var(--foreground))", paddingBottom: 2 }}>YES</div>
             </div>
           </div>
         </div>
 
         {/* What you get */}
-        <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: "24px 28px", marginBottom: 24 }}>
+        <div style={{ background: "hsl(var(--card))", borderRadius: 14, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", padding: "24px 28px", marginBottom: 24 }}>
           <h3 style={{ fontSize: 18, fontWeight: 700, color: TEAL, margin: "0 0 8px" }}>
             What you get inside VeritaQC&trade;
           </h3>
-          <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 14, color: "#2d3748", lineHeight: 1.7 }}>
+          <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 14, color: "hsl(var(--foreground))", lineHeight: 1.7 }}>
             <li>Tech-facing entry page: pick a control lot, log the result, see the Westgard rule decision in real time, file the required corrective action if a rejection fires.</li>
             <li>Daily review feed across all lots in the lab, with status filters: any, with-violation, missing-corrective-action.</li>
             <li>Per-lab Westgard rule configuration: CLSI C24 supports lab-set bias_consecutive_count and trend_consecutive_count, defaulted to 10 and 7.</li>
