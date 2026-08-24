@@ -79,7 +79,13 @@ export default function Dashboard() {
         return;
       }
       const res = await fetch("/api/my-studies/export", {
-        headers: { Authorization: `Bearer ${token}` },
+        // Send the active lab so the export scopes to the lab being viewed, not
+        // the owner's home lab. The server reads X-Active-Lab-Id; omitting it
+        // exported the wrong lab's studies on a secondary lab (cross-lab leak).
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(labId ? { "X-Active-Lab-Id": String(labId) } : {}),
+        },
       });
       if (!res.ok) {
         let msg = "Export failed";
