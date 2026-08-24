@@ -20,6 +20,7 @@ import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { ChevronUp } from "lucide-react";
 import HomePage from "@/pages/HomePage";
 import { isStockHost } from "@/lib/host";
+import { isPublicMarketingPath } from "@/lib/auth";
 const ServicesPage = lazy(() => import("@/pages/ServicesPage"));
 const BookScopingCallPage = lazy(() => import("@/pages/BookScopingCallPage"));
 const AdminSchedulingPage = lazy(() => import("@/pages/AdminSchedulingPage"));
@@ -305,6 +306,11 @@ function PageFallback() {
 
 function AppContent() {
   const [location, setLocation] = useLocation();
+  // Public marketing/resource pages must not show the onboarding wizard or the
+  // subscription/onboarding banners. These are app chrome, not prospect chrome;
+  // overlaying an onboarding wizard on a public resource article (reached from a
+  // newsletter link) reads as a forced sign-up. See isPublicMarketingPath.
+  const onPublicMarketingPath = isPublicMarketingPath(location);
 
   // VeritaStock is a VeritaStock-ONLY product. On the dedicated VeritaStock
   // deployment (VITE_STOCK_DEPLOYMENT=true, or the veritastock.com host), redirect
@@ -349,9 +355,9 @@ function AppContent() {
       <GATracker />
       <CanonicalUpdater />
       <NavBar />
-      {!isStockHost() && <SubscriptionBanner />}
-      {!isStockHost() && <OnboardingBanner />}
-      {!isStockHost() && <OnboardingGuard />}
+      {!isStockHost() && !onPublicMarketingPath && <SubscriptionBanner />}
+      {!isStockHost() && !onPublicMarketingPath && <OnboardingBanner />}
+      {!isStockHost() && !onPublicMarketingPath && <OnboardingGuard />}
       <main className="flex-1">
         <Suspense fallback={<PageFallback />}>
           <Switch>

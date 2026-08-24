@@ -68,6 +68,28 @@ export function getToken(): string | null { return _token; }
 export function getUser(): AuthUser | null { return _user; }
 export function isLoggedIn(): boolean { return !!_token; }
 
+// Public, prospect-facing marketing and resource routes. These must render for
+// EVERYONE regardless of auth state: logged out, logged in, or holding a stale/
+// expired token. On these paths a 401 from a background query must NOT bounce
+// the visitor to /login, and the onboarding wizard / subscription nags must not
+// overlay the page. A newsletter blast drove recipients with old trial-account
+// tokens to a public resource article; the global 401 handler then hard-
+// redirected them to the login page (2026-08-24). Keep this list CONSERVATIVE:
+// include only unambiguously public routes. App and workspace routes are
+// intentionally excluded so their own auth gates still fire on a stale token.
+const PUBLIC_PATH_PREFIXES = [
+  "/resources", "/pricing", "/faq", "/demo", "/learn", "/book",
+  "/study-guide", "/trust", "/security", "/roadmap", "/veritaassure",
+  "/calculator", "/founding-lab", "/request-invoice",
+];
+export function isPublicMarketingPath(pathname: string): boolean {
+  if (!pathname) return false;
+  if (pathname === "/") return true;
+  return PUBLIC_PATH_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(p + "/"),
+  );
+}
+
 // 2026-06-10 (Michael L feedback on co2 PDF showing UMass Milford):
 // every NavBar-aware request now carries the active lab in
 // X-Active-Lab-Id. The server (resolveActiveLabForRequest) validates
