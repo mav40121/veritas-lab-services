@@ -9,6 +9,17 @@ import { teaData } from "@/lib/cliaTeaData";
 
 const articles = [
   {
+    slug: "proficiency-testing-clia-pt-referral",
+    title: "Proficiency Testing Under CLIA: The Rules Labs Get Wrong, and the Mistake That Ends Careers",
+    summary: "A former Joint Commission surveyor on CLIA proficiency testing: what needs PT after the 2024 regulated-analyte change, how PT is graded, how to cover what PT does not with a documented twice-yearly accuracy check, and the PT referral rule that can end the laboratory director's and owner's careers.",
+    category: "Proficiency Testing",
+    readTime: "14 min read",
+    author: "Michael Veri",
+    date: "August 2026",
+    tags: ["Proficiency Testing", "PT Referral", "CLIA", "Subpart I", "VeritaPT™"],
+    featured: true,
+  },
+  {
     slug: "tjc-laboratory-inspection-what-to-expect",
     title: "The Anatomy of a Joint Commission Laboratory Survey",
     summary: "A former Joint Commission surveyor walks through a laboratory survey phase by phase: the opening, the tour, proficiency testing and license review, the records and tracers where most findings live, personnel, observed procedures, and the summation on the SAFER matrix. Then how to turn that method into a mock inspection that finds your gaps first.",
