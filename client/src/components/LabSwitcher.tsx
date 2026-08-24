@@ -134,9 +134,11 @@ function useLabSwitcherState() {
 }
 
 export function LabSwitcher() {
-  // Hook called unconditionally to keep hook order stable; the single-site flag
-  // is constant for the page lifetime.
+  // Hooks called unconditionally (before any early return) to keep hook order
+  // stable; the single-site flag is constant for the page lifetime.
   const state = useLabSwitcherState();
+  const { data: allMemberships } = useMemberships();
+  const soloActiveLabId = useActiveLabId();
   // Single-site demo mode: show one static, non-switching site chip.
   if (isSingleSiteDemo()) {
     return (
@@ -149,7 +151,28 @@ export function LabSwitcher() {
       </div>
     );
   }
-  if (!state) return null;
+  if (!state) {
+    // useLabSwitcherState returns null when there is nothing to switch BETWEEN
+    // (zero or one membership). For a single-membership user, still show a
+    // static, non-switching chip with the active lab name + CLIA so the header
+    // is never ambiguous. Before this, a single-membership seat user saw NO lab
+    // name at all and could not tell which lab they were viewing (2026-08-24
+    // Lisa: "Are you in Milford or Michael lab?").
+    const solo =
+      allMemberships && allMemberships.length === 1
+        ? allMemberships[0]
+        : allMemberships?.find((m) => m.labId === soloActiveLabId) ?? null;
+    if (!solo) return null;
+    return (
+      <div
+        className="hidden lg:flex items-center gap-1.5 max-w-[220px] rounded-md border px-3 h-8 text-xs font-medium"
+        title={`Active lab: ${labLabel(solo)}${solo.cliaNumber ? ` / CLIA ${solo.cliaNumber}` : ""}`}
+      >
+        <Building2 size={13} className="text-primary shrink-0" />
+        <span className="truncate">{labLabel(solo)}</span>
+      </div>
+    );
+  }
   const { memberships, current, switchTo } = state;
 
   const currentSuffix = distinguishingSuffix(current, memberships);

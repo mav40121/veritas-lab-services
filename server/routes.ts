@@ -6411,6 +6411,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return sharedResolveLegacyLabId((db as any).$client, req);
   }
 
+  // Resolve the caller's active staff_labs row (VeritaStaff config is stored in
+  // staff_labs, a separate table from the main labs; staff_labs.tier2_lab_id
+  // links a staff_labs row to a main labs.id). A multi-lab owner has one
+  // staff_labs row per lab, so the old `WHERE user_id = ?` reader returned an
+  // ARBITRARY row and leaked another lab's staff identity/roster (2026-08-24
+  // cross-lab sweep; owner 17 has staff_labs for labs 3/19/22). Prefer the row
+  // whose tier2_lab_id matches the ACTIVE lab; fall back to the caller's single
+  // staff_labs row when they have exactly one (single-lab accounts, incl. legacy
+  // rows with a NULL tier2_lab_id). Returns null when a multi-lab caller has no
+  // staff_labs row for the active lab (no staff config there yet).
+  function staffLabByLabId(labId: number | null, ownerUserId: number): any | null {
+    const sqlite = (db as any).$client;
+    if (labId) {
+      const byTier = sqlite.prepare("SELECT * FROM staff_labs WHERE tier2_lab_id = ?").get(labId);
+      if (byTier) return byTier;
+    }
+    const rows = sqlite.prepare("SELECT * FROM staff_labs WHERE user_id = ?").all(ownerUserId) as any[];
+    return rows.length === 1 ? rows[0] : null;
+  }
+  function activeStaffLab(req: any, dataUserId: number): any | null {
+    const activeLab = resolveActiveLabForRequest(req.userId, req) as any;
+    return staffLabByLabId(activeLab?.id ?? null, dataUserId);
+  }
+
   // ── LAB MEMBER MANAGEMENT (Phase 1: admin role + transfer ownership) ─────
   // Membership roles: 'owner' (one per lab), 'admin' (can invite/remove),
   // 'staff' (operational read/write per existing permissions_json). Existing
@@ -6629,7 +6653,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // staff_labs row for this labs.id via owner.
       const ownerRow = sqlite.prepare("SELECT owner_user_id, lab_name, clia_number FROM labs WHERE id = ?").get(labId) as any;
       if (!ownerRow) return res.status(404).json({ error: "Lab not found" });
-      const staffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(ownerRow.owner_user_id) as any;
+      const staffLab = staffLabByLabId(labId, ownerRow.owner_user_id) as any;
       if (!staffLab) return res.json({ lab: { id: labId, name: ownerRow.lab_name, clia: ownerRow.clia_number }, employees: [] });
       const employees = sqlite.prepare(
         `SELECT id, first_name, last_name, middle_initial, title, title_code,
@@ -6677,7 +6701,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // labs owner). Same shape the /employees endpoint uses.
       const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
       if (!ownerRow) return res.status(404).json({ error: "Lab not found" });
-      const staffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(ownerRow.owner_user_id) as any;
+      const staffLab = staffLabByLabId(labId, ownerRow.owner_user_id) as any;
       if (!staffLab) return res.json({ policies: [] });
       const employee = sqlite.prepare(
         "SELECT id FROM staff_employees WHERE id = ? AND lab_id = ? AND status = 'active'"
@@ -6857,7 +6881,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Validate lab + employee + document scope
       const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
       if (!ownerRow) return res.status(404).json({ error: "Lab not found" });
-      const staffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(ownerRow.owner_user_id) as any;
+      const staffLab = staffLabByLabId(labId, ownerRow.owner_user_id) as any;
       if (!staffLab) return res.status(404).json({ error: "Staff roster not found" });
       const employee = sqlite.prepare(
         "SELECT id, first_name, last_name FROM staff_employees WHERE id = ? AND lab_id = ? AND status = 'active'"
@@ -8855,7 +8879,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Validate employee belongs to lab + has the inventory toggle on
       const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
       if (!ownerRow) return res.status(404).json({ error: "Lab not found" });
-      const staffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(ownerRow.owner_user_id) as any;
+      const staffLab = staffLabByLabId(labId, ownerRow.owner_user_id) as any;
       if (!staffLab) return res.status(404).json({ error: "Staff roster not found" });
       const employee = sqlite.prepare(
         `SELECT id, first_name, last_name, middle_initial, can_adjust_inventory
@@ -8987,7 +9011,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Validate employee belongs to lab + has can_view_audit on
       const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
       if (!ownerRow) return res.status(404).json({ error: "Lab not found" });
-      const staffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(ownerRow.owner_user_id) as any;
+      const staffLab = staffLabByLabId(labId, ownerRow.owner_user_id) as any;
       if (!staffLab) return res.status(404).json({ error: "Staff roster not found" });
       const employee = sqlite.prepare(
         `SELECT id, first_name, last_name, can_view_audit
@@ -9132,7 +9156,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Validate the staff employee belongs to this lab via the picker path
       const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
       if (!ownerRow) return res.status(404).json({ error: "Lab not found" });
-      const staffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(ownerRow.owner_user_id) as any;
+      const staffLab = staffLabByLabId(labId, ownerRow.owner_user_id) as any;
       if (!staffLab) return res.status(404).json({ error: "Staff roster not found" });
       const staffEmployee = sqlite.prepare(
         "SELECT id, first_name, last_name FROM staff_employees WHERE id = ? AND lab_id = ? AND status = 'active'"
@@ -9209,7 +9233,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
       if (!ownerRow) return res.status(404).json({ error: "Lab not found" });
-      const staffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(ownerRow.owner_user_id) as any;
+      const staffLab = staffLabByLabId(labId, ownerRow.owner_user_id) as any;
       if (!staffLab) return res.status(404).json({ error: "Staff roster not found" });
       const staffEmployee = sqlite.prepare(
         "SELECT id FROM staff_employees WHERE id = ? AND lab_id = ? AND status = 'active'"
@@ -9271,7 +9295,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
       if (!ownerRow) return res.status(404).json({ error: "Lab not found" });
-      const staffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(ownerRow.owner_user_id) as any;
+      const staffLab = staffLabByLabId(labId, ownerRow.owner_user_id) as any;
       if (!staffLab) return res.status(404).json({ error: "Staff roster not found" });
       const staffEmployee = sqlite.prepare(
         "SELECT id FROM staff_employees WHERE id = ? AND lab_id = ? AND status = 'active'"
@@ -10519,52 +10543,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (auth?.startsWith("Bearer ")) {
       try {
         const payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number };
-        // 2026-06-02 lab-scoped seat check (matches PR #482 pattern at
-        // line 4935). Derive active lab from Referer URL since this is
-        // the legacy unscoped GET. Owners of the active lab return their
-        // own studies; seat holders in the active lab return the owner's
-        // studies; no active-lab context falls back to legacy global
-        // seat lookup.
-        const getActiveLabId: number | null = activeLabIdFromContext(req);
-        let dataUserId = payload.userId;
-        if (getActiveLabId) {
-          const ownsLab = (db as any).$client.prepare(
-            "SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1"
-          ).get(getActiveLabId, payload.userId);
-          if (!ownsLab) {
-            const seatRow = (db as any).$client.prepare(
-              "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
-            ).get(payload.userId, getActiveLabId) as any;
-            if (seatRow) dataUserId = seatRow.owner_user_id;
-          }
-        } else {
-          // Legacy fallback: no active-lab context. Preserve global behavior.
-          const seatRow = (db as any).$client.prepare(
-            "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
-          ).get(payload.userId) as any;
-          if (seatRow) dataUserId = seatRow.owner_user_id;
-        }
-        // Return only studies owned by this user (or owner)
+        // Resolve the active lab from the CALLER (X-Active-Lab-Id header /
+        // body.lab_id), validated against the caller's OWN membership.
+        // resolveActiveLabForRequest maps a seat caller to its owner
+        // internally, so a seat user viewing the owner's lab still sees that
+        // lab's studies. The critical difference from the old code: when NO
+        // active lab resolves it falls back to the CALLER's own home lab, not
+        // the seat owner's cross-lab study set. The prior no-lab branch set
+        // dataUserId = the seat owner and returned getStudiesByUser(owner),
+        // which showed a Milford seat user every study in Michaels Lab on the
+        // bare (lab-less) dashboard (2026-08-24 Lisa report).
         // 2026-06-01: drafts pin to the top of the dashboard regardless of id,
         // then completed studies sort by id DESC.
-        let userStudies = storage.getStudiesByUser(dataUserId);
-        // 2026-06-14 (#44): when an active lab is resolved from the Referer,
-        // scope this legacy list to that lab so every row can open on the
-        // lab-scoped detail page (/labs/:labId/study/:id). Without this the
-        // list returns the user's studies across ALL their labs, and a
-        // cross-lab row 404s on the lab-scoped detail page (latent phantom
-        // "can't-open" footgun). drizzle's studies schema lacks lab_id, so
-        // resolve the lab's study ids via raw SQL (idx_studies_lab_id) and
-        // filter on id. No active-lab context (the genuine legacy global
-        // fallback) is left unchanged.
-        if (getActiveLabId) {
-          const labStudyIds = new Set(
-            ((db as any).$client
-              .prepare("SELECT id FROM studies WHERE lab_id = ?")
-              .all(getActiveLabId) as any[]).map((r) => r.id),
-          );
-          userStudies = userStudies.filter((s) => labStudyIds.has(s.id));
-        }
+        const activeLab = resolveActiveLabForRequest(payload.userId, req);
+        const activeLabId: number | null = activeLab?.id ?? null;
+        let userStudies = activeLabId
+          ? storage.getStudiesByLab(activeLabId)
+          : storage.getStudiesByUser(payload.userId);
         // 2026-06-15: archived studies drop off the legacy active list too.
         // drizzle's studies schema lacks archived_at, so resolve archived ids
         // via raw SQL. ?archived=1 returns ONLY the archived set so the legacy
@@ -10607,55 +10602,38 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(401).json({ error: "Invalid or expired session" });
     }
 
-    // Resolve seat user to owner for data scoping. 2026-06-02 lab-scoped
-    // (same pattern as the GET /api/studies list above and PR #482's
-    // POST /api/studies handler). For multi-lab owners holding a seat in
-    // someone else's lab, the unscoped seat lookup would otherwise export
-    // the wrong owner's studies.
-    const exportActiveLabId: number | null = activeLabIdFromContext(req);
-    let dataUserId = payload.userId;
-    if (exportActiveLabId) {
-      const ownsLab = (db as any).$client.prepare(
-        "SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1"
-      ).get(exportActiveLabId, payload.userId);
-      if (!ownsLab) {
-        const seatRow = (db as any).$client.prepare(
-          "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
-        ).get(payload.userId, exportActiveLabId) as any;
-        if (seatRow) dataUserId = seatRow.owner_user_id;
-      }
-    } else {
-      const seatRow = (db as any).$client.prepare(
-        "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
-      ).get(payload.userId) as any;
-      if (seatRow) dataUserId = seatRow.owner_user_id;
-    }
+    // Resolve the active lab from the CALLER (X-Active-Lab-Id / body.lab_id),
+    // membership-validated, seat-aware, with a home-lab fallback. The old code
+    // fell back to the seat OWNER's user_id when no lab resolved, exporting the
+    // owner's studies across ALL labs to a seat user (the 2026-08-24 Lisa
+    // bare-dashboard leak: a Milford seat user exported every Michaels Lab
+    // study).
+    const activeLab = resolveActiveLabForRequest(payload.userId, req);
+    const exportActiveLabId: number | null = activeLab?.id ?? null;
 
-    // Plan allowlist (EXPLICIT, never blocklist)
-    const ownerUser = storage.getUserById(dataUserId);
+    // Plan allowlist (EXPLICIT, never blocklist). Keys off the active lab's
+    // owner (the account whose plan governs the lab), or the caller's own
+    // account when no lab resolves.
+    const planOwnerId = (activeLab as any)?.owner_user_id ?? payload.userId;
+    const ownerUser = storage.getUserById(planOwnerId);
     if (!ownerUser) return res.status(404).json({ error: "Account not found" });
     const ALLOWED_EXPORT_PLANS = ["per_study", "unlimited", "clinic", "community", "hospital", "enterprise", "annual", "starter", "professional", "lab", "complete"];
     if (!ALLOWED_EXPORT_PLANS.includes(ownerUser.plan)) {
       return res.status(403).json({ error: "Studies export is not included in your current plan. Upgrade to enable." });
     }
 
-    // Pull studies scoped to the ACTIVE lab (X-Active-Lab-Id), not the user's
-    // whole catalogue across labs. getStudiesByUser returned every lab the
-    // owner belongs to, so the export did not match the lab-scoped dashboard
-    // table (cross-lab scoping bug). Fall back to the user's studies only when
-    // no active lab resolves (legacy account with no membership).
+    // Pull studies scoped to the ACTIVE lab, not the user's whole catalogue
+    // across labs. Fall back to the caller's own studies only when no active
+    // lab resolves (legacy account with no membership).
     const userStudies = exportActiveLabId
       ? storage.getStudiesByLab(exportActiveLabId)
-      : storage.getStudiesByUser(dataUserId);
+      : storage.getStudiesByUser(payload.userId);
     userStudies.sort((a, b) => b.id - a.id);
 
     // Lab name and CLIA: prefer the ACTIVE lab's identity so the export header
     // matches the scoped studies above; fall back to the owner's account record.
-    const exportLabRow = exportActiveLabId
-      ? ((db as any).$client.prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(exportActiveLabId) as any)
-      : null;
-    const labName = exportLabRow?.lab_name || (ownerUser as any).cliaLabName || (ownerUser as any).clia_lab_name || ownerUser.name || "Laboratory";
-    const cliaNumber = exportLabRow?.clia_number || (ownerUser as any).cliaNumber || (ownerUser as any).clia_number || "Not on file";
+    const labName = (activeLab as any)?.lab_name || (ownerUser as any).cliaLabName || (ownerUser as any).clia_lab_name || ownerUser.name || "Laboratory";
+    const cliaNumber = (activeLab as any)?.clia_number || (ownerUser as any).cliaNumber || (ownerUser as any).clia_number || "Not on file";
 
     // Helpers
     const studyTypeLabel = (st: string): string => {
@@ -14980,9 +14958,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // identity matches the URL the download came from.
       let labName: string;
       let cliaNumber: string;
-      if (req.scope?.lab) {
-        labName = req.scope.lab.lab_name || "Laboratory";
-        cliaNumber = req.scope.lab.clia_number || "Not on file";
+      // Prefer the ACTIVE lab's identity (scope, else X-Active-Lab-Id) so the
+      // export header matches the lab being viewed, not the owner's home lab.
+      const activeLabVm = req.scope?.lab ?? (resolveActiveLabForRequest(req.userId, req) as any);
+      if (activeLabVm) {
+        labName = activeLabVm.lab_name || "Laboratory";
+        cliaNumber = activeLabVm.clia_number || "Not on file";
       } else {
         const ownerUserVm = storage.getUserById(dataUserId);
         labName = (ownerUserVm as any)?.cliaLabName || (ownerUserVm as any)?.clia_lab_name || ownerUserVm?.name || "Laboratory";
@@ -15547,7 +15528,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // resolved id equals the old `users.lab_id` value). Reads are unchanged,
     // so nothing can be hidden by this.
     try {
-      const activeLab = resolveActiveLabForRequest(dataUserId, req);
+      const activeLab = resolveActiveLabForRequest(req.userId, req);
       (db as any).$client.prepare(
         "UPDATE veritascan_scans SET lab_id = ? WHERE id = ?"
       ).run(activeLab?.id ?? null, result.lastInsertRowid);
@@ -16460,7 +16441,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Prefer req.scope.lab when on a lab-scoped URL so multi-lab owners get
     // the URL lab's accreditation flags, not their primary lab's.
     let xlsxPreferredStandards: string[] = [];
-    const xlsxLab = req.scope?.lab ?? resolveLabForUser(req.userId);
+    const xlsxLab = req.scope?.lab ?? resolveActiveLabForRequest(req.userId, req) ?? resolveLabForUser(req.userId);
     if (xlsxLab) {
       if (xlsxLab.accreditation_cap) xlsxPreferredStandards.push("CAP");
       if (xlsxLab.accreditation_tjc) xlsxPreferredStandards.push("TJC");
@@ -16492,9 +16473,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // requests fall back to the owner-user lookup.
       let labName: string;
       let cliaNumber: string;
-      if (req.scope?.lab) {
-        labName = req.scope.lab.lab_name || "Laboratory";
-        cliaNumber = req.scope.lab.clia_number || "Not on file";
+      // Prefer the ACTIVE lab's identity (scope, else X-Active-Lab-Id) so the
+      // export header matches the lab being viewed, not the owner's home lab.
+      const activeLabVs = req.scope?.lab ?? (resolveActiveLabForRequest(req.userId, req) as any);
+      if (activeLabVs) {
+        labName = activeLabVs.lab_name || "Laboratory";
+        cliaNumber = activeLabVs.clia_number || "Not on file";
       } else {
         const ownerUserVs = storage.getUserById(dataUserId);
         labName = (ownerUserVs as any)?.cliaLabName || (ownerUserVs as any)?.clia_lab_name || ownerUserVs?.name || "Laboratory";
@@ -16779,7 +16763,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Fetch CLIA number and preferred standards from labs table, fallback to user.
     // Lab-scoped requests source from req.scope.lab so the PDF identity matches
     // the URL the download came from.
-    const scanLab = req.scope?.lab ?? resolveLabForUser(req.userId);
+    const scanLab = req.scope?.lab ?? resolveActiveLabForRequest(req.userId, req) ?? resolveLabForUser(req.userId);
     let scanCliaNumber: string | undefined;
     let scanLabName: string | undefined;
     let scanPreferredStandards: string[] | undefined;
@@ -19174,8 +19158,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     // Get lab's current pt_enrollments_v2 - seed demo defaults if needed
     const enrollments = (db as any).$client.prepare(
-      "SELECT * FROM pt_enrollments_v2 WHERE user_id = ?"
-    ).all(userId) as any[];
+      labId
+        ? "SELECT * FROM pt_enrollments_v2 WHERE lab_id = ?"
+        : "SELECT * FROM pt_enrollments_v2 WHERE user_id = ?"
+    ).all(labId ?? userId) as any[];
 
     const enrolledCategories = new Set(enrollments.map((e: any) => e.pt_category));
 
@@ -19186,8 +19172,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // valid for a regulated analyte only when PT is not feasible (rare; PT
     // still wins when both exist, so PT is checked first below).
     const aaRecords = (db as any).$client.prepare(
-      "SELECT * FROM aa_records WHERE user_id = ?"
-    ).all(userId) as any[];
+      labId
+        ? "SELECT * FROM aa_records WHERE lab_id = ?"
+        : "SELECT * FROM aa_records WHERE user_id = ?"
+    ).all(labId ?? userId) as any[];
     const aaByLowerAnalyte = new Map<string, any>();
     for (const r of aaRecords) {
       if (r.analyte) aaByLowerAnalyte.set(String(r.analyte).toLowerCase(), r);
@@ -19448,9 +19436,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // GET /api/pt/enrollments
   app.get("/api/pt/enrollments", authMiddleware, (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
+    // Scope to the ACTIVE lab (caller-based); WHERE user_id merged every lab the
+    // account/seat owner belongs to. Fall back to user scope when no lab.
+    const labId = resolveActiveLabForRequest(req.userId, req)?.id ?? null;
     const rows = (db as any).$client.prepare(
-      "SELECT * FROM pt_enrollments_v2 WHERE user_id = ? ORDER BY year_enrolled DESC, pt_category"
-    ).all(dataUserId);
+      labId
+        ? "SELECT * FROM pt_enrollments_v2 WHERE lab_id = ? ORDER BY year_enrolled DESC, pt_category"
+        : "SELECT * FROM pt_enrollments_v2 WHERE user_id = ? ORDER BY year_enrolled DESC, pt_category"
+    ).all(labId ?? dataUserId);
     res.json(rows);
   });
 
@@ -19472,7 +19465,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // falls back to the default lab with no X-Active-Lab-Id header, so single-lab
     // users are unchanged. This table's reads key on user_id, so nothing hides.
     try {
-      const activeLab = resolveActiveLabForRequest(dataUserId, req);
+      const activeLab = resolveActiveLabForRequest(req.userId, req);
       (db as any).$client.prepare("UPDATE pt_enrollments_v2 SET lab_id = ? WHERE id = ?").run(activeLab?.id ?? null, result.lastInsertRowid);
     } catch {}
     const created = (db as any).$client.prepare("SELECT * FROM pt_enrollments_v2 WHERE id = ?").get(Number(result.lastInsertRowid));
@@ -19503,9 +19496,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // GET all AAA records for the active data user
   app.get("/api/pt/aa-records", authMiddleware, (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
+    // Scope to the ACTIVE lab (caller-based), fall back to user scope when none.
+    const labId = resolveActiveLabForRequest(req.userId, req)?.id ?? null;
     const rows = (db as any).$client.prepare(
-      "SELECT * FROM aa_records WHERE user_id = ? ORDER BY analyte"
-    ).all(dataUserId);
+      labId
+        ? "SELECT * FROM aa_records WHERE lab_id = ? ORDER BY analyte"
+        : "SELECT * FROM aa_records WHERE user_id = ? ORDER BY analyte"
+    ).all(labId ?? dataUserId);
     res.json(rows);
   });
 
@@ -19546,7 +19543,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // falls back to the default lab with no X-Active-Lab-Id header, so single-lab
     // users are unchanged. This table's reads key on user_id, so nothing hides.
     try {
-      const activeLab = resolveActiveLabForRequest(dataUserId, req);
+      const activeLab = resolveActiveLabForRequest(req.userId, req);
       (db as any).$client.prepare("UPDATE aa_records SET lab_id = ? WHERE id = ?").run(activeLab?.id ?? null, result.lastInsertRowid);
     } catch {}
     const created = (db as any).$client.prepare("SELECT * FROM aa_records WHERE id = ?").get(Number(result.lastInsertRowid));
@@ -19638,7 +19635,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // (Shape A). Fall back to the request's active lab for any legacy row whose
     // lab_id was never stamped.
     let labId: number | null = rec.lab_id ?? null;
-    if (!labId) { try { labId = resolveActiveLabForRequest(dataUserId, req)?.id ?? null; } catch {} }
+    if (!labId) { try { labId = resolveActiveLabForRequest(req.userId, req)?.id ?? null; } catch {} }
     if (!labId) return res.status(409).json({ error: "Could not resolve a lab for this AAA record. Open it from a lab context and retry." });
     const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
     const userIdForRow = ownerRow?.owner_user_id ?? dataUserId;
@@ -20163,7 +20160,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // falls back to the default lab with no X-Active-Lab-Id header, so single-lab
     // users are unchanged. This table's reads key on user_id, so nothing hides.
     try {
-      const activeLab = resolveActiveLabForRequest(dataUserId, req);
+      const activeLab = resolveActiveLabForRequest(req.userId, req);
       (db as any).$client.prepare("UPDATE findings SET lab_id = ? WHERE id = ?").run(activeLab?.id ?? null, result.lastInsertRowid);
     } catch {}
     const created = (db as any).$client.prepare("SELECT * FROM findings WHERE id = ?").get(Number(result.lastInsertRowid));
@@ -20930,7 +20927,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // for multi-lab. resolveActiveLabForRequest honors X-Active-Lab-Id and
       // falls back to the default lab (single-lab unchanged).
       try {
-        const activeLab = resolveActiveLabForRequest(dataUserId, req);
+        const activeLab = resolveActiveLabForRequest(req.userId, req);
         (db as any).$client.prepare(
           "UPDATE competency_programs SET lab_id = ? WHERE id = ?"
         ).run(activeLab?.id ?? null, programId);
@@ -20982,7 +20979,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // for multi-lab. resolveActiveLabForRequest honors X-Active-Lab-Id and
       // falls back to the default lab (single-lab unchanged).
       try {
-        const activeLab = resolveActiveLabForRequest(dataUserId, req);
+        const activeLab = resolveActiveLabForRequest(req.userId, req);
         (db as any).$client.prepare(
           "UPDATE competency_programs SET lab_id = ? WHERE id = ?"
         ).run(activeLab?.id ?? null, programId);
@@ -21282,7 +21279,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // write-path Shape A (batch 2): tag the ACTIVE lab, not the owner's default
     // lab (legacy create route; lab-scoped reads use req.scope.labId).
     try {
-      const activeLab = resolveActiveLabForRequest(dataUserId, req);
+      const activeLab = resolveActiveLabForRequest(req.userId, req);
       (db as any).$client.prepare(
         "UPDATE competency_employees SET lab_id = ? WHERE id = ?"
       ).run(activeLab?.id ?? null, result.lastInsertRowid);
@@ -22194,7 +22191,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // by the quiz's lab_id (they scope by id / program_id), so this is safe; it
     // keeps the tag consistent with the active lab the user is working in.
     try {
-      const activeLab = resolveActiveLabForRequest(dataUserId, req);
+      const activeLab = resolveActiveLabForRequest(req.userId, req);
       (db as any).$client.prepare(
         "UPDATE competency_quizzes SET lab_id = ? WHERE id = ?"
       ).run(activeLab?.id ?? null, result.lastInsertRowid);
@@ -23356,15 +23353,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const sqlite = (db as any).$client;
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    let lab = sqlite.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId);
+    // Scope to the ACTIVE lab's staff_labs row (via tier2_lab_id), not an
+    // arbitrary WHERE user_id row (owner 17 has staff_labs for labs 3/19/22).
+    const activeLabRow = resolveActiveLabForRequest(req.userId, req) as any;
+    let lab = activeStaffLab(req, dataUserId);
     if (!lab) {
       const acctLab = sqlite.prepare("SELECT id, clia_number, lab_name FROM labs WHERE owner_user_id = ? ORDER BY id LIMIT 1").get(dataUserId) as any;
       const u = sqlite.prepare("SELECT clia_number, clia_lab_name, lab_id FROM users WHERE id = ?").get(dataUserId) as any;
       lab = seedStaffLabFromAccount(sqlite, {
-        tier2LabId: (u?.lab_id ?? acctLab?.id) || null,
+        tier2LabId: (activeLabRow?.id ?? u?.lab_id ?? acctLab?.id) || null,
         userId: dataUserId,
-        labName: acctLab?.lab_name || u?.clia_lab_name,
-        cliaNumber: acctLab?.clia_number || u?.clia_number,
+        labName: activeLabRow?.lab_name || acctLab?.lab_name || u?.clia_lab_name,
+        cliaNumber: activeLabRow?.clia_number || acctLab?.clia_number || u?.clia_number,
       });
     }
     res.json(lab || null);
@@ -23377,7 +23377,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const now = new Date().toISOString();
     const dataUserId = req.ownerUserId ?? req.user.userId;
 
-    const existing = (db as any).$client.prepare("SELECT id, accreditation_body FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+    // Target the ACTIVE lab's staff_labs row (via tier2_lab_id) for the upsert,
+    // not an arbitrary WHERE user_id row (a multi-lab owner has several).
+    const existing = activeStaffLab(req, dataUserId) as any;
 
     // Lab-aware accreditor gate (defense-in-depth, mirrors client filter).
     // CLIA_ONLY and OTHER always allowed. CAP/TJC/COLA only when the master
@@ -23408,9 +23410,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = (db as any).$client.prepare(
       "INSERT INTO staff_labs (user_id, lab_name, clia_number, lab_address_street, lab_address_city, lab_address_state, lab_address_zip, lab_phone, certificate_type, accreditation_body, accreditation_body_other, includes_nys, complexity, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
     ).run(dataUserId, labName.trim(), cliaNumber.trim(), street || '', city || '', state || '', zip || '', phone || '', certificateType || 'compliance', accreditationBody || 'CLIA_ONLY', accreditationBodyOther || '', includesNys ? 1 : 0, complexity || 'high', now, now);
-    // Phase 3.9 dual-write tier2_lab_id.
+    // Stamp tier2_lab_id = the ACTIVE lab (not the owner's home lab), so a
+    // multi-lab owner's new staff_labs row belongs to the lab they are in.
+    const insertTier2 = (resolveActiveLabForRequest(req.userId, req) as any)?.id
+      ?? ((db as any).$client.prepare("SELECT lab_id FROM users WHERE id = ?").get(dataUserId) as any)?.lab_id
+      ?? null;
     try {
-      (db as any).$client.prepare("UPDATE staff_labs SET tier2_lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE id = ?").run(dataUserId, result.lastInsertRowid);
+      (db as any).$client.prepare("UPDATE staff_labs SET tier2_lab_id = ? WHERE id = ?").run(insertTier2, result.lastInsertRowid);
     } catch {}
     const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE id = ?").get(result.lastInsertRowid);
     res.json(lab);
@@ -23448,14 +23454,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/staff/employees", authMiddleware, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    // Resolve the ACTIVE lab (X-Active-Lab-Id), mapped to its staff_labs row via
-    // tier2_lab_id, matching the template + lab-scoped endpoints. The bare
-    // WHERE user_id lookup returned an arbitrary staff_labs row for a multi-lab
-    // owner. Fall back to that lookup only when no active lab resolves.
-    const activeLab = resolveActiveLabForRequest(req.userId, req);
-    const lab = (activeLab
-      ? (db as any).$client.prepare("SELECT id FROM staff_labs WHERE tier2_lab_id = ?").get(activeLab.id)
-      : (db as any).$client.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(dataUserId)) as any;
+    // Resolve the ACTIVE lab's staff_labs row (via tier2_lab_id), with a
+    // single-row fallback for legacy/single-lab accounts (activeStaffLab).
+    const lab = activeStaffLab(req, dataUserId) as any;
     if (!lab) return res.json([]);
 
     const employees = (db as any).$client.prepare(
@@ -23479,11 +23480,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // multi-lab owner's import targets the lab they are viewing, not an
     // arbitrary staff_labs row. Falls back to the owner's staff_labs row when
     // there is no active-lab header (single-lab / legacy page).
-    const activeLab = resolveActiveLabForRequest(req.userId, req);
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const lab = (activeLab
-      ? (db as any).$client.prepare("SELECT lab_name FROM staff_labs WHERE tier2_lab_id = ?").get(activeLab.id)
-      : (db as any).$client.prepare("SELECT lab_name FROM staff_labs WHERE user_id = ?").get(dataUserId)) as any;
+    const lab = activeStaffLab(req, dataUserId) as any;
     try {
       const { buildStaffImportWorkbook } = await import("./staffBulkImport");
       const buf = await buildStaffImportWorkbook({ labName: lab?.lab_name });
@@ -23501,7 +23499,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/staff/employees/:id", authMiddleware, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const lab = (db as any).$client.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+    const lab = activeStaffLab(req, dataUserId) as any;
     if (!lab) return res.status(404).json({ error: "Lab not found" });
 
     const emp = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ? AND lab_id = ?").get(req.params.id, lab.id) as any;
@@ -23516,7 +23514,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/staff/employees", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+    const lab = activeStaffLab(req, dataUserId) as any;
     if (!lab) return res.status(400).json({ error: "Set up your lab first" });
 
     const { lastName, firstName, middleInitial, title, titleCode, hireDate, qualificationsText, qualificationsVerifiedAt, qualificationsVerifiedBy, highestComplexity, performsTesting, roles } = req.body;
@@ -23593,7 +23591,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put("/api/staff/employees/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+    const lab = activeStaffLab(req, dataUserId) as any;
     if (!lab) return res.status(400).json({ error: "Lab not found" });
 
     const emp = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ? AND lab_id = ?").get(req.params.id, lab.id) as any;
@@ -23650,7 +23648,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.delete("/api/staff/employees/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const lab = (db as any).$client.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+    const lab = activeStaffLab(req, dataUserId) as any;
     if (!lab) return res.status(400).json({ error: "Lab not found" });
     const emp = (db as any).$client.prepare("SELECT id FROM staff_employees WHERE id = ? AND lab_id = ?").get(req.params.id, lab.id);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
@@ -25670,11 +25668,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
       // Active-lab aware (X-Active-Lab-Id): multi-lab imports preview against the
       // lab being viewed, not an arbitrary staff_labs row. See the template route.
-      const activeLab = resolveActiveLabForRequest(req.userId, req);
       const dataUserId = req.ownerUserId ?? req.user.userId;
-      const lab = (activeLab
-        ? (db as any).$client.prepare("SELECT id FROM staff_labs WHERE tier2_lab_id = ?").get(activeLab.id)
-        : (db as any).$client.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(dataUserId)) as any;
+      const lab = activeStaffLab(req, dataUserId) as any;
       if (!lab) return res.status(400).json({ error: "Set up your lab first" });
       if (!req.file?.buffer) return res.status(400).json({ error: "No file uploaded" });
       try {
@@ -25712,11 +25707,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
       // Active-lab aware (X-Active-Lab-Id): multi-lab imports COMMIT to the lab
       // being viewed, not an arbitrary staff_labs row. See the template route.
-      const activeLab = resolveActiveLabForRequest(req.userId, req);
       const dataUserId = req.ownerUserId ?? req.user.userId;
-      const lab = (activeLab
-        ? (db as any).$client.prepare("SELECT * FROM staff_labs WHERE tier2_lab_id = ?").get(activeLab.id)
-        : (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId)) as any;
+      const lab = activeStaffLab(req, dataUserId) as any;
       if (!lab) return res.status(400).json({ error: "Set up your lab first" });
       if (!req.file?.buffer) return res.status(400).json({ error: "No file uploaded" });
       try {
@@ -25864,7 +25856,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put("/api/staff/competency/:employeeId", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+    const lab = activeStaffLab(req, dataUserId) as any;
     if (!lab) return res.status(400).json({ error: "Lab not found" });
 
     const emp = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ? AND lab_id = ?").get(req.params.employeeId, lab.id) as any;
@@ -26061,7 +26053,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/staff/cms209", authMiddleware, async (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+    const lab = activeStaffLab(req, dataUserId) as any;
     if (!lab) return res.status(400).json({ error: "Lab not set up" });
 
     const employees = (db as any).$client.prepare(
@@ -26122,7 +26114,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/staff/lab-specialties", authMiddleware, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+    const lab = activeStaffLab(req, dataUserId) as any;
     if (!lab) return res.json({ specialties: [], specialtyLabels: CMS_SPECIALTIES });
     res.json({ specialties: getLabSpecialtyNumbers(lab.id), specialtyLabels: CMS_SPECIALTIES });
   });
@@ -26131,7 +26123,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put("/api/staff/lab-specialties", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+    const lab = activeStaffLab(req, dataUserId) as any;
     if (!lab) return res.status(400).json({ error: "Set up your lab first" });
     const nums = sanitizeSpecialties(req.body?.specialties);
     writeLabSpecialties(lab.id, lab.tier2_lab_id ?? null, nums);
@@ -26142,7 +26134,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/staff/cms209-readiness", authMiddleware, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+    const lab = activeStaffLab(req, dataUserId) as any;
     if (!lab) return res.json({ labSpecialties: [], gaps: [], specialtyLabels: CMS_SPECIALTIES });
     const emps = employeesWithRolesForStaffLab("lab_id", lab.id);
     const labNums = getLabSpecialtyNumbers(lab.id);
@@ -26774,9 +26766,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
     }
 
+    // Scope to the ACTIVE lab (caller-based); WHERE user_id merged certificates
+    // from every lab the owner belongs to. Fall back to user scope when no lab.
+    const certLabId = resolveActiveLabForRequest(req.userId, req)?.id ?? null;
     const certs = (db as any).$client.prepare(
-      "SELECT * FROM lab_certificates WHERE user_id = ? AND is_active = 1 ORDER BY created_at DESC"
-    ).all(req.userId) as any[];
+      certLabId
+        ? "SELECT * FROM lab_certificates WHERE lab_id = ? AND is_active = 1 ORDER BY created_at DESC"
+        : "SELECT * FROM lab_certificates WHERE user_id = ? AND is_active = 1 ORDER BY created_at DESC"
+    ).all(certLabId ?? req.userId) as any[];
 
     // Attach document count for each certificate
     const result = certs.map((cert: any) => {
@@ -27698,9 +27695,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/veritapt/enrollments", authMiddleware, (req: any, res) => {
     if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
+    // Scope to the ACTIVE lab (caller-based), fall back to user scope when none.
+    const labId = resolveActiveLabForRequest(req.userId, req)?.id ?? null;
     const rows = (db as any).$client.prepare(
-      "SELECT * FROM pt_enrollments WHERE user_id = ? ORDER BY enrollment_year DESC, analyte"
-    ).all(dataUserId);
+      labId
+        ? "SELECT * FROM pt_enrollments WHERE lab_id = ? ORDER BY enrollment_year DESC, analyte"
+        : "SELECT * FROM pt_enrollments WHERE user_id = ? ORDER BY enrollment_year DESC, analyte"
+    ).all(labId ?? dataUserId);
     res.json(rows);
   });
 
@@ -27721,7 +27722,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // falls back to the default lab with no X-Active-Lab-Id header, so single-lab
     // users are unchanged. This table's reads key on user_id, so nothing hides.
     try {
-      const activeLab = resolveActiveLabForRequest(dataUserId, req);
+      const activeLab = resolveActiveLabForRequest(req.userId, req);
       (db as any).$client.prepare("UPDATE pt_enrollments SET lab_id = ? WHERE id = ?").run(activeLab?.id ?? null, result.lastInsertRowid);
     } catch {}
     const created = (db as any).$client.prepare("SELECT * FROM pt_enrollments WHERE id = ?").get(Number(result.lastInsertRowid));
@@ -28056,7 +28057,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const userId = req.ownerUserId ?? req.user.userId;
       // 2026-06-10 Shape A class sweep (Michael L feedback).
-      const ptLab = resolveActiveLabForRequest(userId, req);
+      const ptLab = resolveActiveLabForRequest(req.user.userId, req);
       let ptLabName = "";
       let ptCliaNum = "";
       if (ptLab) {
@@ -28236,8 +28237,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       // 6. Get active PT enrollments to determine already-covered analytes
       const enrollments = (db as any).$client.prepare(
-        "SELECT analyte FROM pt_enrollments WHERE user_id = ? AND status = 'active'"
-      ).all(userId) as { analyte: string }[];
+        labId
+          ? "SELECT analyte FROM pt_enrollments WHERE lab_id = ? AND status = 'active'"
+          : "SELECT analyte FROM pt_enrollments WHERE user_id = ? AND status = 'active'"
+      ).all(labId ?? userId) as { analyte: string }[];
       const enrolledSet = new Set(enrollments.map(e => normalizeAnalyte(e.analyte)));
 
       const alreadyCovered: string[] = [];
@@ -30621,7 +30624,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId);
     }
     // 2026-06-10 Shape A class sweep (Michael L feedback).
-    const lab = resolveActiveLabForRequest(userId, req);
+    const lab = resolveActiveLabForRequest(req.user.userId, req);
     const accCount = (lab?.accreditation_cap ? 1 : 0) + (lab?.accreditation_tjc ? 1 : 0)
       + (lab?.accreditation_cola ? 1 : 0) + (lab?.accreditation_aabb ? 1 : 0);
     let accreditationChoice = 'CLIA';
@@ -30664,21 +30667,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get('/api/veritapolicy/requirements', authMiddleware, (req: any, res) => {
     const sqlite = db.$client;
     const userId = req.ownerUserId;
-    // Get all user requirement statuses
-    const statuses = sqlite.prepare('SELECT * FROM veritapolicy_requirement_status WHERE user_id = ?').all(userId) as any[];
+    // Scope statuses/settings/policies to the ACTIVE lab (resolveLegacyLabId:
+    // validated X-Active-Lab-Id -> default_lab_id -> first active membership),
+    // matching the sibling /api/veritapolicy/policies and the lab-scoped twin.
+    // WHERE user_id merged every lab the account (or a seat owner) belongs to,
+    // so a seat user saw the owner's policy state. Fall back to user scope only
+    // when no lab resolves.
+    const labId = resolveLegacyLabId(req);
+    const scopeCol = labId ? 'lab_id' : 'user_id';
+    const scopeVal = labId ?? userId;
+    const statuses = sqlite.prepare(`SELECT * FROM veritapolicy_requirement_status WHERE ${scopeCol} = ?`).all(scopeVal) as any[];
     const statusMap: Record<number, any> = {};
     for (const s of statuses) statusMap[s.requirement_id] = s;
-    // Get settings for applicability
-    const settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId) as any;
-    // Get lab policies for mapping display
-    const policies = sqlite.prepare('SELECT id, policy_number, policy_name FROM veritapolicy_lab_policies WHERE user_id = ? ORDER BY policy_name').all(userId) as any[];
+    const settings = sqlite.prepare(`SELECT * FROM veritapolicy_settings WHERE ${scopeCol} = ?`).get(scopeVal) as any;
+    const policies = sqlite.prepare(`SELECT id, policy_number, policy_name FROM veritapolicy_lab_policies WHERE ${scopeCol} = ? ORDER BY policy_name`).all(scopeVal) as any[];
     const policyMap: Record<number, any> = {};
     for (const p of policies) policyMap[p.id] = p;
     // Phase 1 (2026-05-01): source of truth for accreditation is the labs
     // table, not veritapolicy_settings.accreditation_body. The latter is
     // retained but no longer drives content selection.
-    // 2026-06-10 Shape A class sweep (Michael L feedback).
-    const lab = resolveActiveLabForRequest(userId, req);
+    // 2026-06-10 Shape A class sweep (Michael L feedback). Resolve the lab row
+    // for the SAME active lab used to scope the reads above (caller-based).
+    const lab = labId
+      ? (sqlite.prepare('SELECT * FROM labs WHERE id = ?').get(labId) as any)
+      : resolveActiveLabForRequest(req.user.userId, req);
     const reqSets = veritapolicyReqSetsForLab(lab);
 
     // Build response
@@ -30830,14 +30842,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get('/api/veritapolicy/summary', authMiddleware, (req: any, res) => {
     const sqlite = db.$client;
     const userId = req.ownerUserId;
-    const settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId) as any;
-    const statuses = sqlite.prepare('SELECT * FROM veritapolicy_requirement_status WHERE user_id = ?').all(userId) as any[];
+    // Scope to the ACTIVE lab (caller-based), fall back to user scope when none.
+    const labId = resolveLegacyLabId(req);
+    const scopeCol = labId ? 'lab_id' : 'user_id';
+    const scopeVal = labId ?? userId;
+    const settings = sqlite.prepare(`SELECT * FROM veritapolicy_settings WHERE ${scopeCol} = ?`).get(scopeVal) as any;
+    const statuses = sqlite.prepare(`SELECT * FROM veritapolicy_requirement_status WHERE ${scopeCol} = ?`).all(scopeVal) as any[];
     const statusMap: Record<number, any> = {};
     for (const s of statuses) statusMap[s.requirement_id] = s;
-    // Phase 1 (2026-05-01): source the accreditor set from labs flags via the
-    // shared helper. CFR is included for every lab.
-    // 2026-06-10 Shape A class sweep (Michael L feedback).
-    const lab = resolveActiveLabForRequest(userId, req);
+    const lab = labId ? (sqlite.prepare('SELECT * FROM labs WHERE id = ?').get(labId) as any) : resolveActiveLabForRequest(req.user.userId, req);
     const summaryReqs = veritapolicyReqSetsForLab(lab);
     let total = 0, complete = 0, inProgress = 0, notStarted = 0, na = 0;
     for (const req of summaryReqs) {
@@ -30866,14 +30879,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const sqlite = db.$client;
       const userId = req.ownerUserId;
       const user = sqlite.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
-      const settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId) as any;
-      const statuses = sqlite.prepare('SELECT * FROM veritapolicy_requirement_status WHERE user_id = ?').all(userId) as any[];
+      // Scope to the ACTIVE lab (caller-based); the PDF identity + content then
+      // reflect the lab being viewed, not the seat owner's home lab.
+      const labId = resolveLegacyLabId(req);
+      const scopeCol = labId ? 'lab_id' : 'user_id';
+      const scopeVal = labId ?? userId;
+      const settings = sqlite.prepare(`SELECT * FROM veritapolicy_settings WHERE ${scopeCol} = ?`).get(scopeVal) as any;
+      const statuses = sqlite.prepare(`SELECT * FROM veritapolicy_requirement_status WHERE ${scopeCol} = ?`).all(scopeVal) as any[];
       const statusMap: Record<number, any> = {};
       for (const s of statuses) statusMap[s.requirement_id] = s;
-      // Phase 1 (2026-05-01): source from labs flags via shared helper.
-      // CFR included for every lab regardless of accreditor selection.
-      // 2026-06-10 Shape A class sweep (Michael L feedback).
-      const lab = resolveActiveLabForRequest(userId, req);
+      const lab = labId ? (sqlite.prepare('SELECT * FROM labs WHERE id = ?').get(labId) as any) : resolveActiveLabForRequest(req.user.userId, req);
       const allReqs = veritapolicyReqSetsForLab(lab);
       const enrichedReqs = allReqs.map((reqItem: any) => {
         const us = statusMap[reqItem.id];
@@ -30922,7 +30937,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const sqlite = db.$client;
       const userId = req.ownerUserId;
       // 2026-06-10 Shape A class sweep (Michael L feedback).
-      const lab = resolveActiveLabForRequest(userId, req);
+      const lab = resolveActiveLabForRequest(req.user.userId, req);
       type AoCol = { key: 'tjc_citations' | 'cap_citations' | 'cola_citations' | 'aabb_citations'; label: string };
       const aoCols: AoCol[] = [];
       if (lab?.accreditation_tjc)  aoCols.push({ key: 'tjc_citations',  label: 'TJC' });
@@ -30930,7 +30945,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (lab?.accreditation_cola) aoCols.push({ key: 'cola_citations', label: 'COLA' });
       if (lab?.accreditation_aabb) aoCols.push({ key: 'aabb_citations', label: 'AABB' });
       const { VERITAPOLICY_MASTER_LIST } = await import('./veritapolicyMasterList');
-      const statuses = sqlite.prepare('SELECT * FROM veritapolicy_master_status WHERE user_id = ?').all(userId) as any[];
+      const scopeCol = lab?.id ? 'lab_id' : 'user_id';
+      const scopeVal = lab?.id ?? userId;
+      const statuses = sqlite.prepare(`SELECT * FROM veritapolicy_master_status WHERE ${scopeCol} = ?`).all(scopeVal) as any[];
       const sm: Record<string, any> = {};
       for (const s of statuses) sm[s.policy_id] = s;
       const rows = VERITAPOLICY_MASTER_LIST.map(p => {
@@ -31002,9 +31019,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const sqlite = db.$client;
       const userId = req.ownerUserId;
       // 2026-06-10 Shape A class sweep (Michael L feedback).
-      const lab = resolveActiveLabForRequest(userId, req);
+      const lab = resolveActiveLabForRequest(req.user.userId, req);
       const { VERITAPOLICY_MASTER_LIST } = await import('./veritapolicyMasterList');
-      const statuses = sqlite.prepare('SELECT * FROM veritapolicy_master_status WHERE user_id = ?').all(userId) as any[];
+      const scopeCol = lab?.id ? 'lab_id' : 'user_id';
+      const scopeVal = lab?.id ?? userId;
+      const statuses = sqlite.prepare(`SELECT * FROM veritapolicy_master_status WHERE ${scopeCol} = ?`).all(scopeVal) as any[];
       const sm: Record<string, any> = {};
       for (const s of statuses) sm[s.policy_id] = s;
       let complete = 0, in_progress = 0, not_started = 0, na = 0;
@@ -31041,10 +31060,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const userId = req.ownerUserId;
       // 2026-06-10 Shape A class sweep (Michael L feedback).
-      const lab = resolveActiveLabForRequest(userId, req);
+      const lab = resolveActiveLabForRequest(req.user.userId, req);
       const ownerUser = storage.getUserById(userId);
-      const labName = (ownerUser as any)?.cliaLabName || (ownerUser as any)?.clia_lab_name || ownerUser?.name || 'Laboratory';
-      const cliaNumber = (ownerUser as any)?.cliaNumber || (ownerUser as any)?.clia_number || 'Not on file';
+      // Identity from the ACTIVE lab (matches the scoped content), fall back to
+      // the owner's account record.
+      const labName = (lab as any)?.lab_name || (ownerUser as any)?.cliaLabName || (ownerUser as any)?.clia_lab_name || ownerUser?.name || 'Laboratory';
+      const cliaNumber = (lab as any)?.clia_number || (ownerUser as any)?.cliaNumber || (ownerUser as any)?.clia_number || 'Not on file';
       const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || 'veritaassure-export';
 
       // Pick the AO columns to include based on the lab record. CFR is always
