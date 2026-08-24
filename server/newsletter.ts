@@ -88,6 +88,8 @@ export function resolveRecipients(activeEmails: string[], testTo?: string | null
 
 export interface NewsletterSendResult { sent: number; failed: number; errors: string[]; }
 
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
 export async function sendNewsletter(opts: {
   subject: string;
   bodyHtml: string;
@@ -95,27 +97,43 @@ export async function sendNewsletter(opts: {
   postalAddress: string;
 }): Promise<NewsletterSendResult> {
   const result: NewsletterSendResult = { sent: 0, failed: 0, errors: [] };
+  // Resend's default rate limit is ~2 requests/second. Pace sends just under
+  // that and retry transient failures (429 rate-limit, 5xx) with exponential
+  // backoff so a large list is not silently truncated. A prior 233-recipient
+  // send fired with no throttle or retry and lost ~30 recipients to HTTP 429.
+  const THROTTLE_MS = 600; // ~1.6 sends/second
+  const MAX_RETRIES = 4;   // backoff 1s, 2s, 4s, 8s
   for (const email of opts.recipients) {
-    try {
-      const resp = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: NEWSLETTER_FROM,
-          to: email,
-          subject: opts.subject,
-          html: buildNewsletterHtml({ bodyHtml: opts.bodyHtml, email, postalAddress: opts.postalAddress }),
-        }),
-      });
-      if (resp.ok) result.sent++;
-      else { result.failed++; result.errors.push(`${email}: HTTP ${resp.status}`); }
-    } catch (err: any) {
-      result.failed++;
-      result.errors.push(`${email}: ${err?.message || err}`);
+    let ok = false;
+    let lastError = "unknown error";
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const resp = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: NEWSLETTER_FROM,
+            to: email,
+            subject: opts.subject,
+            html: buildNewsletterHtml({ bodyHtml: opts.bodyHtml, email, postalAddress: opts.postalAddress }),
+          }),
+        });
+        if (resp.ok) { ok = true; break; }
+        lastError = `HTTP ${resp.status}`;
+        // Only rate-limit (429) and server errors (5xx) are worth retrying; a
+        // 4xx such as 422 (invalid address) will never succeed.
+        if (resp.status !== 429 && resp.status < 500) break;
+      } catch (err: any) {
+        lastError = String(err?.message || err);
+      }
+      if (attempt < MAX_RETRIES) await sleep(1000 * Math.pow(2, attempt));
     }
+    if (ok) result.sent++;
+    else { result.failed++; result.errors.push(`${email}: ${lastError}`); }
+    await sleep(THROTTLE_MS);
   }
   return result;
 }
