@@ -115,7 +115,7 @@ export default function ArticleWhyVeritaCheckPage() {
                 VeritaCheck™ runs fourteen study types under one tool: Precision Verification (EP15-A3), Method Comparison / Multi-Instrument Correlation (EP09), Calibration Verification (EP06), Linearity (EP06), Reagent Lot Verification (EP26), QC Lot Verification (C24-Ed4), PT/INR Geometric Mean Calculator (H47), Multi-Analyte Lot Comparison, Coag (EP26), Reference Range Verification (EP28), Sensitivity Verification (EP17-A2), Carryover Verification (EP10-A3), Accuracy / Bias (EP15-A3), Reportable Range / AMR Verification (CLIA 493.1255), and Manual Differential (CLSI H20). One login, one billing line, one signature workflow.
               </p>
               <p>
-                Around VeritaCheck™ in the same VeritaAssure™ platform: VeritaPolicy™ for the lab's required policy set, VeritaMap™ for the test menu and critical value reference, VeritaComp™ for staff competency, VeritaLab™ for certificate tracking and CMS-116 application support, VeritaOps™ for cost-per-reportable-test studies, VeritaStock™ for inventory. A director who logs in to VeritaAssure sees all of them.
+                Around VeritaCheck™ in the same VeritaAssure™ platform: VeritaPolicy™ for the lab's required policy set, VeritaMap™ for the test menu and critical value reference, VeritaComp™ for staff competency, VeritaLab™ for certificate tracking and CMS-116 application support, VeritaOps™ for cost-per-reportable-test studies, VeritaStock™ for inventory. A director who logs in to VeritaAssure™ sees all of them.
               </p>
               <p>
                 Legacy verification software covers method comparison and precision well. The other study types are typically scattered across separate vendors, separate spreadsheets, or are not addressed at all. Lab director time is the cost the customer rarely tallies but always pays.
@@ -152,7 +152,7 @@ export default function ArticleWhyVeritaCheckPage() {
               </div>
               <div className="mt-5 flex flex-wrap gap-3">
                 <Button asChild className="bg-primary hover:bg-primary/90">
-                  <Link href="/demo/compliance">Open the VeritaCheck demo</Link>
+                  <Link href="/demo/compliance">Open the VeritaCheck™ demo</Link>
                 </Button>
                 <Button asChild variant="outline">
                   <Link href="/pricing">View pricing</Link>

@@ -114,7 +114,7 @@ return (
           </p>
 
           <p>
-            <strong>VeritaStaff™ teaches personnel qualifications.</strong> Building the TC/TS/GS role assignments for a lab forces a new director to understand what CLIA requires of each supervisory role. Who can sign a high complexity competency? Why can the Technical Consultant role not be delegated? What qualifications does a Technical Supervisor need for each specialty? VeritaStaff™ makes these questions concrete because they have to be answered correctly before the CMS 209 generates.
+            <strong>VeritaStaff™ teaches personnel qualifications.</strong> Building the TC/TS/GS role assignments for a lab forces a new director to understand what CLIA requires of each supervisory role. Who can sign a high complexity competency? Why does moderate complexity testing require a Technical Consultant? What qualifications does a Technical Supervisor need for each specialty? VeritaStaff™ makes these questions concrete because they have to be answered correctly before the CMS 209 generates.
           </p>
 
           {/* VeritaAssure CTA */}

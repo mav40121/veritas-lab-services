@@ -106,7 +106,7 @@ return (
             During my time as a Joint Commission laboratory surveyor, I encountered a consistent pattern across facilities of every size and complexity level. When I asked lab directors what criteria they used to evaluate calibration verification pass/fail, the most common answer was "the manufacturer's allowable error." Some said "our internal lab policy." A smaller number said "CLIA TEa."
           </p>
           <p>
-            None of those answers are wrong on its face. CLIA does not specify numeric acceptance criteria for calibration verification: §493.1253(b)(2) and §493.1255(b)(3) require the lab to establish and document criteria, but the choice belongs to the medical director or designee. The reason directors who said "CLIA TEa" were on stronger ground is simple: CLIA already publishes federally defined PT acceptance criteria for every regulated analyte, and adopting those values as your cal ver criterion gives you a published, defensible threshold rather than relying on a manufacturer claim that may or may not match.
+            None of those answers are wrong on its face. CLIA does not specify numeric acceptance criteria for calibration verification: §493.1253(b)(3) and §493.1255(b)(2) require the lab to establish and document criteria, but the choice belongs to the medical director or designee. The reason directors who said "CLIA TEa" were on stronger ground is simple: CLIA already publishes federally defined PT acceptance criteria for every regulated analyte, and adopting those values as your cal ver criterion gives you a published, defensible threshold rather than relying on a manufacturer claim that may or may not match.
           </p>
           <p>
             This is not a criticism of those directors. CLIA is a complex regulatory framework, and the TEa tables are buried in a subsection of a subsection of the Code of Federal Regulations. Nobody hands you a copy when you become lab director. You're expected to find it yourself.
@@ -129,7 +129,7 @@ return (
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Where to Find It in the CFR</h2>
           <p>
-            CLIA TEa values are published in <strong>42 CFR Part 493, Subpart I</strong> ("Proficiency Testing Programs by Specialty and Subspecialty"). The relevant sections:
+            CLIA TEa values are published in <strong>42 CFR Part 493, Subpart I</strong> ("Proficiency Testing Programs for Nonwaived Testing"). The relevant sections:
           </p>
           <div className="bg-muted/40 rounded-lg border border-border p-4 space-y-2 text-sm font-mono my-4">
             <div><span className="text-primary font-semibold">§493.927</span> - PT acceptance criteria, general immunology (alpha-1 antitrypsin, AFP, ANA, complement, hepatitis markers, immunoglobulins...)</div>
@@ -178,7 +178,7 @@ return (
             Manufacturer criteria are a vendor performance claim, not a federally published acceptance limit, so they are not always the most defensible basis for your calibration verification criteria. Manufacturer-stated allowable error is the performance claim made in the package insert or instrument specification sheet. It is based on what the manufacturer's testing showed their system can achieve, not on what regulators determined is acceptable for patient safety.
           </p>
           <p>
-            In some cases, manufacturer claims are more stringent than CLIA PT TEa. In others, they are more lenient. The critical point: CLIA PT TEa is a federally published value, while a manufacturer claim is a vendor specification. Adopting the federally published value as your cal ver acceptance criterion (with medical director or designee approval) gives you a more defensible answer to a surveyor. "The manufacturer said so" works, but "42 CFR §493.931 establishes ±8% or ±6 mg/dL for glucose as the PT acceptance criterion, and our laboratory has adopted that as our cal ver criterion under §493.1255(b)(3); all five calibration levels fell within that range" is a stronger answer.
+            In some cases, manufacturer claims are more stringent than CLIA PT TEa. In others, they are more lenient. The critical point: CLIA PT TEa is a federally published value, while a manufacturer claim is a vendor specification. Adopting the federally published value as your cal ver acceptance criterion (with medical director or designee approval) gives you a more defensible answer to a surveyor. "The manufacturer said so" works, but "42 CFR §493.931 establishes ±8% or ±6 mg/dL for glucose as the PT acceptance criterion, and our laboratory has adopted that as our cal ver criterion under §493.1255(b)(2); all five calibration levels fell within that range" is a stronger answer.
           </p>
 
           <Callout type="warning">

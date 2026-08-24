@@ -174,7 +174,7 @@ return (
             <li>Observed result from each method/instrument</li>
             <li>Calculated % error per method (observed − expected ÷ expected × 100)</li>
             <li>Pass/fail against CLIA allowable error (TEa) for that analyte</li>
-            <li>Slope (m), intercept (b), and Pearson r² across instruments</li>
+            <li>Slope (m), intercept (b), and Pearson r across instruments</li>
           </ul>
 
           {/* VeritaCheck CTA */}
