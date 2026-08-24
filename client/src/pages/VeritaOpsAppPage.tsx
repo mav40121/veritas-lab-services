@@ -170,8 +170,16 @@ function StudyDialog({
   const [form, setForm] = useState<Partial<CprtStudy>>({});
   // v1.4 template picker only shown when creating new, not editing.
   const [archetype, setArchetype] = useState<ArchetypeKey>("custom");
+  // Raw in-progress text for numeric fields, so a user can type intermediate
+  // decimal states ("3", "3.", "3.24") that Number() would otherwise collapse
+  // ("3." -> 3), which made the decimal point impossible to enter (2026-08-24
+  // Lisa: "I can't use decimal points in the CPR sheet"). form[k] always holds
+  // a parsed number; rawNumeric[k] only overrides the DISPLAY while editing and
+  // is cleared on blur + form reset.
+  const [rawNumeric, setRawNumeric] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    setRawNumeric({});
     if (editStudy) {
       setForm(editStudy);
       setArchetype("custom");
@@ -253,17 +261,36 @@ function StudyDialog({
 
   const setField = (k: keyof CprtStudy, v: any) => setForm((prev) => ({ ...prev, [k]: v }));
 
-  const numericField = (k: keyof CprtStudy, label: string, step: string = "0.01") => (
-    <div className="space-y-1.5">
-      <Label className="text-xs">{label}</Label>
-      <Input
-        type="text" inputMode="decimal"
-        step={step}
-        value={(form[k] as any) ?? 0}
-        onChange={(e) => setField(k, e.target.value === "" ? 0 : Number(e.target.value))}
-      />
-    </div>
-  );
+  const numericField = (k: keyof CprtStudy, label: string, step: string = "0.01") => {
+    const kk = k as string;
+    const display = kk in rawNumeric ? rawNumeric[kk] : String((form[k] as any) ?? "");
+    return (
+      <div className="space-y-1.5">
+        <Label className="text-xs">{label}</Label>
+        <Input
+          type="text" inputMode="decimal"
+          step={step}
+          value={display}
+          onChange={(e) => {
+            const v = e.target.value;
+            // Accept only a valid (possibly partial) decimal while typing, so
+            // "3." and "2.50" survive instead of collapsing to 3 / 2.5.
+            if (v !== "" && !/^-?\d*\.?\d*$/.test(v)) return;
+            setRawNumeric((r) => ({ ...r, [kk]: v }));
+            const n = v === "" || v === "-" || v === "." || v === "-." ? 0 : Number(v);
+            if (!Number.isNaN(n)) setField(k, n);
+          }}
+          onBlur={() =>
+            setRawNumeric((r) => {
+              const c = { ...r };
+              delete c[kk];
+              return c;
+            })
+          }
+        />
+      </div>
+    );
+  };
 
   const handleSubmit = () => {
     if (!form.test_name?.trim()) return;
