@@ -50,6 +50,7 @@ const ArticlePrecisionInterpretationPage = lazy(() => import("@/pages/ArticlePre
 const ArticleReferenceIntervalVerificationPage = lazy(() => import("@/pages/ArticleReferenceIntervalVerificationPage"));
 const ArticleQCTestingIntoCompliancePage = lazy(() => import("@/pages/ArticleQCTestingIntoCompliancePage"));
 const ArticleCostPerReportablePage = lazy(() => import("@/pages/ArticleCostPerReportablePage"));
+const ArticleProficiencyTestingPage = lazy(() => import("@/pages/ArticleProficiencyTestingPage"));
 const ArticleWhyVeritaCheckPage = lazy(() => import("@/pages/ArticleWhyVeritaCheckPage"));
 const FAQPage = lazy(() => import("@/pages/FAQPage"));
 const PricingPage = lazy(() => import("@/pages/PricingPage"));
@@ -408,6 +409,7 @@ function AppContent() {
           <Route path="/resources/verifying-reference-intervals" component={ArticleReferenceIntervalVerificationPage} />
           <Route path="/resources/quality-control-testing-into-compliance" component={ArticleQCTestingIntoCompliancePage} />
           <Route path="/resources/cost-per-reportable-test-four-layer-framework" component={ArticleCostPerReportablePage} />
+          <Route path="/resources/proficiency-testing-clia-pt-referral" component={ArticleProficiencyTestingPage} />
           <Route path="/resources/why-veritacheck-vs-legacy-verification" component={ArticleWhyVeritaCheckPage} />
           <Route path="/veritascan-app">{wrapLegacy(VeritaScanAppPage)}</Route>
           <Route path="/veritascan-app/:id">{wrapLegacy(VeritaScanScanPage)}</Route>
