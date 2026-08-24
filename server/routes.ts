@@ -20881,7 +20881,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // WHERE user_id merged programs and employee counts from every lab a
     // multi-lab owner belongs to. Fall back to user scope only when no lab
     // resolves (legacy account with no membership).
-    const activeLabId = resolveActiveLabForRequest(dataUserId, req)?.id ?? null;
+    // Resolve the active lab from the CALLER (req.user.userId), not dataUserId.
+    // dataUserId is req.ownerUserId for seat users, and when the caller holds a
+    // seat in an UNRELATED account (e.g. an owner who is also a seat user
+    // elsewhere) that points at the wrong owner, so the lab membership check
+    // fails and it silently fell back to that owner's user_id. resolveActive-
+    // LabForRequest already maps a seat caller to its own owner internally.
+    const activeLabId = resolveActiveLabForRequest(req.user.userId, req)?.id ?? null;
     const scopeCol = activeLabId ? "lab_id" : "user_id";
     const scopeVal = activeLabId ?? dataUserId;
     const programs = (db as any).$client.prepare(
@@ -21247,7 +21253,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     // Scope to the ACTIVE lab; fall back to user for legacy no-lab accounts.
-    const activeLabId = resolveActiveLabForRequest(dataUserId, req)?.id ?? null;
+    // Resolve from the CALLER (req.user.userId), not dataUserId: dataUserId is
+    // the seat owner, which for a caller holding a seat in an unrelated account
+    // points at the wrong owner and defeats the lab membership check.
+    const activeLabId = resolveActiveLabForRequest(req.user.userId, req)?.id ?? null;
     const employees = (db as any).$client.prepare(
       activeLabId
         ? "SELECT * FROM competency_employees WHERE lab_id = ? ORDER BY name"
@@ -23089,7 +23098,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // 2026-06-10 (Michael L feedback) Shape A class sweep: prefer the
     // active lab from X-Active-Lab-Id header / body.lab_id with
     // membership validation, fall back to default_lab_id resolver.
-    const compLab = resolveActiveLabForRequest(dataUserId, req);
+    // Resolve from the CALLER (req.user.userId), not dataUserId: for a caller
+    // holding a seat in an unrelated account dataUserId is the foreign owner,
+    // which stamps the wrong lab's CLIA/name on the competency PDF.
+    const compLab = resolveActiveLabForRequest(req.user.userId, req);
     const compCliaNumber = compLab?.clia_number || undefined;
     const compLabName = compLab?.lab_name || undefined;
     // Fallback to user record if no lab row yet
