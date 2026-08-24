@@ -1,0 +1,65 @@
+# Public-page Playwright specs run by the BLOCKING playwright-public-gate CI job
+# (.github/workflows/playwright-public-gate.yml). These run against a locally
+# built + booted server on an ephemeral SQLite DB, so they must be PUBLIC
+# (no auth token) and deterministic against a fresh DB (no seeded prod data).
+#
+# This set was chosen empirically: the full public candidate list was run
+# against a local build, and only specs that passed with zero failures are
+# listed here. Data-dependent specs (veritastock demos, staff-portal-login),
+# stale-content specs, and the known-red resource-article-d-polish (EP09-A3 in
+# the shared FAQ) are intentionally excluded.
+#
+# To add a spec: confirm it is public + passes against a local build (see the
+# workflow's boot step), then add its path below. One path per line; blank
+# lines and # comments are ignored.
+
+tests/playwright/brand-images-and-price.spec.ts
+tests/playwright/code-split-routes-render.spec.ts
+tests/playwright/contact-lazy-route-renders.spec.ts
+tests/playwright/demo-selector-dark-mode.spec.ts
+tests/playwright/ep26-article.spec.ts
+tests/playwright/ep26-product-labels.spec.ts
+tests/playwright/geo-answer-first.spec.ts
+tests/playwright/geo-author-entity.spec.ts
+tests/playwright/geo-faq-schema.spec.ts
+tests/playwright/geo-old-article-301.spec.ts
+tests/playwright/homepage-mobile-no-overflow.spec.ts
+tests/playwright/homepage-sample-reports.spec.ts
+tests/playwright/hospital-inventory-landing.spec.ts
+tests/playwright/inventory-count-workflow.spec.ts
+tests/playwright/lazy-chunk-selfheal.spec.ts
+tests/playwright/learn-video-library.spec.ts
+tests/playwright/navbar-breakpoint.spec.ts
+tests/playwright/password-reset-page.spec.ts
+tests/playwright/pricing-no-stale-display-prices.spec.ts
+tests/playwright/pricing-staff-portal-section.spec.ts
+tests/playwright/pricing-vc-unlimited-no-trial.spec.ts
+tests/playwright/public-article-stale-token.spec.ts
+tests/playwright/qc-resource-page.spec.ts
+tests/playwright/resource-article-cfr-citations.spec.ts
+tests/playwright/resource-article-proficiency-testing.spec.ts
+tests/playwright/resource-faq-render.spec.ts
+tests/playwright/resource-internal-links.spec.ts
+tests/playwright/resource-tube-labeling-download.spec.ts
+tests/playwright/resources-newest-first.spec.ts
+tests/playwright/seo-resources-citations.spec.ts
+tests/playwright/staff-portal-activity.spec.ts
+tests/playwright/staff-portal-competencies.spec.ts
+tests/playwright/staff-portal-inventory.spec.ts
+tests/playwright/staff-portal-policies.spec.ts
+tests/playwright/staffportal-token-key-fix.spec.ts
+tests/playwright/study-signoff-terminology.spec.ts
+tests/playwright/tea-pages-mobile-no-overflow.spec.ts
+tests/playwright/tea-rule-designation.spec.ts
+tests/playwright/veritaassure-policy-card-copy.spec.ts
+tests/playwright/veritacheck-mobile-no-overflow.spec.ts
+tests/playwright/veritacheck-page-smoke.spec.ts
+tests/playwright/veritalab-cadence-copy.spec.ts
+tests/playwright/veritapace-howto-label.spec.ts
+tests/playwright/veritaresponse-copy-truth.spec.ts
+tests/playwright/veritascan-count-marketing-pages.spec.ts
+tests/playwright/veritascan-public-count-accuracy.spec.ts
+tests/playwright/veritastock-login-skin.spec.ts
+tests/playwright/veritastock-route-lockdown.spec.ts
+tests/playwright/veritatrack-copy-truth.spec.ts
+tests/playwright/why-veritacheck-cfr.spec.ts

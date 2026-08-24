@@ -90,9 +90,13 @@ jobs:
             kill "$SERVER_PID" 2>/dev/null || true
             exit 1
           fi
-          # Run only the curated public, no-auth spec(s) against the local build.
+          # Run the curated public, no-auth spec set (tests/playwright/public-gate.manifest.txt)
+          # against the local build. The manifest holds only specs proven green
+          # against a fresh DB; see its header for the add/exclude policy.
           set +e
-          PW_BASE=http://localhost:5000 npx playwright test tests/playwright/public-article-stale-token.spec.ts --retries=1 --workers=2
+          SPECS=$(grep -vE '^\s*(#|$)' tests/playwright/public-gate.manifest.txt | tr '\n' ' ')
+          echo "running $(echo "$SPECS" | wc -w) public specs"
+          PW_BASE=http://localhost:5000 npx playwright test $SPECS --retries=1 --workers=4
           STATUS=$?
           kill "$SERVER_PID" 2>/dev/null || true
           exit $STATUS
