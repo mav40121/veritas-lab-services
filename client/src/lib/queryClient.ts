@@ -1,5 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-import { authHeaders, clearAuth } from "./auth";
+import { authHeaders, clearAuth, isPublicMarketingPath } from "./auth";
 import { triggerSubscriptionError } from "@/components/SubscriptionModal";
 
 // In production the "__PORT_5000__" placeholder is never substituted, so the app
@@ -62,9 +62,15 @@ export const getQueryFn: <T>(options: {
       if (unauthorizedBehavior === "returnNull") {
         return null;
       }
-      // Stale or expired token: clear auth and redirect to login
+      // Stale or expired token: clear it either way. Only bounce to /login from
+      // app/workspace routes. On public marketing/resource pages a stale token
+      // must NOT redirect a prospect to the login page (that sent newsletter
+      // recipients holding old trial tokens from a public article to /login,
+      // 2026-08-24). Render the public page logged out instead.
       clearAuth();
-      window.location.href = "/login";
+      if (typeof window !== "undefined" && !isPublicMarketingPath(window.location.pathname)) {
+        window.location.href = "/login";
+      }
       return null;
     }
 
