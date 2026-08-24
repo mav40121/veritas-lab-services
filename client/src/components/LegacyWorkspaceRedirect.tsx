@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { useMemberships } from "@/hooks/useMemberships";
-import { isLoggedIn as authIsLoggedIn } from "@/lib/auth";
+import { isLoggedIn as authIsLoggedIn, setActiveLabId } from "@/lib/auth";
 
 // Wraps a legacy unprefixed workspace route (e.g. /dashboard,
 // /veritapolicy-app, /study/:id/results) and redirects to its lab-scoped
@@ -27,21 +27,32 @@ export function LegacyWorkspaceRedirect({ children, appPath }: { children: React
   const [location, setLocation] = useLocation();
   const loggedIn = authIsLoggedIn();
   const { data: memberships, isLoading } = useMemberships();
+  const onLegacyPath = loggedIn && !location.startsWith("/labs/");
 
   const willRedirect =
-    loggedIn &&
-    !isLoading &&
-    !!memberships &&
-    memberships.length > 0 &&
-    !location.startsWith("/labs/");
+    onLegacyPath && !isLoading && !!memberships && memberships.length > 0;
 
   useEffect(() => {
     if (!willRedirect) return;
     const target = memberships![0];
+    // Persist the resolved lab so authHeaders() on any later un-prefixed page
+    // carries X-Active-Lab-Id instead of leaving the server to pick a default.
+    // A single-membership seat user never opens the LabSwitcher, so without
+    // this the persisted fallback stays empty and requests go out lab-less.
+    setActiveLabId(target.labId);
     const dest = appPath ?? location;
     setLocation(`/labs/${target.labId}${dest}`);
   }, [willRedirect, memberships, location, setLocation, appPath]);
 
+  // Hold the un-prefixed child until the active lab is known. Rendering the
+  // bare page while memberships are still loading fires lab-less API calls
+  // that the server resolves to the WRONG lab (2026-08-24 Lisa report: a
+  // Milford seat user saw Michaels Lab studies on bare /dashboard). Hold only
+  // while the query is in flight or a redirect is imminent; fall through to
+  // render when logged out (page owns its auth), already on a /labs/:id URL,
+  // on zero memberships (onboarding), OR when the query errored (memberships
+  // undefined but settled) so an error never blanks the page.
+  if (onLegacyPath && isLoading) return null;
   if (willRedirect) return null;
   return <>{children}</>;
 }
