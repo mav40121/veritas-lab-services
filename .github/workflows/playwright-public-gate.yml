@@ -1,0 +1,107 @@
+name: Playwright Public Gate
+
+# BLOCKING, PR-valid Playwright gate.
+#
+# playwright-smoke (the sibling workflow) runs the full suite against PRODUCTION
+# as report-only: prod is the OLD code during a PR, and ~24 legacy specs need
+# prod credentials or specific lab data, so it cannot gate a merge. This job
+# instead BUILDS THE PR's OWN CODE, boots the server locally on an ephemeral
+# SQLite DB with dummy secrets, and runs a curated set of PUBLIC, no-auth specs
+# against localhost. A failure here fails the job and blocks the merge.
+#
+# It exists because a regression shipped on 2026-08-24: public resource-article
+# pages hard-redirected stale-token visitors to /login (a newsletter blast sent
+# recipients from a public article to a sign-up screen). The gate below runs the
+# regression spec that reproduces it, so a revert of that fix cannot land.
+#
+# To REQUIRE it: Settings -> Branches -> main -> Require status checks to pass
+# -> select "playwright-public-gate". (A check must have run at least once on a
+# PR before GitHub lists it as selectable.)
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Match the sibling smoke job: never cancel an in-progress run, so a rapid
+# second push to main cannot leave a cancelled run that Railway's "wait for CI"
+# reads as a failed suite and then skips the deploy.
+concurrency:
+  group: playwright-public-gate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  playwright-public-gate:
+    name: playwright-public-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser (chromium)
+        run: npx playwright install --with-deps chromium
+
+      - name: Build app (client + server)
+        run: npm run build
+
+      - name: Boot server and run public gate specs (BLOCKING)
+        env:
+          CI: 'true'
+          NODE_ENV: production
+          PORT: '5000'
+          DB_PATH: .tmp-e2e-gate.db
+          JWT_SECRET: test-jwt-secret
+          ADMIN_SECRET: test-admin-secret
+          STRIPE_SECRET_KEY: sk_test_dummy
+          STRIPE_WEBHOOK_SECRET: whsec_dummy
+          RESEND_API_KEY: re_dummy
+        run: |
+          set -e
+          rm -f .tmp-e2e-gate.db
+          node dist/index.cjs &
+          SERVER_PID=$!
+          echo "server pid=$SERVER_PID"
+          # Wait up to 60s for the server to accept connections; fail fast if the
+          # process dies during boot (missing env, migration error, etc.).
+          READY=0
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:5000/ >/dev/null 2>&1; then
+              echo "server ready after ${i}s"; READY=1; break
+            fi
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+              echo "::error::server process exited during boot"; exit 1
+            fi
+            sleep 1
+          done
+          if [ "$READY" != "1" ]; then
+            echo "::error::server never became ready on :5000"
+            kill "$SERVER_PID" 2>/dev/null || true
+            exit 1
+          fi
+          # Run only the curated public, no-auth spec(s) against the local build.
+          set +e
+          PW_BASE=http://localhost:5000 npx playwright test tests/playwright/public-article-stale-token.spec.ts --retries=1 --workers=2
+          STATUS=$?
+          kill "$SERVER_PID" 2>/dev/null || true
+          exit $STATUS
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-public-gate-report
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
