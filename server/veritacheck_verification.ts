@@ -1636,14 +1636,17 @@ export function registerVeritaCheckVerificationRoutes(
       if (vStatus === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
       return res.status(404).json({ error: "Not found" });
     }
-    // Return all studies for this user so any can be linked
+    // Scope suggestions to the verification's OWN lab, not the owner's whole
+    // studies catalogue. WHERE user_id merged every lab a multi-lab owner
+    // belongs to, so the picker offered studies from other labs (cross-lab
+    // leak class). v.lab_id is the verification's lab.
     const matches = sqlite.prepare(`
       SELECT id, test_name AS testName, study_type AS studyType, created_at AS createdAt
       FROM studies
-      WHERE user_id = ?
+      WHERE lab_id = ?
       ORDER BY created_at DESC
       LIMIT 50
-    `).all(userId);
+    `).all(v.lab_id);
     res.json(matches);
   });
 

@@ -20624,14 +20624,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.json({ match: null, normalizedKey: normalized.raw, reason: reasons[normalized.kind] });
     }
 
-    // CFR §493 match: most recent completed study for the user.
+    // CFR §493 match: most recent completed study in the FINDING'S lab, not the
+    // owner's whole catalogue. WHERE user_id surfaced a study from another of the
+    // owner's labs under this finding (cross-lab leak class). finding.lab_id is
+    // the finding's lab.
     const study = (db as any).$client.prepare(
       `SELECT id, test_name, study_type, date, status, created_at
        FROM studies
-       WHERE user_id = ?
+       WHERE lab_id = ?
        ORDER BY date DESC, id DESC
        LIMIT 1`
-    ).get(dataUserId) as any;
+    ).get(finding.lab_id) as any;
     if (!study) {
       return res.json({
         match: null,
