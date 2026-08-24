@@ -4281,6 +4281,11 @@ interface CompetencyPDFInput {
   // Lab director prints, hands to tech for paper completion, transcribes
   // back into VeritaComp using the normal New Assessment dialog.
   blank?: boolean;
+  // NYS CLEP jurisdiction. When 'NYS-CLEP', the technical competency renders the
+  // 8-element CLEP framework (the six CLIA elements plus Element 7 Safe Work
+  // Practices and Element 8 Delegated Supervisory Functions, 10 NYCRR 58-1.2(d)
+  // HR S8). CLIA labs (default) render the six-element framework unchanged.
+  primaryRegime?: "CLIA" | "NYS-CLEP";
 }
 
 // Human-readable label for the doc_type enum from competency_element_documents.
@@ -4429,6 +4434,14 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
       { num: 5, name: "Blind / PT Sample Performance" },
       { num: 6, name: "Problem-Solving Assessment (Quiz)" },
     ];
+    // NYS CLEP labs assess 8 elements (adds Safe Work Practices + Delegated
+    // Supervisory Functions per 10 NYCRR 58-1.2(d), HR S8). CLIA labs stay at 6.
+    if (input.primaryRegime === "NYS-CLEP") {
+      summaryElements.push(
+        { num: 7, name: "Direct Observation of Safe Work Practices (NYS CLEP)" },
+        { num: 8, name: "Assessment of Delegated Supervisory Functions (NYS CLEP)" },
+      );
+    }
     const summaryRows = summaryElements.map(el => {
       const elItems = items.filter((i: any) => (i.element_number || i.method_number) === el.num);
       const naKey = `el${el.num}_na` as string;
@@ -4552,8 +4565,10 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
   // ─── PAGES 2+ ───
 
   if (isTechnical) {
-    // Each element gets its own section
-    const elementDefs = [
+    // Each element gets its own section. `citation` overrides the default
+    // 42 CFR §493.1235(a)(N) anchor (used for the six CLIA elements) so the NYS
+    // CLEP elements 7 and 8 can cite 10 NYCRR 58-1.2(d) instead.
+    const elementDefs: Array<{ num: number; title: string; note: string; citation?: string; cols: string[]; render: (item: any) => string }> = [
       {
         num: 1,
         title: "Element 1: Direct Observation of Routine Patient Test Performance",
@@ -4617,6 +4632,36 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
       },
     ];
 
+    // NYS CLEP: append the two CLEP-only elements (10 NYCRR 58-1.2(d), HR S8).
+    // Their `citation` overrides the default 42 CFR §493.1235 anchor. CLIA labs
+    // never reach this branch, so their PDFs render exactly six elements.
+    if (input.primaryRegime === "NYS-CLEP") {
+      elementDefs.push(
+        {
+          num: 7,
+          title: "Element 7: Direct Observation of Safe Work Practices",
+          note: "NYS CLEP requirement. The observer (Lab Director or designee, Technical Consultant, or Technical Supervisor as appropriate) documents direct observation that the employee follows the laboratory's safety practices. Required for New York State permit-holding laboratories.",
+          citation: "10 NYCRR 58-1.2(d), Clinical Laboratory Standards of Practice HR S8(d)",
+          cols: ["Method Group", "Date Observed", "Observer Initials", "Pass"],
+          render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
+            <td>${esc(item.el7_date_observed || "")}</td>
+            <td>${esc(item.el7_observer_initials || "")}</td>
+            ${compItemVerdictCell(item)}`,
+        },
+        {
+          num: 8,
+          title: "Element 8: Assessment of Delegated Supervisory Functions",
+          note: "NYS CLEP requirement. For staff who perform delegated supervisory or leadership functions, documents assessment of competency to perform those functions. Required for New York State permit-holding laboratories.",
+          citation: "10 NYCRR 58-1.2(d), Clinical Laboratory Standards of Practice HR S8(i)",
+          cols: ["Method Group", "Function Assessed", "Date", "Pass"],
+          render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
+            <td style="word-break:break-word;white-space:normal;max-width:280px;font-size:7.5pt;line-height:1.4;">${esc(item.el8_function_assessed || "")}</td>
+            <td>${esc(item.el8_date || "")}</td>
+            ${compItemVerdictCell(item)}`,
+        },
+      );
+    }
+
     // Single page break before all elements, then they flow naturally
     html += `<div class="page-break"></div>`;
     for (const elDef of elementDefs) {
@@ -4627,7 +4672,7 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
       // alongside the activity, not just on page 1.
       html += `<div class="section" style="margin-bottom:6px;">
         <div class="section-header">${elDef.title}</div>
-        <div class="section-note">${elDef.note} <span style="color:#888;font-size:7pt;">(42 CFR &sect;493.1235(a)(${elDef.num}))</span></div>
+        <div class="section-note">${elDef.note} <span style="color:#888;font-size:7pt;">(${elDef.citation || `42 CFR &sect;493.1235(a)(${elDef.num})`})</span></div>
         <table>
           <tr>${elDef.cols.map(c => `<th>${c}</th>`).join("")}</tr>`;
 

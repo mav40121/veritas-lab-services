@@ -21467,9 +21467,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           el4_date_observed, el4_observer_initials, el4_na, el4_na_justification,
           el5_sample_type, el5_sample_id, el5_acceptable, el5_na, el5_na_justification,
           el6_quiz_id, el6_score, el6_date_taken, el6_na, el6_na_justification,
+          el7_date_observed, el7_observer_initials, el7_na, el7_na_justification,
+          el8_function_assessed, el8_date, el8_na, el8_na_justification,
           waived_instrument, waived_test, waived_method_number, waived_evidence, waived_date, waived_initials,
           nt_item_label, nt_item_description, nt_date_met, nt_employee_initials, nt_supervisor_initials
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       for (const item of items) {
         stmt.run(
@@ -21493,6 +21495,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           item.el5Na ? 1 : 0, item.el5NaJustification ?? null,
           item.el6QuizId ?? null, item.el6Score ?? null, item.el6DateTaken ?? null,
           item.el6Na ? 1 : 0, item.el6NaJustification ?? null,
+          item.el7DateObserved ?? null, item.el7ObserverInitials ?? null,
+          item.el7Na ? 1 : 0, item.el7NaJustification ?? null,
+          item.el8FunctionAssessed ?? null, item.el8Date ?? null,
+          item.el8Na ? 1 : 0, item.el8NaJustification ?? null,
           item.waivedInstrument ?? null, item.waivedTest ?? null,
           item.waivedMethodNumber ?? null, item.waivedEvidence ?? null,
           item.waivedDate ?? null, item.waivedInitials ?? null,
@@ -21828,9 +21834,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           el4_date_observed, el4_observer_initials, el4_na, el4_na_justification,
           el5_sample_type, el5_sample_id, el5_acceptable, el5_na, el5_na_justification,
           el6_quiz_id, el6_score, el6_date_taken, el6_na, el6_na_justification,
+          el7_date_observed, el7_observer_initials, el7_na, el7_na_justification,
+          el8_function_assessed, el8_date, el8_na, el8_na_justification,
           waived_instrument, waived_test, waived_method_number, waived_evidence, waived_date, waived_initials,
           nt_item_label, nt_item_description, nt_date_met, nt_employee_initials, nt_supervisor_initials
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       for (const item of items) {
         stmt.run(
@@ -21854,6 +21862,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           item.el5Na ? 1 : 0, item.el5NaJustification ?? null,
           item.el6QuizId ?? null, item.el6Score ?? null, item.el6DateTaken ?? null,
           item.el6Na ? 1 : 0, item.el6NaJustification ?? null,
+          item.el7DateObserved ?? null, item.el7ObserverInitials ?? null,
+          item.el7Na ? 1 : 0, item.el7NaJustification ?? null,
+          item.el8FunctionAssessed ?? null, item.el8Date ?? null,
+          item.el8Na ? 1 : 0, item.el8NaJustification ?? null,
           item.waivedInstrument ?? null, item.waivedTest ?? null,
           item.waivedMethodNumber ?? null, item.waivedEvidence ?? null,
           item.waivedDate ?? null, item.waivedInitials ?? null,
@@ -22567,7 +22579,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
        JOIN competency_quizzes q ON qr.quiz_id = q.id
        WHERE qr.assessment_id = ?`
     ).all(assessment.id);
-    const compLab = (db as any).$client.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    const compLab = (db as any).$client.prepare("SELECT id, lab_name, clia_number, primary_regime FROM labs WHERE id = ?").get(req.scope.labId) as any;
     const labName = compLab?.lab_name || "Clinical Laboratory";
     const cliaForComp = compLab?.clia_number || undefined;
     try {
@@ -22579,7 +22591,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
          WHERE assessment_id = ?
          ORDER BY element_number, created_at`
       ).all(assessment.id);
-      const pdfBuffer = await generateCompetencyPDF({ assessment, items, methodGroups, checklistItems, labName, quizResults, cliaNumber: cliaForComp, elementDocuments }, licenseCtxFromReq(req));
+      const pdfBuffer = await generateCompetencyPDF({ assessment, items, methodGroups, checklistItems, labName, quizResults, cliaNumber: cliaForComp, elementDocuments, primaryRegime: compLab?.primary_regime }, licenseCtxFromReq(req));
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = new Date().toISOString().split("T")[0];
       const typeLabel = assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
@@ -22619,7 +22631,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const checklistItems = (db as any).$client.prepare(
       "SELECT * FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order"
     ).all(program.id);
-    const compLab = (db as any).$client.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    const compLab = (db as any).$client.prepare("SELECT id, lab_name, clia_number, primary_regime FROM labs WHERE id = ?").get(req.scope.labId) as any;
     const labName = compLab?.lab_name || "Clinical Laboratory";
     const cliaForComp = compLab?.clia_number || undefined;
 
@@ -22658,6 +22670,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         cliaNumber: cliaForComp,
         elementDocuments: [],
         blank: true,
+        primaryRegime: compLab?.primary_regime,
       }, licenseCtxFromReq(req));
       const safeName = (program.name || "Program").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = new Date().toISOString().split("T")[0];
@@ -22877,7 +22890,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
            WHERE assessment_id = ?
            ORDER BY element_number, created_at`
         ).all(a.id);
-        const pdfBuffer = await generateCompetencyPDF({ assessment: a, items, methodGroups, checklistItems, labName, quizResults, cliaNumber, elementDocuments }, licenseCtxFromReq(req));
+        const pdfBuffer = await generateCompetencyPDF({ assessment: a, items, methodGroups, checklistItems, labName, quizResults, cliaNumber, elementDocuments, primaryRegime: compLab?.primary_regime }, licenseCtxFromReq(req));
         zip.file(candidate, pdfBuffer);
         bundleRows.push({ a, filename: candidate, ok: true });
       } catch (err: any) {

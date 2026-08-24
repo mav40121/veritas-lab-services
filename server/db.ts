@@ -1339,6 +1339,18 @@ const newCompItemCols: [string, string][] = [
   ["el5_na_justification", "TEXT"],
   ["el6_na", "INTEGER"],
   ["el6_na_justification", "TEXT"],
+  // NYS CLEP 8-element competency (10 NYCRR 58-1.2(d), HR S8). Elements 7 and 8
+  // are appended only for labs with primary_regime='NYS-CLEP'; on CLIA labs
+  // these columns stay null. El7 = Safe Work Practices (HR S8(d), observer +
+  // date, mirrors el4). El8 = Delegated Supervisory Functions (HR S8(i)).
+  ["el7_date_observed", "TEXT"],
+  ["el7_observer_initials", "TEXT"],
+  ["el7_na", "INTEGER"],
+  ["el7_na_justification", "TEXT"],
+  ["el8_function_assessed", "TEXT"],
+  ["el8_date", "TEXT"],
+  ["el8_na", "INTEGER"],
+  ["el8_na_justification", "TEXT"],
 ];
 for (const [col, colType] of newCompItemCols) {
   if (!compItemColNames.includes(col)) {

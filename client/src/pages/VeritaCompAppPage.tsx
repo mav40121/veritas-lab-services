@@ -9,6 +9,7 @@ import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useMemberships } from "@/hooks/useMemberships";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { downloadPdfToken } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -2267,6 +2268,16 @@ interface TechElementData {
   el6_date_taken: string;
   el6_na: boolean;
   el6_na_justification: string;
+  // Elements 7 & 8: NYS CLEP only (10 NYCRR 58-1.2(d), HR S8). Rendered and
+  // submitted only when the active lab is NYS-CLEP; null on CLIA labs.
+  el7_date_observed: string;
+  el7_observer_initials: string;
+  el7_na: boolean;
+  el7_na_justification: string;
+  el8_function_assessed: string;
+  el8_date: string;
+  el8_na: boolean;
+  el8_na_justification: string;
 }
 
 function emptyTechElement(): TechElementData {
@@ -2284,6 +2295,10 @@ function emptyTechElement(): TechElementData {
     el5_na: false, el5_na_justification: "",
     el6_quiz_id: "", el6_score: null, el6_date_taken: "",
     el6_na: false, el6_na_justification: "",
+    el7_date_observed: "", el7_observer_initials: "",
+    el7_na: false, el7_na_justification: "",
+    el8_function_assessed: "", el8_date: "",
+    el8_na: false, el8_na_justification: "",
   };
 }
 
@@ -2314,6 +2329,13 @@ function NewAssessmentDialog({
 }) {
   const { toast } = useToast();
   const activeLabId = useActiveLabId();
+  // NYS CLEP: a New York (CLIA-exempt) lab assesses the 8-element CLEP framework
+  // (adds Element 7 Safe Work Practices + Element 8 Delegated Supervisory
+  // Functions, 10 NYCRR 58-1.2(d) HR S8). CLIA labs stay at 6. Drives which
+  // element sub-forms render and the item-build loop bound below.
+  const { data: memberships } = useMemberships();
+  const isNys = (memberships || []).find(m => m.labId === activeLabId)?.primaryRegime === "NYS-CLEP";
+  const elementCount = isNys ? 8 : 6;
   const activeEmployees = employees.filter(e => e.status === "active");
   const selectedEmployee = activeEmployees.length > 0 ? activeEmployees[0] : null;
   const [employeeId, setEmployeeId] = useState<number | null>(selectedEmployee?.id || null);
@@ -2568,15 +2590,15 @@ function NewAssessmentDialog({
   }
 
   // Check if any element fails (exclude N/A elements)
-  const anyFails = Object.values(techData).some(d => !d.passed && !d.el1_na && !d.el2_na && !d.el3_na && !d.el4_na && !d.el5_na && !d.el6_na && (d.el1_specimen_id || d.el2_evidence || d.el3_qc_date || d.el4_date_observed || d.el5_sample_id || d.el6_quiz_id));
+  const anyFails = Object.values(techData).some(d => !d.passed && !d.el1_na && !d.el2_na && !d.el3_na && !d.el4_na && !d.el5_na && !d.el6_na && !d.el7_na && !d.el8_na && (d.el1_specimen_id || d.el2_evidence || d.el3_qc_date || d.el4_date_observed || d.el5_sample_id || d.el6_quiz_id || d.el7_date_observed || d.el8_function_assessed));
 
   // Check if any N/A element is missing justification
   function getMissingNaJustifications(): string[] {
     const missing: string[] = [];
-    const elNames = ["Direct Observation", "Monitoring/Reporting", "QC Performance", "Instrument Maintenance", "Blind/PT Sample", "Quiz"];
+    const elNames = ["Direct Observation", "Monitoring/Reporting", "QC Performance", "Instrument Maintenance", "Blind/PT Sample", "Quiz", "Safe Work Practices (NYS)", "Delegated Supervisory Functions (NYS)"];
     for (const key of Object.keys(techData)) {
       const d = techData[key];
-      for (let el = 1; el <= 6; el++) {
+      for (let el = 1; el <= elementCount; el++) {
         const naKey = `el${el}_na` as keyof TechElementData;
         const justKey = `el${el}_na_justification` as keyof TechElementData;
         if (d[naKey] && !(d[justKey] as string)?.trim()) {
@@ -2609,7 +2631,7 @@ function NewAssessmentDialog({
 
     if (program.type === "technical") {
       for (const mg of (program.methodGroups || [])) {
-        for (let el = 1; el <= 6; el++) {
+        for (let el = 1; el <= elementCount; el++) {
           const key = `${el}-${mg.id}`;
           const d = techData[key] || emptyTechElement();
           items.push({
@@ -2642,6 +2664,14 @@ function NewAssessmentDialog({
             el6DateTaken: d.el6_date_taken,
             el6Na: d.el6_na,
             el6NaJustification: d.el6_na_justification,
+            el7DateObserved: d.el7_date_observed,
+            el7ObserverInitials: d.el7_observer_initials,
+            el7Na: d.el7_na,
+            el7NaJustification: d.el7_na_justification,
+            el8FunctionAssessed: d.el8_function_assessed,
+            el8Date: d.el8_date,
+            el8Na: d.el8_na,
+            el8NaJustification: d.el8_na_justification,
             passed: d.passed,
           });
         }
@@ -3256,6 +3286,79 @@ function NewAssessmentDialog({
                       );
                     })()}
                   </div>
+
+                  {isNys && (<>
+                  {/* Element 7 - NYS CLEP: Direct Observation of Safe Work Practices */}
+                  <div className="border border-amber-300 dark:border-amber-700 rounded-lg p-3 bg-amber-50/40 dark:bg-amber-950/10">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-xs font-semibold">Element 7: Direct Observation of Safe Work Practices <span className="text-[9px] font-normal text-amber-700 dark:text-amber-400">NYS CLEP</span></div>
+                      <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0">
+                        <input type="checkbox" checked={getTechDataForElement(7, mg.id).el7_na} onChange={e => { setTechField(7, mg.id, "el7_na", e.target.checked); if (e.target.checked) setTechField(7, mg.id, "passed", false); }} className="w-3.5 h-3.5" />
+                        N/A
+                      </label>
+                    </div>
+                    <p className="text-[10px] italic text-muted-foreground mb-2">10 NYCRR 58-1.2(d), HR S8(d). Observer (LD, TC, or TS as appropriate) documents direct observation that the employee follows the lab's safety practices.</p>
+                    {getTechDataForElement(7, mg.id).el7_na ? (
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">Justification (required)</label>
+                        <Textarea className="text-xs min-h-[32px] border-amber-400" placeholder="Explain why this element is not applicable..." value={getTechDataForElement(7, mg.id).el7_na_justification} onChange={e => setTechField(7, mg.id, "el7_na_justification", e.target.value)} rows={2} />
+                      </div>
+                    ) : (
+                      <div className="flex gap-2 items-end">
+                        <div className="w-40">
+                          <label className="text-[10px] text-muted-foreground">Date Observed</label>
+                          <Input type="date" className="text-xs h-7" value={getTechDataForElement(7, mg.id).el7_date_observed} onChange={e => setTechField(7, mg.id, "el7_date_observed", e.target.value)} />
+                        </div>
+                        <div className="w-56">
+                          <label className="text-[10px] text-muted-foreground">Observer (LD / TC / TS)</label>
+                          <ObserverInitialsField
+                            value={getTechDataForElement(7, mg.id).el7_observer_initials}
+                            onChange={(v) => setTechField(7, mg.id, "el7_observer_initials", v)}
+                            observers={qualifiedObservers || []}
+                            isLoading={observersLoading}
+                          />
+                        </div>
+                        <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0 pb-1">
+                          <input type="checkbox" checked={getTechDataForElement(7, mg.id).passed} onChange={e => setTechField(7, mg.id, "passed", e.target.checked)} className="w-3.5 h-3.5" />
+                          Pass
+                        </label>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Element 8 - NYS CLEP: Assessment of Delegated Supervisory Functions */}
+                  <div className="border border-amber-300 dark:border-amber-700 rounded-lg p-3 bg-amber-50/40 dark:bg-amber-950/10">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-xs font-semibold">Element 8: Assessment of Delegated Supervisory Functions <span className="text-[9px] font-normal text-amber-700 dark:text-amber-400">NYS CLEP</span></div>
+                      <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0">
+                        <input type="checkbox" checked={getTechDataForElement(8, mg.id).el8_na} onChange={e => { setTechField(8, mg.id, "el8_na", e.target.checked); if (e.target.checked) setTechField(8, mg.id, "passed", false); }} className="w-3.5 h-3.5" />
+                        N/A
+                      </label>
+                    </div>
+                    <p className="text-[10px] italic text-muted-foreground mb-2">10 NYCRR 58-1.2(d), HR S8(i). For staff who perform delegated supervisory or leadership functions. Use N/A for staff with no delegated supervisory duties.</p>
+                    {getTechDataForElement(8, mg.id).el8_na ? (
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">Justification (required)</label>
+                        <Textarea className="text-xs min-h-[32px] border-amber-400" placeholder="Explain why this element is not applicable..." value={getTechDataForElement(8, mg.id).el8_na_justification} onChange={e => setTechField(8, mg.id, "el8_na_justification", e.target.value)} rows={2} />
+                      </div>
+                    ) : (
+                      <div className="flex gap-2 items-end">
+                        <div className="flex-1">
+                          <label className="text-[10px] text-muted-foreground">Function Assessed</label>
+                          <Input className="text-xs h-7" placeholder="e.g., QC review sign-off, corrective-action approval" value={getTechDataForElement(8, mg.id).el8_function_assessed} onChange={e => setTechField(8, mg.id, "el8_function_assessed", e.target.value)} />
+                        </div>
+                        <div className="w-40">
+                          <label className="text-[10px] text-muted-foreground">Date</label>
+                          <Input type="date" className="text-xs h-7" value={getTechDataForElement(8, mg.id).el8_date} onChange={e => setTechField(8, mg.id, "el8_date", e.target.value)} />
+                        </div>
+                        <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0 pb-1">
+                          <input type="checkbox" checked={getTechDataForElement(8, mg.id).passed} onChange={e => setTechField(8, mg.id, "passed", e.target.checked)} className="w-3.5 h-3.5" />
+                          Pass
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                  </>)}
                 </div>
               ))}
             </div>
