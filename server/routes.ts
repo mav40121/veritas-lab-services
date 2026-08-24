@@ -20877,13 +20877,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/competency/programs", authMiddleware, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
+    // Scope to the ACTIVE lab (X-Active-Lab-Id), matching the lab-scoped twin.
+    // WHERE user_id merged programs and employee counts from every lab a
+    // multi-lab owner belongs to. Fall back to user scope only when no lab
+    // resolves (legacy account with no membership).
+    const activeLabId = resolveActiveLabForRequest(dataUserId, req)?.id ?? null;
+    const scopeCol = activeLabId ? "lab_id" : "user_id";
+    const scopeVal = activeLabId ?? dataUserId;
     const programs = (db as any).$client.prepare(
-      "SELECT * FROM competency_programs WHERE user_id = ? ORDER BY updated_at DESC"
-    ).all(dataUserId);
+      `SELECT * FROM competency_programs WHERE ${scopeCol} = ? ORDER BY updated_at DESC`
+    ).all(scopeVal);
     const result = programs.map((p: any) => {
       const employeeCount = (db as any).$client.prepare(
-        "SELECT COUNT(*) as cnt FROM competency_employees WHERE user_id = ? AND status = 'active'"
-      ).get(dataUserId)?.cnt || 0;
+        `SELECT COUNT(*) as cnt FROM competency_employees WHERE ${scopeCol} = ? AND status = 'active'`
+      ).get(scopeVal)?.cnt || 0;
       const assessmentCount = (db as any).$client.prepare(
         "SELECT COUNT(*) as cnt FROM competency_assessments WHERE program_id = ?"
       ).get(p.id)?.cnt || 0;
@@ -21044,10 +21051,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const program = userCanAccessLabRow('competency_programs', req.params.id, req);
     if (!program) return res.status(404).json({ error: "Program not found" });
+    // Scope the embedded employees to the PROGRAM'S own lab (matching the
+    // lab-scoped twin below), not the owner's whole employee roster across labs.
+    // Fall back to user scope only for a legacy program with no lab_id.
+    const empSql = program.lab_id
+      ? "SELECT * FROM competency_employees WHERE lab_id = ? AND status = 'active' ORDER BY name"
+      : "SELECT * FROM competency_employees WHERE user_id = ? ORDER BY name";
     return buildProgramDetailResponse(
       program,
-      "SELECT * FROM competency_employees WHERE user_id = ? ORDER BY name",
-      req.user.userId,
+      empSql,
+      program.lab_id ?? req.user.userId,
       res,
     );
   });
@@ -21233,9 +21246,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/competency/employees", authMiddleware, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
+    // Scope to the ACTIVE lab; fall back to user for legacy no-lab accounts.
+    const activeLabId = resolveActiveLabForRequest(dataUserId, req)?.id ?? null;
     const employees = (db as any).$client.prepare(
-      "SELECT * FROM competency_employees WHERE user_id = ? ORDER BY name"
-    ).all(dataUserId);
+      activeLabId
+        ? "SELECT * FROM competency_employees WHERE lab_id = ? ORDER BY name"
+        : "SELECT * FROM competency_employees WHERE user_id = ? ORDER BY name"
+    ).all(activeLabId ?? dataUserId);
     res.json(employees);
   });
 
@@ -23419,7 +23436,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/staff/employees", authMiddleware, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const lab = (db as any).$client.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(dataUserId) as any;
+    // Resolve the ACTIVE lab (X-Active-Lab-Id), mapped to its staff_labs row via
+    // tier2_lab_id, matching the template + lab-scoped endpoints. The bare
+    // WHERE user_id lookup returned an arbitrary staff_labs row for a multi-lab
+    // owner. Fall back to that lookup only when no active lab resolves.
+    const activeLab = resolveActiveLabForRequest(req.userId, req);
+    const lab = (activeLab
+      ? (db as any).$client.prepare("SELECT id FROM staff_labs WHERE tier2_lab_id = ?").get(activeLab.id)
+      : (db as any).$client.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(dataUserId)) as any;
     if (!lab) return res.json([]);
 
     const employees = (db as any).$client.prepare(
