@@ -35,4 +35,23 @@ test.describe("Decimal inputs accept typed decimals", () => {
       await expect(field.first()).toHaveValue("0.125");
     }
   });
+
+  test("VeritaOps CPRT cost field retains a typed decimal", async ({ page }) => {
+    test.skip(!TOKEN, "PW_TOKEN not set, skipping authenticated UI exercise");
+    await injectAuth(page, BASE, TOKEN);
+    await page.goto(`${BASE}/labs/${LAB_ID}/veritaops-app`);
+    // Open the New CPRT Study dialog (either the header button or the empty-state
+    // button, depending on whether the lab already has studies).
+    const openBtn = page.getByRole("button", { name: /New CPRT Study|Start your first study/ });
+    if (await openBtn.count()) {
+      await openBtn.first().click();
+      const cost = page.getByTestId("cprt-reagent_cost_per_test");
+      await cost.click();
+      await cost.fill("");
+      // The old inline Number() echo collapsed "3." to 3, so "3.24" was
+      // impossible; DecimalInput keeps the string draft.
+      await cost.type("3.24");
+      await expect(cost).toHaveValue("3.24");
+    }
+  });
 });

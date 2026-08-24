@@ -14,6 +14,7 @@ import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -253,14 +254,21 @@ function StudyDialog({
 
   const setField = (k: keyof CprtStudy, v: any) => setForm((prev) => ({ ...prev, [k]: v }));
 
+  // Uses the shared DecimalInput wrapper (client/src/components/ui/decimal-input),
+  // the same fix applied site-wide on 2026-08-14: it holds a string draft so a
+  // trailing "." survives ("3", "3.", "3.24") while calling back with the parsed
+  // number. The old inline Number(e.target.value) echo made a decimal point
+  // impossible to enter (2026-08-24 Lisa: "cannot use decimal points in the CPR
+  // sheet"); CPRT was the one form that never adopted DecimalInput.
   const numericField = (k: keyof CprtStudy, label: string, step: string = "0.01") => (
     <div className="space-y-1.5">
       <Label className="text-xs">{label}</Label>
-      <Input
-        type="text" inputMode="decimal"
+      <DecimalInput
+        data-testid={`cprt-${String(k)}`}
         step={step}
-        value={(form[k] as any) ?? 0}
-        onChange={(e) => setField(k, e.target.value === "" ? 0 : Number(e.target.value))}
+        value={Number((form[k] as any) ?? 0)}
+        onChangeNumber={(n) => setField(k, n)}
+        fallback={0}
       />
     </div>
   );
