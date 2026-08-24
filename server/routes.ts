@@ -10639,13 +10639,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(403).json({ error: "Studies export is not included in your current plan. Upgrade to enable." });
     }
 
-    // Pull all studies for the account
-    const userStudies = storage.getStudiesByUser(dataUserId);
+    // Pull studies scoped to the ACTIVE lab (X-Active-Lab-Id), not the user's
+    // whole catalogue across labs. getStudiesByUser returned every lab the
+    // owner belongs to, so the export did not match the lab-scoped dashboard
+    // table (cross-lab scoping bug). Fall back to the user's studies only when
+    // no active lab resolves (legacy account with no membership).
+    const userStudies = exportActiveLabId
+      ? storage.getStudiesByLab(exportActiveLabId)
+      : storage.getStudiesByUser(dataUserId);
     userStudies.sort((a, b) => b.id - a.id);
 
-    // Lab name and CLIA from owner user record
-    const labName = (ownerUser as any).cliaLabName || (ownerUser as any).clia_lab_name || ownerUser.name || "Laboratory";
-    const cliaNumber = (ownerUser as any).cliaNumber || (ownerUser as any).clia_number || "Not on file";
+    // Lab name and CLIA: prefer the ACTIVE lab's identity so the export header
+    // matches the scoped studies above; fall back to the owner's account record.
+    const exportLabRow = exportActiveLabId
+      ? ((db as any).$client.prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(exportActiveLabId) as any)
+      : null;
+    const labName = exportLabRow?.lab_name || (ownerUser as any).cliaLabName || (ownerUser as any).clia_lab_name || ownerUser.name || "Laboratory";
+    const cliaNumber = exportLabRow?.clia_number || (ownerUser as any).cliaNumber || (ownerUser as any).clia_number || "Not on file";
 
     // Helpers
     const studyTypeLabel = (st: string): string => {

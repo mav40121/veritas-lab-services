@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { users, studies, contactMessages } from "@shared/schema";
 import type { User, InsertStudy, Study, InsertContact } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import {
   resolveCanonicalAnalyte,
   teaByAnalyte,
@@ -78,6 +78,7 @@ export interface IStorage {
   createStudy(study: InsertStudy): Study;
   getStudy(id: number): Study | undefined;
   getStudiesByUser(userId: number): Study[];
+  getStudiesByLab(labId: number): Study[];
   getAllStudies(): Study[];
   updateStudyStatus(id: number, status: string): void;
   deleteStudy(id: number): void;
@@ -199,6 +200,12 @@ class DatabaseStorage implements IStorage {
   }
   getStudiesByUser(userId: number): Study[] {
     return db.select().from(studies).where(eq(studies.userId, userId)).orderBy(desc(studies.id)).all();
+  }
+  getStudiesByLab(labId: number): Study[] {
+    // studies.lab_id is a DB column not modeled in the Drizzle `studies` schema,
+    // so scope with a raw SQL predicate inside the same select (identical Study
+    // shape to getStudiesByUser).
+    return db.select().from(studies).where(sql`lab_id = ${labId}`).orderBy(desc(studies.id)).all();
   }
   getAllStudies(): Study[] {
     return db.select().from(studies).orderBy(desc(studies.id)).all();
