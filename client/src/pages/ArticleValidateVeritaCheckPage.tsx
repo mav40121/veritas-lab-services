@@ -62,7 +62,7 @@ return (
             <div className="font-semibold text-sm text-primary mb-3">Key Takeaways</div>
             <ul className="space-y-2">
               {[
-                "Software validation is required under CLIA 42 CFR 493.1251 and CAP checklist item COM.01300",
+                "Software validation is required under CLIA 42 CFR 493.1253 and CAP checklist item COM.01300",
                 "The appropriate framework is IQ/OQ/PQ: Installation Qualification, Operational Qualification, Performance Qualification",
                 "Most labs complete the full process in under two hours",
                 "A free Software Validation Record template is available at veritaslabservices.com",
@@ -85,7 +85,7 @@ return (
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Why Software Validation Is Required</h2>
           <p>
-            CLIA regulations under 42 CFR 493.1251 require laboratories to establish and verify the performance of all methods and procedures used in the testing process, including software involved in reporting. CAP checklist item COM.01300 addresses software validation directly. These requirements exist because software errors in a regulated environment carry the same risk as method errors. Documenting your validation demonstrates that the tool performs as intended in your specific setting.
+            CLIA regulations under 42 CFR 493.1253 require laboratories to establish and verify the performance of all methods and procedures used in the testing process, including software involved in reporting. CAP checklist item COM.01300 addresses software validation directly. These requirements exist because software errors in a regulated environment carry the same risk as method errors. Documenting your validation demonstrates that the tool performs as intended in your specific setting.
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">What Validating VeritaCheck™ Actually Means</h2>
@@ -177,7 +177,7 @@ return (
           <div className="mt-10 pt-6 border-t border-border">
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">References</div>
             <ol className="space-y-1.5 text-xs text-muted-foreground list-decimal list-inside">
-              <li>Code of Federal Regulations. (2024). 42 CFR 493.1251 - Establishment and Verification of Performance Specifications. <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ecfr.gov</a></li>
+              <li>Code of Federal Regulations. (2024). 42 CFR 493.1253 - Establishment and Verification of Performance Specifications. <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ecfr.gov</a></li>
               <li>College of American Pathologists. (2024). COM.01300 - Software Validation. CAP Accreditation Checklists.</li>
               <li>FDA. (2002). General Principles of Software Validation; Final Guidance for Industry and FDA Staff.</li>
             </ol>

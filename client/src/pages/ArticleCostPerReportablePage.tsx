@@ -262,7 +262,7 @@ export default function ArticleCostPerReportablePage() {
 
           <Section id="clia" title="6. The CLIA context">
             <p>
-              The CLIA regulations do not prescribe a cost-per-reportable-test framework. The relevant standards for the laboratory director's responsibility in this domain are 42 CFR §493.1407 (high-complexity testing) or §493.1445 (moderate-complexity testing), which together hold the laboratory director responsible for the overall operation and administration of the laboratory, including the employment of qualified personnel and assuring compliance with applicable regulations.
+              The CLIA regulations do not prescribe a cost-per-reportable-test framework. The relevant standards for the laboratory director's responsibility in this domain are 42 CFR §493.1407 (moderate-complexity testing) or §493.1445 (high-complexity testing), which together hold the laboratory director responsible for the overall operation and administration of the laboratory, including the employment of qualified personnel and assuring compliance with applicable regulations.
             </p>
             <p>
               The standard does not require CPRT. It does require that the director can defend the resource decisions made under their license. In practice, a director who cannot articulate the per-reportable-test economics of their test menu, their reagent vendor choices, and their capital posture is operating outside the spirit of that obligation even when fully inside the letter.
@@ -312,10 +312,10 @@ export default function ArticleCostPerReportablePage() {
               NCCLS. <em>Basic Cost Accounting for Clinical Services; Approved Guideline.</em> NCCLS document GP11-A. Wayne, PA: NCCLS; 1998.
             </p>
             <p className="text-sm">
-              <strong>42 CFR §493.1407.</strong> Standard: Laboratory director responsibilities (high-complexity testing).
+              <strong>42 CFR §493.1407.</strong> Standard: Laboratory director responsibilities (moderate-complexity testing).
             </p>
             <p className="text-sm">
-              <strong>42 CFR §493.1445.</strong> Standard: Laboratory director responsibilities (moderate-complexity testing).
+              <strong>42 CFR §493.1445.</strong> Standard: Laboratory director responsibilities (high-complexity testing).
             </p>
           </Section>
 
