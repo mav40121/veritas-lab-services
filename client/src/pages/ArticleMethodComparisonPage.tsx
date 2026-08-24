@@ -86,7 +86,7 @@ return (
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">When a Method Comparison Is Required</h2>
           <p>
-            The primary triggers are: placing a new analyzer into service, adding a new reagent system for an existing test, and whenever two instruments in your lab perform the same test and you need to demonstrate they produce equivalent results. CLSI EP09-A3 is the reference protocol. CAP checklist items COM.30650 and COM.30700 address method comparison and correlation directly.
+            The primary triggers are: placing a new analyzer into service, adding a new reagent system for an existing test, and whenever two instruments in your lab perform the same test and you need to demonstrate they produce equivalent results. CLSI EP09c is the reference protocol. CAP checklist items COM.30650 and COM.30700 address method comparison and correlation directly.
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Specimen Requirements</h2>
@@ -174,7 +174,7 @@ return (
           <div className="mt-10 pt-6 border-t border-border">
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">References</div>
             <ol className="space-y-1.5 text-xs text-muted-foreground list-decimal list-inside">
-              <li>CLSI EP09-A3. (2018). Measurement Procedure Comparison and Bias Estimation Using Patient Samples. <a href="https://clsi.org/standards/products/method-evaluation/documents/ep09/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">clsi.org</a></li>
+              <li>CLSI EP09c. (2018). Measurement Procedure Comparison and Bias Estimation Using Patient Samples. <a href="https://clsi.org/standards/products/method-evaluation/documents/ep09/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">clsi.org</a></li>
               <li>College of American Pathologists. (2024). COM.30650, COM.30700 - Method Comparison and Correlation. CAP Accreditation Checklists.</li>
               <li>Code of Federal Regulations. (2024). Title 42, Part 493: Laboratory Requirements. <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ecfr.gov</a></li>
             </ol>
