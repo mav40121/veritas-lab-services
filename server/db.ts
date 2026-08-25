@@ -2011,6 +2011,11 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
   ensure("stripe_subscription_id",     "ALTER TABLE labs ADD COLUMN stripe_subscription_id TEXT");
   ensure("study_credits",              "ALTER TABLE labs ADD COLUMN study_credits INTEGER DEFAULT 0");
   ensure("has_completed_onboarding",   "ALTER TABLE labs ADD COLUMN has_completed_onboarding INTEGER DEFAULT 0");
+  // 2026-08-25 (MedStar/Hiltunen): may a front-line Staff Portal tech add an
+  // append-only note to a saved QC point, or is that limited to a console
+  // writer (Technical Consultant / supervisor). Default 1 = open to the front
+  // line, per Mike's decision. Set 0 per site to restrict. See qc_result_notes.
+  ensure("qc_note_frontline_can_add",  "ALTER TABLE labs ADD COLUMN qc_note_frontline_can_add INTEGER NOT NULL DEFAULT 1");
   // 2026-07-15: card-less trial hard-lock. A trial lab (is_trial=1) is fully
   // blocked at its subscription_expires_at (reads AND writes) via
   // labScopeMiddleware, instead of falling into the 2-year read-only retention
@@ -5629,6 +5634,31 @@ sqlite.exec(`
     FOREIGN KEY (qc_rule_violation_id) REFERENCES qc_rule_violations(id)
   );
 
+  -- qc_result_notes: APPEND-ONLY investigation notes on a saved QC point
+  -- (2026-08-25, MedStar/Hiltunen request). A front-line tech (or a console
+  -- writer) can add a note after the point is recorded, e.g. the troubleshooting
+  -- for a Westgard violation or a "this run was a rerun" pointer. The original
+  -- qc_results row and its comment/timestamp are NEVER touched; each note is a
+  -- new row stamped with its author (user OR staff employee) and the time, so the
+  -- point tells its own story to a surveyor. There is intentionally no update or
+  -- delete path -- author_name is a SNAPSHOT so the trail survives a later rename
+  -- or removal of the employee. Who may add via the Staff Portal front line is
+  -- gated by labs.qc_note_frontline_can_add.
+  CREATE TABLE IF NOT EXISTS qc_result_notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    qc_result_id INTEGER NOT NULL,
+    note TEXT NOT NULL,
+    author_user_id INTEGER,
+    author_staff_employee_id INTEGER,
+    author_name TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'console',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (lab_id) REFERENCES labs(id),
+    FOREIGN KEY (qc_result_id) REFERENCES qc_results(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_qc_result_notes_result ON qc_result_notes(qc_result_id, id);
+
   CREATE TABLE IF NOT EXISTS qc_period_reviews (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     lab_id INTEGER NOT NULL,
@@ -5759,6 +5789,12 @@ try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as a
   ensure("qc_results", "voided_at",         "ALTER TABLE qc_results ADD COLUMN voided_at TEXT");
   ensure("qc_results", "voided_by_user_id", "ALTER TABLE qc_results ADD COLUMN voided_by_user_id INTEGER");
   ensure("qc_results", "void_reason",       "ALTER TABLE qc_results ADD COLUMN void_reason TEXT");
+
+  // qc_result_notes is created complete above; these self-heal a partial table
+  // and satisfy the "every CREATE TABLE has a matching ALTER migration" rule.
+  ensure("qc_result_notes", "author_user_id",           "ALTER TABLE qc_result_notes ADD COLUMN author_user_id INTEGER");
+  ensure("qc_result_notes", "author_staff_employee_id",  "ALTER TABLE qc_result_notes ADD COLUMN author_staff_employee_id INTEGER");
+  ensure("qc_result_notes", "source",                    "ALTER TABLE qc_result_notes ADD COLUMN source TEXT NOT NULL DEFAULT 'console'");
 
   ensure("qc_period_reviews", "attestation_acknowledged", "ALTER TABLE qc_period_reviews ADD COLUMN attestation_acknowledged INTEGER NOT NULL DEFAULT 0");
   ensure("qc_period_reviews", "review_notes",             "ALTER TABLE qc_period_reviews ADD COLUMN review_notes TEXT");
