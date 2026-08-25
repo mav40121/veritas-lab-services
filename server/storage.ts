@@ -79,6 +79,7 @@ export interface IStorage {
   getStudy(id: number): Study | undefined;
   getStudiesByUser(userId: number): Study[];
   getStudiesByLab(labId: number): Study[];
+  getStudiesByLabForUser(labId: number, userId: number): Study[];
   getAllStudies(): Study[];
   updateStudyStatus(id: number, status: string): void;
   deleteStudy(id: number): void;
@@ -206,6 +207,16 @@ class DatabaseStorage implements IStorage {
     // so scope with a raw SQL predicate inside the same select (identical Study
     // shape to getStudiesByUser).
     return db.select().from(studies).where(sql`lab_id = ${labId}`).orderBy(desc(studies.id)).all();
+  }
+  getStudiesByLabForUser(labId: number, userId: number): Study[] {
+    // Active-lab rows PLUS the caller's OWN studies that predate lab stamping
+    // (lab_id IS NULL). Those pre-backfill orphans have no lab to leak across, so
+    // surfacing them to their own author is leak-safe, and it prevents a legacy
+    // no-lab study from vanishing once its author resolves to a lab (2026-08-25
+    // review Finding 2). Never returns another lab's rows or another user's rows.
+    return db.select().from(studies)
+      .where(sql`(lab_id = ${labId} OR (lab_id IS NULL AND user_id = ${userId}))`)
+      .orderBy(desc(studies.id)).all();
   }
   getAllStudies(): Study[] {
     return db.select().from(studies).orderBy(desc(studies.id)).all();

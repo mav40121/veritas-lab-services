@@ -258,20 +258,32 @@ def check_file(rel, fpath):
                     ERRORS.append(f"  >> {line.strip()[:140]}")
 
     # ── 8. CROSS-LAB SCOPING: resolve the ACTIVE lab from the CALLER ──────────
-    # resolveActiveLabForRequest must receive the CALLER (req.userId /
-    # req.user.userId), NEVER dataUserId or req.ownerUserId (the seat OWNER).
-    # Passing the owner makes a seat user see the owner's lab -- that is how Lisa
-    # saw Michaels Lab studies (2026-08-24). This is the proven root-cause
-    # signature; keep it at zero. See reference_seat_accept_primary_lab_leak.
+    # resolveActiveLabForRequest's FIRST arg must be the CALLER identity, NEVER
+    # the seat OWNER (dataUserId / req.ownerUserId). Passing the owner makes a
+    # seat user see the owner's lab -- that is how Lisa saw Michaels Lab studies
+    # (2026-08-24). This is an ALLOWLIST (not a two-string blocklist): the earlier
+    # blocklist form only caught the two literal spellings from that incident, so
+    # `const u = req.ownerUserId; resolveActiveLabForRequest(u, req)` or any other
+    # owner expression (payload.ownerUserId, seat.owner_user_id, ...) slipped past.
+    # Any first arg not in CALLER_FIRST_ARGS fails -- a regression through a NEW
+    # owner spelling or a variable holding the owner is caught, not just the two
+    # historical strings. Add a genuinely-new CALLER spelling here when one lands.
+    # See reference_seat_accept_primary_lab_leak.
+    CALLER_FIRST_ARGS = {"req.userId", "req.user.userId", "payload.userId", "callerUserId", "userId"}
     if rel_norm.startswith("server/"):
-        crosslab_re = re.compile(r'resolveActiveLabForRequest\(\s*(?:dataUserId|req\.ownerUserId)\b')
+        caller_re = re.compile(r'resolveActiveLabForRequest\(\s*([A-Za-z_][A-Za-z0-9_.]*)\s*,')
         for i, line in enumerate(lines, 1):
             s = line.strip()
             if s.startswith("//") or s.startswith("*"):
                 continue
-            if crosslab_re.search(line):
-                ERRORS.append(f"[{rel_norm}:{i}] Active-lab resolver called with the seat OWNER (dataUserId/req.ownerUserId) -- pass the CALLER (req.userId).")
-                ERRORS.append(f"  >> {s[:140]}")
+            m = caller_re.search(line)
+            if not m:
+                continue
+            arg = m.group(1)
+            if arg in CALLER_FIRST_ARGS:
+                continue
+            ERRORS.append(f"[{rel_norm}:{i}] Active-lab resolver first arg '{arg}' is not a known CALLER identity {sorted(CALLER_FIRST_ARGS)} -- pass the CALLER (req.userId), never the seat owner; if '{arg}' really is the caller, add it to CALLER_FIRST_ARGS.")
+            ERRORS.append(f"  >> {s[:140]}")
 
     # ── 9. DECIMAL INPUTS: use DecimalInput, never a parsed-number echo ───────
     # An inputMode="decimal" input whose onChange runs Number()/parseFloat() on
@@ -305,33 +317,43 @@ def check_file(rel, fpath):
     if is_client_norm and not rel_norm.endswith("decimal-input.tsx"):
         pf_re = re.compile(r'parseFloat\(\s*e\.target\.value\s*\)')
         for i, line in enumerate(lines, 1):
+            s = line.strip()
+            # Skip comment lines (a .tsx comment documenting the anti-pattern is
+            # not a live bug); consistent with rules #8 and #11. 2026-08-25 review.
+            if s.startswith("//") or s.startswith("*"):
+                continue
             if pf_re.search(line):
                 ERRORS.append(f"[{rel_norm}:{i}] parseFloat(e.target.value) in a client input handler -- decimal fields must use <DecimalInput> (keeps a string draft); this echo wipes the trailing '.'.")
-                ERRORS.append(f"  >> {line.strip()[:140]}")
+                ERRORS.append(f"  >> {s[:140]}")
 
-    # ── 11. METHOD-SCOPING: getStudiesByUser must pair with getStudiesByLab ───
+    # ── 11. METHOD-SCOPING: a get*ByUser fetch must pair with a *ByLab twin ────
     # The cross-lab class had a SECOND signature that a `WHERE user_id` grep
     # could never catch: METHOD scoping. The dashboard studies export pulled
     # storage.getStudiesByUser(<seat owner>) -- user-scoped across ALL the
     # owner's labs -- with no literal SQL for rule #8 or a filter grep to see
-    # (2026-08-24 Lisa export leak, PR #1227). A user-scoped studies fetch in a
-    # read/export handler is only safe as the FALLBACK arm of an active-lab
-    # ternary (getStudiesByLab present in the window) or inside an
-    # ADMIN_SECRET-gated tool. Flag any getStudiesByUser( with neither nearby.
-    # Comments and the storage.ts definitions/interface (getStudiesByLab is
-    # declared right beside them) pass clean; all 3 current call sites are
-    # paired or admin-gated. See reference_seat_accept_primary_lab_leak.
+    # (2026-08-24 Lisa export leak, PR #1227). Generalized 2026-08-25 from the one
+    # method name getStudiesByUser to ANY get*ByUser getter (getScansByUser,
+    # getMapsByUser, ... a future sibling with the identical leak shape), per
+    # "fix the class not the instance." A user-scoped fetch in a read/export
+    # handler is only safe as the FALLBACK arm of an active-lab ternary (a *ByLab
+    # twin present in the window -- getStudiesByLab / getStudiesByLabForUser / any
+    # ByLab) or inside an ADMIN_SECRET-gated tool. Comments and the storage.ts
+    # definitions/interface (a *ByLab twin sits right beside them) pass clean;
+    # every current call site is paired or admin-gated. `getStudiesByLabForUser`
+    # contains no "ByUser" substring so it is not itself a trigger.
+    # See reference_seat_accept_primary_lab_leak.
     if rel_norm.startswith("server/"):
+        byuser_re = re.compile(r'\bget\w*ByUser\(')
         for i, line in enumerate(lines, 1):
             s = line.strip()
             if s.startswith("//") or s.startswith("*"):
                 continue
-            if "getStudiesByUser(" not in line:
+            if not byuser_re.search(line):
                 continue
             window = "\n".join(lines[max(0, i - 13):i + 12])  # +/- 12 lines
-            if "getStudiesByLab" in window or "ADMIN_SECRET" in window:
+            if "ByLab" in window or "ADMIN_SECRET" in window:
                 continue
-            ERRORS.append(f"[{rel_norm}:{i}] getStudiesByUser() with no getStudiesByLab pairing or ADMIN_SECRET gate nearby -- a user-scoped studies fetch leaks across every lab the (seat) owner belongs to, invisible to a WHERE-user_id grep. Use `activeLabId ? getStudiesByLab(activeLabId) : getStudiesByUser(caller)` or gate the handler on ADMIN_SECRET.")
+            ERRORS.append(f"[{rel_norm}:{i}] A get*ByUser() fetch with no *ByLab pairing or ADMIN_SECRET gate nearby -- a user-scoped fetch leaks across every lab the (seat) owner belongs to, invisible to a WHERE-user_id grep. Use `activeLabId ? get*ByLab(activeLabId) : get*ByUser(caller)` or gate the handler on ADMIN_SECRET.")
             ERRORS.append(f"  >> {s[:140]}")
 
 
