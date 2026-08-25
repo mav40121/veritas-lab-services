@@ -10580,7 +10580,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const activeLab = resolveActiveLabForRequest(payload.userId, req);
         const activeLabId: number | null = activeLab?.id ?? null;
         let userStudies = activeLabId
-          ? storage.getStudiesByLab(activeLabId)
+          ? storage.getStudiesByLabForUser(activeLabId, payload.userId)
           : storage.getStudiesByUser(payload.userId);
         // 2026-06-15: archived studies drop off the legacy active list too.
         // drizzle's studies schema lacks archived_at, so resolve archived ids
@@ -10648,7 +10648,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // across labs. Fall back to the caller's own studies only when no active
     // lab resolves (legacy account with no membership).
     const userStudies = exportActiveLabId
-      ? storage.getStudiesByLab(exportActiveLabId)
+      ? storage.getStudiesByLabForUser(exportActiveLabId, payload.userId)
       : storage.getStudiesByUser(payload.userId);
     userStudies.sort((a, b) => b.id - a.id);
 
@@ -30650,11 +30650,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const scopeVal = labId ?? userId;
     let settings = sqlite.prepare(`SELECT * FROM veritapolicy_settings WHERE ${scopeCol} = ?`).get(scopeVal) as any;
     if (!settings) {
-      sqlite.prepare(`INSERT INTO veritapolicy_settings (user_id) VALUES (?)`).run(userId);
-      settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId);
+      // 2026-08-25 review Finding 1: when a lab resolves, seed the row WITH its
+      // lab_id and re-read by lab_id. The old branch inserted a user_id-only
+      // (lab_id NULL) row and re-read WHERE user_id, so a multi-lab owner got a
+      // sibling lab's settings AND a fresh NULL-lab orphan on every load (the
+      // lab-scoped SELECT above never matches a NULL-lab row, so it re-inserted
+      // unboundedly). UNIQUE(lab_id) makes OR IGNORE a safe no-op under a race.
+      if (labId) {
+        sqlite.prepare(`INSERT OR IGNORE INTO veritapolicy_settings (user_id, lab_id) VALUES (?, ?)`).run(userId, labId);
+        settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE lab_id = ?').get(labId);
+      } else {
+        sqlite.prepare(`INSERT INTO veritapolicy_settings (user_id) VALUES (?)`).run(userId);
+        settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId);
+      }
     }
     // 2026-06-10 Shape A class sweep (Michael L feedback).
-    const lab = resolveActiveLabForRequest(req.user.userId, req);
+    // 2026-08-25 review Finding 4: derive the accreditor flags from the SAME lab
+    // the settings row was scoped to, so settings and accreditation_choice can
+    // never describe two different labs on a bare (no-header) multi-lab request.
+    const lab = labId
+      ? sqlite.prepare('SELECT * FROM labs WHERE id = ?').get(labId)
+      : resolveActiveLabForRequest(req.user.userId, req);
     const accCount = (lab?.accreditation_cap ? 1 : 0) + (lab?.accreditation_tjc ? 1 : 0)
       + (lab?.accreditation_cola ? 1 : 0) + (lab?.accreditation_aabb ? 1 : 0);
     let accreditationChoice = 'CLIA';
