@@ -290,6 +290,25 @@ def check_file(rel, fpath):
                 ERRORS.append(f"[{rel_norm}:{i}] Decimal input echoes a parsed number (Number/parseFloat(e.target.value)) -- collapses the trailing '.'; use <DecimalInput>, or inputMode=\"numeric\" for integer fields.")
                 ERRORS.append(f"  >> {line.strip()[:140]}")
 
+    # ── 10. parseFloat(e.target.value) is banned outright in client source ────
+    # This is the EXACT signature the 2026-08-25 decimal sweep first MISSED:
+    # the initial pass grepped only Number(e.target.value), so 38 VeritaCheck
+    # value grids that used parseFloat(e.target.value) went undetected. Rule #9
+    # only fires when the echo is within 4 lines of an inputMode="decimal" tag,
+    # which misses indirected (handleChange) and untagged inputs. With
+    # DecimalInput the standard, a raw parseFloat(e.target.value) should NEVER
+    # exist: decimal fields use <DecimalInput> (it parses its own string draft,
+    # not e.target.value), integer fields use parseInt/Number, string-draft
+    # fields store e.target.value unparsed. So ANY parseFloat(e.target.value) is
+    # a decimal-echo bug. Count is 0 as of this rule; this keeps it 0.
+    # See reference_decimal_input_wrapper.
+    if is_client_norm and not rel_norm.endswith("decimal-input.tsx"):
+        pf_re = re.compile(r'parseFloat\(\s*e\.target\.value\s*\)')
+        for i, line in enumerate(lines, 1):
+            if pf_re.search(line):
+                ERRORS.append(f"[{rel_norm}:{i}] parseFloat(e.target.value) in a client input handler -- decimal fields must use <DecimalInput> (keeps a string draft); this echo wipes the trailing '.'.")
+                ERRORS.append(f"  >> {line.strip()[:140]}")
+
 
 # ── 6. DB MIGRATION CHECK (db.ts only) ──────────────────────────────────────
 # Every CREATE TABLE IF NOT EXISTS must have a corresponding ALTER TABLE
