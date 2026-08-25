@@ -19,7 +19,7 @@
 // - 15-minute idle timeout. 8h JWT TTL is the hard ceiling.
 // - No NavBar, no chrome, no links out. Kiosk surface.
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import DOMPurify from "dompurify";
 import InventoryCountWorkflow, { type CountItem } from "@/components/InventoryCountWorkflow";
 import { clearAuth } from "@/lib/auth";
@@ -267,7 +267,8 @@ export default function StaffPortalPage() {
 // every run to this staff member (operator_staff_employee_id) and runs the
 // SAME Westgard evaluation as the writer path, so scoring is identical.
 interface StaffQcLot { id: number; analyte: string; level: string; lot_number: string; mfr_mean: number; mfr_sd: number; status: string; }
-interface StaffQcResult { id: number; result_value: number; result_date: string; instrument: string | null; accepted_for_reporting: number; }
+interface StaffQcNote { id: number; note: string; author_name: string; source: string; created_at: string; }
+interface StaffQcResult { id: number; result_value: number; result_date: string; instrument: string | null; accepted_for_reporting: number; notes?: StaffQcNote[]; }
 
 function StaffPortalQcView({ token, employee, labName, onBack, onSignOut }: {
   token: string;
@@ -288,6 +289,12 @@ function StaffPortalQcView({ token, employee, labName, onBack, onSignOut }: {
   const [submitting, setSubmitting] = useState(false);
   const [recent, setRecent] = useState<StaffQcResult[]>([]);
   const [msg, setMsg] = useState<{ kind: "ok" | "reject" | "error"; text: string } | null>(null);
+  // Append-only note thread on a saved point (2026-08-25 MedStar). canAddNote
+  // reflects the per-site labs.qc_note_frontline_can_add gate from the server.
+  const [canAddNote, setCanAddNote] = useState(true);
+  const [noteOpenId, setNoteOpenId] = useState<number | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [noteBusy, setNoteBusy] = useState(false);
 
   const selected = lots.find(l => l.id === lotId) || null;
   const instrumentSuggestions = Array.from(new Set(
@@ -298,6 +305,30 @@ function StaffPortalQcView({ token, employee, labName, onBack, onSignOut }: {
     const d = await fetch(`/api/staff-portal-session/qc/results?control_lot_id=${id}&limit=10`, { headers: h })
       .then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] }));
     setRecent(d.results || []);
+    if (typeof d.can_add_note === "boolean") setCanAddNote(d.can_add_note);
+  }
+
+  // Add an append-only investigation note to a saved point. Gated server-side by
+  // the per-site setting; a 403 comes back as a friendly message.
+  async function addStaffNote(resultId: number) {
+    if (!noteDraft.trim() || !lotId) return;
+    setNoteBusy(true); setMsg(null);
+    try {
+      const res = await fetch(`/api/staff-portal-session/qc/results/${resultId}/notes`, {
+        method: "POST",
+        headers: { ...h, "Content-Type": "application/json" },
+        body: JSON.stringify({ note: noteDraft.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setMsg({ kind: "error", text: data.error || "Could not add the note." }); return; }
+      setNoteDraft("");
+      await loadRecent(lotId);
+      setMsg({ kind: "ok", text: "Note added." });
+    } catch {
+      setMsg({ kind: "error", text: "Network error adding the note. Try again." });
+    } finally {
+      setNoteBusy(false);
+    }
   }
 
   useEffect(() => {
@@ -433,16 +464,70 @@ function StaffPortalQcView({ token, employee, labName, onBack, onSignOut }: {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="text-left text-xs text-muted-foreground border-b">
-                      <tr><th className="py-1.5 pr-2">Date</th><th className="py-1.5 pr-2">Value</th><th className="py-1.5 pr-2">Instrument</th><th className="py-1.5 pr-2">Accepted</th></tr>
+                      <tr><th className="py-1.5 pr-2">Date</th><th className="py-1.5 pr-2">Value</th><th className="py-1.5 pr-2">Instrument</th><th className="py-1.5 pr-2">Accepted</th><th className="py-1.5 pr-2">Notes</th></tr>
                     </thead>
                     <tbody>
                       {recent.map(r => (
-                        <tr key={r.id} className="border-b last:border-b-0">
-                          <td className="py-1.5 pr-2">{r.result_date}</td>
-                          <td className="py-1.5 pr-2 font-mono">{r.result_value}</td>
-                          <td className="py-1.5 pr-2 text-muted-foreground">{r.instrument || "-"}</td>
-                          <td className="py-1.5 pr-2">{r.accepted_for_reporting === 1 ? "yes" : "excluded"}</td>
-                        </tr>
+                        <Fragment key={r.id}>
+                          <tr className="border-b last:border-b-0">
+                            <td className="py-1.5 pr-2">{r.result_date}</td>
+                            <td className="py-1.5 pr-2 font-mono">{r.result_value}</td>
+                            <td className="py-1.5 pr-2 text-muted-foreground">{r.instrument || "-"}</td>
+                            <td className="py-1.5 pr-2">{r.accepted_for_reporting === 1 ? "yes" : "excluded"}</td>
+                            <td className="py-1.5 pr-2">
+                              <button
+                                type="button"
+                                onClick={() => { setNoteOpenId(noteOpenId === r.id ? null : r.id); setNoteDraft(""); }}
+                                className="text-xs underline text-muted-foreground hover:text-foreground"
+                              >
+                                {(r.notes?.length || 0) > 0 ? `${r.notes!.length} note${r.notes!.length === 1 ? "" : "s"}` : "Add"}
+                              </button>
+                            </td>
+                          </tr>
+                          {noteOpenId === r.id && (
+                            <tr className="border-b last:border-b-0 bg-muted/30">
+                              <td colSpan={5} className="py-2 px-2">
+                                <div className="space-y-2">
+                                  {(r.notes || []).length === 0 ? (
+                                    <div className="text-xs text-muted-foreground">No notes on this point yet.</div>
+                                  ) : (
+                                    (r.notes || []).map(n => (
+                                      <div key={n.id} className="rounded border border-border bg-background p-2">
+                                        <div className="text-sm whitespace-pre-wrap">{n.note}</div>
+                                        <div className="text-[11px] text-muted-foreground mt-0.5">{n.author_name} &middot; {new Date(n.created_at).toLocaleString()}</div>
+                                      </div>
+                                    ))
+                                  )}
+                                  {canAddNote ? (
+                                    <div className="space-y-1">
+                                      <textarea
+                                        className={inputCls}
+                                        rows={2}
+                                        maxLength={2000}
+                                        value={noteDraft}
+                                        onChange={e => setNoteDraft(e.target.value)}
+                                        placeholder="Add your investigation note: what you found, that this run was a rerun, etc."
+                                      />
+                                      <div className="flex justify-end">
+                                        <button
+                                          type="button"
+                                          disabled={noteBusy || !noteDraft.trim()}
+                                          onClick={() => addStaffNote(r.id)}
+                                          className="text-white text-xs font-semibold py-1.5 px-4 rounded-md disabled:opacity-60"
+                                          style={{ backgroundColor: "#01696F" }}
+                                        >
+                                          {noteBusy ? "Adding..." : "Add note"}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="text-[11px] text-muted-foreground">Notes at this site are added by a Technical Consultant or supervisor.</div>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       ))}
                     </tbody>
                   </table>

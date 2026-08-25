@@ -99,6 +99,18 @@ interface ResultRow {
   created_at: string;
   violations: ViolationRow[];
   corrective_actions: CorrectiveActionRow[];
+  notes: QcNoteRow[];
+}
+
+// Append-only investigation note on a saved QC point (2026-08-25, MedStar). The
+// original entry never changes; each note is stamped with its author and time.
+interface QcNoteRow {
+  id: number;
+  qc_result_id: number;
+  note: string;
+  author_name: string;
+  source: string;
+  created_at: string;
 }
 
 // Submit-time response that surfaces violations + the corrective-action gate
@@ -292,6 +304,10 @@ export default function VeritaQCAppPage() {
   const [selectedLotId, setSelectedLotId] = useState<number | null>(null);
 
   const [results, setResults] = useState<ResultRow[]>([]);
+  // Append-only note thread on a saved point (2026-08-25 MedStar).
+  const [noteResult, setNoteResult] = useState<ResultRow | null>(null);
+  const [noteText, setNoteText] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
   const [chartPoints, setChartPoints] = useState<string>("30"); // visible LJ points; "all" shows every loaded point
   const [loadingResults, setLoadingResults] = useState(false);
   const [resultsError, setResultsError] = useState(false);
@@ -399,6 +415,35 @@ export default function VeritaQCAppPage() {
       setResultsError(true);
     } finally {
       setLoadingResults(false);
+    }
+  }
+
+  // Add an append-only investigation note to a saved point. The original entry
+  // is never touched; the note is stamped with the caller and time server-side.
+  async function submitNote() {
+    if (!noteResult || !noteText.trim() || !activeLabId) return;
+    setNoteSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/qc/results/${noteResult.id}/notes`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ note: noteText.trim() }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({} as any));
+        throw new Error(e.error || `add note ${res.status}`);
+      }
+      const data = await res.json();
+      const appended = data.note as QcNoteRow;
+      // Reflect it in the open dialog and the table row without a full refetch.
+      setNoteResult(prev => (prev ? { ...prev, notes: [...(prev.notes || []), appended] } : prev));
+      setResults(rs => rs.map(row => (row.id === noteResult.id ? { ...row, notes: [...(row.notes || []), appended] } : row)));
+      setNoteText("");
+      toast({ title: "Note added", description: "Stamped with your name and the time." });
+    } catch (err: any) {
+      toast({ title: "Could not add note", description: err.message || String(err), variant: "destructive" });
+    } finally {
+      setNoteSaving(false);
     }
   }
 
@@ -1267,7 +1312,16 @@ export default function VeritaQCAppPage() {
                               <span className="text-xs text-amber-700">excluded</span>
                             )}
                           </td>
-                          <td className="py-2 pr-2 text-right">
+                          <td className="py-2 pr-2 text-right whitespace-nowrap">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2"
+                              onClick={() => { setNoteResult(r); setNoteText(""); }}
+                              title="View or add append-only investigation notes"
+                            >
+                              Notes{r.notes && r.notes.length > 0 ? ` (${r.notes.length})` : ""}
+                            </Button>
                             {r.voided_at ? (
                               <span className="text-xs text-muted-foreground italic" title={r.void_reason ? `Voided: ${r.void_reason}` : "Voided"}>Voided</span>
                             ) : (
@@ -1363,6 +1417,62 @@ export default function VeritaQCAppPage() {
               {caSubmitting ? "Saving..." : "File corrective action"}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Append-only investigation notes on a saved QC point (2026-08-25
+          MedStar). Read the thread and add a note; the original entry and its
+          timestamp never change, each note is stamped with author + time. */}
+      <Dialog open={!!noteResult} onOpenChange={(open) => { if (!open) { setNoteResult(null); setNoteText(""); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FlaskConical className="h-5 w-5 text-primary" />
+              Investigation notes
+            </DialogTitle>
+            <DialogDescription>
+              Append-only. The original entry and its timestamp never change. Each note is stamped with who added it and when, so the point tells its story in order.
+            </DialogDescription>
+          </DialogHeader>
+          {noteResult && (
+            <div className="space-y-3">
+              <div className="rounded-md border bg-muted/40 p-2 text-xs text-muted-foreground">
+                {noteResult.result_date}, value {noteResult.result_value}{noteResult.comment ? `, "${noteResult.comment}"` : ""}
+              </div>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {(noteResult.notes || []).length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No notes yet. Add the first one below.</p>
+                ) : (
+                  (noteResult.notes || []).map(n => (
+                    <div key={n.id} className="rounded-md border p-2 text-sm">
+                      <div className="whitespace-pre-wrap">{n.note}</div>
+                      <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                        <span className="font-medium">{n.author_name}</span>
+                        <span>{new Date(n.created_at).toLocaleString()}</span>
+                        {n.source === "staff_portal" && <Badge variant="outline" className="text-[10px]">Staff Portal</Badge>}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              {!isReadOnly && (
+                <div className="space-y-2">
+                  <Textarea
+                    value={noteText}
+                    onChange={(e) => setNoteText(e.target.value)}
+                    rows={3}
+                    maxLength={2000}
+                    placeholder="e.g. Westgard 1-3s. Repeated control, in range. This point was a rerun of the prior failed result."
+                  />
+                  <div className="flex justify-end">
+                    <Button onClick={submitNote} disabled={noteSaving || !noteText.trim()}>
+                      {noteSaving ? "Adding..." : "Add note"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
