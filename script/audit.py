@@ -356,6 +356,28 @@ def check_file(rel, fpath):
             ERRORS.append(f"[{rel_norm}:{i}] A get*ByUser() fetch with no *ByLab pairing or ADMIN_SECRET gate nearby -- a user-scoped fetch leaks across every lab the (seat) owner belongs to, invisible to a WHERE-user_id grep. Use `activeLabId ? get*ByLab(activeLabId) : get*ByUser(caller)` or gate the handler on ADMIN_SECRET.")
             ERRORS.append(f"  >> {s[:140]}")
 
+    # ── 12. qc_results delete must clear qc_result_notes (append-only child) ──
+    # qc_result_notes FKs qc_results; any DELETE FROM qc_results that does not
+    # also clear the note thread orphans it. The delete-cascade guard
+    # (scripts/audit-delete-cascades.mjs) only inspects `WHERE id = ?` handlers,
+    # so the two bulk `WHERE control_lot_id = ?` deletes (qc-import replace,
+    # qc-delete-lot) slipped past it on 2026-08-25 and orphaned notes. This rule
+    # catches EVERY `DELETE FROM qc_results` regardless of WHERE clause: a
+    # qc_result_notes clear must appear within +/-10 lines. See
+    # reference_seat_accept_primary_lab_leak / the MedStar QC-note feature.
+    if rel_norm.startswith("server/"):
+        for i, line in enumerate(lines, 1):
+            s = line.strip()
+            if s.startswith("//") or s.startswith("*"):
+                continue
+            if "DELETE FROM qc_results" not in line:
+                continue
+            window = "\n".join(lines[max(0, i - 11):i + 10])  # +/- 10 lines
+            if "qc_result_notes" in window:
+                continue
+            ERRORS.append(f"[{rel_norm}:{i}] DELETE FROM qc_results with no qc_result_notes clear within +/-10 lines -- the append-only note thread FKs qc_results and would be orphaned. Add `DELETE FROM qc_result_notes WHERE qc_result_id ...` before the results delete.")
+            ERRORS.append(f"  >> {s[:140]}")
+
 
 # ── 6. DB MIGRATION CHECK (db.ts only) ──────────────────────────────────────
 # Every CREATE TABLE IF NOT EXISTS must have a corresponding ALTER TABLE

@@ -2927,6 +2927,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "INSERT INTO qc_control_lots (lab_id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, opened_date, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)"
     );
     const delResults = sqlite.prepare("DELETE FROM qc_results WHERE control_lot_id = ?");
+    // Clear append-only notes for a lot's results before the replace-mode wipe,
+    // else a reload orphans the note thread (2026-08-25).
+    const delNotes = sqlite.prepare("DELETE FROM qc_result_notes WHERE qc_result_id IN (SELECT id FROM qc_results WHERE control_lot_id = ?)");
     const insResult = sqlite.prepare(
       "INSERT INTO qc_results (lab_id, control_lot_id, instrument, result_value, result_date, accepted_for_reporting, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)"
     );
@@ -2948,7 +2951,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         let lotId: number;
         if (lotRow) {
           lotId = Number(lotRow.id);
-          if (replace) delResults.run(lotId);
+          if (replace) { delNotes.run(lotId); delResults.run(lotId); }
         } else {
           const r = insLot.run(
             Number(labId), analyte, level, lotNumber,
@@ -2988,12 +2991,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const lot = sqlite.prepare("SELECT id, analyte, lot_number FROM qc_control_lots WHERE id = ? AND lab_id = ?").get(Number(lotId), Number(labId)) as any;
     if (!lot) return res.status(404).json({ error: "Lot not found for that lab" });
     const resultIds = (sqlite.prepare("SELECT id FROM qc_results WHERE control_lot_id = ?").all(Number(lotId)) as any[]).map(r => r.id);
-    let cas = 0, viols = 0, results = 0, periodReviews = 0;
+    let cas = 0, viols = 0, notes = 0, results = 0, periodReviews = 0;
     try {
       sqlite.exec("BEGIN");
       for (const rid of resultIds) {
         cas += sqlite.prepare("DELETE FROM qc_corrective_actions WHERE qc_result_id = ?").run(rid).changes;
         viols += sqlite.prepare("DELETE FROM qc_rule_violations WHERE qc_result_id = ?").run(rid).changes;
+        // 2026-08-25: append-only notes FK qc_results; clear them or the lot
+        // delete orphans the note thread (bulk WHERE control_lot_id delete is
+        // outside the delete-cascade guard's WHERE-id check).
+        notes += sqlite.prepare("DELETE FROM qc_result_notes WHERE qc_result_id = ?").run(rid).changes;
       }
       results = sqlite.prepare("DELETE FROM qc_results WHERE control_lot_id = ?").run(Number(lotId)).changes;
       // qc_period_reviews FK the lot (control_lot_id); clear them too so the lot
@@ -3006,7 +3013,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("[admin/qc-delete-lot] failed:", err.message);
       return res.status(500).json({ error: err.message || "delete failed" });
     }
-    res.json({ ok: true, lab_id: Number(labId), deleted_lot: { id: lot.id, analyte: lot.analyte, lot_number: lot.lot_number }, results_deleted: results, violations_deleted: viols, corrective_actions_deleted: cas, period_reviews_deleted: periodReviews });
+    res.json({ ok: true, lab_id: Number(labId), deleted_lot: { id: lot.id, analyte: lot.analyte, lot_number: lot.lot_number }, results_deleted: results, violations_deleted: viols, corrective_actions_deleted: cas, notes_deleted: notes, period_reviews_deleted: periodReviews });
   });
 
   // Admin: correct a mistyped/mislabeled QC control lot NUMBER (label-only fix).
