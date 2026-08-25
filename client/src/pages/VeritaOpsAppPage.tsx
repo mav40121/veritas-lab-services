@@ -331,11 +331,11 @@ function StudyDialog({
               </div>
               <div className="space-y-1.5 col-span-2">
                 <Label>Annual volume (tests/year)</Label>
-                <Input
-                  type="text" inputMode="decimal"
+                <DecimalInput
                   step="1"
-                  value={form.annual_volume ?? 0}
-                  onChange={(e) => setField("annual_volume", e.target.value === "" ? 0 : Number(e.target.value))}
+                  value={Number(form.annual_volume ?? 0)}
+                  onChangeNumber={(n) => setField("annual_volume", n)}
+                  fallback={0}
                 />
               </div>
             </div>

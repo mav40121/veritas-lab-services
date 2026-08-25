@@ -257,6 +257,39 @@ def check_file(rel, fpath):
                     ERRORS.append(f"[{rel_norm}:{i}] Hardcoded href to lab-scopable path '/{prefix}' -- wrap with useLabRoute()")
                     ERRORS.append(f"  >> {line.strip()[:140]}")
 
+    # ── 8. CROSS-LAB SCOPING: resolve the ACTIVE lab from the CALLER ──────────
+    # resolveActiveLabForRequest must receive the CALLER (req.userId /
+    # req.user.userId), NEVER dataUserId or req.ownerUserId (the seat OWNER).
+    # Passing the owner makes a seat user see the owner's lab -- that is how Lisa
+    # saw Michaels Lab studies (2026-08-24). This is the proven root-cause
+    # signature; keep it at zero. See reference_seat_accept_primary_lab_leak.
+    if rel_norm.startswith("server/"):
+        crosslab_re = re.compile(r'resolveActiveLabForRequest\(\s*(?:dataUserId|req\.ownerUserId)\b')
+        for i, line in enumerate(lines, 1):
+            s = line.strip()
+            if s.startswith("//") or s.startswith("*"):
+                continue
+            if crosslab_re.search(line):
+                ERRORS.append(f"[{rel_norm}:{i}] Active-lab resolver called with the seat OWNER (dataUserId/req.ownerUserId) -- pass the CALLER (req.userId).")
+                ERRORS.append(f"  >> {s[:140]}")
+
+    # ── 9. DECIMAL INPUTS: use DecimalInput, never a parsed-number echo ───────
+    # An inputMode="decimal" input whose onChange runs Number()/parseFloat() on
+    # e.target.value and stores that number back wipes the trailing "."
+    # (Number("3.")===3), so a decimal point cannot be typed (2026-08-24 Lisa
+    # CPRT + 38 VeritaCheck value grids). Use <DecimalInput> (keeps a string
+    # draft) for decimal fields; integer fields use inputMode="numeric".
+    # See reference_decimal_input_wrapper.
+    if is_client_norm and not rel_norm.endswith("decimal-input.tsx"):
+        echo_re = re.compile(r'(?:parseFloat|Number)\(\s*e\.target\.value\s*\)')
+        for i, line in enumerate(lines, 1):
+            if 'inputMode="decimal"' not in line:
+                continue
+            window = "\n".join(lines[i - 1:i + 3])  # this line + next 3
+            if echo_re.search(window):
+                ERRORS.append(f"[{rel_norm}:{i}] Decimal input echoes a parsed number (Number/parseFloat(e.target.value)) -- collapses the trailing '.'; use <DecimalInput>, or inputMode=\"numeric\" for integer fields.")
+                ERRORS.append(f"  >> {line.strip()[:140]}")
+
 
 # ── 6. DB MIGRATION CHECK (db.ts only) ──────────────────────────────────────
 # Every CREATE TABLE IF NOT EXISTS must have a corresponding ALTER TABLE

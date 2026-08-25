@@ -103,7 +103,7 @@ export default function ManualDifferentialForm({
                 <Button key={n} type="button" size="sm" variant={cellsCounted === n ? "default" : "outline"}
                   onClick={() => setCellsCounted(n)} data-testid={`md-cells-${n}`}>{n}</Button>
               ))}
-              <Input type="text" inputMode="decimal" min={1} value={cellsCounted} onChange={(e) => setCellsCounted(Math.max(1, Math.floor(Number(e.target.value) || 0)))}
+              <Input type="text" inputMode="numeric" min={1} value={cellsCounted} onChange={(e) => setCellsCounted(Math.max(1, Math.floor(Number(e.target.value) || 0)))}
                 className="max-w-[100px]" data-testid="md-cells-counted" />
             </div>
           </div>
