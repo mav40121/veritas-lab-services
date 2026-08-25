@@ -1061,23 +1061,45 @@ function markLabReportingLocks(labId: number): void {
  * chain. Returns the full labs row or null.
  */
 function resolveLabForUser(userId: number): any | null {
-  // First check if user has lab_id directly
-  const userRow = (db as any).$client.prepare(
-    "SELECT lab_id FROM users WHERE id = ?"
+  const sqlite = (db as any).$client;
+  const userRow = sqlite.prepare(
+    "SELECT lab_id, default_lab_id FROM users WHERE id = ?"
   ).get(userId) as any;
-  if (userRow?.lab_id) {
-    return (db as any).$client.prepare("SELECT * FROM labs WHERE id = ?").get(userRow.lab_id);
+  // users.lab_id is a LEGACY home pointer that is NOT membership-checked. When
+  // it points at a lab the user no longer ACTIVELY belongs to (e.g. a personal
+  // account left pointing at a lab its OTHER account owns -- Lisa's gmail u19
+  // still pointed at Milford/lab 4, owned by her UMass account u33, where the
+  // gmail seat is inactive), returning it leaks that lab through the no-header
+  // fallback. Only resolve to a lab the user OWNS or is an ACTIVE member of:
+  // try users.lab_id, then default_lab_id, then their first active membership.
+  const isActive = (lid: any): boolean => {
+    if (!lid) return false;
+    return !!sqlite.prepare(
+      `SELECT 1 AS ok FROM labs WHERE id = ? AND owner_user_id = ?
+       UNION
+       SELECT 1 AS ok FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'
+       LIMIT 1`
+    ).get(lid, userId, lid, userId);
+  };
+  for (const cand of [userRow?.lab_id, userRow?.default_lab_id]) {
+    if (isActive(cand)) return sqlite.prepare("SELECT * FROM labs WHERE id = ?").get(cand);
   }
-  // If this is a seat user, try the owner's lab
-  const seatRow = (db as any).$client.prepare(
+  const firstMembership = sqlite.prepare(
+    "SELECT lab_id FROM lab_members WHERE user_id = ? AND status = 'active' ORDER BY is_primary_lab DESC, lab_id ASC LIMIT 1"
+  ).get(userId) as any;
+  if (firstMembership?.lab_id) {
+    return sqlite.prepare("SELECT * FROM labs WHERE id = ?").get(firstMembership.lab_id);
+  }
+  // Seat user with no direct membership: fall back to the seat owner's home lab.
+  const seatRow = sqlite.prepare(
     "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
   ).get(userId) as any;
   if (seatRow) {
-    const ownerRow = (db as any).$client.prepare(
+    const ownerRow = sqlite.prepare(
       "SELECT lab_id FROM users WHERE id = ?"
     ).get(seatRow.owner_user_id) as any;
     if (ownerRow?.lab_id) {
-      return (db as any).$client.prepare("SELECT * FROM labs WHERE id = ?").get(ownerRow.lab_id);
+      return sqlite.prepare("SELECT * FROM labs WHERE id = ?").get(ownerRow.lab_id);
     }
   }
   return null;
