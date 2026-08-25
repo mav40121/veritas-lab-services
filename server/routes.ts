@@ -3059,11 +3059,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT id, control_lot_id, result_date, result_value FROM qc_results WHERE id = ? AND lab_id = ?"
     ).get(Number(resultId), Number(labId)) as any;
     if (!row) return res.status(404).json({ error: "Result not found for that lab" });
-    let cas = 0, viols = 0, deleted = 0;
+    let cas = 0, viols = 0, notes = 0, deleted = 0;
     try {
       sqlite.exec("BEGIN");
       cas = sqlite.prepare("DELETE FROM qc_corrective_actions WHERE qc_result_id = ?").run(Number(resultId)).changes;
       viols = sqlite.prepare("DELETE FROM qc_rule_violations WHERE qc_result_id = ?").run(Number(resultId)).changes;
+      notes = sqlite.prepare("DELETE FROM qc_result_notes WHERE qc_result_id = ?").run(Number(resultId)).changes;
       deleted = sqlite.prepare("DELETE FROM qc_results WHERE id = ? AND lab_id = ?").run(Number(resultId), Number(labId)).changes;
       sqlite.exec("COMMIT");
     } catch (err: any) {
@@ -3071,7 +3072,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("[admin/qc-delete-result] failed:", err.message);
       return res.status(500).json({ error: err.message || "delete failed" });
     }
-    res.json({ ok: true, lab_id: Number(labId), deleted, violations_deleted: viols, corrective_actions_deleted: cas, result: { id: row.id, control_lot_id: row.control_lot_id, result_date: row.result_date, result_value: row.result_value } });
+    res.json({ ok: true, lab_id: Number(labId), deleted, violations_deleted: viols, corrective_actions_deleted: cas, notes_deleted: notes, result: { id: row.id, control_lot_id: row.control_lot_id, result_date: row.result_date, result_value: row.result_value } });
   });
 
   // Admin: backfill VeritaMap links on VeritaTrack tasks that were created without
@@ -29443,6 +29444,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // with no blanket allowlist exemption. Literal statements (not a loop) so
       // the static audit can see each child clear. Ordered children-before-their-
       // in-set parents. Every child references labs via lab_id.
+      sqlite.prepare("DELETE FROM qc_result_notes WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM qc_corrective_actions WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM qc_results WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM qc_period_reviews WHERE lab_id = ?").run(id);
