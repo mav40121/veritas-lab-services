@@ -309,6 +309,31 @@ def check_file(rel, fpath):
                 ERRORS.append(f"[{rel_norm}:{i}] parseFloat(e.target.value) in a client input handler -- decimal fields must use <DecimalInput> (keeps a string draft); this echo wipes the trailing '.'.")
                 ERRORS.append(f"  >> {line.strip()[:140]}")
 
+    # ── 11. METHOD-SCOPING: getStudiesByUser must pair with getStudiesByLab ───
+    # The cross-lab class had a SECOND signature that a `WHERE user_id` grep
+    # could never catch: METHOD scoping. The dashboard studies export pulled
+    # storage.getStudiesByUser(<seat owner>) -- user-scoped across ALL the
+    # owner's labs -- with no literal SQL for rule #8 or a filter grep to see
+    # (2026-08-24 Lisa export leak, PR #1227). A user-scoped studies fetch in a
+    # read/export handler is only safe as the FALLBACK arm of an active-lab
+    # ternary (getStudiesByLab present in the window) or inside an
+    # ADMIN_SECRET-gated tool. Flag any getStudiesByUser( with neither nearby.
+    # Comments and the storage.ts definitions/interface (getStudiesByLab is
+    # declared right beside them) pass clean; all 3 current call sites are
+    # paired or admin-gated. See reference_seat_accept_primary_lab_leak.
+    if rel_norm.startswith("server/"):
+        for i, line in enumerate(lines, 1):
+            s = line.strip()
+            if s.startswith("//") or s.startswith("*"):
+                continue
+            if "getStudiesByUser(" not in line:
+                continue
+            window = "\n".join(lines[max(0, i - 13):i + 12])  # +/- 12 lines
+            if "getStudiesByLab" in window or "ADMIN_SECRET" in window:
+                continue
+            ERRORS.append(f"[{rel_norm}:{i}] getStudiesByUser() with no getStudiesByLab pairing or ADMIN_SECRET gate nearby -- a user-scoped studies fetch leaks across every lab the (seat) owner belongs to, invisible to a WHERE-user_id grep. Use `activeLabId ? getStudiesByLab(activeLabId) : getStudiesByUser(caller)` or gate the handler on ADMIN_SECRET.")
+            ERRORS.append(f"  >> {s[:140]}")
+
 
 # ── 6. DB MIGRATION CHECK (db.ts only) ──────────────────────────────────────
 # Every CREATE TABLE IF NOT EXISTS must have a corresponding ALTER TABLE
