@@ -3059,11 +3059,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT id, control_lot_id, result_date, result_value FROM qc_results WHERE id = ? AND lab_id = ?"
     ).get(Number(resultId), Number(labId)) as any;
     if (!row) return res.status(404).json({ error: "Result not found for that lab" });
-    let cas = 0, viols = 0, deleted = 0;
+    let cas = 0, viols = 0, notes = 0, deleted = 0;
     try {
       sqlite.exec("BEGIN");
       cas = sqlite.prepare("DELETE FROM qc_corrective_actions WHERE qc_result_id = ?").run(Number(resultId)).changes;
       viols = sqlite.prepare("DELETE FROM qc_rule_violations WHERE qc_result_id = ?").run(Number(resultId)).changes;
+      notes = sqlite.prepare("DELETE FROM qc_result_notes WHERE qc_result_id = ?").run(Number(resultId)).changes;
       deleted = sqlite.prepare("DELETE FROM qc_results WHERE id = ? AND lab_id = ?").run(Number(resultId), Number(labId)).changes;
       sqlite.exec("COMMIT");
     } catch (err: any) {
@@ -3071,7 +3072,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("[admin/qc-delete-result] failed:", err.message);
       return res.status(500).json({ error: err.message || "delete failed" });
     }
-    res.json({ ok: true, lab_id: Number(labId), deleted, violations_deleted: viols, corrective_actions_deleted: cas, result: { id: row.id, control_lot_id: row.control_lot_id, result_date: row.result_date, result_value: row.result_value } });
+    res.json({ ok: true, lab_id: Number(labId), deleted, violations_deleted: viols, corrective_actions_deleted: cas, notes_deleted: notes, result: { id: row.id, control_lot_id: row.control_lot_id, result_date: row.result_date, result_value: row.result_value } });
   });
 
   // Admin: backfill VeritaMap links on VeritaTrack tasks that were created without
@@ -3426,8 +3427,46 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const limit = Math.min(Number((req.query || {}).limit) || 20, 100);
     const rows = sqlite.prepare(
       "SELECT id, control_lot_id, instrument, result_value, result_date, run_time, accepted_for_reporting, created_at FROM qc_results WHERE lab_id = ? AND control_lot_id = ? ORDER BY result_date DESC, id DESC LIMIT ?"
-    ).all(req.staffPortalLabId, lotId, limit);
-    res.json({ results: rows });
+    ).all(req.staffPortalLabId, lotId, limit) as any[];
+    // Attach the append-only note thread per point (2026-08-25 MedStar).
+    if (rows.length) {
+      const ph = rows.map(() => "?").join(",");
+      const notes = sqlite.prepare(
+        "SELECT id, qc_result_id, note, author_name, source, created_at FROM qc_result_notes WHERE qc_result_id IN (" + ph + ") ORDER BY id ASC"
+      ).all(...rows.map((r: any) => r.id)) as any[];
+      const byR: Record<number, any[]> = {};
+      for (const n of notes) (byR[n.qc_result_id] = byR[n.qc_result_id] || []).push(n);
+      for (const r of rows) (r as any).notes = byR[r.id] || [];
+    }
+    const canAddNote = sqlite.prepare("SELECT qc_note_frontline_can_add FROM labs WHERE id = ?").get(req.staffPortalLabId) as any;
+    res.json({ results: rows, can_add_note: !canAddNote || canAddNote.qc_note_frontline_can_add !== 0 });
+  });
+
+  // POST /api/staff-portal-session/qc/results/:id/notes: front-line append-only
+  // note on a saved QC point (2026-08-25, MedStar). Gated by the lab setting:
+  // when a site limits notes to a console writer (Technical Consultant /
+  // supervisor), the front line gets a 403 and the note is added from the
+  // console instead. Stamped with the signed-in staff employee and the time.
+  app.post("/api/staff-portal-session/qc/results/:id/notes", staffPortalAuthMiddleware, (req: any, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+    const note = String(req.body?.note ?? "").trim();
+    if (!note) return res.status(400).json({ error: "A note is required" });
+    if (note.length > 2000) return res.status(400).json({ error: "Note is too long (2000 character max)" });
+    const sqlite = (db as any).$client;
+    const allow = sqlite.prepare("SELECT qc_note_frontline_can_add FROM labs WHERE id = ?").get(req.staffPortalLabId) as any;
+    if (allow && allow.qc_note_frontline_can_add === 0) {
+      return res.status(403).json({ error: "Adding QC notes is limited to a Technical Consultant or supervisor at this site." });
+    }
+    const row = sqlite.prepare("SELECT id FROM qc_results WHERE id = ? AND lab_id = ?").get(id, req.staffPortalLabId) as any;
+    if (!row) return res.status(404).json({ error: "QC result not found in this lab" });
+    const emp = sqlite.prepare("SELECT NULLIF(TRIM(COALESCE(first_name,'') || ' ' || COALESCE(last_name,'')), '') AS nm FROM staff_employees WHERE id = ?").get(req.staffPortalStaffEmployeeId) as any;
+    const authorName = (emp?.nm && String(emp.nm).trim()) || "Staff";
+    const now = new Date().toISOString();
+    const ins = sqlite.prepare(
+      "INSERT INTO qc_result_notes (lab_id, qc_result_id, note, author_user_id, author_staff_employee_id, author_name, source, created_at) VALUES (?, ?, ?, NULL, ?, ?, 'staff_portal', ?)"
+    ).run(req.staffPortalLabId, id, note, req.staffPortalStaffEmployeeId || null, authorName, now);
+    res.json({ ok: true, note: { id: Number(ins.lastInsertRowid), qc_result_id: id, note, author_name: authorName, source: "staff_portal", created_at: now } });
   });
 
   app.post("/api/staff-portal-session/qc/results", staffPortalAuthMiddleware, (req: any, res) => {
@@ -3800,10 +3839,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     for (const ca of correctiveActions) {
       (caByResult[ca.qc_result_id] = caByResult[ca.qc_result_id] || []).push(ca);
     }
+    const notes = sqlite.prepare(
+      "SELECT id, qc_result_id, note, author_name, source, created_at FROM qc_result_notes WHERE qc_result_id IN (" + placeholders + ") ORDER BY id ASC"
+    ).all(...ids) as any[];
+    const notesByResult: Record<number, any[]> = {};
+    for (const n of notes) {
+      (notesByResult[n.qc_result_id] = notesByResult[n.qc_result_id] || []).push(n);
+    }
     const enriched = results.map(r => ({
       ...r,
       violations: violByResult[r.id] || [],
       corrective_actions: caByResult[r.id] || [],
+      notes: notesByResult[r.id] || [],
     }));
     res.json({ results: enriched, analyte: lot.analyte });
   });
@@ -3823,6 +3870,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (row.voided_at) return res.status(409).json({ error: "This result is already voided" });
     sqlite.prepare("UPDATE qc_results SET voided_at = datetime('now'), voided_by_user_id = ?, void_reason = ? WHERE id = ?").run(req.userId, reason, id);
     res.json({ ok: true, id });
+  });
+
+  // POST /api/labs/:labId/qc/results/:id/notes: append-only investigation note
+  // on a saved QC point (2026-08-25, MedStar/Hiltunen). The original point, its
+  // comment, and its timestamp are never touched; each note is a new row stamped
+  // with the author and the time, so the point tells its own story to a surveyor
+  // (troubleshooting for a Westgard violation, a "this run was a rerun" pointer).
+  // Console path (a lab writer): always allowed. The Staff Portal twin carries
+  // the front-line path, gated by labs.qc_note_frontline_can_add.
+  app.post("/api/labs/:labId/qc/results/:id/notes", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+    const note = String(req.body?.note ?? "").trim();
+    if (!note) return res.status(400).json({ error: "A note is required" });
+    if (note.length > 2000) return res.status(400).json({ error: "Note is too long (2000 character max)" });
+    const sqlite = (db as any).$client;
+    const row = sqlite.prepare("SELECT id FROM qc_results WHERE id = ? AND lab_id = ?").get(id, req.scope.labId) as any;
+    if (!row) return res.status(404).json({ error: "QC result not found in this lab" });
+    const u = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
+    const authorName = (u?.name && String(u.name).trim()) || "Lab user";
+    const now = new Date().toISOString();
+    const ins = sqlite.prepare(
+      "INSERT INTO qc_result_notes (lab_id, qc_result_id, note, author_user_id, author_staff_employee_id, author_name, source, created_at) VALUES (?, ?, ?, ?, NULL, ?, 'console', ?)"
+    ).run(req.scope.labId, id, note, req.userId, authorName, now);
+    res.json({ ok: true, note: { id: Number(ins.lastInsertRowid), qc_result_id: id, note, author_name: authorName, source: "console", created_at: now } });
   });
 
   // VeritaQC Phase 1C: cross-lot daily-review feed. Returns enriched results
@@ -3861,10 +3933,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     for (const v of violations) (vByR[v.qc_result_id] = vByR[v.qc_result_id] || []).push(v);
     const cByR: Record<number, any[]> = {};
     for (const c of cas) (cByR[c.qc_result_id] = cByR[c.qc_result_id] || []).push(c);
+    const rNotes = sqlite.prepare(
+      "SELECT id, qc_result_id, note, author_name, source, created_at FROM qc_result_notes WHERE qc_result_id IN (" + placeholders + ") ORDER BY id ASC"
+    ).all(...ids) as any[];
+    const nByR: Record<number, any[]> = {};
+    for (const n of rNotes) (nByR[n.qc_result_id] = nByR[n.qc_result_id] || []).push(n);
     let enriched = results.map(r => ({
       ...r,
       violations: vByR[r.id] || [],
       corrective_actions: cByR[r.id] || [],
+      notes: nByR[r.id] || [],
     }));
     if (status === "with_violation") {
       enriched = enriched.filter(r => r.violations.length > 0);
@@ -10580,7 +10658,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const activeLab = resolveActiveLabForRequest(payload.userId, req);
         const activeLabId: number | null = activeLab?.id ?? null;
         let userStudies = activeLabId
-          ? storage.getStudiesByLab(activeLabId)
+          ? storage.getStudiesByLabForUser(activeLabId, payload.userId)
           : storage.getStudiesByUser(payload.userId);
         // 2026-06-15: archived studies drop off the legacy active list too.
         // drizzle's studies schema lacks archived_at, so resolve archived ids
@@ -10648,7 +10726,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // across labs. Fall back to the caller's own studies only when no active
     // lab resolves (legacy account with no membership).
     const userStudies = exportActiveLabId
-      ? storage.getStudiesByLab(exportActiveLabId)
+      ? storage.getStudiesByLabForUser(exportActiveLabId, payload.userId)
       : storage.getStudiesByUser(payload.userId);
     userStudies.sort((a, b) => b.id - a.id);
 
@@ -29366,6 +29444,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // with no blanket allowlist exemption. Literal statements (not a loop) so
       // the static audit can see each child clear. Ordered children-before-their-
       // in-set parents. Every child references labs via lab_id.
+      sqlite.prepare("DELETE FROM qc_result_notes WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM qc_corrective_actions WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM qc_results WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM qc_period_reviews WHERE lab_id = ?").run(id);
@@ -30650,11 +30729,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const scopeVal = labId ?? userId;
     let settings = sqlite.prepare(`SELECT * FROM veritapolicy_settings WHERE ${scopeCol} = ?`).get(scopeVal) as any;
     if (!settings) {
-      sqlite.prepare(`INSERT INTO veritapolicy_settings (user_id) VALUES (?)`).run(userId);
-      settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId);
+      // 2026-08-25 review Finding 1: when a lab resolves, seed the row WITH its
+      // lab_id and re-read by lab_id. The old branch inserted a user_id-only
+      // (lab_id NULL) row and re-read WHERE user_id, so a multi-lab owner got a
+      // sibling lab's settings AND a fresh NULL-lab orphan on every load (the
+      // lab-scoped SELECT above never matches a NULL-lab row, so it re-inserted
+      // unboundedly). UNIQUE(lab_id) makes OR IGNORE a safe no-op under a race.
+      if (labId) {
+        sqlite.prepare(`INSERT OR IGNORE INTO veritapolicy_settings (user_id, lab_id) VALUES (?, ?)`).run(userId, labId);
+        settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE lab_id = ?').get(labId);
+      } else {
+        sqlite.prepare(`INSERT INTO veritapolicy_settings (user_id) VALUES (?)`).run(userId);
+        settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId);
+      }
     }
     // 2026-06-10 Shape A class sweep (Michael L feedback).
-    const lab = resolveActiveLabForRequest(req.user.userId, req);
+    // 2026-08-25 review Finding 4: derive the accreditor flags from the SAME lab
+    // the settings row was scoped to, so settings and accreditation_choice can
+    // never describe two different labs on a bare (no-header) multi-lab request.
+    const lab = labId
+      ? sqlite.prepare('SELECT * FROM labs WHERE id = ?').get(labId)
+      : resolveActiveLabForRequest(req.user.userId, req);
     const accCount = (lab?.accreditation_cap ? 1 : 0) + (lab?.accreditation_tjc ? 1 : 0)
       + (lab?.accreditation_cola ? 1 : 0) + (lab?.accreditation_aabb ? 1 : 0);
     let accreditationChoice = 'CLIA';
