@@ -548,13 +548,13 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
                 <Label>Unit Cost (per {form.usage_unit ?? "each"})</Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-                  <Input
-                    type="text" inputMode="decimal"
+                  <DecimalInput
                     min={0}
                     step="0.01"
                     className="pl-6"
-                    value={form.unit_cost ?? ""}
-                    onChange={(e) => setForm({ ...form, unit_cost: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })}
+                    value={Number(form.unit_cost ?? 0)}
+                    onChangeNumber={(n) => setForm({ ...form, unit_cost: n })}
+                    fallback={0}
                     data-testid="unit-cost-input"
                   />
                 </div>
@@ -709,12 +709,11 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
             <div className="grid grid-cols-3 gap-3 mt-3">
               <div className="space-y-1.5">
                 <Label>On Order ({usageUnit}s)</Label>
-                <Input type="text" inputMode="decimal" min={0} value={form.on_order_qty ?? 0} onChange={(e) => {
+                <DecimalInput min={0} fallback={0} value={Number(form.on_order_qty ?? 0)} onChangeNumber={(qty) => {
                   // Entering a quantity auto-stamps the order-placed date (today) and
                   // an expected arrival of placed + programmed lead time, both still
                   // editable. This is what lets the lab verify lead times later: the
                   // placed date is captured at order time, the received date at receipt.
-                  const qty = parseFloat(e.target.value) || 0;
                   const next: Partial<InventoryItem> = { ...form, on_order_qty: qty };
                   if (qty > 0 && !form.on_order_placed_date) {
                     const today = new Date().toISOString().slice(0, 10);

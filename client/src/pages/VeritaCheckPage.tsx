@@ -3178,11 +3178,12 @@ return (
                                 within the GREATER of the percent or the absolute allowance. */}
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-sm text-muted-foreground">or &plusmn;</span>
-                              <Input
-                                type="text" inputMode="decimal" step="any" min="0"
+                              <DecimalInput
+                                step="any" min="0"
                                 placeholder="absolute"
-                                value={customAbsFloor ?? ""}
-                                onChange={e => { const v = e.target.value.trim(); setCustomAbsFloor(v === "" ? null : (Number.isFinite(parseFloat(v)) ? parseFloat(v) : null)); }}
+                                value={customAbsFloor ?? NaN}
+                                fallback={NaN}
+                                onChangeNumber={n => setCustomAbsFloor(Number.isNaN(n) ? null : n)}
                                 className="max-w-[110px]"
                                 data-testid="custom-tea-abs-floor"
                               />
@@ -3299,8 +3300,8 @@ return (
                             {lotData.map((dp, idx) => (
                               <tr key={idx} className="border-b border-border/50">
                                 <td className="py-1.5 pr-4"><Input value={dp.specimenId} onChange={e => { const d = [...lotData]; d[idx] = { ...d[idx], specimenId: e.target.value }; setLotData(d); }} className="h-8 text-sm w-24" /></td>
-                                <td className="py-1.5 pr-4"><Input type="text" inputMode="decimal" step="any" placeholder="-" value={dp.currentLot ?? ""} onChange={e => { const d = [...lotData]; d[idx] = { ...d[idx], currentLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotData(d); }} className="h-8 text-sm w-28" /></td>
-                                <td className="py-1.5 pr-4"><Input type="text" inputMode="decimal" step="any" placeholder="-" value={dp.newLot ?? ""} onChange={e => { const d = [...lotData]; d[idx] = { ...d[idx], newLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotData(d); }} className="h-8 text-sm w-28" /></td>
+                                <td className="py-1.5 pr-4"><DecimalInput step="any" placeholder="-" value={dp.currentLot ?? NaN} fallback={NaN} onChangeNumber={n => { const d = [...lotData]; d[idx] = { ...d[idx], currentLot: Number.isNaN(n) ? null : n }; setLotData(d); }} className="h-8 text-sm w-28" /></td>
+                                <td className="py-1.5 pr-4"><DecimalInput step="any" placeholder="-" value={dp.newLot ?? NaN} fallback={NaN} onChangeNumber={n => { const d = [...lotData]; d[idx] = { ...d[idx], newLot: Number.isNaN(n) ? null : n }; setLotData(d); }} className="h-8 text-sm w-28" /></td>
                               </tr>
                             ))}
                           </tbody>
@@ -3321,8 +3322,8 @@ return (
                               {lotDataAbnormal.map((dp, idx) => (
                                 <tr key={idx} className="border-b border-border/50">
                                   <td className="py-1.5 pr-4"><Input value={dp.specimenId} onChange={e => { const d = [...lotDataAbnormal]; d[idx] = { ...d[idx], specimenId: e.target.value }; setLotDataAbnormal(d); }} className="h-8 text-sm w-24" /></td>
-                                  <td className="py-1.5 pr-4"><Input type="text" inputMode="decimal" step="any" placeholder="-" value={dp.currentLot ?? ""} onChange={e => { const d = [...lotDataAbnormal]; d[idx] = { ...d[idx], currentLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotDataAbnormal(d); }} className="h-8 text-sm w-28" /></td>
-                                  <td className="py-1.5 pr-4"><Input type="text" inputMode="decimal" step="any" placeholder="-" value={dp.newLot ?? ""} onChange={e => { const d = [...lotDataAbnormal]; d[idx] = { ...d[idx], newLot: e.target.value === "" ? null : parseFloat(e.target.value) }; setLotDataAbnormal(d); }} className="h-8 text-sm w-28" /></td>
+                                  <td className="py-1.5 pr-4"><DecimalInput step="any" placeholder="-" value={dp.currentLot ?? NaN} fallback={NaN} onChangeNumber={n => { const d = [...lotDataAbnormal]; d[idx] = { ...d[idx], currentLot: Number.isNaN(n) ? null : n }; setLotDataAbnormal(d); }} className="h-8 text-sm w-28" /></td>
+                                  <td className="py-1.5 pr-4"><DecimalInput step="any" placeholder="-" value={dp.newLot ?? NaN} fallback={NaN} onChangeNumber={n => { const d = [...lotDataAbnormal]; d[idx] = { ...d[idx], newLot: Number.isNaN(n) ? null : n }; setLotDataAbnormal(d); }} className="h-8 text-sm w-28" /></td>
                                 </tr>
                               ))}
                             </tbody>
@@ -3357,8 +3358,8 @@ return (
                         <div className="text-sm font-medium">Normal Patient PT Results (seconds)</div>
                         <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
                           {ptModule1Data.map((v, i) => (
-                            <Input key={i} type="text" inputMode="decimal" step="any" placeholder="-" value={v ?? ""}
-                              onChange={e => { const d = [...ptModule1Data]; d[i] = e.target.value === "" ? null as any : parseFloat(e.target.value); setPtModule1Data(d); }}
+                            <DecimalInput key={i} step="any" placeholder="-" value={v ?? NaN} fallback={NaN}
+                              onChangeNumber={n => { const d = [...ptModule1Data]; d[i] = Number.isNaN(n) ? (null as any) : n; setPtModule1Data(d); }}
                               className="h-8 text-xs text-center" />
                           ))}
                         </div>
@@ -3377,19 +3378,19 @@ return (
                             <div className="space-y-1.5"><Label>Reagent Expiration</Label><Input type="date" value={blk.reagentExp} onChange={e => patchPtInstrument(ai, { reagentExp: e.target.value })} /></div>
                           </div>
                           <div className="grid sm:grid-cols-3 gap-4">
-                            <div className="space-y-1.5"><Label>ISI Value</Label><Input type="text" inputMode="decimal" step="0.01" value={blk.isi} onChange={e => patchPtInstrument(ai, { isi: parseFloat(e.target.value) || 0.97 })} /></div>
-                            <div className="space-y-1.5"><Label>PT RI Low (sec)</Label><Input type="text" inputMode="decimal" step="0.1" value={blk.ptRILow} onChange={e => patchPtInstrument(ai, { ptRILow: parseFloat(e.target.value) || 10 })} /></div>
-                            <div className="space-y-1.5"><Label>PT RI High (sec)</Label><Input type="text" inputMode="decimal" step="0.1" value={blk.ptRIHigh} onChange={e => patchPtInstrument(ai, { ptRIHigh: parseFloat(e.target.value) || 14 })} /></div>
+                            <div className="space-y-1.5"><Label>ISI Value</Label><DecimalInput step="0.01" value={blk.isi} fallback={0.97} onChangeNumber={n => patchPtInstrument(ai, { isi: n })} /></div>
+                            <div className="space-y-1.5"><Label>PT RI Low (sec)</Label><DecimalInput step="0.1" value={blk.ptRILow} fallback={10} onChangeNumber={n => patchPtInstrument(ai, { ptRILow: n })} /></div>
+                            <div className="space-y-1.5"><Label>PT RI High (sec)</Label><DecimalInput step="0.1" value={blk.ptRIHigh} fallback={14} onChangeNumber={n => patchPtInstrument(ai, { ptRIHigh: n })} /></div>
                           </div>
                           <div className="grid sm:grid-cols-2 gap-4">
-                            <div className="space-y-1.5"><Label>INR RI Low</Label><Input type="text" inputMode="decimal" step="0.1" value={blk.inrRILow} onChange={e => patchPtInstrument(ai, { inrRILow: parseFloat(e.target.value) || 0.9 })} /></div>
-                            <div className="space-y-1.5"><Label>INR RI High</Label><Input type="text" inputMode="decimal" step="0.1" value={blk.inrRIHigh} onChange={e => patchPtInstrument(ai, { inrRIHigh: parseFloat(e.target.value) || 1.2 })} /></div>
+                            <div className="space-y-1.5"><Label>INR RI Low</Label><DecimalInput step="0.1" value={blk.inrRILow} fallback={0.9} onChangeNumber={n => patchPtInstrument(ai, { inrRILow: n })} /></div>
+                            <div className="space-y-1.5"><Label>INR RI High</Label><DecimalInput step="0.1" value={blk.inrRIHigh} fallback={1.2} onChangeNumber={n => patchPtInstrument(ai, { inrRIHigh: n })} /></div>
                           </div>
                           <div className="space-y-2">
                             <div className="text-sm font-medium">Normal Patient PT Results (seconds)</div>
                             <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
                               {blk.ptValues.map((v, ci) => (
-                                <Input key={ci} type="text" inputMode="decimal" step="any" placeholder="-" value={v ?? ""} onChange={e => setPtInstrumentValue(ai, ci, e.target.value === "" ? null : parseFloat(e.target.value))} className="h-8 text-xs text-center" />
+                                <DecimalInput key={ci} step="any" placeholder="-" value={v ?? NaN} fallback={NaN} onChangeNumber={n => setPtInstrumentValue(ai, ci, Number.isNaN(n) ? null : n)} className="h-8 text-xs text-center" />
                               ))}
                             </div>
                             {blk.ptValues.filter(v => v !== null && !isNaN(v as number)).length < 20 && <p className="text-xs text-amber-500">Minimum 20 normal specimens recommended</p>}
@@ -3407,7 +3408,7 @@ return (
                       <div className="grid sm:grid-cols-3 gap-4">
                         <div className="space-y-1.5"><Label>Instrument 1 (X)</Label><Input value={ptInstrumentName} onChange={e => setPtInstrumentName(e.target.value)} /></div>
                         <div className="space-y-1.5"><Label>Instrument 2 (Y)</Label><Input value={ptInstrument2Name} onChange={e => setPtInstrument2Name(e.target.value)} /></div>
-                        <div className="space-y-1.5"><Label>TEa %</Label><Input type="text" inputMode="decimal" step="1" value={(ptModule2TEa * 100)} onChange={e => setPtModule2TEa((parseFloat(e.target.value) || 20) / 100)} /><span className="text-xs text-muted-foreground">Default: 20% for PT</span></div>
+                        <div className="space-y-1.5"><Label>TEa %</Label><DecimalInput step="1" value={ptModule2TEa * 100} fallback={20} onChangeNumber={n => setPtModule2TEa(n / 100)} /><span className="text-xs text-muted-foreground">Default: 20% for PT</span></div>
                       </div>
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
@@ -3420,8 +3421,8 @@ return (
                             {ptModule2Data.map((dp, idx) => (
                               <tr key={idx} className="border-b border-border/50">
                                 <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">{dp.id}</span></td>
-                                <td className="py-1.5 pr-4"><Input type="text" inputMode="decimal" step="any" placeholder="-" value={dp.x ?? ""} onChange={e => { const d = [...ptModule2Data]; d[idx] = { ...d[idx], x: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule2Data(d); }} className="h-8 text-sm w-28" /></td>
-                                <td className="py-1.5 pr-4"><Input type="text" inputMode="decimal" step="any" placeholder="-" value={dp.y ?? ""} onChange={e => { const d = [...ptModule2Data]; d[idx] = { ...d[idx], y: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule2Data(d); }} className="h-8 text-sm w-28" /></td>
+                                <td className="py-1.5 pr-4"><DecimalInput step="any" placeholder="-" value={dp.x ?? NaN} fallback={NaN} onChangeNumber={n => { const d = [...ptModule2Data]; d[idx] = { ...d[idx], x: Number.isNaN(n) ? null : n }; setPtModule2Data(d); }} className="h-8 text-sm w-28" /></td>
+                                <td className="py-1.5 pr-4"><DecimalInput step="any" placeholder="-" value={dp.y ?? NaN} fallback={NaN} onChangeNumber={n => { const d = [...ptModule2Data]; d[idx] = { ...d[idx], y: Number.isNaN(n) ? null : n }; setPtModule2Data(d); }} className="h-8 text-sm w-28" /></td>
                               </tr>
                             ))}
                           </tbody>
@@ -3444,7 +3445,7 @@ return (
                         <div className="grid sm:grid-cols-3 gap-4">
                           <div className="space-y-1.5"><Label>Old Lot #</Label><Input value={ptOldLotNum} onChange={e => setPtOldLotNum(e.target.value)} /></div>
                           <div className="space-y-1.5"><Label>Old Lot Expiration</Label><Input type="date" value={ptOldLotExp} onChange={e => setPtOldLotExp(e.target.value)} /></div>
-                          <div className="space-y-1.5"><Label>TEa %</Label><Input type="text" inputMode="decimal" step="1" value={(ptModule3TEa * 100)} onChange={e => setPtModule3TEa((parseFloat(e.target.value) || 20) / 100)} /></div>
+                          <div className="space-y-1.5"><Label>TEa %</Label><DecimalInput step="1" value={ptModule3TEa * 100} fallback={20} onChangeNumber={n => setPtModule3TEa(n / 100)} /></div>
                         </div>
                         <p className="text-xs text-muted-foreground">Run old lot first, then new lot on same specimens sequentially.</p>
                         <div className="overflow-x-auto">
@@ -3458,8 +3459,8 @@ return (
                               {ptModule3Data.map((dp, idx) => (
                                 <tr key={idx} className="border-b border-border/50">
                                   <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">{dp.id}</span></td>
-                                  <td className="py-1.5 pr-4"><Input type="text" inputMode="decimal" step="any" placeholder="-" value={dp.x ?? ""} onChange={e => { const d = [...ptModule3Data]; d[idx] = { ...d[idx], x: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule3Data(d); }} className="h-8 text-sm w-28" /></td>
-                                  <td className="py-1.5 pr-4"><Input type="text" inputMode="decimal" step="any" placeholder="-" value={dp.y ?? ""} onChange={e => { const d = [...ptModule3Data]; d[idx] = { ...d[idx], y: e.target.value === "" ? null : parseFloat(e.target.value) }; setPtModule3Data(d); }} className="h-8 text-sm w-28" /></td>
+                                  <td className="py-1.5 pr-4"><DecimalInput step="any" placeholder="-" value={dp.x ?? NaN} fallback={NaN} onChangeNumber={n => { const d = [...ptModule3Data]; d[idx] = { ...d[idx], x: Number.isNaN(n) ? null : n }; setPtModule3Data(d); }} className="h-8 text-sm w-28" /></td>
+                                  <td className="py-1.5 pr-4"><DecimalInput step="any" placeholder="-" value={dp.y ?? NaN} fallback={NaN} onChangeNumber={n => { const d = [...ptModule3Data]; d[idx] = { ...d[idx], y: Number.isNaN(n) ? null : n }; setPtModule3Data(d); }} className="h-8 text-sm w-28" /></td>
                                 </tr>
                               ))}
                             </tbody>
@@ -3610,27 +3611,29 @@ return (
                               <div className="flex items-center gap-3 p-2 rounded bg-muted/30 border border-border/50">
                                 <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Vendor (package insert)</div>
                                 <Label className="text-xs">Mean:</Label>
-                                <Input
-                                  type="text" inputMode="decimal" step="any" placeholder="-"
-                                  value={vendor?.mean ?? ""}
-                                  onChange={e => setQcVendorValues({
+                                <DecimalInput
+                                  step="any" placeholder="-"
+                                  value={vendor?.mean ?? NaN}
+                                  fallback={NaN}
+                                  onChangeNumber={n => setQcVendorValues({
                                     ...qcVendorValues,
                                     [vendorKey]: {
-                                      mean: e.target.value === "" ? null : parseFloat(e.target.value),
+                                      mean: Number.isNaN(n) ? null : n,
                                       sd: vendor?.sd ?? null,
                                     },
                                   })}
                                   className="h-7 text-xs w-24"
                                 />
                                 <Label className="text-xs">SD:</Label>
-                                <Input
-                                  type="text" inputMode="decimal" step="any" placeholder="-"
-                                  value={vendor?.sd ?? ""}
-                                  onChange={e => setQcVendorValues({
+                                <DecimalInput
+                                  step="any" placeholder="-"
+                                  value={vendor?.sd ?? NaN}
+                                  fallback={NaN}
+                                  onChangeNumber={n => setQcVendorValues({
                                     ...qcVendorValues,
                                     [vendorKey]: {
                                       mean: vendor?.mean ?? null,
-                                      sd: e.target.value === "" ? null : parseFloat(e.target.value),
+                                      sd: Number.isNaN(n) ? null : n,
                                     },
                                   })}
                                   className="h-7 text-xs w-24"
@@ -3651,11 +3654,12 @@ return (
                                     <div className="text-[10px] text-muted-foreground uppercase tracking-wide">New lot</div>
                                     <div className="grid grid-cols-5 sm:grid-cols-10 gap-1">
                                       {Array.from({ length: qcNumRuns }).map((_, ri) => (
-                                        <Input key={ri} type="text" inputMode="decimal" step="any" placeholder="-"
-                                          value={!isNaN(runs[ri]) ? runs[ri] : ""}
-                                          onChange={e => {
+                                        <DecimalInput key={ri} step="any" placeholder="-"
+                                          value={runs[ri]}
+                                          fallback={NaN}
+                                          onChangeNumber={n => {
                                             const updated = [...(qcRunData[key] || Array(qcNumRuns).fill(NaN))];
-                                            updated[ri] = e.target.value === "" ? NaN : parseFloat(e.target.value);
+                                            updated[ri] = n;
                                             setQcRunData({ ...qcRunData, [key]: updated });
                                           }}
                                           className="h-7 text-xs text-center" />
@@ -3667,11 +3671,12 @@ return (
                                       <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Prior lot (crossover)</div>
                                       <div className="grid grid-cols-5 sm:grid-cols-10 gap-1">
                                         {Array.from({ length: qcNumRuns }).map((_, ri) => (
-                                          <Input key={ri} type="text" inputMode="decimal" step="any" placeholder="-"
-                                            value={!isNaN(priorRuns[ri]) ? priorRuns[ri] : ""}
-                                            onChange={e => {
+                                          <DecimalInput key={ri} step="any" placeholder="-"
+                                            value={priorRuns[ri]}
+                                            fallback={NaN}
+                                            onChangeNumber={n => {
                                               const updated = [...(qcPriorLotRuns[key] || Array(qcNumRuns).fill(NaN))];
-                                              updated[ri] = e.target.value === "" ? NaN : parseFloat(e.target.value);
+                                              updated[ri] = n;
                                               setQcPriorLotRuns({ ...qcPriorLotRuns, [key]: updated });
                                             }}
                                             className="h-7 text-xs text-center bg-muted/20" />
@@ -3732,9 +3737,9 @@ return (
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="space-y-1.5"><Label>PT TEa %</Label><Input type="text" inputMode="decimal" step="1" value={maTeaPT * 100} onChange={e => setMaTeaPT((parseFloat(e.target.value) || 20) / 100)} /></div>
-                        <div className="space-y-1.5"><Label>APTT TEa %</Label><Input type="text" inputMode="decimal" step="1" value={maTeaAPTT * 100} onChange={e => setMaTeaAPTT((parseFloat(e.target.value) || 15) / 100)} /></div>
-                        <div className="space-y-1.5"><Label>Fib TEa %</Label><Input type="text" inputMode="decimal" step="1" value={maTeaFib * 100} onChange={e => setMaTeaFib((parseFloat(e.target.value) || 20) / 100)} /></div>
+                        <div className="space-y-1.5"><Label>PT TEa %</Label><DecimalInput step="1" value={maTeaPT * 100} fallback={20} onChangeNumber={n => setMaTeaPT(n / 100)} /></div>
+                        <div className="space-y-1.5"><Label>APTT TEa %</Label><DecimalInput step="1" value={maTeaAPTT * 100} fallback={15} onChangeNumber={n => setMaTeaAPTT(n / 100)} /></div>
+                        <div className="space-y-1.5"><Label>Fib TEa %</Label><DecimalInput step="1" value={maTeaFib * 100} fallback={20} onChangeNumber={n => setMaTeaFib(n / 100)} /></div>
                       </div>
                     </CardContent>
                   </Card>
@@ -3804,8 +3809,8 @@ return (
                     <div className="grid sm:grid-cols-2 gap-4">
                       <div className="space-y-1.5"><Label>Analyte Name</Label><Input placeholder="e.g. Sodium" value={refAnalyte} onChange={e => setRefAnalyte(e.target.value)} /></div>
                       <div className="space-y-1.5"><Label>Units</Label><Input placeholder="e.g. mmol/L" value={refUnits} onChange={e => setRefUnits(e.target.value)} /></div>
-                      <div className="space-y-1.5"><Label>Reference Range Low *</Label><Input type="text" inputMode="decimal" step="any" placeholder="e.g. 135" value={refLow} onChange={e => setRefLow(e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
-                      <div className="space-y-1.5"><Label>Reference Range High *</Label><Input type="text" inputMode="decimal" step="any" placeholder="e.g. 145" value={refHigh} onChange={e => setRefHigh(e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
+                      <div className="space-y-1.5"><Label>Reference Range Low *</Label><DecimalInput step="any" placeholder="e.g. 135" value={typeof refLow === "number" ? refLow : NaN} fallback={NaN} onChangeNumber={n => setRefLow(Number.isNaN(n) ? "" : n)} /></div>
+                      <div className="space-y-1.5"><Label>Reference Range High *</Label><DecimalInput step="any" placeholder="e.g. 145" value={typeof refHigh === "number" ? refHigh : NaN} fallback={NaN} onChangeNumber={n => setRefHigh(Number.isNaN(n) ? "" : n)} /></div>
                       <div className="space-y-1.5"><Label>Number of Specimens</Label>
                         <Input type="text" inputMode="decimal" min={20} max={200} value={refNumSpecimens} onChange={e => {
                           const n = Math.max(20, Math.min(200, parseInt(e.target.value) || 20));
@@ -3910,12 +3915,12 @@ return (
                                     </Select>
                                   </td>
                                   <td className="py-1.5 pr-4">
-                                    <Input
-                                      type="text" inputMode="decimal"
+                                    <DecimalInput
                                       step="any"
                                       placeholder="-"
-                                      value={dp.value ?? ""}
-                                      onChange={e => { const d = [...coData]; d[idx] = { ...d[idx], value: e.target.value === "" ? null : parseFloat(e.target.value) }; setCoData(d); }}
+                                      value={dp.value ?? NaN}
+                                      fallback={NaN}
+                                      onChangeNumber={n => { const d = [...coData]; d[idx] = { ...d[idx], value: Number.isNaN(n) ? null : n }; setCoData(d); }}
                                       className="h-8 text-sm w-32"
                                     />
                                   </td>
@@ -4042,12 +4047,12 @@ return (
                                 />
                               </div>
                               <div className="space-y-1"><Label className="text-xs">Assigned Value ({abUnits || "units"})</Label>
-                                <Input
-                                  type="text" inputMode="decimal"
+                                <DecimalInput
                                   step="any"
-                                  value={lv.assignedValue ?? ""}
-                                  onChange={e => {
-                                    const num = e.target.value === "" ? null : parseFloat(e.target.value);
+                                  value={lv.assignedValue ?? NaN}
+                                  fallback={NaN}
+                                  onChangeNumber={n => {
+                                    const num = Number.isNaN(n) ? null : n;
                                     setAbLevels(prev => prev.map((p, i) => i === levelIdx ? { ...p, assignedValue: num } : p));
                                   }}
                                   placeholder="e.g. 100"
@@ -4060,15 +4065,13 @@ return (
                               {Array.from({ length: abReplicatesPerLevel }).map((_, repIdx) => {
                                 const val = reps[repIdx];
                                 return (
-                                  <Input
+                                  <DecimalInput
                                     key={repIdx}
-                                    type="text" inputMode="decimal"
                                     step="any"
                                     placeholder={`#${repIdx + 1}`}
-                                    value={val === undefined || val === null || isNaN(val) ? "" : val}
-                                    onChange={e => {
-                                      const raw = e.target.value;
-                                      const num = raw === "" ? NaN : parseFloat(raw);
+                                    value={val === undefined || val === null || isNaN(val) ? NaN : val}
+                                    fallback={NaN}
+                                    onChangeNumber={num => {
                                       setAbRunData(prev => {
                                         const existing = prev[lv.name] ? [...prev[lv.name]] : [];
                                         while (existing.length <= repIdx) existing.push(NaN);
@@ -4153,19 +4156,21 @@ return (
                     <div className="grid sm:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
                         <Label>Manufacturer Claimed AMR Low ({linUnits || "units"}) <span className="text-xs text-muted-foreground">(optional)</span></Label>
-                        <Input
-                          type="text" inputMode="decimal" step="any" placeholder="e.g. 5"
-                          value={linClaimedLow}
-                          onChange={e => setLinClaimedLow(e.target.value === "" ? "" : parseFloat(e.target.value))}
+                        <DecimalInput
+                          step="any" placeholder="e.g. 5"
+                          value={typeof linClaimedLow === "number" ? linClaimedLow : NaN}
+                          fallback={NaN}
+                          onChangeNumber={n => setLinClaimedLow(Number.isNaN(n) ? "" : n)}
                           data-testid="input-lin-claimed-low"
                         />
                       </div>
                       <div className="space-y-1.5">
                         <Label>Manufacturer Claimed AMR High ({linUnits || "units"}) <span className="text-xs text-muted-foreground">(optional)</span></Label>
-                        <Input
-                          type="text" inputMode="decimal" step="any" placeholder="e.g. 500"
-                          value={linClaimedHigh}
-                          onChange={e => setLinClaimedHigh(e.target.value === "" ? "" : parseFloat(e.target.value))}
+                        <DecimalInput
+                          step="any" placeholder="e.g. 500"
+                          value={typeof linClaimedHigh === "number" ? linClaimedHigh : NaN}
+                          fallback={NaN}
+                          onChangeNumber={n => setLinClaimedHigh(Number.isNaN(n) ? "" : n)}
                           data-testid="input-lin-claimed-high"
                         />
                       </div>
@@ -4201,12 +4206,12 @@ return (
                                 />
                               </div>
                               <div className="space-y-1"><Label className="text-xs">Assigned Value ({linUnits || "units"})</Label>
-                                <Input
-                                  type="text" inputMode="decimal"
+                                <DecimalInput
                                   step="any"
-                                  value={lv.assignedValue ?? ""}
-                                  onChange={e => {
-                                    const num = e.target.value === "" ? null : parseFloat(e.target.value);
+                                  value={lv.assignedValue ?? NaN}
+                                  fallback={NaN}
+                                  onChangeNumber={n => {
+                                    const num = Number.isNaN(n) ? null : n;
                                     setLinLevels(prev => prev.map((p, i) => i === levelIdx ? { ...p, assignedValue: num } : p));
                                   }}
                                   placeholder="e.g. 50"
@@ -4219,15 +4224,13 @@ return (
                               {Array.from({ length: linReplicatesPerLevel }).map((_, repIdx) => {
                                 const val = reps[repIdx];
                                 return (
-                                  <Input
+                                  <DecimalInput
                                     key={repIdx}
-                                    type="text" inputMode="decimal"
                                     step="any"
                                     placeholder={`#${repIdx + 1}`}
-                                    value={val === undefined || val === null || isNaN(val) ? "" : val}
-                                    onChange={e => {
-                                      const raw = e.target.value;
-                                      const num = raw === "" ? NaN : parseFloat(raw);
+                                    value={val === undefined || val === null || isNaN(val) ? NaN : val}
+                                    fallback={NaN}
+                                    onChangeNumber={num => {
                                       setLinRunData(prev => {
                                         const existing = prev[lv.name] ? [...prev[lv.name]] : [];
                                         while (existing.length <= repIdx) existing.push(NaN);
@@ -4275,10 +4278,10 @@ return (
                       <div className="space-y-1.5"><Label>Analyte Name</Label><Input placeholder="e.g. Glucose" value={rrAnalyte} onChange={e => setRrAnalyte(e.target.value)} data-testid="input-rr-analyte" /></div>
                       <div className="space-y-1.5"><Label>Units</Label><Input placeholder="e.g. mg/dL" value={rrUnits} onChange={e => setRrUnits(e.target.value)} data-testid="input-rr-units" /></div>
                       <div className="space-y-1.5"><Label>Claimed Range Low ({rrUnits || "units"})</Label>
-                        <Input type="text" inputMode="decimal" step="any" placeholder="e.g. 20" value={rrClaimedLow} onChange={e => setRrClaimedLow(e.target.value === "" ? "" : parseFloat(e.target.value))} data-testid="input-rr-claimed-low" />
+                        <DecimalInput step="any" placeholder="e.g. 20" value={typeof rrClaimedLow === "number" ? rrClaimedLow : NaN} fallback={NaN} onChangeNumber={n => setRrClaimedLow(Number.isNaN(n) ? "" : n)} data-testid="input-rr-claimed-low" />
                       </div>
                       <div className="space-y-1.5"><Label>Claimed Range High ({rrUnits || "units"})</Label>
-                        <Input type="text" inputMode="decimal" step="any" placeholder="e.g. 500" value={rrClaimedHigh} onChange={e => setRrClaimedHigh(e.target.value === "" ? "" : parseFloat(e.target.value))} data-testid="input-rr-claimed-high" />
+                        <DecimalInput step="any" placeholder="e.g. 500" value={typeof rrClaimedHigh === "number" ? rrClaimedHigh : NaN} fallback={NaN} onChangeNumber={n => setRrClaimedHigh(Number.isNaN(n) ? "" : n)} data-testid="input-rr-claimed-high" />
                       </div>
                     </div>
                     <div className="grid sm:grid-cols-2 gap-4">
@@ -4339,12 +4342,12 @@ return (
                                 />
                               </div>
                               <div className="space-y-1"><Label className="text-xs">Assigned Value ({rrUnits || "units"})</Label>
-                                <Input
-                                  type="text" inputMode="decimal"
+                                <DecimalInput
                                   step="any"
-                                  value={lv.assignedValue ?? ""}
-                                  onChange={e => {
-                                    const num = e.target.value === "" ? null : parseFloat(e.target.value);
+                                  value={lv.assignedValue ?? NaN}
+                                  fallback={NaN}
+                                  onChangeNumber={n => {
+                                    const num = Number.isNaN(n) ? null : n;
                                     setRrLevels(prev => prev.map((p, i) => i === levelIdx ? { ...p, assignedValue: num } : p));
                                   }}
                                   placeholder="e.g. 20"
@@ -4357,15 +4360,13 @@ return (
                               {Array.from({ length: rrReplicatesPerLevel }).map((_, repIdx) => {
                                 const val = reps[repIdx];
                                 return (
-                                  <Input
+                                  <DecimalInput
                                     key={repIdx}
-                                    type="text" inputMode="decimal"
                                     step="any"
                                     placeholder={`#${repIdx + 1}`}
-                                    value={val === undefined || val === null || isNaN(val) ? "" : val}
-                                    onChange={e => {
-                                      const raw = e.target.value;
-                                      const num = raw === "" ? NaN : parseFloat(raw);
+                                    value={val === undefined || val === null || isNaN(val) ? NaN : val}
+                                    fallback={NaN}
+                                    onChangeNumber={num => {
                                       setRrRunData(prev => {
                                         const existing = prev[lv.name] ? [...prev[lv.name]] : [];
                                         while (existing.length <= repIdx) existing.push(NaN);

@@ -10,6 +10,7 @@ import { staffingGridFte } from "@shared/operationsForecast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -249,11 +250,11 @@ function DataGrid({ studyId, data, onSave, readOnly, weekNum, metricTypes, allDa
                         const isOutlier = getOutlierFlag(mt, d, h);
                         return (
                           <td key={d} className={`border p-0 ${isOutlier ? "bg-yellow-100 dark:bg-yellow-900/30" : ""}`}>
-                            <input
-                              type="text" inputMode="decimal"
-                              className="w-full px-1.5 py-0.5 text-center bg-transparent border-none outline-none text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                              value={val || ""}
-                              onChange={e => handleChange(mt, d, h, e.target.value)}
+                            <DecimalInput
+                              className="w-full !h-auto rounded-none shadow-none px-1.5 py-0.5 text-center bg-transparent border-none outline-none text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              value={val || NaN}
+                              onChangeNumber={(n) => handleChange(mt, d, h, Number.isNaN(n) ? "" : String(n))}
+                              fallback={NaN}
                               disabled={readOnly}
                               min={0}
                             />
@@ -473,11 +474,11 @@ function AnalysisView({ data, studyName }: { data: HourlyDataItem[]; studyName: 
           <h3 className="text-sm font-semibold">Recommended Staffing (FTEs)</h3>
           <div className="flex items-center gap-2">
             <label className="text-xs text-muted-foreground whitespace-nowrap">Throughput rate:</label>
-            <input
-              type="text" inputMode="decimal"
+            <DecimalInput
               className="w-16 px-2 py-1 text-xs border rounded text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               value={throughputRate}
-              onChange={e => { const v = parseFloat(e.target.value); if (v > 0) setThroughputRate(v); }}
+              onChangeNumber={(n) => { if (n > 0) setThroughputRate(n); }}
+              fallback={throughputRate}
               min={1}
               max={200}
             />

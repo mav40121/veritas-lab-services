@@ -22123,13 +22123,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // GET /api/veritacomp/programs/:id/quizzes
   app.get("/api/veritacomp/programs/:id/quizzes", authMiddleware, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
-    const dataUserId = req.ownerUserId ?? req.user.userId;
     const program = userCanAccessLabRow('competency_programs', req.params.id, req);
     if (!program) return res.status(404).json({ error: "Program not found" });
-    // Get user quizzes for this program + system quizzes (user_id = 0)
+    // Quizzes for THIS program (access-checked above) + system quizzes
+    // (user_id = 0). The old trailing `OR user_id = ?` widened this to every
+    // quiz the owner authored in OTHER programs/labs (cross-lab bleed for a
+    // multi-lab owner or seat user); program_id already scopes to this program.
     const quizzes = (db as any).$client.prepare(
-      "SELECT id, user_id, program_id, method_group_id, method_group_name, title, method_group_ids, randomize_questions, question_format, created_at FROM competency_quizzes WHERE program_id = ? OR user_id = 0 OR user_id = ?"
-    ).all(req.params.id, dataUserId);
+      "SELECT id, user_id, program_id, method_group_id, method_group_name, title, method_group_ids, randomize_questions, question_format, created_at FROM competency_quizzes WHERE program_id = ? OR user_id = 0"
+    ).all(req.params.id);
     res.json(quizzes);
   });
 
@@ -30618,7 +30620,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get('/api/veritapolicy/settings', authMiddleware, (req: any, res) => {
     const sqlite = db.$client;
     const userId = req.ownerUserId;
-    let settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId) as any;
+    // Scope to the ACTIVE lab (caller-based), matching the sibling readers;
+    // WHERE user_id returned an arbitrary sibling lab's is_independent /
+    // setup_complete / accreditation_body for a multi-lab owner or seat user.
+    const labId = resolveLegacyLabId(req);
+    const scopeCol = labId ? 'lab_id' : 'user_id';
+    const scopeVal = labId ?? userId;
+    let settings = sqlite.prepare(`SELECT * FROM veritapolicy_settings WHERE ${scopeCol} = ?`).get(scopeVal) as any;
     if (!settings) {
       sqlite.prepare(`INSERT INTO veritapolicy_settings (user_id) VALUES (?)`).run(userId);
       settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId);
