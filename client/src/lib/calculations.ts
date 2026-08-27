@@ -18,6 +18,34 @@ export interface DataPoint {
 
 function mean(v: number[]) { return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; }
 
+// ─── TEa criterion formatting ────────────────────────────────────────────────
+// Single source of truth for rendering an adopted acceptance criterion (TEa) as
+// a short symbol string, e.g. "±8% or ±6 mg/dL (greater)". A custom lab-defined
+// TEa may set a 0% percent goal with only an absolute floor (e.g. ±3 mm/hr for
+// ESR, an unregulated analyte with no CLIA-defined TEa); in that case the percent
+// term is omitted so the criterion reads "±3 mm/hr", not the meaningless
+// "±0.0% or ±3 mm/hr (greater)".
+export function formatTeaCriterion(opts: {
+  isPercentage: boolean;
+  value: number;                 // fraction (0.08) when isPercentage, else the absolute value
+  absoluteFloor?: number | null;
+  absoluteUnit?: string | null;
+  valueUnit?: string | null;     // unit for the pure-absolute (non-percentage) value
+}): string {
+  const { isPercentage, value, absoluteFloor, absoluteUnit, valueUnit } = opts;
+  const floorTerm =
+    absoluteFloor != null && absoluteFloor > 0
+      ? `±${absoluteFloor}${absoluteUnit ? ` ${absoluteUnit}` : ""}`
+      : "";
+  if (!isPercentage) {
+    const u = valueUnit ?? absoluteUnit ?? "";
+    return `±${value}${u ? ` ${u}` : ""}`;
+  }
+  const pctTerm = value > 0 ? `±${(value * 100).toFixed(1)}%` : "";
+  if (pctTerm && floorTerm) return `${pctTerm} or ${floorTerm} (greater)`;
+  return floorTerm || pctTerm || `±${(value * 100).toFixed(1)}%`;
+}
+
 function slopeFn(x: number[], y: number[]) {
   const n = x.length; if (n < 2) return 1;
   const xm = mean(x), ym = mean(y);
@@ -341,11 +369,11 @@ export function calculateCalVer(
   const range = levelResults.length
     ? `${levelResults[0].assignedValue.toFixed(3)} to ${levelResults[levelResults.length - 1].assignedValue.toFixed(3)}`
     : "-";
-  const teaLabel = teaIsPercentage
-    ? (cliaAbsoluteFloor != null
-      ? `±${(cliaError * 100).toFixed(1)}% or ±${cliaAbsoluteFloor} (greater)`
-      : `±${(cliaError * 100).toFixed(1)}%`)
-    : `±${cliaError}`;
+  const teaLabel = formatTeaCriterion({
+    isPercentage: teaIsPercentage,
+    value: cliaError,
+    absoluteFloor: cliaAbsoluteFloor,
+  });
   const maxDev = levelResults.length ? Math.max(...levelResults.map((r) => Math.abs(r.pctRecovery - 100))) : 0;
   const summary =
     `Calibration Verification was performed over an assigned value range of ${range}. ` +
