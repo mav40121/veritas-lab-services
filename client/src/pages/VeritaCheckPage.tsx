@@ -26,7 +26,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { calculateStudy, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, calculateRefInterval, calculateQualitative, calculateSemiQuant, calculateSensitivity, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type QCRangeDataPoint, type RefIntervalDataPoint, type SensitivityInput, calculateINR } from "@/lib/calculations";
+import { calculateStudy, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, calculateRefInterval, calculateQualitative, calculateSemiQuant, calculateSensitivity, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type QCRangeDataPoint, type RefIntervalDataPoint, type SensitivityInput, calculateINR, formatTeaCriterion } from "@/lib/calculations";
 import { teaData } from "@/lib/cliaTeaData";
 import { useAuth } from "@/components/AuthContext";
 import { authHeaders } from "@/lib/auth";
@@ -2077,8 +2077,12 @@ export default function VeritaCheckPage() {
         if (!pass) allPass = false;
         return { name: lv.name, assigned_value: assigned, n, mean, sd: sdv, pctRecovery, absBiasPct, absBias, allowance, verdict: pass ? "pass" as const : "fail" as const };
       });
-      const teaTxt = presetIsPercentage ? `${(tea * 100).toFixed(1)}%` : `${tea} ${presetAbsUnit || ""}`.trim();
-      const floorTxt = presetIsPercentage && presetAbsFloor ? ` or ${presetAbsFloor} ${presetAbsUnit || ""}, whichever is greater` : "";
+      const teaTxt = !presetIsPercentage
+        ? `${tea} ${presetAbsUnit || ""}`.trim()
+        : tea > 0
+          ? `${(tea * 100).toFixed(1)}%`
+          : `${presetAbsFloor ?? 0} ${presetAbsUnit || ""}`.trim();
+      const floorTxt = presetIsPercentage && tea > 0 && presetAbsFloor ? ` or ${presetAbsFloor} ${presetAbsUnit || ""}, whichever is greater` : "";
       const results = {
         type: "accuracy_bias",
         analyte: abAnalyte.trim(),
@@ -2313,8 +2317,12 @@ export default function VeritaCheckPage() {
         if (!pass) allPass = false;
         return { name: lv.name, assigned_value: assigned, n, mean, sd: sdv, pctRecovery, absBiasPct, absBias, allowance, verdict: pass ? "pass" as const : "fail" as const };
       });
-      const teaTxt = presetIsPercentage ? `${(tea * 100).toFixed(1)}%` : `${tea} ${presetAbsUnit || ""}`.trim();
-      const floorTxt = presetIsPercentage && presetAbsFloor ? ` or ${presetAbsFloor} ${presetAbsUnit || ""}, whichever is greater` : "";
+      const teaTxt = !presetIsPercentage
+        ? `${tea} ${presetAbsUnit || ""}`.trim()
+        : tea > 0
+          ? `${(tea * 100).toFixed(1)}%`
+          : `${presetAbsFloor ?? 0} ${presetAbsUnit || ""}`.trim();
+      const floorTxt = presetIsPercentage && tea > 0 && presetAbsFloor ? ` or ${presetAbsFloor} ${presetAbsUnit || ""}, whichever is greater` : "";
       const cl: number | null = rrClaimedLow === "" ? null : Number(rrClaimedLow);
       const ch: number | null = rrClaimedHigh === "" ? null : Number(rrClaimedHigh);
       const rangeTxt = (cl !== null && ch !== null) ? ` for a claimed reportable range of ${cl} to ${ch} ${rrUnits.trim() || "units"}` : "";
@@ -3171,7 +3179,7 @@ return (
                           <div className="space-y-2">
                             <div className="flex items-center gap-2">
                               <DecimalInput value={customClia} onChangeNumber={setCustomClia} fallback={0.15} className="max-w-[120px]" data-testid="custom-tea-percent" />
-                              <span className="text-sm text-muted-foreground">= {(customClia * 100).toFixed(1)}% allowable error</span>
+                              <span className="text-sm text-muted-foreground">{customClia > 0 ? `= ${(customClia * 100).toFixed(1)}% allowable error` : '= no percent goal set'}</span>
                             </div>
                             {/* Dual criterion: optional absolute floor + unit. At low concentrations
                                 (eos/baso) the absolute allowance governs; a point passes if it is
@@ -3207,7 +3215,7 @@ return (
                   })()}
                   {CLIA_PRESETS[cliaPreset].cfr && <p className="text-xs text-muted-foreground">Reference: {CLIA_PRESETS[cliaPreset].cfr}</p>}
                   <div className="rounded-md bg-primary/5 border border-primary/20 p-3">
-                    <p className="text-xs text-primary font-medium">Active TEa: {teaIsPercentage ? `\u00B1${(cliaValue * 100).toFixed(1)}%` : `\u00B1${cliaValue} ${teaUnit}`}{cliaAbsoluteFloor != null ? ` or \u00B1${cliaAbsoluteFloor}${cliaAbsoluteUnit ? ' ' + cliaAbsoluteUnit : ''} (greater)` : ''}</p>
+                    <p className="text-xs text-primary font-medium">Active TEa: {formatTeaCriterion({ isPercentage: teaIsPercentage, value: cliaValue, absoluteFloor: cliaAbsoluteFloor, absoluteUnit: cliaAbsoluteUnit, valueUnit: teaUnit })}</p>
                   </div>
                 </CardContent>
               </Card>

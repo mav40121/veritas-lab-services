@@ -52,6 +52,7 @@ import {
   calculateSensitivity,
   type SensitivityResults,
   type SensitivityInput,
+  formatTeaCriterion,
 } from "@/lib/calculations";
 import type { Study } from "@shared/schema";
 import { isCensored, censorValueForMath, type CensoringPolicy } from "@shared/censoring";
@@ -619,17 +620,13 @@ function EvalBox({ results, study }: { results: StudyResults; study: Study }) {
 }
 
 function formatTeaDisplay(study: Study): string {
-  const isAbsolute = (study as any).teaIsPercentage === 0;
-  const absFloor = (study as any).cliaAbsoluteFloor;
-  const absUnit = (study as any).cliaAbsoluteUnit || '';
-  if (isAbsolute) {
-    return `\u00B1${study.cliaAllowableError} ${(study as any).teaUnit || ''}`;
-  }
-  const pctStr = `\u00B1${(study.cliaAllowableError * 100).toFixed(1)}%`;
-  if (absFloor != null) {
-    return `${pctStr} or \u00B1${absFloor} ${absUnit} (greater)`;
-  }
-  return pctStr;
+  return formatTeaCriterion({
+    isPercentage: (study as any).teaIsPercentage !== 0,
+    value: study.cliaAllowableError,
+    absoluteFloor: (study as any).cliaAbsoluteFloor,
+    absoluteUnit: (study as any).cliaAbsoluteUnit,
+    valueUnit: (study as any).teaUnit,
+  });
 }
 
 function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: string[] }) {
@@ -1907,7 +1904,9 @@ function reportableRangeChartSVG(
   ).join("");
 
   const teaLabel = teaIsPercentage
-    ? `±${(tea * 100).toFixed(1)}%${absoluteFloor ? ` or ±${absoluteFloor} ${absoluteUnit}` : ""}`
+    ? (tea > 0
+        ? `±${(tea * 100).toFixed(1)}%${absoluteFloor ? ` or ±${absoluteFloor} ${absoluteUnit}` : ""}`
+        : (absoluteFloor ? `±${absoluteFloor} ${absoluteUnit}` : `±${(tea * 100).toFixed(1)}%`))
     : `±${tea} ${absoluteUnit}`;
   const legend = `
     <g transform="translate(${padL + plotW - 190}, ${padT + 8})">
