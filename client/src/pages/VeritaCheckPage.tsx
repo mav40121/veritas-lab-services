@@ -2970,7 +2970,7 @@ return (
                   <CardHeader className="pb-3"><CardTitle className="text-base">Assay Type</CardTitle></CardHeader>
                   <CardContent className="space-y-3">
                     <Select value={assayType} onValueChange={v => setAssayType(v as AssayType)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger data-testid="select-assay-type"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="quantitative">Quantitative (numeric values)</SelectItem>
                         <SelectItem value="qualitative">Qualitative (Pos/Neg, Reactive/Nonreactive)</SelectItem>
@@ -2995,8 +2995,8 @@ return (
                         </Select>
                         <div className="flex items-center gap-2 mt-2">
                           <Label className="text-xs">Pass threshold:</Label>
-                          <Select value={String(qualPassThreshold)} onValueChange={v => setQualPassThreshold(parseFloat(v))}>
-                            <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
+                          <Select value={qualPassThreshold.toFixed(2)} onValueChange={v => setQualPassThreshold(parseFloat(v))}>
+                            <SelectTrigger className="h-8 w-28 text-xs" data-testid="select-qual-pass-threshold"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="0.90">90%</SelectItem>
                               <SelectItem value="0.95">95%</SelectItem>
@@ -3035,8 +3035,8 @@ return (
                         )}
                         <div className="flex items-center gap-2 mt-2">
                           <Label className="text-xs">Pass threshold (+/-1 grade):</Label>
-                          <Select value={String(semiQuantPassThreshold)} onValueChange={v => setSemiQuantPassThreshold(parseFloat(v))}>
-                            <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
+                          <Select value={semiQuantPassThreshold.toFixed(2)} onValueChange={v => setSemiQuantPassThreshold(parseFloat(v))}>
+                            <SelectTrigger className="h-8 w-28 text-xs" data-testid="select-semi-pass-threshold"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="0.80">80%</SelectItem>
                               <SelectItem value="0.90">90%</SelectItem>
