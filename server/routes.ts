@@ -1647,6 +1647,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ userId, count: studies.length, studies });
   });
 
+  // POST /api/admin/studies/reconcile-finalized-status  body { secret, dryRun? }
+  // Backfill for the finalize-status defect: a study finalized while still 'draft'
+  // (an amendment signed off without an intervening non-draft save) kept status
+  // 'draft', so the dashboard listed a signed, passing study as DRAFT (Chineme
+  // Swann / San Carlos, 2026-08-31). Recompute the verification status from each
+  // such row's own data. dryRun reports the changes without writing. ADMIN_SECRET.
+  app.post("/api/admin/studies/reconcile-finalized-status", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const dryRun = req.body?.dryRun === true;
+    const rows = (db as any).$client.prepare(
+      "SELECT * FROM studies WHERE lifecycle_state = 'finalized' AND status = 'draft'"
+    ).all() as any[];
+    const changes: any[] = [];
+    for (const r of rows) {
+      let to = 'draft';
+      try {
+        to = computeStudyStatus(
+          r.study_type, r.data_points, r.instruments, r.clia_allowable_error,
+          r.tea_is_percentage !== 0, r.clia_absolute_floor ?? null, r.censoring_policy ?? 'exclude',
+        );
+      } catch { to = 'draft'; }
+      changes.push({ id: r.id, lab_id: r.lab_id, test_name: r.test_name, amends_study_id: r.amends_study_id, to });
+      if (!dryRun && to !== 'draft') {
+        (db as any).$client.prepare("UPDATE studies SET status = ? WHERE id = ?").run(to, r.id);
+      }
+    }
+    res.json({ candidates: rows.length, applied: dryRun ? 0 : changes.filter(c => c.to !== 'draft').length, dryRun, changes });
+  });
+
   // POST /api/admin/relocate-study — move a study to a different lab_id.
   // Used to back-patch studies created via the legacy /api/studies path
   // before the lab_members-primary dual-write fix, when the row landed on
@@ -11951,11 +11981,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // finalized signature + timestamp + signer and, for an amendment, archives
   // the superseded original. Caller owns validation and the response.
   function finalizeStudyRowInPlace(userId: number, studyRow: any, signature: string, now: string) {
+    // Reconcile status. A finalized study is a completed compliance record, so its
+    // status must reflect its verification result (pass/fail), never 'draft'. An
+    // amendment is cloned in 'draft' state (see applyStudyAmend); signed off without
+    // an intervening non-draft save, its status would stay 'draft' and the dashboard
+    // would list a signed, passing amendment as DRAFT (Chineme Swann / San Carlos,
+    // 2026-08-31). Recompute from the row's own data; leave as-is if it cannot.
+    let finalStatus = studyRow.status;
+    if (finalStatus === 'draft') {
+      try {
+        finalStatus = computeStudyStatus(
+          studyRow.study_type, studyRow.data_points, studyRow.instruments,
+          studyRow.clia_allowable_error, studyRow.tea_is_percentage !== 0,
+          studyRow.clia_absolute_floor ?? null, studyRow.censoring_policy ?? 'exclude',
+        );
+      } catch { finalStatus = studyRow.status; }
+    }
     (db as any).$client.prepare(`
-      UPDATE studies SET lifecycle_state = 'finalized',
+      UPDATE studies SET lifecycle_state = 'finalized', status = ?,
         finalized_at = ?, finalized_by_user_id = ?, finalized_signature = ?
       WHERE id = ?
-    `).run(now, userId, signature, studyRow.id);
+    `).run(finalStatus, now, userId, signature, studyRow.id);
     // 2026-06-15: signing off an amendment auto-archives the original it
     // supersedes (the row amends_study_id points to), so the active list shows
     // only the current valid result while the superseded original is retained
