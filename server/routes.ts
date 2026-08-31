@@ -28288,6 +28288,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           nonWaived: [],
           gaps: [],
           alreadyCovered: [],
+          enrolledCategories: [],
           recommendations: [],
         });
       }
@@ -28412,7 +28413,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         classified.push({ canonical, ptCategory: m ? m.ptCategory : (specialtyCategory(t.specialty) ?? "Unmapped") });
       }
 
-      // 6. Already-covered = a current active enrollment matches the analyte.
+      // 6. Already-covered = a current enrollment covers the analyte, read from
+      // BOTH enrollment stores:
+      //   - pt_enrollments (v1, analyte-level): a per-analyte active enrollment.
+      //   - pt_enrollments_v2 (category-level): a discipline enrollment (vendor +
+      //     program + pt_category). This is how the PT Enrollment page and every
+      //     real lab (San Carlos) actually records API/CAP coverage. The engine
+      //     used to read ONLY v1, so a lab enrolled through the normal v2 UI came
+      //     back alreadyCovered=0 and every discipline it already holds was
+      //     re-recommended. Netting v2 turns the output from a "what your menu
+      //     needs" map into a "what you still need to buy" list.
+      // v2 pt_category values share the ptCategory vocabulary (the same strings
+      // used by CATEGORY_PROGRAMS and the analyte reference), so category coverage
+      // is a direct membership test. Any v2 enrollment row counts as current
+      // coverage, matching the PT Enrollment status page (~line 19312), which
+      // likewise treats an enrollment row as active without a year filter. If a
+      // lab keeps stale enrollment rows, correct them on the enrollment page; the
+      // engine reflects what is recorded rather than second-guessing it.
       const ptEnrollments = (db as any).$client.prepare(
         labId
           ? "SELECT analyte FROM pt_enrollments WHERE lab_id = ? AND status = 'active'"
@@ -28423,12 +28440,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const m = matchAnalyte(e.analyte);
         enrolledSet.add(nzKey(m ? m.name : e.analyte));
       }
+      const ptEnrollmentsV2 = (db as any).$client.prepare(
+        labId
+          ? "SELECT pt_category FROM pt_enrollments_v2 WHERE lab_id = ?"
+          : "SELECT pt_category FROM pt_enrollments_v2 WHERE user_id = ?"
+      ).all(labId ?? userId) as { pt_category: string }[];
+      const enrolledCategories = new Set<string>();
+      for (const e of ptEnrollmentsV2) {
+        if (e.pt_category) enrolledCategories.add(e.pt_category.trim());
+      }
 
       const alreadyCovered: string[] = [];
       const gaps: string[] = [];
       const gapByCategory = new Map<string, string[]>();
       for (const c of classified) {
-        if (enrolledSet.has(nzKey(c.canonical))) {
+        const coveredByAnalyte = enrolledSet.has(nzKey(c.canonical));
+        const coveredByCategory = c.ptCategory !== "Unmapped" && enrolledCategories.has(c.ptCategory);
+        if (coveredByAnalyte || coveredByCategory) {
           alreadyCovered.push(c.canonical);
         } else {
           gaps.push(c.canonical);
@@ -28489,6 +28517,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         nonWaived,
         gaps,
         alreadyCovered,
+        enrolledCategories: Array.from(enrolledCategories).sort(),
         recommendations,
       });
     } catch (err: any) {
