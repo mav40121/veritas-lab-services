@@ -28283,41 +28283,87 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // partial order. Now: match by alias, then recommend one API + one CAP
       // program per ptCategory that has a gap. See cliaAnalytes.ts.
       const nzKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-      const analyteLut = new Map<string, (typeof cliaAnalytes)[number]>();
+
+      // Menu specialty -> PT discipline (values MUST be CATEGORY_PROGRAMS keys).
+      // The lab's own specialty tag is used two ways below: to DISAMBIGUATE an
+      // ambiguous alias (e.g. "AST" is both Aspartate Aminotransferase and
+      // Antimicrobial Susceptibility Testing; on a chemistry-only lab like CW Bylas
+      // the enzyme is meant, not a micro program), and to ROLL UP an analyte the
+      // reference does not carry (CBC differential sub-cells, urine dipstick pads,
+      // individual drugs of abuse, co-oximetry) to its discipline instead of
+      // dropping it as Unmapped.
+      const SPECIALTY_TO_PTCATEGORY: Record<string, string> = {
+        "general chemistry": "General Chemistry",
+        "electrolytes": "General Chemistry",
+        "special chemistry": "Special Chemistry",
+        "blood gas": "Special Chemistry",
+        "endocrinology": "Endocrinology",
+        "toxicology": "Toxicology / TDM",
+        "therapeutic drug monitoring": "Toxicology / TDM",
+        "immunology": "Immunology / Serology",
+        "general immunology": "Immunology / Serology",
+        "serology": "Immunology / Serology",
+        "hematology": "Hematology",
+        "coagulation": "Coagulation",
+        "immunohematology": "Blood Bank / Immunohematology",
+        "blood bank": "Blood Bank / Immunohematology",
+        "transfusion": "Blood Bank / Immunohematology",
+        "microbiology": "Microbiology",
+        "urinalysis": "Urinalysis",
+      };
+      const specialtyCategory = (spec?: string | null): string | null =>
+        (spec ? SPECIALTY_TO_PTCATEGORY[spec.toLowerCase().trim()] : undefined) ?? null;
+
+      // Multimap: an ambiguous alias keeps EVERY candidate entry. First-write-wins
+      // silently resolved "AST" to Antimicrobial Susceptibility Testing, so a
+      // chemistry-only lab was handed a Microbiology program it never runs.
+      const analyteLut = new Map<string, (typeof cliaAnalytes)[number][]>();
       for (const a of cliaAnalytes) {
         for (const key of [a.name, ...a.aliases]) {
           const k = nzKey(key);
-          if (k && !analyteLut.has(k)) analyteLut.set(k, a);
+          if (!k) continue;
+          const arr = analyteLut.get(k) || [];
+          if (!arr.includes(a)) arr.push(a);
+          analyteLut.set(k, arr);
         }
       }
-      const matchAnalyte = (raw: string): (typeof cliaAnalytes)[number] | null => {
-        const direct = analyteLut.get(nzKey(raw));
+      // Choose an entry for a key, preferring the one whose discipline matches the
+      // menu item's specialty when the alias is ambiguous.
+      const pick = (arr: (typeof cliaAnalytes)[number][] | undefined, wantCat: string | null) => {
+        if (!arr || arr.length === 0) return null;
+        if (arr.length === 1 || !wantCat) return arr[0];
+        return arr.find(a => a.ptCategory === wantCat) || arr[0];
+      };
+      const matchAnalyte = (raw: string, specialty?: string | null): (typeof cliaAnalytes)[number] | null => {
+        const wantCat = specialtyCategory(specialty);
+        const direct = pick(analyteLut.get(nzKey(raw)), wantCat);
         if (direct) return direct;
         // Fall back to the leading phrase and any parenthetical abbreviations, so
         // "Alanine aminotransferase (ALT) (SGPT)" still resolves to ALT.
         const cands = [raw.split("(")[0], ...((raw.match(/\(([^)]+)\)/g) || []).map(x => x.replace(/[()]/g, "")))];
         for (const cand of cands) {
-          const hit = analyteLut.get(nzKey(cand));
+          const hit = pick(analyteLut.get(nzKey(cand)), wantCat);
           if (hit) return hit;
           for (const sub of cand.split(/[\/,]/)) {
-            const h2 = analyteLut.get(nzKey(sub));
+            const h2 = pick(analyteLut.get(nzKey(sub)), wantCat);
             if (h2) return h2;
           }
         }
         return null;
       };
 
-      // 5. Classify the non-waived menu: canonical name + ptCategory per analyte
-      // (Unmapped when no reference match exists, e.g. an analyzer sub-parameter).
+      // 5. Classify the non-waived menu: canonical name + ptCategory per analyte.
+      // No reference match: roll the analyte up to its discipline via the menu's
+      // specialty tag; only a specialty we cannot map falls through to "Unmapped".
       const classified: { canonical: string; ptCategory: string }[] = [];
       const seenCanon = new Set<string>();
       for (const t of nonWaived) {
-        const m = matchAnalyte(t.analyte);
+        const m = matchAnalyte(t.analyte, t.specialty);
         const canonical = m ? m.name : t.analyte;
         const dk = nzKey(canonical);
         if (seenCanon.has(dk)) continue;
         seenCanon.add(dk);
-        classified.push({ canonical, ptCategory: m ? m.ptCategory : "Unmapped" });
+        classified.push({ canonical, ptCategory: m ? m.ptCategory : (specialtyCategory(t.specialty) ?? "Unmapped") });
       }
 
       // 6. Already-covered = a current active enrollment matches the analyte.
