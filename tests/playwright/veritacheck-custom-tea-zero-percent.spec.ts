@@ -24,12 +24,14 @@ test.describe("VeritaCheck custom TEa with a 0% percent goal", () => {
     await injectAuth(page, BASE, TOKEN);
     await page.goto(`${BASE}/labs/${LAB_ID}/veritacheck`);
 
-    // Enter the custom-TEa path. The checkbox is only present once the TEa card
-    // is visible; skip gracefully if it is not reachable without deeper setup.
+    // Open the study builder from the landing view (default study type shows the
+    // Adopted Acceptance Criterion (TEa) card on the Setup tab).
+    const newStudy = page.getByRole("button", { name: /New Study/i });
+    if (await newStudy.count()) await newStudy.first().click();
+
+    // Enter the custom-TEa path.
     const useCustom = page.locator("#use-custom-tea");
-    if (!(await useCustom.count())) {
-      test.skip(true, "custom-TEa block not reachable without deeper study setup");
-    }
+    await expect(useCustom.first()).toBeVisible({ timeout: 15000 });
     await useCustom.first().click();
 
     const pct = page.getByTestId("custom-tea-percent").first();
