@@ -407,6 +407,38 @@ def check_file(rel, fpath):
             ERRORS.append(f"[{rel_norm}:{i}] user_seats SQL keyed on (owner_user_id, seat_email) with no lab_id -- seats are lab-scoped, so this blocks multi-lab membership or deactivates seats across labs. Add `AND lab_id = ?` (and the labId arg), or mark the line `seat-scope-ok` if it is a genuinely lab-less legacy endpoint.")
             ERRORS.append(f"  >> {s[:140]}")
 
+    # ── 14. SEAT-JOIN FAN-OUT: joining user_seats to lab_members on user_id must
+    # scope lab_id ────────────────────────────────────────────────────────────
+    # A LEFT/INNER JOIN user_seats ON us.seat_user_id = lm.user_id keyed on
+    # owner + status but NOT lab_id fans out: seats are per-lab, so a member on
+    # two of the owner's labs has two active user_seats rows and the join emits
+    # one output row per seat. The member then renders TWICE in the lab member
+    # list (Milford Carolyn/Sarah, 2026-09-08) and eligible-approver counts
+    # double. Any join with `seat_user_id = lm.user_id` must carry a
+    # `lab_id = lm.lab_id` (or `us.lab_id = ?`) condition within the 6 lines
+    # below it, UNLESS marked `seat-scope-ok`. Proven to bite: drop the
+    # `AND us.lab_id = lm.lab_id` and this fails, exit 1. Same class as PR #1247
+    # and the members fan-out fix. See reference_seat_accept_primary_lab_leak.
+    if rel_norm.startswith("server/"):
+        join_re = re.compile(r'seat_user_id\s*=\s*lm\.user_id')
+        for i, line in enumerate(lines, 1):
+            s = line.strip()
+            if s.startswith("//") or s.startswith("*"):
+                continue
+            if not join_re.search(line):
+                continue
+            window = "\n".join(lines[i - 1:i + 6])  # this line + up to 6 below (the join block)
+            # The join is scoped only when the JOIN condition itself compares the
+            # seat's lab to the membership's lab. Do NOT accept the WHERE clause's
+            # `lm.lab_id = ?` (that filters the driving table, it does not scope
+            # the fanned-out join), so check for the join-scope tokens explicitly.
+            if ("us.lab_id" in window) or ("= lm.lab_id" in window):
+                continue
+            if "seat-scope-ok" in "\n".join(lines[max(0, i - 8):i + 6]):
+                continue
+            ERRORS.append(f"[{rel_norm}:{i}] user_seats joined to lab_members on user_id with no lab_id in the join -- seats are per-lab, so this fans out and renders multi-lab members twice / double-counts approvers. Add `AND us.lab_id = lm.lab_id`, or mark `seat-scope-ok` if the cross-lab fan-out is intended.")
+            ERRORS.append(f"  >> {s[:140]}")
+
 
 # ── 6. DB MIGRATION CHECK (db.ts only) ──────────────────────────────────────
 # Every CREATE TABLE IF NOT EXISTS must have a corresponding ALTER TABLE

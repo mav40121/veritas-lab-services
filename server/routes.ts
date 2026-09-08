@@ -9778,9 +9778,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const sqlite = (db as any).$client;
     // parking-lot #33 PR 4: surface seat_type on each member row so the UI
     // can render writer-vs-reviewer chips. LEFT JOIN user_seats on
-    // (owner_user_id, seat_user_id) so the owner row (no matching seat)
+    // (owner_user_id, seat_user_id, lab_id) so the owner row (no matching seat)
     // falls back to 'active', which matches the counting-gate rule
-    // (owner always counts against the active cap).
+    // (owner always counts against the active cap). The us.lab_id = lm.lab_id
+    // condition is REQUIRED: seats are per-lab, so a member seated on two of
+    // the owner's labs has two active user_seats rows; without the lab_id scope
+    // the join fans out and the member renders twice in this lab's list (the
+    // 2026-09-08 Milford duplicate-member report). Same read-side seat-scoping
+    // class as PR #1247.
     const lab = sqlite.prepare("SELECT owner_user_id, medical_director_email, medical_director_name FROM labs WHERE id = ?").get(req.scope.labId) as any;
     const ownerUserId = lab?.owner_user_id ?? null;
     // Designated Medical Director (may be an active member OR a pending
@@ -9800,6 +9805,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ON us.seat_user_id = lm.user_id
        AND us.owner_user_id = ?
        AND us.status = 'active'
+       AND us.lab_id = lm.lab_id
       WHERE lm.lab_id = ? AND lm.status = 'active'
       ORDER BY CASE lm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, lm.created_at ASC
     `).all(ownerUserId, req.scope.labId);
