@@ -335,6 +335,7 @@ export function canUserApproveStep(
            ON us.seat_user_id = lm.user_id
           AND us.owner_user_id = (SELECT owner_user_id FROM labs WHERE id = ?)
           AND us.status = 'active'
+          AND us.lab_id = lm.lab_id
         WHERE lm.user_id = ? AND lm.lab_id = ? AND lm.status = 'active'
         LIMIT 1`
     )
@@ -515,6 +516,7 @@ export function countEligibleReviewersForStep(
            ON us.seat_user_id = lm.user_id
           AND us.owner_user_id = (SELECT owner_user_id FROM labs WHERE id = ?)
           AND us.status = 'active'
+          AND us.lab_id = lm.lab_id
         WHERE lm.lab_id = ? AND lm.status = 'active'`
     )
     .all(labId, labId) as { user_id: number; role: string; seat_type: string }[];
