@@ -72,10 +72,15 @@ function licenseCtxFromReq(req: any, productName?: string): LicenseContext {
   //
   // The header resolver stays as the fallback for legacy unprefixed routes
   // (/api/veritamap/maps/:id/excel and friends) which have no req.scope.
-  let activeLabName: string | null = req?.scope?.lab?.lab_name || null;
-  if (!activeLabName && req?.userId) {
-    try { activeLabName = resolveActiveLabForRequest(req.userId, req)?.lab_name || null; } catch {}
+  // Resolve the active lab as an object (not just its name) so the export can
+  // read is_demo off it and stamp the sample-data mark. req.scope.lab (curated)
+  // carries is_demo now; the resolveActiveLabForRequest fallback selects *.
+  let activeLab: any = req?.scope?.lab || null;
+  if (!activeLab && req?.userId) {
+    try { activeLab = resolveActiveLabForRequest(req.userId, req) || null; } catch {}
   }
+  const activeLabName: string | null = activeLab?.lab_name || null;
+  const isDemo = activeLab ? !!activeLab.is_demo : false;
   const labName = activeLabName || userRow?.cliaLabName || userRow?.clia_lab_name || null;
   if (u?.email) {
     return {
@@ -84,6 +89,7 @@ function licenseCtxFromReq(req: any, productName?: string): LicenseContext {
       plan: u.plan,
       issueDate: labLocalDate(new Date().toISOString()),
       productName,
+      isDemo,
     };
   }
   const ipRaw = (req?.ip || req?.headers?.["x-forwarded-for"] || "").toString();
@@ -6451,7 +6457,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
              l.plan_expires_at AS plan_expires_at, l.stripe_customer_id AS stripe_customer_id,
              l.lab_name AS lab_name, l.clia_number AS clia_number,
              l.accreditation_tjc AS accreditation_tjc, l.accreditation_cap AS accreditation_cap,
-             l.accreditation_cola AS accreditation_cola, l.accreditation_aabb AS accreditation_aabb
+             l.accreditation_cola AS accreditation_cola, l.accreditation_aabb AS accreditation_aabb,
+             l.is_demo AS is_demo
       FROM lab_members lm
       LEFT JOIN labs l ON l.id = lm.lab_id
       WHERE lm.user_id = ? AND lm.lab_id = ? AND lm.status = 'active' LIMIT 1
@@ -6502,6 +6509,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         accreditation_cap: row.accreditation_cap,
         accreditation_cola: row.accreditation_cola,
         accreditation_aabb: row.accreditation_aabb,
+        // USON bake-off: carried so licenseCtxFromReq can stamp the sample-data
+        // mark on this lab's PDF/Excel exports without a second query.
+        is_demo: row.is_demo,
       },
     };
 
@@ -12294,6 +12304,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       let cliaLabName: string | undefined;
       let preferredStandards: string[] | undefined;
       let resolvedLabId: number | null = null;
+      let resolvedIsDemo = false;
       let licenseCtx: LicenseContext | undefined;
       const auth = req.headers.authorization;
       if (auth?.startsWith("Bearer ")) {
@@ -12306,6 +12317,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           const lab = resolveActiveLabForRequest(payload.userId, req);
           if (lab) {
             resolvedLabId = lab.id;
+            resolvedIsDemo = !!lab.is_demo;
             cliaNumber = lab.clia_number || undefined;
             cliaLabName = lab.lab_name || undefined;
             const standards: string[] = [];
@@ -12339,6 +12351,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               email: idUser.email,
               plan: idUser.plan,
               issueDate: labLocalDate(new Date().toISOString()),
+              isDemo: resolvedIsDemo,
             };
           }
         } catch (err: any) {

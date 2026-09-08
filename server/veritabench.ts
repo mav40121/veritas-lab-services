@@ -120,12 +120,18 @@ function bencheLicenseCtx(req: any): LicenseContext {
   const row = ownerId
     ? (sqlite.prepare("SELECT clia_lab_name, clia_number, email, name, plan FROM users WHERE id = ?").get(ownerId) as any)
     : null;
+  // USON bake-off: stamp the sample-data mark when the ACTIVE lab is is_demo.
+  const activeLabId = resolveLegacyLabId(sqlite, req);
+  const isDemo = activeLabId
+    ? !!(sqlite.prepare("SELECT is_demo FROM labs WHERE id = ?").get(activeLabId) as any)?.is_demo
+    : false;
   if (u?.email) {
     return {
       licensee: row?.clia_lab_name || u.name || u.email,
       email: u.email,
       plan: u.plan,
       issueDate: labLocalDate(new Date().toISOString()),
+      isDemo,
     };
   }
   const ipRaw = (req?.ip || req?.headers?.["x-forwarded-for"] || "").toString();

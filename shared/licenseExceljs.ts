@@ -7,6 +7,8 @@ import {
   AUTHOR_META,
   COPYRIGHT_BLOCK,
   LICENSE_TERMS_BLOCK,
+  SAMPLE_DATA_BANNER,
+  SAMPLE_DATA_FOOTER,
   normalizeLicenseContext,
   type LicenseContext,
 } from "./licenseText";
@@ -17,6 +19,9 @@ const AMBER_FILL_ARGB = "FFFFF7E0";
 const AMBER_TEXT_ARGB = "FF6E4A00";
 const BODY_DARK_ARGB = "FF1A1A1A";
 const NOTE_GREY_ARGB = "FF777777";
+// USON bake-off: sample-data band colors (teal on light-teal) for is_demo labs.
+const DEMO_FILL_ARGB = "FFD7EFEF";
+const DEMO_TEXT_ARGB = "FF004F4F";
 
 function maxColumns(ws: ExcelJS.Worksheet): number {
   const cc = ws.columnCount || 0;
@@ -63,24 +68,45 @@ function shiftFreezePane(ws: ExcelJS.Worksheet): void {
 
 function insertLicenseBand(ws: ExcelJS.Worksheet, ctx: LicenseContext): void {
   const cols = maxColumns(ws);
-  ws.spliceRows(1, 0, []);
-  const row = ws.getRow(1);
-  const top = ws.getCell(1, 1);
+  // USON bake-off: an is_demo lab gets a sample-data band as row 1 and the
+  // license band as row 2. Insert BOTH blank rows in one splice, then fill and
+  // merge each exactly once. A second spliceRows after a merge does not shift
+  // the prior merge in ExcelJS, so merging row 1 twice throws "Cannot merge
+  // already merged cells" -- inserting both rows up front avoids that.
+  const rowsToInsert: any[] = ctx.isDemo ? [[], []] : [[]];
+  ws.spliceRows(1, 0, ...rowsToInsert);
+
+  const licenseRowIdx = ctx.isDemo ? 2 : 1;
+  const licenseCell = ws.getCell(licenseRowIdx, 1);
   const bandText =
     `\u00A9 2026 Veritas Lab Services, LLC. ${ctx.productName}. All rights reserved. ` +
     `Licensed to: ${ctx.licensee} (${ctx.email}) \u00B7 Issued ${ctx.issueDate} \u00B7 ` +
     `Single-facility internal use only. No redistribution, no derivative works, no resale.`;
-  top.value = bandText;
-  top.font = { name: "Calibri", size: 9, italic: true, bold: true, color: { argb: AMBER_TEXT_ARGB } };
-  top.fill = { type: "pattern", pattern: "solid", fgColor: { argb: AMBER_FILL_ARGB } };
-  top.alignment = { wrapText: true, vertical: "middle", horizontal: "left" };
-  ws.mergeCells(1, 1, 1, cols);
+  licenseCell.value = bandText;
+  licenseCell.font = { name: "Calibri", size: 9, italic: true, bold: true, color: { argb: AMBER_TEXT_ARGB } };
+  licenseCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: AMBER_FILL_ARGB } };
+  licenseCell.alignment = { wrapText: true, vertical: "middle", horizontal: "left" };
+  ws.mergeCells(licenseRowIdx, 1, licenseRowIdx, cols);
   // Band spans `cols` merged columns; assume each column is ~16 chars wide on
   // average for the worksheets we ship (data tables are wide). Use a generous
   // chars-per-line so the band stays compact when the sheet has many columns.
   const bandCharsPerLine = Math.max(120, cols * 16);
-  row.height = Math.max(30, estimateWrappedHeight(bandText, bandCharsPerLine, 14, 1));
+  ws.getRow(licenseRowIdx).height = Math.max(30, estimateWrappedHeight(bandText, bandCharsPerLine, 14, 1));
+
+  if (ctx.isDemo) {
+    const demoCell = ws.getCell(1, 1);
+    demoCell.value = SAMPLE_DATA_BANNER;
+    demoCell.font = { name: "Calibri", size: 11, bold: true, color: { argb: DEMO_TEXT_ARGB } };
+    demoCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: DEMO_FILL_ARGB } };
+    demoCell.alignment = { wrapText: true, vertical: "middle", horizontal: "center" };
+    ws.mergeCells(1, 1, 1, cols);
+    ws.getRow(1).height = 24;
+  }
+
+  // Shift the freeze pane down once per inserted row so the frozen header still
+  // sits below the bands.
   shiftFreezePane(ws);
+  if (ctx.isDemo) shiftFreezePane(ws);
 }
 
 /**
@@ -153,14 +179,18 @@ function joinHeaderFooter(p: { L: string; C: string; R: string }): string {
 function setHeaderFooter(ws: ExcelJS.Worksheet, ctx: LicenseContext): void {
   ws.headerFooter = ws.headerFooter || ({} as any);
   const headerRight = `Licensed: ${ctx.licensee}`;
+  // USON bake-off: a demo lab prefixes the sample-data mark onto the left footer
+  // so it rides every printed page whether or not the sheet already set a footer.
+  const demoFooterPrefix = ctx.isDemo ? `${SAMPLE_DATA_FOOTER}\n` : "";
   const footerLeft =
+    demoFooterPrefix +
     `© 2026 Veritas Lab Services, LLC | ` +
     `Licensed to: ${ctx.licensee} (${ctx.email}) | ` +
     `Issued ${ctx.issueDate} | Do not redistribute`;
 
   const existingHeader = String(ws.headerFooter.oddHeader || "");
   if (!existingHeader.trim()) {
-    ws.headerFooter.oddHeader = `&R${headerRight}`;
+    ws.headerFooter.oddHeader = ctx.isDemo ? `&C${SAMPLE_DATA_FOOTER}&R${headerRight}` : `&R${headerRight}`;
   }
 
   const existingFooter = String(ws.headerFooter.oddFooter || "");
@@ -205,6 +235,19 @@ function ensureAboutSheet(workbook: ExcelJS.Workbook, ctx: LicenseContext): void
     about!.getRow(rowIdx).height = height;
   };
 
+  // USON bake-off: a demo lab leads the About sheet with the sample-data notice
+  // so anyone opening the workbook sees it before the license blocks. Shift the
+  // rest of the content down two rows so the fixed offsets below stay intact.
+  if (ctx.isDemo) {
+    const demoCell = about!.getCell(startRow, 1);
+    demoCell.value = SAMPLE_DATA_BANNER;
+    demoCell.font = { name: "Calibri", size: 12, bold: true, color: { argb: DEMO_TEXT_ARGB } };
+    demoCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: DEMO_FILL_ARGB } };
+    demoCell.alignment = wrap;
+    about!.getRow(startRow).height = 24;
+    startRow += 2;
+  }
+
   // Column 1 is width 110 in Excel column-units \u2248 ~88 chars of Calibri 11
   // before wrap. Use estimateWrappedHeight() so blocks never clip on long text.
   const licensedTo =
@@ -234,6 +277,7 @@ export function applyLicenseToExcelJSWorkbook(
 
   const sheets = workbook.worksheets || [];
   if (sheets.length > 0) {
+    // insertLicenseBand adds the sample-data band as row 1 itself when isDemo.
     insertLicenseBand(sheets[0], norm);
   }
   for (const ws of sheets) {
