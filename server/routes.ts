@@ -2344,7 +2344,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // labs before first report. Refuses to update name or CLIA if the
   // corresponding lock is set (those freeze on first report, per CLAUDE.md §5).
   app.post("/api/admin/update-lab", (req, res) => {
-    const { secret, labId, labName, cliaNumber, accCap, accTjc, accCola, accAabb } = req.body || {};
+    const { secret, labId, labName, cliaNumber, accCap, accTjc, accCola, accAabb, isDemo } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     if (!labId) return res.status(400).json({ error: "labId required" });
 
@@ -2378,6 +2378,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (accTjc !== undefined)  { updates.push("accreditation_tjc = ?");  params.push(accTjc ? 1 : 0); }
     if (accCola !== undefined) { updates.push("accreditation_cola = ?"); params.push(accCola ? 1 : 0); }
     if (accAabb !== undefined) { updates.push("accreditation_aabb = ?"); params.push(accAabb ? 1 : 0); }
+    if (isDemo !== undefined)  { updates.push("is_demo = ?");            params.push(isDemo ? 1 : 0); }
 
     if (updates.length === 0) return res.status(400).json({ error: "Nothing to update" });
 
@@ -6158,6 +6159,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         l.accreditation_tjc,
         l.accreditation_cola,
         l.accreditation_aabb,
+        l.is_demo,
         l.primary_regime,
         l.nys_permit_type,
         (SELECT sl.lab_address_state FROM staff_labs sl
@@ -6200,6 +6202,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       accreditationTjc: !!m.accreditation_tjc,
       accreditationCola: !!m.accreditation_cola,
       accreditationAabb: !!m.accreditation_aabb,
+      // USON bake-off: labs flagged is_demo=1 carry representative sample
+      // data (no real facility, no real measurements). Surfaced so the
+      // NavBar can mount a persistent "sample data" banner and exports can
+      // stamp a watermark. Optional on the client for deploy skew.
+      isDemo: !!m.is_demo,
       // NYS CLEP Phase-0: jurisdiction regime (default CLIA). nysSuggested is a
       // soft hint (owner's physical state is NY) that never auto-applies.
       primaryRegime: m.primary_regime || 'CLIA',

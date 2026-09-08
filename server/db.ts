@@ -1829,6 +1829,7 @@ sqlite.exec(`
     accreditation_aabb INTEGER NOT NULL DEFAULT 0,
     clia_locked INTEGER NOT NULL DEFAULT 0,
     lab_name_locked INTEGER NOT NULL DEFAULT 0,
+    is_demo INTEGER NOT NULL DEFAULT 0,
     owner_user_id INTEGER NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -2023,6 +2024,7 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
   // paid/comped lab is untouched (pure ALTER+DEFAULT, no cascading writes); the
   // specific trial labs are marked via POST /api/admin/set-lab-trial.
   ensure("is_trial",                   "ALTER TABLE labs ADD COLUMN is_trial INTEGER NOT NULL DEFAULT 0");
+  ensure("is_demo",                    "ALTER TABLE labs ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0"); // representative/sample-data tenant -> UI banner + export stamp (USON demo labs)
   ensure("preferred_pt_vendor",        "ALTER TABLE labs ADD COLUMN preferred_pt_vendor TEXT");
   // NYS CLEP Phase-0 (2026-07-10): per-lab jurisdiction regime. NY is a
   // CLIA-exempt state; a NY lab is DUAL — NYS DOH/CLEP for state jurisdiction
