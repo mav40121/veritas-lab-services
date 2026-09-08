@@ -378,6 +378,35 @@ def check_file(rel, fpath):
             ERRORS.append(f"[{rel_norm}:{i}] DELETE FROM qc_results with no qc_result_notes clear within +/-10 lines -- the append-only note thread FKs qc_results and would be orphaned. Add `DELETE FROM qc_result_notes WHERE qc_result_id ...` before the results delete.")
             ERRORS.append(f"  >> {s[:140]}")
 
+    # ── 13. SEAT SCOPING: seat lookups/writes must include lab_id ─────────────
+    # user_seats rows are LAB-SCOPED (lab_id). A check keyed on
+    # (owner_user_id, seat_email) with NO lab_id breaks multi-lab customers: it
+    # blocks inviting a person to a second lab under the same owner ("this email
+    # already has a seat under the lab owner" -- Lisa/Milford, 2026-09-08), and a
+    # member-remove deactivate keyed that way kills the person's seat on every
+    # OTHER lab under the owner too. Any user_seats SQL matching
+    # owner_user_id + seat_email must also filter lab_id, UNLESS a `seat-scope-ok`
+    # marker sits within the 7 lines above it (the two lab-less legacy endpoints
+    # -- attach-seat, account-level invite -- route to a single/primary lab and
+    # are marked + flagged for a follow-up). Proven to bite: drop the AND lab_id
+    # from any invite check and this fails, exit 1. See
+    # reference_seat_accept_primary_lab_leak.
+    if rel_norm.startswith("server/"):
+        seat_re = re.compile(r'owner_user_id = \? AND seat_email = \?')
+        for i, line in enumerate(lines, 1):
+            s = line.strip()
+            if s.startswith("//") or s.startswith("*"):
+                continue
+            if not seat_re.search(line):
+                continue
+            if "lab_id" in line:
+                continue
+            window = "\n".join(lines[max(0, i - 8):i])  # up to 7 lines above
+            if "seat-scope-ok" in window:
+                continue
+            ERRORS.append(f"[{rel_norm}:{i}] user_seats SQL keyed on (owner_user_id, seat_email) with no lab_id -- seats are lab-scoped, so this blocks multi-lab membership or deactivates seats across labs. Add `AND lab_id = ?` (and the labId arg), or mark the line `seat-scope-ok` if it is a genuinely lab-less legacy endpoint.")
+            ERRORS.append(f"  >> {s[:140]}")
+
 
 # ── 6. DB MIGRATION CHECK (db.ts only) ──────────────────────────────────────
 # Every CREATE TABLE IF NOT EXISTS must have a corresponding ALTER TABLE

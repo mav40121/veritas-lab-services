@@ -2759,10 +2759,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).get(Number(labId), seatUserId) as any;
       if (dupMember) return res.status(409).json({ error: "User is already a member of this lab" });
     }
+    // Seat uniqueness is PER LAB (see /api/labs/:labId/members). Scope by lab so
+    // a person seated on one of the owner's labs can still be invited to another.
     const dupSeat = sqlite.prepare(
-      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status != 'deactivated'"
-    ).get(labOwnerId, normalizedEmail) as any;
-    if (dupSeat) return res.status(409).json({ error: "This email already has a seat under the lab owner" });
+      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status != 'deactivated'"
+    ).get(labOwnerId, normalizedEmail, Number(labId)) as any;
+    if (dupSeat) return res.status(409).json({ error: "This email already has a seat on this lab" });
 
     const now = new Date().toISOString();
     const newStatus = seatUserId ? "active" : "pending";
@@ -2771,8 +2773,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       sqlite.exec("BEGIN");
       const deactivated = sqlite.prepare(
-        "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status = 'deactivated'"
-      ).get(labOwnerId, normalizedEmail) as any;
+        "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status = 'deactivated'"
+      ).get(labOwnerId, normalizedEmail, Number(labId)) as any;
       if (deactivated) {
         sqlite.prepare(
           "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ?, lab_id = ?, seat_type = ? WHERE id = ?"
@@ -2795,8 +2797,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(500).json({ error: err.message || "Failed to create invite" });
     }
     const seat = sqlite.prepare(
-      "SELECT id, owner_user_id, seat_email, seat_user_id, status, lab_id, invite_token, permissions, invited_at FROM user_seats WHERE owner_user_id = ? AND seat_email = ?"
-    ).get(labOwnerId, normalizedEmail);
+      "SELECT id, owner_user_id, seat_email, seat_user_id, status, lab_id, invite_token, permissions, invited_at FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ?"
+    ).get(labOwnerId, normalizedEmail, Number(labId));
     const inviteUrl = `https://www.veritaslabservices.com/join?token=${inviteToken}`;
     // Do not log the invite token: it grants join access to the lab. Keep the
     // rest of the line for operational debugging.
@@ -4817,6 +4819,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     if (!ownerUserId || !seatEmail || !seatUserId) return res.status(400).json({ error: "ownerUserId, seatEmail, seatUserId required" });
     const sqlite = db.$client;
+    // seat-scope-ok: legacy admin tool, lab-less by design (creates one seat with
+    // no lab_id, no labId param). NOT the multi-lab customer path
+    // (/api/labs/:labId/members is). Admin-gated; a cross-lab DELETE here is a
+    // known limitation flagged for a follow-up labId pass or retirement.
     // Remove any existing seat records for this email under this owner
     sqlite.prepare("DELETE FROM user_seats WHERE owner_user_id = ? AND seat_email = ?").run(Number(ownerUserId), seatEmail);
     // Insert as active seat with full permissions
@@ -4829,6 +4835,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const ownerUser = sqlite.prepare("SELECT plan FROM users WHERE id = ?").get(Number(ownerUserId)) as any;
     const inheritedPlan = ownerUser?.plan || 'community';
     sqlite.prepare("UPDATE users SET plan = ?, study_credits = 99999 WHERE id = ?").run(inheritedPlan, Number(seatUserId)); // PHASE5-OK seat-user inherits owner plan during onboarding
+    // seat-scope-ok: legacy attach-seat (lab-less; see DELETE above).
     const seat = sqlite.prepare("SELECT * FROM user_seats WHERE owner_user_id = ? AND seat_email = ?").get(Number(ownerUserId), seatEmail) as any;
     res.json({ ok: true, seat });
   });
@@ -9985,10 +9992,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).get(req.scope.labId, seatUserId) as any;
       if (dupMember) return res.status(409).json({ error: "User is already a member of this lab" });
     }
+    // Seat uniqueness is PER LAB: user_seats rows are lab-scoped (lab_id), so a
+    // person who holds a seat on one of the owner's labs must still be invitable
+    // to a DIFFERENT lab under the same owner. Scoping this by owner+email alone
+    // wrongly blocked multi-lab membership (the "This email already has a seat
+    // under the lab owner" wall). See scripts/verify-seat-lab-scoping.mjs.
     const dupSeat = sqlite.prepare(
-      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status != 'deactivated'"
-    ).get(labOwnerId, normalizedEmail) as any;
-    if (dupSeat) return res.status(409).json({ error: "This email already has a seat under the lab owner" });
+      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status != 'deactivated'"
+    ).get(labOwnerId, normalizedEmail, req.scope.labId) as any;
+    if (dupSeat) return res.status(409).json({ error: "This email already has a seat on this lab" });
 
     const now = new Date().toISOString();
     const newStatus = seatUserId ? "active" : "pending";
@@ -10009,8 +10021,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       sqlite.exec("BEGIN");
       // Reactivate previously deactivated seat row if any.
       const deactivated = sqlite.prepare(
-        "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status = 'deactivated'"
-      ).get(labOwnerId, normalizedEmail) as any;
+        "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status = 'deactivated'"
+      ).get(labOwnerId, normalizedEmail, req.scope.labId) as any;
       if (deactivated) {
         sqlite.prepare(
           "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ?, lab_id = ?, seat_type = ? WHERE id = ?"
@@ -10392,9 +10404,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     // Duplicate-invite guard.
     const dupSeat = sqlite.prepare(
-      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status != 'deactivated'"
-    ).get(labOwnerId, normalizedEmail) as any;
-    if (dupSeat) return res.status(409).json({ error: "This email already has a seat under the lab owner. Use the seat list to manage it." });
+      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status != 'deactivated'"
+    ).get(labOwnerId, normalizedEmail, req.scope.labId) as any;
+    if (dupSeat) return res.status(409).json({ error: "This email already has a seat on this lab. Use the seat list to manage it." });
 
     const existingUser = storage.getUserByEmail(normalizedEmail);
     const seatUserId = existingUser ? existingUser.id : null;
@@ -10417,8 +10429,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       sqlite.exec("BEGIN");
       const deactivated = sqlite.prepare(
-        "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status = 'deactivated'"
-      ).get(labOwnerId, normalizedEmail) as any;
+        "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status = 'deactivated'"
+      ).get(labOwnerId, normalizedEmail, req.scope.labId) as any;
       if (deactivated) {
         sqlite.prepare(
           "UPDATE user_seats SET seat_user_id = NULL, status = 'pending', invited_at = ?, accepted_at = NULL, permissions = ?, invite_token = ?, lab_id = ?, seat_type = 'staff_portal', staff_employee_id = ? WHERE id = ?"
@@ -10562,8 +10574,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const lab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
     if (!lab) return res.status(404).json({ error: "Lab not found" });
     const seat = sqlite.prepare(
-      "SELECT id, permissions FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status != 'deactivated'"
-    ).get(lab.owner_user_id, String(member.email).toLowerCase()) as any;
+      "SELECT id, permissions FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status != 'deactivated'"
+    ).get(lab.owner_user_id, String(member.email).toLowerCase(), req.scope.labId) as any;
     if (!seat) return res.status(404).json({ error: "Seat row not found for this member" });
     const before = seat.permissions;
     const after = JSON.stringify(permissions);
@@ -10591,10 +10603,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       sqlite.prepare("DELETE FROM lab_members WHERE id = ?").run(memberId);
       // Also deactivate the matching user_seats row (matches the lab owner's seat pool).
       const userRow = sqlite.prepare("SELECT email FROM users WHERE id = ?").get(member.user_id) as any;
+      // Deactivate ONLY this lab's seat. Without the lab_id scope, removing a
+      // member from one lab would deactivate that person's seat on every other
+      // lab under the same owner (silent cross-lab access loss).
       if (userRow?.email && lab?.owner_user_id) {
         sqlite.prepare(
-          "UPDATE user_seats SET status = 'deactivated' WHERE owner_user_id = ? AND seat_email = ? AND status != 'deactivated'"
-        ).run(lab.owner_user_id, String(userRow.email).toLowerCase());
+          "UPDATE user_seats SET status = 'deactivated' WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status != 'deactivated'"
+        ).run(lab.owner_user_id, String(userRow.email).toLowerCase(), req.scope.labId);
       }
       sqlite.exec("COMMIT");
     } catch (err: any) {
@@ -26544,6 +26559,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     const now = new Date().toISOString();
+    // seat-scope-ok: legacy account-level seat invite. Routes to the owner's
+    // PRIMARY lab (no labId concept). The lab-scoped /api/labs/:labId/members is
+    // the multi-lab path; this one is left single-lab intentionally and flagged
+    // for Michael (harden with a labId or retire).
     const existingActive = (db as any).$client.prepare(
       "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status != 'deactivated'"
     ).get(req.userId, email.toLowerCase());
@@ -26568,6 +26587,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const inviteToken = crypto.randomUUID();
 
     // Reactivate a previously deactivated seat if one exists
+    // seat-scope-ok: legacy account-level invite (primary-lab; see above).
     const deactivated = (db as any).$client.prepare(
       "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status = 'deactivated'"
     ).get(req.userId, email.toLowerCase()) as any;
