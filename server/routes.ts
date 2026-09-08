@@ -29926,16 +29926,38 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
     }
 
-    // Template data_points per type from an existing passing study, so a seeded
-    // study opens cleanly in the UI. Falls back to an empty-but-valid array.
-    const templateData = (studyType: string): string => {
-      const t = sqlite.prepare(
-        `SELECT data_points FROM studies WHERE study_type = ? AND data_points IS NOT NULL AND length(data_points) > 2 AND status IN ('pass','completed') ORDER BY id LIMIT 1`
-      ).get(studyType) as { data_points: string } | undefined;
-      return t?.data_points || "[]";
-    };
-    const calTemplate = templateData("cal_ver");
-    const mcTemplate = templateData("method_comparison");
+    // Generate pass-clean data_points KEYED to the seeded study's OWN instrument
+    // label(s), so the stored verdict genuinely passes computeStudyStatus on every
+    // boot recompute (server/index.ts / routes.ts recomputeAllStudyStatuses).
+    //
+    // The prior approach copied data_points from an existing passing study; that
+    // template's instrumentValues were keyed on the TEMPLATE study's instrument
+    // (e.g. "ASSAYER"), while the new study's `instruments` were the real map
+    // labels. computeStudyStatus looks up instrumentValues[<study instrument>],
+    // found nothing (totalCount = 0), and returned "fail" -- so every boot
+    // recompute flipped these seeded studies to FAIL even though the INSERT wrote
+    // status='pass' (USON demo, 0-passing/all-failing, 2026-09-08). Generating the
+    // points keyed to the study's own label(s) makes the verdict durable.
+    //
+    // cal_ver: 5 levels, recovery within ~2% (well under the 7.5% percent TEa).
+    // method_comparison: instruments within the absolute TEa (4). Values are
+    // representative demo numbers; the verdict is relative so the scale is arbitrary.
+    const genCalVer = (label: string): string => JSON.stringify(
+      [50, 100, 150, 200, 250].map((assigned, i) => ({
+        level: i + 1,
+        expectedValue: assigned,
+        instrumentValues: { [label]: Number((assigned * [1.01, 0.985, 1.01, 1.015, 0.992][i]).toFixed(2)) },
+      }))
+    );
+    const genMethodComp = (labels: string[]): string => JSON.stringify(
+      [50, 100, 150, 200, 250].map((base, i) => ({
+        level: i + 1,
+        expectedValue: null,
+        instrumentValues: Object.fromEntries(
+          labels.map((lab, j) => [lab, j === 0 ? base : Number((base + (1 + (j % 3))).toFixed(2))]),
+        ),
+      }))
+    );
     const insStudy = sqlite.prepare(`
       INSERT INTO studies (user_id, lab_id, test_name, instrument, analyst, date, study_type,
         clia_allowable_error, tea_is_percentage, tea_unit, data_points, instruments,
@@ -29974,7 +29996,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const label = instLabel(inst);
       if (existsCalSeed.get(lid, MARK, cb.analyte, label)) { calSkipped++; continue; }
       if (!dryRun) insStudy.run(lab.owner_user_id, lid, cb.analyte, label, ANALYST, today, "cal_ver",
-        0.075, 1, "%", calTemplate, JSON.stringify([label]), now, lab.owner_user_id, lab.owner_user_id, cb.analyte, MARK, now);
+        0.075, 1, "%", genCalVer(label), JSON.stringify([label]), now, lab.owner_user_id, lab.owner_user_id, cb.analyte, MARK, now);
       calSeeded++;
     }
 
@@ -30019,7 +30041,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         mcRepaired++;
       } else {
         if (!dryRun) insStudy.run(lab.owner_user_id, lid, analyte, labels.join(", "), ANALYST, today, "method_comparison",
-          4, 0, "", mcTemplate, JSON.stringify(labels), now, lab.owner_user_id, lab.owner_user_id, analyte, MARK, now);
+          4, 0, "", genMethodComp(labels), JSON.stringify(labels), now, lab.owner_user_id, lab.owner_user_id, analyte, MARK, now);
         mcSeeded++;
       }
     }
