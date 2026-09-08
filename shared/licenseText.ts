@@ -28,6 +28,13 @@ export const LICENSE_TERMS_BLOCK =
   "of Massachusetts. Violations may result in termination of license " +
   "and statutory damages under 17 U.S.C. §§ 504-505.";
 
+// USON bake-off: single source of truth for the sample-data mark stamped onto
+// every export (PDF band + footer, Excel band + header/footer + About) when the
+// lab is flagged is_demo. No em dashes per the house style.
+export const SAMPLE_DATA_BANNER =
+  "REPRESENTATIVE SAMPLE DATA. NOT A REAL FACILITY OR ACTUAL LAB DATA.";
+export const SAMPLE_DATA_FOOTER = "REPRESENTATIVE SAMPLE DATA. NOT A REAL FACILITY.";
+
 export function LICENSE_BAND(licensee: string, email: string, issueDate: string): string {
   const safeLicensee = (licensee || "Demo Preview").trim();
   const safeEmail = (email || "anonymous").trim();
@@ -52,6 +59,13 @@ export interface LicenseContext {
    * License terms blocks below remain product-neutral on purpose.
    */
   productName?: string;
+  /**
+   * USON bake-off: true when the source lab is flagged is_demo. Adds a
+   * SAMPLE_DATA mark to the export (PDF band + footer, Excel band + header/
+   * footer + About). Defaults to false in normalizeLicenseContext so every
+   * non-demo export is byte-for-byte unchanged.
+   */
+  isDemo?: boolean;
 }
 
 export function normalizeLicenseContext(
@@ -63,5 +77,6 @@ export function normalizeLicenseContext(
     issueDate: (ctx?.issueDate || new Date().toISOString().slice(0, 10)).trim(),
     plan: ctx?.plan ? String(ctx.plan).trim() : undefined,
     productName: (ctx?.productName && String(ctx.productName).trim()) || "VeritaAssure\u2122",
+    isDemo: ctx?.isDemo === true,
   };
 }

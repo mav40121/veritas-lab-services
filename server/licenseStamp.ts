@@ -15,6 +15,8 @@ import {
   COPYRIGHT_BLOCK,
   LICENSE_BAND,
   LICENSE_TERMS_BLOCK,
+  SAMPLE_DATA_BANNER,
+  SAMPLE_DATA_FOOTER,
   normalizeLicenseContext,
   type LicenseContext,
 } from "@shared/licenseText";
@@ -71,7 +73,15 @@ export function licenseHtmlBandTop(
 ): string {
   const norm = normalizeLicenseContext(ctx);
   const band = LICENSE_BAND(norm.licensee, norm.email, norm.issueDate);
-  return `
+  // USON bake-off: a demo lab prepends a high-contrast sample-data band above
+  // the license band so no exported page is mistaken for a real facility's.
+  const demoBand = norm.isDemo
+    ? `
+<div class="veritas-sample-data-band" style="font-family:Helvetica,Arial,sans-serif;font-size:9px;font-weight:bold;letter-spacing:0.5px;color:#004F4F;background:#D7EFEF;padding:5px 8px;border-bottom:1px solid #7FB6B6;text-align:center;">
+  ${escHtml(SAMPLE_DATA_BANNER)}
+</div>`
+    : "";
+  return `${demoBand}
 <div class="veritas-license-band" style="font-family:Helvetica,Arial,sans-serif;font-size:8px;color:#6E4A00;background:#FFF7E0;padding:4px 8px;border-bottom:1px solid #E6D9A8;text-align:center;">
   ${escHtml(band)}
 </div>`;
@@ -108,7 +118,13 @@ export function licenseAugmentedFooterTemplate(
 ): string {
   const norm = normalizeLicenseContext(ctx);
   const band = LICENSE_BAND(norm.licensee, norm.email, norm.issueDate);
-  const bandLine = `
+  // USON bake-off: a demo lab adds a sample-data footer line above the license
+  // band so the mark rides on every page of the exported PDF.
+  const demoLine = norm.isDemo
+    ? `
+  <div style="width:100%;text-align:center;font-family:Helvetica,Arial,sans-serif;font-size:6px;font-weight:bold;color:#004F4F;padding:0 15mm 1px 15mm;box-sizing:border-box;">${escHtml(SAMPLE_DATA_FOOTER)}</div>`
+    : "";
+  const bandLine = `${demoLine}
   <div style="width:100%;text-align:center;font-family:Helvetica,Arial,sans-serif;font-size:6px;color:#6E4A00;padding:0 15mm 2px 15mm;box-sizing:border-box;">${escHtml(band)}</div>`;
   if (!baseTemplate) {
     return `<div style="width:100%">${bandLine}</div>`;
