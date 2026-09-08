@@ -15,6 +15,7 @@ import { AuthProvider, useAuth } from "@/components/AuthContext";
 import { LegacyWorkspaceRedirect } from "@/components/LegacyWorkspaceRedirect";
 import { NavBar } from "@/components/NavBar";
 import { SubscriptionBanner } from "@/components/SubscriptionBanner";
+import { DemoLabBanner } from "@/components/DemoLabBanner";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { ChevronUp } from "lucide-react";
@@ -355,6 +356,7 @@ function AppContent() {
       <GATracker />
       <CanonicalUpdater />
       <NavBar />
+      {!isStockHost() && !onPublicMarketingPath && <DemoLabBanner />}
       {!isStockHost() && !onPublicMarketingPath && <SubscriptionBanner />}
       {!isStockHost() && !onPublicMarketingPath && <OnboardingBanner />}
       {!isStockHost() && !onPublicMarketingPath && <OnboardingGuard />}

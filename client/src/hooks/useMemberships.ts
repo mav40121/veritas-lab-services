@@ -40,6 +40,10 @@ export interface Membership {
   primaryRegime?: "CLIA" | "NYS-CLEP";
   nysPermitType?: "none" | "in-state" | "out-of-state";
   nysSuggested?: boolean;
+  // USON bake-off: true when this lab holds representative sample data (not a
+  // real facility, no real measurements). Drives the NavBar sample-data banner
+  // and export watermark. Optional for deploy skew (older responses omit it).
+  isDemo?: boolean;
 }
 
 // Resolve the set of accreditors a lab is allowed to file findings under.
