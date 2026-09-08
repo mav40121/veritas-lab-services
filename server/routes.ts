@@ -54,7 +54,27 @@ function licenseCtxFromReq(req: any, productName?: string): LicenseContext {
   // shown in the row-1 license band; defaults to "VeritaAssure\u2122" via
   // normalizeLicenseContext when omitted.
   const u = req?.user || null;
-  const userRow = req?.userId ? storage.getUserById(req.userId) as any : null;
+  // Inline-token export routes (e.g. GET /api/my-studies/export, the cumsum and
+  // demo-map excel routes) parse the JWT themselves and never set req.userId or
+  // req.user, so before this they fell through to the anonymous "Demo Preview"
+  // band AND could never resolve is_demo. Derive an effective user id from the
+  // bearer token when the request carries no attached identity, so the license
+  // band names the real lab and the sample-data stamp resolves. A route with no
+  // token (truly public/demo) still lands in the anonymous branch below.
+  // callerUserId is always the CALLER's own id (req.userId or the id inside the
+  // caller's own bearer token), never a seat owner -- resolveActiveLabForRequest
+  // does its own seat-aware mapping internally.
+  let callerUserId: number | null = req?.userId ? Number(req.userId) : null;
+  if (!callerUserId && !u) {
+    const auth = req?.headers?.authorization;
+    if (typeof auth === "string" && auth.startsWith("Bearer ")) {
+      try {
+        const p = jwt.verify(auth.slice(7), JWT_SECRET) as { userId?: number };
+        if (p?.userId) callerUserId = Number(p.userId);
+      } catch { /* expired/invalid token -> stay anonymous */ }
+    }
+  }
+  const userRow = callerUserId ? storage.getUserById(callerUserId) as any : null;
   // 2026-07-16 (parking-lot #43): prefer the lab the ROUTE already resolved.
   // req.scope.lab is set by labScopeMiddleware from the /api/labs/:labId path
   // param and is membership-validated, and it is the same lab whose name the
@@ -76,17 +96,18 @@ function licenseCtxFromReq(req: any, productName?: string): LicenseContext {
   // read is_demo off it and stamp the sample-data mark. req.scope.lab (curated)
   // carries is_demo now; the resolveActiveLabForRequest fallback selects *.
   let activeLab: any = req?.scope?.lab || null;
-  if (!activeLab && req?.userId) {
-    try { activeLab = resolveActiveLabForRequest(req.userId, req) || null; } catch {}
+  if (!activeLab && callerUserId) {
+    try { activeLab = resolveActiveLabForRequest(callerUserId, req) || null; } catch {}
   }
   const activeLabName: string | null = activeLab?.lab_name || null;
   const isDemo = activeLab ? !!activeLab.is_demo : false;
   const labName = activeLabName || userRow?.cliaLabName || userRow?.clia_lab_name || null;
-  if (u?.email) {
+  const email = u?.email || userRow?.email || null;
+  if (email) {
     return {
-      licensee: labName || u.name || u.email,
-      email: u.email,
-      plan: u.plan,
+      licensee: labName || u?.name || userRow?.name || email,
+      email,
+      plan: u?.plan ?? userRow?.plan,
       issueDate: labLocalDate(new Date().toISOString()),
       productName,
       isDemo,
