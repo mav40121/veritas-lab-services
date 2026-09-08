@@ -466,6 +466,24 @@ function AppContent() {
           {/* Operations folded into the unified /veritaassure suite page. Server
               301s /operations (server/index.ts); this covers in-app SPA nav. */}
           <Route path="/operations">{() => <Redirect to="/veritaassure" />}</Route>
+          {/* Conversion-funnel URL aliases: conventional URLs a prospect types or
+              an ad / email / social link uses. Each previously fell through to the
+              404 page (a silent funnel leak); redirect them to the real page so no
+              first-touch bounces. Signup/trial -> /register; get-started -> the real
+              getting-started page; demo-booking -> /book; product/features ->
+              /veritaassure; about -> /team. Verified 2026-09-08 that all twelve 404'd. */}
+          <Route path="/signup">{() => <Redirect to="/register" />}</Route>
+          <Route path="/sign-up">{() => <Redirect to="/register" />}</Route>
+          <Route path="/free-trial">{() => <Redirect to="/register" />}</Route>
+          <Route path="/trial">{() => <Redirect to="/register" />}</Route>
+          <Route path="/get-started">{() => <Redirect to="/getting-started" />}</Route>
+          <Route path="/start">{() => <Redirect to="/getting-started" />}</Route>
+          <Route path="/request-demo">{() => <Redirect to="/book" />}</Route>
+          <Route path="/book-a-demo">{() => <Redirect to="/book" />}</Route>
+          <Route path="/schedule">{() => <Redirect to="/book" />}</Route>
+          <Route path="/features">{() => <Redirect to="/veritaassure" />}</Route>
+          <Route path="/product">{() => <Redirect to="/veritaassure" />}</Route>
+          <Route path="/about">{() => <Redirect to="/team" />}</Route>
           <Route path="/getting-started" component={GettingStartedPage} />
           <Route path="/account/settings">{wrapLegacy(AccountSettingsPage)}</Route>
           <Route path="/account/seats">{() => { window.location.replace("/account/settings"); return null; }}</Route>
