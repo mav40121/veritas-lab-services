@@ -18,11 +18,15 @@ test.describe("Conversion funnel — CTA clarity", () => {
   test("/register defaults to the Create Account (signup) tab", async ({ page }) => {
     await page.goto(`${BASE}/register`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(1500);
-    // The register form has a "Full Name" field that the login form does not.
+    // The Create Account tab must be the active one (was Sign In before this pass).
     await expect(
-      page.getByText("Full Name", { exact: false }).first(),
-      "register tab (Full Name field) should be active on /register"
-    ).toBeVisible({ timeout: 8000 });
+      page.locator('[role="tab"][data-state="active"]'),
+      "the active tab on /register should be Create Account"
+    ).toHaveText(/create account/i);
+    // The signup flow (not the login form) is shown: step 1 asks the lab type,
+    // and the header carries the free-account framing.
+    await expect(page.getByText(/create a free account/i).first()).toBeVisible();
+    await expect(page.getByText(/what type of lab/i).first()).toBeVisible();
   });
 
   test("landing hero: Explore -> /demo, Try VeritaCheck Free -> /register", async ({ page }) => {
