@@ -6,10 +6,11 @@
 //            Rename. Typed-signature on approve and reject (Phase 3 will add
 //            password re-auth and tamper-detection on download).
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useMemberships } from "@/hooks/useMemberships";
 import { VeritaPolicyTabs } from "@/components/VeritaPolicyTabs";
 import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -200,6 +201,13 @@ function StatusBadge({ status }: { status: string }) {
 export default function VeritaPolicyMyPoliciesPage() {
   const { user } = useAuth();
   const activeLabId = useActiveLabId();
+  const { data: memberships } = useMemberships();
+  // Default review interval the upload picker seeds to for this lab: biennial
+  // (24) at the CLIA/CAP floor, annual (12) where the state requires it (MA).
+  // Server-computed on /api/labs/me; fall back to biennial on deploy skew.
+  const activeDefaultReviewMonths = String(
+    memberships?.find((m) => m.labId === activeLabId)?.defaultReviewIntervalMonths ?? 24
+  );
   const { toast } = useToast();
 
   const invalidateAll = () => {
@@ -265,16 +273,24 @@ export default function VeritaPolicyMyPoliciesPage() {
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadDescription, setUploadDescription] = useState("");
   const [uploadManualId, setUploadManualId] = useState<string>("");
-  const [uploadReviewMonths, setUploadReviewMonths] = useState<string>("12");
+  const [uploadReviewMonths, setUploadReviewMonths] = useState<string>("24");
   const [uploadIsMajor, setUploadIsMajor] = useState(false);
   const [uploadingProgress, setUploadingProgress] = useState(false);
+
+  // Seed the interval picker to this lab's default whenever the upload dialog
+  // opens (biennial, or annual for an MA lab). Runs on the open transition so a
+  // user's in-dialog change is not clobbered by a late memberships fetch.
+  useEffect(() => {
+    if (uploadOpen) setUploadReviewMonths(activeDefaultReviewMonths);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uploadOpen]);
 
   const resetUpload = () => {
     setUploadFile(null);
     setUploadTitle("");
     setUploadDescription("");
     setUploadManualId("");
-    setUploadReviewMonths("12");
+    setUploadReviewMonths(activeDefaultReviewMonths);
     setUploadIsMajor(false);
   };
 
