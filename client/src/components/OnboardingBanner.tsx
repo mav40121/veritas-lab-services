@@ -13,6 +13,19 @@ export function OnboardingBanner() {
   if ((user as any).onboardingSeen) return null;
   if (dismissed) return null;
 
+  // Don't stack on top of the onboarding wizard. A brand-new account that has not
+  // completed or dismissed onboarding gets the OnboardingWizard modal (see
+  // OnboardingGuard in App.tsx), which owns the setup prompt; this banner is the
+  // gentler nudge that only makes sense AFTER the wizard is done or dismissed.
+  // Mirror the wizard's show condition so the two never appear at once.
+  let locallyDismissed = false;
+  try { locallyDismissed = localStorage.getItem(`onboarding_dismissed_${user.id}`) === "1"; } catch { /* storage blocked */ }
+  const wizardActive =
+    (user as any).hasCompletedOnboarding === false &&
+    (user as any).isSeatUser !== true &&
+    !locallyDismissed;
+  if (wizardActive) return null;
+
   const handleDismiss = () => {
     setDismissed(true);
     apiRequest("POST", "/api/onboarding/seen").catch(() => {});
