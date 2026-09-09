@@ -41,4 +41,23 @@ test.describe("Conversion funnel — CTA clarity", () => {
     // The old "no login required" promise is preserved as trust microcopy.
     await expect(page.getByText(/no login required/i).first()).toBeVisible();
   });
+
+  test("/veritacheck anonymous hero: Launch -> /register, demo -> /demo/compliance, sign-in kept", async ({ page }) => {
+    // The VeritaCheck product page for a logged-out prospect must offer a clean
+    // path into the trial, not two buttons that both dead-end at the Sign In
+    // wall. Primary "Launch VeritaCheck" now reaches /register (the real free
+    // trial, two study credits); a genuine no-login demo replaces the duplicate;
+    // sign-in stays available for returning users.
+    await page.goto(`${BASE}/veritacheck`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(1500);
+    const launch = page.getByRole("link", { name: /Launch VeritaCheck/i }).first();
+    await expect(launch).toHaveAttribute("href", "/register");
+    const demo = page.getByRole("link", { name: /See the live demo/i }).first();
+    await expect(demo).toHaveAttribute("href", "/demo/compliance");
+    // Returning-user sign-in path preserved.
+    const signin = page.getByRole("link", { name: /^Sign in$/i }).first();
+    await expect(signin).toHaveAttribute("href", "/login");
+    // The free-trial hook is now visible on the hero.
+    await expect(page.getByText(/two studies included/i).first()).toBeVisible();
+  });
 });
