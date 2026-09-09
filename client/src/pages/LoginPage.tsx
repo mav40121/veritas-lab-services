@@ -82,8 +82,12 @@ export default function LoginPage() {
     }
   }, [navigate]);
 
-  // Registration step: "labtype" | "hospital-search" | "self-select" | "form"
-  const [regStep, setRegStep] = useState<"labtype" | "hospital-search" | "self-select" | "form">("labtype");
+  // Registration step: "labtype" | "hospital-search" | "self-select" | "form".
+  // Default to "form" so "Try Free" opens straight to name/email/password (a free
+  // account, plan="free", 2 free study credits). The lab-type -> tier wizard is
+  // opt-in from the form (or arrived-at via /pricing with ?tier), not a forced
+  // first step, since none of it is required to create the free account.
+  const [regStep, setRegStep] = useState<"labtype" | "hospital-search" | "self-select" | "form">("form");
   const [labType, setLabType] = useState<LabType | null>(null);
 
   // Hospital search state
@@ -526,12 +530,17 @@ export default function LoginPage() {
                 {/* STEP 3: Registration form */}
                 {regStep === "form" && (
                   <form onSubmit={handleRegister} className="space-y-4">
-                    {(() => { const s = getFormSummary(); return (
+                    {(selectedTier || selectedHospital) ? (() => { const s = getFormSummary(); return (
                       <div className="bg-muted rounded-lg p-3 text-xs space-y-0.5">
                         <p className="font-medium">{s.name}</p>
                         <p className="text-muted-foreground">{s.sub}</p>
                       </div>
-                    ); })()}
+                    ); })() : (
+                      <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 text-xs">
+                        <p className="font-medium text-primary">Free account</p>
+                        <p className="text-muted-foreground">Two free studies to start. No card required. You can pick a plan any time.</p>
+                      </div>
+                    )}
                     <div className="space-y-1.5"><Label>Full Name</Label><Input value={registerForm.name} onChange={e => setRegisterForm(f => ({ ...f, name: e.target.value }))} placeholder="Your name" required /></div>
                     <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={registerForm.email} onChange={e => setRegisterForm(f => ({ ...f, email: e.target.value }))} placeholder="you@lab.com" required /></div>
                     <div className="space-y-1.5"><Label>Password</Label><Input type="password" value={registerForm.password} onChange={e => setRegisterForm(f => ({ ...f, password: e.target.value }))} placeholder="Min 6 characters" required /></div>
@@ -552,16 +561,26 @@ export default function LoginPage() {
                     <Button type="submit" disabled={loading || !hipaaAcknowledged} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
                       {loading ? "Creating account..." : "Create Account"}
                     </Button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRegStep(labType === "hospital" ? "hospital-search" : "self-select");
-                        setSelectedTier(null);
-                      }}
-                      className="text-xs text-muted-foreground hover:underline w-full text-center"
-                    >
-                      Back to plan selection
-                    </button>
+                    {(selectedTier || selectedHospital || labType) ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRegStep(labType === "hospital" ? "hospital-search" : "self-select");
+                          setSelectedTier(null);
+                        }}
+                        className="text-xs text-muted-foreground hover:underline w-full text-center"
+                      >
+                        Back to plan selection
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setRegStep("labtype")}
+                        className="text-xs text-muted-foreground hover:underline w-full text-center"
+                      >
+                        Not sure which plan fits? Help me choose →
+                      </button>
+                    )}
                   </form>
                 )}
                 </>)}
