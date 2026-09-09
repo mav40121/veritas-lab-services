@@ -15,7 +15,7 @@ import { test, expect } from "@playwright/test";
 const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
 
 test.describe("Conversion funnel — CTA clarity", () => {
-  test("/register defaults to the Create Account (signup) tab", async ({ page }) => {
+  test("/register opens the Create Account tab straight to the signup form", async ({ page }) => {
     await page.goto(`${BASE}/register`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(1500);
     // The Create Account tab must be the active one (was Sign In before this pass).
@@ -23,10 +23,12 @@ test.describe("Conversion funnel — CTA clarity", () => {
       page.locator('[role="tab"][data-state="active"]'),
       "the active tab on /register should be Create Account"
     ).toHaveText(/create account/i);
-    // The signup flow (not the login form) is shown: step 1 asks the lab type,
-    // and the header carries the free-account framing.
-    await expect(page.getByText(/create a free account/i).first()).toBeVisible();
-    await expect(page.getByText(/what type of lab/i).first()).toBeVisible();
+    // The signup FORM is the first step now (no forced lab-type wizard): the
+    // name/email/password fields and the free-account framing are visible.
+    await expect(page.getByText("Full Name", { exact: false }).first()).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText(/two free studies/i).first()).toBeVisible();
+    // The plan picker is opt-in, not forced.
+    await expect(page.getByText(/help me choose/i).first()).toBeVisible();
   });
 
   test("landing hero: Explore -> /demo, Try VeritaCheck Free -> /register", async ({ page }) => {
