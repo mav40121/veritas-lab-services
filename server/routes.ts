@@ -14703,7 +14703,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // caller's membership, not users.lab_id (the home lab). The old home-lab read
     // showed one lab's correlations on every other lab's VeritaMap page.
     const callerLabId = resolveActiveLabForRequest(callerUserId, req)?.id;
-    if (!callerLabId) return res.status(403).json({ error: "Caller has no lab_id assigned" });
+    // A brand-new account (mid-onboarding, no lab built yet) legitimately has no
+    // correlations due: return an empty list, not 403. This widget loads on the
+    // post-signup dashboard, so a 403 here was a console error on every new user's
+    // first screen (onboarding audit 2026-09-08). "No lab" is empty, not forbidden.
+    if (!callerLabId) return res.json([]);
     const days = Math.max(0, Math.min(365, parseInt(String(req.query.days ?? "60"), 10) || 60));
     const cutoff = new Date(Date.now() + days * 86400_000).toISOString().slice(0, 10);
 
