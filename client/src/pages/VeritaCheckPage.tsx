@@ -2671,12 +2671,16 @@ return (
 
                   <div className="flex flex-col sm:flex-row gap-3">
                     <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                      <Link href="/login">Launch VeritaCheck{"\u2122"} <ChevronRight size={15} className="ml-1" /></Link>
+                      <Link href="/register">Launch VeritaCheck{"\u2122"} <ChevronRight size={15} className="ml-1" /></Link>
                     </Button>
                     <Button asChild variant="outline" size="lg">
-                      <Link href="/login">Sign In / Create Account</Link>
+                      <Link href="/demo/compliance">See the live demo</Link>
                     </Button>
                   </div>
+                  <p className="text-sm text-muted-foreground mt-3">
+                    Start free: two studies included, no card required. Already have an account?{" "}
+                    <Link href="/login" className="text-primary hover:underline">Sign in</Link>.
+                  </p>
                 </div>
 
                 {/* Right: teal card */}
