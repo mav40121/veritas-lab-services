@@ -44,6 +44,11 @@ export interface Membership {
   // real facility, no real measurements). Drives the NavBar sample-data banner
   // and export watermark. Optional for deploy skew (older responses omit it).
   isDemo?: boolean;
+  // Default review interval (months) for a NEW policy on this lab: 24 (biennial,
+  // the CLIA/CAP floor) or 12 (annual) for a state that requires it (MA). The
+  // VeritaPolicy upload dialog seeds its interval picker from this. Optional for
+  // deploy skew; treat a missing value as 24.
+  defaultReviewIntervalMonths?: number;
 }
 
 // Resolve the set of accreditors a lab is allowed to file findings under.

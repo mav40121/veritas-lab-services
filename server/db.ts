@@ -5956,7 +5956,7 @@ sqlite.exec(`
     owner_user_id INTEGER NOT NULL,
     effective_date TEXT,
     next_review_date TEXT,
-    review_interval_months INTEGER NOT NULL DEFAULT 12,
+    review_interval_months INTEGER NOT NULL DEFAULT 24, -- biennial floor; the upload route overrides to 12 for annual-review states (MA). See server/policyReviewInterval.ts.
     -- FK to policy_approval_workflows.id; null means no workflow
     -- assigned yet (document sits in draft until workflow chosen).
     workflow_id INTEGER,

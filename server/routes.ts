@@ -7,6 +7,7 @@ import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
 import { resolveStudyAccess, consumeStudyCredit, isUnlimitedPlan } from "./studyCredits";
+import { defaultReviewIntervalMonthsForState } from "./policyReviewInterval";
 import { resolveSignupPlan } from "./signupPlan";
 import { db, PLAN_SEATS, PLAN_VIEW_ONLY_SEATS, PLAN_PRICES, PLAN_BED_RANGES, suggestTierFromBeds } from "./db";
 import { computeUsageQty, validateTransfer, validateBatch, matchKey, countOnHand, scopeEnterpriseLocations } from "./enterpriseTransfer";
@@ -6239,6 +6240,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       primaryRegime: m.primary_regime || 'CLIA',
       nysPermitType: m.nys_permit_type || 'none',
       nysSuggested: m.primary_regime !== 'NYS-CLEP' && String(m.owner_state || '').toUpperCase() === 'NY',
+      // Default policy review interval (months) for a NEW policy on this lab:
+      // biennial (24) at the CLIA/CAP floor, annual (12) where the lab's state
+      // requires it (MA). The upload dialog seeds its picker from this; the
+      // server recomputes the same value when the field is omitted. Existing
+      // policies are never re-stamped.
+      defaultReviewIntervalMonths: defaultReviewIntervalMonthsForState(m.owner_state),
       lastActiveAt: m.last_active_at,
       plan: m.plan,
       subscriptionStatus: m.subscription_status,
@@ -32492,7 +32499,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const manualIdRaw = req.body?.manual_id;
       const manualId =
         manualIdRaw !== undefined && manualIdRaw !== "" ? Number(manualIdRaw) : null;
-      const reviewIntervalMonths = Number(req.body?.review_interval_months ?? 12);
+      // Default review interval when the caller omits it: biennial (24mo) at the
+      // CLIA/CAP floor, annual (12mo) for labs whose state requires it (MA),
+      // keyed off the same owner-state signal /api/labs/me uses. An explicit
+      // value from the picker always wins. This applies to NEW uploads only;
+      // existing policies keep their stored interval.
+      const rawReviewInterval = req.body?.review_interval_months;
+      const labStateRow = sqlite
+        .prepare(
+          `SELECT (SELECT sl.lab_address_state FROM staff_labs sl
+                     WHERE sl.user_id = l.owner_user_id ORDER BY sl.id DESC LIMIT 1) AS state
+             FROM labs l WHERE l.id = ?`
+        )
+        .get(labId) as { state?: string } | undefined;
+      const stateDefaultInterval = defaultReviewIntervalMonthsForState(labStateRow?.state);
+      const reviewIntervalMonths =
+        rawReviewInterval === undefined || rawReviewInterval === null || rawReviewInterval === ""
+          ? stateDefaultInterval
+          : Number(rawReviewInterval);
 
       const title =
         titleOverride && titleOverride.length > 0
@@ -32524,7 +32548,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           title,
           description,
           req.userId,
-          Number.isFinite(reviewIntervalMonths) ? reviewIntervalMonths : 12
+          Number.isFinite(reviewIntervalMonths) ? reviewIntervalMonths : stateDefaultInterval
         );
       const documentId = Number(docInsert.lastInsertRowid);
       const versionNumber = 1;
