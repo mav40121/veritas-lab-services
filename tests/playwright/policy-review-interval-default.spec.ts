@@ -63,7 +63,7 @@ test.describe("VeritaPolicy — review-interval default (biennial / MA-annual)",
     }, [BASE, TOKEN, LAB_ID] as const);
     expect(expected, "lab is visible to the token").not.toBeNull();
 
-    await page.goto(`${BASE}/labs/${LAB_ID}/veritapolicy/my-policies`);
+    await page.goto(`${BASE}/labs/${LAB_ID}/veritapolicy-app/my-policies`);
     // Open the Upload dialog (button label may vary slightly; match "Upload").
     const uploadBtn = page.getByRole("button", { name: /upload/i }).first();
     await uploadBtn.click({ timeout: 10000 }).catch(() => {});
