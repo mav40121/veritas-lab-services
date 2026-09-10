@@ -19,13 +19,17 @@ test.describe("Pre-conference marketing polish", () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(1500);
-    // Product-preview card copy is present (desktop card).
-    await expect(page.getByText(/Survey-ready compliance, in one view/i).first()).toBeVisible();
-    // Software-first: the "Software Suite" badge sits before "Consulting".
-    const sw = await page.getByText("Software Suite", { exact: true }).first().boundingBox();
-    const cons = await page.getByText("Consulting", { exact: true }).first().boundingBox();
-    expect(sw && cons, "both hero badges present").toBeTruthy();
-    expect((sw!.x), "Software Suite badge is left of Consulting").toBeLessThan(cons!.x + 5);
+    // Scope to the hero section so the nav's "Clinical Laboratory Consulting"
+    // tagline does not confuse the badge check.
+    const hero = page.locator("section").filter({ hasText: "mastering the science" }).first();
+    const heroText = await hero.innerText();
+    // #3: the product-preview card renders in the hero.
+    expect(heroText, "hero shows the product-preview card").toContain("Survey-ready compliance");
+    // #2: software identity leads -- the Software Suite badge precedes Consulting.
+    const iSoftware = heroText.indexOf("Software Suite");
+    const iConsulting = heroText.indexOf("Consulting");
+    expect(iSoftware, "Software Suite badge present in hero").toBeGreaterThanOrEqual(0);
+    expect(iConsulting, "Consulting badge follows Software Suite").toBeGreaterThan(iSoftware);
   });
 
   test("pricing: plan prices sit above the payment-methods band", async ({ page }) => {
