@@ -255,7 +255,14 @@ export default function VeritaPTAppPage() {
     } else {
       setLoading(false);
     }
-  }, [hasPlanAccess]);
+    // Multi-lab: the create-event enrollment selection points at the prior
+    // lab's enrollment list, so clear it whenever the active lab changes.
+    setNewEventEnrollmentId("");
+    // fetchData is redefined each render and closes over the current ptApi;
+    // keying on activeLabId re-runs it so a lab switch reloads the new lab's
+    // coverage/enrollments/AA-records instead of leaving the prior lab's data.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasPlanAccess, activeLabId]);
 
   const handleAddEnrollment = async () => {
     if (!newVendor || !newProgramName.trim() || !newCategory || !newYear) return;
