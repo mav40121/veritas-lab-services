@@ -25,7 +25,7 @@ const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const HHMM = /^\d{2}:\d{2}$/;
 
 export interface ShiftDef { id: number; name: string; min_staff: number; }
-export interface Assignment { shift_def_id: number; work_date: string; department?: string | null; }
+export interface Assignment { shift_def_id: number; work_date: string; department?: string | null; staff_employee_id?: number | null; }
 export interface CoverageGap { date: string; shift_def_id: number; shift_name: string; assigned: number; required: number; department?: string | null; }
 // Phase 3: a shift can require min_staff of a given department (bench).
 export interface DeptRequirement { shift_def_id: number; department: string; min_staff: number; }
@@ -39,12 +39,22 @@ export interface DeptRequirement { shift_def_id: number; department: string; min
 // carrying that department is below the required min_staff. Passing no
 // deptRequirements (the default) leaves the original shift-level behavior exactly
 // as it was, so every existing caller and the Phase 1 unit test are unaffected.
+//
+// Phase 3b (competency-aware coverage): when competentByDept is supplied, an
+// assignment counts toward a department (bench) requirement ONLY if the assigned
+// staff member is competent in that department, i.e. staff_employee_id is in the
+// competent set for that (normalized) department name. The shift-level count is
+// NEVER competency-filtered: a body present still counts toward min_staff; only
+// the bench requirement demands competence. Omitting competentByDept (the
+// default) counts every assignment as before, so Phase 3 behavior is unchanged.
+// Department names are matched case-insensitively and trimmed.
 export function computeCoverageGaps(
   shiftDefs: ShiftDef[],
   assignments: Assignment[],
   startDate: string,
   endDate: string,
   deptRequirements: DeptRequirement[] = [],
+  competentByDept?: Map<string, Set<number>>,
 ): CoverageGap[] {
   const dates: string[] = [];
   const cur = new Date(startDate + "T00:00:00Z");
@@ -61,8 +71,18 @@ export function computeCoverageGaps(
   for (const a of assignments) {
     counts.set(a.work_date + "|" + a.shift_def_id, (counts.get(a.work_date + "|" + a.shift_def_id) || 0) + 1);
     if (a.department) {
-      const dk = a.work_date + "|" + a.shift_def_id + "|" + a.department;
-      deptCounts.set(dk, (deptCounts.get(dk) || 0) + 1);
+      // A department assignment counts toward its bench requirement unless a
+      // competency map is supplied and this staff member is not competent for
+      // that department.
+      let countsTowardBench = true;
+      if (competentByDept) {
+        const set = competentByDept.get(a.department.trim().toLowerCase());
+        countsTowardBench = a.staff_employee_id != null && !!set && set.has(a.staff_employee_id);
+      }
+      if (countsTowardBench) {
+        const dk = a.work_date + "|" + a.shift_def_id + "|" + a.department;
+        deptCounts.set(dk, (deptCounts.get(dk) || 0) + 1);
+      }
     }
   }
   // Index department requirements by shift so shifts without any keep prior behavior.
@@ -91,6 +111,52 @@ export function computeCoverageGaps(
     }
   }
   return gaps;
+}
+
+// Phase 3b: resolve which staff are competent in each department for a lab.
+// Walks the VeritaComp tree competency_assessments -> competency_programs
+// (department) and bridges to VeritaShift via competency_employees.staff_employee_id
+// (the same staff_employees.id used on schedule_assignments). Only passing
+// assessments count. Department names are lower-cased and trimmed to match the
+// scheduler's free-text bench names case-insensitively.
+//
+// Returns the competent-by-department map plus two honesty counters:
+//  - unbridged: distinct competent employees whose staff_employee_id is NULL
+//    (a best-effort name backfill did not link them). These would be dropped,
+//    so the caller can warn the director rather than surface a false gap.
+//  - competentEmployees: distinct competent, bridged employees (for context).
+// NOTE (documented limitation): competence is matched at the PROGRAM department
+// grain, not the method-group / instrument grain, so a bench that is finer than
+// its department cannot be expressed here.
+export function getCompetentStaffByDept(
+  sqlite: any,
+  labId: number,
+): { map: Map<string, Set<number>>; unbridged: number; competentEmployees: number } {
+  const map = new Map<string, Set<number>>();
+  const rows = sqlite.prepare(
+    `SELECT DISTINCT ce.staff_employee_id AS sid, LOWER(TRIM(p.department)) AS dept
+       FROM competency_assessments a
+       JOIN competency_programs   p  ON p.id = a.program_id
+       JOIN competency_employees  ce ON ce.id = a.employee_id
+      WHERE p.lab_id = ? AND a.status = 'pass'
+        AND ce.staff_employee_id IS NOT NULL
+        AND p.department IS NOT NULL AND TRIM(p.department) <> ''`
+  ).all(labId) as { sid: number; dept: string }[];
+  const bridged = new Set<number>();
+  for (const r of rows) {
+    if (!map.has(r.dept)) map.set(r.dept, new Set<number>());
+    map.get(r.dept)!.add(r.sid);
+    bridged.add(r.sid);
+  }
+  const unbridgedRow = sqlite.prepare(
+    `SELECT COUNT(DISTINCT ce.id) AS n
+       FROM competency_assessments a
+       JOIN competency_programs   p  ON p.id = a.program_id
+       JOIN competency_employees  ce ON ce.id = a.employee_id
+      WHERE p.lab_id = ? AND a.status = 'pass'
+        AND ce.staff_employee_id IS NULL`
+  ).get(labId) as { n: number } | undefined;
+  return { map, unbridged: unbridgedRow?.n || 0, competentEmployees: bridged.size };
 }
 
 export function registerScheduleRoutes(
@@ -161,18 +227,31 @@ export function registerScheduleRoutes(
   // ── Phase 3: department-coverage settings + per-shift requirements ─────
   app.get("/api/labs/:labId/schedule/settings", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!ops(req, res)) return;
-    const row = sqlite.prepare("SELECT department_coverage FROM schedule_settings WHERE lab_id = ?").get(req.scope.labId) as any;
-    res.json({ departmentCoverage: row?.department_coverage === 1 });
+    const row = sqlite.prepare("SELECT department_coverage, competency_aware_coverage FROM schedule_settings WHERE lab_id = ?").get(req.scope.labId) as any;
+    res.json({
+      departmentCoverage: row?.department_coverage === 1,
+      competencyAware: row?.competency_aware_coverage === 1,
+    });
   });
 
   app.put("/api/labs/:labId/schedule/settings", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
     if (!ops(req, res)) return;
-    const on = req.body?.departmentCoverage === true || req.body?.departmentCoverage === 1 ? 1 : 0;
+    const b = req.body || {};
     const now = new Date().toISOString();
+    // Read current so a PUT of only one flag preserves the other.
+    const cur = sqlite.prepare("SELECT department_coverage, competency_aware_coverage FROM schedule_settings WHERE lab_id = ?").get(req.scope.labId) as any;
+    const deptOn = b.departmentCoverage === undefined
+      ? (cur?.department_coverage === 1 ? 1 : 0)
+      : (b.departmentCoverage === true || b.departmentCoverage === 1 ? 1 : 0);
+    let compOn = b.competencyAware === undefined
+      ? (cur?.competency_aware_coverage === 1 ? 1 : 0)
+      : (b.competencyAware === true || b.competencyAware === 1 ? 1 : 0);
+    // Competency-aware coverage only has meaning on top of department coverage.
+    if (!deptOn) compOn = 0;
     sqlite.prepare(
-      "INSERT INTO schedule_settings (lab_id, department_coverage, updated_at) VALUES (?, ?, ?) ON CONFLICT(lab_id) DO UPDATE SET department_coverage = excluded.department_coverage, updated_at = excluded.updated_at"
-    ).run(req.scope.labId, on, now);
-    res.json({ ok: true, departmentCoverage: on === 1 });
+      "INSERT INTO schedule_settings (lab_id, department_coverage, competency_aware_coverage, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(lab_id) DO UPDATE SET department_coverage = excluded.department_coverage, competency_aware_coverage = excluded.competency_aware_coverage, updated_at = excluded.updated_at"
+    ).run(req.scope.labId, deptOn, compOn, now);
+    res.json({ ok: true, departmentCoverage: deptOn === 1, competencyAware: compOn === 1 });
   });
 
   app.get("/api/labs/:labId/schedule/shifts/:id/dept-requirements", authMiddleware, labScopeMiddleware, (req: any, res) => {
@@ -275,13 +354,23 @@ export function registerScheduleRoutes(
       staff_name: (a.first_name || a.last_name) ? `${a.first_name || ""} ${a.last_name || ""}`.trim() : null,
     }));
     // Phase 3: apply per-department requirements only when the lab has opted in.
-    const settings = sqlite.prepare("SELECT department_coverage FROM schedule_settings WHERE lab_id = ?").get(req.scope.labId) as any;
+    const settings = sqlite.prepare("SELECT department_coverage, competency_aware_coverage FROM schedule_settings WHERE lab_id = ?").get(req.scope.labId) as any;
     const departmentCoverage = settings?.department_coverage === 1;
+    // Phase 3b: competency-aware coverage only applies on top of department
+    // coverage; it counts only competent staff toward a bench requirement.
+    const competencyAware = departmentCoverage && settings?.competency_aware_coverage === 1;
     const deptRequirements = departmentCoverage
       ? (sqlite.prepare("SELECT shift_def_id, department, min_staff FROM schedule_shift_dept_requirements WHERE lab_id = ?").all(req.scope.labId) as any[])
       : [];
-    const coverageGaps = computeCoverageGaps(shiftDefs, rows, period.start_date, period.end_date, deptRequirements);
-    res.json({ period, shiftDefs, assignments, coverageGaps, departmentCoverage });
+    let competentByDept: Map<string, Set<number>> | undefined;
+    let competencyUnbridged = 0;
+    if (competencyAware) {
+      const comp = getCompetentStaffByDept(sqlite, req.scope.labId);
+      competentByDept = comp.map;
+      competencyUnbridged = comp.unbridged;
+    }
+    const coverageGaps = computeCoverageGaps(shiftDefs, rows, period.start_date, period.end_date, deptRequirements, competentByDept);
+    res.json({ period, shiftDefs, assignments, coverageGaps, departmentCoverage, competencyAware, competencyUnbridged });
   });
 
   // ── Assignments ────────────────────────────────────────────────────────

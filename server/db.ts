@@ -1287,6 +1287,7 @@ sqlite.exec(`
   CREATE TABLE IF NOT EXISTS schedule_settings (
     lab_id INTEGER PRIMARY KEY,
     department_coverage INTEGER NOT NULL DEFAULT 0,
+    competency_aware_coverage INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT
   );
   CREATE TABLE IF NOT EXISTS schedule_shift_dept_requirements (
@@ -1313,6 +1314,7 @@ const schedAssignCols = (sqlite.prepare("PRAGMA table_info(schedule_assignments)
 if (!schedAssignCols.includes("department")) sqlite.exec("ALTER TABLE schedule_assignments ADD COLUMN department TEXT");
 const schedSettingsCols = (sqlite.prepare("PRAGMA table_info(schedule_settings)").all() as { name: string }[]).map(c => c.name);
 if (!schedSettingsCols.includes("department_coverage")) sqlite.exec("ALTER TABLE schedule_settings ADD COLUMN department_coverage INTEGER NOT NULL DEFAULT 0");
+if (!schedSettingsCols.includes("competency_aware_coverage")) sqlite.exec("ALTER TABLE schedule_settings ADD COLUMN competency_aware_coverage INTEGER NOT NULL DEFAULT 0");
 const schedDeptReqCols = (sqlite.prepare("PRAGMA table_info(schedule_shift_dept_requirements)").all() as { name: string }[]).map(c => c.name);
 if (!schedDeptReqCols.includes("min_staff")) sqlite.exec("ALTER TABLE schedule_shift_dept_requirements ADD COLUMN min_staff INTEGER NOT NULL DEFAULT 1");
 
