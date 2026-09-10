@@ -40,6 +40,7 @@ tests/playwright/qc-resource-page.spec.ts
 tests/playwright/resource-article-cfr-citations.spec.ts
 tests/playwright/resource-article-proficiency-testing.spec.ts
 tests/playwright/resource-faq-render.spec.ts
+tests/playwright/resource-pt-article-seo.spec.ts
 tests/playwright/resource-internal-links.spec.ts
 tests/playwright/resource-tube-labeling-download.spec.ts
 tests/playwright/resources-newest-first.spec.ts

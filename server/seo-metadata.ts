@@ -268,6 +268,20 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
       faqPageJsonLd(REFINT_ARTICLE_FAQ),
     ],
   },
+  "/resources/proficiency-testing-clia-pt-referral": {
+    title: "Proficiency Testing Under CLIA: The Rules Labs Get Wrong, and the Mistake That Ends Careers",
+    description:
+      "A former Joint Commission surveyor on CLIA proficiency testing: what needs PT after the 2024 regulated-analyte change, how PT is graded, how to cover what PT does not, and the PT referral rule that carries the most severe consequences in CLIA.",
+    jsonLd: articleJsonLd({
+      headline: "Proficiency Testing Under CLIA: The Rules Labs Get Wrong, and the Mistake That Ends Careers",
+      description:
+        "A former Joint Commission surveyor on CLIA proficiency testing: what needs PT after the 2024 regulated-analyte change, how PT is graded, how to cover what PT does not, and the PT referral rule that carries the most severe consequences in CLIA.",
+      articleBody:
+        "What actually needs proficiency testing after the 2024 regulated-analyte change, how PT is graded, how to cover what PT does not, and the referral rule that carries the most severe consequences in CLIA. PT is required only for the regulated analytes named in Subpart I of the CLIA regulations; waived tests and nonwaived analytes not on the Subpart I list do not require PT, but CLIA still requires you to verify the accuracy of any test you perform at least twice a year, typically through a documented split-sample comparison reviewed by the laboratory director or designee. PT covers the primary method for an analyte, not the second analyzer next to it; that backup instrument still has to be shown to produce comparable results at least twice a year under the instrument comparison requirement at 42 CFR 493.1281. Each event delivers five samples per analyte, and satisfactory performance is 80 percent for most analytes, while ABO and Rh typing and compatibility testing require 100 percent; a clerical or transcription error is graded as a wrong result, so CLIA grades the number you reported, not the number you produced. Test PT samples the way you test patients, and never refer a PT sample to another laboratory or discuss it before the reporting deadline: PT referral is the mistake that ends the laboratory director's and owner's careers. Sections: Start here: the list changed in 2024; What PT actually checks; Misunderstanding one: not every nonwaived test needs PT; The coverage trap: PT covers the primary method, not the instrument next to it; Enrollment rules that quietly cause findings; How PT is graded, and why a perfect run can still fail; Test PT the way you test patients, until the exact moment you would not; The mistake that ends careers: PT referral; When you must verify a regulated analyte yourself; After the results, even a passing score is not the finish line; Keep the record a surveyor will actually ask for; The part that actually causes the gap: coverage; References.",
+      path: "/resources/proficiency-testing-clia-pt-referral",
+      datePublished: "2026-08-23",
+    }),
+  },
   "/resources/ep26-reagent-lot-verification": {
     title: "CLSI EP26 Reagent Lot Verification: Protocol and How-To Guide",
     description: "How clinical laboratories verify a new reagent lot under CLSI EP26 (2nd edition, 2022). The protocol, sample requirements, acceptance criteria, and documentation for lot-to-lot verification.",
