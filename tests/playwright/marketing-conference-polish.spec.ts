@@ -38,7 +38,10 @@ test.describe("Pre-conference marketing polish", () => {
     await page.waitForTimeout(1500);
     const clinic = await page.getByText("Clinic", { exact: true }).first().boundingBox();
     const payment = await page.getByText(/We accept credit cards/i).first().boundingBox();
-    expect(clinic && payment, "tier + payment band both present").toBeTruthy();
+    const founding = await page.getByText(/Founding Lab Program/i).first().boundingBox();
+    expect(clinic && payment && founding, "tier, payment band, and founding-lab all present").toBeTruthy();
     expect(clinic!.y, "a plan tier appears above the payment-methods band").toBeLessThan(payment!.y);
+    // Raw prices come before the founding-cohort upsell.
+    expect(clinic!.y, "the plan tiers appear above the Founding Lab offer").toBeLessThan(founding!.y);
   });
 });

@@ -273,9 +273,10 @@ return (
       {/* Services */}
       <section className="section-padding border-b border-border bg-secondary/20">
         <div className="container-default">
-          <div className="text-center mb-12">
-            <h2 className="font-serif text-3xl font-bold mb-3">Available Services</h2>
-            <p className="text-muted-foreground max-w-xl mx-auto">From on-site inspections to digital EP analysis, comprehensive support for your laboratory.</p>
+          <div className="text-center mb-8">
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-2">Beyond the software</p>
+            <h2 className="font-serif text-2xl font-bold mb-2">Consulting, when you want a human in the loop</h2>
+            <p className="text-sm text-muted-foreground max-w-xl mx-auto">The platform does the heavy lifting. When you want hands-on help, Veritas Lab Services also offers on-site and remote consulting.</p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {services.map(({ icon: Icon, title, desc, link, linkLabel }) => (
