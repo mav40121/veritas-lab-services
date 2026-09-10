@@ -31,32 +31,63 @@ return (
       <section className="relative overflow-hidden border-b border-border">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent pointer-events-none" />
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-28">
-          <div className="max-w-3xl">
-            <div className="flex gap-2 mb-5">
-              <Badge variant="outline" className="text-primary border-primary/30 bg-primary/5 font-medium">
-                Consulting
-              </Badge>
-              <Badge className="bg-primary text-primary-foreground font-medium">
-                Software Suite
-              </Badge>
+          <div className="grid lg:grid-cols-2 gap-10 lg:gap-12 items-center">
+            <div>
+              {/* Software-first: this is a product, with consulting alongside. */}
+              <div className="flex gap-2 mb-5">
+                <Badge className="bg-primary text-primary-foreground font-medium">
+                  Software Suite
+                </Badge>
+                <Badge variant="outline" className="text-primary border-primary/30 bg-primary/5 font-medium">
+                  Consulting
+                </Badge>
+              </div>
+              <h1 className="font-serif text-4xl sm:text-5xl font-bold tracking-tight mb-5 leading-tight text-foreground">
+                You spent years mastering the science. Nobody taught you the compliance.
+              </h1>
+              <p className="text-lg text-muted-foreground mb-8 leading-relaxed max-w-2xl">
+                VeritaAssure™ gives every lab professional the tools, the structure, and the confidence to walk into any survey ready.
+              </p>
+              {/* One clear primary (the no-login demo) + one commit CTA (the free
+                  trial). Same on mobile and desktop so the hierarchy never swaps. */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+                  <Link href="/demo">Explore VeritaAssure™ <ChevronRight size={16} className="ml-1" /></Link>
+                </Button>
+                <Button asChild variant="outline" size="lg">
+                  <Link href="/register">Try VeritaCheck™ Free</Link>
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground mt-3">Fully interactive demo. No login required.</p>
             </div>
-            <h1 className="font-serif text-4xl sm:text-5xl font-bold tracking-tight mb-5 leading-tight text-foreground">
-              You spent years mastering the science. Nobody taught you the compliance.
-            </h1>
-            <p className="text-lg text-muted-foreground mb-8 leading-relaxed max-w-2xl">
-              VeritaAssure™ gives every lab professional the tools, the structure, and the confidence to walk into any survey ready.
-            </p>
-            {/* One clear primary (the no-login demo) + one commit CTA (the free
-                trial). Same on mobile and desktop so the hierarchy never swaps. */}
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                <Link href="/demo">Explore VeritaAssure™ <ChevronRight size={16} className="ml-1" /></Link>
-              </Button>
-              <Button asChild variant="outline" size="lg">
-                <Link href="/register">Try VeritaCheck™ Free</Link>
-              </Button>
+            {/* Product preview (desktop only) so a visitor sees what the software
+                does above the fold instead of an empty half-hero. Mirrors the
+                VeritaCheck hero card; illustrative capability list, no lab data. */}
+            <div className="hidden lg:flex justify-center">
+              <div className="w-80 rounded-xl bg-gradient-to-br from-[#0e8a82] to-[#0a5e58] shadow-2xl p-7 text-white">
+                <div className="flex items-center gap-2 mb-1">
+                  <ShieldCheck size={20} className="text-white/90" />
+                  <span className="font-serif text-xl font-bold">VeritaAssure™</span>
+                </div>
+                <p className="text-sm text-white/70 mb-5">Survey-ready compliance, in one view.</p>
+                <ul className="space-y-2.5">
+                  {[
+                    "Calibration verification and method comparison",
+                    "Reportable-range and coverage mapping",
+                    "Competency and daily QC sign-off",
+                    "Inspection-readiness scoring",
+                    "Signed, audit-ready PDF reports",
+                  ].map((line) => (
+                    <li key={line} className="flex items-start gap-2 text-sm text-white/90">
+                      <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-white/80" />
+                      <span>{line}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="w-12 h-0.5 bg-white/30 my-5" />
+                <div className="text-xs text-white/60">42 CFR §493 · TJC · CAP · COLA</div>
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground mt-3">Fully interactive demo. No login required.</p>
           </div>
         </div>
       </section>
