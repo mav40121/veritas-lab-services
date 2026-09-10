@@ -143,7 +143,7 @@ export function LabSwitcher() {
   if (isSingleSiteDemo()) {
     return (
       <div
-        className="hidden lg:flex items-center gap-1.5 max-w-[220px] rounded-md border px-3 h-8 text-xs font-medium"
+        className="hidden sm:flex items-center gap-1.5 max-w-[220px] rounded-md border px-3 h-8 text-xs font-medium"
         title={`Active site: ${SINGLE_SITE_DEMO_NAME}`}
       >
         <Building2 size={13} className="text-primary shrink-0" />
@@ -165,7 +165,7 @@ export function LabSwitcher() {
     if (!solo) return null;
     return (
       <div
-        className="hidden lg:flex items-center gap-1.5 max-w-[220px] rounded-md border px-3 h-8 text-xs font-medium"
+        className="hidden sm:flex items-center gap-1.5 max-w-[220px] rounded-md border px-3 h-8 text-xs font-medium"
         title={`Active lab: ${labLabel(solo)}${solo.cliaNumber ? ` / CLIA ${solo.cliaNumber}` : ""}`}
       >
         <Building2 size={13} className="text-primary shrink-0" />
@@ -180,10 +180,19 @@ export function LabSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
+        {/* Visible down to the `sm` (640px) width, not `lg` (1024px). Browser
+            zoom shrinks the effective viewport width, and at ~150% zoom on a
+            common laptop the width drops below 1024px; a multi-lab owner would
+            then lose the switcher off the top bar and assume they had to sign
+            out and back in to change sites (Mike Hiltunen, MedStar, 2026-09-10).
+            The switcher is core navigation for multi-lab users, so it stays on
+            the bar across realistic zoom; true phones (<640px) still get the
+            in-drawer LabSwitcherMobile. */}
         <Button
           variant="outline"
           size="sm"
-          className="hidden lg:flex gap-1.5 max-w-[200px]"
+          className="hidden sm:flex gap-1.5 max-w-[200px]"
+          data-testid="lab-switcher"
           title={`Active lab: ${labLabel(current)}${current.cliaNumber ? ` / CLIA ${current.cliaNumber}` : ""}`}
         >
           <Building2 size={13} className="text-primary shrink-0" />
