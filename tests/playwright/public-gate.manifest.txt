@@ -17,6 +17,7 @@ tests/playwright/brand-images-and-price.spec.ts
 tests/playwright/code-split-routes-render.spec.ts
 tests/playwright/contact-lazy-route-renders.spec.ts
 tests/playwright/demo-selector-dark-mode.spec.ts
+tests/playwright/demo-trial-cta-register.spec.ts
 tests/playwright/ep26-article.spec.ts
 tests/playwright/ep26-product-labels.spec.ts
 tests/playwright/geo-answer-first.spec.ts

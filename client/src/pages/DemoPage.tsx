@@ -9,8 +9,9 @@ import {
 import { Switch } from "@/components/ui/switch";
 import {
   Calculator, TrendingDown, TrendingUp, DollarSign,
-  Users, BarChart3, Grid3X3, Activity, ChevronDown, Package,
+  Users, BarChart3, Grid3X3, Activity, ChevronDown, Package, ArrowRight,
 } from "lucide-react";
+import { Link } from "wouter";
 import { API_BASE } from "@/lib/queryClient";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -1198,6 +1199,25 @@ export default function DemoPage() {
         </div>
       </section>
 
+      {/* Closing conversion CTA: the operations demo previously dead-ended with
+          no next step. Route to /register (Create Account tab + free-trial copy),
+          not /login, so a warm viewer lands on signup, not a sign-in wall. */}
+      <section className="py-12 sm:py-16 px-4">
+        <div className="max-w-3xl mx-auto text-center">
+          <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">See it on your own numbers</h2>
+          <p className="text-muted-foreground mb-6">
+            Create a free account and start with two studies on us. No card required, no lab data leaves your hands until you decide to keep going.
+          </p>
+          <div className="flex flex-wrap gap-3 justify-center">
+            <Link href="/register" className="inline-flex items-center justify-center rounded-md px-5 py-2.5 text-sm font-semibold text-white" style={{ backgroundColor: "#01696F" }} data-testid="ops-demo-start-trial">
+              Start Free Trial <ArrowRight size={14} className="ml-1" />
+            </Link>
+            <Link href="/pricing" className="inline-flex items-center justify-center rounded-md px-5 py-2.5 text-sm font-semibold border border-border hover:bg-muted/50">
+              See plans and pricing
+            </Link>
+          </div>
+        </div>
+      </section>
 
     </div>
   );
