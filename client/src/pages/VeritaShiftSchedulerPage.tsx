@@ -55,6 +55,12 @@ export default function VeritaShiftSchedulerPage() {
   // Phase 3: department (bench) coverage. Off by default; the shift-level grid
   // above renders identically until a lab turns this on.
   const [deptCoverage, setDeptCoverage] = useState(false);
+  // Phase 3b: competency-aware bench coverage. Only counts staff competent in a
+  // bench (per VeritaComp) toward that bench's requirement. Applies on top of
+  // department coverage. competencyUnbridged surfaces competent staff not yet
+  // linked to a scheduling profile so we never present a silent false gap.
+  const [competencyAware, setCompetencyAware] = useState(false);
+  const [competencyUnbridged, setCompetencyUnbridged] = useState(0);
   const [deptReqs, setDeptReqs] = useState<Record<number, DeptReq[]>>({});
   const [cellDept, setCellDept] = useState<Record<string, string>>({});
   const [reqDept, setReqDept] = useState<Record<number, string>>({});
@@ -90,6 +96,7 @@ export default function VeritaShiftSchedulerPage() {
       ]);
       setShifts(sh); setStaff(st); setPeriods(pe);
       setDeptCoverage(!!settings.departmentCoverage);
+      setCompetencyAware(!!settings.competencyAware);
       if (settings.departmentCoverage) loadDeptReqs(sh);
       if (pe.length && selectedPeriodId == null) setSelectedPeriodId(pe[0].id);
     } catch { /* leave empty states */ }
@@ -107,6 +114,8 @@ export default function VeritaShiftSchedulerPage() {
       const d = await res.json();
       setPeriod(d.period); setAssignments(d.assignments || []); setGaps(d.coverageGaps || []);
       if (typeof d.departmentCoverage === "boolean") setDeptCoverage(d.departmentCoverage);
+      if (typeof d.competencyAware === "boolean") setCompetencyAware(d.competencyAware);
+      setCompetencyUnbridged(typeof d.competencyUnbridged === "number" ? d.competencyUnbridged : 0);
     } catch { /* noop */ }
   }, [base]);
 
@@ -156,7 +165,17 @@ export default function VeritaShiftSchedulerPage() {
     setDeptCoverage(on); // optimistic
     const res = await fetch(`${base}/settings`, { method: "PUT", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ departmentCoverage: on }) });
     if (!res.ok) { setDeptCoverage(!on); toast({ title: "Could not update setting", variant: "destructive" }); return; }
+    // Competency-aware coverage only has meaning on top of department coverage;
+    // the server forces it off when department coverage is off, so mirror that.
+    if (!on) setCompetencyAware(false);
     if (on) loadDeptReqs(shifts);
+    if (selectedPeriodId != null) loadPeriod(selectedPeriodId);
+  };
+  const toggleCompetencyAware = async (on: boolean) => {
+    if (!base) return;
+    setCompetencyAware(on); // optimistic
+    const res = await fetch(`${base}/settings`, { method: "PUT", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ competencyAware: on }) });
+    if (!res.ok) { setCompetencyAware(!on); toast({ title: "Could not update setting", variant: "destructive" }); return; }
     if (selectedPeriodId != null) loadPeriod(selectedPeriodId);
   };
   const addDeptReq = async (shiftId: number) => {
@@ -209,12 +228,25 @@ export default function VeritaShiftSchedulerPage() {
           <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
             <div className="text-sm font-semibold">Shift blocks</div>
             {!readOnly && (
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer" data-testid="dept-coverage-toggle">
-                <input type="checkbox" checked={deptCoverage} onChange={e => toggleDeptCoverage(e.target.checked)} />
-                Department (bench) coverage
-              </label>
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer" data-testid="dept-coverage-toggle">
+                  <input type="checkbox" checked={deptCoverage} onChange={e => toggleDeptCoverage(e.target.checked)} />
+                  Department (bench) coverage
+                </label>
+                {deptCoverage && (
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer" data-testid="competency-coverage-toggle" title="Count only staff competent in a bench toward that bench's requirement, using VeritaComp records.">
+                    <input type="checkbox" checked={competencyAware} onChange={e => toggleCompetencyAware(e.target.checked)} />
+                    Count only competent staff
+                  </label>
+                )}
+              </div>
             )}
           </div>
+          {competencyAware && competencyUnbridged > 0 && (
+            <div className="mb-2 text-xs rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 px-2 py-1.5" data-testid="competency-unbridged-warning">
+              {competencyUnbridged} competent staff {competencyUnbridged === 1 ? "record is" : "records are"} not yet linked to a scheduling profile, so they do not count toward a bench. Link them in VeritaComp to avoid a false gap.
+            </div>
+          )}
           <div className="flex flex-wrap gap-2 mb-3">
             {shifts.length === 0 && <span className="text-sm text-muted-foreground">No shifts yet. Add your Day / Eve / Night blocks below.</span>}
             {shifts.map(s => (
