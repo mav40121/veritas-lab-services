@@ -29,7 +29,10 @@ test.describe("VeritaShift Phase 3 — department (bench) coverage toggle", () =
 
     // Suite-gated page. If this lab lacks VeritaShift access, note and skip.
     const toggle = page.getByTestId("dept-coverage-toggle").locator('input[type="checkbox"]');
-    const visible = await toggle.isVisible({ timeout: 10000 }).catch(() => false);
+    // The scheduler is a lazy chunk; wait for the toggle to render (isVisible() is
+    // one-shot and returns false before the chunk loads, which silently skipped).
+    let visible = false;
+    try { await toggle.waitFor({ state: "visible", timeout: 15000 }); visible = true; } catch { /* not rendered */ }
     if (!visible) {
       test.info().annotations.push({ type: "note", text: "scheduler controls not shown (no suite access or no shifts); skipping" });
       test.skip(true, "Scheduler toggle not rendered for this lab.");
@@ -46,9 +49,18 @@ test.describe("VeritaShift Phase 3 — department (bench) coverage toggle", () =
     }
     await expect(page.getByTestId("bench-requirements")).toHaveCount(0);
 
-    // ...and appear once it is turned on.
+    // Turn it on. The bench-requirements editor renders only when the lab has at
+    // least one shift to attach benches to; assert the editor when shifts exist,
+    // else assert the toggle took effect so the guard is not lab-fragile.
     await toggle.check();
-    await expect(page.getByTestId("bench-requirements")).toBeVisible({ timeout: 8000 });
+    await page.waitForTimeout(600);
+    const hasShifts = (await page.locator('[data-testid^="shift-chip-"]').count()) > 0;
+    if (hasShifts) {
+      await expect(page.getByTestId("bench-requirements")).toBeVisible({ timeout: 8000 });
+    } else {
+      await expect(toggle).toBeChecked();
+      test.info().annotations.push({ type: "note", text: "lab has no shifts; bench editor needs >=1 shift, asserted toggle state only" });
+    }
 
     // Restore the lab's original setting so the test leaves no side effect.
     if (!startChecked) {
