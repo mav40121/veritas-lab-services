@@ -10,7 +10,7 @@ This file is the contract between Claude Code and Michael Veri for work in this 
 - Owner, Veritas Lab Services, LLC (Massachusetts, filed 1/2/2026)
 - Title: Laboratory Operations Consultant
 - Email: VeriLabGuy@gmail.com / info@veritaslabservices.com
-- Timezone: America/Phoenix (Globe, Arizona)
+- Timezone: America/New_York (Eastern). Home base Massachusetts (Upton). Travels on-site for consulting engagements (was Globe, Arizona for the SCAHC engagement through 7/31/26); default to ET for all "my time" / scheduling unless he says he is traveling.
 
 Michael is the regulatory and operational authority on every artifact you produce. You show your math, he decides if it ships.
 

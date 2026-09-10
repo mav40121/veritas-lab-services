@@ -29,6 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { calculateStudy, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, calculateRefInterval, calculateQualitative, calculateSemiQuant, calculateSensitivity, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type QCRangeDataPoint, type RefIntervalDataPoint, type SensitivityInput, calculateINR, formatTeaCriterion } from "@/lib/calculations";
 import { teaData } from "@/lib/cliaTeaData";
 import { useAuth } from "@/components/AuthContext";
+import { triggerStudyCreditsExhausted } from "@/components/StudyCreditsModal";
 import { authHeaders } from "@/lib/auth";
 import { trackEvent } from "@/lib/analytics";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -1691,15 +1692,21 @@ export default function VeritaCheckPage() {
       const response = await fetch(url, { method: isEditing ? "PUT" : "POST", headers, body: JSON.stringify(study) });
       if (!response.ok) {
         let serverMessage = `Server returned ${response.status}`;
+        let serverCode: string | undefined;
         try {
           const errBody = await response.json();
           if (errBody?.error) {
             serverMessage = typeof errBody.error === "string" ? errBody.error : JSON.stringify(errBody.error);
           }
+          serverCode = errBody?.code;
         } catch {
           // response had no JSON body; fall back to the status code message
         }
-        throw new Error(serverMessage);
+        const e = new Error(serverMessage);
+        // Preserve the server's machine code so onError can route it (e.g. the
+        // free-study exhaustion upsell) instead of a generic toast.
+        (e as any).code = serverCode;
+        throw e;
       }
       return response;
     },
@@ -1743,6 +1750,12 @@ export default function VeritaCheckPage() {
     },
     onError: (err: any) => {
       const msg = err?.message || "Failed to save study";
+      // Free-study exhaustion is the trial -> paid moment. Turn the block into a
+      // one-click upgrade modal instead of a dead-end error toast.
+      if (err?.code === "STUDY_CREDITS_EXHAUSTED" || /used your free studies/i.test(msg)) {
+        triggerStudyCreditsExhausted(msg);
+        return;
+      }
       // Lab-identity gate: a finalized study is a compliance record that needs
       // the lab's CLIA number. Surface a clear, actionable prompt (and the draft
       // escape hatch) instead of the raw error.
@@ -2671,12 +2684,16 @@ return (
 
                   <div className="flex flex-col sm:flex-row gap-3">
                     <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                      <Link href="/login">Launch VeritaCheck{"\u2122"} <ChevronRight size={15} className="ml-1" /></Link>
+                      <Link href="/register">Launch VeritaCheck{"\u2122"} <ChevronRight size={15} className="ml-1" /></Link>
                     </Button>
                     <Button asChild variant="outline" size="lg">
-                      <Link href="/login">Sign In / Create Account</Link>
+                      <Link href="/demo/compliance">See the live demo</Link>
                     </Button>
                   </div>
+                  <p className="text-sm text-muted-foreground mt-3">
+                    Start free: two studies included, no card required. Already have an account?{" "}
+                    <Link href="/login" className="text-primary hover:underline">Sign in</Link>.
+                  </p>
                 </div>
 
                 {/* Right: teal card */}
@@ -2970,7 +2987,7 @@ return (
                   <CardHeader className="pb-3"><CardTitle className="text-base">Assay Type</CardTitle></CardHeader>
                   <CardContent className="space-y-3">
                     <Select value={assayType} onValueChange={v => setAssayType(v as AssayType)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger data-testid="select-assay-type"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="quantitative">Quantitative (numeric values)</SelectItem>
                         <SelectItem value="qualitative">Qualitative (Pos/Neg, Reactive/Nonreactive)</SelectItem>
@@ -2995,8 +3012,8 @@ return (
                         </Select>
                         <div className="flex items-center gap-2 mt-2">
                           <Label className="text-xs">Pass threshold:</Label>
-                          <Select value={String(qualPassThreshold)} onValueChange={v => setQualPassThreshold(parseFloat(v))}>
-                            <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
+                          <Select value={qualPassThreshold.toFixed(2)} onValueChange={v => setQualPassThreshold(parseFloat(v))}>
+                            <SelectTrigger className="h-8 w-28 text-xs" data-testid="select-qual-pass-threshold"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="0.90">90%</SelectItem>
                               <SelectItem value="0.95">95%</SelectItem>
@@ -3035,8 +3052,8 @@ return (
                         )}
                         <div className="flex items-center gap-2 mt-2">
                           <Label className="text-xs">Pass threshold (+/-1 grade):</Label>
-                          <Select value={String(semiQuantPassThreshold)} onValueChange={v => setSemiQuantPassThreshold(parseFloat(v))}>
-                            <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
+                          <Select value={semiQuantPassThreshold.toFixed(2)} onValueChange={v => setSemiQuantPassThreshold(parseFloat(v))}>
+                            <SelectTrigger className="h-8 w-28 text-xs" data-testid="select-semi-pass-threshold"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="0.80">80%</SelectItem>
                               <SelectItem value="0.90">90%</SelectItem>

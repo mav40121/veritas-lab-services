@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useAuth } from "@/components/AuthContext";
+import { triggerStudyCreditsExhausted } from "@/components/StudyCreditsModal";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -504,7 +505,10 @@ function NewVerificationForm({ onCreated, onCancel }: { onCreated: (id: number) 
       });
       const data = await r.json();
       if (r.ok) onCreated(data.id);
-      else setError(data.error || "Failed to create verification.");
+      else if (data.code === "STUDY_CREDITS_EXHAUSTED") {
+        // Trial -> paid moment: route to the upgrade modal, not a dead-end line.
+        triggerStudyCreditsExhausted(data.error);
+      } else setError(data.error || "Failed to create verification.");
     } finally {
       setSaving(false);
     }

@@ -342,7 +342,7 @@ export function NavBar() {
           {isLoggedIn ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="hidden min-[1536px]:flex gap-1.5">
+                <Button variant="outline" size="sm" className="hidden lg:flex gap-1.5">
                   <User size={13} />
                   {user?.name.split(" ")[0]}
                   <ChevronDown size={12} />
@@ -360,7 +360,7 @@ export function NavBar() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <Button asChild size="sm" variant="outline" className="hidden min-[1536px]:flex">
+            <Button asChild size="sm" variant="outline" className="hidden lg:flex">
               <Link href="/login">Sign in</Link>
             </Button>
           )}
@@ -371,7 +371,7 @@ export function NavBar() {
               -> /dashboard). */}
 
           {!onStockHost && (
-          <Button asChild size="sm" className="hidden min-[1536px]:flex bg-primary hover:bg-primary/90 text-primary-foreground font-medium">
+          <Button asChild size="sm" className="hidden lg:flex bg-primary hover:bg-primary/90 text-primary-foreground font-medium">
             <Link href="/veritacheck">Run a Study</Link>
           </Button>
           )}
@@ -400,12 +400,15 @@ export function NavBar() {
               </Link>
             ))}
 
-            {/* 2026-06-08: mobile lab switcher. The desktop dropdown
-                (LabSwitcher above) is "hidden min-[1536px]:flex" so iPhone Safari
-                users had no way to switch labs. This inline list mirrors
-                the dropdown's content and closes the drawer after a
-                successful switch. Renders null when the user has fewer
-                than 2 memberships. */}
+            {/* 2026-06-08: mobile lab switcher for phones (<640px), where the
+                top-bar LabSwitcher (now "hidden sm:flex") is not shown. This
+                inline list mirrors the dropdown's content and closes the drawer
+                after a successful switch. Renders null when the user has fewer
+                than 2 memberships.
+                2026-09-10: the marketing nav collapses into this drawer below
+                1536px, but the logged-in app controls (lab switcher, account
+                menu, Run a Study) now stay on the bar down to lg (1024px) / sm
+                (640px) so browser zoom no longer strips them. */}
             {isLoggedIn && <LabSwitcherMobile onAfterSwitch={closeMobile} />}
 
             {/* VeritaStock host: inventory nav (lab marketing groups suppressed) */}

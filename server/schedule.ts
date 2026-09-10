@@ -25,17 +25,26 @@ const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const HHMM = /^\d{2}:\d{2}$/;
 
 export interface ShiftDef { id: number; name: string; min_staff: number; }
-export interface Assignment { shift_def_id: number; work_date: string; }
-export interface CoverageGap { date: string; shift_def_id: number; shift_name: string; assigned: number; required: number; }
+export interface Assignment { shift_def_id: number; work_date: string; department?: string | null; }
+export interface CoverageGap { date: string; shift_def_id: number; shift_name: string; assigned: number; required: number; department?: string | null; }
+// Phase 3: a shift can require min_staff of a given department (bench).
+export interface DeptRequirement { shift_def_id: number; department: string; min_staff: number; }
 
 // Pure coverage-gap computation (unit-tested by scripts/verify-schedule-coverage.ts).
-// For each date in [startDate, endDate] and each shift, a gap exists when the
-// number of assignments is below the shift's min_staff.
+// For each date in [startDate, endDate] and each shift, a shift-level gap exists
+// when the number of assignments is below the shift's min_staff.
+//
+// Phase 3 (department coverage): when deptRequirements is non-empty, ADDITIONAL
+// per-(date, shift, department) gaps are emitted where the count of assignments
+// carrying that department is below the required min_staff. Passing no
+// deptRequirements (the default) leaves the original shift-level behavior exactly
+// as it was, so every existing caller and the Phase 1 unit test are unaffected.
 export function computeCoverageGaps(
   shiftDefs: ShiftDef[],
   assignments: Assignment[],
   startDate: string,
   endDate: string,
+  deptRequirements: DeptRequirement[] = [],
 ): CoverageGap[] {
   const dates: string[] = [];
   const cur = new Date(startDate + "T00:00:00Z");
@@ -46,17 +55,38 @@ export function computeCoverageGaps(
     cur.setUTCDate(cur.getUTCDate() + 1);
     guard += 1;
   }
+  // Shift-level counts (department-agnostic) and, for Phase 3, per-department counts.
   const counts = new Map<string, number>();
+  const deptCounts = new Map<string, number>();
   for (const a of assignments) {
-    const k = a.work_date + "|" + a.shift_def_id;
-    counts.set(k, (counts.get(k) || 0) + 1);
+    counts.set(a.work_date + "|" + a.shift_def_id, (counts.get(a.work_date + "|" + a.shift_def_id) || 0) + 1);
+    if (a.department) {
+      const dk = a.work_date + "|" + a.shift_def_id + "|" + a.department;
+      deptCounts.set(dk, (deptCounts.get(dk) || 0) + 1);
+    }
   }
+  // Index department requirements by shift so shifts without any keep prior behavior.
+  const reqsByShift = new Map<number, DeptRequirement[]>();
+  for (const r of deptRequirements) {
+    if (!reqsByShift.has(r.shift_def_id)) reqsByShift.set(r.shift_def_id, []);
+    reqsByShift.get(r.shift_def_id)!.push(r);
+  }
+  const shiftName = new Map<number, string>(shiftDefs.map((s) => [s.id, s.name]));
   const gaps: CoverageGap[] = [];
   for (const date of dates) {
     for (const s of shiftDefs) {
       const assigned = counts.get(date + "|" + s.id) || 0;
       if (assigned < s.min_staff) {
-        gaps.push({ date, shift_def_id: s.id, shift_name: s.name, assigned, required: s.min_staff });
+        gaps.push({ date, shift_def_id: s.id, shift_name: s.name, assigned, required: s.min_staff, department: null });
+      }
+      const reqs = reqsByShift.get(s.id);
+      if (reqs) {
+        for (const r of reqs) {
+          const got = deptCounts.get(date + "|" + s.id + "|" + r.department) || 0;
+          if (got < r.min_staff) {
+            gaps.push({ date, shift_def_id: s.id, shift_name: shiftName.get(s.id) || s.name, assigned: got, required: r.min_staff, department: r.department });
+          }
+        }
       }
     }
   }
@@ -128,6 +158,53 @@ export function registerScheduleRoutes(
     res.json({ ok: true, deactivated: info.changes });
   });
 
+  // ── Phase 3: department-coverage settings + per-shift requirements ─────
+  app.get("/api/labs/:labId/schedule/settings", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!ops(req, res)) return;
+    const row = sqlite.prepare("SELECT department_coverage FROM schedule_settings WHERE lab_id = ?").get(req.scope.labId) as any;
+    res.json({ departmentCoverage: row?.department_coverage === 1 });
+  });
+
+  app.put("/api/labs/:labId/schedule/settings", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!ops(req, res)) return;
+    const on = req.body?.departmentCoverage === true || req.body?.departmentCoverage === 1 ? 1 : 0;
+    const now = new Date().toISOString();
+    sqlite.prepare(
+      "INSERT INTO schedule_settings (lab_id, department_coverage, updated_at) VALUES (?, ?, ?) ON CONFLICT(lab_id) DO UPDATE SET department_coverage = excluded.department_coverage, updated_at = excluded.updated_at"
+    ).run(req.scope.labId, on, now);
+    res.json({ ok: true, departmentCoverage: on === 1 });
+  });
+
+  app.get("/api/labs/:labId/schedule/shifts/:id/dept-requirements", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!ops(req, res)) return;
+    const rows = sqlite.prepare(
+      "SELECT id, shift_def_id, department, min_staff FROM schedule_shift_dept_requirements WHERE lab_id = ? AND shift_def_id = ? ORDER BY department ASC"
+    ).all(req.scope.labId, Number(req.params.id));
+    res.json(rows);
+  });
+
+  app.post("/api/labs/:labId/schedule/shifts/:id/dept-requirements", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!ops(req, res)) return;
+    const shift = sqlite.prepare("SELECT id FROM schedule_shift_defs WHERE id = ? AND lab_id = ?").get(Number(req.params.id), req.scope.labId);
+    if (!shift) return res.status(404).json({ error: "Shift not found" });
+    const department = typeof req.body?.department === "string" ? req.body.department.trim().slice(0, 60) : "";
+    if (!department) return res.status(400).json({ error: "department required" });
+    const min = Math.max(1, Math.min(99, parseInt(String(req.body?.min_staff ?? 1), 10) || 1));
+    const now = new Date().toISOString();
+    const info = sqlite.prepare(
+      "INSERT INTO schedule_shift_dept_requirements (lab_id, shift_def_id, department, min_staff, created_at) VALUES (?, ?, ?, ?, ?)"
+    ).run(req.scope.labId, Number(req.params.id), department, min, now);
+    res.json({ ok: true, id: info.lastInsertRowid });
+  });
+
+  app.delete("/api/labs/:labId/schedule/dept-requirements/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!ops(req, res)) return;
+    const info = sqlite.prepare(
+      "DELETE FROM schedule_shift_dept_requirements WHERE id = ? AND lab_id = ?"
+    ).run(Number(req.params.id), req.scope.labId);
+    res.json({ ok: true, deleted: info.changes });
+  });
+
   // ── Staff pool (owner -> staff_labs -> staff_employees) ────────────────
   app.get("/api/labs/:labId/schedule/staff", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!ops(req, res)) return;
@@ -197,8 +274,14 @@ export function registerScheduleRoutes(
       department: a.department,
       staff_name: (a.first_name || a.last_name) ? `${a.first_name || ""} ${a.last_name || ""}`.trim() : null,
     }));
-    const coverageGaps = computeCoverageGaps(shiftDefs, rows, period.start_date, period.end_date);
-    res.json({ period, shiftDefs, assignments, coverageGaps });
+    // Phase 3: apply per-department requirements only when the lab has opted in.
+    const settings = sqlite.prepare("SELECT department_coverage FROM schedule_settings WHERE lab_id = ?").get(req.scope.labId) as any;
+    const departmentCoverage = settings?.department_coverage === 1;
+    const deptRequirements = departmentCoverage
+      ? (sqlite.prepare("SELECT shift_def_id, department, min_staff FROM schedule_shift_dept_requirements WHERE lab_id = ?").all(req.scope.labId) as any[])
+      : [];
+    const coverageGaps = computeCoverageGaps(shiftDefs, rows, period.start_date, period.end_date, deptRequirements);
+    res.json({ period, shiftDefs, assignments, coverageGaps, departmentCoverage });
   });
 
   // ── Assignments ────────────────────────────────────────────────────────

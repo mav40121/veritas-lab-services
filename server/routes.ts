@@ -7,6 +7,7 @@ import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
 import { resolveStudyAccess, consumeStudyCredit, isUnlimitedPlan } from "./studyCredits";
+import { defaultReviewIntervalMonthsForState } from "./policyReviewInterval";
 import { resolveSignupPlan } from "./signupPlan";
 import { db, PLAN_SEATS, PLAN_VIEW_ONLY_SEATS, PLAN_PRICES, PLAN_BED_RANGES, suggestTierFromBeds } from "./db";
 import { computeUsageQty, validateTransfer, validateBatch, matchKey, countOnHand, scopeEnterpriseLocations } from "./enterpriseTransfer";
@@ -54,7 +55,27 @@ function licenseCtxFromReq(req: any, productName?: string): LicenseContext {
   // shown in the row-1 license band; defaults to "VeritaAssure\u2122" via
   // normalizeLicenseContext when omitted.
   const u = req?.user || null;
-  const userRow = req?.userId ? storage.getUserById(req.userId) as any : null;
+  // Inline-token export routes (e.g. GET /api/my-studies/export, the cumsum and
+  // demo-map excel routes) parse the JWT themselves and never set req.userId or
+  // req.user, so before this they fell through to the anonymous "Demo Preview"
+  // band AND could never resolve is_demo. Derive an effective user id from the
+  // bearer token when the request carries no attached identity, so the license
+  // band names the real lab and the sample-data stamp resolves. A route with no
+  // token (truly public/demo) still lands in the anonymous branch below.
+  // callerUserId is always the CALLER's own id (req.userId or the id inside the
+  // caller's own bearer token), never a seat owner -- resolveActiveLabForRequest
+  // does its own seat-aware mapping internally.
+  let callerUserId: number | null = req?.userId ? Number(req.userId) : null;
+  if (!callerUserId && !u) {
+    const auth = req?.headers?.authorization;
+    if (typeof auth === "string" && auth.startsWith("Bearer ")) {
+      try {
+        const p = jwt.verify(auth.slice(7), JWT_SECRET) as { userId?: number };
+        if (p?.userId) callerUserId = Number(p.userId);
+      } catch { /* expired/invalid token -> stay anonymous */ }
+    }
+  }
+  const userRow = callerUserId ? storage.getUserById(callerUserId) as any : null;
   // 2026-07-16 (parking-lot #43): prefer the lab the ROUTE already resolved.
   // req.scope.lab is set by labScopeMiddleware from the /api/labs/:labId path
   // param and is membership-validated, and it is the same lab whose name the
@@ -72,18 +93,25 @@ function licenseCtxFromReq(req: any, productName?: string): LicenseContext {
   //
   // The header resolver stays as the fallback for legacy unprefixed routes
   // (/api/veritamap/maps/:id/excel and friends) which have no req.scope.
-  let activeLabName: string | null = req?.scope?.lab?.lab_name || null;
-  if (!activeLabName && req?.userId) {
-    try { activeLabName = resolveActiveLabForRequest(req.userId, req)?.lab_name || null; } catch {}
+  // Resolve the active lab as an object (not just its name) so the export can
+  // read is_demo off it and stamp the sample-data mark. req.scope.lab (curated)
+  // carries is_demo now; the resolveActiveLabForRequest fallback selects *.
+  let activeLab: any = req?.scope?.lab || null;
+  if (!activeLab && callerUserId) {
+    try { activeLab = resolveActiveLabForRequest(callerUserId, req) || null; } catch {}
   }
+  const activeLabName: string | null = activeLab?.lab_name || null;
+  const isDemo = activeLab ? !!activeLab.is_demo : false;
   const labName = activeLabName || userRow?.cliaLabName || userRow?.clia_lab_name || null;
-  if (u?.email) {
+  const email = u?.email || userRow?.email || null;
+  if (email) {
     return {
-      licensee: labName || u.name || u.email,
-      email: u.email,
-      plan: u.plan,
+      licensee: labName || u?.name || userRow?.name || email,
+      email,
+      plan: u?.plan ?? userRow?.plan,
       issueDate: labLocalDate(new Date().toISOString()),
       productName,
+      isDemo,
     };
   }
   const ipRaw = (req?.ip || req?.headers?.["x-forwarded-for"] || "").toString();
@@ -1647,6 +1675,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ userId, count: studies.length, studies });
   });
 
+  // POST /api/admin/studies/reconcile-finalized-status  body { secret, dryRun? }
+  // Backfill for the finalize-status defect: a study finalized while still 'draft'
+  // (an amendment signed off without an intervening non-draft save) kept status
+  // 'draft', so the dashboard listed a signed, passing study as DRAFT (Chineme
+  // Swann / San Carlos, 2026-08-31). Recompute the verification status from each
+  // such row's own data. dryRun reports the changes without writing. ADMIN_SECRET.
+  app.post("/api/admin/studies/reconcile-finalized-status", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const dryRun = req.body?.dryRun === true;
+    const rows = (db as any).$client.prepare(
+      "SELECT * FROM studies WHERE lifecycle_state = 'finalized' AND status = 'draft'"
+    ).all() as any[];
+    const changes: any[] = [];
+    for (const r of rows) {
+      let to = 'draft';
+      try {
+        to = computeStudyStatus(
+          r.study_type, r.data_points, r.instruments, r.clia_allowable_error,
+          r.tea_is_percentage !== 0, r.clia_absolute_floor ?? null, r.censoring_policy ?? 'exclude',
+        );
+      } catch { to = 'draft'; }
+      changes.push({ id: r.id, lab_id: r.lab_id, test_name: r.test_name, amends_study_id: r.amends_study_id, to });
+      if (!dryRun && to !== 'draft') {
+        (db as any).$client.prepare("UPDATE studies SET status = ? WHERE id = ?").run(to, r.id);
+      }
+    }
+    res.json({ candidates: rows.length, applied: dryRun ? 0 : changes.filter(c => c.to !== 'draft').length, dryRun, changes });
+  });
+
   // POST /api/admin/relocate-study — move a study to a different lab_id.
   // Used to back-patch studies created via the legacy /api/studies path
   // before the lab_members-primary dual-write fix, when the row landed on
@@ -2314,7 +2372,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // labs before first report. Refuses to update name or CLIA if the
   // corresponding lock is set (those freeze on first report, per CLAUDE.md §5).
   app.post("/api/admin/update-lab", (req, res) => {
-    const { secret, labId, labName, cliaNumber, accCap, accTjc, accCola, accAabb } = req.body || {};
+    const { secret, labId, labName, cliaNumber, accCap, accTjc, accCola, accAabb, isDemo } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     if (!labId) return res.status(400).json({ error: "labId required" });
 
@@ -2348,6 +2406,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (accTjc !== undefined)  { updates.push("accreditation_tjc = ?");  params.push(accTjc ? 1 : 0); }
     if (accCola !== undefined) { updates.push("accreditation_cola = ?"); params.push(accCola ? 1 : 0); }
     if (accAabb !== undefined) { updates.push("accreditation_aabb = ?"); params.push(accAabb ? 1 : 0); }
+    if (isDemo !== undefined)  { updates.push("is_demo = ?");            params.push(isDemo ? 1 : 0); }
 
     if (updates.length === 0) return res.status(400).json({ error: "Nothing to update" });
 
@@ -2729,10 +2788,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).get(Number(labId), seatUserId) as any;
       if (dupMember) return res.status(409).json({ error: "User is already a member of this lab" });
     }
+    // Seat uniqueness is PER LAB (see /api/labs/:labId/members). Scope by lab so
+    // a person seated on one of the owner's labs can still be invited to another.
     const dupSeat = sqlite.prepare(
-      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status != 'deactivated'"
-    ).get(labOwnerId, normalizedEmail) as any;
-    if (dupSeat) return res.status(409).json({ error: "This email already has a seat under the lab owner" });
+      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status != 'deactivated'"
+    ).get(labOwnerId, normalizedEmail, Number(labId)) as any;
+    if (dupSeat) return res.status(409).json({ error: "This email already has a seat on this lab" });
 
     const now = new Date().toISOString();
     const newStatus = seatUserId ? "active" : "pending";
@@ -2741,8 +2802,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       sqlite.exec("BEGIN");
       const deactivated = sqlite.prepare(
-        "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status = 'deactivated'"
-      ).get(labOwnerId, normalizedEmail) as any;
+        "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status = 'deactivated'"
+      ).get(labOwnerId, normalizedEmail, Number(labId)) as any;
       if (deactivated) {
         sqlite.prepare(
           "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ?, lab_id = ?, seat_type = ? WHERE id = ?"
@@ -2765,8 +2826,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(500).json({ error: err.message || "Failed to create invite" });
     }
     const seat = sqlite.prepare(
-      "SELECT id, owner_user_id, seat_email, seat_user_id, status, lab_id, invite_token, permissions, invited_at FROM user_seats WHERE owner_user_id = ? AND seat_email = ?"
-    ).get(labOwnerId, normalizedEmail);
+      "SELECT id, owner_user_id, seat_email, seat_user_id, status, lab_id, invite_token, permissions, invited_at FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ?"
+    ).get(labOwnerId, normalizedEmail, Number(labId));
     const inviteUrl = `https://www.veritaslabservices.com/join?token=${inviteToken}`;
     // Do not log the invite token: it grants join access to the lab. Keep the
     // rest of the line for operational debugging.
@@ -4787,6 +4848,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     if (!ownerUserId || !seatEmail || !seatUserId) return res.status(400).json({ error: "ownerUserId, seatEmail, seatUserId required" });
     const sqlite = db.$client;
+    // seat-scope-ok: legacy admin tool, lab-less by design (creates one seat with
+    // no lab_id, no labId param). NOT the multi-lab customer path
+    // (/api/labs/:labId/members is). Admin-gated; a cross-lab DELETE here is a
+    // known limitation flagged for a follow-up labId pass or retirement.
     // Remove any existing seat records for this email under this owner
     sqlite.prepare("DELETE FROM user_seats WHERE owner_user_id = ? AND seat_email = ?").run(Number(ownerUserId), seatEmail);
     // Insert as active seat with full permissions
@@ -4799,6 +4864,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const ownerUser = sqlite.prepare("SELECT plan FROM users WHERE id = ?").get(Number(ownerUserId)) as any;
     const inheritedPlan = ownerUser?.plan || 'community';
     sqlite.prepare("UPDATE users SET plan = ?, study_credits = 99999 WHERE id = ?").run(inheritedPlan, Number(seatUserId)); // PHASE5-OK seat-user inherits owner plan during onboarding
+    // seat-scope-ok: legacy attach-seat (lab-less; see DELETE above).
     const seat = sqlite.prepare("SELECT * FROM user_seats WHERE owner_user_id = ? AND seat_email = ?").get(Number(ownerUserId), seatEmail) as any;
     res.json({ ok: true, seat });
   });
@@ -6121,6 +6187,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         l.accreditation_tjc,
         l.accreditation_cola,
         l.accreditation_aabb,
+        l.is_demo,
         l.primary_regime,
         l.nys_permit_type,
         (SELECT sl.lab_address_state FROM staff_labs sl
@@ -6163,11 +6230,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       accreditationTjc: !!m.accreditation_tjc,
       accreditationCola: !!m.accreditation_cola,
       accreditationAabb: !!m.accreditation_aabb,
+      // USON bake-off: labs flagged is_demo=1 carry representative sample
+      // data (no real facility, no real measurements). Surfaced so the
+      // NavBar can mount a persistent "sample data" banner and exports can
+      // stamp a watermark. Optional on the client for deploy skew.
+      isDemo: !!m.is_demo,
       // NYS CLEP Phase-0: jurisdiction regime (default CLIA). nysSuggested is a
       // soft hint (owner's physical state is NY) that never auto-applies.
       primaryRegime: m.primary_regime || 'CLIA',
       nysPermitType: m.nys_permit_type || 'none',
       nysSuggested: m.primary_regime !== 'NYS-CLEP' && String(m.owner_state || '').toUpperCase() === 'NY',
+      // Default policy review interval (months) for a NEW policy on this lab:
+      // biennial (24) at the CLIA/CAP floor, annual (12) where the lab's state
+      // requires it (MA). The upload dialog seeds its picker from this; the
+      // server recomputes the same value when the field is omitted. Existing
+      // policies are never re-stamped.
+      defaultReviewIntervalMonths: defaultReviewIntervalMonthsForState(m.owner_state),
       lastActiveAt: m.last_active_at,
       plan: m.plan,
       subscriptionStatus: m.subscription_status,
@@ -6407,7 +6485,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
              l.plan_expires_at AS plan_expires_at, l.stripe_customer_id AS stripe_customer_id,
              l.lab_name AS lab_name, l.clia_number AS clia_number,
              l.accreditation_tjc AS accreditation_tjc, l.accreditation_cap AS accreditation_cap,
-             l.accreditation_cola AS accreditation_cola, l.accreditation_aabb AS accreditation_aabb
+             l.accreditation_cola AS accreditation_cola, l.accreditation_aabb AS accreditation_aabb,
+             l.is_demo AS is_demo
       FROM lab_members lm
       LEFT JOIN labs l ON l.id = lm.lab_id
       WHERE lm.user_id = ? AND lm.lab_id = ? AND lm.status = 'active' LIMIT 1
@@ -6458,6 +6537,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         accreditation_cap: row.accreditation_cap,
         accreditation_cola: row.accreditation_cola,
         accreditation_aabb: row.accreditation_aabb,
+        // USON bake-off: carried so licenseCtxFromReq can stamp the sample-data
+        // mark on this lab's PDF/Excel exports without a second query.
+        is_demo: row.is_demo,
       },
     };
 
@@ -9703,9 +9785,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const sqlite = (db as any).$client;
     // parking-lot #33 PR 4: surface seat_type on each member row so the UI
     // can render writer-vs-reviewer chips. LEFT JOIN user_seats on
-    // (owner_user_id, seat_user_id) so the owner row (no matching seat)
+    // (owner_user_id, seat_user_id, lab_id) so the owner row (no matching seat)
     // falls back to 'active', which matches the counting-gate rule
-    // (owner always counts against the active cap).
+    // (owner always counts against the active cap). The us.lab_id = lm.lab_id
+    // condition is REQUIRED: seats are per-lab, so a member seated on two of
+    // the owner's labs has two active user_seats rows; without the lab_id scope
+    // the join fans out and the member renders twice in this lab's list (the
+    // 2026-09-08 Milford duplicate-member report). Same read-side seat-scoping
+    // class as PR #1247.
     const lab = sqlite.prepare("SELECT owner_user_id, medical_director_email, medical_director_name FROM labs WHERE id = ?").get(req.scope.labId) as any;
     const ownerUserId = lab?.owner_user_id ?? null;
     // Designated Medical Director (may be an active member OR a pending
@@ -9725,6 +9812,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ON us.seat_user_id = lm.user_id
        AND us.owner_user_id = ?
        AND us.status = 'active'
+       AND us.lab_id = lm.lab_id
       WHERE lm.lab_id = ? AND lm.status = 'active'
       ORDER BY CASE lm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, lm.created_at ASC
     `).all(ownerUserId, req.scope.labId);
@@ -9955,10 +10043,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).get(req.scope.labId, seatUserId) as any;
       if (dupMember) return res.status(409).json({ error: "User is already a member of this lab" });
     }
+    // Seat uniqueness is PER LAB: user_seats rows are lab-scoped (lab_id), so a
+    // person who holds a seat on one of the owner's labs must still be invitable
+    // to a DIFFERENT lab under the same owner. Scoping this by owner+email alone
+    // wrongly blocked multi-lab membership (the "This email already has a seat
+    // under the lab owner" wall). See scripts/verify-seat-lab-scoping.mjs.
     const dupSeat = sqlite.prepare(
-      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status != 'deactivated'"
-    ).get(labOwnerId, normalizedEmail) as any;
-    if (dupSeat) return res.status(409).json({ error: "This email already has a seat under the lab owner" });
+      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status != 'deactivated'"
+    ).get(labOwnerId, normalizedEmail, req.scope.labId) as any;
+    if (dupSeat) return res.status(409).json({ error: "This email already has a seat on this lab" });
 
     const now = new Date().toISOString();
     const newStatus = seatUserId ? "active" : "pending";
@@ -9979,8 +10072,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       sqlite.exec("BEGIN");
       // Reactivate previously deactivated seat row if any.
       const deactivated = sqlite.prepare(
-        "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status = 'deactivated'"
-      ).get(labOwnerId, normalizedEmail) as any;
+        "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status = 'deactivated'"
+      ).get(labOwnerId, normalizedEmail, req.scope.labId) as any;
       if (deactivated) {
         sqlite.prepare(
           "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ?, lab_id = ?, seat_type = ? WHERE id = ?"
@@ -10362,9 +10455,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     // Duplicate-invite guard.
     const dupSeat = sqlite.prepare(
-      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status != 'deactivated'"
-    ).get(labOwnerId, normalizedEmail) as any;
-    if (dupSeat) return res.status(409).json({ error: "This email already has a seat under the lab owner. Use the seat list to manage it." });
+      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status != 'deactivated'"
+    ).get(labOwnerId, normalizedEmail, req.scope.labId) as any;
+    if (dupSeat) return res.status(409).json({ error: "This email already has a seat on this lab. Use the seat list to manage it." });
 
     const existingUser = storage.getUserByEmail(normalizedEmail);
     const seatUserId = existingUser ? existingUser.id : null;
@@ -10387,8 +10480,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       sqlite.exec("BEGIN");
       const deactivated = sqlite.prepare(
-        "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status = 'deactivated'"
-      ).get(labOwnerId, normalizedEmail) as any;
+        "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status = 'deactivated'"
+      ).get(labOwnerId, normalizedEmail, req.scope.labId) as any;
       if (deactivated) {
         sqlite.prepare(
           "UPDATE user_seats SET seat_user_id = NULL, status = 'pending', invited_at = ?, accepted_at = NULL, permissions = ?, invite_token = ?, lab_id = ?, seat_type = 'staff_portal', staff_employee_id = ? WHERE id = ?"
@@ -10532,8 +10625,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const lab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
     if (!lab) return res.status(404).json({ error: "Lab not found" });
     const seat = sqlite.prepare(
-      "SELECT id, permissions FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status != 'deactivated'"
-    ).get(lab.owner_user_id, String(member.email).toLowerCase()) as any;
+      "SELECT id, permissions FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status != 'deactivated'"
+    ).get(lab.owner_user_id, String(member.email).toLowerCase(), req.scope.labId) as any;
     if (!seat) return res.status(404).json({ error: "Seat row not found for this member" });
     const before = seat.permissions;
     const after = JSON.stringify(permissions);
@@ -10561,10 +10654,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       sqlite.prepare("DELETE FROM lab_members WHERE id = ?").run(memberId);
       // Also deactivate the matching user_seats row (matches the lab owner's seat pool).
       const userRow = sqlite.prepare("SELECT email FROM users WHERE id = ?").get(member.user_id) as any;
+      // Deactivate ONLY this lab's seat. Without the lab_id scope, removing a
+      // member from one lab would deactivate that person's seat on every other
+      // lab under the same owner (silent cross-lab access loss).
       if (userRow?.email && lab?.owner_user_id) {
         sqlite.prepare(
-          "UPDATE user_seats SET status = 'deactivated' WHERE owner_user_id = ? AND seat_email = ? AND status != 'deactivated'"
-        ).run(lab.owner_user_id, String(userRow.email).toLowerCase());
+          "UPDATE user_seats SET status = 'deactivated' WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status != 'deactivated'"
+        ).run(lab.owner_user_id, String(userRow.email).toLowerCase(), req.scope.labId);
       }
       sqlite.exec("COMMIT");
     } catch (err: any) {
@@ -11951,11 +12047,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // finalized signature + timestamp + signer and, for an amendment, archives
   // the superseded original. Caller owns validation and the response.
   function finalizeStudyRowInPlace(userId: number, studyRow: any, signature: string, now: string) {
+    // Reconcile status. A finalized study is a completed compliance record, so its
+    // status must reflect its verification result (pass/fail), never 'draft'. An
+    // amendment is cloned in 'draft' state (see applyStudyAmend); signed off without
+    // an intervening non-draft save, its status would stay 'draft' and the dashboard
+    // would list a signed, passing amendment as DRAFT (Chineme Swann / San Carlos,
+    // 2026-08-31). Recompute from the row's own data; leave as-is if it cannot.
+    let finalStatus = studyRow.status;
+    if (finalStatus === 'draft') {
+      try {
+        finalStatus = computeStudyStatus(
+          studyRow.study_type, studyRow.data_points, studyRow.instruments,
+          studyRow.clia_allowable_error, studyRow.tea_is_percentage !== 0,
+          studyRow.clia_absolute_floor ?? null, studyRow.censoring_policy ?? 'exclude',
+        );
+      } catch { finalStatus = studyRow.status; }
+    }
     (db as any).$client.prepare(`
-      UPDATE studies SET lifecycle_state = 'finalized',
+      UPDATE studies SET lifecycle_state = 'finalized', status = ?,
         finalized_at = ?, finalized_by_user_id = ?, finalized_signature = ?
       WHERE id = ?
-    `).run(now, userId, signature, studyRow.id);
+    `).run(finalStatus, now, userId, signature, studyRow.id);
     // 2026-06-15: signing off an amendment auto-archives the original it
     // supersedes (the row amends_study_id points to), so the active list shows
     // only the current valid result while the superseded original is retained
@@ -12226,6 +12338,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       let cliaLabName: string | undefined;
       let preferredStandards: string[] | undefined;
       let resolvedLabId: number | null = null;
+      let resolvedIsDemo = false;
       let licenseCtx: LicenseContext | undefined;
       const auth = req.headers.authorization;
       if (auth?.startsWith("Bearer ")) {
@@ -12238,6 +12351,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           const lab = resolveActiveLabForRequest(payload.userId, req);
           if (lab) {
             resolvedLabId = lab.id;
+            resolvedIsDemo = !!lab.is_demo;
             cliaNumber = lab.clia_number || undefined;
             cliaLabName = lab.lab_name || undefined;
             const standards: string[] = [];
@@ -12271,6 +12385,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               email: idUser.email,
               plan: idUser.plan,
               issueDate: labLocalDate(new Date().toISOString()),
+              isDemo: resolvedIsDemo,
             };
           }
         } catch (err: any) {
@@ -14595,7 +14710,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // caller's membership, not users.lab_id (the home lab). The old home-lab read
     // showed one lab's correlations on every other lab's VeritaMap page.
     const callerLabId = resolveActiveLabForRequest(callerUserId, req)?.id;
-    if (!callerLabId) return res.status(403).json({ error: "Caller has no lab_id assigned" });
+    // A brand-new account (mid-onboarding, no lab built yet) legitimately has no
+    // correlations due: return an empty list, not 403. This widget loads on the
+    // post-signup dashboard, so a 403 here was a console error on every new user's
+    // first screen (onboarding audit 2026-09-08). "No lab" is empty, not forbidden.
+    if (!callerLabId) return res.json([]);
     const days = Math.max(0, Math.min(365, parseInt(String(req.query.days ?? "60"), 10) || 60));
     const cutoff = new Date(Date.now() + days * 86400_000).toISOString().slice(0, 10);
 
@@ -26498,6 +26617,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     const now = new Date().toISOString();
+    // seat-scope-ok: legacy account-level seat invite. Routes to the owner's
+    // PRIMARY lab (no labId concept). The lab-scoped /api/labs/:labId/members is
+    // the multi-lab path; this one is left single-lab intentionally and flagged
+    // for Michael (harden with a labId or retire).
     const existingActive = (db as any).$client.prepare(
       "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status != 'deactivated'"
     ).get(req.userId, email.toLowerCase());
@@ -26522,6 +26645,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const inviteToken = crypto.randomUUID();
 
     // Reactivate a previously deactivated seat if one exists
+    // seat-scope-ok: legacy account-level invite (primary-lab; see above).
     const deactivated = (db as any).$client.prepare(
       "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status = 'deactivated'"
     ).get(req.userId, email.toLowerCase()) as any;
@@ -28242,6 +28366,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           nonWaived: [],
           gaps: [],
           alreadyCovered: [],
+          enrolledCategories: [],
           recommendations: [],
         });
       }
@@ -28283,44 +28408,106 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // partial order. Now: match by alias, then recommend one API + one CAP
       // program per ptCategory that has a gap. See cliaAnalytes.ts.
       const nzKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-      const analyteLut = new Map<string, (typeof cliaAnalytes)[number]>();
+
+      // Menu specialty -> PT discipline (values MUST be CATEGORY_PROGRAMS keys).
+      // The lab's own specialty tag is used two ways below: to DISAMBIGUATE an
+      // ambiguous alias (e.g. "AST" is both Aspartate Aminotransferase and
+      // Antimicrobial Susceptibility Testing; on a chemistry-only lab like CW Bylas
+      // the enzyme is meant, not a micro program), and to ROLL UP an analyte the
+      // reference does not carry (CBC differential sub-cells, urine dipstick pads,
+      // individual drugs of abuse, co-oximetry) to its discipline instead of
+      // dropping it as Unmapped.
+      const SPECIALTY_TO_PTCATEGORY: Record<string, string> = {
+        "general chemistry": "General Chemistry",
+        "electrolytes": "General Chemistry",
+        "special chemistry": "Special Chemistry",
+        "blood gas": "Special Chemistry",
+        "endocrinology": "Endocrinology",
+        "toxicology": "Toxicology / TDM",
+        "therapeutic drug monitoring": "Toxicology / TDM",
+        "immunology": "Immunology / Serology",
+        "general immunology": "Immunology / Serology",
+        "serology": "Immunology / Serology",
+        "hematology": "Hematology",
+        "coagulation": "Coagulation",
+        "immunohematology": "Blood Bank / Immunohematology",
+        "blood bank": "Blood Bank / Immunohematology",
+        "transfusion": "Blood Bank / Immunohematology",
+        "microbiology": "Microbiology",
+        "urinalysis": "Urinalysis",
+      };
+      const specialtyCategory = (spec?: string | null): string | null =>
+        (spec ? SPECIALTY_TO_PTCATEGORY[spec.toLowerCase().trim()] : undefined) ?? null;
+
+      // Multimap: an ambiguous alias keeps EVERY candidate entry. First-write-wins
+      // silently resolved "AST" to Antimicrobial Susceptibility Testing, so a
+      // chemistry-only lab was handed a Microbiology program it never runs.
+      const analyteLut = new Map<string, (typeof cliaAnalytes)[number][]>();
       for (const a of cliaAnalytes) {
         for (const key of [a.name, ...a.aliases]) {
           const k = nzKey(key);
-          if (k && !analyteLut.has(k)) analyteLut.set(k, a);
+          if (!k) continue;
+          const arr = analyteLut.get(k) || [];
+          if (!arr.includes(a)) arr.push(a);
+          analyteLut.set(k, arr);
         }
       }
-      const matchAnalyte = (raw: string): (typeof cliaAnalytes)[number] | null => {
-        const direct = analyteLut.get(nzKey(raw));
+      // Choose an entry for a key, preferring the one whose discipline matches the
+      // menu item's specialty when the alias is ambiguous.
+      const pick = (arr: (typeof cliaAnalytes)[number][] | undefined, wantCat: string | null) => {
+        if (!arr || arr.length === 0) return null;
+        if (arr.length === 1 || !wantCat) return arr[0];
+        return arr.find(a => a.ptCategory === wantCat) || arr[0];
+      };
+      const matchAnalyte = (raw: string, specialty?: string | null): (typeof cliaAnalytes)[number] | null => {
+        const wantCat = specialtyCategory(specialty);
+        const direct = pick(analyteLut.get(nzKey(raw)), wantCat);
         if (direct) return direct;
         // Fall back to the leading phrase and any parenthetical abbreviations, so
         // "Alanine aminotransferase (ALT) (SGPT)" still resolves to ALT.
         const cands = [raw.split("(")[0], ...((raw.match(/\(([^)]+)\)/g) || []).map(x => x.replace(/[()]/g, "")))];
         for (const cand of cands) {
-          const hit = analyteLut.get(nzKey(cand));
+          const hit = pick(analyteLut.get(nzKey(cand)), wantCat);
           if (hit) return hit;
           for (const sub of cand.split(/[\/,]/)) {
-            const h2 = analyteLut.get(nzKey(sub));
+            const h2 = pick(analyteLut.get(nzKey(sub)), wantCat);
             if (h2) return h2;
           }
         }
         return null;
       };
 
-      // 5. Classify the non-waived menu: canonical name + ptCategory per analyte
-      // (Unmapped when no reference match exists, e.g. an analyzer sub-parameter).
+      // 5. Classify the non-waived menu: canonical name + ptCategory per analyte.
+      // No reference match: roll the analyte up to its discipline via the menu's
+      // specialty tag; only a specialty we cannot map falls through to "Unmapped".
       const classified: { canonical: string; ptCategory: string }[] = [];
       const seenCanon = new Set<string>();
       for (const t of nonWaived) {
-        const m = matchAnalyte(t.analyte);
+        const m = matchAnalyte(t.analyte, t.specialty);
         const canonical = m ? m.name : t.analyte;
         const dk = nzKey(canonical);
         if (seenCanon.has(dk)) continue;
         seenCanon.add(dk);
-        classified.push({ canonical, ptCategory: m ? m.ptCategory : "Unmapped" });
+        classified.push({ canonical, ptCategory: m ? m.ptCategory : (specialtyCategory(t.specialty) ?? "Unmapped") });
       }
 
-      // 6. Already-covered = a current active enrollment matches the analyte.
+      // 6. Already-covered = a current enrollment covers the analyte, read from
+      // BOTH enrollment stores:
+      //   - pt_enrollments (v1, analyte-level): a per-analyte active enrollment.
+      //   - pt_enrollments_v2 (category-level): a discipline enrollment (vendor +
+      //     program + pt_category). This is how the PT Enrollment page and every
+      //     real lab (San Carlos) actually records API/CAP coverage. The engine
+      //     used to read ONLY v1, so a lab enrolled through the normal v2 UI came
+      //     back alreadyCovered=0 and every discipline it already holds was
+      //     re-recommended. Netting v2 turns the output from a "what your menu
+      //     needs" map into a "what you still need to buy" list.
+      // v2 pt_category values share the ptCategory vocabulary (the same strings
+      // used by CATEGORY_PROGRAMS and the analyte reference), so category coverage
+      // is a direct membership test. Any v2 enrollment row counts as current
+      // coverage, matching the PT Enrollment status page (~line 19312), which
+      // likewise treats an enrollment row as active without a year filter. If a
+      // lab keeps stale enrollment rows, correct them on the enrollment page; the
+      // engine reflects what is recorded rather than second-guessing it.
       const ptEnrollments = (db as any).$client.prepare(
         labId
           ? "SELECT analyte FROM pt_enrollments WHERE lab_id = ? AND status = 'active'"
@@ -28331,12 +28518,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const m = matchAnalyte(e.analyte);
         enrolledSet.add(nzKey(m ? m.name : e.analyte));
       }
+      const ptEnrollmentsV2 = (db as any).$client.prepare(
+        labId
+          ? "SELECT pt_category FROM pt_enrollments_v2 WHERE lab_id = ?"
+          : "SELECT pt_category FROM pt_enrollments_v2 WHERE user_id = ?"
+      ).all(labId ?? userId) as { pt_category: string }[];
+      const enrolledCategories = new Set<string>();
+      for (const e of ptEnrollmentsV2) {
+        if (e.pt_category) enrolledCategories.add(e.pt_category.trim());
+      }
 
       const alreadyCovered: string[] = [];
       const gaps: string[] = [];
       const gapByCategory = new Map<string, string[]>();
       for (const c of classified) {
-        if (enrolledSet.has(nzKey(c.canonical))) {
+        const coveredByAnalyte = enrolledSet.has(nzKey(c.canonical));
+        const coveredByCategory = c.ptCategory !== "Unmapped" && enrolledCategories.has(c.ptCategory);
+        if (coveredByAnalyte || coveredByCategory) {
           alreadyCovered.push(c.canonical);
         } else {
           gaps.push(c.canonical);
@@ -28397,6 +28595,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         nonWaived,
         gaps,
         alreadyCovered,
+        enrolledCategories: Array.from(enrolledCategories).sort(),
         recommendations,
       });
     } catch (err: any) {
@@ -29738,16 +29937,38 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
     }
 
-    // Template data_points per type from an existing passing study, so a seeded
-    // study opens cleanly in the UI. Falls back to an empty-but-valid array.
-    const templateData = (studyType: string): string => {
-      const t = sqlite.prepare(
-        `SELECT data_points FROM studies WHERE study_type = ? AND data_points IS NOT NULL AND length(data_points) > 2 AND status IN ('pass','completed') ORDER BY id LIMIT 1`
-      ).get(studyType) as { data_points: string } | undefined;
-      return t?.data_points || "[]";
-    };
-    const calTemplate = templateData("cal_ver");
-    const mcTemplate = templateData("method_comparison");
+    // Generate pass-clean data_points KEYED to the seeded study's OWN instrument
+    // label(s), so the stored verdict genuinely passes computeStudyStatus on every
+    // boot recompute (server/index.ts / routes.ts recomputeAllStudyStatuses).
+    //
+    // The prior approach copied data_points from an existing passing study; that
+    // template's instrumentValues were keyed on the TEMPLATE study's instrument
+    // (e.g. "ASSAYER"), while the new study's `instruments` were the real map
+    // labels. computeStudyStatus looks up instrumentValues[<study instrument>],
+    // found nothing (totalCount = 0), and returned "fail" -- so every boot
+    // recompute flipped these seeded studies to FAIL even though the INSERT wrote
+    // status='pass' (USON demo, 0-passing/all-failing, 2026-09-08). Generating the
+    // points keyed to the study's own label(s) makes the verdict durable.
+    //
+    // cal_ver: 5 levels, recovery within ~2% (well under the 7.5% percent TEa).
+    // method_comparison: instruments within the absolute TEa (4). Values are
+    // representative demo numbers; the verdict is relative so the scale is arbitrary.
+    const genCalVer = (label: string): string => JSON.stringify(
+      [50, 100, 150, 200, 250].map((assigned, i) => ({
+        level: i + 1,
+        expectedValue: assigned,
+        instrumentValues: { [label]: Number((assigned * [1.01, 0.985, 1.01, 1.015, 0.992][i]).toFixed(2)) },
+      }))
+    );
+    const genMethodComp = (labels: string[]): string => JSON.stringify(
+      [50, 100, 150, 200, 250].map((base, i) => ({
+        level: i + 1,
+        expectedValue: null,
+        instrumentValues: Object.fromEntries(
+          labels.map((lab, j) => [lab, j === 0 ? base : Number((base + (1 + (j % 3))).toFixed(2))]),
+        ),
+      }))
+    );
     const insStudy = sqlite.prepare(`
       INSERT INTO studies (user_id, lab_id, test_name, instrument, analyst, date, study_type,
         clia_allowable_error, tea_is_percentage, tea_unit, data_points, instruments,
@@ -29786,7 +30007,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const label = instLabel(inst);
       if (existsCalSeed.get(lid, MARK, cb.analyte, label)) { calSkipped++; continue; }
       if (!dryRun) insStudy.run(lab.owner_user_id, lid, cb.analyte, label, ANALYST, today, "cal_ver",
-        0.075, 1, "%", calTemplate, JSON.stringify([label]), now, lab.owner_user_id, lab.owner_user_id, cb.analyte, MARK, now);
+        0.075, 1, "%", genCalVer(label), JSON.stringify([label]), now, lab.owner_user_id, lab.owner_user_id, cb.analyte, MARK, now);
       calSeeded++;
     }
 
@@ -29831,7 +30052,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         mcRepaired++;
       } else {
         if (!dryRun) insStudy.run(lab.owner_user_id, lid, analyte, labels.join(", "), ANALYST, today, "method_comparison",
-          4, 0, "", mcTemplate, JSON.stringify(labels), now, lab.owner_user_id, lab.owner_user_id, analyte, MARK, now);
+          4, 0, "", genMethodComp(labels), JSON.stringify(labels), now, lab.owner_user_id, lab.owner_user_id, analyte, MARK, now);
         mcSeeded++;
       }
     }
@@ -32278,7 +32499,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const manualIdRaw = req.body?.manual_id;
       const manualId =
         manualIdRaw !== undefined && manualIdRaw !== "" ? Number(manualIdRaw) : null;
-      const reviewIntervalMonths = Number(req.body?.review_interval_months ?? 12);
+      // Default review interval when the caller omits it: biennial (24mo) at the
+      // CLIA/CAP floor, annual (12mo) for labs whose state requires it (MA),
+      // keyed off the same owner-state signal /api/labs/me uses. An explicit
+      // value from the picker always wins. This applies to NEW uploads only;
+      // existing policies keep their stored interval.
+      const rawReviewInterval = req.body?.review_interval_months;
+      const labStateRow = sqlite
+        .prepare(
+          `SELECT (SELECT sl.lab_address_state FROM staff_labs sl
+                     WHERE sl.user_id = l.owner_user_id ORDER BY sl.id DESC LIMIT 1) AS state
+             FROM labs l WHERE l.id = ?`
+        )
+        .get(labId) as { state?: string } | undefined;
+      const stateDefaultInterval = defaultReviewIntervalMonthsForState(labStateRow?.state);
+      const reviewIntervalMonths =
+        rawReviewInterval === undefined || rawReviewInterval === null || rawReviewInterval === ""
+          ? stateDefaultInterval
+          : Number(rawReviewInterval);
 
       const title =
         titleOverride && titleOverride.length > 0
@@ -32310,7 +32548,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           title,
           description,
           req.userId,
-          Number.isFinite(reviewIntervalMonths) ? reviewIntervalMonths : 12
+          Number.isFinite(reviewIntervalMonths) ? reviewIntervalMonths : stateDefaultInterval
         );
       const documentId = Number(docInsert.lastInsertRowid);
       const versionNumber = 1;

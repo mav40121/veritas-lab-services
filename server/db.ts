@@ -1280,6 +1280,25 @@ sqlite.exec(`
   CREATE INDEX IF NOT EXISTS idx_sched_periods_lab ON schedule_periods(lab_id);
   CREATE INDEX IF NOT EXISTS idx_sched_assign_period ON schedule_assignments(period_id);
   CREATE INDEX IF NOT EXISTS idx_sched_assign_lab ON schedule_assignments(lab_id);
+  -- Phase 3 (department/bench-level coverage). Per-lab opt-in; OFF by default so
+  -- the shipped shift-level scheduler is unchanged. When on, a shift can require
+  -- a minimum number of staff PER department, and coverage gaps are computed per
+  -- (date, shift, department) using schedule_assignments.department.
+  CREATE TABLE IF NOT EXISTS schedule_settings (
+    lab_id INTEGER PRIMARY KEY,
+    department_coverage INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT
+  );
+  CREATE TABLE IF NOT EXISTS schedule_shift_dept_requirements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    shift_def_id INTEGER NOT NULL,
+    department TEXT NOT NULL,
+    min_staff INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_sched_deptreq_lab ON schedule_shift_dept_requirements(lab_id);
+  CREATE INDEX IF NOT EXISTS idx_sched_deptreq_shift ON schedule_shift_dept_requirements(shift_def_id);
 `);
 // Column guards (NEW DB TABLE RULE): literal per-table so the migration audit
 // sees them, and so an older partial table on the live volume gets its columns.
@@ -1292,6 +1311,10 @@ if (!schedPeriodCols.includes("status")) sqlite.exec("ALTER TABLE schedule_perio
 if (!schedPeriodCols.includes("published_at")) sqlite.exec("ALTER TABLE schedule_periods ADD COLUMN published_at TEXT");
 const schedAssignCols = (sqlite.prepare("PRAGMA table_info(schedule_assignments)").all() as { name: string }[]).map(c => c.name);
 if (!schedAssignCols.includes("department")) sqlite.exec("ALTER TABLE schedule_assignments ADD COLUMN department TEXT");
+const schedSettingsCols = (sqlite.prepare("PRAGMA table_info(schedule_settings)").all() as { name: string }[]).map(c => c.name);
+if (!schedSettingsCols.includes("department_coverage")) sqlite.exec("ALTER TABLE schedule_settings ADD COLUMN department_coverage INTEGER NOT NULL DEFAULT 0");
+const schedDeptReqCols = (sqlite.prepare("PRAGMA table_info(schedule_shift_dept_requirements)").all() as { name: string }[]).map(c => c.name);
+if (!schedDeptReqCols.includes("min_staff")) sqlite.exec("ALTER TABLE schedule_shift_dept_requirements ADD COLUMN min_staff INTEGER NOT NULL DEFAULT 1");
 
 // Add specimen_info column to competency_assessment_items if upgrading
 const compItemCols = sqlite.prepare("PRAGMA table_info(competency_assessment_items)").all() as { name: string }[];
@@ -1829,6 +1852,7 @@ sqlite.exec(`
     accreditation_aabb INTEGER NOT NULL DEFAULT 0,
     clia_locked INTEGER NOT NULL DEFAULT 0,
     lab_name_locked INTEGER NOT NULL DEFAULT 0,
+    is_demo INTEGER NOT NULL DEFAULT 0,
     owner_user_id INTEGER NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -2023,6 +2047,7 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
   // paid/comped lab is untouched (pure ALTER+DEFAULT, no cascading writes); the
   // specific trial labs are marked via POST /api/admin/set-lab-trial.
   ensure("is_trial",                   "ALTER TABLE labs ADD COLUMN is_trial INTEGER NOT NULL DEFAULT 0");
+  ensure("is_demo",                    "ALTER TABLE labs ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0"); // representative/sample-data tenant -> UI banner + export stamp (USON demo labs)
   ensure("preferred_pt_vendor",        "ALTER TABLE labs ADD COLUMN preferred_pt_vendor TEXT");
   // NYS CLEP Phase-0 (2026-07-10): per-lab jurisdiction regime. NY is a
   // CLIA-exempt state; a NY lab is DUAL — NYS DOH/CLEP for state jurisdiction
@@ -5954,7 +5979,7 @@ sqlite.exec(`
     owner_user_id INTEGER NOT NULL,
     effective_date TEXT,
     next_review_date TEXT,
-    review_interval_months INTEGER NOT NULL DEFAULT 12,
+    review_interval_months INTEGER NOT NULL DEFAULT 24, -- biennial floor; the upload route overrides to 12 for annual-review states (MA). See server/policyReviewInterval.ts.
     -- FK to policy_approval_workflows.id; null means no workflow
     -- assigned yet (document sits in draft until workflow chosen).
     workflow_id INTEGER,

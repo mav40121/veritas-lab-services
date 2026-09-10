@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, Award, Users, Shield, ShieldCheck, BarChart3, FlaskConical, BookOpen, ExternalLink, CheckCircle2, Star, Play, MapPin, AlertTriangle, ArrowRight, Briefcase, Wrench, Handshake, GraduationCap, Building2, UserCheck } from "lucide-react";
+import { ChevronRight, Award, Users, Shield, ShieldCheck, BarChart3, FlaskConical, BookOpen, ExternalLink, CheckCircle2, Star, Play, MapPin, AlertTriangle, Briefcase, Wrench, Handshake, GraduationCap, Building2, UserCheck } from "lucide-react";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
 import { SampleReportsSection } from "@/components/SampleReportsSection";
 
@@ -13,7 +13,7 @@ const services = [
   { icon: BarChart3, title: "Productivity Analysis", desc: "Expert on-site assessment of workflows, staffing, and resources using industry benchmarks. Actionable reports with data-driven recommendations." },
   { icon: BookOpen, title: "Educational Webinars", desc: "Facility webinars on blood administration, QC/QA, delegation of authority, and lab survey preparation, tailored to your team's needs." },
   { icon: Award, title: "Interim Lab Director", desc: "Experienced interim Lab Administrative Directors who ensure uninterrupted operations and regulatory compliance during leadership transitions." },
-  { icon: FlaskConical, title: "VeritaCheck™ - Lab Study Platform", desc: "The performance-verification module of your compliance platform: automated Calibration Verification / Linearity, Correlation / Method Comparison, and precision studies with surveyor-ready, CFR-cited PDF reports.", link: "/veritacheck", linkLabel: "Try VeritaCheck™ Free" },
+  { icon: FlaskConical, title: "VeritaCheck™ - Lab Study Platform", desc: "The performance-verification module of your compliance platform: automated Calibration Verification / Linearity, Correlation / Method Comparison, and precision studies with surveyor-ready, CFR-cited PDF reports.", link: "/register", linkLabel: "Try VeritaCheck™ Free" },
 ];
 
 const stats = [
@@ -46,25 +46,17 @@ return (
             <p className="text-lg text-muted-foreground mb-8 leading-relaxed max-w-2xl">
               VeritaAssure™ gives every lab professional the tools, the structure, and the confidence to walk into any survey ready.
             </p>
+            {/* One clear primary (the no-login demo) + one commit CTA (the free
+                trial). Same on mobile and desktop so the hierarchy never swaps. */}
             <div className="flex flex-col sm:flex-row gap-3">
-              {/* Mobile: VeritaCheck primary, Explore secondary */}
-              <Button asChild size="lg" className="sm:hidden bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                <Link href="/veritacheck">Try VeritaCheck™ Free <ChevronRight size={16} className="ml-1" /></Link>
-              </Button>
-              <Button asChild variant="outline" size="lg" className="sm:hidden">
-                <Link href="/demo">Explore VeritaAssure™</Link>
-              </Button>
-              {/* Desktop: Explore primary, VeritaCheck secondary */}
-              <Button asChild size="lg" className="hidden sm:inline-flex bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+              <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
                 <Link href="/demo">Explore VeritaAssure™ <ChevronRight size={16} className="ml-1" /></Link>
               </Button>
-              <Button asChild variant="outline" size="lg" className="hidden sm:inline-flex">
-                <Link href="/veritacheck">Try VeritaCheck™ Free</Link>
+              <Button asChild variant="outline" size="lg">
+                <Link href="/register">Try VeritaCheck™ Free</Link>
               </Button>
             </div>
-            <Link href="/demo" className="sm:hidden inline-flex items-center gap-1 text-sm text-primary font-medium mt-3 hover:underline">
-              See it in action - no login required <ArrowRight size={14} />
-            </Link>
+            <p className="text-sm text-muted-foreground mt-3">Fully interactive demo. No login required.</p>
           </div>
         </div>
       </section>
@@ -293,7 +285,7 @@ return (
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-              <Link href="/veritacheck">Try VeritaCheck™ Free <ChevronRight size={16} className="ml-1" /></Link>
+              <Link href="/register">Try VeritaCheck™ Free <ChevronRight size={16} className="ml-1" /></Link>
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link href="/pricing">See Pricing</Link>
