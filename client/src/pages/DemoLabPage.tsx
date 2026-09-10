@@ -317,7 +317,7 @@ export default function DemoLabPage() {
               VeritaAssure&#8482; Live Demo - Riverside Regional Medical Center | This is a fully interactive demo with live, generated data.
             </div>
             <Button asChild size="sm" className="bg-white text-[#006064] hover:bg-white/90 font-semibold border-0">
-              <Link href="/login">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
+              <Link href="/register">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
             </Button>
           </div>
         </div>
@@ -668,7 +668,7 @@ export default function DemoLabPage() {
                   Ready to run your own studies? VeritaCheck&#8482; works with your instruments and your data.
                 </p>
                 <Button asChild size="sm" className="mt-3 bg-white text-[#006064] hover:bg-white/90 font-semibold">
-                  <Link href="/login">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
+                  <Link href="/register">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
                 </Button>
               </div>
 
@@ -764,7 +764,7 @@ export default function DemoLabPage() {
               <div className="rounded-xl p-6 text-center" style={{ background: "#006064" }}>
                 <p className="text-white font-medium">Map your lab's instruments and tests in minutes.</p>
                 <Button asChild size="sm" className="mt-3 bg-white text-[#006064] hover:bg-white/90 font-semibold">
-                  <Link href="/login">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
+                  <Link href="/register">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
                 </Button>
               </div>
             </div>
@@ -927,7 +927,7 @@ export default function DemoLabPage() {
               <div className="rounded-xl p-6 text-center" style={{ background: "#006064" }}>
                 <p className="text-white font-medium">Know where you stand before the surveyor arrives.</p>
                 <Button asChild size="sm" className="mt-3 bg-white text-[#006064] hover:bg-white/90 font-semibold">
-                  <Link href="/login">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
+                  <Link href="/register">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
                 </Button>
               </div>
             </div>
@@ -1023,7 +1023,7 @@ export default function DemoLabPage() {
               <div className="rounded-xl p-6 text-center" style={{ background: "#006064" }}>
                 <p className="text-white font-medium">Document competency the way surveyors expect to see it.</p>
                 <Button asChild size="sm" className="mt-3 bg-white text-[#006064] hover:bg-white/90 font-semibold">
-                  <Link href="/login">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
+                  <Link href="/register">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
                 </Button>
               </div>
             </div>
@@ -1097,7 +1097,7 @@ export default function DemoLabPage() {
               <div className="rounded-xl p-6 text-center" style={{ background: "#006064" }}>
                 <p className="text-white font-medium">Keep your personnel records survey-ready.</p>
                 <Button asChild size="sm" className="mt-3 bg-white text-[#006064] hover:bg-white/90 font-semibold">
-                  <Link href="/login">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
+                  <Link href="/register">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
                 </Button>
               </div>
             </div>
@@ -1254,7 +1254,7 @@ export default function DemoLabPage() {
               <div className="rounded-xl p-6 text-center" style={{ background: "#006064" }}>
                 <p className="text-white font-medium">Know your PT coverage status before your next inspection.</p>
                 <Button asChild size="sm" className="mt-3 bg-white text-[#006064] hover:bg-white/90 font-semibold">
-                  <Link href="/login">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
+                  <Link href="/register">Start Free Trial <ArrowRight size={14} className="ml-1" /></Link>
                 </Button>
               </div>
             </div>
