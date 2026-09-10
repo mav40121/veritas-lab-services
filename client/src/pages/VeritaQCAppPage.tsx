@@ -379,11 +379,20 @@ export default function VeritaQCAppPage() {
       const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/qc/lots`, { headers: authHeaders() });
       if (!res.ok) throw new Error(`lots ${res.status}`);
       const data = await res.json();
-      setLots(data.lots || []);
-      if (data.lots && data.lots.length > 0 && selectedLotId === null) {
-        const firstActive = data.lots.find((l: ControlLot) => l.status === "active") || data.lots[0];
-        setSelectedLotId(firstActive.id);
-      }
+      const lotsArr: ControlLot[] = data.lots || [];
+      setLots(lotsArr);
+      // Keep the current selection only if it belongs to THIS lab's lots;
+      // otherwise auto-select the first active lot. Using the functional updater
+      // (not the captured selectedLotId) is what makes a lab switch reselect
+      // correctly: after switching labs the previous lab's lot id is not in the
+      // new lab's lots, so it re-selects the new lab's first lot instead of
+      // leaving a stale cross-lab lot id that errors on the results fetch and
+      // shows an empty grid (Mike Hiltunen, MedStar, 2026-09-10).
+      setSelectedLotId(prev => {
+        if (prev != null && lotsArr.some(l => l.id === prev)) return prev;
+        const firstActive = lotsArr.find((l: ControlLot) => l.status === "active") || lotsArr[0];
+        return firstActive ? firstActive.id : null;
+      });
       setLotsError(false);
     } catch (err) {
       // Audit #8: a failed lot load must not read as "no control lots yet"
@@ -499,9 +508,17 @@ export default function VeritaQCAppPage() {
     if (isLoggedIn && hasPlanAccess && activeLabId) loadLots();
   }, [isLoggedIn, hasPlanAccess, activeLabId]);
 
+  // Load results whenever the selected lot changes. Deliberately NOT keyed on
+  // activeLabId: on a lab switch, loadLots re-selects this lab's own first lot
+  // (the previous lab's lot id is never valid here), and that selection change
+  // drives the reload. Keying on activeLabId too fired a fetch with the previous
+  // lab's stale lot id under the new lab, which errored ("Couldn't load results
+  // for this lot") and left an empty grid after switching (MedStar, 2026-09-10).
   useEffect(() => {
     if (selectedLotId) loadResults(selectedLotId);
-  }, [selectedLotId, activeLabId]);
+    else setResults([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLotId]);
 
   // When the continuous view is on, (re)load the whole control line for the
   // selected lot's analyte + level. Re-runs on lot switch and after a changeover
