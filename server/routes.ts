@@ -12663,6 +12663,60 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, applicationId });
   });
 
+  // GET /api/admin/founding-lab/applications — list submitted Founding Lab
+  // applications for triage. The apply POST above only stored the row and fired
+  // a best-effort email; with no read surface, an application could sit unseen
+  // if that email was missed or RESEND_API_KEY was unset. This is the read
+  // surface. Read-only. Auth: x-admin-secret header or ?secret= query param.
+  // Optional ?status= filter and ?limit= (default 200, max 500).
+  app.get("/api/admin/founding-lab/applications", (req: any, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const cols = "id, submitted_at, lab_name, clia_number, contact_name, contact_title, contact_email, contact_phone, lab_type, tier_of_interest, approximate_seat_count, why_founder, marketing_logo_approval, status, notes";
+    const statusFilter = typeof req.query.status === "string" && req.query.status.trim() ? req.query.status.trim() : null;
+    const limit = Math.min(500, Math.max(1, parseInt(String(req.query.limit ?? "200"), 10) || 200));
+    const rows = statusFilter
+      ? sqlite.prepare(`SELECT ${cols} FROM founding_lab_applications WHERE status = ? ORDER BY submitted_at DESC, id DESC LIMIT ?`).all(statusFilter, limit)
+      : sqlite.prepare(`SELECT ${cols} FROM founding_lab_applications ORDER BY submitted_at DESC, id DESC LIMIT ?`).all(limit);
+    const byStatus = sqlite.prepare("SELECT status, COUNT(*) AS n FROM founding_lab_applications GROUP BY status").all();
+    const total = sqlite.prepare("SELECT COUNT(*) AS n FROM founding_lab_applications").get() as any;
+    res.json({ total: total?.n ?? 0, by_status: byStatus, count: rows.length, applications: rows });
+  });
+
+  // POST /api/admin/founding-lab/applications/:id/status — triage an application
+  // by updating its status and/or notes (the status column was written once at
+  // insert and never updated before this). Auth: x-admin-secret header or
+  // {secret} in body.
+  const FOUNDER_APP_STATUSES = ["new", "reviewing", "accepted", "declined", "closed"];
+  app.post("/api/admin/founding-lab/applications/:id/status", (req: any, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
+    const sqlite = (db as any).$client;
+    const existing = sqlite.prepare("SELECT id FROM founding_lab_applications WHERE id = ?").get(id);
+    if (!existing) return res.status(404).json({ error: "Application not found" });
+    const fields: string[] = [];
+    const vals: any[] = [];
+    if (req.body?.status !== undefined) {
+      if (!FOUNDER_APP_STATUSES.includes(String(req.body.status))) {
+        return res.status(400).json({ error: "Invalid status", allowed: FOUNDER_APP_STATUSES });
+      }
+      fields.push("status = ?");
+      vals.push(String(req.body.status));
+    }
+    if (req.body?.notes !== undefined) {
+      fields.push("notes = ?");
+      vals.push(req.body.notes ? String(req.body.notes) : null);
+    }
+    if (!fields.length) return res.status(400).json({ error: "Nothing to update (send status and/or notes)" });
+    vals.push(id);
+    sqlite.prepare(`UPDATE founding_lab_applications SET ${fields.join(", ")} WHERE id = ?`).run(...vals);
+    const updated = sqlite.prepare("SELECT id, lab_name, contact_name, contact_email, status, notes FROM founding_lab_applications WHERE id = ?").get(id);
+    res.json({ ok: true, application: updated });
+  });
+
   // ── VERITAMAP ───────────────────────────────────────────────────────────
 
   // Plan label alone does NOT grant unlimited access — the user must have
