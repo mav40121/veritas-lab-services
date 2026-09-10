@@ -17,6 +17,7 @@ import { NavBar } from "@/components/NavBar";
 import { SubscriptionBanner } from "@/components/SubscriptionBanner";
 import { DemoLabBanner } from "@/components/DemoLabBanner";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
+import { StudyCreditsModal } from "@/components/StudyCreditsModal";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { ChevronUp } from "lucide-react";
 import HomePage from "@/pages/HomePage";
@@ -568,6 +569,7 @@ function AppContent() {
       <BackToTop />
       <Toaster />
       <SubscriptionModal />
+      <StudyCreditsModal />
     </div>
   );
 }

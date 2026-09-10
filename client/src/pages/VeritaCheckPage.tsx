@@ -29,6 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { calculateStudy, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, calculateRefInterval, calculateQualitative, calculateSemiQuant, calculateSensitivity, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type QCRangeDataPoint, type RefIntervalDataPoint, type SensitivityInput, calculateINR, formatTeaCriterion } from "@/lib/calculations";
 import { teaData } from "@/lib/cliaTeaData";
 import { useAuth } from "@/components/AuthContext";
+import { triggerStudyCreditsExhausted } from "@/components/StudyCreditsModal";
 import { authHeaders } from "@/lib/auth";
 import { trackEvent } from "@/lib/analytics";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -1691,15 +1692,21 @@ export default function VeritaCheckPage() {
       const response = await fetch(url, { method: isEditing ? "PUT" : "POST", headers, body: JSON.stringify(study) });
       if (!response.ok) {
         let serverMessage = `Server returned ${response.status}`;
+        let serverCode: string | undefined;
         try {
           const errBody = await response.json();
           if (errBody?.error) {
             serverMessage = typeof errBody.error === "string" ? errBody.error : JSON.stringify(errBody.error);
           }
+          serverCode = errBody?.code;
         } catch {
           // response had no JSON body; fall back to the status code message
         }
-        throw new Error(serverMessage);
+        const e = new Error(serverMessage);
+        // Preserve the server's machine code so onError can route it (e.g. the
+        // free-study exhaustion upsell) instead of a generic toast.
+        (e as any).code = serverCode;
+        throw e;
       }
       return response;
     },
@@ -1743,6 +1750,12 @@ export default function VeritaCheckPage() {
     },
     onError: (err: any) => {
       const msg = err?.message || "Failed to save study";
+      // Free-study exhaustion is the trial -> paid moment. Turn the block into a
+      // one-click upgrade modal instead of a dead-end error toast.
+      if (err?.code === "STUDY_CREDITS_EXHAUSTED" || /used your free studies/i.test(msg)) {
+        triggerStudyCreditsExhausted(msg);
+        return;
+      }
       // Lab-identity gate: a finalized study is a compliance record that needs
       // the lab's CLIA number. Surface a clear, actionable prompt (and the draft
       // escape hatch) instead of the raw error.
