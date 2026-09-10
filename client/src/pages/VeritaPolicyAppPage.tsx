@@ -167,7 +167,10 @@ export default function VeritaPolicyAppPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+    // policyApi is derived from activeLabId; include it so loadAll is
+    // recreated on a lab switch and the effect below re-fires, reloading the
+    // new lab's settings/summary/master-list instead of the prior lab's.
+  }, [toast, policyApi]);
 
   useEffect(() => {
     if (isLoggedIn && hasPlanAccess) loadAll();
