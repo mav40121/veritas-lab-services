@@ -182,64 +182,6 @@ return (
         </div>
       </section>
 
-      {/* Payment Methods + Stripe Trust */}
-      <section className="border-y border-teal-800/40 bg-teal-950/50">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 text-center">
-          <div className="flex items-center justify-center gap-10 sm:gap-14 mb-4">
-            <div className="flex flex-col items-center gap-1.5">
-              <CreditCard size={24} className="text-teal-400" />
-              <span className="text-xs text-muted-foreground font-medium">Credit Card</span>
-            </div>
-            <div className="flex flex-col items-center gap-1.5">
-              <Building2 size={24} className="text-teal-400" />
-              <span className="text-xs text-muted-foreground font-medium">ACH Transfer</span>
-            </div>
-            <div className="flex flex-col items-center gap-1.5">
-              <FileText size={24} className="text-teal-400" />
-              <span className="text-xs text-muted-foreground font-medium">Purchase Order</span>
-            </div>
-          </div>
-          <p className="text-sm text-foreground">
-            We accept credit cards, ACH bank transfer, and purchase orders.
-          </p>
-          <p className="text-sm text-foreground mt-1.5">
-            Invoiced billing and purchase orders available for institutions. Contact{" "}
-            <a href="mailto:info@veritaslabservices.com" className="text-teal-400 hover:underline">
-              info@veritaslabservices.com
-            </a>{" "}
-            to get started.
-          </p>
-          <div className="flex items-center justify-center gap-1.5 mt-4 text-xs text-muted-foreground">
-            <Lock size={12} />
-            <span>Payments secured by Stripe</span>
-          </div>
-        </div>
-      </section>
-
-      {/* Testimonials */}
-      <section className="border-b border-border bg-muted/20">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
-          <div className="grid md:grid-cols-2 gap-8">
-            <div className="text-center px-4">
-              <Quote size={24} className="text-primary/40 mx-auto mb-3" />
-              <p className="text-base italic leading-relaxed mb-4">
-                "I didn't know what questions to ask because I didn't know where my gaps were. VeritaAssure™ showed me what I was missing before a surveyor found it first."
-              </p>
-              <p className="text-sm font-semibold">John Hall</p>
-              <p className="text-xs text-muted-foreground">Laboratory Director, San Carlos Apache Healthcare Corporation</p>
-            </div>
-            <div className="text-center px-4">
-              <Quote size={24} className="text-primary/40 mx-auto mb-3" />
-              <p className="text-base italic leading-relaxed mb-4">
-                "VeritaAssure™ is a suite of tools that will revolutionize the regulatory side of laboratory management. Whether your lab is accredited by CAP, TJC, or COLA, this streamlines your entire compliance workflow."
-              </p>
-              <p className="text-sm font-semibold">Lisa Veri</p>
-              <p className="text-xs text-muted-foreground">Administrative Lab Director, Milford Regional Medical Center</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* Pricing Cards */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-14 space-y-14">
 
@@ -633,6 +575,66 @@ return (
         </div>
 
       </div>
+
+      {/* Payment methods + testimonials, placed AFTER the plans so a visitor sees
+          the prices right below the hero rather than payment logistics and
+          quotes first. */}
+      <section className="border-y border-teal-800/40 bg-teal-950/50">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 text-center">
+          <div className="flex items-center justify-center gap-10 sm:gap-14 mb-4">
+            <div className="flex flex-col items-center gap-1.5">
+              <CreditCard size={24} className="text-teal-400" />
+              <span className="text-xs text-muted-foreground font-medium">Credit Card</span>
+            </div>
+            <div className="flex flex-col items-center gap-1.5">
+              <Building2 size={24} className="text-teal-400" />
+              <span className="text-xs text-muted-foreground font-medium">ACH Transfer</span>
+            </div>
+            <div className="flex flex-col items-center gap-1.5">
+              <FileText size={24} className="text-teal-400" />
+              <span className="text-xs text-muted-foreground font-medium">Purchase Order</span>
+            </div>
+          </div>
+          <p className="text-sm text-foreground">
+            We accept credit cards, ACH bank transfer, and purchase orders.
+          </p>
+          <p className="text-sm text-foreground mt-1.5">
+            Invoiced billing and purchase orders available for institutions. Contact{" "}
+            <a href="mailto:info@veritaslabservices.com" className="text-teal-400 hover:underline">
+              info@veritaslabservices.com
+            </a>{" "}
+            to get started.
+          </p>
+          <div className="flex items-center justify-center gap-1.5 mt-4 text-xs text-muted-foreground">
+            <Lock size={12} />
+            <span>Payments secured by Stripe</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials */}
+      <section className="border-b border-border bg-muted/20">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
+          <div className="grid md:grid-cols-2 gap-8">
+            <div className="text-center px-4">
+              <Quote size={24} className="text-primary/40 mx-auto mb-3" />
+              <p className="text-base italic leading-relaxed mb-4">
+                "I didn't know what questions to ask because I didn't know where my gaps were. VeritaAssure™ showed me what I was missing before a surveyor found it first."
+              </p>
+              <p className="text-sm font-semibold">John Hall</p>
+              <p className="text-xs text-muted-foreground">Laboratory Director, San Carlos Apache Healthcare Corporation</p>
+            </div>
+            <div className="text-center px-4">
+              <Quote size={24} className="text-primary/40 mx-auto mb-3" />
+              <p className="text-base italic leading-relaxed mb-4">
+                "VeritaAssure™ is a suite of tools that will revolutionize the regulatory side of laboratory management. Whether your lab is accredited by CAP, TJC, or COLA, this streamlines your entire compliance workflow."
+              </p>
+              <p className="text-sm font-semibold">Lisa Veri</p>
+              <p className="text-xs text-muted-foreground">Administrative Lab Director, Milford Regional Medical Center</p>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
