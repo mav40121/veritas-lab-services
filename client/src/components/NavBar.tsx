@@ -153,7 +153,7 @@ export function NavBar() {
           </svg>
           <div className="leading-tight">
             <div className="font-serif font-bold text-sm tracking-tight text-foreground">{onStockHost ? "VeritaStock™" : "Veritas Lab Services"}</div>
-            <div className="text-xs text-muted-foreground leading-none">{onStockHost ? "Multi-Location Inventory" : "Clinical Laboratory Consulting"}</div>
+            <div className="text-xs text-muted-foreground leading-none">{onStockHost ? "Multi-Location Inventory" : "Lab Compliance Software"}</div>
           </div>
         </Link>
 
