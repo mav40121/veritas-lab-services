@@ -9,6 +9,17 @@ import { teaData } from "@/lib/cliaTeaData";
 
 const articles = [
   {
+    slug: "post-analytical-critical-values-corrected-reports",
+    title: "The Last Mile: Why a Correct Result Still Reaches the Patient Wrong",
+    summary: "A former Joint Commission surveyor on the post-analytical phase: the critical value list your medical staff must own, the read-back that confirms a call was actually received, the corrected report CLIA requires you to phone in under 42 CFR 493.1291(k), and the autoverification rules quietly releasing results no one reads.",
+    category: "Post-Analytical",
+    readTime: "9 min read",
+    author: "Michael Veri",
+    date: "September 2026",
+    tags: ["Post-Analytical", "Critical Values", "Corrected Reports", "Autoverification", "VeritaMap™"],
+    featured: true,
+  },
+  {
     slug: "proficiency-testing-clia-pt-referral",
     title: "Proficiency Testing Under CLIA: The Rules Labs Get Wrong, and the Mistake That Ends Careers",
     summary: "A former Joint Commission surveyor on CLIA proficiency testing: what needs PT after the 2024 regulated-analyte change, how PT is graded, how to cover what PT does not with a documented twice-yearly accuracy check, and the PT referral rule that can end the laboratory director's and owner's careers.",

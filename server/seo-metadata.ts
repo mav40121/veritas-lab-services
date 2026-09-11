@@ -268,6 +268,20 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
       faqPageJsonLd(REFINT_ARTICLE_FAQ),
     ],
   },
+  "/resources/post-analytical-critical-values-corrected-reports": {
+    title: "Critical Values and Corrected Reports: The Post-Analytical Last Mile",
+    description:
+      "A former Joint Commission surveyor on the post-analytical last mile: the critical value list your medical staff must own, read-back that confirms delivery, and the corrected-report call CLIA requires under 42 CFR 493.1291(k).",
+    jsonLd: articleJsonLd({
+      headline: "The Last Mile: Why a Correct Result Still Reaches the Patient Wrong",
+      description:
+        "A former Joint Commission surveyor on the post-analytical last mile: the critical value list your medical staff must own, read-back that confirms delivery, and the corrected-report call CLIA requires under 42 CFR 493.1291(k).",
+      articleBody:
+        "A laboratory measures its success by the accuracy of the number; a patient experiences it as whether the right clinician acted on the right number in time. The post-analytical last mile is the least-watched phase in most laboratories because it happens after the part the lab controls, and it is where a correct result still reaches the patient wrong. The critical value list is a medical decision, not a laboratory one: the thresholds belong to your medical executive committee, and CLIA requires the laboratory to immediately alert the responsible clinician to imminently life-threatening results, or panic or alert values (42 CFR 493.1291(g)). Calling is not the same as reaching; the read-back confirms a specific licensed person received and repeated the value, and the number that matters is the tail, not the average callback. When an error in a reported result is detected, 42 CFR 493.1291(k) requires you to notify the person who ordered or used the result, not merely to issue an amended report, because the harm is already at the bedside. Autoverification is a quality-control decision, not a default: rules written once and never revisited release today's results on yesterday's assumptions. The last mile stays broken because it is measured by documentation, and an audit that confirms a call was logged does not confirm anyone received it. Sections: The critical value list nobody chose; The call that was made but not received; The correction that never reached the care; The result that left without a human; Why the last mile stays broken.",
+      path: "/resources/post-analytical-critical-values-corrected-reports",
+      datePublished: "2026-09-10",
+    }),
+  },
   "/resources/proficiency-testing-clia-pt-referral": {
     title: "Proficiency Testing Under CLIA: The Rules Labs Get Wrong, and the Mistake That Ends Careers",
     description:
