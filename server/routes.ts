@@ -10431,7 +10431,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   //   PIN + picker.
   app.post("/api/labs/:labId/staff-portal-invites", authMiddleware, labScopeMiddleware, async (req: any, res) => {
     if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
-    const { staff_employee_id, email } = req.body || {};
+    // deliverEmail defaults to true (unchanged behavior: the invite is emailed
+    // to the staff member). Pass deliverEmail:false to create the invite and
+    // return its link WITHOUT emailing the staff, so a director can hand the
+    // link out themselves (e.g. forward all links in one message).
+    const { staff_employee_id, email, deliverEmail } = req.body || {};
     const staffEmpId = parseInt(String(staff_employee_id ?? ""), 10);
     if (!Number.isFinite(staffEmpId) || staffEmpId <= 0) return res.status(400).json({ error: "staff_employee_id required" });
     if (!email || !String(email).includes("@")) return res.status(400).json({ error: "Valid email required" });
@@ -10504,7 +10508,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       : `${ownerRow.name || "the lab director"}'s team`;
     const techName = `${staffEmp.first_name || ""} ${staffEmp.last_name || ""}`.trim() || "Team member";
     let emailSent = false;
-    if (process.env.RESEND_API_KEY) {
+    if (process.env.RESEND_API_KEY && deliverEmail !== false) {
       try {
         const resendRes = await fetch("https://api.resend.com/emails", {
           method: "POST",
@@ -23805,7 +23809,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const now = new Date().toISOString();
     const result = (db as any).$client.prepare(
       "INSERT INTO staff_employees (lab_id, user_id, last_name, first_name, middle_initial, title, title_code, hire_date, qualifications_text, qualifications_verified_at, qualifications_verified_by, highest_complexity, performs_testing, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-    ).run(lab.id, dataUserId, lastName.trim(), firstName.trim(), middleInitial || null, title || null, titleCode || null, hireDate || null, qualificationsText || null, qualificationsVerifiedAt || null, qualificationsVerifiedBy || null, highestComplexity || 'H', performsTesting ? 1 : 0, 'active', now, now);
+      // user_id is the employee's OWN personal-login link (set when they accept
+      // a Staff Portal invite), NOT the account owner. See the lab-scoped create
+      // for why owner id here is wrong. dataUserId is retained for the tier2
+      // resolution below but must not seed user_id.
+    ).run(lab.id, null, lastName.trim(), firstName.trim(), middleInitial || null, title || null, titleCode || null, hireDate || null, qualificationsText || null, qualificationsVerifiedAt || null, qualificationsVerifiedBy || null, highestComplexity || 'H', performsTesting ? 1 : 0, 'active', now, now);
     const empId = result.lastInsertRowid;
     // Phase 3.9 dual-write tier2_lab_id on the employee row.
     try {
@@ -24092,7 +24100,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const empId = sqlite.transaction(() => {
       const result = sqlite.prepare(
         "INSERT INTO staff_employees (lab_id, tier2_lab_id, user_id, last_name, first_name, middle_initial, title, title_code, hire_date, qualifications_text, qualifications_verified_at, qualifications_verified_by, highest_complexity, performs_testing, can_adjust_inventory, can_view_audit, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-      ).run(lab.id, tier2LabId, ownerUserId, lastName.trim(), firstName.trim(), middleInitial || null, title || null, titleCode || null, hireDate || null, qualificationsText || null, qualificationsVerifiedAt || null, qualificationsVerifiedBy || null, highestComplexity || 'H', performsTesting ? 1 : 0, canAdjustInventory ? 1 : 0, canViewAudit ? 1 : 0, 'active', now, now);
+        // user_id is the employee's OWN personal-login link (set when they
+        // accept a Staff Portal invite), NOT the owner. Stamping ownerUserId
+        // here mislinked every employee to the owner, which made owner-resolution
+        // reads (WHERE user_id = <logged-in user>) match arbitrary employees and
+        // made the Staff Portal invite refuse them as "already has an account".
+      ).run(lab.id, tier2LabId, null, lastName.trim(), firstName.trim(), middleInitial || null, title || null, titleCode || null, hireDate || null, qualificationsText || null, qualificationsVerifiedAt || null, qualificationsVerifiedBy || null, highestComplexity || 'H', performsTesting ? 1 : 0, canAdjustInventory ? 1 : 0, canViewAudit ? 1 : 0, 'active', now, now);
       const id = result.lastInsertRowid;
       if (Array.isArray(roles)) {
         const roleStmt = sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, tier2_lab_id, role, specialty_number, all_specialties) VALUES (?,?,?,?,?,?)");
