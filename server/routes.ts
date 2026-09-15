@@ -1705,96 +1705,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ candidates: rows.length, applied: dryRun ? 0 : changes.filter(c => c.to !== 'draft').length, dryRun, changes });
   });
 
-  // POST /api/admin/staff/repair-user-id — repairs the "employee create mislinked
-  // user_id to the account owner" bug. staff_employees.user_id is the employee's
-  // OWN personal-login id, set only when they accept a Staff Portal invite. A
-  // create bug stamped it with the lab owner's user id, which (a) made owner-
-  // resolution reads (WHERE user_id = <logged-in user>) match arbitrary
-  // employees, (b) made the invite endpoint 409 ("already has an account"), and
-  // (c) left the accept flow (UPDATE ... WHERE user_id IS NULL) unable to link
-  // the real login. This nulls user_id ONLY for rows where user_id equals the
-  // lab's owner_user_id AND no accepted staff_portal seat (accepted_at set) ties
-  // that user to that employee, so a legitimately-accepted personal login is
-  // never unlinked. Pass employeeIds:[...] to scope to specific rows, or
-  // allMislinked:true to repair every matching row. dryRun reports without
-  // writing. ADMIN_SECRET.
-  app.post("/api/admin/staff/repair-user-id", (req, res) => {
-    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
-    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
-    const dryRun = req.body?.dryRun === true;
-    const allMislinked = req.body?.allMislinked === true;
-    const rawIds = Array.isArray(req.body?.employeeIds) ? req.body.employeeIds : null;
-    const ids = rawIds
-      ? rawIds.map((n: any) => parseInt(String(n), 10)).filter((n: number) => Number.isFinite(n) && n > 0)
-      : null;
-    if (!allMislinked && (!ids || ids.length === 0)) {
-      return res.status(400).json({ error: "Provide employeeIds:[...] or allMislinked:true" });
-    }
-    const sqlite = (db as any).$client;
-    // A row is bug-mislinked iff user_id is set, equals the lab's owner_user_id,
-    // and no accepted staff_portal seat ties that user to this employee.
-    const mislinked = sqlite.prepare(`
-      SELECT e.id, e.user_id, e.first_name, e.last_name, e.tier2_lab_id, l.owner_user_id
-      FROM staff_employees e
-      JOIN labs l ON l.id = COALESCE(e.tier2_lab_id, e.lab_id)
-      WHERE e.user_id IS NOT NULL
-        AND e.user_id = l.owner_user_id
-        AND NOT EXISTS (
-          SELECT 1 FROM user_seats s
-          WHERE s.staff_employee_id = e.id
-            AND s.seat_type = 'staff_portal'
-            AND s.seat_user_id = e.user_id
-            AND s.accepted_at IS NOT NULL
-        )
-    `).all() as any[];
-    const mislinkedById = new Map<number, any>(mislinked.map((r: any) => [r.id, r]));
-    let candidates: any[];
-    const skipped: any[] = [];
-    if (ids) {
-      candidates = [];
-      for (const id of ids) {
-        const m = mislinkedById.get(id);
-        if (m) {
-          candidates.push(m);
-        } else {
-          const row = sqlite.prepare("SELECT id, user_id FROM staff_employees WHERE id = ?").get(id) as any;
-          skipped.push({
-            id,
-            reason: !row
-              ? "not found"
-              : (row.user_id == null
-                  ? "user_id already null"
-                  : "user_id is not the lab owner id, or a real accepted seat exists; not repaired"),
-          });
-        }
-      }
-    } else {
-      candidates = mislinked;
-    }
-    let updated = 0;
-    if (!dryRun) {
-      const upd = sqlite.prepare("UPDATE staff_employees SET user_id = NULL, updated_at = ? WHERE id = ? AND user_id = ?");
-      const now = new Date().toISOString();
-      for (const c of candidates) {
-        const r = upd.run(now, c.id, c.user_id);
-        if (r.changes > 0) updated++;
-      }
-    }
-    res.json({
-      dryRun,
-      scope: ids ? "employeeIds" : "allMislinked",
-      candidates: candidates.map((c: any) => ({
-        id: c.id,
-        name: `${c.first_name || ""} ${c.last_name || ""}`.trim(),
-        user_id: c.user_id,
-        tier2_lab_id: c.tier2_lab_id,
-        owner_user_id: c.owner_user_id,
-      })),
-      updated: dryRun ? 0 : updated,
-      skipped,
-    });
-  });
-
   // POST /api/admin/relocate-study — move a study to a different lab_id.
   // Used to back-patch studies created via the legacy /api/studies path
   // before the lab_members-primary dual-write fix, when the row landed on
@@ -10543,7 +10453,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT id, first_name, last_name, user_id FROM staff_employees WHERE id = ? AND tier2_lab_id = ? AND status = 'active'"
     ).get(staffEmpId, req.scope.labId) as any;
     if (!staffEmp) return res.status(404).json({ error: "Employee not found on this lab's active roster" });
-    if (staffEmp.user_id) {
+    // "Already has an account" is an ACCEPTED staff_portal seat for this
+    // employee, not staff_employees.user_id. That column is NOT NULL and carries
+    // the account owner id (see the create endpoints), so keying off it here
+    // rejected every employee. The real signal is an accepted, non-deactivated
+    // staff_portal seat tied to this staff_employee_id.
+    const acceptedSeat = sqlite.prepare(
+      "SELECT id FROM user_seats WHERE staff_employee_id = ? AND seat_type = 'staff_portal' AND accepted_at IS NOT NULL AND status != 'deactivated' LIMIT 1"
+    ).get(staffEmpId) as any;
+    if (acceptedSeat) {
       return res.status(409).json({ error: "This employee already has a Staff Portal account" });
     }
 
@@ -23899,11 +23817,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const now = new Date().toISOString();
     const result = (db as any).$client.prepare(
       "INSERT INTO staff_employees (lab_id, user_id, last_name, first_name, middle_initial, title, title_code, hire_date, qualifications_text, qualifications_verified_at, qualifications_verified_by, highest_complexity, performs_testing, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-      // user_id is the employee's OWN personal-login link (set when they accept
-      // a Staff Portal invite), NOT the account owner. See the lab-scoped create
-      // for why owner id here is wrong. dataUserId is retained for the tier2
-      // resolution below but must not seed user_id.
-    ).run(lab.id, null, lastName.trim(), firstName.trim(), middleInitial || null, title || null, titleCode || null, hireDate || null, qualificationsText || null, qualificationsVerifiedAt || null, qualificationsVerifiedBy || null, highestComplexity || 'H', performsTesting ? 1 : 0, 'active', now, now);
+      // staff_employees.user_id is NOT NULL and carries the account OWNER id
+      // (seeded rows and every create path use it this way). A staffer's own
+      // Staff Portal identity resolves via user_seats.seat_user_id on accept,
+      // NOT this column, so the owner id here is correct. Do NOT insert NULL:
+      // the column is NOT NULL and a null breaks employee creation.
+    ).run(lab.id, dataUserId, lastName.trim(), firstName.trim(), middleInitial || null, title || null, titleCode || null, hireDate || null, qualificationsText || null, qualificationsVerifiedAt || null, qualificationsVerifiedBy || null, highestComplexity || 'H', performsTesting ? 1 : 0, 'active', now, now);
     const empId = result.lastInsertRowid;
     // Phase 3.9 dual-write tier2_lab_id on the employee row.
     try {
@@ -24190,12 +24109,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const empId = sqlite.transaction(() => {
       const result = sqlite.prepare(
         "INSERT INTO staff_employees (lab_id, tier2_lab_id, user_id, last_name, first_name, middle_initial, title, title_code, hire_date, qualifications_text, qualifications_verified_at, qualifications_verified_by, highest_complexity, performs_testing, can_adjust_inventory, can_view_audit, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-        // user_id is the employee's OWN personal-login link (set when they
-        // accept a Staff Portal invite), NOT the owner. Stamping ownerUserId
-        // here mislinked every employee to the owner, which made owner-resolution
-        // reads (WHERE user_id = <logged-in user>) match arbitrary employees and
-        // made the Staff Portal invite refuse them as "already has an account".
-      ).run(lab.id, tier2LabId, null, lastName.trim(), firstName.trim(), middleInitial || null, title || null, titleCode || null, hireDate || null, qualificationsText || null, qualificationsVerifiedAt || null, qualificationsVerifiedBy || null, highestComplexity || 'H', performsTesting ? 1 : 0, canAdjustInventory ? 1 : 0, canViewAudit ? 1 : 0, 'active', now, now);
+        // staff_employees.user_id is NOT NULL and carries the account OWNER id
+        // (the seeded rows and every create path use it this way). A staffer's own
+        // Staff Portal identity resolves via user_seats.seat_user_id on accept,
+        // NOT this column, so the owner id here is correct. Do NOT insert NULL:
+        // the column is NOT NULL and a null breaks employee creation.
+      ).run(lab.id, tier2LabId, ownerUserId, lastName.trim(), firstName.trim(), middleInitial || null, title || null, titleCode || null, hireDate || null, qualificationsText || null, qualificationsVerifiedAt || null, qualificationsVerifiedBy || null, highestComplexity || 'H', performsTesting ? 1 : 0, canAdjustInventory ? 1 : 0, canViewAudit ? 1 : 0, 'active', now, now);
       const id = result.lastInsertRowid;
       if (Array.isArray(roles)) {
         const roleStmt = sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, tier2_lab_id, role, specialty_number, all_specialties) VALUES (?,?,?,?,?,?)");
