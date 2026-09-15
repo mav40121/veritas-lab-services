@@ -1,0 +1,55 @@
+name: PDF signature guard
+
+# Hard CI gate: the VeritaCheck method-comparison director signature block MUST
+# render on page 1 (PDF rule 5). It regressed silently in Sep 2026 when
+# cumulative page-1 growth (a longer narrative + the taller electronically-signed
+# block) pushed the atomic signature block onto page 2. Nothing tested actual
+# page placement, so it slipped through every existing check (math/content only).
+#
+# scripts/verify-methodcomp-signature-page1.ts renders the worst realistic case
+# (a signed, long-narrative troponin method comparison with excluded points) to
+# the real print geometry and fails if the signature block does not fit within
+# page 1, with headroom so creeping growth is caught BEFORE it tips over.
+#
+# To make this block merges, enable in:
+#   Settings -> Branches -> main -> Branch protection ->
+#   Require status checks to pass before merging -> select "pdf-signature-guard".
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  pdf-signature-guard:
+    name: pdf-signature-guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Puppeteer needs a Chrome binary plus the headless system libraries.
+      # playwright (a devDependency) provides the OS libs via install-deps; the
+      # browser itself comes from puppeteer's own cache.
+      - name: Install headless Chrome system libraries
+        run: npx playwright install-deps chromium
+
+      - name: Ensure Puppeteer Chrome is present
+        run: npx puppeteer browsers install chrome
+
+      - name: Signature-on-page-1 guard
+        run: npx tsx scripts/verify-methodcomp-signature-page1.ts
