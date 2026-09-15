@@ -833,7 +833,7 @@ function footerHTML(): string {
 // page documenting it. page-break-before keeps this OFF page 1 so the director
 // signature block stays anchored to page 1 (NON-NEGOTIABLE). Returns "" when
 // none apply, so unaffected studies are byte-identical to before.
-function excludedAndDeterminationHTML(study: any): string {
+function excludedAndDeterminationHTML(study: any, inline = false): string {
   const esc = (s: any) => String(s == null ? "" : s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const fmtDate = (s: any) => { try { return s ? new Date(s).toISOString().slice(0, 10) : ""; } catch { return ""; } };
@@ -886,7 +886,10 @@ function excludedAndDeterminationHTML(study: any): string {
     body += `<p style="font-size:7.5pt;color:#28251D;margin:0 0 4px 0;">Amendment of study #${esc(study.amends_study_id)}, which it supersedes.</p>`;
   }
 
-  return `<div style="page-break-before:always;padding-top:4px;">
+  // inline=true drops the forced page break so the record can ride an existing
+  // continuation page (e.g. the method-comp stats page) instead of taking a
+  // near-empty page of its own. Default (false) keeps the original behavior.
+  return `<div style="${inline ? "margin-top:10px;" : "page-break-before:always;"}padding-top:4px;">
     <div style="font-size:11pt;font-weight:700;text-align:center;margin-bottom:8px;">Exclusions and Determination Record</div>
     ${body}
   </div>`;
@@ -896,7 +899,7 @@ function excludedAndDeterminationHTML(study: any): string {
 // continuation page AFTER the signature div (its page-break-before puts it on a
 // fresh page, so the signature stays on page 1). Omitting the arg yields the
 // original signature-only block.
-function directorReviewHTML(study?: any): string {
+function directorReviewHTML(study?: any, appendExclusions = true): string {
   // 2026-07-31: when a study is electronically signed off (lifecycle_state
   // 'finalized' with a captured signature), the review block now REFLECTS that
   // sign-off \u2014 Accepted checked, the signer's name on the Signature/Print Name
@@ -954,7 +957,7 @@ function directorReviewHTML(study?: any): string {
         <div style="font-size:6.5pt;color:#888;margin-top:8px;">Title</div>
       </div>
     </div>
-  </div>${study ? excludedAndDeterminationHTML(study) : ""}`;
+  </div>${study && appendExclusions ? excludedAndDeterminationHTML(study) : ""}`;
 }
 
 
@@ -1694,7 +1697,7 @@ function buildSemiQuantHTML(study: Study, results: any): string {
   </body></html>`;
 }
 
-function buildMethodCompHTML(study: Study, results: MethodCompData): string {
+export function buildMethodCompHTML(study: Study, results: MethodCompData): string {
   const allInstrumentNames: string[] = safeJsonParse(study.instruments) || [];
   const primaryName = allInstrumentNames[0] || "Primary";
   const levelResults = results.levelResults || [];
@@ -1905,10 +1908,13 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
   // Build charts for just the first comparison for page 1
   const p1xVals = levelResults.map(r => r.referenceValue);
   const p1yVals = levelResults.filter(r => r.instruments?.[firstCompName]).map(r => r.instruments[firstCompName].value);
-  const p1CorrSvg = scatterSVG(p1xVals, p1yVals.length ? p1yVals : p1xVals, `${abbreviateInstrumentName(primaryName)} (Primary)`, abbreviateInstrumentName(firstCompName), `${abbreviateInstrumentName(firstCompName)} vs. ${abbreviateInstrumentName(primaryName)}`, true);
+  // Page-1 charts run shorter (160 vs the default 220) so the narrative, CFR box,
+  // and the signed director-review block all fit on page 1 (signature-on-page-1
+  // is non-negotiable). The full-height charts still render in the continuation.
+  const p1CorrSvg = scatterSVG(p1xVals, p1yVals.length ? p1yVals : p1xVals, `${abbreviateInstrumentName(primaryName)} (Primary)`, abbreviateInstrumentName(firstCompName), `${abbreviateInstrumentName(firstCompName)} vs. ${abbreviateInstrumentName(primaryName)}`, true, 320, 160);
   const p1avgs = levelResults.filter(r => r.instruments?.[firstCompName]).map(r => (r.referenceValue + r.instruments[firstCompName].value) / 2);
   const p1pctDiffs = levelResults.filter(r => r.instruments?.[firstCompName]).map(r => r.instruments[firstCompName].pctDifference);
-  const p1BaSvg = blandAltmanSVG(p1avgs, p1pctDiffs, study.cliaAllowableError, firstBAEntry?.pctMeanDiff ?? 0, firstCompName);
+  const p1BaSvg = blandAltmanSVG(p1avgs, p1pctDiffs, study.cliaAllowableError, firstBAEntry?.pctMeanDiff ?? 0, firstCompName, 320, 160);
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Correlation / Method Comparison - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
@@ -1937,10 +1943,11 @@ function buildMethodCompHTML(study: Study, results: MethodCompData): string {
 
   ${regulatoryComplianceBoxHTML(study.studyType, (study as any)._preferredStandards)}
 
-  ${directorReviewHTML(study)}
+  ${directorReviewHTML(study, false)}
 
   <div class="stats-section">
     <div class="section-label">Statistical Analysis and Experimental Results (Continued from page 1)</div>
+    ${excludedAndDeterminationHTML(study, true)}
 
     ${comparisonSections}
 
