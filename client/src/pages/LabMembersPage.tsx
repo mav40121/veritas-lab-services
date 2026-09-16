@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, UserPlus, ShieldCheck, ShieldOff, Trash2, Crown, ArrowRightLeft, Clock, Link as LinkIcon, RotateCw, X, KeyRound, Copy, Check, MapPin, Stethoscope } from "lucide-react";
+import { Loader2, UserPlus, ShieldCheck, ShieldOff, Trash2, Crown, ArrowRightLeft, Clock, Link as LinkIcon, RotateCw, X, KeyRound, Copy, Check, MapPin, Stethoscope, Pencil } from "lucide-react";
 
 interface LabMember {
   membership_id: number;
@@ -187,6 +187,19 @@ export default function LabMembersPage() {
     },
     onSuccess: () => { toast({ title: "Member removed" }); invalidate(); },
     onError: (err: any) => toast({ title: "Remove failed", description: String(err?.message || err), variant: "destructive" }),
+  });
+
+  // Inline email correction. Fixes a member's login email in place instead of
+  // remove + re-invite, which would detach their existing attestations.
+  const [editEmailFor, setEditEmailFor] = useState<number | null>(null);
+  const [editEmailValue, setEditEmailValue] = useState("");
+  const emailMutation = useMutation({
+    mutationFn: async ({ memberId, email }: { memberId: number; email: string }) => {
+      const res = await apiRequest("PATCH", `/api/labs/${activeLabId}/members/${memberId}/email`, { email });
+      return res.json();
+    },
+    onSuccess: () => { toast({ title: "Email updated" }); setEditEmailFor(null); setEditEmailValue(""); invalidate(); },
+    onError: (err: any) => toast({ title: "Email change failed", description: String(err?.message || err), variant: "destructive" }),
   });
 
   const reissueMutation = useMutation({
@@ -376,10 +389,34 @@ export default function LabMembersPage() {
                     return (
                       <tr key={`m-${m.membership_id}`} className="border-b last:border-b-0">
                         <td className="py-2 pr-3">
-                          <div className="font-medium flex items-center gap-2 flex-wrap">
-                            {m.name || m.email}{isSelf && <span className="text-xs text-muted-foreground">(you)</span>}
-                          </div>
-                          {m.name && <div className="text-xs text-muted-foreground">{m.email}</div>}
+                          {editEmailFor === m.membership_id ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Input
+                                type="email"
+                                value={editEmailValue}
+                                onChange={e => setEditEmailValue(e.target.value)}
+                                className="h-8 w-56 text-sm"
+                                placeholder="name@example.com"
+                                autoFocus
+                                aria-label="New email address"
+                                onKeyDown={e => {
+                                  if (e.key === "Enter" && editEmailValue.includes("@")) emailMutation.mutate({ memberId: m.membership_id, email: editEmailValue.trim() });
+                                  if (e.key === "Escape") { setEditEmailFor(null); setEditEmailValue(""); }
+                                }}
+                              />
+                              <Button size="sm" onClick={() => emailMutation.mutate({ memberId: m.membership_id, email: editEmailValue.trim() })} disabled={emailMutation.isPending || !editEmailValue.includes("@")}>
+                                {emailMutation.isPending && <Loader2 className="animate-spin mr-1" size={12} />} Save
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => { setEditEmailFor(null); setEditEmailValue(""); }}>Cancel</Button>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="font-medium flex items-center gap-2 flex-wrap">
+                                {m.name || m.email}{isSelf && <span className="text-xs text-muted-foreground">(you)</span>}
+                              </div>
+                              {m.name && <div className="text-xs text-muted-foreground">{m.email}</div>}
+                            </>
+                          )}
                         </td>
                         <td className="py-2 pr-3">{roleBadge(isMedicalDirector(m.email) ? "medical_director" : m.role)}</td>
                         <td className="py-2 pr-3">{seatTypeBadge(m.seat_type || "active")}</td>
@@ -393,6 +430,11 @@ export default function LabMembersPage() {
                           {isOwner && !isMemberOwner && m.role === "admin" && (
                             <Button size="sm" variant="outline" onClick={() => roleMutation.mutate({ memberId: m.membership_id, role: "staff" })} disabled={roleMutation.isPending}>
                               <ShieldOff size={12} className="mr-1" /> Demote to staff
+                            </Button>
+                          )}
+                          {canManage && !isMemberOwner && editEmailFor !== m.membership_id && (
+                            <Button size="sm" variant="ghost" onClick={() => { setEditEmailFor(m.membership_id); setEditEmailValue(m.email); }} disabled={emailMutation.isPending} title="Correct this member's login email in place">
+                              <Pencil size={12} className="mr-1" /> Edit email
                             </Button>
                           )}
                           {canManage && !isMemberOwner && (
