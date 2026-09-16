@@ -10609,6 +10609,61 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, membershipId: memberId, role: newRole });
   });
 
+  // PATCH /api/labs/:labId/members/:memberId/email — correct an accepted
+  // member's login email in place, so an admin does not have to remove and
+  // re-invite (which would spin up a separate account and detach the person's
+  // existing policy sign-offs and competencies). Owner or admin. Refuses the
+  // owner (billing identity; the owner changes their own email in account
+  // settings or via transfer-ownership). users.email is UNIQUE, so a collision
+  // is pre-checked and returned as 409 rather than thrown. Keeps
+  // user_seats.seat_email (the seat-removal path matches on it) and, when the
+  // member is the designated medical director, labs.medical_director_email in
+  // sync so removal and the MD badge still resolve after the change.
+  app.patch("/api/labs/:labId/members/:memberId/email", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
+    const memberId = Number(req.params.memberId);
+    if (!Number.isFinite(memberId)) return res.status(400).json({ error: "Invalid memberId" });
+    const newEmail = String(req.body?.email ?? "").trim().toLowerCase();
+    if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+      return res.status(400).json({ error: "A valid email address is required" });
+    }
+    const sqlite = (db as any).$client;
+    const member = sqlite.prepare(
+      "SELECT id, lab_id, user_id, role FROM lab_members WHERE id = ? AND lab_id = ?"
+    ).get(memberId, req.scope.labId) as any;
+    if (!member) return res.status(404).json({ error: "Member not found in this lab" });
+    if (member.role === "owner") {
+      return res.status(409).json({ error: "Cannot change the owner's email here; the owner updates it in account settings" });
+    }
+    const userRow = sqlite.prepare("SELECT id, email FROM users WHERE id = ?").get(member.user_id) as any;
+    if (!userRow) return res.status(404).json({ error: "Member account not found" });
+    const oldEmail = String(userRow.email || "").toLowerCase();
+    if (oldEmail === newEmail) return res.json({ ok: true, email: newEmail, unchanged: true });
+    const clash = sqlite.prepare("SELECT id FROM users WHERE lower(email) = ? AND id != ?").get(newEmail, userRow.id) as any;
+    if (clash) return res.status(409).json({ error: "That email is already in use by another account" });
+
+    const lab = sqlite.prepare("SELECT medical_director_email FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    try {
+      sqlite.exec("BEGIN");
+      sqlite.prepare("UPDATE users SET email = ? WHERE id = ?").run(newEmail, userRow.id);
+      // Keep every seat this person holds pointing at the new email so the
+      // remove path (which deactivates by seat_email) still finds them.
+      sqlite.prepare("UPDATE user_seats SET seat_email = ? WHERE seat_user_id = ?").run(newEmail, userRow.id);
+      // If this member is the lab's designated medical director, follow the
+      // email so the MD badge and approval routing keep resolving.
+      if (lab?.medical_director_email && String(lab.medical_director_email).toLowerCase() === oldEmail) {
+        sqlite.prepare("UPDATE labs SET medical_director_email = ? WHERE id = ?").run(newEmail, req.scope.labId);
+      }
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[labs/:labId/members/:memberId/email PATCH] failed:", err.message);
+      return res.status(500).json({ error: err.message || "Failed to update email" });
+    }
+    console.log(`[labs/${req.scope.labId}/members/${memberId}/email PATCH] user_id=${userRow.id} ${oldEmail} -> ${newEmail} (by user_id=${req.userId})`);
+    res.json({ ok: true, email: newEmail });
+  });
+
   // PATCH /api/labs/:labId/members/:memberId/permissions — update a member's
   // per-module permissions. Owner or admin may call. Updates the user_seats
   // row that links this member to the lab owner's seat pool (where the
