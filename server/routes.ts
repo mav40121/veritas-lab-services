@@ -26220,6 +26220,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   );
 
+  // Reject a hand-entered competency date with an implausible year. A native
+  // date input or paste can yield a 1-4 digit year (e.g. 0002, seen on Troy /
+  // Rachel 2026-09-18). Returns an error message or null; mirrors the client
+  // isPlausibleYmd guard in VeritaStaffAppPage so a bad value cannot persist
+  // from any client.
+  function implausibleCompetencyDate(body: any): string | null {
+    const nowY = new Date().getFullYear();
+    const fields: [string, any][] = [
+      ["Initial completed date", body?.initialCompletedAt],
+      ["6-Month completed date", body?.sixMonthCompletedAt],
+      ["1st Annual completed date", body?.firstAnnualCompletedAt],
+      ["Annual completed date", body?.lastAnnualCompletedAt],
+    ];
+    for (const [label, v] of fields) {
+      if (!v) continue;
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v));
+      const y = m ? Number(m[1]) : NaN;
+      if (!m || y < 1950 || y > nowY + 1) {
+        return `${label} has an invalid year. Enter a date between 1950 and ${nowY + 1}.`;
+      }
+    }
+    return null;
+  }
+
   // Update competency schedule
   app.put("/api/staff/competency/:employeeId", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
@@ -26229,6 +26253,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const emp = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ? AND lab_id = ?").get(req.params.employeeId, lab.id) as any;
     if (!emp) return res.status(404).json({ error: "Employee not found" });
+    const legacyDateErr = implausibleCompetencyDate(req.body);
+    if (legacyDateErr) return res.status(400).json({ error: legacyDateErr });
 
     const { initialCompletedAt, initialSignedBy, sixMonthCompletedAt, sixMonthSignedBy, firstAnnualCompletedAt, firstAnnualSignedBy, lastAnnualCompletedAt, lastAnnualSignedBy, notes } = req.body;
 
@@ -26325,6 +26351,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT * FROM staff_employees WHERE id = ? AND tier2_lab_id = ?"
     ).get(req.params.employeeId, tier2LabId) as any;
     if (!emp) return res.status(404).json({ error: "Employee not found" });
+    const dateErr = implausibleCompetencyDate(req.body);
+    if (dateErr) return res.status(400).json({ error: dateErr });
     const { initialCompletedAt, initialSignedBy, sixMonthCompletedAt, sixMonthSignedBy, firstAnnualCompletedAt, firstAnnualSignedBy, lastAnnualCompletedAt, lastAnnualSignedBy, notes } = req.body;
     const accreditor = lab.accreditation_body;
     const includesTJCorCAP = ["TJC", "CAP"].includes(accreditor);
