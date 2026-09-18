@@ -24047,7 +24047,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const roles = (db as any).$client.prepare(
         "SELECT * FROM staff_roles WHERE employee_id = ?"
       ).all(emp.id);
-      return { ...emp, roles };
+      // Attach the competency schedule so the list status chips and the
+      // Competency dialog reflect saved milestones. The legacy
+      // /api/staff/employees list and the single-employee lab-scoped GET both
+      // include it; this lab-scoped list dropped it, so on a lab-routed account
+      // (the default path) a saved schedule never surfaced and every competency
+      // save looked like it did nothing (Troy Regional / Rachel report 2026-09-18).
+      const schedule = (db as any).$client.prepare(
+        "SELECT * FROM staff_competency_schedules WHERE employee_id = ?"
+      ).get(emp.id);
+      return { ...emp, roles, competencySchedule: schedule || null };
     });
     res.json(result);
   });
