@@ -109,6 +109,7 @@ const SUITE_PLANS = [
     features: [
       "Full VeritaAssure\u2122 suite including all future modules",
       "2 active seats included ($500/seat)",
+      "Medical director and reviewer seats included free",
       "Additional seats at $500 each, your tier rate",
       "CLIA number on all reports",
       "Complimentary 1-hour onboarding session",
@@ -126,6 +127,7 @@ const SUITE_PLANS = [
     features: [
       "Everything in Clinic",
       "5 active seats included ($425/seat)",
+      "Medical director and reviewer seats included free",
       "Additional seats at $425 each, your tier rate",
       "Complimentary 1-hour onboarding session",
       "Named seat support",
@@ -144,6 +146,7 @@ const SUITE_PLANS = [
     features: [
       "Everything in Community",
       "15 active seats included ($333/seat)",
+      "Medical director and reviewer seats included free",
       "Additional seats at $333 each, your tier rate",
       "Complimentary 2-hour onboarding session",
     ],
@@ -375,7 +378,7 @@ return (
 
         {/* Seat note */}
         <p className="text-xs text-center text-muted-foreground">
-          Active seats include the account owner. Additional active seats above the tier-included count are priced at the tier's per-seat rate. Read-and-sign access for staff who only acknowledge policies, sign competency, or run inventory scans is handled by the Staff Portal add-on below, not per seat.
+          Active seats include the account owner. Additional active seats above the tier-included count are priced at the tier's per-seat rate. Reviewer seats for the medical director or designee, technical consultant, and technical supervisor are always included free and do not count against your active seats. Read-and-sign access for staff who only acknowledge policies, sign competency, or run inventory scans is handled by the Staff Portal add-on below, not per seat.
         </p>
 
         {/* Founding Lab Program (charter offer) shown BELOW the plan tiles so a
