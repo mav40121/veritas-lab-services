@@ -61,7 +61,7 @@ function buildHtml(): string {
 
   <div class="panel">
     <h3>1. Cost</h3>
-    <p>VeritaCheck&trade; Unlimited is $299 in Year 1, $499 per year after, for the entire lab. Per-study pricing for occasional use is $25 one-time. Reviewer seats (medical director or designee, technical consultant, technical supervisor) are unlimited and free on every paid plan.</p>
+    <p>VeritaCheck&trade; Unlimited is $299 in Year 1, $499 per year after, for the entire lab. Per-study pricing for occasional use is $25 one-time. Every paid plan includes one free medical director seat for the lab's named director, which does not count against your active seats. Other reviewers, such as the technical consultant and technical supervisor, use active seats.</p>
     <p>Legacy verification software is typically licensed per seat at $800 to $3,000 per analyst per year. A community-hospital lab with three technologists and one reviewer pays $2,400 to $9,000 per year before any tech time is spent.</p>
     <p>The CFO sees a $499 line as a rounding error. A $5,000 line gets reviewed every renewal cycle.</p>
   </div>
