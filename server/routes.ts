@@ -1820,6 +1820,39 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return res.json({ ok: true, deleted, reowned, before });
   });
 
+  // POST /api/admin/reparent-orphan-seats — fix user_seats whose owner_user_id
+  // no longer matches their lab's current owner. This happens after an ownership
+  // transfer: before 2026-09-21 the transfer route moved labs.owner_user_id but
+  // left user_seats.owner_user_id pointing at the previous owner, so the members
+  // endpoint and the invite gate (both keyed on lab.owner_user_id) read an empty
+  // seat pool. Re-parents each orphaned seat to its lab's current owner. dryRun
+  // returns the rows without writing. Optional labId scopes to a single lab;
+  // omitted sweeps all labs. Deactivated seats are excluded (they affect no
+  // count). Idempotent: a second run finds zero orphans. ADMIN_SECRET-gated.
+  // Body: { secret, labId?, dryRun? }.
+  app.post("/api/admin/reparent-orphan-seats", (req, res) => {
+    const { secret, labId, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const scopeLab = labId != null ? Number(labId) : null;
+    if (labId != null && !Number.isInteger(scopeLab)) return res.status(400).json({ error: "labId must be an integer" });
+    const params: any[] = [];
+    let sql = `SELECT us.id, us.owner_user_id AS current_owner, l.owner_user_id AS correct_owner,
+                      us.seat_email, us.seat_type, us.status, us.lab_id, l.lab_name
+               FROM user_seats us JOIN labs l ON l.id = us.lab_id
+               WHERE us.lab_id IS NOT NULL AND us.status != 'deactivated'
+                 AND us.owner_user_id != l.owner_user_id`;
+    if (scopeLab != null) { sql += " AND us.lab_id = ?"; params.push(scopeLab); }
+    const orphans = sqlite.prepare(sql).all(...params) as any[];
+    if (dryRun) return res.json({ dryRun: true, labId: scopeLab, orphanCount: orphans.length, orphans });
+    let reparented = 0;
+    const upd = sqlite.prepare("UPDATE user_seats SET owner_user_id = ? WHERE id = ?");
+    const tx = sqlite.transaction(() => { for (const o of orphans) reparented += upd.run(o.correct_owner, o.id).changes; });
+    tx();
+    console.log(`[admin/reparent-orphan-seats] labId=${scopeLab ?? "ALL"} reparented=${reparented}`);
+    return res.json({ ok: true, labId: scopeLab, reparented, orphans });
+  });
+
   // Seed / upsert monthly inventory valuation snapshots for the demo. Admin-gated.
   // Body: { secret, rows: [{ lab_id, year_month, avg_value_on_hand, opening_value?,
   //   closing_value?, waste_value?, waste_note? }] }. Upserts on (lab_id, year_month).
@@ -10836,6 +10869,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     const now = new Date().toISOString();
+    let seatsReparented = 0;
     try {
       sqlite.exec("BEGIN");
       sqlite.prepare("UPDATE labs SET owner_user_id = ?, updated_at = ? WHERE id = ?").run(newOwnerId, now, req.scope.labId);
@@ -10848,18 +10882,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         sqlite.prepare("UPDATE lab_members SET is_primary_lab = 0, updated_at = ? WHERE user_id = ? AND is_primary_lab = 1").run(now, newOwnerId);
         sqlite.prepare("UPDATE lab_members SET is_primary_lab = 1, updated_at = ? WHERE id = ?").run(now, newOwnerMember.id);
       }
+      // Re-parent this lab's seat pool to the new owner. The members endpoint
+      // and the invite gate both count seats by lab.owner_user_id, so without
+      // this the transferred lab would read an empty pool (0 active, 0 MD) and
+      // the invite gate would undercount. Scoped to this lab's seats that still
+      // point at the outgoing owner (lab.owner_user_id is still the old owner
+      // here; the labs UPDATE above changed the row, not this cached object).
+      // Pre-2026-09-21 transfers left seats orphaned; the admin endpoint
+      // POST /api/admin/reparent-orphan-seats backfills those.
+      seatsReparented = sqlite.prepare(
+        "UPDATE user_seats SET owner_user_id = ? WHERE lab_id = ? AND owner_user_id = ?"
+      ).run(newOwnerId, req.scope.labId, lab.owner_user_id).changes;
       sqlite.exec("COMMIT");
     } catch (err: any) {
       try { sqlite.exec("ROLLBACK"); } catch {}
       console.error("[labs/:labId/transfer-ownership] failed:", err.message);
       return res.status(500).json({ error: err.message || "Failed to transfer ownership" });
     }
-    console.log(`[labs/${req.scope.labId}/transfer-ownership] old_owner=${req.userId} -> new_owner=${newOwnerId} (primary_moved=${oldOwnerMember.is_primary_lab === 1})`);
+    console.log(`[labs/${req.scope.labId}/transfer-ownership] old_owner=${req.userId} -> new_owner=${newOwnerId} (primary_moved=${oldOwnerMember.is_primary_lab === 1}, seats_reparented=${seatsReparented})`);
     res.json({
       ok: true,
       labId: req.scope.labId,
       oldOwnerUserId: req.userId,
       newOwnerUserId: newOwnerId,
+      seatsReparented,
       primaryFlagMoved: oldOwnerMember.is_primary_lab === 1,
       note: "Stripe customer / billing email is unchanged on the lab; update in Stripe portal if you want billing emails to follow the new owner.",
     });
