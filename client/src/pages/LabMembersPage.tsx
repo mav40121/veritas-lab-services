@@ -371,9 +371,9 @@ export default function LabMembersPage() {
           ) : (members.length === 0 && pendingInvites.length === 0) ? (
             <div className="text-sm text-muted-foreground">No members yet.</div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-sm">
-                <thead>
+                <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted">
                   <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                     <th className="py-2 pr-3">Name / Email</th>
                     <th className="py-2 pr-3">Role</th>
@@ -647,9 +647,9 @@ function MemberLocationsCard({ labId }: { labId: number }) {
         <p className="text-sm text-muted-foreground">
           Choose which locations each member can access, and the location they land on by default. A member only sees locations they are granted here. Granting is additive; to remove access to a location, use Remove on that location&apos;s Members page.
         </p>
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted">
               <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                 <th className="py-2 pr-3">Member</th>
                 {locations.map((l) => <th key={l.labId} className="py-2 px-2 text-center">{l.name}</th>)}

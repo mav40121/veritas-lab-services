@@ -454,9 +454,9 @@ export default function VeritaMapLabwidePage() {
       {/* Table */}
       {!isLoading && filtered.length > 0 && (
         <TooltipProvider>
-          <div className="overflow-x-auto rounded-lg border border-border bg-card">
+          <div className="overflow-auto max-h-[70vh] rounded-lg border border-border bg-card">
             <table className="w-full text-sm">
-              <thead className="bg-muted/40 text-xs text-muted-foreground">
+              <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted bg-muted/40 text-xs text-muted-foreground">
                 <tr>
                   <LabwideSortHeader field="analyte">Analyte</LabwideSortHeader>
                   <LabwideSortHeader field="department">Department</LabwideSortHeader>

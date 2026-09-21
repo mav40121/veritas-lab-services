@@ -362,9 +362,9 @@ export default function VeritaStockSnapOrderPage() {
               {items.length === 0 ? "No inventory items yet. Add items in VeritaStock first." : "No items match your search."}
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-sm">
-                <thead className="bg-muted/40 border-b">
+                <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted bg-muted/40 border-b">
                   <tr>
                     <th className="text-left px-3 py-2 font-semibold">Item</th>
                     <th className="text-left px-3 py-2 font-semibold">Vendor</th>

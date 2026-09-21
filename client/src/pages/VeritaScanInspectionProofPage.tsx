@@ -273,9 +273,9 @@ export default function VeritaScanInspectionProofPage() {
                   return (
                     <div key={dom} className="space-y-1">
                       <h3 className="text-sm font-semibold border-b pb-1">{dom}</h3>
-                      <div className="overflow-x-auto">
+                      <div className="overflow-auto max-h-[70vh]">
                         <table className="w-full text-xs">
-                          <thead>
+                          <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted">
                             <tr className="text-muted-foreground border-b">
                               <th className="text-left py-1 pr-3 w-12">#</th>
                               <th className="text-left py-1 pr-3">Item</th>

@@ -247,9 +247,9 @@ export default function VeritaCheckCoveragePage() {
     </tr>
   );
   const renderUnmappedTable = (rows: any[]) => (
-    <div className="overflow-x-auto">
+    <div className="overflow-auto max-h-[70vh]">
       <table className="w-full text-sm">
-        <thead><tr className="text-left text-xs text-muted-foreground border-b border-border">
+        <thead><tr className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted text-left text-xs text-muted-foreground border-b border-border">
           <th className="py-2 px-3 font-medium">Study</th><th className="py-2 px-3 font-medium">Type</th>
           <th className="py-2 px-3 font-medium">Instrument</th><th className="py-2 px-3 font-medium">Date</th>
           <th className="py-2 px-3 font-medium">Verdict</th><th className="py-2 px-3 font-medium">Align to map analyte</th>
@@ -395,9 +395,9 @@ export default function VeritaCheckCoveragePage() {
         )}
       </div>
       <Card className="mb-8"><CardContent className="p-0">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           <table className="w-full text-sm">
-            <thead><tr className="text-left text-xs text-muted-foreground border-b border-border">
+            <thead><tr className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted text-left text-xs text-muted-foreground border-b border-border">
               <th className="py-2 px-3 font-medium w-8"></th>
               <McSortTh label="Analyte" k="analyte" sort={mcSort} setSort={setMcSort} />
               <McSortTh label="Instruments" k="instruments" sort={mcSort} setSort={setMcSort} />
@@ -464,9 +464,9 @@ export default function VeritaCheckCoveragePage() {
         )}
       </div>
       <Card><CardContent className="p-0">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           <table className="w-full text-sm">
-            <thead><tr className="text-left text-xs text-muted-foreground border-b border-border">
+            <thead><tr className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted text-left text-xs text-muted-foreground border-b border-border">
               <th className="py-2 px-3 font-medium w-8"></th>
               <SortTh label="Analyte" k="analyte" sort={sort} setSort={setSort} />
               <SortTh label="Instrument" k="instrument" sort={sort} setSort={setSort} />

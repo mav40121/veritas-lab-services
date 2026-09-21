@@ -164,9 +164,9 @@ export default function VeritaStockTrendsPage() {
             </div>
           </div>
 
-          <div className="rounded-lg border overflow-x-auto" data-testid="trends-table">
+          <div className="rounded-lg border overflow-auto max-h-[70vh]" data-testid="trends-table">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted">
                 <tr className="border-b" style={{ backgroundColor: "#01696F10" }}>
                   <th className="text-left px-3 py-2 font-medium">Location</th>
                   {months.map((m) => <th key={m} className="text-right px-3 py-2 font-medium">{ymLabel(m)}</th>)}

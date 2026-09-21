@@ -1387,9 +1387,9 @@ function AuditLogPanel({ secret }: { secret: string }) {
           )}
 
           {entries.length > 0 ? (
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-xs border-collapse">
-                <thead>
+                <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted">
                   <tr className="bg-muted">
                     <th className="px-2 py-1.5 text-left border">Time</th>
                     <th className="px-2 py-1.5 text-left border">User</th>

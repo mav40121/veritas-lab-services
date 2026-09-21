@@ -703,9 +703,9 @@ export default function VeritaPacePage() {
               <Button onClick={openAdd} style={{ backgroundColor: "#01696F" }}><Plus size={14} className="mr-1.5" />Add Month</Button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-sm">
-                <thead>
+                <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted">
                   <tr className="border-b" style={{ backgroundColor: "#01696F10" }}>
                     <th className="text-left px-3 py-2 font-medium">Period</th>
                     <th className="text-right px-3 py-2 font-medium">Billable Tests</th>

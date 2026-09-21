@@ -620,9 +620,9 @@ function PIPlanTab({ readOnly, departments }: { readOnly: boolean; departments: 
           ) : reviews.length === 0 ? (
             <p className="text-sm text-muted-foreground">No leadership reviews recorded yet.</p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-sm">
-                <thead>
+                <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted">
                   <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                     <th className="py-2 pr-3">Date</th><th className="py-2 pr-3">Reviewed by</th><th className="py-2 pr-3">Title</th><th className="py-2 pr-3">Changes</th><th className="py-2 pr-3">Next due</th>
                   </tr>
@@ -1441,9 +1441,9 @@ export default function VeritaQAPage() {
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
+              <div className="overflow-auto max-h-[70vh]">
                 <table className="w-full text-sm">
-                  <thead>
+                  <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted">
                     <tr className="border-b" style={{ backgroundColor: "#01696F10" }}>
                       <th className="text-left px-3 py-2 font-medium">Metric Name</th>
                       <th className="text-right px-3 py-2 font-medium w-[120px]">Value</th>

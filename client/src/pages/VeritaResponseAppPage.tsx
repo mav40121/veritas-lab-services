@@ -350,9 +350,9 @@ export default function VeritaResponseAppPage() {
       {/* List */}
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <div className="overflow-auto max-h-[70vh]">
             <table className="w-full text-sm" style={{ minWidth: 700 }}>
-              <thead>
+              <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted">
                 <tr className="text-muted-foreground border-b text-xs bg-muted/30">
                   <th className="text-left py-2.5 px-4">Accreditor</th>
                   <th className="text-left py-2.5 pr-4">Finding #</th>
