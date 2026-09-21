@@ -330,9 +330,9 @@ export default function VeritaScanDocumentLibraryPage() {
                 </label>
               </div>
 
-              <div className="overflow-x-auto">
+              <div className="overflow-auto max-h-[70vh]">
                 <table className="w-full text-sm">
-                  <thead>
+                  <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted">
                     <tr className="border-b text-xs text-muted-foreground">
                       <th className="text-left py-2 pr-3">Document</th>
                       <th className="text-left py-2 pr-3">Type</th>

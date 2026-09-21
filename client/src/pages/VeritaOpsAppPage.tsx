@@ -849,9 +849,9 @@ export default function VeritaOpsAppPage() {
               </Button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-sm">
-                <thead className="bg-muted/40 border-b">
+                <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted bg-muted/40 border-b">
                   <tr>
                     <th className="text-center px-2 py-2 font-semibold w-8" title="Select up to 2 to compare"></th>
                     <th className="text-left px-3 py-2 font-semibold">Test</th>

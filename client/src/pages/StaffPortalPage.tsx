@@ -461,9 +461,9 @@ function StaffPortalQcView({ token, employee, labName, onBack, onSignOut }: {
             {recent.length > 0 && (
               <div className="mt-6">
                 <div className="text-xs text-muted-foreground mb-1">Recent results on this lot</div>
-                <div className="overflow-x-auto">
+                <div className="overflow-auto max-h-[70vh]">
                   <table className="w-full text-sm">
-                    <thead className="text-left text-xs text-muted-foreground border-b">
+                    <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted text-left text-xs text-muted-foreground border-b">
                       <tr><th className="py-1.5 pr-2">Date</th><th className="py-1.5 pr-2">Value</th><th className="py-1.5 pr-2">Instrument</th><th className="py-1.5 pr-2">Accepted</th><th className="py-1.5 pr-2">Notes</th></tr>
                     </thead>
                     <tbody>

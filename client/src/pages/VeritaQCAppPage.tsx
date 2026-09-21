@@ -1296,9 +1296,9 @@ export default function VeritaQCAppPage() {
               ) : results.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No results logged for this lot yet.</p>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-auto max-h-[70vh]">
                   <table className="w-full text-sm">
-                    <thead className="text-left text-xs text-muted-foreground border-b">
+                    <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted text-left text-xs text-muted-foreground border-b">
                       <tr>
                         <th className="py-2 pr-2">Date</th>
                         <th className="py-2 pr-2">Value</th>

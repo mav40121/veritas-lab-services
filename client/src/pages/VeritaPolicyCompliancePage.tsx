@@ -374,9 +374,9 @@ export default function VeritaPolicyCompliancePage() {
               to upload your first.
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-sm">
-                <thead>
+                <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted">
                   <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                     <th className="py-2 pr-3">Manual</th>
                     <th className="py-2 pr-3 text-right">Total</th>
@@ -477,9 +477,9 @@ export default function VeritaPolicyCompliancePage() {
           {links.length === 0 ? (
             <div className="text-sm text-muted-foreground">No surveyor links yet.</div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-sm">
-                <thead>
+                <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted">
                   <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                     <th className="py-2 pr-3">Label</th>
                     <th className="py-2 pr-3">Created</th>
@@ -609,9 +609,9 @@ export default function VeritaPolicyCompliancePage() {
           {perUserAttest.length === 0 ? (
             <div className="text-sm text-muted-foreground">No active lab members.</div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-sm">
-                <thead>
+                <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted">
                   <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                     <th className="py-2 pr-3">Staff</th>
                     <th className="py-2 pr-3 text-right">Pending</th>
@@ -657,9 +657,9 @@ export default function VeritaPolicyCompliancePage() {
           {perStaffAttest.length === 0 ? (
             <div className="text-sm text-muted-foreground">No bench-staff kiosk signatures yet.</div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-sm">
-                <thead>
+                <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted">
                   <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                     <th className="py-2 pr-3">Staff member</th>
                     <th className="py-2 pr-3">Title</th>

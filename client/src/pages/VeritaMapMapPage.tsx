@@ -2331,7 +2331,7 @@ export default function VeritaMapMapPage() {
     const isActive = sortField === field;
     return (
       <th
-        className={`px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap cursor-pointer hover:text-[#01696F] select-none ${className ?? ""}`}
+        className={`sticky top-0 z-20 bg-muted px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap cursor-pointer hover:text-[#01696F] select-none ${className ?? ""}`}
         onClick={() => handleSort(field)}
       >
         <span className="inline-flex items-center gap-1">
@@ -2762,7 +2762,7 @@ export default function VeritaMapMapPage() {
           )}
 
           {/* Table */}
-          <div className="overflow-x-auto rounded-xl border border-border" style={{WebkitOverflowScrolling: 'touch'}}>
+          <div className="overflow-auto max-h-[calc(100vh-13rem)] rounded-xl border border-border" style={{WebkitOverflowScrolling: 'touch'}}>
             <table className="min-w-full text-xs" style={{minWidth: '1100px'}}>
               <thead>
                 <tr className="bg-muted/60 border-b border-border">
@@ -2782,7 +2782,7 @@ export default function VeritaMapMapPage() {
                   <SortableHeader field="last_precision">Precision</SortableHeader>
                   <SortableHeader field="last_sop_review">SOP Review</SortableHeader>
                   <SortableHeader field="notes">Notes</SortableHeader>
-                  <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
+                  <th className="sticky top-0 z-20 bg-muted px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">
                     Actions
                   </th>
                 </tr>

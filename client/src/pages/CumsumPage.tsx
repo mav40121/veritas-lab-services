@@ -289,9 +289,9 @@ export default function CumsumPage() {
               {selectedTracker.entries.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No entries yet. Add the Install Lot to establish the baseline.</p>
               ) : (
-                <div className="overflow-x-auto w-full">
+                <div className="overflow-auto max-h-[70vh] w-full">
                   <table className="min-w-[600px] w-full text-sm">
-                    <thead>
+                    <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted">
                       <tr className="border-b border-border">
                         <th className="text-left py-2 pr-3 text-xs text-muted-foreground font-medium">Year</th>
                         <th className="text-left py-2 pr-3 text-xs text-muted-foreground font-medium">Old Lot</th>
@@ -365,9 +365,9 @@ export default function CumsumPage() {
                 <div className="space-y-2">
                   <div className="text-sm font-medium">Specimen Data - {selectedTracker.analyte} (seconds)</div>
                   <p className="text-xs text-muted-foreground">Enter &gt;150 to exclude a specimen from geometric mean calculation. Minimum 15 specimens recommended.</p>
-                  <div className="overflow-x-auto">
+                  <div className="overflow-auto max-h-[70vh]">
                     <table className="w-full text-sm">
-                      <thead>
+                      <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted">
                         <tr className="border-b border-border">
                           <th className="text-left py-2 pr-3 text-xs text-muted-foreground font-medium w-24">Specimen</th>
                           {!isInstallLot && <th className="text-left py-2 pr-3 text-xs text-muted-foreground font-medium">Old Lot (sec)</th>}

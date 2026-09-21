@@ -133,9 +133,9 @@ export default function ReadinessDashboardPage() {
             <Card>
               <CardHeader><CardTitle className="text-base">All labs</CardTitle></CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
+                <div className="overflow-auto max-h-[70vh]">
                   <table className="w-full text-sm">
-                    <thead className="text-left text-xs text-muted-foreground border-b">
+                    <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted text-left text-xs text-muted-foreground border-b">
                       <tr><th className="py-2 pr-2">Lab</th><th className="py-2 pr-2">Status</th><th className="py-2 pr-2">Modules on track</th><th className="py-2 pr-2">Overdue</th><th className="py-2 pr-2">Due soon</th></tr>
                     </thead>
                     <tbody>

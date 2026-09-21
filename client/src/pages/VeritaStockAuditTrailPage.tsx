@@ -143,9 +143,9 @@ export default function VeritaStockAuditTrailPage() {
       </div>
 
       <Card>
-        <CardContent className="p-0 overflow-x-auto">
+        <CardContent className="p-0 overflow-auto max-h-[70vh]">
           <table className="w-full text-sm" data-testid="audit-table">
-            <thead className="bg-muted/40 border-b">
+            <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted bg-muted/40 border-b">
               <tr className="text-left text-xs text-muted-foreground">
                 <th className="px-3 py-2 font-medium whitespace-nowrap">When</th>
                 <th className="px-3 py-2 font-medium">Who</th>

@@ -317,9 +317,9 @@ export default function EquipmentAppPage() {
               <Button onClick={openAdd} disabled={isReadOnly}>Add your first instrument</Button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-sm">
-                <thead className="text-left text-xs text-muted-foreground border-b">
+                <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted text-left text-xs text-muted-foreground border-b">
                   <tr>
                     <th className="py-2 pr-2">Instrument</th>
                     <th className="py-2 pr-2">Location</th>
@@ -424,7 +424,7 @@ export default function EquipmentAppPage() {
           ) : (
             <div className="overflow-x-auto max-h-96">
               <table className="w-full text-sm">
-                <thead className="text-left text-xs text-muted-foreground border-b"><tr><th className="py-2 pr-2">Date</th><th className="py-2 pr-2">Type</th><th className="py-2 pr-2">By</th><th className="py-2 pr-2">Next due</th><th className="py-2 pr-2">Notes</th></tr></thead>
+                <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted text-left text-xs text-muted-foreground border-b"><tr><th className="py-2 pr-2">Date</th><th className="py-2 pr-2">Type</th><th className="py-2 pr-2">By</th><th className="py-2 pr-2">Next due</th><th className="py-2 pr-2">Notes</th></tr></thead>
                 <tbody>
                   {histEvents.map(ev => (
                     <tr key={ev.id} className="border-b last:border-b-0 align-top">

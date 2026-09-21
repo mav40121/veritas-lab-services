@@ -120,9 +120,9 @@ export default function VeritaCheckSignoffGroupsPage() {
                 ? <Badge variant="outline" className="text-emerald-600 border-emerald-500/40"><CheckCircle2 size={12} className="mr-1" />Signed</Badge>
                 : <Button disabled={draftCount === 0} onClick={() => setSignOpen(true)} data-testid="button-sign-group"><Lock size={14} className="mr-2" />Sign and Lock all{draftCount ? ` (${draftCount})` : ""}</Button>}
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-sm">
-                <thead>
+                <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted">
                   <tr className="text-left text-xs text-muted-foreground border-b border-border">
                     <th className="py-2 pr-3 font-medium">Study</th>
                     <th className="py-2 pr-3 font-medium">Instrument</th>

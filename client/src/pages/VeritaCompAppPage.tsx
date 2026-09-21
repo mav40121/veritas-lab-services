@@ -2112,9 +2112,9 @@ function EmployeesTab({ employees, programId }: { employees: Employee[]; program
           <p className="text-sm text-muted-foreground mb-5">Add employees to begin competency assessments.</p>
         </div>
       ) : (
-        <div className="border border-border rounded-lg overflow-hidden">
+        <div className="border border-border rounded-lg overflow-auto max-h-[70vh]">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted">
               <tr className="bg-muted/50 border-b border-border">
                 <th className="text-left p-3 font-medium text-xs">Name</th>
                 <th className="text-left p-3 font-medium text-xs">Title</th>

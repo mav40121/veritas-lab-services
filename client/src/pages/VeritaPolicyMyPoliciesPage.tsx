@@ -1269,9 +1269,9 @@ export default function VeritaPolicyMyPoliciesPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
+              <div className="overflow-auto max-h-[70vh]">
                 <table className="w-full text-sm">
-                  <thead>
+                  <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted">
                     <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                       <th className="py-2 pr-3">Title</th>
                       <th className="py-2 pr-3">Status</th>
