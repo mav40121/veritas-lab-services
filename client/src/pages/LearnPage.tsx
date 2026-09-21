@@ -99,7 +99,7 @@ export default function LearnPage() {
             See every module in about thirty seconds.
           </p>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed mb-8">
-            One short getting-started video for each of the seventeen modules. No sign-in, no sales call.
+            Short getting-started videos across the VeritaAssure&#8482; suite. No sign-in, no sales call.
             Watch how a lab builds its test menu, runs a verification study, and stays inspection-ready,
             then try the same flow yourself in the live demo.
           </p>
@@ -126,7 +126,7 @@ export default function LearnPage() {
             Compliance
           </div>
           <p className="text-sm text-muted-foreground mb-6 max-w-2xl">
-            Eleven modules for staying inspection-ready, starting with the two that set VeritaAssure&#8482; apart:
+            The compliance modules for staying inspection-ready, starting with the two that set VeritaAssure&#8482; apart:
             performance verification and the coverage map behind it.
           </p>
           <LessonGrid modules={COMPLIANCE} />

@@ -2,7 +2,7 @@
 //
 // Gate 3 browser evidence + standing guard for the unified VeritaAssure nav.
 // Compliance and Operations modules were merged into ONE menu: flat on desktop
-// (a single "VeritaAssure" dropdown listing all seventeen modules, no separate
+// (a single "VeritaAssure" dropdown listing all eighteen modules, no separate
 // "Operations" top-level entry), collapsible-grouped on mobile (one
 // "VeritaAssure" section with Compliance / Operations sub-headers).
 //
