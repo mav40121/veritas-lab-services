@@ -253,7 +253,7 @@ export default function EquipmentAppPage() {
       <div className="container max-w-2xl mx-auto py-12 px-4">
         <Card><CardContent className="py-10 text-center">
           <Lock className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
-          <h2 className="text-lg font-semibold mb-1">Sign in to use Equipment Maintenance</h2>
+          <h2 className="text-lg font-semibold mb-1">Sign in to use VeritaMaintain&#8482;</h2>
           <p className="text-sm text-muted-foreground mb-4">Track per-instrument calibration and preventive maintenance with due dates.</p>
           <Button asChild><Link href="/login">Sign in</Link></Button>
         </CardContent></Card>
@@ -265,7 +265,7 @@ export default function EquipmentAppPage() {
       <div className="container max-w-2xl mx-auto py-12 px-4">
         <Card><CardContent className="py-10 text-center">
           <Lock className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
-          <h2 className="text-lg font-semibold mb-1">Equipment Maintenance requires a subscription</h2>
+          <h2 className="text-lg font-semibold mb-1">VeritaMaintain&#8482; requires a subscription</h2>
           <p className="text-sm text-muted-foreground mb-4">Upgrade your plan to track instrument calibration, preventive maintenance, and service history.</p>
           <Button asChild><Link href="/pricing">See plans</Link></Button>
         </CardContent></Card>
@@ -281,9 +281,12 @@ export default function EquipmentAppPage() {
 
   return (
     <div className="container max-w-5xl mx-auto py-8 px-4">
-      <div className="mb-6 flex items-center gap-2">
-        <Wrench className="h-6 w-6 text-primary" />
-        <h1 className="text-2xl font-bold">Equipment Maintenance</h1>
+      <div className="mb-6 flex items-center gap-3">
+        <Wrench className="h-6 w-6 text-primary shrink-0" />
+        <div>
+          <h1 className="text-2xl font-bold leading-tight">VeritaMaintain&#8482;</h1>
+          <p className="text-sm text-muted-foreground">Instrument maintenance and function-check log</p>
+        </div>
         <div className="ml-auto">
           <Button size="sm" onClick={openAdd} disabled={isReadOnly}>+ Add instrument</Button>
         </div>

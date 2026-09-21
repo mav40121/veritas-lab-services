@@ -113,7 +113,7 @@ export async function runEquipmentReminders(): Promise<EquipmentReminderSummary>
       ``,
       `Instrument calibration and preventive maintenance support CLIA 42 CFR 493.1254 and competency Element 4. Complete the maintenance, then log it in VeritaAssure to clear these reminders.`,
       ``,
-      `Sent automatically from VeritaAssure. To change who receives these or turn them off, update the reminder settings on the Equipment Maintenance page.`,
+      `Sent automatically from VeritaAssure. To change who receives these or turn them off, update the reminder settings on the VeritaMaintain™ page.`,
     ].join("\n");
 
     try {

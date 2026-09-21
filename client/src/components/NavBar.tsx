@@ -44,7 +44,7 @@ const complianceModules: NavLink[] = [
   { href: "/veritatrack", label: "VeritaTrack\u2122" },
   { href: "/veritaresponse", label: "VeritaResponse\u2122" },
   { href: "/veritaqc-app", label: "VeritaQC\u2122" },
-  { href: "/equipment-app", label: "Equipment Maintenance" },
+  { href: "/equipment-app", label: "VeritaMaintain™" },
 ];
 const operationsModules: NavLink[] = [
   { href: "/calculator", label: "VeritaBench\u2122" },
