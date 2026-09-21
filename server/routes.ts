@@ -3639,9 +3639,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!Number.isFinite(sdN) || sdN <= 0) {
       return res.status(400).json({ error: "mfr_sd must be a positive number" });
     }
-    const lvl = String(level || "mid").toLowerCase();
-    if (!["low", "mid", "high"].includes(lvl)) {
-      return res.status(400).json({ error: "level must be low, mid, or high" });
+    // Level is a free-text label. Low / Mid / High are the quick-picks, but a
+    // lab may use any nomenclature its clients recognize (e.g. Level 1 / Level 2,
+    // Normal / Abnormal). Stored as-entered so it displays verbatim; empty
+    // defaults to "mid". The control line keys on this exact string.
+    const lvl = level == null || String(level).trim() === "" ? "mid" : String(level).trim();
+    if (lvl.length > 24) {
+      return res.status(400).json({ error: "level label must be 24 characters or fewer" });
     }
     const sdInt = Number(mfr_sd_interval) === 3 ? 3 : 2;
     const rangeLow = mfr_range_low != null && mfr_range_low !== ""
@@ -3751,7 +3755,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!prior) return res.status(404).json({ error: "Prior control lot not found in this lab" });
 
     const {
-      lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval,
+      lot_number, level, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval,
       mfr_range_low, mfr_range_high, expiration_date, opened_date, retire_prior,
     } = req.body || {};
 
@@ -3779,6 +3783,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(400).json({ error: "mfr_range_high must be a number if provided" });
     }
     const retirePrior = retire_prior === undefined ? true : !!retire_prior;
+    // The new lot carries the prior lot's level by default, but the lab may
+    // rename it here (e.g. adopting Level 1 / Level 2 on a fresh QC lot). A
+    // rename starts a new control line for that label, which is expected since
+    // a new lot re-baselines onto its own mean and SD.
+    const relabel = level != null && String(level).trim() !== "" ? String(level).trim() : null;
+    if (relabel && relabel.length > 24) {
+      return res.status(400).json({ error: "level label must be 24 characters or fewer" });
+    }
+    const newLevel = relabel || prior.level;
     const now = new Date().toISOString();
 
     try {
@@ -3788,7 +3801,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ).run(
           req.scope.labId,
           prior.analyte,
-          prior.level,
+          newLevel,
           String(lot_number).trim(),
           manufacturer ? String(manufacturer).trim() : (prior.manufacturer || null),
           meanN, sdN, sdInt, rangeLow, rangeHigh,
@@ -3826,11 +3839,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // between consecutive points. Powers the "Span all lots" Levey-Jennings view.
   app.get("/api/labs/:labId/qc/line", authMiddleware, labScopeMiddleware, (req: any, res) => {
     const analyte = String(req.query.analyte || "").trim();
-    const level = String(req.query.level || "").trim().toLowerCase();
+    // Level is a free-text label (matches the stored value verbatim, so no
+    // lowercasing or enum restriction). The client passes the lot's own level.
+    const level = String(req.query.level || "").trim();
     if (!analyte) return res.status(400).json({ error: "analyte required" });
-    if (!["low", "mid", "high"].includes(level)) {
-      return res.status(400).json({ error: "level must be low, mid, or high" });
-    }
+    if (!level) return res.status(400).json({ error: "level required" });
     const sqlite = (db as any).$client;
     // Lots of this line in creation chronology (created_at always exists and
     // reflects the changeover order; a replacement lot is inserted after its
