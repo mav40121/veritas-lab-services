@@ -144,6 +144,10 @@ export default function VeritaPolicyAppPage() {
   const [downloadingDocx, setDownloadingDocx] = useState<Record<string, boolean>>({});
   const [downloadingBundle, setDownloadingBundle] = useState(false);
   const [hasCustomTemplate, setHasCustomTemplate] = useState<{ count: number } | null>(null);
+  // Opt-in "UNCONTROLLED COPY" watermark on downloaded Word starters. Off by
+  // default: the in-system copy is the controlled master, so a watermark only
+  // goes on hand-out / printed copies when the user asks for it.
+  const [uncontrolledCopy, setUncontrolledCopy] = useState(false);
 
   const settingsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -271,7 +275,7 @@ export default function VeritaPolicyAppPage() {
     }
     setDownloadingDocx(prev => ({ ...prev, [policyId]: true }));
     try {
-      const url = `${API_BASE}/api/labs/${activeLabId}/veritapolicy/templates/${encodeURIComponent(policyId)}/docx`;
+      const url = `${API_BASE}/api/labs/${activeLabId}/veritapolicy/templates/${encodeURIComponent(policyId)}/docx${uncontrolledCopy ? "?uncontrolled=true" : ""}`;
       const res = await fetch(url, { headers: authHeaders() });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
@@ -282,12 +286,12 @@ export default function VeritaPolicyAppPage() {
       const a = document.createElement("a");
       a.href = dlUrl;
       const safeName = policyName.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 60);
-      a.download = `VeritaPolicy_${String(policyId).padStart(3, "0")}_${safeName}.docx`;
+      a.download = `VeritaPolicy_${String(policyId).padStart(3, "0")}_${safeName}${uncontrolledCopy ? "_UNCONTROLLED" : ""}.docx`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(dlUrl);
-      toast({ title: "Policy downloaded", description: `${policyName} (Word doc)` });
+      toast({ title: "Policy downloaded", description: `${policyName} (Word doc${uncontrolledCopy ? ", UNCONTROLLED COPY watermark" : ""})` });
     } catch (e: any) {
       toast({ title: "Download failed", description: e?.message || "Could not generate the Word document.", variant: "destructive" });
     } finally {
@@ -302,7 +306,7 @@ export default function VeritaPolicyAppPage() {
     }
     setDownloadingBundle(true);
     try {
-      const url = `${API_BASE}/api/labs/${activeLabId}/veritapolicy/templates/bundle.zip`;
+      const url = `${API_BASE}/api/labs/${activeLabId}/veritapolicy/templates/bundle.zip${uncontrolledCopy ? "?uncontrolled=true" : ""}`;
       const res = await fetch(url, { headers: authHeaders() });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
@@ -314,7 +318,7 @@ export default function VeritaPolicyAppPage() {
       const a = document.createElement("a");
       a.href = dlUrl;
       const date = new Date().toISOString().slice(0, 10);
-      a.download = `VeritaPolicy_Bundle_${date}.zip`;
+      a.download = `VeritaPolicy_Bundle_${date}${uncontrolledCopy ? "_UNCONTROLLED" : ""}.zip`;
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(dlUrl);
       toast({ title: "Bundle downloaded", description: `${count} policy Word starters in one ZIP` });
@@ -494,6 +498,20 @@ export default function VeritaPolicyAppPage() {
               </Badge>
             )}
           </div>
+          <label
+            className={`flex items-center gap-1.5 text-xs select-none ${activeLabId ? "text-muted-foreground cursor-pointer" : "text-muted-foreground/50 cursor-not-allowed"}`}
+            title={activeLabId
+              ? "Stamp a diagonal UNCONTROLLED COPY watermark on the Word starters you download. Use it for printed or hand-out copies; leave it off for the controlled master in VeritaPolicy."
+              : "Open this lab to download watermarked Word starters"}>
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 rounded border-border accent-primary"
+              checked={uncontrolledCopy}
+              disabled={!activeLabId}
+              onChange={(e) => setUncontrolledCopy(e.target.checked)}
+              aria-label="Watermark downloaded Word starters as Uncontrolled Copy" />
+            Uncontrolled copy
+          </label>
           <Button size="sm" onClick={handleDownloadPdf} disabled={downloadingPdf} className="gap-1.5">
             <Download size={14} /> {downloadingPdf ? "Generating..." : "Download PDF"}
           </Button>

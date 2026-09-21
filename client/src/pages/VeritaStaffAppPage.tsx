@@ -122,6 +122,21 @@ const ACCREDITORS = [
   { value: "OTHER", label: "Other" },
 ];
 
+// Sane bounds for hand-entered dates. A native <input type="date"> (and paste)
+// can yield a 1-4 digit year, so a mistyped competency date once came in as
+// year 0002 (Troy / Rachel 2026-09-18). min/max constrain the picker and
+// isPlausibleYmd blocks a bad value before save; the server rejects it too.
+const DATE_MIN = "1950-01-01";
+const dateMax = () => new Date().toISOString().split("T")[0];
+function isPlausibleYmd(v: string | null | undefined): boolean {
+  if (!v) return true; // empty is fine; not-entered is allowed
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (!m) return false;
+  const y = Number(m[1]);
+  const nowY = new Date().getFullYear();
+  return y >= 1950 && y <= nowY + 1;
+}
+
 function getCompetencyStatus(schedule: CompetencySchedule | null): { label: string; color: string } {
   // The other branches all return text + bg + border so the Badge renders
   // legibly against any page surface. The "Not set" branch used to return
@@ -1168,7 +1183,7 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
             </div>
             <div>
               <label className="text-sm font-medium">Hire Date</label>
-              <Input type="date" value={form.hireDate} onChange={(e) => setForm({ ...form, hireDate: e.target.value })} />
+              <Input type="date" min={DATE_MIN} max={dateMax()} value={form.hireDate} onChange={(e) => setForm({ ...form, hireDate: e.target.value })} />
             </div>
           </div>
           <div>
@@ -1194,6 +1209,8 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
               <label className="text-sm font-medium">Verification date</label>
               <Input
                 type="date"
+                min={DATE_MIN}
+                max={dateMax()}
                 value={form.qualificationsVerifiedAt}
                 onChange={(e) => setForm({ ...form, qualificationsVerifiedAt: e.target.value })}
               />
@@ -1439,6 +1456,17 @@ function CompetencyDialog({ open, onOpenChange, employee, lab }: {
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
+    for (const [label, v] of [
+      ["Initial completed", form.initialCompletedAt],
+      ["6-Month completed", form.sixMonthCompletedAt],
+      ["1st Annual completed", form.firstAnnualCompletedAt],
+      ["Annual completed", form.lastAnnualCompletedAt],
+    ] as [string, string][]) {
+      if (!isPlausibleYmd(v)) {
+        toast({ title: "Check the date", description: `${label} has an invalid year. Enter a date between 1950 and next year.`, variant: "destructive" });
+        return;
+      }
+    }
     setSaving(true);
     try {
       const competencyUrl = activeLabId
@@ -1474,7 +1502,7 @@ function CompetencyDialog({ open, onOpenChange, employee, lab }: {
           </label>
         </div>
         <div>
-          <Input type="date" value={completedValue} onChange={(e) => setForm({ ...form, [completedKey]: e.target.value })} className="text-xs" />
+          <Input type="date" min={DATE_MIN} max={dateMax()} value={completedValue} onChange={(e) => setForm({ ...form, [completedKey]: e.target.value })} className="text-xs" />
         </div>
         <div>
           <Input value={signedByValue} onChange={(e) => setForm({ ...form, [signedByKey]: e.target.value })} placeholder="Signed by" className="text-xs" />

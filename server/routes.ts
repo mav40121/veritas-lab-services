@@ -10609,6 +10609,61 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, membershipId: memberId, role: newRole });
   });
 
+  // PATCH /api/labs/:labId/members/:memberId/email — correct an accepted
+  // member's login email in place, so an admin does not have to remove and
+  // re-invite (which would spin up a separate account and detach the person's
+  // existing policy sign-offs and competencies). Owner or admin. Refuses the
+  // owner (billing identity; the owner changes their own email in account
+  // settings or via transfer-ownership). users.email is UNIQUE, so a collision
+  // is pre-checked and returned as 409 rather than thrown. Keeps
+  // user_seats.seat_email (the seat-removal path matches on it) and, when the
+  // member is the designated medical director, labs.medical_director_email in
+  // sync so removal and the MD badge still resolve after the change.
+  app.patch("/api/labs/:labId/members/:memberId/email", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
+    const memberId = Number(req.params.memberId);
+    if (!Number.isFinite(memberId)) return res.status(400).json({ error: "Invalid memberId" });
+    const newEmail = String(req.body?.email ?? "").trim().toLowerCase();
+    if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+      return res.status(400).json({ error: "A valid email address is required" });
+    }
+    const sqlite = (db as any).$client;
+    const member = sqlite.prepare(
+      "SELECT id, lab_id, user_id, role FROM lab_members WHERE id = ? AND lab_id = ?"
+    ).get(memberId, req.scope.labId) as any;
+    if (!member) return res.status(404).json({ error: "Member not found in this lab" });
+    if (member.role === "owner") {
+      return res.status(409).json({ error: "Cannot change the owner's email here; the owner updates it in account settings" });
+    }
+    const userRow = sqlite.prepare("SELECT id, email FROM users WHERE id = ?").get(member.user_id) as any;
+    if (!userRow) return res.status(404).json({ error: "Member account not found" });
+    const oldEmail = String(userRow.email || "").toLowerCase();
+    if (oldEmail === newEmail) return res.json({ ok: true, email: newEmail, unchanged: true });
+    const clash = sqlite.prepare("SELECT id FROM users WHERE lower(email) = ? AND id != ?").get(newEmail, userRow.id) as any;
+    if (clash) return res.status(409).json({ error: "That email is already in use by another account" });
+
+    const lab = sqlite.prepare("SELECT medical_director_email FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    try {
+      sqlite.exec("BEGIN");
+      sqlite.prepare("UPDATE users SET email = ? WHERE id = ?").run(newEmail, userRow.id);
+      // Keep every seat this person holds pointing at the new email so the
+      // remove path (which deactivates by seat_email) still finds them.
+      sqlite.prepare("UPDATE user_seats SET seat_email = ? WHERE seat_user_id = ?").run(newEmail, userRow.id);
+      // If this member is the lab's designated medical director, follow the
+      // email so the MD badge and approval routing keep resolving.
+      if (lab?.medical_director_email && String(lab.medical_director_email).toLowerCase() === oldEmail) {
+        sqlite.prepare("UPDATE labs SET medical_director_email = ? WHERE id = ?").run(newEmail, req.scope.labId);
+      }
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[labs/:labId/members/:memberId/email PATCH] failed:", err.message);
+      return res.status(500).json({ error: err.message || "Failed to update email" });
+    }
+    console.log(`[labs/${req.scope.labId}/members/${memberId}/email PATCH] user_id=${userRow.id} ${oldEmail} -> ${newEmail} (by user_id=${req.userId})`);
+    res.json({ ok: true, email: newEmail });
+  });
+
   // PATCH /api/labs/:labId/members/:memberId/permissions — update a member's
   // per-module permissions. Owner or admin may call. Updates the user_seats
   // row that links this member to the lab owner's seat pool (where the
@@ -23992,7 +24047,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const roles = (db as any).$client.prepare(
         "SELECT * FROM staff_roles WHERE employee_id = ?"
       ).all(emp.id);
-      return { ...emp, roles };
+      // Attach the competency schedule so the list status chips and the
+      // Competency dialog reflect saved milestones. The legacy
+      // /api/staff/employees list and the single-employee lab-scoped GET both
+      // include it; this lab-scoped list dropped it, so on a lab-routed account
+      // (the default path) a saved schedule never surfaced and every competency
+      // save looked like it did nothing (Troy Regional / Rachel report 2026-09-18).
+      const schedule = (db as any).$client.prepare(
+        "SELECT * FROM staff_competency_schedules WHERE employee_id = ?"
+      ).get(emp.id);
+      return { ...emp, roles, competencySchedule: schedule || null };
     });
     res.json(result);
   });
@@ -26156,6 +26220,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   );
 
+  // Reject a hand-entered competency date with an implausible year. A native
+  // date input or paste can yield a 1-4 digit year (e.g. 0002, seen on Troy /
+  // Rachel 2026-09-18). Returns an error message or null; mirrors the client
+  // isPlausibleYmd guard in VeritaStaffAppPage so a bad value cannot persist
+  // from any client.
+  function implausibleCompetencyDate(body: any): string | null {
+    const nowY = new Date().getFullYear();
+    const fields: [string, any][] = [
+      ["Initial completed date", body?.initialCompletedAt],
+      ["6-Month completed date", body?.sixMonthCompletedAt],
+      ["1st Annual completed date", body?.firstAnnualCompletedAt],
+      ["Annual completed date", body?.lastAnnualCompletedAt],
+    ];
+    for (const [label, v] of fields) {
+      if (!v) continue;
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v));
+      const y = m ? Number(m[1]) : NaN;
+      if (!m || y < 1950 || y > nowY + 1) {
+        return `${label} has an invalid year. Enter a date between 1950 and ${nowY + 1}.`;
+      }
+    }
+    return null;
+  }
+
   // Update competency schedule
   app.put("/api/staff/competency/:employeeId", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
@@ -26165,6 +26253,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const emp = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ? AND lab_id = ?").get(req.params.employeeId, lab.id) as any;
     if (!emp) return res.status(404).json({ error: "Employee not found" });
+    const legacyDateErr = implausibleCompetencyDate(req.body);
+    if (legacyDateErr) return res.status(400).json({ error: legacyDateErr });
 
     const { initialCompletedAt, initialSignedBy, sixMonthCompletedAt, sixMonthSignedBy, firstAnnualCompletedAt, firstAnnualSignedBy, lastAnnualCompletedAt, lastAnnualSignedBy, notes } = req.body;
 
@@ -26261,6 +26351,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT * FROM staff_employees WHERE id = ? AND tier2_lab_id = ?"
     ).get(req.params.employeeId, tier2LabId) as any;
     if (!emp) return res.status(404).json({ error: "Employee not found" });
+    const dateErr = implausibleCompetencyDate(req.body);
+    if (dateErr) return res.status(400).json({ error: dateErr });
     const { initialCompletedAt, initialSignedBy, sixMonthCompletedAt, sixMonthSignedBy, firstAnnualCompletedAt, firstAnnualSignedBy, lastAnnualCompletedAt, lastAnnualSignedBy, notes } = req.body;
     const accreditor = lab.accreditation_body;
     const includesTJCorCAP = ["TJC", "CAP"].includes(accreditor);
@@ -31873,15 +31965,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const downloader = sqlite.prepare('SELECT name, email FROM users WHERE id = ?').get(req.userId) as any;
       const downloadedBy = downloader?.name || downloader?.email || `user #${req.userId}`;
       const downloadedAt = new Date().toISOString().slice(0, 10);
+      // Opt-in "UNCONTROLLED COPY" diagonal watermark for hand-out / printed
+      // copies. Off by default so the in-system copy stays the controlled master.
+      const uncontrolled = req.query?.uncontrolled === 'true' || req.query?.uncontrolled === '1';
 
       const buf = await generatePolicyDocxBuffer(policyId, {
         lab_name: lab.lab_name || 'Your Laboratory',
         clia_number: lab.clia_number || 'CLIA pending',
-      }, crosswalk, { downloadedBy, downloadedAt });
+      }, crosswalk, { downloadedBy, downloadedAt, uncontrolled });
       if (!buf) return res.status(500).json({ error: 'DOCX generation failed' });
 
       const safeSlug = (tmpl.slug || tmpl.policy_name.toLowerCase().replace(/[^a-z0-9]+/g, '_')).slice(0, 60);
-      const filename = `VeritaPolicy_${String(policyId).padStart(3, '0')}_${safeSlug}.docx`;
+      const filename = `VeritaPolicy_${String(policyId).padStart(3, '0')}_${safeSlug}${uncontrolled ? '_UNCONTROLLED' : ''}.docx`;
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.setHeader('Content-Length', String(buf.length));
@@ -32013,6 +32108,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const bundleDownloader = sqlite.prepare('SELECT name, email FROM users WHERE id = ?').get(req.userId) as any;
       const bundleDownloadedBy = bundleDownloader?.name || bundleDownloader?.email || `user #${req.userId}`;
       const bundleDownloadedAt = new Date().toISOString().slice(0, 10);
+      // Opt-in "UNCONTROLLED COPY" diagonal watermark, off by default. Applies
+      // to every generator-built starter in the zip; custom-uploaded facility
+      // templates (served as-is below) pass through without the watermark.
+      const bundleUncontrolled = req.query?.uncontrolled === 'true' || req.query?.uncontrolled === '1';
 
       // Pre-fetch any custom artifacts for this lab in one query so the loop
       // below does a map lookup instead of N round-trips.
@@ -32043,10 +32142,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         if (lab.accreditation_cola && row.cola_citations) crosswalk.cola = row.cola_citations;
         if (lab.accreditation_aabb && row.aabb_citations) crosswalk.aabb = row.aabb_citations;
 
-        const buf = await generatePolicyDocxBuffer(pid, labCtx, crosswalk, { downloadedBy: bundleDownloadedBy, downloadedAt: bundleDownloadedAt });
+        const buf = await generatePolicyDocxBuffer(pid, labCtx, crosswalk, { downloadedBy: bundleDownloadedBy, downloadedAt: bundleDownloadedAt, uncontrolled: bundleUncontrolled });
         if (!buf) { skipped += 1; continue; }
         const safeSlug = (tmpl.slug || tmpl.policy_name.toLowerCase().replace(/[^a-z0-9]+/g, '_')).slice(0, 60);
-        const filename = `VeritaPolicy_${pid.padStart(3, '0')}_${safeSlug}.docx`;
+        const filename = `VeritaPolicy_${pid.padStart(3, '0')}_${safeSlug}${bundleUncontrolled ? '_UNCONTROLLED' : ''}.docx`;
         zip.file(filename, buf);
         added += 1;
       }
@@ -32068,6 +32167,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         `to match your lab's actual procedures, then have the medical director`,
         `or designee sign before placing into your manual.`,
         ``,
+        ...(bundleUncontrolled ? [
+          `These starters carry an UNCONTROLLED COPY watermark. They are for`,
+          `hand-out or reference only. The controlled master stays in VeritaPolicy.`,
+          ``,
+        ] : []),
         `Generated by VeritaAssure (TM) | VeritaPolicy (TM).`,
       ].join('\n');
       zip.file(`README_${today}.txt`, readme);
