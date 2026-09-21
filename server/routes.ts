@@ -9888,8 +9888,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // parking-lot #33 PR 4: surface seat caps + current usage so the
     // members page can show "Active 2 of 5 included" and the $99/yr
     // add-on hint without the client having to know plan internals.
-    let seatLimits: { activeIncluded: number; viewOnlyIncluded: number; addOnRatePerYear: number; addOnPriceId: string | null } = { activeIncluded: 1, viewOnlyIncluded: 0, addOnRatePerYear: 99, addOnPriceId: null };
-    let seatCounts = { active: 0, viewOnly: 0 };
+    let seatLimits: { activeIncluded: number; viewOnlyIncluded: number; medicalDirectorIncluded: number; addOnRatePerYear: number; addOnPriceId: string | null } = { activeIncluded: 1, viewOnlyIncluded: 0, medicalDirectorIncluded: 0, addOnRatePerYear: 99, addOnPriceId: null };
+    let seatCounts = { active: 0, viewOnly: 0, medicalDirector: 0 };
     try {
       if (lab) {
         const ownerRow = sqlite.prepare("SELECT plan, seat_count FROM users WHERE id = ?").get(lab.owner_user_id) as any;
@@ -9897,19 +9897,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const planSeatLimit = PLAN_SEATS[ownerPlan] ?? (PLAN_LIMITS as any)[ownerPlan]?.maxAnalysts ?? 1;
         const dbSeats = ownerRow?.seat_count || 0;
         const activeIncluded = Math.max(dbSeats, planSeatLimit);
-        const viewOnlyIncluded = PLAN_VIEW_ONLY_SEATS[ownerPlan] ?? 0;
         const addon = getViewOnlyAddOnConfig();
-        seatLimits = { activeIncluded, viewOnlyIncluded, addOnRatePerYear: addon.ratePerYear, addOnPriceId: addon.priceId };
-        const breakdown = sqlite.prepare(
-          `SELECT
-             SUM(CASE WHEN COALESCE(seat_type,'active') = 'active'    THEN 1 ELSE 0 END) as active_count,
-             SUM(CASE WHEN COALESCE(seat_type,'active') = 'view_only' THEN 1 ELSE 0 END) as view_only_count
-           FROM user_seats
-           WHERE owner_user_id = ? AND status != 'deactivated'`
-        ).get(lab.owner_user_id) as { active_count: number; view_only_count: number } | undefined;
+        // Three-type seat model: active (writers), medical director (one free
+        // seat per lab, tied to the director designation), staff portal. The
+        // designated medical director(s) across the owner's labs sit on a FREE
+        // seat and do not count against the active cap; view-only is retired.
+        const mdEmails = new Set(
+          (sqlite.prepare("SELECT lower(medical_director_email) AS e FROM labs WHERE owner_user_id = ? AND medical_director_email IS NOT NULL AND TRIM(medical_director_email) != ''").all(lab.owner_user_id) as { e: string }[]).map(r => r.e)
+        );
+        const seatRows = sqlite.prepare(
+          "SELECT lower(seat_email) AS e, COALESCE(seat_type,'active') AS t FROM user_seats WHERE owner_user_id = ? AND status != 'deactivated'"
+        ).all(lab.owner_user_id) as { e: string; t: string }[];
+        let activeSeatCount = 0, mdSeatCount = 0;
+        for (const s of seatRows) {
+          if (s.e && mdEmails.has(s.e)) { mdSeatCount++; continue; }
+          if (s.t === "active") activeSeatCount++;
+        }
+        const thisLabMd = sqlite.prepare("SELECT medical_director_email AS e FROM labs WHERE id = ?").get(req.scope.labId) as { e: string | null } | undefined;
+        seatLimits = { activeIncluded, viewOnlyIncluded: 0, medicalDirectorIncluded: (thisLabMd?.e && String(thisLabMd.e).trim()) ? 1 : 0, addOnRatePerYear: addon.ratePerYear, addOnPriceId: addon.priceId };
         seatCounts = {
-          active: (breakdown?.active_count ?? 0) + 1 /* owner counts as active */,
-          viewOnly: breakdown?.view_only_count ?? 0,
+          active: activeSeatCount + 1 /* owner counts as active */,
+          viewOnly: 0,
+          medicalDirector: mdSeatCount,
         };
       }
     } catch (err: any) {
@@ -10043,15 +10052,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const dbSeats = ownerRow.seat_count || 0;
     const maxActiveSeats = Math.max(dbSeats, planSeatLimit);
     const maxViewOnlySeats = PLAN_VIEW_ONLY_SEATS[ownerPlan] ?? 0;
-    const seatBreakdown = sqlite.prepare(
-      `SELECT
-         SUM(CASE WHEN COALESCE(seat_type,'active') = 'active'    THEN 1 ELSE 0 END) as active_count,
-         SUM(CASE WHEN COALESCE(seat_type,'active') = 'view_only' THEN 1 ELSE 0 END) as view_only_count
-       FROM user_seats
-       WHERE owner_user_id = ? AND status != 'deactivated'`
-    ).get(labOwnerId) as { active_count: number; view_only_count: number } | undefined;
-    const currentActive = (seatBreakdown?.active_count ?? 0) + 1 /* owner counts as active */;
-    const currentViewOnly = seatBreakdown?.view_only_count ?? 0;
+    // Three-type model: the designated medical director(s) across the owner's
+    // labs sit on a free seat and are excluded from the active-seat count.
+    const gateMdEmails = new Set(
+      (sqlite.prepare("SELECT lower(medical_director_email) AS e FROM labs WHERE owner_user_id = ? AND medical_director_email IS NOT NULL AND TRIM(medical_director_email) != ''").all(labOwnerId) as { e: string }[]).map(r => r.e)
+    );
+    const gateSeatRows = sqlite.prepare(
+      "SELECT lower(seat_email) AS e, COALESCE(seat_type,'active') AS t FROM user_seats WHERE owner_user_id = ? AND status != 'deactivated'"
+    ).all(labOwnerId) as { e: string; t: string }[];
+    let gateActive = 0, gateViewOnly = 0;
+    for (const s of gateSeatRows) {
+      if (s.e && gateMdEmails.has(s.e)) continue; // medical director seat is free
+      if (s.t === "active") gateActive++;
+      else if (s.t === "view_only") gateViewOnly++;
+    }
+    const currentActive = gateActive + 1 /* owner counts as active */;
+    const currentViewOnly = gateViewOnly;
     if (seatType === "active" && currentActive + 1 > maxActiveSeats) {
       return res.status(402).json({
         error: "seat_limit_reached",
