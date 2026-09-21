@@ -551,7 +551,7 @@ app.use((req, res, next) => {
   app.get('/our-services', (_req, res) => res.redirect(301, '/services'));
 
   // /operations -> /veritaassure. The 6 operations modules were folded into the
-  // unified 17-module VeritaAssure suite page. 301 consolidates SEO link equity.
+  // unified 18-module VeritaAssure suite page. 301 consolidates SEO link equity.
   app.get('/operations', (_req, res) => res.redirect(301, '/veritaassure'));
 
   // importantly only setup vite in development and after

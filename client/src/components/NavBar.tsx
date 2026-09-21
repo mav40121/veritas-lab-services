@@ -22,7 +22,7 @@ const mobileTopLinks: { href: string; label: string }[] = [
   { href: "/services", label: "Consulting" },
   { href: "/pricing", label: "Plans" },
 ];
-// Single source of truth for the seventeen VeritaAssure modules, kept in the
+// Single source of truth for the eighteen VeritaAssure modules, kept in the
 // two streams so the mobile menu can label them. Desktop renders them FLAT
 // (one menu, no Compliance/Operations split); mobile keeps the stream
 // sub-headers so the collapsible group still scans on a phone. The route ->
@@ -198,7 +198,7 @@ export function NavBar() {
             Plans
           </Link>
 
-          {/* VeritaAssure — one flat menu of all seventeen modules. Compliance
+          {/* VeritaAssure — one flat menu of all eighteen modules. Compliance
               and Operations are unified here (no separate Operations menu); the
               stream split now lives only as sub-headers in the mobile group. */}
           <DropdownMenu>

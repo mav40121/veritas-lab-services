@@ -8,7 +8,7 @@ import {
   FlaskConical, Map, ClipboardCheck, Award, Users, FileText,
   ChevronRight, CheckCircle2, Download, Shield, Play, CalendarDays,
   TestTubes, ClipboardList, Activity,
-  BarChart3, TrendingUp, Clock, Boxes, Calculator, Gauge,
+  BarChart3, TrendingUp, Clock, Boxes, Calculator, Gauge, Wrench,
 } from "lucide-react";
 
 const COMPLIANCE_MODULES = [
@@ -132,6 +132,17 @@ const COMPLIANCE_MODULES = [
     badgeColor: "emerald",
     icon: ClipboardList,
     color: "text-rose-600 bg-rose-500/10 border-rose-500/20",
+  },
+  {
+    href: "/equipment-app",
+    label: "VeritaMaintain™",
+    desc: "Equipment Maintenance",
+    detail:
+      "Track every instrument's maintenance and function-check schedule, log each event with who performed it and when, and see what is overdue at a glance. Supports the maintenance and function-check records required under CLIA 42 CFR 493.1254, with automatic maintenance-due email reminders.",
+    badge: "Live",
+    badgeColor: "emerald",
+    icon: Wrench,
+    color: "text-slate-600 bg-slate-500/10 border-slate-500/20",
   },
 ];
 
@@ -268,7 +279,7 @@ function ModuleGrid({ modules }: { modules: typeof COMPLIANCE_MODULES }) {
 
 export default function VeritaAssurePage() {
     const { isLoggedIn } = useAuth();
-    useSEO({ title: "VeritaAssure™ | Complete Lab Compliance and Operations Software Suite", description: "The complete laboratory platform: seventeen modules across compliance and operations. VeritaCheck™, VeritaMap™, VeritaScan™, VeritaPolicy™, VeritaStock™, VeritaOps™, and more, built by a lab professional who conducted 200+ Joint Commission surveys." });
+    useSEO({ title: "VeritaAssure™ | Complete Lab Compliance and Operations Software Suite", description: "The complete laboratory platform: eighteen modules across compliance and operations. VeritaCheck™, VeritaMap™, VeritaScan™, VeritaPolicy™, VeritaStock™, VeritaOps™, and more, built by a lab professional who conducted 200+ Joint Commission surveys." });
 return (
     <div className="min-h-screen bg-background">
 
@@ -289,8 +300,8 @@ return (
           </p>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed mb-8">
             VeritaAssure&#8482; is the integrated laboratory platform from Veritas Lab Services, LLC:
-            seventeen modules across two streams. Eleven compliance modules (performance verification,
-            inspection readiness, test menu mapping, competency, personnel, policy, and QC) and six
+            eighteen modules across two streams. Twelve compliance modules (performance verification,
+            inspection readiness, test menu mapping, competency, personnel, policy, QC, and equipment maintenance) and six
             operations modules (productivity benchmarking, staffing, quality metrics, cost per reportable test,
             and inventory). Built by a former TJC laboratory surveyor with 200+ facility inspections.
             Browser-based. No desktop software. No installation.
@@ -314,14 +325,14 @@ return (
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-14 space-y-16">
 
-        {/* Module Grid — all seventeen modules, two streams under one suite */}
+        {/* Module Grid — all eighteen modules, two streams under one suite */}
         <section>
           <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
             Compliance
           </div>
           <p className="text-sm text-muted-foreground mb-6 max-w-2xl">
-            Eleven modules for staying inspection-ready: performance verification, test menu mapping,
-            competency, personnel, policy, QC, and more.
+            Twelve modules for staying inspection-ready: performance verification, test menu mapping,
+            competency, personnel, policy, QC, equipment maintenance, and more.
           </p>
           <ModuleGrid modules={COMPLIANCE_MODULES} />
         </section>

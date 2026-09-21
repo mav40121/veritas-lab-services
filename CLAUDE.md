@@ -140,10 +140,10 @@ Plain-text questions in chat without numbering, without the ★, or without `[my
 ## 3. Copy Rules
 
 - NO em dashes (—) in public-facing artifacts. Use commas, colons, or plain hyphens. Public-facing means anything a customer, prospect, accreditor, or non-employee sees: website copy, leave-behinds, brochures, generated PDFs (VeritaCheck, VeritaComp, VeritaScan, VeritaMap, VeritaLab, certificates, CMS 209), demo assets, marketing emails, social cards, externally shown decks, the master citation index xlsx, and book content. Em-dashes are tolerated only in internal files like this one, STANDING_REQUIREMENTS.md, code comments, and scratch notes. When in doubt, treat as public-facing.
-- All product names use ™ not ®. The VeritaAssure™ suite is seventeen modules organized into two streams:
-  - **Compliance (11):** VeritaCheck™, VeritaMap™, VeritaScan™, VeritaComp™, VeritaPolicy™, VeritaStaff™, VeritaLab™, VeritaPT™, VeritaTrack™, VeritaResponse™, VeritaQC™.
+- All product names use ™ not ®. The VeritaAssure™ suite is eighteen modules organized into two streams:
+  - **Compliance (12):** VeritaCheck™, VeritaMap™, VeritaScan™, VeritaComp™, VeritaPolicy™, VeritaStaff™, VeritaLab™, VeritaPT™, VeritaTrack™, VeritaResponse™, VeritaQC™, VeritaMaintain™ (the rebranded Equipment Maintenance module; route /equipment-app).
   - **Operations (6):** VeritaBench™, VeritaPace™, VeritaShift™, VeritaQA™, VeritaStock™, VeritaOps™.
-  - The suite mark itself is VeritaAssure™. Any public-facing copy that gives a module count must say "seventeen" (11 compliance + 6 operations), not "twelve".
+  - The suite mark itself is VeritaAssure™. Any public-facing copy that gives a module count must say "eighteen" (12 compliance + 6 operations).
 - NO reference to EP Evaluator by name — use "other evaluation tools" if the comparison is needed.
 - NO CAMLAB references — use "TJC standard".
 - NO dated accreditor manual references in public-facing copy. Never name a TJC, CAP, AABB, or COLA manual by year, month/year, or edition. Use "the current TJC standard" or "TJC standard for laboratory accreditation". The audit script enforces this.

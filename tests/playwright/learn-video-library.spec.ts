@@ -23,7 +23,7 @@ test.describe("Learn VeritaAssure video library", () => {
     expect(body).not.toContain("404 Page Not Found");
     expect(/Learn VeritaAssure/i.test(body)).toBeTruthy();
 
-    // 17 modules -> at least 17 video players on the page.
+    // At least 17 tutorial videos (one per module that has one) on the page.
     const videoCount = await page.locator("video").count();
     expect(videoCount).toBeGreaterThanOrEqual(17);
 
