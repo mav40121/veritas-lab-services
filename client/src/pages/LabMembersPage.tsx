@@ -294,7 +294,7 @@ export default function LabMembersPage() {
                 <div>
                   <div className="font-medium">Read-and-sign staff</div>
                   <div className="text-xs text-muted-foreground">
-                    Medical director or designee, reviewers, and staff who only read and sign use the Staff Portal at /staff-access. They do not consume seats.
+                    Staff who only read and sign use the Staff Portal at /staff-access. They do not consume seats. Your medical director gets one free seat; other reviewers use active seats.
                   </div>
                 </div>
               </div>
@@ -351,7 +351,7 @@ export default function LabMembersPage() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Every member is an active (writer) seat and counts against the tier seat cap. Staff who only read and sign policies, self-attest competency, or acknowledge corrective actions do not need a seat: they use the Staff Portal. Admins can invite/remove members and manage lab settings. They cannot change billing or transfer ownership. Staff get operational access only.
+              Every member is an active (writer) seat and counts against the tier seat cap, except your medical director, who gets one free seat that does not count against the cap. Staff who only read and sign policies, self-attest competency, or acknowledge corrective actions do not need a seat: they use the Staff Portal. Admins can invite/remove members and manage lab settings. They cannot change billing or transfer ownership. Staff get operational access only.
             </p>
           </CardContent>
         </Card>
