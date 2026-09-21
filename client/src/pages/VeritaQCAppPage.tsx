@@ -341,7 +341,7 @@ export default function VeritaQCAppPage() {
   const [addLotOpen, setAddLotOpen] = useState(false);
   const [newAnalyte, setNewAnalyte] = useState("");
   const [newLotNumber, setNewLotNumber] = useState("");
-  const [newLevel, setNewLevel] = useState<"low" | "mid" | "high">("mid");
+  const [newLevel, setNewLevel] = useState<string>("mid");
   const [newManufacturer, setNewManufacturer] = useState("");
   const [newMfrMean, setNewMfrMean] = useState("");
   const [newMfrSd, setNewMfrSd] = useState("");
@@ -363,6 +363,7 @@ export default function VeritaQCAppPage() {
   // same control line via POST /qc/control-lots/:id/changeover.
   const [changeoverOpen, setChangeoverOpen] = useState(false);
   const [coLotNumber, setCoLotNumber] = useState("");
+  const [coLevel, setCoLevel] = useState("");
   const [coManufacturer, setCoManufacturer] = useState("");
   const [coMean, setCoMean] = useState("");
   const [coSd, setCoSd] = useState("");
@@ -747,6 +748,7 @@ export default function VeritaQCAppPage() {
 
   function resetChangeoverForm() {
     setCoLotNumber("");
+    setCoLevel("");
     setCoManufacturer("");
     setCoMean("");
     setCoSd("");
@@ -763,6 +765,7 @@ export default function VeritaQCAppPage() {
     const lot = lots.find(l => l.id === selectedLotId);
     resetChangeoverForm();
     if (lot) {
+      setCoLevel(lot.level || "");
       setCoManufacturer(lot.manufacturer || "");
       setCoSdInterval(String(lot.mfr_sd_interval) === "3" ? "3" : "2");
     }
@@ -794,6 +797,7 @@ export default function VeritaQCAppPage() {
           headers: { ...authHeaders(), "Content-Type": "application/json" },
           body: JSON.stringify({
             lot_number: coLotNumber.trim(),
+            level: coLevel.trim() || null,
             manufacturer: coManufacturer.trim() || null,
             mfr_mean: meanN,
             mfr_sd: sdN,
@@ -1529,14 +1533,25 @@ export default function VeritaQCAppPage() {
             </div>
             <div>
               <Label htmlFor="new-level">Level <span className="text-red-600">*</span></Label>
-              <Select value={newLevel} onValueChange={(v) => setNewLevel(v as "low" | "mid" | "high")}>
-                <SelectTrigger id="new-level"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="mid">Mid</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                </SelectContent>
-              </Select>
+              <Input
+                id="new-level"
+                value={newLevel}
+                onChange={(e) => setNewLevel(e.target.value)}
+                placeholder="e.g. Level 1, Low, Normal"
+                maxLength={24}
+              />
+              <div className="flex gap-1.5 mt-1.5">
+                {["low", "mid", "high"].map((q) => (
+                  <button
+                    type="button"
+                    key={q}
+                    onClick={() => setNewLevel(q)}
+                    className="text-xs capitalize rounded-full border border-input px-2 py-0.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="sm:col-span-2">
               <Label htmlFor="new-manufacturer">Manufacturer</Label>
@@ -1637,13 +1652,17 @@ export default function VeritaQCAppPage() {
           </DialogHeader>
           {selectedLot && (
             <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
-              Replacing lot <span className="font-medium text-foreground">{selectedLot.lot_number}</span> (mean {selectedLot.mfr_mean}, SD {selectedLot.mfr_sd}, &plusmn;{selectedLot.mfr_sd_interval} SD). Analyte and level carry forward and cannot change here.
+              Replacing lot <span className="font-medium text-foreground">{selectedLot.lot_number}</span> (mean {selectedLot.mfr_mean}, SD {selectedLot.mfr_sd}, &plusmn;{selectedLot.mfr_sd_interval} SD). Analyte carries forward; you can rename the level below.
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="co-lot-number">New lot number <span className="text-red-600">*</span></Label>
               <Input id="co-lot-number" value={coLotNumber} onChange={(e) => setCoLotNumber(e.target.value)} placeholder="e.g. 303072" autoFocus />
+            </div>
+            <div>
+              <Label htmlFor="co-level">Level</Label>
+              <Input id="co-level" value={coLevel} onChange={(e) => setCoLevel(e.target.value)} placeholder="Carried from prior lot" maxLength={24} />
             </div>
             <div>
               <Label htmlFor="co-manufacturer">Manufacturer</Label>
