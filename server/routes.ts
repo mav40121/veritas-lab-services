@@ -3077,6 +3077,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, lab_id: Number(labId), deleted_lot: { id: lot.id, analyte: lot.analyte, lot_number: lot.lot_number }, results_deleted: results, violations_deleted: viols, corrective_actions_deleted: cas, notes_deleted: notes, period_reviews_deleted: periodReviews });
   });
 
+  // Admin: relabel a QC control LEVEL in place for a lab, at a client's request
+  // (e.g. low -> "Level 1", high -> "Level 2"). Touches ONLY the level column
+  // (+ updated_at); qc_results (values, dates, voids), means/SDs, and lot numbers
+  // are left completely untouched. Because it moves every lot matching `from` to
+  // `to` together, the control line stays intact (analyte + level groups by the
+  // new label). Case-insensitive match on `from`; dryRun previews the affected
+  // lots without writing; idempotent (re-running a done relabel updates 0 rows).
+  app.post("/api/admin/qc-relabel-level", (req, res) => {
+    const { secret, labId, from, to, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!labId || !from || !to) return res.status(400).json({ error: "labId, from, and to required" });
+    const toTrim = String(to).trim();
+    if (!toTrim || toTrim.length > 24) return res.status(400).json({ error: "to must be a 1-24 char label" });
+    const sqlite = (db as any).$client;
+    const matches = sqlite.prepare(
+      "SELECT id, analyte, level, lot_number, mfr_mean, mfr_sd, status FROM qc_control_lots WHERE lab_id = ? AND lower(level) = lower(?)"
+    ).all(Number(labId), String(from)) as any[];
+    if (dryRun) {
+      return res.json({ ok: true, dryRun: true, lab_id: Number(labId), from, to: toTrim, would_update: matches.length, lots: matches });
+    }
+    const info = sqlite.prepare(
+      "UPDATE qc_control_lots SET level = ?, updated_at = ? WHERE lab_id = ? AND lower(level) = lower(?)"
+    ).run(toTrim, new Date().toISOString(), Number(labId), String(from));
+    const after = sqlite.prepare(
+      "SELECT id, analyte, level, lot_number, mfr_mean, mfr_sd, status FROM qc_control_lots WHERE lab_id = ? AND level = ?"
+    ).all(Number(labId), toTrim) as any[];
+    return res.json({ ok: true, lab_id: Number(labId), from, to: toTrim, updated: info.changes, lots: after });
+  });
+
   // Admin: correct a mistyped/mislabeled QC control lot NUMBER (label-only fix).
   // Re-labels the lot to newLotNumber; the attached qc_results (values, dates,
   // voids) are left completely untouched. Used when a control lot was entered
