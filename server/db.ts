@@ -5733,6 +5733,62 @@ sqlite.exec(`
     UNIQUE(lab_id, analyte, qc_level)
   );
 
+  -- VeritaMaintain: instrument/equipment maintenance and function-check logs
+  -- (42 CFR 493.1254 maintenance & function checks; 493.1105 2-yr retention).
+  -- maintain_equipment = each device; maintain_schedules = its per-manufacturer
+  -- maintenance/function-check tasks + frequency; maintain_logs = each performed
+  -- event. Next-due is derived from the latest log + frequency at read time,
+  -- never stored, so a frequency edit re-derives immediately.
+  CREATE TABLE IF NOT EXISTS maintain_equipment (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    category TEXT,
+    manufacturer TEXT,
+    model TEXT,
+    serial_number TEXT,
+    location TEXT,
+    in_service_date TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    veritamap_instrument TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (lab_id) REFERENCES labs(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS maintain_schedules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    equipment_id INTEGER NOT NULL,
+    lab_id INTEGER NOT NULL,
+    task_name TEXT NOT NULL,
+    task_type TEXT NOT NULL DEFAULT 'maintenance',
+    frequency TEXT NOT NULL DEFAULT 'monthly',
+    instructions TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (lab_id) REFERENCES labs(id),
+    FOREIGN KEY (equipment_id) REFERENCES maintain_equipment(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS maintain_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    equipment_id INTEGER NOT NULL,
+    schedule_id INTEGER,
+    lab_id INTEGER NOT NULL,
+    performed_date TEXT NOT NULL,
+    performed_by TEXT,
+    result TEXT NOT NULL DEFAULT 'done',
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (lab_id) REFERENCES labs(id),
+    FOREIGN KEY (equipment_id) REFERENCES maintain_equipment(id),
+    FOREIGN KEY (schedule_id) REFERENCES maintain_schedules(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_maintain_sched_equipment ON maintain_schedules(equipment_id, active);
+  CREATE INDEX IF NOT EXISTS idx_maintain_logs_sched ON maintain_logs(schedule_id, performed_date);
+  CREATE INDEX IF NOT EXISTS idx_maintain_logs_equipment ON maintain_logs(equipment_id, performed_date);
+
   -- PDF download tokens. Browser claims a token via GET /api/pdf/:token after
   -- a server-side POST mints it; the GET delivers the PDF buffer and deletes
   -- the row (one-time use). Persisted to SQLite (not an in-memory Map) so the
@@ -5822,6 +5878,25 @@ try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as a
   ensure("qc_result_notes", "author_user_id",           "ALTER TABLE qc_result_notes ADD COLUMN author_user_id INTEGER");
   ensure("qc_result_notes", "author_staff_employee_id",  "ALTER TABLE qc_result_notes ADD COLUMN author_staff_employee_id INTEGER");
   ensure("qc_result_notes", "source",                    "ALTER TABLE qc_result_notes ADD COLUMN source TEXT NOT NULL DEFAULT 'console'");
+
+  // VeritaMaintain self-heal. All columns are defined in the CREATE TABLE above;
+  // these guard a partial table from an earlier interrupted deploy (per §8).
+  ensure("maintain_equipment", "category",             "ALTER TABLE maintain_equipment ADD COLUMN category TEXT");
+  ensure("maintain_equipment", "manufacturer",         "ALTER TABLE maintain_equipment ADD COLUMN manufacturer TEXT");
+  ensure("maintain_equipment", "model",                "ALTER TABLE maintain_equipment ADD COLUMN model TEXT");
+  ensure("maintain_equipment", "serial_number",        "ALTER TABLE maintain_equipment ADD COLUMN serial_number TEXT");
+  ensure("maintain_equipment", "location",             "ALTER TABLE maintain_equipment ADD COLUMN location TEXT");
+  ensure("maintain_equipment", "in_service_date",      "ALTER TABLE maintain_equipment ADD COLUMN in_service_date TEXT");
+  ensure("maintain_equipment", "status",               "ALTER TABLE maintain_equipment ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  ensure("maintain_equipment", "veritamap_instrument", "ALTER TABLE maintain_equipment ADD COLUMN veritamap_instrument TEXT");
+  ensure("maintain_schedules", "task_type",            "ALTER TABLE maintain_schedules ADD COLUMN task_type TEXT NOT NULL DEFAULT 'maintenance'");
+  ensure("maintain_schedules", "frequency",            "ALTER TABLE maintain_schedules ADD COLUMN frequency TEXT NOT NULL DEFAULT 'monthly'");
+  ensure("maintain_schedules", "instructions",         "ALTER TABLE maintain_schedules ADD COLUMN instructions TEXT");
+  ensure("maintain_schedules", "active",               "ALTER TABLE maintain_schedules ADD COLUMN active INTEGER NOT NULL DEFAULT 1");
+  ensure("maintain_logs", "schedule_id",               "ALTER TABLE maintain_logs ADD COLUMN schedule_id INTEGER");
+  ensure("maintain_logs", "performed_by",              "ALTER TABLE maintain_logs ADD COLUMN performed_by TEXT");
+  ensure("maintain_logs", "result",                    "ALTER TABLE maintain_logs ADD COLUMN result TEXT NOT NULL DEFAULT 'done'");
+  ensure("maintain_logs", "notes",                     "ALTER TABLE maintain_logs ADD COLUMN notes TEXT");
 
   ensure("qc_period_reviews", "attestation_acknowledged", "ALTER TABLE qc_period_reviews ADD COLUMN attestation_acknowledged INTEGER NOT NULL DEFAULT 0");
   ensure("qc_period_reviews", "review_notes",             "ALTER TABLE qc_period_reviews ADD COLUMN review_notes TEXT");

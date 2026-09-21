@@ -4741,6 +4741,179 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, analyte, mappings: updated });
   });
 
+  // ── VeritaMaintain™ — equipment maintenance & function-check logs ───────────
+  // 42 CFR 493.1254 (maintenance and function checks), 493.1105 (2-yr retention).
+  // Reads use auth + lab scope; writes also requireWriteAccess (read-only seats
+  // cannot log or edit). next-due is computed from the latest log + frequency at
+  // read time and never stored, so a frequency edit re-derives immediately.
+  const MAINT_FREQ = ["daily", "weekly", "monthly", "quarterly", "semiannual", "annual", "as_needed"];
+  const MAINT_FREQ_DAYS: Record<string, number | null> = { daily: 1, weekly: 7, monthly: 30, quarterly: 91, semiannual: 182, annual: 365, as_needed: null };
+  const MAINT_TASK_TYPE = ["maintenance", "function_check"];
+  const MAINT_RESULT = ["done", "pass", "fail", "na"];
+  const maintStr = (v: any) => (v == null || String(v).trim() === "") ? null : String(v).trim();
+
+  app.get("/api/labs/:labId/maintain/equipment", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const rows = sqlite.prepare(
+      "SELECT id, lab_id, name, category, manufacturer, model, serial_number, location, in_service_date, status, veritamap_instrument, created_at, updated_at FROM maintain_equipment WHERE lab_id = ? ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END, name COLLATE NOCASE"
+    ).all(req.scope.labId) as any[];
+    res.json({ equipment: rows });
+  });
+
+  app.post("/api/labs/:labId/maintain/equipment", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    const { name, category, manufacturer, model, serial_number, location, in_service_date, veritamap_instrument } = req.body || {};
+    if (!name || typeof name !== "string" || !name.trim()) return res.status(400).json({ error: "name required" });
+    const sqlite = (db as any).$client;
+    const now = new Date().toISOString();
+    const ins = sqlite.prepare(
+      "INSERT INTO maintain_equipment (lab_id, name, category, manufacturer, model, serial_number, location, in_service_date, status, veritamap_instrument, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)"
+    ).run(req.scope.labId, name.trim(), maintStr(category), maintStr(manufacturer), maintStr(model), maintStr(serial_number), maintStr(location), maintStr(in_service_date), maintStr(veritamap_instrument), now, now);
+    const row = sqlite.prepare("SELECT * FROM maintain_equipment WHERE id = ?").get(Number(ins.lastInsertRowid));
+    res.json({ ok: true, equipment: row });
+  });
+
+  app.patch("/api/labs/:labId/maintain/equipment/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: "valid :id required" });
+    const sqlite = (db as any).$client;
+    const cur = sqlite.prepare("SELECT id FROM maintain_equipment WHERE id = ? AND lab_id = ?").get(id, req.scope.labId) as any;
+    if (!cur) return res.status(404).json({ error: "Equipment not found in this lab" });
+    const b = req.body || {};
+    const fields: string[] = [];
+    const vals: any[] = [];
+    for (const f of ["name", "category", "manufacturer", "model", "serial_number", "location", "in_service_date", "veritamap_instrument"]) {
+      if (f in b) { fields.push(`${f} = ?`); vals.push(f === "name" ? (String(b[f] || "").trim() || null) : maintStr(b[f])); }
+    }
+    if ("status" in b) {
+      const s = String(b.status || "").toLowerCase();
+      if (!["active", "retired"].includes(s)) return res.status(400).json({ error: "status must be active or retired" });
+      fields.push("status = ?"); vals.push(s);
+    }
+    if (fields.length === 0) return res.status(400).json({ error: "no updatable fields provided" });
+    fields.push("updated_at = ?"); vals.push(new Date().toISOString());
+    vals.push(id);
+    sqlite.prepare(`UPDATE maintain_equipment SET ${fields.join(", ")} WHERE id = ?`).run(...vals);
+    const row = sqlite.prepare("SELECT * FROM maintain_equipment WHERE id = ?").get(id);
+    res.json({ ok: true, equipment: row });
+  });
+
+  app.get("/api/labs/:labId/maintain/equipment/:equipmentId/schedules", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const eid = Number(req.params.equipmentId);
+    const sqlite = (db as any).$client;
+    const eq = sqlite.prepare("SELECT id FROM maintain_equipment WHERE id = ? AND lab_id = ?").get(eid, req.scope.labId) as any;
+    if (!eq) return res.status(404).json({ error: "Equipment not found in this lab" });
+    const rows = sqlite.prepare(
+      "SELECT id, equipment_id, task_name, task_type, frequency, instructions, active, created_at, updated_at FROM maintain_schedules WHERE equipment_id = ? AND lab_id = ? ORDER BY active DESC, task_name COLLATE NOCASE"
+    ).all(eid, req.scope.labId) as any[];
+    res.json({ schedules: rows });
+  });
+
+  app.post("/api/labs/:labId/maintain/equipment/:equipmentId/schedules", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    const eid = Number(req.params.equipmentId);
+    const sqlite = (db as any).$client;
+    const eq = sqlite.prepare("SELECT id FROM maintain_equipment WHERE id = ? AND lab_id = ?").get(eid, req.scope.labId) as any;
+    if (!eq) return res.status(404).json({ error: "Equipment not found in this lab" });
+    const { task_name, task_type, frequency, instructions } = req.body || {};
+    if (!task_name || !String(task_name).trim()) return res.status(400).json({ error: "task_name required" });
+    const tt = String(task_type || "maintenance").toLowerCase();
+    if (!MAINT_TASK_TYPE.includes(tt)) return res.status(400).json({ error: "task_type must be maintenance or function_check" });
+    const fq = String(frequency || "monthly").toLowerCase();
+    if (!MAINT_FREQ.includes(fq)) return res.status(400).json({ error: "invalid frequency" });
+    const now = new Date().toISOString();
+    const ins = sqlite.prepare(
+      "INSERT INTO maintain_schedules (equipment_id, lab_id, task_name, task_type, frequency, instructions, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)"
+    ).run(eid, req.scope.labId, String(task_name).trim(), tt, fq, maintStr(instructions), now, now);
+    const row = sqlite.prepare("SELECT * FROM maintain_schedules WHERE id = ?").get(Number(ins.lastInsertRowid));
+    res.json({ ok: true, schedule: row });
+  });
+
+  app.patch("/api/labs/:labId/maintain/schedules/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    const id = Number(req.params.id);
+    const sqlite = (db as any).$client;
+    const cur = sqlite.prepare("SELECT id FROM maintain_schedules WHERE id = ? AND lab_id = ?").get(id, req.scope.labId) as any;
+    if (!cur) return res.status(404).json({ error: "Schedule not found in this lab" });
+    const b = req.body || {};
+    const fields: string[] = [], vals: any[] = [];
+    if ("task_name" in b) { const v = String(b.task_name || "").trim(); if (!v) return res.status(400).json({ error: "task_name cannot be empty" }); fields.push("task_name = ?"); vals.push(v); }
+    if ("task_type" in b) { const v = String(b.task_type || "").toLowerCase(); if (!MAINT_TASK_TYPE.includes(v)) return res.status(400).json({ error: "invalid task_type" }); fields.push("task_type = ?"); vals.push(v); }
+    if ("frequency" in b) { const v = String(b.frequency || "").toLowerCase(); if (!MAINT_FREQ.includes(v)) return res.status(400).json({ error: "invalid frequency" }); fields.push("frequency = ?"); vals.push(v); }
+    if ("instructions" in b) { fields.push("instructions = ?"); vals.push(maintStr(b.instructions)); }
+    if ("active" in b) { fields.push("active = ?"); vals.push(b.active ? 1 : 0); }
+    if (fields.length === 0) return res.status(400).json({ error: "no updatable fields provided" });
+    fields.push("updated_at = ?"); vals.push(new Date().toISOString()); vals.push(id);
+    sqlite.prepare(`UPDATE maintain_schedules SET ${fields.join(", ")} WHERE id = ?`).run(...vals);
+    const row = sqlite.prepare("SELECT * FROM maintain_schedules WHERE id = ?").get(id);
+    res.json({ ok: true, schedule: row });
+  });
+
+  app.get("/api/labs/:labId/maintain/equipment/:equipmentId/logs", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const eid = Number(req.params.equipmentId);
+    const sqlite = (db as any).$client;
+    const eq = sqlite.prepare("SELECT id FROM maintain_equipment WHERE id = ? AND lab_id = ?").get(eid, req.scope.labId) as any;
+    if (!eq) return res.status(404).json({ error: "Equipment not found in this lab" });
+    const rows = sqlite.prepare(
+      "SELECT l.id, l.equipment_id, l.schedule_id, l.performed_date, l.performed_by, l.result, l.notes, l.created_at, s.task_name, s.task_type, s.frequency FROM maintain_logs l LEFT JOIN maintain_schedules s ON s.id = l.schedule_id WHERE l.equipment_id = ? AND l.lab_id = ? ORDER BY l.performed_date DESC, l.id DESC LIMIT 500"
+    ).all(eid, req.scope.labId) as any[];
+    res.json({ logs: rows });
+  });
+
+  app.post("/api/labs/:labId/maintain/logs", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    const { equipment_id, schedule_id, performed_date, performed_by, result, notes } = req.body || {};
+    const eid = Number(equipment_id);
+    const sqlite = (db as any).$client;
+    const eq = sqlite.prepare("SELECT id FROM maintain_equipment WHERE id = ? AND lab_id = ?").get(eid, req.scope.labId) as any;
+    if (!eq) return res.status(404).json({ error: "Equipment not found in this lab" });
+    let sid: number | null = null;
+    if (schedule_id != null && String(schedule_id) !== "") {
+      sid = Number(schedule_id);
+      const sc = sqlite.prepare("SELECT id FROM maintain_schedules WHERE id = ? AND equipment_id = ? AND lab_id = ?").get(sid, eid, req.scope.labId) as any;
+      if (!sc) return res.status(400).json({ error: "schedule_id does not belong to this equipment" });
+    }
+    const pd = String(performed_date || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}/.test(pd)) return res.status(400).json({ error: "performed_date (YYYY-MM-DD) required" });
+    const rz = String(result || "done").toLowerCase();
+    if (!MAINT_RESULT.includes(rz)) return res.status(400).json({ error: "result must be done, pass, fail, or na" });
+    const now = new Date().toISOString();
+    const ins = sqlite.prepare(
+      "INSERT INTO maintain_logs (equipment_id, schedule_id, lab_id, performed_date, performed_by, result, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(eid, sid, req.scope.labId, pd, maintStr(performed_by), rz, maintStr(notes), now);
+    const row = sqlite.prepare("SELECT * FROM maintain_logs WHERE id = ?").get(Number(ins.lastInsertRowid));
+    res.json({ ok: true, log: row });
+  });
+
+  app.get("/api/labs/:labId/maintain/due", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const rows = sqlite.prepare(
+      "SELECT s.id AS schedule_id, s.equipment_id, s.task_name, s.task_type, s.frequency, e.name AS equipment_name, (SELECT MAX(performed_date) FROM maintain_logs l WHERE l.schedule_id = s.id) AS last_done FROM maintain_schedules s JOIN maintain_equipment e ON e.id = s.equipment_id WHERE s.lab_id = ? AND s.active = 1 AND e.status = 'active'"
+    ).all(req.scope.labId) as any[];
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const dayMs = 86400000;
+    const out = rows.map((r: any) => {
+      const days = MAINT_FREQ_DAYS[r.frequency];
+      let next_due: string | null = null;
+      let status = "ok";
+      if (days == null) {
+        status = "as_needed";
+      } else if (!r.last_done) {
+        status = "overdue";
+      } else {
+        const last = new Date(r.last_done + "T00:00:00");
+        const nd = new Date(last.getTime() + days * dayMs);
+        next_due = nd.toISOString().slice(0, 10);
+        const diffDays = Math.round((nd.getTime() - today.getTime()) / dayMs);
+        status = diffDays < 0 ? "overdue" : (diffDays <= 7 ? "due_soon" : "ok");
+      }
+      return { ...r, next_due, status };
+    });
+    const summary = {
+      overdue: out.filter((o: any) => o.status === "overdue").length,
+      due_soon: out.filter((o: any) => o.status === "due_soon").length,
+      ok: out.filter((o: any) => o.status === "ok").length,
+      as_needed: out.filter((o: any) => o.status === "as_needed").length,
+    };
+    res.json({ due: out, summary });
+  });
+
   // GET /api/labs/:labId/qc/import-analyte-bulk-candidates
   //   Required query: analyte
   //   Optional query: start_date, end_date, instrument
