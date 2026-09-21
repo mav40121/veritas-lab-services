@@ -888,6 +888,15 @@ export default function VeritaQCAppPage() {
 
   const selectedLot = lots.find(l => l.id === selectedLotId) || null;
 
+  // Level labels this lab has already used, offered as quick-picks in the
+  // add-lot dialog (alongside Low / Mid / High) so a lab reuses its own
+  // nomenclature (e.g. Normal / Abnormal, Level 1 / Level 2) instead of
+  // re-typing and drifting into near-duplicate control lines. Excludes the
+  // canonical low/mid/high, which already have their own chips.
+  const pastLevels = Array.from(new Set(lots.map(l => l.level).filter(Boolean)))
+    .filter(v => !["low", "mid", "high"].includes(String(v).toLowerCase()))
+    .sort((a, b) => String(a).localeCompare(String(b)));
+
   // Group lots into control lines (analyte + level). Within a line, order
   // newest-first so the current lot sits at the top of its group. "Current" =
   // the newest active lot of the line (or the newest lot if none are active).
@@ -1540,13 +1549,24 @@ export default function VeritaQCAppPage() {
                 placeholder="e.g. Level 1, Low, Normal"
                 maxLength={24}
               />
-              <div className="flex gap-1.5 mt-1.5">
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
                 {["low", "mid", "high"].map((q) => (
                   <button
                     type="button"
                     key={q}
                     onClick={() => setNewLevel(q)}
                     className="text-xs capitalize rounded-full border border-input px-2 py-0.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  >
+                    {q}
+                  </button>
+                ))}
+                {pastLevels.map((q) => (
+                  <button
+                    type="button"
+                    key={q}
+                    onClick={() => setNewLevel(q)}
+                    className="text-xs rounded-full border border-input px-2 py-0.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    title="Previously used in this lab"
                   >
                     {q}
                   </button>
