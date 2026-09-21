@@ -2762,7 +2762,7 @@ export default function VeritaMapMapPage() {
           )}
 
           {/* Table */}
-          <div className="overflow-auto max-h-[calc(100vh-13rem)] rounded-xl border border-border" style={{WebkitOverflowScrolling: 'touch'}}>
+          <div className="sticky top-16 max-h-[calc(100vh-5rem)] overflow-auto rounded-xl border border-border" style={{WebkitOverflowScrolling: 'touch'}}>
             <table className="min-w-full text-xs" style={{minWidth: '1100px'}}>
               <thead>
                 <tr className="bg-muted/60 border-b border-border">
