@@ -21,9 +21,9 @@ test.describe("Plans page — free medical director / reviewer seat", () => {
   test("/pricing states reviewer seats are included free", async ({ page }) => {
     await page.goto(`${BASE}/pricing`, { waitUntil: "networkidle" });
     const body = (await page.textContent("body")) || "";
-    // Tier-card bullet.
-    expect(body).toContain("Medical director and reviewer seats included free");
-    // Seat note wording.
-    expect(/reviewer seats for the medical director or designee/i.test(body)).toBeTruthy();
+    // Tier-card bullet: one free medical director seat.
+    expect(body).toContain("One free medical director seat");
+    // Seat note: one free MD seat for the named director; reviewers use active seats.
+    expect(/one free medical director seat for its named director/i.test(body)).toBeTruthy();
   });
 });
