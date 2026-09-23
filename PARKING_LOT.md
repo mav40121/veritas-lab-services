@@ -1077,6 +1077,45 @@ strike-throughs above); see C30. Pre- vs post-COLA: indifferent.
 
 ---
 
+### 45. VeritaTrack calendar month cells are not expandable, so hidden tasks are unreachable
+
+**Effort:** S (1-3 days) — make each month cell open a detail view or expand in place, and wire the "+N more" affordance to reveal the full task list. The data is already loaded, this is a UI interaction gap, not a data one.
+**Importance:** High — a compliance calendar that hides tasks with no way to see them undercuts the module's core promise of showing what a lab owes and when.
+
+VeritaTrack's calendar view shows a per-month task count and a "+N more" line, but the month boxes are not clickable and cannot be expanded, so any task past the first few is invisible with no path to it. On the live demo (lab 3), the September cell shows 11 tasks with "+8 more" and nothing reveals the hidden eight. The List and Reminders views exist, but a user who lands on Calendar has no way to reach the full month from there. Shipping a clickable or expandable month cell closes the gap without any new data work.
+
+**Source:** 2026-09-23 session, Michael screenshot of the VeritaTrack calendar (lab 3, September cell).
+
+**Status:** Open. Not started.
+
+---
+
+### 46. VeritaScan line items cannot attach or link evidence (policy or uploaded document)
+
+**Effort:** M (1-2 weeks) — add a per-item evidence link that reuses the VeritaScan URL-pointer model rather than storing files: let a line item reference an existing VeritaDC controlled document or an external URL, then surface it as completion evidence.
+**Importance:** High — showing evidence per line item is the whole point of a self-inspection; without it the scan records a status but cannot show the policy or document that satisfies it.
+
+Users still cannot attach a policy, link an already-uploaded policy, or point to other evidence from a VeritaScan line item. VeritaScan is intentionally URL-and-metadata only (no file content lands on VeritaAssure), so the correct shape is a link to a VeritaDC document or an external URL on each item, not a file upload. This pairs naturally with VeritaDC now that document control is the evidence home. Shipping it lets a scan line item carry its proof, which is what both a surveyor and a director want to see.
+
+**Source:** 2026-09-23 session, Michael. Recurring request.
+
+**Status:** Open. Not started.
+
+---
+
+### 47. Hide sections a lab does not use from a master list, to reduce clutter (prospect-requested)
+
+**Effort:** S-M (a few days to ~2 weeks depending on scope) — a lab-level visibility toggle that hides not-applicable or unused sections from a master-list view. Smaller if it is a "hide N/A" filter on the existing VeritaDC master list, larger if it also spans VeritaScan domains.
+**Importance:** Medium-High — came straight from a live prospect today as an onboarding-friction point; a lab that does not run a service line should not have to wade past its requirements.
+
+A prospect asked today whether she could hide the modules or sections her lab does not use from the master list, to cut confusion and clutter. VeritaDC (formerly VeritaPolicy) already auto-marks non-applicable requirements as N/A via the service-line toggles, but it still shows them, so the ask is to hide them from view entirely, not just flag them. Scope needs one clarification with the operator: whether "master list" means the VeritaDC Master List categories, the VeritaScan domains, or both. A simple "show only applicable / hide N/A" view toggle persisted per lab would satisfy the core request; a fuller version lets the lab choose which sections to hide.
+
+**Source:** 2026-09-23 session, Michael relaying a prospect ask from a demo today.
+
+**Status:** Open. Not started. Needs a one-line scope confirmation (which master list).
+
+---
+
 ## CLOSED (audit trail)
 
 ### C34. Wire the two static-audit guards into CI (was #43)
