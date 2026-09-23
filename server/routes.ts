@@ -681,6 +681,7 @@ import {
   UNITS_LOOKUP, REFERENCE_RANGES, AMR_LOOKUP,
   CFR_MAP as VERITAMAP_CFR_MAP, getComplianceStatus, lookupAnalyte, INSTRUCTIONS_CONTENT,
 } from "./veritamapData";
+import { IQCP_QUESTION_BANK, evaluatePrescreen, type PrescreenAnswers } from "./iqcpQuestionBank";
 // Phase 3.6 (2026-05-03): Authoritative server-side reference for VeritaScan items.
 // Used as a fallback when client-sent referenceItems are missing accreditor fields
 // (e.g. stale browser bundles). Pure data module, safe to import on the server.
@@ -13185,6 +13186,104 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     `).run(status, (reviewer_notes || "").trim() || null, resolved_by_user_id || null, now, now, id);
     if (result.changes === 0) return res.status(404).json({ error: "request not found" });
     res.json({ id, status });
+  });
+
+  // ===== IQCP Builder (VeritaQC sub-feature) — Phase 1 backend =====
+
+  // Static IQCP reference content (CMS workbook Appendix A-F): the 3-question
+  // pre-screen, the five risk-assessment components, QCP and QA guidance, and
+  // the glossary with CFR cites. No lab data, so auth-only.
+  app.get("/api/iqcp/question-bank", authMiddleware, (_req: any, res) => {
+    res.json(IQCP_QUESTION_BANK);
+  });
+
+  // The 3-question pre-screen gate ("is it even worth building?"). All three
+  // answers must be "yes" or an IQCP is not indicated. Server-authoritative so
+  // the UI and any future PDF share one source of truth.
+  app.post("/api/iqcp/prescreen", authMiddleware, (req: any, res) => {
+    const answers: PrescreenAnswers = {
+      nonwaived: req.body?.nonwaived,
+      reduce_intent: req.body?.reduce_intent,
+      mfr_less_strict: req.body?.mfr_less_strict,
+    };
+    res.json({ ...evaluatePrescreen(answers), answers });
+  });
+
+  // Which test systems on this lab's VeritaMap are eligible for an IQCP:
+  // nonwaived (moderate/high complexity), non-pathology, active tests, grouped
+  // by instrument (the IQCP unit is the test system, not the analyte).
+  app.get("/api/labs/:labId/iqcp/eligible-tests", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const labId = req.scope.labId;
+    const maps = (db as any).$client.prepare(
+      "SELECT id, name FROM veritamap_maps WHERE lab_id = ? ORDER BY updated_at DESC"
+    ).all(labId) as Array<{ id: number; name: string }>;
+    if (maps.length === 0) {
+      return res.json({
+        labId,
+        maps: [],
+        eligible: [],
+        totals: { instrumentCount: 0, analyteCount: 0 },
+        note: "No VeritaMap was found for this lab. Build the lab's instrument map first; IQCP eligibility is derived from it.",
+      });
+    }
+    const mapNameById: Record<number, string> = {};
+    for (const m of maps) mapNameById[m.id] = m.name;
+    const mapIds = maps.map((m) => m.id);
+    const placeholders = mapIds.map(() => "?").join(",");
+    // MODERATE/HIGH only (waived is never in scope); exclude the pathology
+    // disciplines that do not use traditional QC (histopathology contains
+    // "patholog"; cytology excluded explicitly).
+    const rows = (db as any).$client.prepare(`
+      SELECT it.instrument_id, i.instrument_name, i.category, i.role, it.map_id,
+             it.analyte, it.specialty, it.complexity
+      FROM veritamap_instrument_tests it
+      JOIN veritamap_instruments i ON i.id = it.instrument_id
+      WHERE it.map_id IN (${placeholders})
+        AND it.active = 1
+        AND UPPER(it.complexity) IN ('MODERATE','HIGH')
+        AND LOWER(it.specialty) NOT LIKE '%patholog%'
+        AND LOWER(it.specialty) NOT LIKE '%cytolog%'
+      ORDER BY i.instrument_name, it.analyte
+    `).all(...mapIds) as Array<{
+      instrument_id: number; instrument_name: string; category: string | null;
+      role: string | null; map_id: number; analyte: string; specialty: string; complexity: string;
+    }>;
+    // Existing IQCP plans on this lab, keyed by instrument, so the UI can show
+    // "already started" instead of offering a duplicate.
+    const planRows = (db as any).$client.prepare(
+      "SELECT id, instrument_id, status FROM iqcp_plans WHERE lab_id = ?"
+    ).all(labId) as Array<{ id: number; instrument_id: number | null; status: string }>;
+    const planByInstrument: Record<number, { id: number; status: string }> = {};
+    for (const p of planRows) {
+      if (p.instrument_id != null) planByInstrument[p.instrument_id] = { id: p.id, status: p.status };
+    }
+    const byInstrument: Record<number, any> = {};
+    let analyteCount = 0;
+    for (const r of rows) {
+      analyteCount++;
+      if (!byInstrument[r.instrument_id]) {
+        byInstrument[r.instrument_id] = {
+          instrumentId: r.instrument_id,
+          instrumentName: r.instrument_name,
+          category: r.category,
+          role: r.role,
+          mapId: r.map_id,
+          mapName: mapNameById[r.map_id] || null,
+          existingPlan: planByInstrument[r.instrument_id] || null,
+          analytes: [] as Array<{ analyte: string; specialty: string; complexity: string }>,
+        };
+      }
+      byInstrument[r.instrument_id].analytes.push({
+        analyte: r.analyte, specialty: r.specialty, complexity: r.complexity,
+      });
+    }
+    const eligible = Object.values(byInstrument);
+    res.json({
+      labId,
+      maps: maps.map((m) => ({ id: m.id, name: m.name })),
+      eligible,
+      totals: { instrumentCount: eligible.length, analyteCount },
+    });
   });
 
   // List maps
