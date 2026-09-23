@@ -115,7 +115,7 @@ return (
               { name: "VeritaMap™", href: "/veritamap" },
               { name: "VeritaScan™", href: "/veritascan" },
               { name: "VeritaComp™", href: "/veritacomp" },
-              { name: "VeritaPolicy™", href: "/veritapolicy" },
+              { name: "VeritaDC™", href: "/veritadc" },
               { name: "VeritaStaff™", href: "/veritastaff" },
               { name: "VeritaLab™", href: "/veritalab" },
               { name: "VeritaPT™", href: "/veritapt" },
@@ -196,7 +196,7 @@ return (
                 </div>
                 <h3 className="font-semibold text-sm mb-2">VeritaAssure™ Tools</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-                  The eighteen VeritaAssure™ modules span two streams. Compliance (twelve): VeritaCheck™, VeritaMap™, VeritaScan™, VeritaComp™, VeritaPolicy™, VeritaStaff™, VeritaLab™, VeritaPT™, VeritaTrack™, VeritaResponse™, VeritaQC™, and VeritaMaintain™. Operations (six): VeritaBench™, VeritaPace™, VeritaShift™, VeritaQA™, VeritaStock™, and VeritaOps™. Built for lab directors who want data-driven compliance without waiting on a consultant.
+                  The eighteen VeritaAssure™ modules span two streams. Compliance (twelve): VeritaCheck™, VeritaMap™, VeritaScan™, VeritaComp™, VeritaDC™, VeritaStaff™, VeritaLab™, VeritaPT™, VeritaTrack™, VeritaResponse™, VeritaQC™, and VeritaMaintain™. Operations (six): VeritaBench™, VeritaPace™, VeritaShift™, VeritaQA™, VeritaStock™, and VeritaOps™. Built for lab directors who want data-driven compliance without waiting on a consultant.
                 </p>
                 <Button asChild size="sm" variant="outline" className="text-xs h-7 border-primary/30 text-primary hover:bg-primary/10">
                   <Link href="/veritacheck">Explore the Tools →</Link>

@@ -126,7 +126,7 @@ export default function DemoLabPage() {
     { id: "veritastaff", label: "VeritaStaff™", icon: Users },
     { id: "veritapt", label: "VeritaPT™", icon: TestTubes }, // coverage analyzer
     { id: "veritalab", label: "VeritaLab™", icon: FileText },
-    { id: "veritapolicy", label: "VeritaPolicy™", icon: Shield },
+    { id: "veritapolicy", label: "VeritaDC™", icon: Shield },
     { id: "veritaqc", label: "VeritaQC™", icon: Activity },
     { id: "veritatrack", label: "VeritaTrack™", icon: CalendarDays },
     { id: "veritaresponse", label: "VeritaResponse™", icon: AlertTriangle },
@@ -1314,7 +1314,7 @@ export default function DemoLabPage() {
               <div className="rounded-xl p-6 text-center" style={{ background: "#006064" }}>
                 <p className="text-white font-medium">Stop staring at a blank page when a surveyor asks for a policy.</p>
                 <Button asChild size="sm" className="mt-3 bg-white text-[#006064] hover:bg-white/90 font-semibold">
-                  <Link href="/veritapolicy">Learn more <ArrowRight size={14} className="ml-1" /></Link>
+                  <Link href="/veritadc">Learn more <ArrowRight size={14} className="ml-1" /></Link>
                 </Button>
               </div>
             </div>

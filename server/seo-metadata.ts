@@ -120,7 +120,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/veritaassure": {
     title: "VeritaAssure\u2122 | Lab Compliance Software Suite for Clinical Laboratories",
-    description: "The complete laboratory compliance platform. VeritaCheck™, VeritaMap™, VeritaScan™, VeritaTrack™, VeritaPolicy™, and more - built by a lab professional who conducted 200+ Joint Commission surveys.",
+    description: "The complete laboratory compliance platform. VeritaCheck™, VeritaMap™, VeritaScan™, VeritaTrack™, VeritaDC™, and more - built by a lab professional who conducted 200+ Joint Commission surveys.",
   },
   "/pricing": {
     title: "Pricing | VeritaAssure\u2122 Lab Compliance Software",
@@ -198,9 +198,13 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     title: "VeritaLab™ | Laboratory Certificate and Document Storage Software",
     description: "Centralized storage for laboratory accreditation certificates, licenses, and compliance documents. Never scramble for paperwork during a survey again.",
   },
+  "/veritadc": {
+    title: "VeritaDC™ | Laboratory Document Control Software",
+    description: "Document control for clinical laboratories: manage policies, procedures, and forms with version history, director approval, and periodic reviews. Crosswalks required policies to CLIA and your accreditor, and stays survey-ready.",
+  },
   "/veritapolicy": {
-    title: "VeritaPolicy™ | Laboratory Policy and Procedure Management Software",
-    description: "Version-controlled policy and procedure management for clinical laboratories. Track staff acknowledgments, manage document review cycles, and stay survey-ready.",
+    title: "VeritaDC™ | Laboratory Document Control Software",
+    description: "Document control for clinical laboratories: manage policies, procedures, and forms with version history, director approval, and periodic reviews. Crosswalks required policies to CLIA and your accreditor, and stays survey-ready.",
   },
   "/resources": {
     title: "Resources | CLIA Compliance Guides for Clinical Laboratories",

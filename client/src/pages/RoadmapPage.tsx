@@ -59,9 +59,9 @@ const completedItems: RoadmapItem[] = [
       "Tracks PT enrollment, survey results, and corrective actions by analyte and specialty. Monitors unacceptable results, identifies trends, and generates documentation for surveyor review.",
   },
   {
-    title: "VeritaPolicy™ - CLIA and Accreditor Policy Compliance Tracker",
+    title: "VeritaDC™ - Policy and Document Control",
     description:
-      "Tracks the laboratory policies required under CLIA (42 CFR 493) and crosswalks each policy to the standards of your accrediting body: CAP, COLA, TJC, or AABB. Service line toggles automatically mark non-applicable requirements as N/A. The lab policy library links one document to multiple requirements. Readiness score with an inspector-ready PDF report.",
+      "A document control system for the lab: manage policies, procedures, and forms with version history, director approval, and periodic reviews. Tracks the policies required under CLIA (42 CFR 493) and crosswalks each one to your accrediting body: CAP, COLA, TJC, or AABB. Service line toggles auto-apply N/A, and one document satisfies multiple requirements. Readiness score with an inspector-ready PDF report.",
   },
 ];
 

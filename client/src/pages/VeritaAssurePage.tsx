@@ -79,11 +79,12 @@ const COMPLIANCE_MODULES = [
     color: "text-green-600 bg-green-500/10 border-green-500/20",
   },
   {
-    href: "/veritapolicy",
-    label: "VeritaPolicy™",
-    desc: "CLIA and Accreditor Policy Tracker",
+    href: "/veritadc",
+    label: "VeritaDC™",
+    formerly: "Formerly VeritaPolicy",
+    desc: "Policy and Document Control",
     detail:
-      "Tracks the laboratory policies required under CLIA (42 CFR 493) and crosswalks each one to your accrediting body: CAP, COLA, TJC, or AABB. Service line toggles auto-apply N/A. The policy library links one document to multiple requirements. Inspection-ready PDF report with a readiness score.",
+      "A document control system for the lab: load policies, procedures, and forms, keep version history, capture director approval, and document periodic reviews. Tracks the policies required under CLIA (42 CFR 493) and crosswalks each one to your accrediting body: CAP, COLA, TJC, or AABB. Service line toggles auto-apply N/A, and one document satisfies multiple requirements. Inspection-ready PDF report with a readiness score.",
     badge: "New",
     badgeColor: "emerald",
     icon: Shield,
@@ -251,7 +252,7 @@ function BadgePill({ label, color }: { label: string; color: string }) {
 function ModuleGrid({ modules }: { modules: typeof COMPLIANCE_MODULES }) {
   return (
     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {modules.map(({ href, label, desc, detail, badge, badgeColor, icon: Icon, color }) => (
+      {modules.map(({ href, label, desc, detail, badge, badgeColor, icon: Icon, color, formerly }: any) => (
         <Link key={href} href={href}>
           <Card className="h-full hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group">
             <CardContent className="p-5">
@@ -264,6 +265,9 @@ function ModuleGrid({ modules }: { modules: typeof COMPLIANCE_MODULES }) {
               <div className="font-semibold text-sm group-hover:text-primary transition-colors mb-0.5">
                 {label}
               </div>
+              {formerly && (
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mb-0.5">{formerly}</div>
+              )}
               <div className="text-xs text-muted-foreground font-medium mb-2">{desc}</div>
               <p className="text-xs text-muted-foreground leading-relaxed">{detail}</p>
               <div className="mt-3 flex items-center gap-1 text-xs text-primary font-medium">
@@ -279,7 +283,7 @@ function ModuleGrid({ modules }: { modules: typeof COMPLIANCE_MODULES }) {
 
 export default function VeritaAssurePage() {
     const { isLoggedIn } = useAuth();
-    useSEO({ title: "VeritaAssure™ | Complete Lab Compliance and Operations Software Suite", description: "The complete laboratory platform: eighteen modules across compliance and operations. VeritaCheck™, VeritaMap™, VeritaScan™, VeritaPolicy™, VeritaStock™, VeritaOps™, and more, built by a lab professional who conducted 200+ Joint Commission surveys." });
+    useSEO({ title: "VeritaAssure™ | Complete Lab Compliance and Operations Software Suite", description: "The complete laboratory platform: eighteen modules across compliance and operations. VeritaCheck™, VeritaMap™, VeritaScan™, VeritaDC™, VeritaStock™, VeritaOps™, and more, built by a lab professional who conducted 200+ Joint Commission surveys." });
 return (
     <div className="min-h-screen bg-background">
 

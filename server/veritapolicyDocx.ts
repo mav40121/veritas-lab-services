@@ -142,7 +142,7 @@ function brandBar() {
         shading: { fill: TEAL, type: ShadingType.CLEAR },
         margins: { top: 200, bottom: 200, left: 240, right: 240 },
         children: [new Paragraph({
-          children: [new TextRun({ text: "VeritaAssure™  |  VeritaPolicy™", color: "FFFFFF", bold: true, size: 24, font: "Calibri" })],
+          children: [new TextRun({ text: "VeritaAssure™  |  VeritaDC™", color: "FFFFFF", bold: true, size: 24, font: "Calibri" })],
         })],
       })],
     })],
@@ -602,7 +602,7 @@ function buildDocument(tmpl: PolicyTemplate, lab: LabContext, crosswalk?: Accred
             new Paragraph({
               alignment: AlignmentType.CENTER,
               children: [
-                new TextRun({ text: "VeritaAssure™  |  VeritaPolicy™  |  Confidential — For Internal Lab Use Only  |  Page ", color: TEXT_DARK, size: 16, font: "Calibri" }),
+                new TextRun({ text: "VeritaAssure™  |  VeritaDC™  |  Confidential — For Internal Lab Use Only  |  Page ", color: TEXT_DARK, size: 16, font: "Calibri" }),
                 new TextRun({ children: [PageNumber.CURRENT], color: TEXT_DARK, size: 16, font: "Calibri" }),
                 new TextRun({ text: " of ", color: TEXT_DARK, size: 16, font: "Calibri" }),
                 new TextRun({ children: [PageNumber.TOTAL_PAGES], color: TEXT_DARK, size: 16, font: "Calibri" }),

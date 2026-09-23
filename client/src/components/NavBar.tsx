@@ -37,7 +37,7 @@ const complianceModules: NavLink[] = [
   { href: "/veritamap", label: "VeritaMap\u2122" },
   { href: "/veritascan", label: "VeritaScan\u2122" },
   { href: "/veritacomp", label: "VeritaComp\u2122" },
-  { href: "/veritapolicy", label: "VeritaPolicy\u2122" },
+  { href: "/veritadc", label: "VeritaDC\u2122" },
   { href: "/veritastaff", label: "VeritaStaff\u2122" },
   { href: "/veritalab", label: "VeritaLab\u2122" },
   { href: "/veritapt", label: "VeritaPT\u2122" },

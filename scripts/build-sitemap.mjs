@@ -79,6 +79,7 @@ const SITEMAP_EXCLUDE = new Set([
   "/demo", "/demo/qc", "/demo/cprt", "/demo/operations", "/demo/compliance",   // interactive demos
   "/founding-lab/apply", "/book", "/book/scoping-call", "/getting-started",     // forms / utility
   "/roadmap", "/study-guide",
+  "/veritapolicy",                                                             // 301 -> /veritadc (renamed 2026-09-23)
 ]);
 const publicRoutes = metaKeys.filter((p) => !isAppRoute(p) && !SITEMAP_EXCLUDE.has(p));
 
