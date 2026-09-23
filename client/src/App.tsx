@@ -98,6 +98,7 @@ const VeritaQCDailyReviewPage = lazy(() => import("@/pages/VeritaQCDailyReviewPa
 const VeritaPolicyAppPage = lazy(() => import("@/pages/VeritaPolicyAppPage"));
 const VeritaPolicyMyPoliciesPage = lazy(() => import("@/pages/VeritaPolicyMyPoliciesPage"));
 const VeritaPolicyCompliancePage = lazy(() => import("@/pages/VeritaPolicyCompliancePage"));
+const VeritaPolicyIqcpPage = lazy(() => import("@/pages/VeritaPolicyIqcpPage"));
 const SurveyorViewPage = lazy(() => import("@/pages/SurveyorViewPage"));
 const VeritaPolicyPage = lazy(() => import("@/pages/VeritaPolicyPage"));
 const CumsumPage = lazy(() => import("@/pages/CumsumPage"));
@@ -542,6 +543,7 @@ function AppContent() {
           <Route path="/labs/:labId/veritapolicy-app" component={VeritaPolicyAppPage} />
           <Route path="/labs/:labId/veritapolicy-app/my-policies" component={VeritaPolicyMyPoliciesPage} />
           <Route path="/labs/:labId/veritapolicy-app/compliance" component={VeritaPolicyCompliancePage} />
+          <Route path="/labs/:labId/veritapolicy-app/iqcp" component={VeritaPolicyIqcpPage} />
           <Route path="/labs/:labId/veritacheck/signoff-groups" component={VeritaCheckSignoffGroupsPage} />
           <Route path="/labs/:labId/veritacheck/coverage" component={VeritaCheckCoveragePage} />
           <Route path="/labs/:labId/veritacheck" component={VeritaCheckPage} />
