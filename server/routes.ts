@@ -17543,8 +17543,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (recipients.length === 0) {
       return res.json({ ok: true, sent: 0, failed: 0, recipientCount: 0, test: !!testTo });
     }
-    const result = await sendNewsletter({ subject, bodyHtml, recipients, postalAddress });
-    res.json({ ok: result.failed === 0, sent: result.sent, failed: result.failed, errors: result.errors, recipientCount: recipients.length, test: !!testTo });
+    // Test sends stay synchronous: a single recipient, and the caller wants the
+    // immediate sent/failed result to confirm the copy before a full send.
+    if (testTo) {
+      const result = await sendNewsletter({ subject, bodyHtml, recipients, postalAddress });
+      return res.json({ ok: result.failed === 0, sent: result.sent, failed: result.failed, errors: result.errors, recipientCount: recipients.length, test: true });
+    }
+    // Full-list send runs in the BACKGROUND. A synchronous send to the whole list
+    // takes minutes and previously blew past the edge-proxy request timeout,
+    // returning a 502 mid-send while the loop kept running (send still completed,
+    // but the caller got no counts). Acknowledge with 202 immediately, then send
+    // off the request/response cycle and log the outcome so the sent/failed counts
+    // are recoverable from the deploy logs.
+    res.status(202).json({ ok: true, accepted: true, background: true, recipientCount: recipients.length, test: false });
+    sendNewsletter({ subject, bodyHtml, recipients, postalAddress })
+      .then((r) => console.log(`[newsletter] background send complete: sent ${r.sent}, failed ${r.failed}, recipients ${recipients.length}` + (r.errors && r.errors.length ? `, errors ${JSON.stringify(r.errors).slice(0, 800)}` : "")))
+      .catch((e) => console.error(`[newsletter] background send crashed: ${e && e.message ? e.message : String(e)}`));
   });
 
   // ── STRIPE ────────────────────────────────────────────────────────────────
