@@ -13286,6 +13286,135 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // ===== IQCP Builder Phase 2 — plan CRUD (VeritaDC document control) =====
+  // A plan is one IQCP for one test system. It carries the 3-question pre-screen
+  // result and, once indicated, the risk-assessment / QCP / QA worksheet rows.
+  // Lab-scoped and write-guarded like the rest of the VeritaDC (veritapolicy)
+  // module. Child rows (risk/qcp/qa) are replace-set with PUT (full-replace).
+  function iqcpPlanForLab(planId: any, labId: number) {
+    return (db as any).$client.prepare("SELECT * FROM iqcp_plans WHERE id = ? AND lab_id = ?").get(planId, labId) as any;
+  }
+
+  // Create a plan from the pre-screen answers. Persists the screening decision
+  // (audit trail even when IQCP is not indicated); status is 'draft' when
+  // indicated, else 'not_indicated'.
+  app.post("/api/labs/:labId/iqcp/plans", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
+    const { instrumentId, instrumentName, mapId, testScope, screen, title } = req.body || {};
+    if (!instrumentName || !String(instrumentName).trim()) return res.status(400).json({ error: "instrumentName required" });
+    const screenAns = {
+      nonwaived: screen?.nonwaived, reduce_intent: screen?.reduce_intent, mfr_less_strict: screen?.mfr_less_strict,
+    };
+    const gate = evaluatePrescreen(screenAns as PrescreenAnswers);
+    const now = new Date().toISOString();
+    const result = (db as any).$client.prepare(`
+      INSERT INTO iqcp_plans
+        (lab_id, map_id, instrument_id, instrument_name, test_scope, status,
+         screen_nonwaived, screen_reduce_intent, screen_mfr_less_strict, screen_result,
+         title, created_by_user_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      req.scope.labId, mapId ?? null, instrumentId ?? null, String(instrumentName).trim(),
+      JSON.stringify(Array.isArray(testScope) ? testScope : []),
+      gate.indicated ? 'draft' : 'not_indicated',
+      screenAns.nonwaived ?? null, screenAns.reduce_intent ?? null, screenAns.mfr_less_strict ?? null,
+      gate.indicated ? 'indicated' : 'not_indicated',
+      (title && String(title).trim()) || null, req.userId, now, now,
+    );
+    const plan = iqcpPlanForLab(Number(result.lastInsertRowid), req.scope.labId);
+    res.json({ ...plan, screen: gate });
+  });
+
+  // List plans for the lab.
+  app.get("/api/labs/:labId/iqcp/plans", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const rows = (db as any).$client.prepare(
+      "SELECT id, instrument_name, status, screen_result, title, approved_by_name, approved_at, created_at, updated_at FROM iqcp_plans WHERE lab_id = ? ORDER BY id DESC"
+    ).all(req.scope.labId);
+    res.json(rows);
+  });
+
+  // Get one plan with its risk/qcp/qa worksheet rows.
+  app.get("/api/labs/:labId/iqcp/plans/:id", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const plan = iqcpPlanForLab(req.params.id, req.scope.labId);
+    if (!plan) return res.status(404).json({ error: "Plan not found" });
+    const risk = (db as any).$client.prepare("SELECT * FROM iqcp_risk_items WHERE plan_id = ? ORDER BY sort_order, id").all(plan.id);
+    const qcp = (db as any).$client.prepare("SELECT * FROM iqcp_qcp_items WHERE plan_id = ? ORDER BY sort_order, id").all(plan.id);
+    const qa = (db as any).$client.prepare("SELECT * FROM iqcp_qa_items WHERE plan_id = ? ORDER BY sort_order, id").all(plan.id);
+    res.json({ ...plan, riskItems: risk, qcpItems: qcp, qaItems: qa });
+  });
+
+  // Update plan metadata: title, status, re-screen, or record director approval.
+  app.patch("/api/labs/:labId/iqcp/plans/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
+    const plan = iqcpPlanForLab(req.params.id, req.scope.labId);
+    if (!plan) return res.status(404).json({ error: "Plan not found" });
+    const { title, status, screen, approvedByName } = req.body || {};
+    const sets: string[] = []; const vals: any[] = [];
+    if (title !== undefined) { sets.push("title = ?"); vals.push((title && String(title).trim()) || null); }
+    if (status !== undefined) { sets.push("status = ?"); vals.push(String(status)); }
+    if (screen && typeof screen === "object") {
+      const gate = evaluatePrescreen({ nonwaived: screen.nonwaived, reduce_intent: screen.reduce_intent, mfr_less_strict: screen.mfr_less_strict });
+      sets.push("screen_nonwaived = ?", "screen_reduce_intent = ?", "screen_mfr_less_strict = ?", "screen_result = ?");
+      vals.push(screen.nonwaived ?? null, screen.reduce_intent ?? null, screen.mfr_less_strict ?? null, gate.indicated ? 'indicated' : 'not_indicated');
+    }
+    if (approvedByName !== undefined) {
+      sets.push("approved_by_name = ?", "approved_by_user_id = ?", "approved_at = ?");
+      const nm = (approvedByName && String(approvedByName).trim()) || null;
+      vals.push(nm, nm ? req.userId : null, nm ? new Date().toISOString() : null);
+    }
+    if (sets.length === 0) return res.status(400).json({ error: "No updatable fields provided" });
+    sets.push("updated_at = ?"); vals.push(new Date().toISOString());
+    vals.push(plan.id, req.scope.labId);
+    (db as any).$client.prepare(`UPDATE iqcp_plans SET ${sets.join(", ")} WHERE id = ? AND lab_id = ?`).run(...vals);
+    res.json(iqcpPlanForLab(plan.id, req.scope.labId));
+  });
+
+  // Replace-set the worksheet rows for one section. items[] is the full new set.
+  function iqcpReplaceSet(section: "risk" | "qcp" | "qa") {
+    return (req: any, res: any) => {
+      const plan = iqcpPlanForLab(req.params.id, req.scope.labId);
+      if (!plan) return res.status(404).json({ error: "Plan not found" });
+      const items = Array.isArray(req.body?.items) ? req.body.items : null;
+      if (!items) return res.status(400).json({ error: "items array required" });
+      const now = new Date().toISOString();
+      const table = section === "risk" ? "iqcp_risk_items" : section === "qcp" ? "iqcp_qcp_items" : "iqcp_qa_items";
+      const tx = (db as any).$client.transaction(() => {
+        (db as any).$client.prepare(`DELETE FROM ${table} WHERE plan_id = ?`).run(plan.id);
+        items.forEach((it: any, i: number) => {
+          if (section === "risk") {
+            (db as any).$client.prepare(`INSERT INTO iqcp_risk_items (plan_id, component, phase, source_of_error, reducible, mitigation, residual_risk, sort_order, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`)
+              .run(plan.id, String(it.component || ""), it.phase ?? null, it.sourceOfError ?? it.source_of_error ?? null, it.reducible ?? null, it.mitigation ?? null, it.residualRisk ?? it.residual_risk ?? null, i, now, now);
+          } else if (section === "qcp") {
+            (db as any).$client.prepare(`INSERT INTO iqcp_qcp_items (plan_id, qc_type, frequency, acceptability_criteria, corrective_action, sort_order, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)`)
+              .run(plan.id, String(it.qcType ?? it.qc_type ?? ""), it.frequency ?? null, it.acceptabilityCriteria ?? it.acceptability_criteria ?? null, it.correctiveAction ?? it.corrective_action ?? null, i, now, now);
+          } else {
+            (db as any).$client.prepare(`INSERT INTO iqcp_qa_items (plan_id, activity, frequency, assessment_method, corrective_action, sort_order, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)`)
+              .run(plan.id, String(it.activity || ""), it.frequency ?? null, it.assessmentMethod ?? it.assessment_method ?? null, it.correctiveAction ?? it.corrective_action ?? null, i, now, now);
+          }
+        });
+        (db as any).$client.prepare("UPDATE iqcp_plans SET updated_at = ? WHERE id = ?").run(now, plan.id);
+      });
+      tx();
+      const rows = (db as any).$client.prepare(`SELECT * FROM ${table} WHERE plan_id = ? ORDER BY sort_order, id`).all(plan.id);
+      res.json({ ok: true, items: rows });
+    };
+  }
+  app.put("/api/labs/:labId/iqcp/plans/:id/risk-items", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), iqcpReplaceSet("risk"));
+  app.put("/api/labs/:labId/iqcp/plans/:id/qcp-items", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), iqcpReplaceSet("qcp"));
+  app.put("/api/labs/:labId/iqcp/plans/:id/qa-items", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), iqcpReplaceSet("qa"));
+
+  // Delete a plan and its worksheet rows.
+  app.delete("/api/labs/:labId/iqcp/plans/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
+    const plan = iqcpPlanForLab(req.params.id, req.scope.labId);
+    if (!plan) return res.status(404).json({ error: "Plan not found" });
+    const tx = (db as any).$client.transaction(() => {
+      (db as any).$client.prepare("DELETE FROM iqcp_risk_items WHERE plan_id = ?").run(plan.id);
+      (db as any).$client.prepare("DELETE FROM iqcp_qcp_items WHERE plan_id = ?").run(plan.id);
+      (db as any).$client.prepare("DELETE FROM iqcp_qa_items WHERE plan_id = ?").run(plan.id);
+      (db as any).$client.prepare("DELETE FROM iqcp_plans WHERE id = ? AND lab_id = ?").run(plan.id, req.scope.labId);
+    });
+    tx();
+    res.json({ ok: true });
+  });
+
   // List maps
   app.get("/api/veritamap/maps", authMiddleware, (req: any, res) => {
     // Multi-lab-bleed root-cause fix: lab-scope the legacy list endpoint.
