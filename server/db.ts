@@ -167,6 +167,77 @@ sqlite.exec(`
   CREATE INDEX IF NOT EXISTS idx_corr_group ON veritamap_test_correlations(correlation_group_id);
   CREATE INDEX IF NOT EXISTS idx_corr_signoff_date ON veritamap_test_correlations(signoff_date);
 
+  -- IQCP Builder (VeritaQC sub-feature). CMS Individualized Quality Control
+  -- Plan framework: a 3-question pre-screen gate, then Risk Assessment (5
+  -- components x 3 phases), Quality Control Plan, and Quality Assessment.
+  -- iqcp_plans is the parent (one per test system a lab builds an IQCP for)
+  -- and carries lab_id directly; the worksheet child tables scope through
+  -- plan_id. Mirrors CMS IQCP Workbook Appendix A (Risk Assessment),
+  -- B (Quality Control Plan), and C (Quality Assessment).
+  CREATE TABLE IF NOT EXISTS iqcp_plans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    map_id INTEGER,
+    instrument_id INTEGER,
+    instrument_name TEXT NOT NULL,
+    test_scope TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'screening',
+    screen_nonwaived TEXT,
+    screen_reduce_intent TEXT,
+    screen_mfr_less_strict TEXT,
+    screen_result TEXT,
+    screen_notes TEXT,
+    title TEXT,
+    created_by_user_id INTEGER,
+    approved_by_user_id INTEGER,
+    approved_by_name TEXT,
+    approved_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_iqcp_plans_lab ON iqcp_plans(lab_id, id DESC);
+
+  CREATE TABLE IF NOT EXISTS iqcp_risk_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id INTEGER NOT NULL,
+    component TEXT NOT NULL,
+    phase TEXT,
+    source_of_error TEXT,
+    reducible TEXT,
+    mitigation TEXT,
+    residual_risk TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_iqcp_risk_plan ON iqcp_risk_items(plan_id);
+
+  CREATE TABLE IF NOT EXISTS iqcp_qcp_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id INTEGER NOT NULL,
+    qc_type TEXT NOT NULL,
+    frequency TEXT,
+    acceptability_criteria TEXT,
+    corrective_action TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_iqcp_qcp_plan ON iqcp_qcp_items(plan_id);
+
+  CREATE TABLE IF NOT EXISTS iqcp_qa_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id INTEGER NOT NULL,
+    activity TEXT NOT NULL,
+    frequency TEXT,
+    assessment_method TEXT,
+    corrective_action TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_iqcp_qa_plan ON iqcp_qa_items(plan_id);
+
   CREATE TABLE IF NOT EXISTS veritascan_scans (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -3668,6 +3739,56 @@ sqlite.exec(`
   if (backfilled.changes > 0) {
     console.log(`[migration] Multi-lab Phase 3.3 (veritamap_maps): backfilled lab_id on ${backfilled.changes} row(s)`);
   }
+}
+
+// IQCP Builder (VeritaQC): NEW DB TABLE RULE. Fresh installs get the full
+// schema from the CREATE TABLE block above; these PRAGMA-guarded ALTERs add
+// any column missing on a DB whose IQCP tables predate that column, so the
+// live server never runs against a partial schema.
+{
+  const addMissing = (table: string, have: Set<string>, wanted: Record<string, string>) => {
+    for (const [col, decl] of Object.entries(wanted)) {
+      if (!have.has(col)) {
+        try { sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${decl}`); } catch {}
+      }
+    }
+  };
+  {
+    const have = new Set((sqlite.prepare("PRAGMA table_info(iqcp_plans)").all() as { name: string }[]).map((c) => c.name));
+    addMissing("iqcp_plans", have, {
+      map_id: "INTEGER", instrument_id: "INTEGER", instrument_name: "TEXT",
+      test_scope: "TEXT NOT NULL DEFAULT '[]'", status: "TEXT NOT NULL DEFAULT 'screening'",
+      screen_nonwaived: "TEXT", screen_reduce_intent: "TEXT", screen_mfr_less_strict: "TEXT",
+      screen_result: "TEXT", screen_notes: "TEXT", title: "TEXT",
+      created_by_user_id: "INTEGER", approved_by_user_id: "INTEGER",
+      approved_by_name: "TEXT", approved_at: "TEXT",
+    });
+  }
+  {
+    const have = new Set((sqlite.prepare("PRAGMA table_info(iqcp_risk_items)").all() as { name: string }[]).map((c) => c.name));
+    addMissing("iqcp_risk_items", have, {
+      phase: "TEXT", source_of_error: "TEXT", reducible: "TEXT", mitigation: "TEXT",
+      residual_risk: "TEXT", sort_order: "INTEGER NOT NULL DEFAULT 0",
+    });
+  }
+  {
+    const have = new Set((sqlite.prepare("PRAGMA table_info(iqcp_qcp_items)").all() as { name: string }[]).map((c) => c.name));
+    addMissing("iqcp_qcp_items", have, {
+      frequency: "TEXT", acceptability_criteria: "TEXT", corrective_action: "TEXT",
+      sort_order: "INTEGER NOT NULL DEFAULT 0",
+    });
+  }
+  {
+    const have = new Set((sqlite.prepare("PRAGMA table_info(iqcp_qa_items)").all() as { name: string }[]).map((c) => c.name));
+    addMissing("iqcp_qa_items", have, {
+      frequency: "TEXT", assessment_method: "TEXT", corrective_action: "TEXT",
+      sort_order: "INTEGER NOT NULL DEFAULT 0",
+    });
+  }
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_iqcp_plans_lab ON iqcp_plans(lab_id, id DESC)"); } catch {}
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_iqcp_risk_plan ON iqcp_risk_items(plan_id)"); } catch {}
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_iqcp_qcp_plan ON iqcp_qcp_items(plan_id)"); } catch {}
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_iqcp_qa_plan ON iqcp_qa_items(plan_id)"); } catch {}
 }
 
 // Multi-Lab Tier 2 — Phase 3.12 (CUMSUM, sub-feature of VeritaCheck):
