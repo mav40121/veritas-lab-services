@@ -9,6 +9,17 @@ import { teaData } from "@/lib/cliaTeaData";
 
 const articles = [
   {
+    slug: "clia-brochures-every-lab-leader-should-read",
+    title: "The CLIA Brochures Every Lab Leader Should Read, and What Each One Is Really Telling You",
+    summary: "A former surveyor's guide to the free CMS CLIA brochures every lab leader should read at least once.",
+    category: "Inspection Readiness",
+    readTime: "5 min read",
+    author: "Michael Veri",
+    date: "September 2026",
+    tags: ["Inspection Readiness", "CLIA", "CMS Brochures", "Proficiency Testing", "IQCP"],
+    featured: true,
+  },
+  {
     slug: "post-analytical-critical-values-corrected-reports",
     title: "The Last Mile: Why a Correct Result Still Reaches the Patient Wrong",
     summary: "A former Joint Commission surveyor on the post-analytical phase: the critical value list your medical staff must own, the read-back that confirms a call was actually received, the corrected report CLIA requires you to phone in under 42 CFR 493.1291(k), and the autoverification rules quietly releasing results no one reads.",

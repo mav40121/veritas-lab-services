@@ -296,6 +296,20 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
       datePublished: "2026-08-23",
     }),
   },
+  "/resources/clia-brochures-every-lab-leader-should-read": {
+    title: "The CLIA Brochures Every Lab Leader Should Read, and What Each One Is Really Telling You",
+    description:
+      "A former Joint Commission surveyor's guide to the free CMS CLIA brochures, what each covers, the requirement behind it, and why it matters, from proficiency testing and personnel competency to calibration verification and IQCP.",
+    jsonLd: articleJsonLd({
+      headline: "The CLIA Brochures Every Lab Leader Should Read, and What Each One Is Really Telling You",
+      description:
+        "A former Joint Commission surveyor's guide to the free CMS CLIA brochures, what each covers, the requirement behind it, and why it matters, from proficiency testing and personnel competency to calibration verification and IQCP.",
+      articleBody:
+        "CMS publishes a small library of free CLIA brochures that state each requirement in plain language. Verification of Performance Specifications: before patient testing on an unmodified, FDA-cleared method, verify accuracy, precision, reportable range, and that reference intervals are appropriate for your patients (42 CFR 493.1253). Calibration and Calibration Verification: confirm accuracy across the full reportable range at least every six months, and after a complete change of reagents, major maintenance or repair, or when controls trend (42 CFR 493.1255). Proficiency Testing and PT Referral: test PT like patient samples by routine staff, and never refer a PT sample to another laboratory or report another laboratory's results before the event close date (42 CFR 493.801(b)(5)); a repeat referral or reporting another lab's results can revoke the certificate for at least a year and bar the owner and operator, while other improper referrals draw a civil money penalty, a directed plan of correction, and required retraining (42 CFR 493.1840). Assessing Personnel Competency: the six procedures of 42 CFR 493.1235, all six where relevant, not the convenient two. Laboratory Director Responsibilities, Developing an Individualized Quality Control Plan (risk assessment, quality control plan, and quality assessment), Laboratory Complaints, and CLIA Certification (certificate of waiver, provider-performed microscopy, compliance, or accreditation) round out the set. Every brochure is free on the CMS CLIA resources page.",
+      path: "/resources/clia-brochures-every-lab-leader-should-read",
+      datePublished: "2026-09-23",
+    }),
+  },
   "/resources/ep26-reagent-lot-verification": {
     title: "CLSI EP26 Reagent Lot Verification: Protocol and How-To Guide",
     description: "How clinical laboratories verify a new reagent lot under CLSI EP26 (2nd edition, 2022). The protocol, sample requirements, acceptance criteria, and documentation for lot-to-lot verification.",
