@@ -468,7 +468,7 @@ export default function VeritaPolicyAppPage() {
         </div>
       <ModuleHowToCard
         moduleKey="veritapolicy"
-        moduleName="VeritaPolicy™"
+        moduleName="VeritaDC™"
         whatItDoes={`VeritaPolicy is a ${policies.length || 58}-policy master list keyed to the CFR plus the citation set for your accrediting body (TJC, CAP, COLA, or AABB). For each policy, the lab maps its own existing policy manual entry, marks status (Not Started, In Progress, Complete, or N/A), and watches the live readiness score update. Use it as the crosswalk between what your binder already covers and what every regulation expects.`}
         howToUse={[
           `Browse the ${policies.length || 58}-row master list; expand any row to read the description, citations, and notes.`,

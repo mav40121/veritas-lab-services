@@ -31955,7 +31955,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
                     firstSheet: 0, activeTab: 0, visibility: 'visible' }];
 
-      applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaPolicy™"));
+      applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaDC™"));
       const buffer = await wb.xlsx.writeBuffer();
       const date = new Date().toISOString().split('T')[0];
       const filename = `VeritaPolicy_MasterList_${date}.xlsx`;
@@ -32638,7 +32638,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
       wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
                     firstSheet: 0, activeTab: 0, visibility: 'visible' }];
-      applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaPolicy™"));
+      applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaDC™"));
       const buffer = await wb.xlsx.writeBuffer();
       const date = new Date().toISOString().split('T')[0];
       const filename = `VeritaPolicy_MasterList_${date}.xlsx`;

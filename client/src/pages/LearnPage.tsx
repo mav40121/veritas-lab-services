@@ -30,7 +30,7 @@ const COMPLIANCE: LessonModule[] = [
   { video: "veritatrack", label: "VeritaTrack™", desc: "Your regulatory calendar, imported straight from the map.", icon: CalendarDays, color: "text-indigo-600 bg-indigo-500/10 border-indigo-500/20" },
   { video: "veritapt", label: "VeritaPT™", desc: "Check every analyte against CLIA proficiency-testing rules.", icon: TestTubes, color: "text-cyan-600 bg-cyan-500/10 border-cyan-500/20" },
   { video: "veritacomp", label: "VeritaComp™", desc: "Competency programs across all six CLIA assessment elements.", icon: Award, color: "text-amber-600 bg-amber-500/10 border-amber-500/20" },
-  { video: "veritapolicy", label: "VeritaPolicy™", desc: "Track required policies and crosswalk each to your accreditor.", icon: Shield, color: "text-teal-600 bg-teal-500/10 border-teal-500/20" },
+  { video: "veritapolicy", label: "VeritaDC™", desc: "Manage policies, procedures, and forms with version control, approval, and periodic review.", icon: Shield, color: "text-teal-600 bg-teal-500/10 border-teal-500/20" },
   { video: "veritastaff", label: "VeritaStaff™", desc: "Personnel roster with CLIA roles and CMS 209 generation.", icon: Users, color: "text-orange-600 bg-orange-500/10 border-orange-500/20" },
   { video: "veritalab", label: "VeritaLab™", desc: "Track certificates, accreditations, and director credentials.", icon: FileText, color: "text-green-600 bg-green-500/10 border-green-500/20" },
   { video: "veritaqc", label: "VeritaQC™", desc: "Daily QC entry with real-time Westgard multi-rule evaluation.", icon: Activity, color: "text-green-600 bg-green-500/10 border-green-500/20" },

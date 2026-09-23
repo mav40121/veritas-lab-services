@@ -554,6 +554,12 @@ app.use((req, res, next) => {
   // unified 18-module VeritaAssure suite page. 301 consolidates SEO link equity.
   app.get('/operations', (_req, res) => res.redirect(301, '/veritaassure'));
 
+  // VeritaPolicy was renamed to VeritaDC (document control) 2026-09-23. The
+  // marketing landing 301s to preserve SEO and keep old links / QR codes in
+  // printed materials working. Exact-match only, so /veritapolicy-app (the app
+  // route) and /api/**/veritapolicy (API) are untouched.
+  app.get('/veritapolicy', (_req, res) => res.redirect(301, '/veritadc'));
+
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes

@@ -125,7 +125,7 @@ export default function AccountSettingsPage() {
     { key: 'veritabench',  label: 'VeritaQA™ Suite' }, // VeritaPace, VeritaShift, VeritaQA
     { key: 'veritastock',  label: 'VeritaStock™' },
     { key: 'veritapt',     label: 'VeritaPT™' },
-    { key: 'veritapolicy', label: 'VeritaPolicy™' },
+    { key: 'veritapolicy', label: 'VeritaDC™' },
     { key: 'veritalab',    label: 'VeritaLab™' },
     { key: 'veritatrack',  label: 'VeritaTrack™' },
     { key: 'veritaresponse', label: 'VeritaResponse™' },

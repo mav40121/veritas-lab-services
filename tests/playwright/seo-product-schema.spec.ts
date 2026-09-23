@@ -30,7 +30,7 @@ import { test, expect } from "@playwright/test";
 const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
 
 const PRODUCTS = [
-  { route: "/veritapolicy", id: "#veritapolicy", name: "VeritaPolicy", blockText: "pre-loads every policy requirement your accreditor expects" },
+  { route: "/veritadc", id: "#veritadc", name: "VeritaDC", blockText: "pre-loads every policy requirement your accreditor expects" },
   { route: "/veritastaff",  id: "#veritastaff",  name: "VeritaStaff",  blockText: "staff roster, CLIA role assignments, competency scheduling" },
   { route: "/veritacheck",  id: "#veritacheck",  name: "VeritaCheck",  blockText: "performance-verification module" },
   { route: "/veritascan",   id: "#veritascan",   name: "VeritaScan",   blockText: "self-inspection and compliance audit tool" },

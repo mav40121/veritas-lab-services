@@ -64,8 +64,8 @@ export default function VeritaPolicyPage() {
   const labRoute = useLabRoute();
   const { isLoggedIn } = useAuth();
   useSEO({
-    title: "VeritaPolicy™ | Laboratory Policy and Procedure Management Software",
-    description: "Version-controlled policy and procedure management for clinical laboratories. Track staff acknowledgments, manage document review cycles, and stay survey-ready.",
+    title: "VeritaDC™ | Laboratory Document Control Software",
+    description: "Document control for clinical laboratories: manage policies, procedures, and forms with version history, director approval, and periodic reviews. Crosswalks required policies to CLIA and your accreditor, and stays survey-ready.",
   });
 
   // Pull the lab's accreditation_choice when logged in. Endpoint requires auth,
@@ -135,20 +135,22 @@ export default function VeritaPolicyPage() {
                 </Badge>
               </div>
               <h1 className="text-4xl font-bold text-foreground mb-4">
-                VeritaPolicy&#8482;
+                VeritaDC&#8482;
               </h1>
               <p className="text-xl text-muted-foreground mb-2 font-medium">
-                {profile.short} Policy Compliance Tracker
+                Policy and Document Control
               </p>
               <p className="text-muted-foreground mb-8 leading-relaxed">
-                Track all {profile.count} policies required by {profile.full} for laboratory accreditation.
-                Build your policy library, link documents to requirements, and generate an
-                inspector-ready compliance report with one click. Built by a former TJC laboratory surveyor with 200+ facility inspections.
+                Document control for the lab: manage policies, procedures, and forms with version history,
+                director approval, and periodic reviews. Every policy required by {profile.full} comes
+                pre-loaded and crosswalked to the accreditor, so you build your library, link documents to
+                requirements, and generate an inspector-ready report with one click. Built by a former TJC
+                laboratory surveyor with 200+ facility inspections.
               </p>
               <div className="flex flex-wrap gap-3">
                 <Link href={labRoute("/veritapolicy-app")}>
                   <Button size="lg" className="gap-2">
-                    Open VeritaPolicy&#8482; <ChevronRight size={16} />
+                    Open VeritaDC&#8482; <ChevronRight size={16} />
                   </Button>
                 </Link>
                 {!isLoggedIn && (
@@ -254,12 +256,12 @@ export default function VeritaPolicyPage() {
         <div className="container-default text-center">
           <h2 className="text-2xl font-bold text-foreground mb-4">Ready for your next {profile.surveyTerm}?</h2>
           <p className="text-muted-foreground mb-8 max-w-xl mx-auto">
-            VeritaPolicy&#8482; is included with all paid VeritaAssure&#8482; plans. No additional cost.
+            VeritaDC&#8482; is included with all paid VeritaAssure&#8482; plans. No additional cost.
           </p>
           <div className="flex flex-wrap gap-3 justify-center">
             <Link href={labRoute("/veritapolicy-app")}>
               <Button size="lg" className="gap-2">
-                Open VeritaPolicy&#8482; <ChevronRight size={16} />
+                Open VeritaDC&#8482; <ChevronRight size={16} />
               </Button>
             </Link>
             {!isLoggedIn && (

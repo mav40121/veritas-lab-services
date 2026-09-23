@@ -12,13 +12,15 @@ import { test, expect } from "@playwright/test";
 
 const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
 
-test.describe("VeritaAssure page - VeritaPolicy card is not TJC-only", () => {
-  test("VeritaPolicy card reflects CLIA + multi-accreditor scope", async ({ page }) => {
+test.describe("VeritaAssure page - VeritaDC card (formerly VeritaPolicy)", () => {
+  test("VeritaDC card reflects document control + CLIA multi-accreditor scope", async ({ page }) => {
     await page.goto(`${BASE}/veritaassure`);
     const body = page.locator("body");
     await expect(body).not.toContainText("TJC Policy Compliance Tracker");
     await expect(body).not.toContainText("88 TJC-required");
-    await expect(body).toContainText("CLIA and Accreditor Policy Tracker");
+    await expect(body).toContainText("VeritaDC");
+    await expect(body).toContainText("Formerly VeritaPolicy");
+    await expect(body).toContainText("Policy and Document Control");
     await expect(body).toContainText("CAP, COLA, TJC, or AABB");
   });
 

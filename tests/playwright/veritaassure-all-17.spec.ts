@@ -9,7 +9,7 @@ import { test, expect } from "@playwright/test";
 
 const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
 const OPS = ["VeritaBench", "VeritaPace", "VeritaShift", "VeritaQA", "VeritaStock", "VeritaOps"];
-const SOME_COMPLIANCE = ["VeritaCheck", "VeritaMap", "VeritaPolicy", "VeritaResponse", "VeritaMaintain"];
+const SOME_COMPLIANCE = ["VeritaCheck", "VeritaMap", "VeritaDC", "VeritaResponse", "VeritaMaintain"];
 
 test.describe("Unified VeritaAssure suite page", () => {
   test.beforeEach(() => {
