@@ -11,7 +11,7 @@ import { defaultReviewIntervalMonthsForState } from "./policyReviewInterval";
 import { resolveSignupPlan } from "./signupPlan";
 import { db, PLAN_SEATS, PLAN_VIEW_ONLY_SEATS, PLAN_PRICES, PLAN_BED_RANGES, suggestTierFromBeds } from "./db";
 import { computeUsageQty, validateTransfer, validateBatch, matchKey, countOnHand, scopeEnterpriseLocations } from "./enterpriseTransfer";
-import { sendNewsletter, verifyUnsubscribeToken, resolveRecipients } from "./newsletter";
+import { sendNewsletter, verifyUnsubscribeToken, resolveRecipients, buildProductUpdateHtml, PRODUCT_UPDATE_FROM } from "./newsletter";
 import { registerScheduleRoutes } from "./schedule";
 import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice, getSeatPriceForTier, VC_UNLIMITED_FIRST_YEAR_COUPON, getViewOnlyAddOnConfig } from "./stripe";
 import crypto from "crypto";
@@ -17691,17 +17691,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Public one-click unsubscribe (CAN-SPAM). Stateless HMAC token over the email,
-  // so the link cannot be forged and no per-user token needs storing. Flips the
-  // subscriber to active = 0; the send path only targets active = 1.
+  // so the link cannot be forged and no per-user token needs storing. newsletter_
+  // subscribers doubles as the unified suppression list: both the Briefing send
+  // and the product-update send exclude active = 0. A registered account holder
+  // who never subscribed to the Briefing has no row here, so we UPSERT a
+  // suppression row rather than only UPDATE, otherwise their unsubscribe would
+  // silently no-op and a later product update would still reach them.
   app.get("/api/newsletter/unsubscribe", (req, res) => {
     const email = String(req.query.e || "").toLowerCase().trim();
     const token = String(req.query.t || "");
     const okToken = !!email && verifyUnsubscribeToken(email, token);
     if (okToken) {
       try {
+        const now = new Date().toISOString();
         (db as any).$client.prepare(
-          "UPDATE newsletter_subscribers SET active = 0, unsubscribed_at = ? WHERE email = ?"
-        ).run(new Date().toISOString(), email);
+          "INSERT INTO newsletter_subscribers (email, source, subscribed_at, unsubscribed_at, active) VALUES (?, 'unsubscribe-suppression', ?, ?, 0) ON CONFLICT(email) DO UPDATE SET active = 0, unsubscribed_at = excluded.unsubscribed_at"
+        ).run(email, now, now);
       } catch (e) { /* still show confirmation; nothing sensitive to leak */ }
     }
     const msg = okToken
@@ -17751,6 +17756,53 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     sendNewsletter({ subject, bodyHtml, recipients, postalAddress })
       .then((r) => console.log(`[newsletter] background send complete: sent ${r.sent}, failed ${r.failed}, recipients ${recipients.length}` + (r.errors && r.errors.length ? `, errors ${JSON.stringify(r.errors).slice(0, 800)}` : "")))
       .catch((e) => console.error(`[newsletter] background send crashed: ${e && e.message ? e.message : String(e)}`));
+  });
+
+  // Admin: send a PRODUCT UPDATE to registered VeritaAssure account holders (the
+  // users table), NOT the Lab Director's Briefing subscriber list. This is the
+  // correct audience for a "we shipped X" notice. Same secret gate, per-recipient
+  // send, dryRun preview, and testTo single-recipient preview as the newsletter
+  // route; the owner (verilabguy@gmail.com) is auto-CC'd via resolveRecipients.
+  // Suppressed emails (unsubscribed: active = 0 in newsletter_subscribers) are
+  // excluded, so an unsubscribe is honored across BOTH audiences. RFC-reserved
+  // test domains are excluded to protect sender reputation from bounce noise.
+  app.post("/api/admin/users/send", async (req: any, res) => {
+    const { secret, subject, bodyHtml, postalAddress, testTo, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const activeEmails: string[] = testTo
+      ? []
+      : ((db as any).$client.prepare(
+          `SELECT DISTINCT LOWER(u.email) AS email
+             FROM users u
+             LEFT JOIN newsletter_subscribers n ON LOWER(n.email) = LOWER(u.email)
+            WHERE u.email LIKE '%@%'
+              AND u.email NOT LIKE '%@example.com'
+              AND u.email NOT LIKE '%@example.org'
+              AND (n.active IS NULL OR n.active = 1)
+            ORDER BY email`
+        ).all() as any[]).map((r) => r.email);
+    const recipients = resolveRecipients(activeEmails, testTo);
+    if (dryRun) {
+      return res.json({ ok: true, dryRun: true, audience: "users", recipientCount: recipients.length, recipients, test: !!testTo });
+    }
+    if (!subject || !bodyHtml) return res.status(400).json({ error: "subject and bodyHtml required" });
+    if (!postalAddress) return res.status(400).json({ error: "postalAddress required (CAN-SPAM footer)" });
+    if (recipients.length === 0) {
+      return res.json({ ok: true, sent: 0, failed: 0, recipientCount: 0, audience: "users", test: !!testTo });
+    }
+    // Test sends stay synchronous (single recipient; caller wants the immediate
+    // sent/failed result to confirm copy before a full send).
+    if (testTo) {
+      const result = await sendNewsletter({ subject, bodyHtml, recipients, postalAddress, from: PRODUCT_UPDATE_FROM, buildHtml: buildProductUpdateHtml });
+      return res.json({ ok: result.failed === 0, sent: result.sent, failed: result.failed, errors: result.errors, recipientCount: recipients.length, audience: "users", test: true });
+    }
+    // Full send runs in the BACKGROUND (a synchronous whole-list send outruns the
+    // edge-proxy timeout). Acknowledge 202, then send off the request cycle and
+    // log the sent/failed counts so they are recoverable from the deploy logs.
+    res.status(202).json({ ok: true, accepted: true, background: true, audience: "users", recipientCount: recipients.length, test: false });
+    sendNewsletter({ subject, bodyHtml, recipients, postalAddress, from: PRODUCT_UPDATE_FROM, buildHtml: buildProductUpdateHtml })
+      .then((r) => console.log(`[product-update] background send complete: sent ${r.sent}, failed ${r.failed}, recipients ${recipients.length}` + (r.errors && r.errors.length ? `, errors ${JSON.stringify(r.errors).slice(0, 800)}` : "")))
+      .catch((e) => console.error(`[product-update] background send crashed: ${e && e.message ? e.message : String(e)}`));
   });
 
   // ── STRIPE ────────────────────────────────────────────────────────────────
