@@ -606,7 +606,10 @@ function GroupAccordion({ category, tasks, onRefresh, defaultOpen, trackApi, tas
 function CalendarView({ tasks }: { tasks: Task[] }) {
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
+  const toggle = (idx: number) => setExpanded(e => ({ ...e, [idx]: !e[idx] }));
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const dueLabel = (d?: string | null) => { if (!d) return ""; const dt = new Date(d); return isNaN(dt.getTime()) ? "" : dt.toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
 
   const byMonth = useMemo(() => {
     const m: Record<number, Task[]> = {};
@@ -632,11 +635,22 @@ function CalendarView({ tasks }: { tasks: Task[] }) {
           const isCurrentMonth = idx === now.getMonth() && viewYear === now.getFullYear();
           const overdueCt = monthTasks.filter(t => t.status === "overdue").length;
           const dueSoonCt = monthTasks.filter(t => t.status === "due_soon").length;
+          const isExpanded = !!expanded[idx];
+          const hasMore = monthTasks.length > 3;
+          const shown = isExpanded ? monthTasks : monthTasks.slice(0, 3);
           return (
-            <div key={month} className={`rounded-xl border p-3 ${isCurrentMonth ? "border-primary/50 bg-primary/5" : "border-border bg-card"}`}>
+            <div
+              key={month}
+              onClick={() => hasMore && toggle(idx)}
+              className={`rounded-xl border p-3 ${isCurrentMonth ? "border-primary/50 bg-primary/5" : "border-border bg-card"} ${hasMore ? "cursor-pointer hover:border-primary/40 transition-colors" : ""}`}
+              data-testid={`vt-month-${idx}`}
+            >
               <div className="flex items-center justify-between mb-2">
                 <span className={`text-sm font-semibold ${isCurrentMonth ? "text-primary" : "text-foreground"}`}>{month}</span>
-                {monthTasks.length > 0 && <span className="text-[10px] text-muted-foreground">{monthTasks.length}</span>}
+                <span className="flex items-center gap-1">
+                  {monthTasks.length > 0 && <span className="text-[10px] text-muted-foreground">{monthTasks.length}</span>}
+                  {hasMore && (isExpanded ? <ChevronDown size={12} className="text-muted-foreground" /> : <ChevronRight size={12} className="text-muted-foreground" />)}
+                </span>
               </div>
               {monthTasks.length === 0 ? (
                 <p className="text-[10px] text-muted-foreground italic">Nothing due</p>
@@ -644,13 +658,21 @@ function CalendarView({ tasks }: { tasks: Task[] }) {
                 <div className="space-y-1">
                   {overdueCt > 0 && <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 shrink-0" /><span className="text-[10px] text-red-600 dark:text-red-400">{overdueCt} overdue</span></div>}
                   {dueSoonCt > 0 && <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" /><span className="text-[10px] text-amber-700 dark:text-amber-300">{dueSoonCt} due soon</span></div>}
-                  {monthTasks.slice(0, 3).map(t => (
+                  {shown.map(t => (
                     <div key={t.id} className="flex items-center gap-1">
                       <span className={`w-2 h-2 rounded-full shrink-0 ${statusDot(t.status)}`} />
-                      <span className="text-[10px] text-muted-foreground truncate">{t.name}</span>
+                      <span className="text-[10px] text-muted-foreground truncate flex-1">{t.name}</span>
+                      {isExpanded && dueLabel(t.next_due) && <span className="text-[9px] text-muted-foreground/70 shrink-0">{dueLabel(t.next_due)}</span>}
                     </div>
                   ))}
-                  {monthTasks.length > 3 && <span className="text-[10px] text-muted-foreground">+{monthTasks.length - 3} more</span>}
+                  {hasMore && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggle(idx); }}
+                      className="text-[10px] text-primary hover:underline"
+                    >
+                      {isExpanded ? "Show less" : `+${monthTasks.length - 3} more`}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
