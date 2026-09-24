@@ -61,6 +61,8 @@ import {
   ExternalLink,
   Paperclip,
   Archive,
+  ChevronDown,
+  Link2,
 } from "lucide-react";
 import { DocumentLinkDialog, COMP_DOC_TYPES } from "@/components/DocumentLinkDialog";
 import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
@@ -420,6 +422,132 @@ function WipBanner() {
   );
 }
 
+// ── Competencies Owed (derived from VeritaStaff) ─────────────────────────
+// #48 (2026-09-24): makes the pitch true. Reads the /competency/owed
+// derivation (owed = instruments assigned to each person in VeritaStaff, on
+// the CLIA timeline) and flags instruments not covered by any competency
+// program as gaps. Read-only; no parallel data store.
+
+interface OwedItem {
+  instrumentId: number;
+  instrumentName: string;
+  department: string | null;
+  complexity: string;
+  evaluatorTitle: string;
+  analyteCount: number;
+  covered: boolean;
+  coverage: { programId: number; programName: string; methodGroupId: number; methodGroupName: string } | null;
+}
+interface OwedEmployee {
+  employeeId: number;
+  name: string;
+  title: string | null;
+  owedCount: number;
+  gapCount: number;
+  owed: OwedItem[];
+}
+interface OwedResponse {
+  employees: OwedEmployee[];
+  timeline: string[];
+  totals: { employees: number; owed: number; gaps: number };
+}
+
+function complexityChipClass(c: string): string {
+  const u = (c || "").toUpperCase();
+  if (u === "HIGH") return "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800";
+  if (u === "MODERATE") return "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800";
+  if (u === "WAIVED") return "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800";
+  return "bg-muted text-muted-foreground border-border";
+}
+
+function CompetenciesOwedSection() {
+  const activeLabId = useActiveLabId();
+  const [expanded, setExpanded] = useState(false);
+  const url = activeLabId ? `/api/labs/${activeLabId}/competency/owed` : null;
+  const { data } = useQuery<OwedResponse>({
+    queryKey: [url ?? "no-owed"],
+    enabled: !!url,
+    queryFn: async () => {
+      const r = await fetch(`${API_BASE}${url}`, { headers: authHeaders() });
+      if (!r.ok) throw new Error(`Failed to load owed competencies (${r.status})`);
+      return r.json();
+    },
+  });
+  if (!url || !data || data.totals.employees === 0) return null;
+  const { totals, employees, timeline } = data;
+
+  return (
+    <div className="mb-6 rounded-xl border border-border bg-card/40">
+      <button
+        type="button"
+        onClick={() => setExpanded((p) => !p)}
+        className="w-full flex items-center gap-2 px-4 py-3 text-left"
+        data-testid="owed-section-toggle"
+      >
+        <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "" : "-rotate-90"}`} />
+        <Link2 className="h-4 w-4 shrink-0 text-primary" />
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-semibold">Competencies owed</div>
+          <div className="text-xs text-muted-foreground">Derived from each person's VeritaStaff&#8482; instrument assignments</div>
+        </div>
+        <span className="text-xs text-muted-foreground shrink-0">{totals.owed} owed</span>
+        {totals.gaps > 0 && (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300/60 shrink-0" data-testid="owed-gap-badge">
+            {totals.gaps} gap{totals.gaps === 1 ? "" : "s"}
+          </span>
+        )}
+      </button>
+
+      {expanded && (
+        <div className="px-4 pb-4 space-y-3">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            What each person owes comes from the instruments assigned to them in VeritaStaff&#8482;, on the CLIA timeline
+            ({timeline.join(" → ")}). A <span className="text-amber-700 dark:text-amber-300 font-medium">gap</span> is an assigned instrument that no competency program covers yet.
+          </p>
+          {employees.map((emp) => (
+            <div key={emp.employeeId} className="rounded-lg border border-border bg-background p-3">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="min-w-0">
+                  <span className="text-sm font-medium">{emp.name || `Employee #${emp.employeeId}`}</span>
+                  {emp.title && <span className="text-xs text-muted-foreground ml-2">{emp.title}</span>}
+                </div>
+                <span className="text-[11px] text-muted-foreground shrink-0">
+                  {emp.owedCount} owed{emp.gapCount > 0 ? ` · ${emp.gapCount} gap${emp.gapCount === 1 ? "" : "s"}` : ""}
+                </span>
+              </div>
+              {emp.owed.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">No instruments assigned in VeritaStaff&#8482;.</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {emp.owed.map((it) => (
+                    <span
+                      key={it.instrumentId}
+                      className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] ${it.covered ? "bg-muted/40 border-border" : "bg-amber-50 dark:bg-amber-950/30 border-amber-300/70"}`}
+                      title={it.covered
+                        ? `Covered by ${it.coverage?.programName || "a program"} (${it.coverage?.methodGroupName || "method group"}). Evaluator: ${it.evaluatorTitle}.`
+                        : `No competency program covers this yet. Evaluator when set up: ${it.evaluatorTitle}.`}
+                    >
+                      <FlaskConical className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      <span className="font-medium">{it.instrumentName}</span>
+                      {it.department && <span className="text-muted-foreground">· {it.department}</span>}
+                      <span className={`px-1.5 py-0.5 rounded border text-[9px] uppercase ${complexityChipClass(it.complexity)}`}>{it.complexity}</span>
+                      {!it.covered && (
+                        <span className="inline-flex items-center gap-0.5 text-amber-700 dark:text-amber-300 font-medium">
+                          <AlertTriangle className="h-3 w-3" /> gap
+                        </span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Program List View ──────────────────────────────────────────────────
 
 function ProgramListView() {
@@ -563,6 +691,9 @@ function ProgramListView() {
           </PermissionTooltip>
         </div>
       </div>
+
+      {/* #48: employee-centric competencies owed, derived from VeritaStaff, with gap detection */}
+      <CompetenciesOwedSection />
 
       {isLoading && (
         <div className="space-y-3">
