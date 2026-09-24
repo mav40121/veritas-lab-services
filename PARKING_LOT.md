@@ -1077,19 +1077,6 @@ strike-throughs above); see C30. Pre- vs post-COLA: indifferent.
 
 ---
 
-### 45. VeritaTrack calendar month cells are not expandable, so hidden tasks are unreachable
-
-**Effort:** S (1-3 days) — make each month cell open a detail view or expand in place, and wire the "+N more" affordance to reveal the full task list. The data is already loaded, this is a UI interaction gap, not a data one.
-**Importance:** High — a compliance calendar that hides tasks with no way to see them undercuts the module's core promise of showing what a lab owes and when.
-
-VeritaTrack's calendar view shows a per-month task count and a "+N more" line, but the month boxes are not clickable and cannot be expanded, so any task past the first few is invisible with no path to it. On the live demo (lab 3), the September cell shows 11 tasks with "+8 more" and nothing reveals the hidden eight. The List and Reminders views exist, but a user who lands on Calendar has no way to reach the full month from there. Shipping a clickable or expandable month cell closes the gap without any new data work.
-
-**Source:** 2026-09-23 session, Michael screenshot of the VeritaTrack calendar (lab 3, September cell).
-
-**Status:** Open. Not started.
-
----
-
 ### 46. VeritaScan line items cannot attach or link evidence (policy or uploaded document)
 
 **Effort:** M (1-2 weeks) — add a per-item evidence link that reuses the VeritaScan URL-pointer model rather than storing files: let a line item reference an existing VeritaDC controlled document or an external URL, then surface it as completion evidence.
@@ -1116,7 +1103,26 @@ A prospect asked today whether she could hide the modules or sections her lab do
 
 ---
 
+### 48. VeritaComp: derive owed competencies from VeritaStaff instrument/test assignments
+
+**Effort:** M-L (mock-first design plus the derivation and UI). The data model exists but the join is not trivial.
+**Importance:** High — Michael pitches to prospects that VeritaComp bases owed competencies on each staffer's VeritaStaff instrument/test selections. Currently untrue; making the pitch honest is the point.
+
+When staff are loaded into VeritaStaff the instruments they run are assignable (staff_employee_instruments links staff_employees to veritamap_instruments). VeritaComp should base each employee's OWED competencies on those assignments, not a lab-wide or manual list. Two design forks the code author already deferred (db.ts:1566, "separate mock-first design"): (1) VeritaStaff uses staff_employees while VeritaComp uses a separate competency_employees table with no FK, so the two records must be bridged; (2) staff_employee_instruments stores instrument IDs while competency_method_groups.instruments stores name+role strings like "Ortho VITROS 5600 [Primary]", so the match must be exact, not inferred, because competency scope is a citation risk. Proposed derivation: owed = the method groups whose instruments overlap the employee's assignment; surface owed vs completed per employee. Build mock-first.
+
+**Source:** 2026-09-24 session, Michael (pitch-integrity gap).
+
+**Status:** Open. Investigated 2026-09-24; ready to build mock-first, pending Michael's steer on the two forks.
+
+---
+
 ## CLOSED (audit trail)
+
+### C36. VeritaTrack calendar month cells expand to reveal hidden tasks (was #45)
+
+**Closure evidence:** PR #1309 (squash on main e398d341), client/src/pages/VeritaTrackAppPage.tsx CalendarView. Month cells with more than 3 tasks are clickable and expand in place (chevron, "+N more" toggles to "Show less", due dates shown when open). Shipped and deployed 2026-09-24. Env-gated spec tests/playwright/veritatrack-calendar-expand.spec.ts.
+
+---
 
 ### C34. Wire the two static-audit guards into CI (was #43)
 
