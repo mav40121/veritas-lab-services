@@ -955,31 +955,6 @@ What's deferred: the actual user flow at `https://www.veritaslabservices.com/lab
 
 ---
 
-### 41. Verify-script convention backfill (CLAUDE.md §2)
-
-**Effort:** L (8 backfill scripts, each ~2-4 hours, total ~3-5 working days if done as one focused sweep).
-**Importance:** Medium-High. Procedural-debt cleanup against a NON-NEGOTIABLE convention. CLAUDE.md §2 verify-*.js: every math/logic change ships with a paired script that exercises every meaningful branch. The audit run on 2026-06-02 found 31 of 35 math/logic commits in the last 90 days violated the convention. Some are exempt (renames, citation swaps, copy changes) but at least 8 introduced new math or fixed math defects and should have shipped with verification.
-
-The 8 high-stakes backfill candidates surfaced by `scripts/audit_verify_script_coverage.py` (run with default --since 90 days). Strike-through = backfill landed.
-- ~~EP17-A2 analytical sensitivity math (#118) — LoB / LoD / LoQ computations~~ ✅ backfilled 2026-06-04 in `scripts/verify-ep17-sensitivity.js` (34/34 PASS).
-- ~~Lot-to-Lot + PT/Coag Deming regression (#c66cbc6) — paired-specimen statistical method~~ ✅ backfilled 2026-06-06 in `scripts/verify-deming-lot-to-lot.js` (30/30 PASS).
-- ~~CUMSUM + QC range + multi-analyte lot comparison (#79d9aa5) — multiple new study type maths in one commit~~ ✅ backfilled 2026-06-06 in `scripts/verify-cumsum-qc-multianalyte.js` (41/41 PASS, including ride-along coverage of PR #252 pooledSD + bias / vendor-SDI classifiers).
-- ~~Reference Interval Verification CLSI EP28-A3c (#3bff6c9) — non-parametric interval calculation~~ ✅ backfilled 2026-06-04 in `scripts/verify-ep28-reference-interval.js` (31/31 PASS).
-- ~~Method comparison Deming + OLS with CI, SEE, bias column (#72e203c) — regression statistics~~ ✅ backfilled 2026-06-06 in `scripts/verify-deming-ols-ci.js` (28/28 PASS).
-- ~~Precision Verification EP15 ANOVA simple + advanced modes (#9643934) — variance decomposition~~ ✅ backfilled 2026-06-06 in `scripts/verify-ep15-anova.js` (26/26 PASS). Simple-mode parity cross-covered by `scripts/verify-precision-parity.js`.
-- ~~Qualitative + semi-quantitative method comparison (#4e14d1a) — categorical comparison logic~~ ✅ backfilled 2026-06-06 in `scripts/verify-method-comparison-qualitative.js` (37/37 PASS).
-- ~~TEa boundary comparison fix (#6e02c0d) — boundary math fix without verification~~ ✅ backfilled 2026-06-03 in `scripts/verify-tea-boundary.js` (19/19 PASS).
-
-**What stays exempt:** renames (e.g. "Reference Interval" -> "Reference Range" relabel), CFR citation swaps, copy authorship, label tweaks. The convention applies to math + branching logic, not text.
-
-**Why it parks:** the audit tool ships in PR #519. Backfill is a multi-PR sweep (one script per candidate). Ideal cadence is one backfill script per session as low-priority procedural fill behind customer-driven work. Lower urgency than feature work because the math has run in prod for 60-90 days without verified defects surfacing; backfill closes the gap for future regression detection, not active bug repair.
-
-**Source:** scripts/audit_verify_script_coverage.py output, run 2026-06-02. Captured as the formal lookback that surfaced the gap.
-
-**Status:** CLOSED 2026-06-13. All 8 high-stakes backfill scripts landed (the
-strike-throughs above); see C30. Pre- vs post-COLA: indifferent.
-
----
 
 ### 42. Outbound demo-invite messaging campaign to 1st-degree LinkedIn contacts
 
@@ -1075,6 +1050,14 @@ A prospect asked today whether she could hide the modules or sections her lab do
 ---
 
 ## CLOSED (audit trail)
+
+### C44. Verify-script convention backfill (was #41) + audit matcher fix
+
+**Closure evidence:** #41 was fully backfilled on 2026-06-13 (all 8 high-stakes scripts landed; see C30); it had only been mis-filed in OPEN. A 2026-09-24 re-audit initially reported 4 of 5 recent math/logic commits as missing a verify script, which was a FALSE POSITIVE: scripts/audit_verify_script_coverage.py matched only scripts/verify-*.js / .cjs, so it ignored the .mjs / .mts / .ts verify scripts the repo now ships (e.g. verify-ptcoag-multi.mts, verify-tea-criterion-format.mjs). Fixed the matcher to accept .js/.cjs/.mjs/.ts/.mts; re-run shows 5 of 5 covered, 0 debt. The convention is being followed. Closed 2026-09-24.
+
+**Source:** 2026-09-24 session, "keep working" pass; audit tooling bug found + fixed.
+
+---
 
 ### C43. VeritaStaff instrument-centric (dual) assignment view
 

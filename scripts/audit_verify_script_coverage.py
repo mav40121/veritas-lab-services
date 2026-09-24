@@ -56,8 +56,12 @@ def main():
             continue
         hsh, subj = line[5:].split("::", 1)
         files = git(["show", "--name-only", "--pretty=", hsh]).splitlines()
+        # Match every verify-script flavor the repo uses. The convention predates
+        # the move to ES modules / TypeScript, so a large share of verify scripts
+        # are now .mjs / .mts / .ts; matching only .js/.cjs false-flagged them all
+        # as procedural debt (e.g. verify-ptcoag-multi.mts, verify-tea-criterion-format.mjs).
         has_verify = any(
-            f.startswith("scripts/verify-") and (f.endswith(".js") or f.endswith(".cjs"))
+            f.startswith("scripts/verify-") and f.endswith((".js", ".cjs", ".mjs", ".ts", ".mts"))
             for f in files
         )
         (covered if has_verify else not_covered).append((hsh[:7], subj))
@@ -68,12 +72,12 @@ def main():
         return 0
 
     print(f"Audited {total} commit(s) touching math/logic files since {args.since}.")
-    print(f"  With paired verify-*.js: {len(covered)}")
-    print(f"  Without paired verify-*.js: {len(not_covered)}")
+    print(f"  With a paired verify script: {len(covered)}")
+    print(f"  Without a paired verify script: {len(not_covered)}")
     print()
 
     if covered:
-        print("=== With paired verify-*.js ===")
+        print("=== With a paired verify script ===")
         for h, s in covered:
             print(f"  {h}  {s[:100]}")
         print()
