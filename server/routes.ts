@@ -25355,11 +25355,58 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const client = (db as any).$client;
 
     const employees = client.prepare(
-      `SELECT id, first_name, last_name, middle_initial, title, highest_complexity
-       FROM staff_employees
-       WHERE tier2_lab_id = ? AND status = 'active' AND performs_testing = 1
-       ORDER BY last_name, first_name`
+      `SELECT e.id, e.first_name, e.last_name, e.middle_initial, e.title, e.highest_complexity, e.hire_date,
+              s.initial_completed_at,
+              s.six_month_due_at, s.six_month_completed_at,
+              s.first_annual_due_at, s.first_annual_completed_at,
+              s.annual_due_at, s.last_annual_completed_at
+       FROM staff_employees e
+       LEFT JOIN staff_competency_schedules s ON s.employee_id = e.id
+       WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1
+       ORDER BY e.last_name, e.first_name`
     ).all(labId) as any[];
+
+    // Per-employee CLIA schedule status. Mirrors the dashboard-stats milestone
+    // walk exactly (server/routes.ts, /competency/dashboard-stats) so the owed
+    // view and the dashboard tile classify the same person the same way.
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const dayMs = 24 * 60 * 60 * 1000;
+    const plus30 = today.getTime() + 30 * dayMs;
+    const plus90 = today.getTime() + 90 * dayMs;
+    const parseDate = (s: string | null): Date | null => {
+      if (!s) return null;
+      const d = new Date(s);
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+    const deriveStatus = (e: any): { bucket: string; reason: string; nextDue: string | null; scheduled: boolean } => {
+      const scheduled = !!(e.initial_completed_at || e.six_month_due_at || e.first_annual_due_at || e.annual_due_at);
+      let nextDue: Date | null = null;
+      let reason = "";
+      if (!e.initial_completed_at) {
+        const hire = parseDate(e.hire_date);
+        nextDue = hire ? new Date(hire.getTime() + 90 * dayMs) : today;
+        reason = "Initial competency not completed";
+      } else if (e.six_month_due_at && !e.six_month_completed_at) {
+        nextDue = parseDate(e.six_month_due_at); reason = "6-month competency due";
+      } else if (e.first_annual_due_at && !e.first_annual_completed_at) {
+        nextDue = parseDate(e.first_annual_due_at); reason = "1st annual competency due";
+      } else if (e.annual_due_at) {
+        const due = parseDate(e.annual_due_at);
+        const lastDone = parseDate(e.last_annual_completed_at);
+        if (due) {
+          if (lastDone && lastDone.getTime() > due.getTime() - 365 * dayMs) {
+            const next = new Date(due.getTime() + 365 * dayMs);
+            nextDue = next; reason = next.getTime() < today.getTime() ? "Annual cycle overdue" : "Annual due";
+          } else { nextDue = due; reason = "Annual competency due"; }
+        }
+      }
+      let bucket = "compliant";
+      if (nextDue === null) bucket = "compliant";
+      else if (nextDue.getTime() < today.getTime()) bucket = "overdue";
+      else if (nextDue.getTime() <= plus30) bucket = "dueSoon30";
+      else if (nextDue.getTime() <= plus90) bucket = "dueSoon90";
+      return { bucket, reason, nextDue: nextDue ? nextDue.toISOString().slice(0, 10) : null, scheduled };
+    };
 
     // Every method group across the lab's competency programs, for coverage.
     const methodGroups = client.prepare(
@@ -25439,16 +25486,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         title: e.title || null,
         owedCount: owed.length,
         gapCount,
+        status: deriveStatus(e),
         owed,
       };
     });
 
     const totalOwed = results.reduce((s, r) => s + r.owedCount, 0);
     const totalGaps = results.reduce((s, r) => s + r.gapCount, 0);
+    const overdue = results.filter((r) => r.status.bucket === "overdue").length;
+    const dueSoon = results.filter((r) => r.status.bucket === "dueSoon30" || r.status.bucket === "dueSoon90").length;
     res.json({
       employees: results,
       timeline: ["Initial", "6-month", "1st annual", "Annual"],
-      totals: { employees: results.length, owed: totalOwed, gaps: totalGaps },
+      totals: { employees: results.length, owed: totalOwed, gaps: totalGaps, overdue, dueSoon },
     });
   });
 

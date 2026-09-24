@@ -38,6 +38,8 @@ test.describe("VeritaComp competencies owed (derived from VeritaStaff)", () => {
       await toggle.click();
       await page.waitForTimeout(600);
       await expect(page.getByText(/What each person owes comes from the instruments assigned/i)).toBeVisible();
+      // Phase 2: every employee row carries a CLIA schedule status chip.
+      await expect(page.getByText(/Up to date|Not scheduled|Overdue|due/i).first()).toBeVisible();
     } else {
       test.skip(true, "No VeritaStaff testing personnel on this lab; owed section is hidden by design.");
     }
