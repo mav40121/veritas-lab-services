@@ -438,18 +438,35 @@ interface OwedItem {
   covered: boolean;
   coverage: { programId: number; programName: string; methodGroupId: number; methodGroupName: string } | null;
 }
+interface OwedStatus {
+  bucket: "overdue" | "dueSoon30" | "dueSoon90" | "compliant";
+  reason: string;
+  nextDue: string | null;
+  scheduled: boolean;
+}
 interface OwedEmployee {
   employeeId: number;
   name: string;
   title: string | null;
   owedCount: number;
   gapCount: number;
+  status: OwedStatus;
   owed: OwedItem[];
 }
 interface OwedResponse {
   employees: OwedEmployee[];
   timeline: string[];
-  totals: { employees: number; owed: number; gaps: number };
+  totals: { employees: number; owed: number; gaps: number; overdue: number; dueSoon: number };
+}
+
+// Maps the CLIA schedule bucket to a chip label + class. "compliant" splits on
+// whether the employee has a schedule on file at all (up to date vs not scheduled).
+function statusChip(s: OwedStatus): { label: string; cls: string } {
+  const due = s.nextDue ? ` · due ${s.nextDue}` : "";
+  if (s.bucket === "overdue") return { label: `Overdue: ${s.reason}${due}`, cls: "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800" };
+  if (s.bucket === "dueSoon30" || s.bucket === "dueSoon90") return { label: `${s.reason}${due}`, cls: "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800" };
+  if (!s.scheduled) return { label: "Not scheduled", cls: "bg-muted text-muted-foreground border-border" };
+  return { label: "Up to date", cls: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800" };
 }
 
 function complexityChipClass(c: string): string {
@@ -491,6 +508,11 @@ function CompetenciesOwedSection() {
           <div className="text-xs text-muted-foreground">Derived from each person's VeritaStaff&#8482; instrument assignments</div>
         </div>
         <span className="text-xs text-muted-foreground shrink-0">{totals.owed} owed</span>
+        {totals.overdue > 0 && (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-300/60 shrink-0" data-testid="owed-overdue-badge">
+            {totals.overdue} overdue
+          </span>
+        )}
         {totals.gaps > 0 && (
           <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300/60 shrink-0" data-testid="owed-gap-badge">
             {totals.gaps} gap{totals.gaps === 1 ? "" : "s"}
@@ -511,9 +533,14 @@ function CompetenciesOwedSection() {
                   <span className="text-sm font-medium">{emp.name || `Employee #${emp.employeeId}`}</span>
                   {emp.title && <span className="text-xs text-muted-foreground ml-2">{emp.title}</span>}
                 </div>
-                <span className="text-[11px] text-muted-foreground shrink-0">
-                  {emp.owedCount} owed{emp.gapCount > 0 ? ` · ${emp.gapCount} gap${emp.gapCount === 1 ? "" : "s"}` : ""}
-                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {(() => { const c = statusChip(emp.status); return (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded border ${c.cls}`} title={emp.status.reason || undefined}>{c.label}</span>
+                  ); })()}
+                  <span className="text-[11px] text-muted-foreground">
+                    {emp.owedCount} owed{emp.gapCount > 0 ? ` · ${emp.gapCount} gap${emp.gapCount === 1 ? "" : "s"}` : ""}
+                  </span>
+                </div>
               </div>
               {emp.owed.length === 0 ? (
                 <p className="text-xs text-muted-foreground italic">No instruments assigned in VeritaStaff&#8482;.</p>
