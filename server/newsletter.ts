@@ -18,6 +18,11 @@ import crypto from "node:crypto";
 
 export const NEWSLETTER_FROM = "Michael Veri <info@veritaslabservices.com>";
 export const NEWSLETTER_NAME = "The Lab Director's Briefing";
+// Product-update sends go to registered VeritaAssure account holders (the users
+// table), NOT the Lab Director's Briefing subscriber list. Separate masthead and
+// "why you are getting this" reason so the two audiences are never conflated.
+export const PRODUCT_UPDATE_FROM = "Michael Veri <info@veritaslabservices.com>";
+export const PRODUCT_UPDATE_NAME = "VeritaAssure Product Update";
 const BASE_URL = "https://www.veritaslabservices.com";
 
 function unsubSecret(): string {
@@ -48,7 +53,17 @@ function esc(s: string): string {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-export function buildNewsletterHtml(opts: { bodyHtml: string; email: string; postalAddress: string }): string {
+// Shared branded shell for both audiences. masthead/subhead/reason are the only
+// things that differ between the Briefing newsletter and a product update, so the
+// layout, colors, and CAN-SPAM unsubscribe footer stay in one place.
+function renderEmailShell(opts: {
+  masthead: string;
+  subhead: string;
+  reason: string;
+  bodyHtml: string;
+  email: string;
+  postalAddress: string;
+}): string {
   const unsub = unsubscribeUrl(opts.email);
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
@@ -61,17 +76,42 @@ export function buildNewsletterHtml(opts: { bodyHtml: string; email: string; pos
   .foot { font-size: 11px; color: #BAB9B4; line-height: 1.5; }
 </style></head>
 <body>
-  <h1>${esc(NEWSLETTER_NAME)}</h1>
-  <h2>From Veritas Lab Services</h2>
+  <h1>${esc(opts.masthead)}</h1>
+  <h2>${esc(opts.subhead)}</h2>
   <hr class="divider">
   ${opts.bodyHtml}
   <hr class="divider">
   <p class="foot">
-    You are receiving this because you subscribed at veritaslabservices.com.
+    ${esc(opts.reason)}
     <a href="${unsub}">Unsubscribe</a>.<br>
     ${esc(opts.postalAddress)}
   </p>
 </body></html>`;
+}
+
+export function buildNewsletterHtml(opts: { bodyHtml: string; email: string; postalAddress: string }): string {
+  return renderEmailShell({
+    masthead: NEWSLETTER_NAME,
+    subhead: "From Veritas Lab Services",
+    reason: "You are receiving this because you subscribed at veritaslabservices.com.",
+    bodyHtml: opts.bodyHtml,
+    email: opts.email,
+    postalAddress: opts.postalAddress,
+  });
+}
+
+// Product update to registered account holders. Different masthead and reason so
+// a real user knows this reached them because they have an account, not because
+// they subscribed to the Briefing.
+export function buildProductUpdateHtml(opts: { bodyHtml: string; email: string; postalAddress: string }): string {
+  return renderEmailShell({
+    masthead: PRODUCT_UPDATE_NAME,
+    subhead: "From Veritas Lab Services",
+    reason: "You are receiving this because you have a VeritaAssure account at veritaslabservices.com.",
+    bodyHtml: opts.bodyHtml,
+    email: opts.email,
+    postalAddress: opts.postalAddress,
+  });
 }
 
 // Michael's standing instruction: he is CC'd on every real send so he sees the
@@ -95,7 +135,13 @@ export async function sendNewsletter(opts: {
   bodyHtml: string;
   recipients: string[];
   postalAddress: string;
+  // Optional overrides for the product-update audience. Defaults keep the
+  // Briefing newsletter behavior byte-identical for existing callers.
+  from?: string;
+  buildHtml?: (a: { bodyHtml: string; email: string; postalAddress: string }) => string;
 }): Promise<NewsletterSendResult> {
+  const fromAddress = opts.from || NEWSLETTER_FROM;
+  const buildHtml = opts.buildHtml || buildNewsletterHtml;
   const result: NewsletterSendResult = { sent: 0, failed: 0, errors: [] };
   // Resend's default rate limit is ~2 requests/second. Pace sends just under
   // that and retry transient failures (429 rate-limit, 5xx) with exponential
@@ -115,10 +161,10 @@ export async function sendNewsletter(opts: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            from: NEWSLETTER_FROM,
+            from: fromAddress,
             to: email,
             subject: opts.subject,
-            html: buildNewsletterHtml({ bodyHtml: opts.bodyHtml, email, postalAddress: opts.postalAddress }),
+            html: buildHtml({ bodyHtml: opts.bodyHtml, email, postalAddress: opts.postalAddress }),
           }),
         });
         if (resp.ok) { ok = true; break; }
