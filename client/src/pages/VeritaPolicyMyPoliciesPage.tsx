@@ -1561,6 +1561,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                     <SelectItem value="6">6 months</SelectItem>
                     <SelectItem value="12">12 months</SelectItem>
                     <SelectItem value="24">24 months</SelectItem>
+                    <SelectItem value="0">No periodic review (N/A)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

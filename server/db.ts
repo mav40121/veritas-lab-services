@@ -192,6 +192,8 @@ sqlite.exec(`
     approved_by_user_id INTEGER,
     approved_by_name TEXT,
     approved_at TEXT,
+    document_id INTEGER,
+    next_review TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
@@ -3762,6 +3764,7 @@ sqlite.exec(`
       screen_result: "TEXT", screen_notes: "TEXT", title: "TEXT",
       created_by_user_id: "INTEGER", approved_by_user_id: "INTEGER",
       approved_by_name: "TEXT", approved_at: "TEXT",
+      document_id: "INTEGER", next_review: "TEXT",
     });
   }
   {
