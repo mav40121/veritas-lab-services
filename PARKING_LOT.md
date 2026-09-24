@@ -1039,69 +1039,9 @@ strike-throughs above); see C30. Pre- vs post-COLA: indifferent.
 
 ---
 
-### 43. License stamp clobbers the §6 lab-identity header/footer and can name the wrong lab
 
-**Effort:** S-M (one shared helper plus a verify script; 8 callsites to re-check)
-**Importance:** Medium-High. Every customer-facing workbook currently prints a header and footer that name the *licensee* lab and omit the CLIA number entirely, which is not what CLAUDE.md §6 "Customer-facing workbooks" rule 3 specifies. On an API path that omits `X-Active-Lab-Id`, the licensee resolves to the user's default lab, so a multi-lab customer can receive a workbook reading "Prepared for: Lab A" on the About sheet and "Licensed to: Lab B" on every printed page.
 
-**What:** `licenseCtxFromReq` (server/routes.ts:57-61) resolves the licensee lab from `resolveActiveLabForRequest`, which reads the `X-Active-Lab-Id` header and silently falls back to the user's default lab inside a bare `catch {}`. The export body meanwhile resolves the lab from `req.scope.labId` (the URL path param, set by `labScopeMiddleware`). Two sources of truth for one document. Separately and unconditionally, `applyLicenseToExcelJSWorkbook` (shared/licenseExceljs.ts:93-96) *assigns* rather than merges `oddHeader`/`oddFooter` on every sheet, so the six lines in the VeritaMap export that carefully set `${labName}    CLIA: ${cliaNumber}` (routes.ts:13932-13933, 14215-14216, 14224-14225) are dead code, overwritten at routes.ts:14237. §6 rule 3 exists so identity survives cell-level copy-paste; layers (b) and (c) do not currently exist in any shipped workbook.
 
-**Class scope (8 callsites, all `applyLicenseToExcelJS(wb, licenseCtxFromReq(req, ...))`):** routes.ts:9981 and 16677 (VeritaCheck), 14237 and 17640 (VeritaMap), 15581 (VeritaScan), 25985 (VeritaLab), 29317 and 29988 (VeritaPolicy).
-
-**Evidence:** Found 2026-07-16 during the PR 4 render-and-look on live `8e85ea5`. `POST /api/labs/3/veritamap/maps/47/excel` with no `X-Active-Lab-Id` returned a workbook whose About sheet A3 read "Prepared for: Michaels Lab    CLIA: 55D5555555" while every sheet header read "Licensed: UMass Memorial Health - Milford Regional Medical Center". Re-running the same request *with* `X-Active-Lab-Id: 3` produced "Licensed: Michaels Lab", confirming the header-driven resolution. The browser flow does send the header (client/src/lib/auth.ts:80), so the wrong-lab half is not currently reaching UI users; the clobbered header/footer half reaches everyone.
-
-**Fix sketch:** Have the license context accept an explicit lab (prefer `req.scope.lab`) rather than re-deriving from a header, and make the stamp *merge* into the existing header/footer instead of assigning over it, so the §6 identity line and the license band coexist. Ship `scripts/verify-license-stamp-identity.mjs` asserting: scoped route stamps the scoped lab, missing header does not silently fall back to a different lab, and CLIA survives in both header and footer on every sheet.
-
-**Source:** 2026-07-16 session, PR 4 (#1046) Gate 3 render. Related: `feedback_pdf_lab_identity_resolution` memory (same `resolveActiveLabForRequest` swallowed-throw shape).
-
-**Status:** Parked by operator decision 2026-07-16 ("log it, finish PR 4 first"). Not started. No code touched.
-
----
-
-### 44. Long Excel column headers are clipped, truncating CFR citations mid-string
-
-**Effort:** S (compute the header row height from the longest wrapped header, or raise the fixed height; then sweep the other export routes)
-**Importance:** Medium. The VeritaMap workbook currently prints "Reference Range Attestation (42 CFR" with "493.1253)" cut off, and "AMR Attestation (42 CFR 493.1253, per" with "instrument)" cut off. A regulatory citation truncated mid-string in a document a surveyor reads is worse than a cosmetic defect: the column no longer says which requirement it attests to. Not a data error. The cell values are complete and correct; only the printed header is cut.
-
-**What:** CLAUDE.md §6 specifies both "row height 20" for the header row and "wrap text" for cells. Those two rules conflict for any header longer than its column width. Row height 20 renders roughly one line of Calibri 11, so a header that wraps to two or three lines has its tail clipped in print and in PDF export. Confirmed on the live VeritaMap Compliance Map export: header row height is 20.0 with `wrapText: true`, and the three longest headers are "AMR Attestation (42 CFR 493.1253, per instrument)" (49 chars), "Reference Range Attestation (42 CFR 493.1253)" (45), and "Last Correlation / Method Comparison Date" (41). "Last SOP Review Date" and "AMR High (per instrument)" clip too.
-
-**Class scope (unverified beyond VeritaMap):** the row-height-20 rule in §6 applies to every customer-facing workbook, so any export whose header text exceeds its column width is a candidate. The other ExcelJS export routes were not checked. A sweep should compare each header's length against its `colWidths` entry rather than fixing VeritaMap alone.
-
-**Evidence:** Found 2026-07-16 during the PR 4 (#1046) Gate 3 render. The live export was opened in Excel and printed to PDF at fit-to-2-pages-wide; the clipping is visible on both pages. Verified pre-existing and not introduced by PR 4: the pre-PR-4 workbook has the identical header row height (20.0) and the identical three longest headers. PR 4's new header ("Age / Sex Band", 13 chars at column width 22) fits on one line and neither caused nor worsened this.
-
-**Fix sketch:** Derive the header row height from the longest header divided by its column width (the export already does this for About-sheet body text at routes.ts:13909-13915, ~88 chars per line at width 110), rather than hardcoding 20. Alternatively shorten the header text itself, though the CFR citations are the part worth keeping. Either way, update the §6 "row height 20" wording so the rule is a minimum rather than a fixed value, since as written it guarantees this defect.
-
-**Source:** 2026-07-16 session, PR 4 (#1046) Gate 3 render. Sibling of [[#43]]; both were found by looking at the rendered workbook, and neither was catchable by the verify scripts.
-
-**Status:** Parked by operator decision 2026-07-16. Not started. No code touched.
-
----
-
-### 45. VeritaTrack calendar month cells are not expandable, so hidden tasks are unreachable
-
-**Effort:** S (1-3 days) — make each month cell open a detail view or expand in place, and wire the "+N more" affordance to reveal the full task list. The data is already loaded, this is a UI interaction gap, not a data one.
-**Importance:** High — a compliance calendar that hides tasks with no way to see them undercuts the module's core promise of showing what a lab owes and when.
-
-VeritaTrack's calendar view shows a per-month task count and a "+N more" line, but the month boxes are not clickable and cannot be expanded, so any task past the first few is invisible with no path to it. On the live demo (lab 3), the September cell shows 11 tasks with "+8 more" and nothing reveals the hidden eight. The List and Reminders views exist, but a user who lands on Calendar has no way to reach the full month from there. Shipping a clickable or expandable month cell closes the gap without any new data work.
-
-**Source:** 2026-09-23 session, Michael screenshot of the VeritaTrack calendar (lab 3, September cell).
-
-**Status:** Open. Not started.
-
----
-
-### 46. VeritaScan line items cannot attach or link evidence (policy or uploaded document)
-
-**Effort:** M (1-2 weeks) — add a per-item evidence link that reuses the VeritaScan URL-pointer model rather than storing files: let a line item reference an existing VeritaDC controlled document or an external URL, then surface it as completion evidence.
-**Importance:** High — showing evidence per line item is the whole point of a self-inspection; without it the scan records a status but cannot show the policy or document that satisfies it.
-
-Users still cannot attach a policy, link an already-uploaded policy, or point to other evidence from a VeritaScan line item. VeritaScan is intentionally URL-and-metadata only (no file content lands on VeritaAssure), so the correct shape is a link to a VeritaDC document or an external URL on each item, not a file upload. This pairs naturally with VeritaDC now that document control is the evidence home. Shipping it lets a scan line item carry its proof, which is what both a surveyor and a director want to see.
-
-**Source:** 2026-09-23 session, Michael. Recurring request.
-
-**Status:** Open. Not started.
-
----
 
 ### 47. Hide sections a lab does not use from a master list, to reduce clutter (prospect-requested)
 
@@ -1117,6 +1057,46 @@ A prospect asked today whether she could hide the modules or sections her lab do
 ---
 
 ## CLOSED (audit trail)
+
+### C40. VeritaComp Competencies Owed derived from VeritaStaff, with gap detection (was #48)
+
+**Closure evidence:** PR #1314 (squash 2bcb0db9). GET /api/labs/:labId/competency/owed derives each VeritaStaff testing employee's owed competencies from their assigned instruments (staff_employee_instruments -> veritamap_instruments + tests), on the CLIA timeline, and flags instruments not covered by any competency program as gaps. CompetenciesOwedSection renders it on the VeritaComp landing page. Reuses the shipped bridge + suggested-method-groups match rules; no new tables. Verified live on prod with real assignment data: 2 instruments assigned to a demo staffer produced owed=2, gaps=2 (HIGH, Technical Supervisor), then reverted cleanly. Closed 2026-09-24.
+
+**Source:** 2026-09-23/24 session, Michael ("veritacomp bases what competencies they owe (currently untrue, but needs to be true)"). Option 1 (unify roster on VeritaStaff, match instruments by id).
+
+---
+
+### C39. VeritaScan line items can attach or link evidence (was #46)
+
+**Closure evidence:** PR #1312 (squash a1dda93d). VeritaScan scan checklist items now show linked evidence as chips (open link, remove) plus a writer "Link evidence" affordance whose picker links an existing VeritaDC/Library document; a shortcut deep-links to the Library for new (governed) documents. Reuses the already-shipped lab_documents + document_checklist_links + coverage endpoints (URL-pointer only, no file storage, no new tables). Browser-verified live on prod (scan 23): the affordance renders and the picker opens. Closed 2026-09-24.
+
+**Source:** 2026-09-23 session, Michael. Recurring request. Companion: cross-module evidence display on the VeritaDC policy shipped in PR #1313 (by-target cross-links surfaced in the policy View modal, browser-verified live).
+
+---
+
+### C38. VeritaTrack calendar month cells expand to reveal hidden tasks (was #45)
+
+**Closure evidence:** VeritaTrack CalendarView month cells with more than three tasks now expand in place (chevron, "+N more" toggling to "Show less", due dates), so no task is hidden with no path to it (client/src/pages/VeritaTrackAppPage.tsx CalendarView). Shipped 2026-09-23. Closed 2026-09-24.
+
+**Source:** 2026-09-23 session, Michael screenshot of the VeritaTrack calendar (lab 3, September cell).
+
+---
+
+### C37. Long Excel column headers no longer clip CFR citations (was #44)
+
+**Closure evidence:** Verified already fixed on main during the 2026-09-24 session. The VeritaMap export derives the header row height from the longest wrapped header via headerRowHeight(headers, colWidths) (server/routes.ts:15935) instead of a fixed 20, so "Reference Range Attestation (42 CFR 493.1253)" and the other long headers print in full. No new code this session. Closed 2026-09-24.
+
+**Source:** parked 2026-07-16 (PR 4 Gate 3 render); found already-fixed 2026-09-24.
+
+---
+
+### C36. License stamp no longer clobbers the §6 header/footer or names the wrong lab (was #43)
+
+**Closure evidence:** Verified already fixed on main during the 2026-09-24 session. setHeaderFooter (shared/licenseExceljs.ts:155-209) now preserves an existing §6 header and appends (not overwrites) the footer left section, and customer-facing exports name the scoped lab: the VeritaScan library export reads req.scope.lab.name / clia_number (server/routes.ts:16572-16573), not the licensee. No new code this session (avoided regressing the existing fix). Closed 2026-09-24.
+
+**Source:** parked 2026-07-16 (PR 4 Gate 3 render); found already-fixed 2026-09-24.
+
+---
 
 ### C34. Wire the two static-audit guards into CI (was #43)
 
