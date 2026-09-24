@@ -25340,6 +25340,118 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(rows);
   });
 
+  // GET /api/labs/:labId/competency/owed
+  //
+  // #48 (2026-09-24): employee-centric "Competencies owed" derivation. Makes the
+  // VeritaComp pitch true: what an employee owes is derived from the instruments
+  // assigned to them in VeritaStaff, INCLUDING instruments not yet covered by any
+  // competency program (the gap the per-program star-suggestion could not surface).
+  // Read-only; reuses the shipped staff_employee_instruments bridge, the VeritaMap
+  // menu, and the same match rules as suggested-method-groups. No new tables.
+  // Roster of record = VeritaStaff testing personnel (Option 1: one roster).
+  app.get("/api/labs/:labId/competency/owed", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const client = (db as any).$client;
+
+    const employees = client.prepare(
+      `SELECT id, first_name, last_name, middle_initial, title, highest_complexity
+       FROM staff_employees
+       WHERE tier2_lab_id = ? AND status = 'active' AND performs_testing = 1
+       ORDER BY last_name, first_name`
+    ).all(labId) as any[];
+
+    // Every method group across the lab's competency programs, for coverage.
+    const methodGroups = client.prepare(
+      `SELECT mg.id, mg.name, mg.instruments, mg.analytes, p.id AS program_id, p.name AS program_name
+       FROM competency_method_groups mg
+       JOIN competency_programs p ON mg.program_id = p.id
+       WHERE p.lab_id = ?`
+    ).all(labId) as any[];
+
+    const parseArr = (s: string): string[] => {
+      try { const v = JSON.parse(s || "[]"); return Array.isArray(v) ? v.map((x: any) => String(x)) : []; } catch { return []; }
+    };
+    const mgParsed = methodGroups.map((mg: any) => ({
+      id: mg.id, name: mg.name, programId: mg.program_id, programName: mg.program_name,
+      instrumentsLC: parseArr(mg.instruments).map((x) => x.toLowerCase()),
+      analytesLC: new Set(parseArr(mg.analytes).map((x) => x.toLowerCase())),
+      nameLC: String(mg.name || "").toLowerCase(),
+    }));
+
+    const rankComplexity = (c: string): number => {
+      const u = String(c || "").toUpperCase();
+      if (u.startsWith("H")) return 3;
+      if (u.startsWith("M")) return 2;
+      if (u.startsWith("W")) return 1;
+      return 0;
+    };
+    const complexityLabel = (r: number): string => (r >= 3 ? "HIGH" : r === 2 ? "MODERATE" : r === 1 ? "WAIVED" : "UNSPECIFIED");
+    // CLAUDE.md §5: evaluator title by complexity.
+    const evaluatorTitle = (r: number): string => (r >= 3 ? "Technical Supervisor" : r === 2 ? "Technical Consultant" : r === 1 ? "General Supervisor" : "Technical Consultant");
+
+    const instStmt = client.prepare(
+      `SELECT i.id, i.instrument_name, i.category
+       FROM staff_employee_instruments j
+       JOIN veritamap_instruments i ON j.instrument_id = i.id
+       JOIN veritamap_maps m ON i.map_id = m.id
+       WHERE j.employee_id = ? AND m.lab_id = ?
+       ORDER BY i.category, i.instrument_name`
+    );
+    const testsStmt = client.prepare(
+      `SELECT DISTINCT analyte, complexity FROM veritamap_instrument_tests WHERE instrument_id = ? AND active = 1`
+    );
+
+    const results = employees.map((e: any) => {
+      const instruments = instStmt.all(e.id, labId) as any[];
+      const owed = instruments.map((inst: any) => {
+        const tests = testsStmt.all(inst.id) as any[];
+        const analytes = tests.map((t: any) => String(t.analyte || "").trim()).filter(Boolean);
+        const maxRank = tests.reduce((m: number, t: any) => Math.max(m, rankComplexity(t.complexity)), 0);
+        const instNameLC = String(inst.instrument_name || "").trim().toLowerCase();
+        const catLC = String(inst.category || "").trim().toLowerCase();
+        const analytesLC = analytes.map((a) => a.toLowerCase());
+        let coverage: any = null;
+        for (const mg of mgParsed) {
+          const instMatch = mg.instrumentsLC.some((n: string) => n && (n.includes(instNameLC) || instNameLC.includes(n)));
+          const analyteMatch = analytesLC.some((a) => mg.analytesLC.has(a));
+          const catMatch = !!catLC && mg.nameLC.includes(catLC);
+          if (instMatch || analyteMatch || catMatch) {
+            coverage = { programId: mg.programId, programName: mg.programName, methodGroupId: mg.id, methodGroupName: mg.name };
+            break;
+          }
+        }
+        return {
+          instrumentId: inst.id,
+          instrumentName: inst.instrument_name,
+          department: inst.category || null,
+          complexity: complexityLabel(maxRank),
+          evaluatorTitle: evaluatorTitle(maxRank),
+          analyteCount: analytes.length,
+          covered: !!coverage,
+          coverage,
+        };
+      });
+      const gapCount = owed.filter((o: any) => !o.covered).length;
+      return {
+        employeeId: e.id,
+        name: `${e.first_name || ""} ${e.last_name || ""}`.trim(),
+        title: e.title || null,
+        owedCount: owed.length,
+        gapCount,
+        owed,
+      };
+    });
+
+    const totalOwed = results.reduce((s, r) => s + r.owedCount, 0);
+    const totalGaps = results.reduce((s, r) => s + r.gapCount, 0);
+    res.json({
+      employees: results,
+      timeline: ["Initial", "6-month", "1st annual", "Annual"],
+      totals: { employees: results.length, owed: totalOwed, gaps: totalGaps },
+    });
+  });
+
   // GET /api/labs/:labId/competency/dashboard-stats
   //
   // PR E2 of the customer-blockers wave (2026-06-05). Single endpoint that
