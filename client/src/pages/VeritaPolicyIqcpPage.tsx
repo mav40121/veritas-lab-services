@@ -9,7 +9,7 @@
 //   4. Review and mark complete with director approval.
 // Backend: /api/iqcp/* (question bank, prescreen) and /api/labs/:labId/iqcp/*.
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useLayoutEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { VeritaPolicyTabs } from "@/components/VeritaPolicyTabs";
@@ -36,6 +36,23 @@ type QaRow = { activity: string; frequency: string; assessment_method: string };
 const PHASES = ["Pre-analytic", "Analytic", "Post-analytic"];
 const REDUCIBLE = ["Yes", "No", "N/A"];
 const emptyScreen: Screen = { nonwaived: "", reduce_intent: "", mfr_less_strict: "" };
+
+// Textarea that grows to fit its content, so pre-filled CMS text is never clipped.
+function AutoTextarea({ value, onChange, className = "", ...props }: any) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const resize = () => { const el = ref.current; if (el) { el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; } };
+  useLayoutEffect(() => { resize(); }, [value]);
+  return (
+    <Textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      onChange={(e: any) => { onChange(e); resize(); }}
+      className={`min-h-[38px] resize-none overflow-hidden ${className}`}
+      {...props}
+    />
+  );
+}
 
 export default function VeritaPolicyIqcpPage() {
   const labId = useActiveLabId();
@@ -275,11 +292,13 @@ const STEPS = [
 
 function PlanBuilder({ planId, bank, labId, jsonMut, onBack }: any) {
   const { toast } = useToast();
-  const { data: plan, isLoading } = useQuery<any>({ queryKey: [`/api/labs/${labId}/iqcp/plans/${planId}`], enabled: !!labId });
+  const planUrl = `/api/labs/${labId}/iqcp/plans/${planId}`;
+  const { data: plan, isLoading } = useQuery<any>({ queryKey: [planUrl], enabled: !!labId });
   const [step, setStep] = useState<string>("risk");
   const [risk, setRisk] = useState<RiskRow[]>([]);
   const [qcp, setQcp] = useState<QcpRow[]>([]);
   const [qa, setQa] = useState<QaRow[]>([]);
+  const [dirty, setDirty] = useState<Record<string, boolean>>({});
   const [approver, setApprover] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -291,28 +310,69 @@ function PlanBuilder({ planId, bank, labId, jsonMut, onBack }: any) {
       ? plan.qaItems.map((r: any) => ({ activity: r.activity, frequency: r.frequency || "", assessment_method: r.assessment_method || "" }))
       : bank.qa.activities.map((a: string) => ({ activity: a, frequency: "", assessment_method: "" })));
     setApprover(plan.approved_by_name || "");
+    setDirty({});
   }, [plan, bank]);
 
-  const save = async (section: "risk" | "qcp" | "qa", items: any[]) => {
+  const markDirty = (s: string) => setDirty((d) => (d[s] ? d : { ...d, [s]: true }));
+  const itemsFor = (s: string) => (s === "risk" ? risk : s === "qcp" ? qcp : qa);
+
+  const save = async (section: "risk" | "qcp" | "qa") => {
     setBusy(true);
     try {
-      await jsonMut("PUT", `/api/labs/${labId}/iqcp/plans/${planId}/${section}-items`, { items });
-      queryClient.invalidateQueries({ queryKey: [`/api/labs/${labId}/iqcp/plans/${planId}`] });
+      await jsonMut("PUT", `${planUrl}/${section}-items`, { items: itemsFor(section) });
+      setDirty((d) => ({ ...d, [section]: false }));
+      queryClient.invalidateQueries({ queryKey: [planUrl] });
       toast({ title: "Saved" });
     } finally { setBusy(false); }
+  };
+
+  // Auto-save the current worksheet (if edited) before switching tabs, so work
+  // is never silently lost by navigating away.
+  const goToStep = async (next: string) => {
+    const cur = step;
+    if ((cur === "risk" || cur === "qcp" || cur === "qa") && dirty[cur]) {
+      try {
+        await jsonMut("PUT", `${planUrl}/${cur}-items`, { items: itemsFor(cur) });
+        setDirty((d) => ({ ...d, [cur]: false }));
+      } catch { /* keep the dirty flag so the user can retry from the tab */ }
+    }
+    if (next === "review") queryClient.invalidateQueries({ queryKey: [planUrl] });
+    setStep(next);
   };
 
   const complete = async () => {
     setBusy(true);
     try {
-      await jsonMut("PATCH", `/api/labs/${labId}/iqcp/plans/${planId}`, { status: "complete", approvedByName: approver || undefined });
-      queryClient.invalidateQueries({ queryKey: [`/api/labs/${labId}/iqcp/plans/${planId}`] });
+      // Persist all three worksheets first so the finished plan reflects everything on screen.
+      await jsonMut("PUT", `${planUrl}/risk-items`, { items: risk });
+      await jsonMut("PUT", `${planUrl}/qcp-items`, { items: qcp });
+      await jsonMut("PUT", `${planUrl}/qa-items`, { items: qa });
+      await jsonMut("PATCH", planUrl, { status: "complete", approvedByName: approver || undefined });
+      setDirty({});
+      queryClient.invalidateQueries({ queryKey: [planUrl] });
       toast({ title: "IQCP marked complete" });
       onBack();
     } finally { setBusy(false); }
   };
 
+  const saveAll = async () => {
+    setBusy(true);
+    try {
+      await jsonMut("PUT", `${planUrl}/risk-items`, { items: risk });
+      await jsonMut("PUT", `${planUrl}/qcp-items`, { items: qcp });
+      await jsonMut("PUT", `${planUrl}/qa-items`, { items: qa });
+      setDirty({});
+      queryClient.invalidateQueries({ queryKey: [planUrl] });
+      toast({ title: "All worksheets saved" });
+    } finally { setBusy(false); }
+  };
+
   if (isLoading || !plan) return <div className="flex items-center gap-2 text-muted-foreground py-8"><Loader2 className="animate-spin" size={16} /> Loading plan</div>;
+
+  const savedRisk = plan.riskItems?.length || 0;
+  const savedQcp = plan.qcpItems?.length || 0;
+  const savedQa = plan.qaItems?.length || 0;
+  const unsaved = !!(dirty.risk || dirty.qcp || dirty.qa) || savedRisk !== risk.length || savedQcp !== qcp.length || savedQa !== qa.length;
 
   return (
     <div>
@@ -328,32 +388,40 @@ function PlanBuilder({ planId, bank, labId, jsonMut, onBack }: any) {
       <div className="flex flex-wrap gap-1 border-b border-border mb-5">
         {STEPS.map((s) => {
           const Icon = s.icon;
+          const isDirty = !!dirty[s.key as string];
           return (
-            <button key={s.key} onClick={() => setStep(s.key)}
+            <button key={s.key} onClick={() => goToStep(s.key)}
               className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${step === s.key ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
               <Icon size={14} /> {s.label}
+              {isDirty && <span className="ml-1 w-1.5 h-1.5 rounded-full bg-amber-500" title="Unsaved changes (saved automatically when you switch tabs)" />}
             </button>
           );
         })}
       </div>
 
       {step === "risk" && (
-        <RiskSection bank={bank} rows={risk} setRows={setRisk} onSave={() => save("risk", risk)} busy={busy} />
+        <RiskSection bank={bank} rows={risk} setRows={setRisk} onDirty={() => markDirty("risk")} onSave={() => save("risk")} busy={busy} />
       )}
       {step === "qcp" && (
-        <QcpSection bank={bank} rows={qcp} setRows={setQcp} onSave={() => save("qcp", qcp)} busy={busy} />
+        <QcpSection bank={bank} rows={qcp} setRows={setQcp} onDirty={() => markDirty("qcp")} onSave={() => save("qcp")} busy={busy} />
       )}
       {step === "qa" && (
-        <QaSection rows={qa} setRows={setQa} onSave={() => save("qa", qa)} busy={busy} />
+        <QaSection rows={qa} setRows={setQa} onDirty={() => markDirty("qa")} onSave={() => save("qa")} busy={busy} />
       )}
       {step === "review" && (
         <Card><CardContent className="p-6">
           <h3 className="font-semibold mb-3">Review and approve</h3>
-          <ul className="text-sm text-muted-foreground space-y-1 mb-5">
-            <li>Risk assessment rows: <strong className="text-foreground">{risk.length}</strong> (save on the Risk Assessment tab)</li>
-            <li>Quality control plan rows: <strong className="text-foreground">{qcp.length}</strong></li>
-            <li>Quality assessment activities: <strong className="text-foreground">{qa.length}</strong></li>
+          <ul className="text-sm text-muted-foreground space-y-1 mb-4">
+            <li>Risk assessment rows saved: <strong className="text-foreground">{savedRisk}</strong></li>
+            <li>Quality control plan rows saved: <strong className="text-foreground">{savedQcp}</strong></li>
+            <li>Quality assessment activities saved: <strong className="text-foreground">{savedQa}</strong></li>
           </ul>
+          {unsaved && (
+            <div className="border border-amber-500/30 bg-amber-500/10 rounded-lg p-3 mb-4 flex items-center justify-between gap-3">
+              <span className="text-sm text-amber-700 dark:text-amber-400">You have worksheet changes that are not saved yet. Marking complete will save them.</span>
+              <Button variant="outline" size="sm" onClick={saveAll} disabled={busy}>Save all worksheets</Button>
+            </div>
+          )}
           <p className="text-xs text-muted-foreground mb-4">{bank.qcp.rule}</p>
           <label className="text-sm font-medium">Laboratory director or designee (approval)</label>
           <Input value={approver} onChange={(e) => setApprover(e.target.value)} placeholder="Name of the approving director or designee" className="mt-1 mb-4 max-w-md" />
@@ -366,10 +434,10 @@ function PlanBuilder({ planId, bank, labId, jsonMut, onBack }: any) {
 }
 
 // ---------------------------------------------------------------------------
-function RiskSection({ bank, rows, setRows, onSave, busy }: any) {
-  const addRow = (component: string, source = "") => setRows((r: RiskRow[]) => [...r, { component, phase: "", source_of_error: source, reducible: "", mitigation: "" }]);
-  const update = (i: number, key: keyof RiskRow, v: string) => setRows((r: RiskRow[]) => r.map((row, idx) => idx === i ? { ...row, [key]: v } : row));
-  const remove = (i: number) => setRows((r: RiskRow[]) => r.filter((_, idx) => idx !== i));
+function RiskSection({ bank, rows, setRows, onSave, onDirty, busy }: any) {
+  const addRow = (component: string, source = "") => { setRows((r: RiskRow[]) => [...r, { component, phase: "", source_of_error: source, reducible: "", mitigation: "" }]); onDirty(); };
+  const update = (i: number, key: keyof RiskRow, v: string) => { setRows((r: RiskRow[]) => r.map((row, idx) => idx === i ? { ...row, [key]: v } : row)); onDirty(); };
+  const remove = (i: number) => { setRows((r: RiskRow[]) => r.filter((_, idx) => idx !== i)); onDirty(); };
   return (
     <div>
       <p className="text-sm text-muted-foreground mb-4">Identify the potential sources of error across the five components and three phases of testing. Use the questions under each component to prompt your thinking, then record the sources of error you find, whether each is reducible, and how you reduce it.</p>
@@ -391,7 +459,7 @@ function RiskSection({ bank, rows, setRows, onSave, busy }: any) {
             </div>
             {rows.map((row: RiskRow, i: number) => row.component === c.label && (
               <div key={i} className="grid grid-cols-12 gap-2 items-start mb-2">
-                <Textarea value={row.source_of_error} onChange={(e) => update(i, "source_of_error", e.target.value)} placeholder="Source of error" className="col-span-5 min-h-[38px] text-sm" />
+                <AutoTextarea value={row.source_of_error} onChange={(e: any) => update(i, "source_of_error", e.target.value)} placeholder="Source of error" className="col-span-5 text-sm" />
                 <Select value={row.phase} onValueChange={(v) => update(i, "phase", v)}>
                   <SelectTrigger className="col-span-2 text-xs"><SelectValue placeholder="Phase" /></SelectTrigger>
                   <SelectContent>{PHASES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
@@ -400,7 +468,7 @@ function RiskSection({ bank, rows, setRows, onSave, busy }: any) {
                   <SelectTrigger className="col-span-1 text-xs px-1"><SelectValue placeholder="?" /></SelectTrigger>
                   <SelectContent>{REDUCIBLE.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
                 </Select>
-                <Textarea value={row.mitigation} onChange={(e) => update(i, "mitigation", e.target.value)} placeholder="How you reduce it" className="col-span-3 min-h-[38px] text-sm" />
+                <AutoTextarea value={row.mitigation} onChange={(e: any) => update(i, "mitigation", e.target.value)} placeholder="How you reduce it" className="col-span-3 text-sm" />
                 <Button variant="ghost" size="sm" className="col-span-1" onClick={() => remove(i)}><Trash2 size={14} /></Button>
               </div>
             ))}
@@ -413,10 +481,10 @@ function RiskSection({ bank, rows, setRows, onSave, busy }: any) {
   );
 }
 
-function QcpSection({ bank, rows, setRows, onSave, busy }: any) {
-  const add = () => setRows((r: QcpRow[]) => [...r, { qc_type: "", frequency: "", acceptability_criteria: "", corrective_action: "" }]);
-  const update = (i: number, k: keyof QcpRow, v: string) => setRows((r: QcpRow[]) => r.map((row, idx) => idx === i ? { ...row, [k]: v } : row));
-  const remove = (i: number) => setRows((r: QcpRow[]) => r.filter((_, idx) => idx !== i));
+function QcpSection({ bank, rows, setRows, onSave, onDirty, busy }: any) {
+  const add = () => { setRows((r: QcpRow[]) => [...r, { qc_type: "", frequency: "", acceptability_criteria: "", corrective_action: "" }]); onDirty(); };
+  const update = (i: number, k: keyof QcpRow, v: string) => { setRows((r: QcpRow[]) => r.map((row, idx) => idx === i ? { ...row, [k]: v } : row)); onDirty(); };
+  const remove = (i: number) => { setRows((r: QcpRow[]) => r.filter((_, idx) => idx !== i)); onDirty(); };
   return (
     <div>
       <p className="text-sm text-muted-foreground mb-1">Define the QC that controls the risks you found: the type, frequency, and acceptability criteria, plus the corrective action when QC fails.</p>
@@ -425,8 +493,8 @@ function QcpSection({ bank, rows, setRows, onSave, busy }: any) {
         <div key={i} className="grid grid-cols-12 gap-2 items-start mb-2">
           <Input value={row.qc_type} onChange={(e) => update(i, "qc_type", e.target.value)} placeholder="Type of QC" className="col-span-3 text-sm" />
           <Input value={row.frequency} onChange={(e) => update(i, "frequency", e.target.value)} placeholder="Frequency" className="col-span-2 text-sm" />
-          <Textarea value={row.acceptability_criteria} onChange={(e) => update(i, "acceptability_criteria", e.target.value)} placeholder="Acceptability criteria" className="col-span-3 min-h-[38px] text-sm" />
-          <Textarea value={row.corrective_action} onChange={(e) => update(i, "corrective_action", e.target.value)} placeholder="Corrective action" className="col-span-3 min-h-[38px] text-sm" />
+          <AutoTextarea value={row.acceptability_criteria} onChange={(e: any) => update(i, "acceptability_criteria", e.target.value)} placeholder="Acceptability criteria" className="col-span-3 text-sm" />
+          <AutoTextarea value={row.corrective_action} onChange={(e: any) => update(i, "corrective_action", e.target.value)} placeholder="Corrective action" className="col-span-3 text-sm" />
           <Button variant="ghost" size="sm" className="col-span-1" onClick={() => remove(i)}><Trash2 size={14} /></Button>
         </div>
       ))}
@@ -436,18 +504,18 @@ function QcpSection({ bank, rows, setRows, onSave, busy }: any) {
   );
 }
 
-function QaSection({ rows, setRows, onSave, busy }: any) {
-  const add = () => setRows((r: QaRow[]) => [...r, { activity: "", frequency: "", assessment_method: "" }]);
-  const update = (i: number, k: keyof QaRow, v: string) => setRows((r: QaRow[]) => r.map((row, idx) => idx === i ? { ...row, [k]: v } : row));
-  const remove = (i: number) => setRows((r: QaRow[]) => r.filter((_, idx) => idx !== i));
+function QaSection({ rows, setRows, onSave, onDirty, busy }: any) {
+  const add = () => { setRows((r: QaRow[]) => [...r, { activity: "", frequency: "", assessment_method: "" }]); onDirty(); };
+  const update = (i: number, k: keyof QaRow, v: string) => { setRows((r: QaRow[]) => r.map((row, idx) => idx === i ? { ...row, [k]: v } : row)); onDirty(); };
+  const remove = (i: number) => { setRows((r: QaRow[]) => r.filter((_, idx) => idx !== i)); onDirty(); };
   return (
     <div>
       <p className="text-sm text-muted-foreground mb-4">Ongoing monitoring that the QCP is working. These CMS quality assessment activities are pre-filled, so set a frequency for the ones you use and add your own. Without QA, the IQCP is not complete.</p>
       {rows.map((row: QaRow, i: number) => (
         <div key={i} className="grid grid-cols-12 gap-2 items-start mb-2">
-          <Textarea value={row.activity} onChange={(e) => update(i, "activity", e.target.value)} placeholder="QA activity" className="col-span-6 min-h-[38px] text-sm" />
+          <AutoTextarea value={row.activity} onChange={(e: any) => update(i, "activity", e.target.value)} placeholder="QA activity" className="col-span-6 text-sm" />
           <Input value={row.frequency} onChange={(e) => update(i, "frequency", e.target.value)} placeholder="Frequency" className="col-span-2 text-sm" />
-          <Textarea value={row.assessment_method} onChange={(e) => update(i, "assessment_method", e.target.value)} placeholder="How it is assessed" className="col-span-3 min-h-[38px] text-sm" />
+          <AutoTextarea value={row.assessment_method} onChange={(e: any) => update(i, "assessment_method", e.target.value)} placeholder="How it is assessed" className="col-span-3 text-sm" />
           <Button variant="ghost" size="sm" className="col-span-1" onClick={() => remove(i)}><Trash2 size={14} /></Button>
         </div>
       ))}
