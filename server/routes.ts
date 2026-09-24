@@ -25426,6 +25426,33 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       nameLC: String(mg.name || "").toLowerCase(),
     }));
 
+    // "Have" side of the coverage map: locked, passing competency assessments in
+    // the current cycle (last 365 days = annual) and the method groups they
+    // covered. Bridged staff_employees -> competency_employees (FK, name fallback).
+    const cycleStart = new Date(today.getTime() - 365 * dayMs).toISOString().slice(0, 10);
+    const assessedRows = client.prepare(
+      `SELECT ce.staff_employee_id AS staff_id, ce.name AS comp_name, ai.method_group_id AS mg_id
+       FROM competency_assessments a
+       JOIN competency_programs p ON p.id = a.program_id
+       JOIN competency_employees ce ON ce.id = a.employee_id
+       JOIN competency_assessment_items ai ON ai.assessment_id = a.id
+       WHERE p.lab_id = ? AND a.locked = 1 AND a.status = 'pass' AND ai.passed = 1
+         AND ai.method_group_id IS NOT NULL AND a.assessment_date >= ?`
+    ).all(labId, cycleStart) as any[];
+    const assessedByStaffId = new Map<number, Set<number>>();
+    const assessedByName = new Map<string, Set<number>>();
+    for (const r of assessedRows) {
+      if (r.staff_id) {
+        if (!assessedByStaffId.has(r.staff_id)) assessedByStaffId.set(r.staff_id, new Set());
+        assessedByStaffId.get(r.staff_id)!.add(r.mg_id);
+      }
+      const nm = String(r.comp_name || "").trim().toLowerCase();
+      if (nm) {
+        if (!assessedByName.has(nm)) assessedByName.set(nm, new Set());
+        assessedByName.get(nm)!.add(r.mg_id);
+      }
+    }
+
     const rankComplexity = (c: string): number => {
       const u = String(c || "").toUpperCase();
       if (u.startsWith("H")) return 3;
@@ -25450,6 +25477,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     );
 
     const results = employees.map((e: any) => {
+      const staffNameLC = `${e.first_name || ""} ${e.last_name || ""}`.trim().toLowerCase();
+      const empAssessed = assessedByStaffId.get(e.id) || assessedByName.get(staffNameLC) || new Set<number>();
       const instruments = instStmt.all(e.id, labId) as any[];
       const owed = instruments.map((inst: any) => {
         const tests = testsStmt.all(inst.id) as any[];
@@ -25459,15 +25488,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const catLC = String(inst.category || "").trim().toLowerCase();
         const analytesLC = analytes.map((a) => a.toLowerCase());
         let coverage: any = null;
+        const coveringMgIds: number[] = [];
         for (const mg of mgParsed) {
           const instMatch = mg.instrumentsLC.some((n: string) => n && (n.includes(instNameLC) || instNameLC.includes(n)));
           const analyteMatch = analytesLC.some((a) => mg.analytesLC.has(a));
           const catMatch = !!catLC && mg.nameLC.includes(catLC);
           if (instMatch || analyteMatch || catMatch) {
-            coverage = { programId: mg.programId, programName: mg.programName, methodGroupId: mg.id, methodGroupName: mg.name };
-            break;
+            coveringMgIds.push(mg.id);
+            if (!coverage) coverage = { programId: mg.programId, programName: mg.programName, methodGroupId: mg.id, methodGroupName: mg.name };
           }
         }
+        // "have" = a locked passing assessment this cycle on any method group that covers this instrument.
+        const assessed = coveringMgIds.some((id) => empAssessed.has(id));
         return {
           instrumentId: inst.id,
           instrumentName: inst.instrument_name,
@@ -25477,15 +25509,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           analyteCount: analytes.length,
           covered: !!coverage,
           coverage,
+          assessed,
         };
       });
       const gapCount = owed.filter((o: any) => !o.covered).length;
+      const assessedCount = owed.filter((o: any) => o.assessed).length;
       return {
         employeeId: e.id,
         name: `${e.first_name || ""} ${e.last_name || ""}`.trim(),
         title: e.title || null,
         owedCount: owed.length,
         gapCount,
+        assessedCount,
         status: deriveStatus(e),
         owed,
       };
@@ -25493,12 +25528,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const totalOwed = results.reduce((s, r) => s + r.owedCount, 0);
     const totalGaps = results.reduce((s, r) => s + r.gapCount, 0);
+    const totalAssessed = results.reduce((s, r) => s + r.assessedCount, 0);
     const overdue = results.filter((r) => r.status.bucket === "overdue").length;
     const dueSoon = results.filter((r) => r.status.bucket === "dueSoon30" || r.status.bucket === "dueSoon90").length;
     res.json({
       employees: results,
       timeline: ["Initial", "6-month", "1st annual", "Annual"],
-      totals: { employees: results.length, owed: totalOwed, gaps: totalGaps, overdue, dueSoon },
+      totals: { employees: results.length, owed: totalOwed, gaps: totalGaps, assessed: totalAssessed, overdue, dueSoon },
     });
   });
 
