@@ -51,6 +51,8 @@ import {
   FolderInput,
   MessageSquare,
   Trash2,
+  Link2,
+  ExternalLink,
 } from "lucide-react";
 
 interface Manual {
@@ -195,6 +197,58 @@ function StatusBadge({ status }: { status: string }) {
     >
       {status.replace(/_/g, " ")}
     </span>
+  );
+}
+
+// ─── Cross-module evidence: VeritaScan documents attached to this policy ─────
+// Reuses the shipped lab_document_cross_links model via the by-target endpoint.
+// The Library's LinkedPolicySection attaches a VeritaScan evidence document to
+// a VeritaDC policy (target_module = "veritapolicy"); this closes the loop by
+// surfacing those attachments on the policy itself. Read-only pointers, no PHI.
+// Renders nothing when there is no attached evidence or no VeritaScan access.
+function PolicyEvidenceLinks({ labId, policyId }: { labId: number | null; policyId: number }) {
+  const q = useQuery<any[]>({
+    queryKey: [`/api/labs/${labId}/veritascan/cross-links/by-target/veritapolicy/${policyId}`],
+    enabled: !!labId,
+    queryFn: async () => {
+      const token = localStorage.getItem("veritas_token") || "";
+      const res = await fetch(
+        `/api/labs/${labId}/veritascan/cross-links/by-target/veritapolicy/${policyId}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (res.status === 403) return []; // no VeritaScan subscription -> nothing to show
+      if (!res.ok) throw new Error(`Failed to load evidence (${res.status})`);
+      return res.json();
+    },
+  });
+  const rows = q.data || [];
+  if (rows.length === 0) return null;
+  return (
+    <div className="rounded border bg-muted/30 p-2 text-xs space-y-1">
+      <div className="font-medium flex items-center gap-1">
+        <Link2 size={14} /> Evidence in VeritaScan&#8482; ({rows.length})
+      </div>
+      <ul className="space-y-1">
+        {rows.map((r: any) => (
+          <li key={r.id} className="flex items-start gap-2">
+            <FileText size={13} className="mt-0.5 shrink-0 text-primary" />
+            <span className="flex-1">
+              <a
+                href={r.external_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-primary hover:underline inline-flex items-center gap-1"
+              >
+                {r.document_title || "Evidence document"}
+                <ExternalLink size={11} className="opacity-60" />
+              </a>
+              {r.storage_provider && <span className="text-muted-foreground"> · {r.storage_provider}</span>}
+              {r.review_due_date && <span className="text-muted-foreground"> · review due {r.review_due_date}</span>}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -1734,6 +1788,7 @@ export default function VeritaPolicyMyPoliciesPage() {
               </ol>
             </div>
           )}
+          {viewDoc && <PolicyEvidenceLinks labId={activeLabId} policyId={viewDoc.id} />}
           {viewLoading ? (
             <div className="p-6 flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="animate-spin" size={14} /> Loading...
