@@ -24,12 +24,13 @@ import {
 import {
   Plus, Trash2, ChevronLeft, Users, Lock, FileDown, Building2,
   CheckCircle2, AlertTriangle, Clock, UserPlus, Edit2, Calendar,
-  Download, X, Upload, FileSpreadsheet, FileText, ExternalLink, Archive,
+  Download, X, Upload, FileSpreadsheet, FileText, ExternalLink, Archive, FlaskConical,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DocumentLinkDialog, STAFF_DOC_TYPES, expirationStatus } from "@/components/DocumentLinkDialog";
 import { EmployeeInstrumentsPickerDialog, type LabInstrument, instrumentLabel } from "@/components/EmployeeInstrumentsPickerDialog";
+import { InstrumentStaffAssignDialog } from "@/components/InstrumentStaffAssignDialog";
 import { getStaffTitleLabel, getStaffTitleGroups } from "@shared/staffTitles";
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -185,6 +186,7 @@ export default function VeritaStaffAppPage() {
   const [generating209, setGenerating209] = useState(false);
   const [generatingPacket, setGeneratingPacket] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const [showInstrumentAssign, setShowInstrumentAssign] = useState(false);
 
   // Auth + plan check
   const hasAccess = isLoggedIn && !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
@@ -369,6 +371,9 @@ export default function VeritaStaffAppPage() {
               </Button>
               <Button variant="outline" size="sm" onClick={() => setShowBulkImport(true)} disabled={readOnly}>
                 <Upload size={14} className="mr-1.5" /> Bulk Import
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setShowInstrumentAssign(true)} disabled={readOnly} title="Assign staff from the instrument side: pick a test system or manual test, check off who runs it" data-testid="button-assign-by-instrument">
+                <FlaskConical size={14} className="mr-1.5" /> Assign by Instrument
               </Button>
               <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={handleGenerate209} disabled={generating209 || readOnly}>
                 <FileDown size={14} className="mr-1.5" /> {generating209 ? "Generating..." : "Generate CMS 209"}
@@ -555,6 +560,8 @@ export default function VeritaStaffAppPage() {
           lab={lab}
         />
       )}
+      {/* #48 dual view: assign staff from the instrument side */}
+      <InstrumentStaffAssignDialog open={showInstrumentAssign} onOpenChange={setShowInstrumentAssign} labId={activeLabId} />
     </div>
   );
 

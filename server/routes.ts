@@ -24991,6 +24991,91 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, count: validIds.length, droppedInvalid: ids.length - validIds.length, dutyChangeEventsCreated: addedIds.length });
   });
 
+  // ── Instrument-centric assignment (transpose of the per-employee endpoints) ──
+  // Same staff_employee_instruments join, viewed from the instrument side: pick a
+  // test system or manual test, choose which staff run it. Manual tests are just
+  // veritamap_instruments rows, so this covers both. Employee lookup uses
+  // tier2_lab_id; the instrument is scoped via veritamap_maps.lab_id.
+
+  // GET /api/labs/:labId/staff/instruments/:instrumentId/employees
+  // Returns the instrument, the lab's active testing staff, and which are assigned.
+  app.get("/api/labs/:labId/staff/instruments/:instrumentId/employees", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const labId = req.scope.labId;
+    const client = (db as any).$client;
+    const inst = client.prepare(
+      `SELECT i.id, i.instrument_name, i.nickname, i.serial_number, i.category, m.name AS map_name
+       FROM veritamap_instruments i JOIN veritamap_maps m ON i.map_id = m.id
+       WHERE i.id = ? AND m.lab_id = ?`
+    ).get(req.params.instrumentId, labId) as any;
+    if (!inst) return res.status(404).json({ error: "Instrument not found in this lab" });
+    const assigned = new Set(
+      (client.prepare("SELECT employee_id FROM staff_employee_instruments WHERE instrument_id = ?").all(req.params.instrumentId) as any[]).map((r) => Number(r.employee_id))
+    );
+    const employees = (client.prepare(
+      `SELECT id, first_name, last_name, middle_initial, title
+       FROM staff_employees
+       WHERE tier2_lab_id = ? AND status = 'active' AND performs_testing = 1
+       ORDER BY last_name, first_name`
+    ).all(labId) as any[]).map((e) => ({
+      id: e.id, first_name: e.first_name, last_name: e.last_name, middle_initial: e.middle_initial, title: e.title,
+      assigned: assigned.has(Number(e.id)),
+    }));
+    res.json({ instrument: inst, employees });
+  });
+
+  // PUT /api/labs/:labId/staff/instruments/:instrumentId/employees  { employeeIds: number[] }
+  // Sets which staff run this instrument. Mirrors the per-employee PUT, including
+  // the §493.1235(a) duty-change event emitted for each NEWLY-added (employee,
+  // instrument) pair so both views trigger the same reassessment.
+  app.put("/api/labs/:labId/staff/instruments/:instrumentId/employees", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const labId = req.scope.labId;
+    const client = (db as any).$client;
+    const instId = Number(req.params.instrumentId);
+    const inst = client.prepare(
+      `SELECT i.id FROM veritamap_instruments i JOIN veritamap_maps m ON i.map_id = m.id WHERE i.id = ? AND m.lab_id = ?`
+    ).get(instId, labId);
+    if (!inst) return res.status(404).json({ error: "Instrument not found in this lab" });
+    const raw = (req.body && Array.isArray(req.body.employeeIds)) ? req.body.employeeIds : [];
+    const ids: number[] = raw.map((v: any) => parseInt(String(v), 10)).filter((n: number) => Number.isFinite(n) && n > 0);
+    let validIds: number[] = [];
+    if (ids.length > 0) {
+      const ph = ids.map(() => "?").join(",");
+      const valid = client.prepare(
+        `SELECT id FROM staff_employees WHERE id IN (${ph}) AND tier2_lab_id = ? AND status = 'active'`
+      ).all(...ids, labId) as Array<{ id: number }>;
+      validIds = valid.map((r) => Number(r.id));
+    }
+    // All active testing staff of the lab -> the scope this instrument's links may span.
+    const labEmpIds = new Set(
+      (client.prepare("SELECT id FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active'").all(labId) as any[]).map((r) => Number(r.id))
+    );
+    const oldRows = client.prepare(
+      "SELECT employee_id FROM staff_employee_instruments WHERE instrument_id = ?"
+    ).all(instId) as Array<{ employee_id: number }>;
+    const oldIds = new Set(oldRows.map((r) => Number(r.employee_id)).filter((id) => labEmpIds.has(id)));
+    const addedIds = validIds.filter((id) => !oldIds.has(id));
+    const now = new Date().toISOString();
+    const txn = client.transaction(() => {
+      // Remove this instrument's links only among the lab's active staff, then re-add.
+      const delStmt = client.prepare("DELETE FROM staff_employee_instruments WHERE instrument_id = ? AND employee_id = ?");
+      for (const eid of oldIds) delStmt.run(instId, eid);
+      const ins = client.prepare(
+        "INSERT OR IGNORE INTO staff_employee_instruments (employee_id, instrument_id, created_at, created_by_user_id) VALUES (?, ?, ?, ?)"
+      );
+      for (const eid of validIds) ins.run(eid, instId, now, req.userId ?? null);
+      if (addedIds.length > 0) {
+        const evt = client.prepare(
+          "INSERT INTO staff_duty_change_events (lab_id, employee_id, instrument_id, detected_at) VALUES (?, ?, ?, ?)"
+        );
+        for (const eid of addedIds) evt.run(labId, eid, instId, now);
+      }
+    });
+    txn();
+    res.json({ ok: true, count: validIds.length, droppedInvalid: ids.length - validIds.length, dutyChangeEventsCreated: addedIds.length });
+  });
+
   // GET /api/labs/:labId/staff/duty-change-events
   //
   // Wave H PR H4 (2026-06-06). Returns the lab's open duty-change
