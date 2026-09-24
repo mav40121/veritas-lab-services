@@ -78,4 +78,31 @@ test.describe("IQCP Builder page (VeritaDC)", () => {
     expect(await page.locator('[title*="Unsaved"]').count()).toBeGreaterThan(0);
     await ctx.close();
   });
+
+  // Phase 3a: the Review tab offers an IQCP PDF download that yields a .pdf file.
+  test("Review offers an IQCP PDF download", async ({ browser }) => {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    await ctx.addInitScript((t) => { try { localStorage.setItem("veritas_token", t as string); } catch {} }, TOKEN);
+    const page = await ctx.newPage();
+    await page.goto(`${BASE}/labs/${LAB}/veritapolicy-app/iqcp`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2500);
+    await page.getByText("Start a new IQCP").click();
+    await page.waitForTimeout(1000);
+    const combos = page.getByRole("combobox");
+    for (let i = 0; i < 3; i++) { await combos.nth(i).click(); await page.getByRole("option", { name: "Yes", exact: true }).click(); await page.waitForTimeout(200); }
+    await page.waitForTimeout(1200);
+    await page.getByRole("combobox").last().click();
+    await page.getByRole("option").first().click();
+    await page.getByRole("button", { name: /Create IQCP/i }).click();
+    await page.waitForTimeout(2500);
+    await page.getByRole("button", { name: "Review" }).click();
+    await page.waitForTimeout(1000);
+    await expect(page.getByRole("button", { name: /Download IQCP PDF/i })).toBeVisible();
+    const [dl] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("button", { name: /Download IQCP PDF/i }).click(),
+    ]);
+    expect(dl.suggestedFilename()).toMatch(/\.pdf$/i);
+    await ctx.close();
+  });
 });
