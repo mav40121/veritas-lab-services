@@ -14617,8 +14617,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       t.font = { name: "Calibri", size: 12, bold: true, color: { argb: WHITE } }; sm.getRow(1).height = 24;
       const s = result.summary;
       const kv: [string, any][] = [
-        ["Method comparisons done", `${s.methodComparisonsDone} of ${s.methodComparisonsNeeded}`],
-        ["Method comparisons missing", s.methodComparisonsNeeded - s.methodComparisonsDone],
+        ["Method comparisons current", `${s.methodComparisonsDone} of ${s.methodComparisonsNeeded}`],
+        ["Method comparisons owed", s.methodComparisonsNeeded - s.methodComparisonsDone],
+        ["Method comparisons overdue", (s as any).methodComparisonsOverdue ?? 0],
         ["Cal Ver / Linearity covered", `${s.linearityCovered} of ${s.linearityRequired}`],
         ["Cal Ver / Linearity missing", s.linearityMissing],
         ["Cal Ver / Linearity to review", s.linearityReview],
@@ -14630,20 +14631,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       kv.forEach(([k, v], i) => { const r = sm.addRow([k, v]); r.eachCell((c: any) => { c.font = { name: "Calibri", size: 10, color: { argb: TEXT } }; c.border = border; if (i % 2 === 1) c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ALT } }; }); });
 
       // Method comparisons
+      // Method comparison / correlation recurs every 6 months (§493.1281): show
+      // the recurrence status and next-due date, matching the on-screen Coverage view.
+      const mcStatusLabel = (m: any): string => (m.status === "failed" ? "Failed" : m.status === "completed_unsigned" ? "Completed, unsigned" : m.nextDueOn && !m.overdue ? "Current" : m.overdue ? "Overdue" : "Missing");
+      const nextDueCell = (o: any): string => (o.nextDueOn ? (o.overdue ? `${o.nextDueOn} (overdue)` : o.nextDueOn) : "");
       const mcs = wb.addWorksheet("Method Comparisons");
-      mkHeader(mcs, ["Analyte", "Instruments", "Study", "Verdict", "Signed"], [30, 46, 12, 12, 10]);
+      mkHeader(mcs, ["Analyte", "Instruments", "Status", "Study", "Verdict", "Next due on"], [30, 46, 18, 12, 12, 16]);
       result.methodComparisons.forEach((m, i) => {
         const failed = /fail/i.test(m.verdict);
-        dataRow(mcs, [m.analyte, m.instruments.join("; "), m.hasStudy ? `#${m.studyId}` : "Missing", (m.verdict || "").toUpperCase(), m.signed ? "Yes" : ""], i, { 3: m.hasStudy ? (failed ? RED : GREEN) : RED });
+        dataRow(mcs, [m.analyte, m.instruments.join("; "), mcStatusLabel(m), m.hasStudy ? `#${m.studyId}` : "Missing", (m.verdict || "").toUpperCase(), nextDueCell(m)], i, { 3: (m as any).overdue || (m as any).status === "failed" ? RED : (m.nextDueOn ? GREEN : AMBER), 6: (m as any).overdue ? RED : TEXT });
       });
 
       // Cal Ver / Linearity
       const cov = wb.addWorksheet("Cal Ver Linearity");
-      mkHeader(cov, ["Specialty", "Analyte", "Instrument", "Status", "Study", "Verdict", "3+ calibrators", "Not calibratable"], [18, 26, 30, 14, 12, 10, 14, 16]);
+      mkHeader(cov, ["Specialty", "Analyte", "Instrument", "Status", "Study", "Verdict", "Next due on", "3+ calibrators", "Not calibratable"], [18, 26, 30, 18, 12, 10, 16, 14, 16]);
       result.rows.forEach((r, i) => {
-        const failed = r.linearityStatus === "covered" && /fail/i.test(r.verdict);
-        const label = failed ? "FAILED" : r.linearityStatus === "covered" ? "Covered" : r.linearityStatus === "review" ? "Review" : r.linearityStatus === "missing" ? "Missing" : "Not required";
-        dataRow(cov, [r.specialty, r.analyte, r.instrument, label, r.studyIds.map((x) => `#${x}`).join(", "), (r.verdict || "").toUpperCase(), r.linearityExemptMultical ? "Yes" : "", r.linearityExemptNoncal ? "Yes" : ""], i, { 4: statusColor(r.linearityStatus, failed) });
+        const st = (r as any).status;
+        const label = st === "exempt" ? "Not required" : st === "review" ? "Review" : st === "failed" ? "Failed" : st === "completed_unsigned" ? "Completed, unsigned" : r.linearityStatus === "covered" ? "Covered" : "Missing";
+        const cellColor = st === "failed" ? RED : r.linearityStatus === "covered" ? GREEN : r.linearityStatus === "review" ? AMBER : r.linearityStatus === "missing" ? RED : GRAY;
+        dataRow(cov, [r.specialty, r.analyte, r.instrument, label, r.studyIds.map((x) => `#${x}`).join(", "), (r.verdict || "").toUpperCase(), nextDueCell(r), r.linearityExemptMultical ? "Yes" : "", r.linearityExemptNoncal ? "Yes" : ""], i, { 4: cellColor, 7: (r as any).overdue ? RED : TEXT });
       });
 
       const buf = await wb.xlsx.writeBuffer();

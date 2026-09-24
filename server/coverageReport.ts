@@ -23,8 +23,10 @@ export interface CoverageReportRow {
   lastMethodComp: string;
   lastPrecision: string;
   linearityStatus: string;   // Covered / Review / Missing / Not required
-  methodCompStatus: string;  // Done / Needed / Not applicable
+  methodCompStatus: string;  // Current / Overdue / Failed / Completed, unsigned / Needed / Not applicable
   ptStatus: string;          // Enrolled / Gap / Waived / Alt. assessment / Not regulated
+  calVerNextDue: string;     // recurrence next-due (signed + 6mo), "" if none
+  methodCompNextDue: string; // recurrence next-due (signed + 6mo), "" if none
 }
 
 type LabwideAnalyte = {
@@ -32,7 +34,7 @@ type LabwideAnalyte = {
   department?: string | null; instrument?: string | null;
   last_cal_ver?: string | null; last_method_comp?: string | null; last_precision?: string | null;
 };
-type CovRow = { analyte: string; instrument: string; linearityStatus: string; };
+type CovRow = { analyte: string; instrument: string; linearityStatus: string; nextDueOn?: string | null; overdue?: boolean };
 type MethodCompRow = { analyte: string; hasStudy: boolean; status?: "missing" | "failed" | "completed_unsigned"; nextDueOn?: string | null; overdue?: boolean };
 type PtRow = { analyteName: string; status?: string | null };
 
@@ -57,12 +59,13 @@ export function buildCoverageReportRows(input: {
 
   // Linearity status by analyte + instrument, then by analyte alone (fallback
   // when the menu instrument name and the study instrument name differ).
-  const linByAnalyteInstr = new Map<string, string>();
-  const linByAnalyte = new Map<string, string>();
+  const linByAnalyteInstr = new Map<string, CovRow>();
+  const linByAnalyte = new Map<string, CovRow>();
   for (const r of coverageRows || []) {
-    if (r.analyte && r.instrument) linByAnalyteInstr.set(`${norm(r.analyte)}|${norm(r.instrument)}`, r.linearityStatus);
-    if (r.analyte && !linByAnalyte.has(norm(r.analyte))) linByAnalyte.set(norm(r.analyte), r.linearityStatus);
+    if (r.analyte && r.instrument) linByAnalyteInstr.set(`${norm(r.analyte)}|${norm(r.instrument)}`, r);
+    if (r.analyte && !linByAnalyte.has(norm(r.analyte))) linByAnalyte.set(norm(r.analyte), r);
   }
+  const nextDueStr = (nd?: string | null, overdue?: boolean) => (nd ? (overdue ? `${nd} (overdue)` : nd) : "");
   const mcByAnalyte = new Map<string, MethodCompRow>();
   for (const m of methodComparisons || []) {
     if (m.analyte) mcByAnalyte.set(norm(m.analyte), m);
@@ -76,7 +79,7 @@ export function buildCoverageReportRows(input: {
     const na = norm(a.analyte);
     const ni = norm(a.instrument);
     const lin = linByAnalyteInstr.get(`${na}|${ni}`) ?? linByAnalyte.get(na);
-    const linearityStatus = lin ? (LINEARITY_LABEL[lin] || lin) : "Missing";
+    const linearityStatus = lin ? (LINEARITY_LABEL[lin.linearityStatus] || lin.linearityStatus) : "Missing";
     const mcRow = mcByAnalyte.get(na);
     // Recurrence-aware (§493.1281, 6-month): "Done" means satisfied THIS cycle
     // (signed + next-due in the future), not "a study ever existed". Rows without
@@ -111,6 +114,8 @@ export function buildCoverageReportRows(input: {
       linearityStatus,
       methodCompStatus,
       ptStatus,
+      calVerNextDue: nextDueStr(lin?.nextDueOn, lin?.overdue),
+      methodCompNextDue: nextDueStr(mcRow?.nextDueOn, mcRow?.overdue),
     };
   });
 }
@@ -165,7 +170,7 @@ export async function generateCoverageReportExcel(
   body("This report lists every reportable analyte and instrument on the lab's test menu and shows, for each, its CLIA complexity, the dates of the last calibration verification, method comparison, and precision study, the current verification coverage status, and the proficiency testing status. It is a point-in-time snapshot the lab director can hand to a surveyor.");
   blank();
   section("How to read the coverage columns");
-  body("Linearity: Covered means a calibration verification or linearity study is on file; Review means a study exists but needs attention; Missing means none is on file; Not required means the combination is exempt (three or more calibrators, not calibratable, CLIA-waived, or a documented reason). Method comparison: Done or Needed. PT status: Enrolled, Gap, Waived, Alt. assessment, or Not regulated. Statuses come from the live VeritaMap, VeritaCheck, and VeritaPT data at export time.");
+  body("Linearity and method comparison recur every six months under CLIA (calibration verification at least every 6 months per 42 CFR 493.1255; instrument comparison at least twice a year per 42 CFR 493.1281). Covered or Current means a signed study satisfies the requirement for this cycle; the Next Due columns show when it comes due again, marked overdue when past. Review means a study exists but needs attention; Missing means none is on file or the requirement has reopened; Not required means the combination is exempt (three or more calibrators, not calibratable, CLIA-waived, or a documented reason). PT status: Enrolled, Gap, Waived, Alt. assessment, or Not regulated. Statuses come from the live VeritaMap, VeritaCheck, and VeritaPT data at export time.");
   blank();
   section("Disclaimer");
   body("This is a snapshot, not an authoritative record. The live VeritaAssure modules are the audit-grade record. The lab director or designee is responsible for the disposition of any gap and for keeping the underlying data current.");
@@ -186,7 +191,7 @@ export async function generateCoverageReportExcel(
       oddFooter: `&L${labName}    CLIA: ${cliaNumber}`,
     },
   });
-  const headers = ["Analyte", "Specialty", "Complexity", "Department", "Instrument", "Last Cal Ver", "Last Method Comp", "Last Precision", "Linearity", "Method Comparison", "PT Status"];
+  const headers = ["Analyte", "Specialty", "Complexity", "Department", "Instrument", "Last Cal Ver", "Last Method Comp", "Last Precision", "Linearity", "Method Comparison", "PT Status", "Cal Ver Next Due", "Method Comp Next Due"];
   sheet.addRow(headers);
   const hr = sheet.getRow(1);
   hr.font = { name: "Calibri", bold: true, color: { argb: "FFFFFFFF" } };
@@ -198,9 +203,10 @@ export async function generateCoverageReportExcel(
       row.analyte, row.specialty, row.complexity, row.department, row.instrument,
       row.lastCalVer, row.lastMethodComp, row.lastPrecision,
       row.linearityStatus, row.methodCompStatus, row.ptStatus,
+      row.calVerNextDue, row.methodCompNextDue,
     ]);
   }
-  const widths = [30, 20, 12, 16, 24, 14, 16, 14, 12, 18, 16];
+  const widths = [30, 20, 12, 16, 24, 14, 16, 14, 12, 18, 16, 16, 18];
   widths.forEach((w, i) => { sheet.getColumn(i + 1).width = w; });
   sheet.views = [{ state: "frozen", ySplit: 1 }];
   sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headers.length } };
