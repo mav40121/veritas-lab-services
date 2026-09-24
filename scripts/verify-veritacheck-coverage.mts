@@ -176,5 +176,37 @@ check("blank other reason -> NOT exempt (missing)", eRow(45)?.linearityStatus, "
 check("waived flag surfaced on the row", eRow(43)?.linearityExemptWaived, true);
 check("exempt count = 4 of 6, required = 2", { exempt: eRes.summary.linearityExempt, required: eRes.summary.linearityRequired }, { exempt: 4, required: 2 });
 
+// --- Cal Ver / Linearity recurrence (§493.1255, 6-month) --------------------
+// Same model as method comparison: a signed passing on-instrument study banks
+// the cycle and reopens at next-due = signed + 6mo. Exempt never recurs; a
+// signed study with no date stays "covered" (no recurrence regression).
+const lInstr = [{ id: 1, instrument_name: "Roche cobas", nickname: "Rico" }];
+const lCombos = [{ id: 60, analyte: "Glucose", specialty: "General Chemistry", instrument_id: 1 }];
+const lRow = (res: any, id: number) => res.rows.find((x: any) => x.instrumentTestId === id);
+const mkCal = (over: any) => ({ id: 700, test_name: "Glucose", instrument: "Rico, Roche cobas", study_type: "cal_ver", status: "pass", lifecycle_state: "finalized", ...over });
+const t = new Date().toISOString().slice(0, 10);
+
+const calRecent = computeCoverageFrom(lInstr, lCombos, [mkCal({ finalized_at: t, date: t })]);
+check("cal-ver: signed today -> covered (satisfied this cycle)", lRow(calRecent, 60)?.linearityStatus, "covered");
+check("cal-ver: signed today -> status missing (banked), not overdue", { status: lRow(calRecent, 60)?.status, overdue: lRow(calRecent, 60)?.overdue }, { status: "missing", overdue: false });
+check("cal-ver: nextDueOn in the future", (lRow(calRecent, 60)?.nextDueOn ?? "") > t, true);
+
+const calOld = computeCoverageFrom(lInstr, lCombos, [mkCal({ finalized_at: "2020-01-01", date: "2020-01-01" })]);
+check("cal-ver: signed 2020 -> reopened (linearity missing, overdue)", { lin: lRow(calOld, 60)?.linearityStatus, overdue: lRow(calOld, 60)?.overdue }, { lin: "missing", overdue: true });
+check("cal-ver: nextDueOn = 2020-07-01", lRow(calOld, 60)?.nextDueOn, "2020-07-01");
+check("cal-ver: overdue not counted covered", calOld.summary.linearityCovered, 0);
+
+const calUnsigned = computeCoverageFrom(lInstr, lCombos, [mkCal({ lifecycle_state: "draft", date: "2026-01-01" })]);
+check("cal-ver: unsigned -> completed_unsigned + linearity missing", { status: lRow(calUnsigned, 60)?.status, lin: lRow(calUnsigned, 60)?.linearityStatus }, { status: "completed_unsigned", lin: "missing" });
+
+const calFail = computeCoverageFrom(lInstr, lCombos, [mkCal({ status: "fail", date: "2026-01-01" })]);
+check("cal-ver: failed -> status failed + linearity missing", { status: lRow(calFail, 60)?.status, lin: lRow(calFail, 60)?.linearityStatus }, { status: "failed", lin: "missing" });
+
+const calExempt = computeCoverageFrom(lInstr, [{ ...lCombos[0], linearity_exempt_multical: 1 }], [mkCal({ finalized_at: "2020-01-01", date: "2020-01-01" })]);
+check("cal-ver: exempt never recurs (exempt, no nextDueOn)", { status: lRow(calExempt, 60)?.status, nextDue: lRow(calExempt, 60)?.nextDueOn }, { status: "exempt", nextDue: null });
+
+const calNoDate = computeCoverageFrom(lInstr, lCombos, [mkCal({})]);
+check("cal-ver: signed but no date -> covered (no regression), nextDueOn null", { lin: lRow(calNoDate, 60)?.linearityStatus, nextDue: lRow(calNoDate, 60)?.nextDueOn }, { lin: "covered", nextDue: null });
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

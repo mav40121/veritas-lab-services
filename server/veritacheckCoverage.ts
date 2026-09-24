@@ -21,6 +21,10 @@
 import { aliasesForPresetLabel, presetKeyForLabel, analytesShareGroup } from "@shared/presetAnalytes";
 
 export type LinearityStatus = "covered" | "review" | "missing" | "exempt";
+// Recurrence-aware cal-ver / linearity status, mirroring method comparison
+// (§493.1255: calibration verification at least every 6 months). Exempt and
+// review are terminal / data-quality and never carry a next-due date.
+export type CalVerStatus = "missing" | "failed" | "completed_unsigned" | "review" | "exempt";
 
 export interface CoverageRow {
   instrumentTestId: number;
@@ -32,10 +36,13 @@ export interface CoverageRow {
   linearityExemptWaived: boolean;
   linearityExemptOther: string;
   linearityRequired: boolean;
-  linearityStatus: LinearityStatus;
+  linearityStatus: LinearityStatus; // recurrence-aware bucket: "covered" = satisfied THIS cycle
   studyIds: number[];
   verdict: string;
   signed: boolean;
+  status: CalVerStatus;      // granular current-cycle state (mirrors method comparison)
+  nextDueOn: string | null;  // YYYY-MM-DD; last signed study + 6 months, else null
+  overdue: boolean;          // a concrete next-due date is in the past
 }
 // Recurrence-aware method comparison / correlation status (§493.1281: compare
 // twice a year). A signed study banks that cycle and the requirement rolls to
@@ -123,6 +130,8 @@ type Study = { id: number; test_name: string; instrument: string; study_type: st
 // Method comparison / correlation recurrence interval (CLIA §493.1281: at least
 // twice a year). Both study types satisfy the requirement.
 const MC_INTERVAL_MONTHS = 6;
+// Cal-ver / linearity recurs at least every 6 months (CLIA §493.1255).
+const LINEARITY_INTERVAL_MONTHS = 6;
 const MC_STUDY_TYPES = new Set(["method_comparison", "correlation"]);
 function addMonthsIso(iso: string, months: number): string {
   const parts = String(iso).slice(0, 10).split("-").map((n) => parseInt(n, 10));
@@ -166,6 +175,7 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
   const rows: CoverageRow[] = [];
   const bySpec = new Map<string, { combos: number; required: number; covered: number; review: number; missing: number; exempt: number }>();
   let linRequired = 0, linCovered = 0, linReview = 0, linMissing = 0, linExempt = 0;
+  const today = todayIso();
 
   for (const c of combos) {
     const inst = instrById.get(c.instrument_id);
@@ -179,23 +189,49 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
     // Only cal-ver / linearity studies count toward the linearity requirement.
     const linCands = studies.filter((s) => LINEARITY_TYPES.has(s.study_type) && matchesAnalyte(s, c.analyte));
     const onInst = inst ? linCands.filter((s) => studyMatchesInstrument(s.instrument, instName, inst.nickname)) : [];
+    // Recurrence: the MOST RECENT on-instrument study drives the current cycle.
+    const onInstSorted = onInst.slice().sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+    const latest = onInstSorted[0] || null;
 
-    let status: LinearityStatus; let matched: Study[];
-    if (exempt) { status = "exempt"; matched = onInst; }
-    else if (onInst.length) { status = "covered"; matched = onInst; }
-    else if (linCands.length) { status = "review"; matched = linCands; }
-    else { status = "missing"; matched = []; }
+    let linStatus: LinearityStatus;   // recurrence-aware bucket (covered = satisfied this cycle)
+    let calStatus: CalVerStatus;      // granular current-cycle state
+    let matched: Study[];
+    let nextDueOn: string | null = null;
+    let overdue = false;
+    if (exempt) {
+      linStatus = "exempt"; calStatus = "exempt"; matched = onInstSorted;
+    } else if (!latest) {
+      // no ON-INSTRUMENT study: either a study exists for the analyte elsewhere
+      // (align it) or nothing at all.
+      if (linCands.length) { linStatus = "review"; calStatus = "review"; matched = linCands; }
+      else { linStatus = "missing"; calStatus = "missing"; matched = []; }
+    } else if (isFailVerdict(latest.status)) {
+      linStatus = "missing"; calStatus = "failed"; matched = onInstSorted;
+    } else if (latest.lifecycle_state !== "finalized") {
+      linStatus = "missing"; calStatus = "completed_unsigned"; matched = onInstSorted;
+    } else {
+      // signed + passing on-instrument study: banked this cycle, recurs at +6mo.
+      const signedDate = String(latest.finalized_at || latest.date || "").slice(0, 10);
+      nextDueOn = signedDate ? addMonthsIso(signedDate, LINEARITY_INTERVAL_MONTHS) : null;
+      overdue = !!nextDueOn && nextDueOn < today;
+      matched = onInstSorted;
+      calStatus = "missing"; // signed resets to "missing" (banked); nextDueOn carries the date
+      // Satisfied this cycle when the next-due is still ahead, OR when no date is
+      // recorded (legacy study) so recurrence cannot be computed -- do not regress
+      // a signed passing study to "missing" just for a missing date.
+      linStatus = (!nextDueOn || !overdue) ? "covered" : "missing";
+    }
 
-    if (status !== "exempt") linRequired++;
-    if (status === "covered") linCovered++;
-    else if (status === "review") linReview++;
-    else if (status === "missing") linMissing++;
+    if (linStatus !== "exempt") linRequired++;
+    if (linStatus === "covered") linCovered++;
+    else if (linStatus === "review") linReview++;
+    else if (linStatus === "missing") linMissing++;
     else linExempt++;
 
     const sp = bySpec.get(c.specialty) || { combos: 0, required: 0, covered: 0, review: 0, missing: 0, exempt: 0 };
     sp.combos++;
-    if (status !== "exempt") sp.required++;
-    (sp as any)[status]++;
+    if (linStatus !== "exempt") sp.required++;
+    (sp as any)[linStatus]++;
     bySpec.set(c.specialty, sp);
 
     rows.push({
@@ -208,10 +244,13 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
       linearityExemptWaived: waived,
       linearityExemptOther: other,
       linearityRequired: !exempt,
-      linearityStatus: status,
+      linearityStatus: linStatus,
       studyIds: matched.slice(0, 8).map((s) => s.id),
       verdict: Array.from(new Set(matched.map((s) => (s.status || "").toLowerCase()).filter(Boolean))).sort().join(", "),
       signed: matched.length > 0 && matched.every((s) => s.lifecycle_state === "finalized"),
+      status: calStatus,
+      nextDueOn,
+      overdue,
     });
   }
 
@@ -223,7 +262,6 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
     if (!instByAnalyte.has(c.analyte)) instByAnalyte.set(c.analyte, new Set());
     instByAnalyte.get(c.analyte)!.add(c.instrument_id);
   }
-  const today = todayIso();
   const methodComparisons: MethodComparisonRow[] = [];
   let mcNeeded = 0, mcDone = 0, mcOverdue = 0;
   for (const [analyte, instIds] of instByAnalyte) {
@@ -389,7 +427,10 @@ export function stampMapDatesFromStudies(
     if (!want[analyte][field] || want[analyte][field] < d) want[analyte][field] = d;
   };
   for (const r of cov.rows) {
-    if (r.linearityStatus === "covered") for (const sid of r.studyIds) put(r.analyte, "last_cal_ver", dateById.get(sid));
+    // Stamp last_cal_ver from a signed passing on-instrument study, whether it is
+    // still satisfied ("covered") or now recurrence-due ("missing"); the map date
+    // reflects when cal-ver was last performed regardless of the next-due status.
+    if (r.signed && r.status === "missing") for (const sid of r.studyIds) put(r.analyte, "last_cal_ver", dateById.get(sid));
   }
   for (const mc of cov.methodComparisons) {
     if (mc.hasStudy && mc.studyId != null) put(mc.analyte, "last_method_comp", dateById.get(mc.studyId));
