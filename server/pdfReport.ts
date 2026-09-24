@@ -3860,6 +3860,165 @@ export async function generateCumsumPDF(tracker: any, entries: any[], currentSpe
   }
 }
 
+// ─── IQCP (VeritaDC) PDF ──────────────────────────────────────────────────────
+// Surveyor-ready Individualized Quality Control Plan. Page 1 carries the
+// determination + the laboratory director / designee review block (signature on
+// page 1 per the PDF rules); page 2+ hold the risk assessment, QCP, and QA
+// worksheets and the regulatory basis. Content fills from a completed iqcp_plans
+// record and its risk/qcp/qa item rows. Copy is em-dash-free.
+export async function generateIqcpPDF(
+  plan: any,
+  lab: { lab_name?: string | null; clia_number?: string | null },
+  licenseCtx?: Partial<LicenseContext> | null,
+): Promise<Buffer> {
+  const TEAL = "#01696F", DK = "#28251D", GRN = "#437A22", GRY = "#7A7974";
+  const labName = escHtml(lab?.lab_name || "Laboratory");
+  const clia = lab?.clia_number ? escHtml(lab.clia_number) : "Not on file - enter in account settings";
+  const fmt = (d: any) => { if (!d) return ""; const dt = new Date(d); return isNaN(dt.getTime()) ? "" : dt.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }); };
+  const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  let scope: string[] = [];
+  try { const s = JSON.parse(plan?.test_scope || "[]"); if (Array.isArray(s)) scope = s.map((x: any) => String(x)); } catch { /* ignore */ }
+  const scopeText = scope.length ? escHtml(scope.join(", ")) : "Per VeritaMap test system";
+  const isComplete = plan?.status === "complete";
+  const approver = plan?.approved_by_name ? escHtml(plan.approved_by_name) : "";
+  const approvedDate = fmt(plan?.approved_at);
+
+  const noRows = (cols: number) => `<tr><td colspan="${cols}" style="color:${GRY};font-style:italic">No entries recorded.</td></tr>`;
+  const risk = (plan?.riskItems || []) as any[];
+  const qcp = (plan?.qcpItems || []) as any[];
+  const qa = (plan?.qaItems || []) as any[];
+  const riskHtml = risk.length ? risk.map((r) => `<tr>
+    <td style="font-weight:600;white-space:nowrap">${escHtml(r.component)}</td>
+    <td>${escHtml(r.phase)}</td>
+    <td>${escHtml(r.source_of_error)}</td>
+    <td style="text-align:center;font-weight:700;color:${String(r.reducible).toLowerCase() === "yes" ? GRN : DK}">${escHtml(r.reducible)}</td>
+    <td>${escHtml(r.mitigation)}</td></tr>`).join("") : noRows(5);
+  const qcpHtml = qcp.length ? qcp.map((r) => `<tr><td style="font-weight:600">${escHtml(r.qc_type)}</td><td style="white-space:nowrap">${escHtml(r.frequency)}</td><td>${escHtml(r.acceptability_criteria)}</td><td>${escHtml(r.corrective_action)}</td></tr>`).join("") : noRows(4);
+  const qaHtml = qa.length ? qa.map((r) => `<tr><td>${escHtml(r.activity)}</td><td style="white-space:nowrap">${escHtml(r.frequency)}</td><td>${escHtml(r.assessment_method)}</td></tr>`).join("") : noRows(3);
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:9pt; color:${DK}; }
+  @page { size:letter; margin:14mm 15mm 20mm 15mm; }
+  .hdr { border-bottom:3px solid ${TEAL}; padding-bottom:8px; margin-bottom:12px; }
+  .hdr .brand { color:${TEAL}; font-weight:800; letter-spacing:.3px; font-size:11pt; }
+  .hdr .lab { float:right; text-align:right; font-size:8.5pt; color:${DK}; }
+  .title { font-size:15pt; font-weight:800; color:${DK}; margin-top:6px; }
+  .subtitle { font-size:10pt; color:${GRY}; margin-top:2px; }
+  .sec { margin-top:16px; }
+  .sec h2 { font-size:11pt; color:${TEAL}; border-bottom:1px solid #d9e3e3; padding-bottom:3px; margin-bottom:6px; }
+  .kv { font-size:9pt; margin:2px 0; }
+  .kv b { display:inline-block; width:180px; color:${GRY}; font-weight:600; }
+  .det { background:#eaf5f4; border:1px solid #bcdedb; border-radius:5px; padding:8px 10px; margin-top:8px; color:#0A3A3D; font-size:9pt; }
+  .det b { color:${TEAL}; }
+  table { width:100%; border-collapse:collapse; margin-top:6px; font-size:7.6pt; }
+  th { background:${TEAL}; color:#fff; text-align:left; padding:4px 5px; font-weight:600; }
+  td { border:1px solid #d0d0d0; padding:4px 5px; vertical-align:top; }
+  tr:nth-child(even) td { background:#f3f8f8; }
+  .sig { border:1.5px solid ${DK}; border-radius:5px; margin-top:14px; padding:10px 12px; page-break-inside:avoid; }
+  .sig h3 { font-size:9.5pt; letter-spacing:.4px; margin-bottom:8px; }
+  .sig .row { display:flex; gap:26px; margin:9px 0; }
+  .sig .fld { flex:1; border-bottom:1px solid #999; font-size:8pt; color:${GRY}; padding-bottom:1px; }
+  .sig .fld .v { color:${DK}; font-size:9pt; font-weight:600; }
+  .chk { font-size:9pt; margin-right:22px; }
+  .chk span { display:inline-block; width:11px; height:11px; border:1.5px solid ${DK}; margin-right:5px; vertical-align:-1px; text-align:center; line-height:9px; }
+  .note { font-size:7.6pt; color:${GRY}; margin-top:7px; }
+  .cfr { font-size:8pt; color:${DK}; }
+  .cfr li { margin:2px 0 2px 16px; }
+  .pagebreak { page-break-before:always; }
+  </style></head><body>
+  <div class="hdr">
+    <div class="lab">${labName}<br>CLIA: ${clia}</div>
+    <div class="brand">VeritaAssure&trade; &nbsp;|&nbsp; VeritaDC&trade;</div>
+    <div class="title">Individualized Quality Control Plan (IQCP)</div>
+    <div class="subtitle">Test system: ${escHtml(plan?.instrument_name || "")}</div>
+  </div>
+  <div class="sec">
+    <h2>Determination</h2>
+    <div class="kv"><b>Prepared</b> ${fmt(plan?.created_at) || today}</div>
+    <div class="kv"><b>Effective date</b> ${isComplete && approvedDate ? approvedDate : "On laboratory director approval below"}</div>
+    <div class="kv"><b>Scope</b> ${scopeText}</div>
+    <div class="det">
+      <b>An IQCP is indicated for this test system.</b> The three-question pre-screen is met:
+      the test is nonwaived; the laboratory intends to run less external QC than the CLIA default;
+      and the manufacturer's instructions specify a QC pattern less stringent than the default.
+      QC may be reduced below the CLIA default per this risk-based plan, but never below the
+      manufacturer's instructions, per 42 CFR &sect;493.1256 and the CMS IQCP framework.
+    </div>
+  </div>
+  <div class="sig">
+    <h3>LABORATORY DIRECTOR OR DESIGNEE REVIEW</h3>
+    <div>
+      <span class="chk"><span>${isComplete ? "X" : ""}</span>Accepted - approved for implementation</span>
+      <span class="chk"><span></span>Not accepted</span>
+    </div>
+    <div class="row">
+      <div class="fld">Signature</div>
+      <div class="fld">Print name / initials${approver ? ` <span class="v">${approver}</span>` : ""}</div>
+    </div>
+    <div class="row">
+      <div class="fld">Title (medical director or designee)</div>
+      <div class="fld">Date${approvedDate ? ` <span class="v">${approvedDate}</span>` : ""}</div>
+    </div>
+    <div class="note">Final approval and clinical determination must be made by the laboratory director or designee. The director must review, sign, and date this plan before implementation, and review it at least annually and when the process changes.</div>
+  </div>
+  <div class="sec pagebreak">
+    <h2>Step 1 &middot; Risk Assessment (five components, three phases)</h2>
+    <table>
+      <tr><th style="width:12%">Component</th><th style="width:11%">Phase</th><th style="width:30%">Potential source of error</th><th style="width:9%">Reducible</th><th style="width:38%">How the laboratory reduces it</th></tr>
+      ${riskHtml}
+    </table>
+  </div>
+  <div class="sec">
+    <h2>Step 2 &middot; Quality Control Plan</h2>
+    <table>
+      <tr><th style="width:34%">Type of QC</th><th style="width:18%">Frequency</th><th style="width:24%">Acceptability criteria</th><th style="width:24%">Corrective action</th></tr>
+      ${qcpHtml}
+    </table>
+    <div class="note">The QC plan may reduce external QC below the CLIA default of two levels of external control on each day of testing, but never below the manufacturer's instructions.</div>
+  </div>
+  <div class="sec">
+    <h2>Step 3 &middot; Quality Assessment</h2>
+    <table>
+      <tr><th style="width:52%">QA activity</th><th style="width:20%">Frequency</th><th style="width:28%">How it is assessed</th></tr>
+      ${qaHtml}
+    </table>
+  </div>
+  <div class="sec">
+    <h2>Regulatory basis</h2>
+    <ul class="cfr">
+      <li>42 CFR &sect;493.1256 - Control procedures (default QC and the IQCP option)</li>
+      <li>42 CFR &sect;493.1250 through &sect;493.1256 - Analytic systems</li>
+      <li>42 CFR &sect;493.1289 - Analytic systems quality assessment</li>
+      <li>IQCP framework and the five risk-assessment components per CMS (CLIA Brochure #13; S&amp;C 13-54-CLIA)</li>
+    </ul>
+  </div>
+  </body></html>`;
+
+  const footer = `<div style="font-family:Helvetica,Arial,sans-serif;font-size:7pt;color:#7A7974;width:100%;padding:0 15mm;display:flex;justify-content:space-between;">
+    <span>VeritaAssure&trade; | VeritaDC&trade; | Confidential - For Internal Lab Use Only</span>
+    <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
+  </div>`;
+
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    const stamped = applyLicenseToPuppeteer(html, footer, licenseCtx);
+    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    const pdfBuffer = await page.pdf({
+      format: "Letter",
+      printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: "<span></span>",
+      footerTemplate: stamped.footerTemplate,
+      margin: { top: "14mm", right: "15mm", bottom: "20mm", left: "15mm" },
+    });
+    return stampPdfAuthor(pdfBuffer);
+  } finally {
+    await page.close();
+  }
+}
+
 export async function generatePDFBuffer(study: Study, results: any, cliaNumber?: string, preferredStandards?: AccreditationBody[] | null, licenseCtx?: Partial<LicenseContext> | null): Promise<Buffer> {
   if (!study || typeof study !== "object") {
     throw new Error("generatePDFBuffer: study must be a valid object, received " + typeof study);

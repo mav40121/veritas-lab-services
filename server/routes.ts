@@ -13415,6 +13415,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // Surveyor-ready IQCP PDF (VeritaDC). Lab-scoped; fills from the plan + items.
+  app.get("/api/labs/:labId/iqcp/plans/:id/pdf", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    try {
+      const plan = iqcpPlanForLab(req.params.id, req.scope.labId);
+      if (!plan) return res.status(404).json({ error: "Plan not found" });
+      plan.riskItems = (db as any).$client.prepare("SELECT * FROM iqcp_risk_items WHERE plan_id = ? ORDER BY sort_order, id").all(plan.id);
+      plan.qcpItems = (db as any).$client.prepare("SELECT * FROM iqcp_qcp_items WHERE plan_id = ? ORDER BY sort_order, id").all(plan.id);
+      plan.qaItems = (db as any).$client.prepare("SELECT * FROM iqcp_qa_items WHERE plan_id = ? ORDER BY sort_order, id").all(plan.id);
+      const lab = req.scope.lab || {};
+      const { generateIqcpPDF } = await import("./pdfReport");
+      const buf = await generateIqcpPDF(plan, { lab_name: lab.lab_name, clia_number: lab.clia_number }, licenseCtxFromReq(req));
+      const safe = String(plan.instrument_name || "IQCP").replace(/[^a-z0-9]+/gi, "-").slice(0, 40);
+      res.set({ "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="IQCP-${safe}.pdf"` });
+      res.send(buf);
+    } catch (err: any) {
+      console.error("IQCP pdf error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // List maps
   app.get("/api/veritamap/maps", authMiddleware, (req: any, res) => {
     // Multi-lab-bleed root-cause fix: lab-scope the legacy list endpoint.

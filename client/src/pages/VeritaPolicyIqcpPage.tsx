@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import {
   Loader2, ShieldCheck, ArrowRight, ArrowLeft, Plus, Trash2, CheckCircle2,
-  AlertTriangle, ClipboardList, FlaskConical, Microscope, ListChecks, FileCheck2,
+  AlertTriangle, ClipboardList, FlaskConical, Microscope, ListChecks, FileCheck2, Download,
 } from "lucide-react";
 
 type Screen = { nonwaived: string; reduce_intent: string; mfr_less_strict: string };
@@ -367,6 +367,23 @@ function PlanBuilder({ planId, bank, labId, jsonMut, onBack }: any) {
     } finally { setBusy(false); }
   };
 
+  const downloadPdf = async () => {
+    setBusy(true);
+    try {
+      const r = await apiRequest("GET", `${planUrl}/pdf`);
+      if (!r.ok) throw new Error("PDF generation failed");
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `IQCP-${(plan?.instrument_name || "plan").replace(/[^a-z0-9]+/gi, "-")}.pdf`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast({ title: "Could not generate PDF", description: e?.message });
+    } finally { setBusy(false); }
+  };
+
   if (isLoading || !plan) return <div className="flex items-center gap-2 text-muted-foreground py-8"><Loader2 className="animate-spin" size={16} /> Loading plan</div>;
 
   const savedRisk = plan.riskItems?.length || 0;
@@ -425,8 +442,11 @@ function PlanBuilder({ planId, bank, labId, jsonMut, onBack }: any) {
           <p className="text-xs text-muted-foreground mb-4">{bank.qcp.rule}</p>
           <label className="text-sm font-medium">Laboratory director or designee (approval)</label>
           <Input value={approver} onChange={(e) => setApprover(e.target.value)} placeholder="Name of the approving director or designee" className="mt-1 mb-4 max-w-md" />
-          <Button onClick={complete} disabled={busy} className="gap-2">{busy ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle2 size={16} />} Mark IQCP complete</Button>
-          <p className="text-xs text-muted-foreground mt-3">Final approval and clinical determination must be made by the laboratory director or designee.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={complete} disabled={busy} className="gap-2">{busy ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle2 size={16} />} Mark IQCP complete</Button>
+            <Button variant="outline" onClick={downloadPdf} disabled={busy} className="gap-2"><Download size={16} /> Download IQCP PDF</Button>
+          </div>
+          <p className="text-xs text-muted-foreground mt-3">Final approval and clinical determination must be made by the laboratory director or designee. The PDF reflects the currently saved plan; save your worksheets first.</p>
         </CardContent></Card>
       )}
     </div>
