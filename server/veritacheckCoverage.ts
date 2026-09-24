@@ -37,6 +37,11 @@ export interface CoverageRow {
   verdict: string;
   signed: boolean;
 }
+// Recurrence-aware method comparison / correlation status (§493.1281: compare
+// twice a year). A signed study banks that cycle and the requirement rolls to
+// its next due date; it is never "done forever". Status is the current-cycle
+// state; nextDueOn is the date the next signature is due (signed date + 6 mo).
+export type MethodComparisonStatus = "missing" | "failed" | "completed_unsigned";
 export interface MethodComparisonRow {
   analyte: string;
   instruments: string[];
@@ -44,6 +49,9 @@ export interface MethodComparisonRow {
   studyId: number | null;
   verdict: string;
   signed: boolean;
+  status: MethodComparisonStatus;
+  nextDueOn: string | null; // YYYY-MM-DD; null = owed now (never signed a passing study)
+  overdue: boolean;         // a concrete next-due date is in the past
 }
 export interface UnmappedStudy {
   id: number;
@@ -70,7 +78,8 @@ export interface CoverageResult {
     linearityMissing: number;
     linearityExempt: number;
     methodComparisonsNeeded: number;
-    methodComparisonsDone: number;
+    methodComparisonsDone: number;    // satisfied THIS cycle (signed + next due in the future)
+    methodComparisonsOverdue: number; // a next-due date has passed
     bySpecialty: { specialty: string; combos: number; required: number; covered: number; review: number; missing: number; exempt: number }[];
   };
   rows: CoverageRow[];
@@ -109,7 +118,25 @@ function studyMatchesInstrument(studyInstr: string, mapName: string, mapNick: st
   return common / mt.size >= 0.6;
 }
 
-type Study = { id: number; test_name: string; instrument: string; study_type: string; status: string; lifecycle_state: string; date?: string; coverage_analyte?: string | null };
+type Study = { id: number; test_name: string; instrument: string; study_type: string; status: string; lifecycle_state: string; date?: string; finalized_at?: string | null; coverage_analyte?: string | null };
+
+// Method comparison / correlation recurrence interval (CLIA §493.1281: at least
+// twice a year). Both study types satisfy the requirement.
+const MC_INTERVAL_MONTHS = 6;
+const MC_STUDY_TYPES = new Set(["method_comparison", "correlation"]);
+function addMonthsIso(iso: string, months: number): string {
+  const parts = String(iso).slice(0, 10).split("-").map((n) => parseInt(n, 10));
+  if (parts.length < 3 || parts.some((n) => Number.isNaN(n))) return String(iso).slice(0, 10);
+  const dt = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  dt.setUTCMonth(dt.getUTCMonth() + months);
+  return dt.toISOString().slice(0, 10);
+}
+function todayIso(): string { return new Date().toISOString().slice(0, 10); }
+// A study "failed" when its verdict is a fail; "completed"/"pass" are not failures.
+function isFailVerdict(status: string): boolean {
+  const s = (status || "").toLowerCase();
+  return s.includes("fail") || s.includes("not accept") || s === "rejected";
+}
 
 // A study counts toward a map analyte when its name matches (the automatic path)
 // OR the director has explicitly aligned it to that analyte (coverage_analyte).
@@ -196,20 +223,49 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
     if (!instByAnalyte.has(c.analyte)) instByAnalyte.set(c.analyte, new Set());
     instByAnalyte.get(c.analyte)!.add(c.instrument_id);
   }
+  const today = todayIso();
   const methodComparisons: MethodComparisonRow[] = [];
-  let mcNeeded = 0, mcDone = 0;
+  let mcNeeded = 0, mcDone = 0, mcOverdue = 0;
   for (const [analyte, instIds] of instByAnalyte) {
     if (instIds.size < 2) continue;
     mcNeeded++;
-    const mc = studies.find((s) => s.study_type === "method_comparison" && matchesAnalyte(s, analyte)) || null;
-    if (mc) mcDone++;
+    // Recurrence: look at the MOST RECENT matching study (method comparison OR
+    // correlation). A signed passing study banks the current cycle and sets the
+    // next due date (signed date + 6 mo); it does not satisfy the requirement
+    // forever. Failed / unsigned / never-done all read as owed now.
+    const cands = studies
+      .filter((s) => MC_STUDY_TYPES.has(s.study_type) && matchesAnalyte(s, analyte))
+      .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+    const latest = cands[0] || null;
+    let status: MethodComparisonStatus = "missing";
+    let nextDueOn: string | null = null;
+    let signed = false;
+    if (latest) {
+      if (isFailVerdict(latest.status)) {
+        status = "failed";
+      } else if (latest.lifecycle_state !== "finalized") {
+        status = "completed_unsigned";
+      } else {
+        signed = true;
+        const signedDate = String(latest.finalized_at || latest.date || "").slice(0, 10);
+        nextDueOn = signedDate ? addMonthsIso(signedDate, MC_INTERVAL_MONTHS) : null;
+        status = "missing"; // banked this cycle; recurs on nextDueOn
+      }
+    }
+    const satisfiedNow = signed && !!nextDueOn && nextDueOn >= today;
+    const overdue = !!nextDueOn && nextDueOn < today;
+    if (satisfiedNow) mcDone++;
+    if (overdue) mcOverdue++;
     methodComparisons.push({
       analyte,
       instruments: Array.from(instIds).map((id) => instLabel(instrById.get(id))).sort(),
-      hasStudy: !!mc,
-      studyId: mc ? mc.id : null,
-      verdict: mc ? (mc.status || "").toLowerCase() : "",
-      signed: !!(mc && mc.lifecycle_state === "finalized"),
+      hasStudy: !!latest,
+      studyId: latest ? latest.id : null,
+      verdict: latest ? (latest.status || "").toLowerCase() : "",
+      signed,
+      status,
+      nextDueOn,
+      overdue,
     });
   }
   methodComparisons.sort((a, b) => a.analyte.localeCompare(b.analyte));
@@ -255,6 +311,7 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
       linearityExempt: linExempt,
       methodComparisonsNeeded: mcNeeded,
       methodComparisonsDone: mcDone,
+      methodComparisonsOverdue: mcOverdue,
       bySpecialty: Array.from(bySpec.entries()).map(([specialty, v]) => ({ specialty, ...v })).sort((a, b) => a.specialty.localeCompare(b.specialty)),
     },
     rows,
@@ -277,7 +334,7 @@ export function computeCoverageForLab(sqlite: any, labId: number): CoverageResul
      WHERE m.lab_id = ? AND (it.active = 1 OR it.active IS NULL)`
   ).all(labId) as Combo[];
   const studies = sqlite.prepare(
-    `SELECT id, test_name, instrument, study_type, status, lifecycle_state, date, coverage_analyte
+    `SELECT id, test_name, instrument, study_type, status, lifecycle_state, date, finalized_at, coverage_analyte
      FROM studies WHERE lab_id = ? AND archived_at IS NULL`
   ).all(labId) as Study[];
   return computeCoverageFrom(instruments, combos, studies);

@@ -66,7 +66,12 @@ check("summary linearityReview", r.summary.linearityReview, 1);
 check("summary linearityMissing", r.summary.linearityMissing, 4);
 check("summary linearityExempt", r.summary.linearityExempt, 2);
 check("method comparisons needed (Glucose + ALT)", r.summary.methodComparisonsNeeded, 2);
-check("method comparisons done (id101 Glucose only)", r.summary.methodComparisonsDone, 1);
+// Recurrence semantics: a study only counts "done" when signed AND its next-due
+// (signed + 6mo) is still in the future. id101 Glucose is unsigned (draft); ALT
+// has no study. So nothing is satisfied this cycle.
+check("method comparisons done = 0 (id101 Glucose unsigned; ALT none)", r.summary.methodComparisonsDone, 0);
+check("Glucose MC unsigned -> status completed_unsigned", mc("Glucose")?.status, "completed_unsigned");
+check("ALT MC has no study -> status missing", mc("ALT")?.status, "missing");
 check("ALT on two same-model units shows both distinctly", mc("ALT")?.instruments, ["Ortho VITROS 5600 (Bonnie)", "Ortho VITROS 5600 (Clyde)"]);
 
 // Unaligned studies: coverage-relevant studies whose name matches no map analyte.
@@ -88,17 +93,20 @@ check("empty map -> unmappedStudies empty", computeCoverageFrom([], [], []).unma
 // matching still applies, so a wrong-instrument alignment reads "review".
 const aInstr = [{ id: 1, instrument_name: "Sysmex XN-1000", nickname: "R2-D2" }];
 const aCombos = [{ id: 20, analyte: "Hemoglobin", specialty: "Hematology", instrument_id: 1 }];
-const aStudy = { id: 200, test_name: "HGB", instrument: "R2-D2, Sysmex XN-1000", study_type: "cal_ver", status: "pass", lifecycle_state: "finalized", date: "2026-05-20" };
+// Use a name that genuinely matches no map analyte by string OR curated synonym
+// (the old "HGB" example went stale once HGB<->Hemoglobin became a curated
+// synonym on 2026-07-09; the align flow needs a truly-unmatched name to test).
+const aStudy = { id: 200, test_name: "ZZTOP marker", instrument: "R2-D2, Sysmex XN-1000", study_type: "cal_ver", status: "pass", lifecycle_state: "finalized", date: "2026-05-20" };
 const row20 = (res: any) => res.rows.find((x: any) => x.instrumentTestId === 20);
 
 const preAlign = computeCoverageFrom(aInstr, aCombos, [aStudy]);
-check("pre-align: HGB name does not match Hemoglobin -> combo missing", row20(preAlign)?.linearityStatus, "missing");
-check("pre-align: HGB listed unaligned with empty coverageAnalyte", preAlign.unmappedStudies.find((u) => u.id === 200)?.coverageAnalyte, "");
+check("pre-align: unmatched name does not match Hemoglobin -> combo missing", row20(preAlign)?.linearityStatus, "missing");
+check("pre-align: unmatched study listed unaligned with empty coverageAnalyte", preAlign.unmappedStudies.find((u) => u.id === 200)?.coverageAnalyte, "");
 
 const postAlign = computeCoverageFrom(aInstr, aCombos, [{ ...aStudy, coverage_analyte: "Hemoglobin" }]);
 check("post-align: aligned study covers the Hemoglobin combo", row20(postAlign)?.linearityStatus, "covered");
 check("post-align: covered row carries study 200", row20(postAlign)?.studyIds, [200]);
-check("post-align: HGB still listed (name still unmatched) with coverageAnalyte set", postAlign.unmappedStudies.find((u) => u.id === 200)?.coverageAnalyte, "Hemoglobin");
+check("post-align: unmatched name still listed with coverageAnalyte set", postAlign.unmappedStudies.find((u) => u.id === 200)?.coverageAnalyte, "Hemoglobin");
 
 const wrongInstr = computeCoverageFrom(aInstr, aCombos, [{ ...aStudy, instrument: "Bonnie, Ortho VITROS 5600", coverage_analyte: "Hemoglobin" }]);
 check("align on the wrong instrument -> review, not covered", row20(wrongInstr)?.linearityStatus, "review");
@@ -108,7 +116,42 @@ const mcInstr = [{ id: 1, instrument_name: "Sysmex XN-1000", nickname: "R2-D2" }
 const mcCombos = [{ id: 30, analyte: "Platelet Count", specialty: "Hematology", instrument_id: 1 }, { id: 31, analyte: "Platelet Count", specialty: "Hematology", instrument_id: 2 }];
 const mcStudy = { id: 300, test_name: "PLT", instrument: "R2-D2, BB-8", study_type: "method_comparison", status: "pass", lifecycle_state: "draft", coverage_analyte: "Platelet Count" };
 const mcRes = computeCoverageFrom(mcInstr, mcCombos, [mcStudy]);
-check("aligned method_comparison credits the MC (done 1/1)", { needed: mcRes.summary.methodComparisonsNeeded, done: mcRes.summary.methodComparisonsDone }, { needed: 1, done: 1 });
+// The aligned study is credited to the MC (matched, not "missing"); it is
+// unsigned here, so it reads completed_unsigned rather than done.
+const mc2 = (res: any, analyte: string) => res.methodComparisons.find((x: any) => x.analyte === analyte);
+check("aligned method_comparison is credited to the MC (matched, unsigned)", { needed: mcRes.summary.methodComparisonsNeeded, status: mc2(mcRes, "Platelet Count")?.status }, { needed: 1, status: "completed_unsigned" });
+
+// --- Method comparison recurrence (§493.1281, 6-month) ----------------------
+// A signed passing study banks the cycle and rolls to next-due = signed + 6mo;
+// it is never "done forever". Failed / unsigned / never-done read as owed now.
+const recInstr = [{ id: 1, instrument_name: "Alpha", nickname: null }, { id: 2, instrument_name: "Beta", nickname: null }];
+const recCombos = [{ id: 50, analyte: "TSH", specialty: "Endocrinology", instrument_id: 1 }, { id: 51, analyte: "TSH", specialty: "Endocrinology", instrument_id: 2 }];
+const mkStudy = (over: any) => ({ id: 900, test_name: "TSH", instrument: "Alpha", study_type: "method_comparison", status: "pass", lifecycle_state: "finalized", ...over });
+const todayISO = new Date().toISOString().slice(0, 10);
+
+const recentSigned = computeCoverageFrom(recInstr, recCombos, [mkStudy({ finalized_at: todayISO, date: todayISO })]);
+check("recurrence: signed today -> status missing (banked, recurs)", mc2(recentSigned, "TSH")?.status, "missing");
+check("recurrence: signed today -> not overdue", mc2(recentSigned, "TSH")?.overdue, false);
+check("recurrence: signed today -> counted done (satisfied this cycle)", recentSigned.summary.methodComparisonsDone, 1);
+check("recurrence: nextDueOn is in the future", (mc2(recentSigned, "TSH")?.nextDueOn ?? "") > todayISO, true);
+
+const oldSigned = computeCoverageFrom(recInstr, recCombos, [mkStudy({ finalized_at: "2020-01-01", date: "2020-01-01" })]);
+check("recurrence: signed 2020 -> overdue", mc2(oldSigned, "TSH")?.overdue, true);
+check("recurrence: overdue -> NOT counted done", oldSigned.summary.methodComparisonsDone, 0);
+check("recurrence: overdue -> methodComparisonsOverdue = 1", oldSigned.summary.methodComparisonsOverdue, 1);
+check("recurrence: nextDueOn = signed 2020-01-01 + 6mo", mc2(oldSigned, "TSH")?.nextDueOn, "2020-07-01");
+
+const unsigned = computeCoverageFrom(recInstr, recCombos, [mkStudy({ lifecycle_state: "draft", date: "2026-01-01" })]);
+check("recurrence: unsigned -> completed_unsigned, nextDueOn null", { status: mc2(unsigned, "TSH")?.status, nextDue: mc2(unsigned, "TSH")?.nextDueOn }, { status: "completed_unsigned", nextDue: null });
+
+const failedMc = computeCoverageFrom(recInstr, recCombos, [mkStudy({ status: "fail", date: "2026-01-01" })]);
+check("recurrence: failed verdict -> failed", mc2(failedMc, "TSH")?.status, "failed");
+
+const noneMc = computeCoverageFrom(recInstr, recCombos, []);
+check("recurrence: no study -> missing, nextDueOn null", { status: mc2(noneMc, "TSH")?.status, nextDue: mc2(noneMc, "TSH")?.nextDueOn }, { status: "missing", nextDue: null });
+
+const corrType = computeCoverageFrom(recInstr, recCombos, [mkStudy({ study_type: "correlation", finalized_at: todayISO, date: todayISO })]);
+check("recurrence: 'correlation' study type also satisfies the requirement", corrType.summary.methodComparisonsDone, 1);
 
 // --- Linearity exemptions: waived + other (the new Coverage columns) ----------
 // Four exemption reasons all drop the combo from required (status "exempt"); a
