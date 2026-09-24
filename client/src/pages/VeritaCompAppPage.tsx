@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useMemo, type ReactNode } from "react";
 import DOMPurify from "dompurify";
 import { Link, useLocation, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -437,6 +437,7 @@ interface OwedItem {
   analyteCount: number;
   covered: boolean;
   coverage: { programId: number; programName: string; methodGroupId: number; methodGroupName: string } | null;
+  assessed: boolean;
 }
 interface OwedStatus {
   bucket: "overdue" | "dueSoon30" | "dueSoon90" | "compliant";
@@ -450,14 +451,32 @@ interface OwedEmployee {
   title: string | null;
   owedCount: number;
   gapCount: number;
+  assessedCount: number;
   status: OwedStatus;
   owed: OwedItem[];
 }
 interface OwedResponse {
   employees: OwedEmployee[];
   timeline: string[];
-  totals: { employees: number; owed: number; gaps: number; overdue: number; dueSoon: number };
+  totals: { employees: number; owed: number; gaps: number; assessed: number; overdue: number; dueSoon: number };
 }
+
+// Coverage-map cell state for one (employee, instrument): the required-vs-assessed
+// verdict, mirroring VeritaCheck's coverage grid.
+type CoverageCell = "assessed" | "owed" | "overdue" | "gap" | "na";
+function coverageCell(item: OwedItem | undefined, empOverdue: boolean): CoverageCell {
+  if (!item) return "na";              // instrument not assigned to this person
+  if (!item.covered) return "gap";     // assigned but no competency program covers it
+  if (item.assessed) return "assessed"; // signed competency this cycle
+  return empOverdue ? "overdue" : "owed";
+}
+const CELL_STYLE: Record<CoverageCell, { bg: string; label: string; short: string }> = {
+  assessed: { bg: "bg-emerald-500/85 text-white", label: "Assessed this cycle", short: "✓" },
+  owed: { bg: "bg-amber-400/85 text-amber-950", label: "Owed (not yet assessed)", short: "○" },
+  overdue: { bg: "bg-rose-500/85 text-white", label: "Overdue", short: "!" },
+  gap: { bg: "bg-muted text-muted-foreground border border-dashed border-amber-400/70", label: "Gap: no competency program covers this", short: "–" },
+  na: { bg: "", label: "Not assigned", short: "" },
+};
 
 // Maps the CLIA schedule bucket to a chip label + class. "compliant" splits on
 // whether the employee has a schedule on file at all (up to date vs not scheduled).
@@ -569,6 +588,121 @@ function CompetenciesOwedSection() {
               )}
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Coverage map (required vs assessed matrix, dual orientation) ─────────────
+// #48 Phase 3: the VeritaComp analog of VeritaCheck's coverage grid. Rows/cols
+// toggle between By employee and By instrument; each cell is the required-vs-
+// assessed verdict for that (person, instrument). Reuses /competency/owed.
+function CompetencyCoverageMap() {
+  const activeLabId = useActiveLabId();
+  const [expanded, setExpanded] = useState(false);
+  const [orient, setOrient] = useState<"employee" | "instrument">("employee");
+  const url = activeLabId ? `/api/labs/${activeLabId}/competency/owed` : null;
+  const { data } = useQuery<OwedResponse>({
+    queryKey: [url ?? "no-owed"],
+    enabled: !!url,
+    queryFn: async () => {
+      const r = await fetch(`${API_BASE}${url}`, { headers: authHeaders() });
+      if (!r.ok) throw new Error(`Failed to load coverage (${r.status})`);
+      return r.json();
+    },
+  });
+  const emps = data?.employees ?? [];
+  const instruments = useMemo(() => {
+    const m = new Map<number, { id: number; name: string; dept: string | null }>();
+    for (const e of emps) for (const o of e.owed) if (!m.has(o.instrumentId)) m.set(o.instrumentId, { id: o.instrumentId, name: o.instrumentName, dept: o.department });
+    return Array.from(m.values()).sort((a, b) => (a.dept || "").localeCompare(b.dept || "") || a.name.localeCompare(b.name));
+  }, [emps]);
+  const lookup = useMemo(() => {
+    const m = new Map<number, Map<number, OwedItem>>();
+    for (const e of emps) { const im = new Map<number, OwedItem>(); for (const o of e.owed) im.set(o.instrumentId, o); m.set(e.employeeId, im); }
+    return m;
+  }, [emps]);
+  if (!url || !data || data.totals.employees === 0 || instruments.length === 0) return null;
+
+  const t = data.totals;
+  const empOverdue = (e: OwedEmployee) => e.status.bucket === "overdue";
+  const cellFor = (e: OwedEmployee, instId: number): CoverageCell => coverageCell(lookup.get(e.employeeId)?.get(instId), empOverdue(e));
+
+  // Rows and columns per orientation.
+  const rowsAreEmployees = orient === "employee";
+  const cellBox = (cell: CoverageCell, rowLabel: string, colLabel: string) => {
+    const s = CELL_STYLE[cell];
+    return (
+      <td key={rowLabel + colLabel} className="p-0.5 text-center">
+        <div className={`h-6 w-6 mx-auto rounded flex items-center justify-center text-[10px] font-bold ${s.bg}`} title={cell === "na" ? "" : `${rowLabel} / ${colLabel}: ${s.label}`}>{s.short}</div>
+      </td>
+    );
+  };
+  const Legend = () => (
+    <div className="flex flex-wrap gap-3 text-[11px] text-muted-foreground">
+      <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-emerald-500/85 inline-block" />Assessed</span>
+      <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-amber-400/85 inline-block" />Owed</span>
+      <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-rose-500/85 inline-block" />Overdue</span>
+      <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded border border-dashed border-amber-400/70 inline-block" />Gap</span>
+    </div>
+  );
+
+  return (
+    <div className="mb-6 rounded-xl border border-border bg-card/40">
+      <button type="button" onClick={() => setExpanded((p) => !p)} className="w-full flex items-center gap-2 px-4 py-3 text-left" data-testid="coverage-map-toggle">
+        <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "" : "-rotate-90"}`} />
+        <BarChart3 className="h-4 w-4 shrink-0 text-primary" />
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-semibold">Coverage map</div>
+          <div className="text-xs text-muted-foreground">Required vs assessed, by employee or by instrument</div>
+        </div>
+        <span className="text-xs text-muted-foreground shrink-0">{t.assessed}/{t.owed} assessed</span>
+        {t.overdue > 0 && <span className="text-xs px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-300/60 shrink-0">{t.overdue} overdue</span>}
+        {t.gaps > 0 && <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300/60 shrink-0">{t.gaps} gaps</span>}
+      </button>
+      {expanded && (
+        <div className="px-4 pb-4 space-y-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="inline-flex rounded-lg border border-border overflow-hidden text-xs">
+              <button type="button" onClick={() => setOrient("employee")} className={`px-3 py-1.5 ${rowsAreEmployees ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground"}`} data-testid="coverage-map-by-employee">By employee</button>
+              <button type="button" onClick={() => setOrient("instrument")} className={`px-3 py-1.5 border-l border-border ${!rowsAreEmployees ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground"}`} data-testid="coverage-map-by-instrument">By instrument</button>
+            </div>
+            <Legend />
+          </div>
+          <div className="overflow-auto max-h-[70vh] border border-border rounded-lg">
+            <table className="text-xs border-collapse">
+              <thead>
+                <tr>
+                  <th className="sticky left-0 top-0 z-20 bg-muted px-2 py-1.5 text-left font-medium min-w-[160px]">{rowsAreEmployees ? "Employee" : "Instrument"}</th>
+                  {(rowsAreEmployees
+                    ? instruments.map((i) => ({ key: i.id, label: i.name }))
+                    : emps.map((e) => ({ key: e.employeeId, label: e.name || `#${e.employeeId}` }))
+                  ).map((c: { key: number; label: string }) => (
+                    <th key={c.key} className="sticky top-0 z-10 bg-muted px-1 py-1.5 font-medium text-muted-foreground max-w-[40px]">
+                      <div className="truncate max-w-[80px] mx-auto" title={c.label}>{c.label}</div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rowsAreEmployees
+                  ? emps.map((e) => (
+                      <tr key={e.employeeId} className="border-t border-border/60">
+                        <td className="sticky left-0 z-10 bg-card px-2 py-1 font-medium whitespace-nowrap max-w-[200px] truncate" title={e.name}>{e.name || `#${e.employeeId}`}</td>
+                        {instruments.map((i) => cellBox(cellFor(e, i.id), e.name || `#${e.employeeId}`, i.name))}
+                      </tr>
+                    ))
+                  : instruments.map((i) => (
+                      <tr key={i.id} className="border-t border-border/60">
+                        <td className="sticky left-0 z-10 bg-card px-2 py-1 font-medium whitespace-nowrap max-w-[200px] truncate" title={i.name}>{i.name}{i.dept ? <span className="text-muted-foreground font-normal"> · {i.dept}</span> : null}</td>
+                        {emps.map((e) => cellBox(cellFor(e, i.id), e.name || `#${e.employeeId}`, i.name))}
+                      </tr>
+                    ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[11px] text-muted-foreground">Each cell is the current-cycle verdict for that person and instrument: assessed (signed this cycle), owed, overdue, or a gap where no competency program covers the assignment. Blank means the instrument is not assigned to that person in VeritaStaff&#8482;.</p>
         </div>
       )}
     </div>
@@ -721,6 +855,8 @@ function ProgramListView() {
 
       {/* #48: employee-centric competencies owed, derived from VeritaStaff, with gap detection */}
       <CompetenciesOwedSection />
+      {/* #48 Phase 3: required-vs-assessed coverage map, toggle by employee / by instrument */}
+      <CompetencyCoverageMap />
 
       {isLoading && (
         <div className="space-y-3">

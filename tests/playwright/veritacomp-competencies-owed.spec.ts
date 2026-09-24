@@ -45,4 +45,25 @@ test.describe("VeritaComp competencies owed (derived from VeritaStaff)", () => {
     }
     await ctx.close();
   });
+
+  test("coverage map expands and toggles between By employee and By instrument", async ({ browser }) => {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    await ctx.addInitScript((t) => { try { localStorage.setItem("veritas_token", t as string); } catch {} }, TOKEN);
+    const page = await ctx.newPage();
+    await page.goto(`${BASE}/labs/${LAB}/veritacomp-app`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3500);
+    const toggle = page.getByTestId("coverage-map-toggle");
+    if (await toggle.count()) {
+      await toggle.click();
+      await page.waitForTimeout(500);
+      await expect(page.getByTestId("coverage-map-by-employee")).toBeVisible();
+      await expect(page.getByTestId("coverage-map-by-instrument")).toBeVisible();
+      await page.getByTestId("coverage-map-by-instrument").click();
+      await page.waitForTimeout(300);
+      await expect(page.getByRole("columnheader", { name: "Instrument" })).toBeVisible();
+    } else {
+      test.skip(true, "No coverage data on this lab; map hidden by design.");
+    }
+    await ctx.close();
+  });
 });
