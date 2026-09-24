@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Link, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
@@ -38,8 +38,14 @@ import {
   ChevronDown,
   ChevronUp,
   Loader2,
+  Link2,
+  X,
+  ExternalLink,
+  Plus,
+  Search,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 
@@ -217,6 +223,258 @@ function CitationRow({
   );
 }
 
+// ─── Evidence-of-compliance linking ─────────────────────────────────────────
+// The per-item evidence model already lives server-side: lab_documents (URL
+// pointers) + document_checklist_links, with a coverage rollup endpoint. This
+// surfaces it on the scan walk so a user sitting on an item can see and attach
+// the documents that prove it, instead of only linking from the Library side.
+// No new store. Coverage is fetched ONCE for the whole lab (one query, not one
+// per row) and sliced by checklist_item_id. Creating a brand-new document
+// stays in the Library, where the governed owner / effective-date / review
+// fields are collected; here we link documents that already exist.
+interface CoverageRow {
+  document_id: number;
+  title: string;
+  display_label: string | null;
+  document_type: string;
+  external_url: string;
+  storage_provider: string | null;
+  status: string;
+  review_due_date: string | null;
+  link_id: number;
+  checklist_item_id: number;
+  link_notes: string | null;
+  linked_at: string;
+}
+
+interface EvidenceCtx {
+  byItem: Record<number, CoverageRow[]>;
+  labId: number | null;
+  readOnly: boolean;
+  invalidate: () => void;
+}
+
+const SCAN_DOC_TYPE_LABELS: Record<string, string> = {
+  policy: "Policy",
+  procedure: "Procedure",
+  training_record: "Training record",
+  competency: "Competency",
+  validation_study: "Validation study",
+  equipment_log: "Equipment log",
+  regulatory_record: "Regulatory record",
+  other: "Other",
+};
+function scanDocTypeLabel(v: string): string {
+  return SCAN_DOC_TYPE_LABELS[v] || v;
+}
+
+// Picker: attach a document already catalogued in the lab's evidence library.
+function EvidencePicker({
+  itemId,
+  labId,
+  alreadyLinkedDocIds,
+  onClose,
+  onLinked,
+}: {
+  itemId: number;
+  labId: number;
+  alreadyLinkedDocIds: Set<number>;
+  onClose: () => void;
+  onLinked: () => void;
+}) {
+  const { toast } = useToast();
+  const labRoute = useLabRoute();
+  const [search, setSearch] = useState("");
+
+  const docsQuery = useQuery<any[]>({
+    queryKey: [`/api/labs/${labId}/veritascan/documents`, "evidence-picker"],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/labs/${labId}/veritascan/documents`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(`Failed to load documents (${res.status})`);
+      return res.json();
+    },
+  });
+
+  const linkMutation = useMutation({
+    mutationFn: async (docId: number) => {
+      const res = await fetch(`${API_BASE}/api/labs/${labId}/veritascan/documents/${docId}/links`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ checklist_item_id: itemId }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `Link failed (${res.status})`);
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Evidence linked" });
+      onLinked();
+      onClose();
+    },
+    onError: (err: Error) => toast({ title: "Could not link evidence", description: err.message, variant: "destructive" }),
+  });
+
+  const docs = (docsQuery.data || []).filter((d: any) => d.status !== "archived" && !alreadyLinkedDocIds.has(d.id));
+  const lower = search.toLowerCase();
+  const filtered = lower
+    ? docs.filter((d: any) =>
+        (d.title || "").toLowerCase().includes(lower) ||
+        (d.display_label || "").toLowerCase().includes(lower) ||
+        scanDocTypeLabel(d.document_type).toLowerCase().includes(lower))
+    : docs;
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Link evidence to this item</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Attach a document from your VeritaScan&#8482; evidence library. Links point to your file in
+            SharePoint, Drive, or OneDrive; VeritaAssure&#8482; stores the pointer, never the file.
+          </p>
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Search the evidence library"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-9 pl-8"
+              data-testid="input-evidence-search"
+            />
+          </div>
+          <div className="max-h-[46vh] overflow-y-auto space-y-1">
+            {filtered.map((d: any) => (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => linkMutation.mutate(d.id)}
+                disabled={linkMutation.isPending}
+                className="w-full text-left p-2 rounded border hover:bg-muted/50 transition-colors disabled:opacity-50"
+                data-testid={`evidence-pick-${d.id}`}
+              >
+                <div className="flex items-center gap-1.5 text-xs font-medium">
+                  <FileText className="h-3.5 w-3.5 text-primary shrink-0" />
+                  <span className="truncate">{d.display_label || d.title}</span>
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">
+                  {scanDocTypeLabel(d.document_type)}
+                  {d.storage_provider ? ` · ${d.storage_provider}` : ""}
+                </div>
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <p className="text-xs text-muted-foreground italic py-6 text-center">
+                {docsQuery.isLoading ? "Loading library…" : "No matching documents in the library."}
+              </p>
+            )}
+          </div>
+        </div>
+        <DialogFooter className="sm:justify-between gap-2">
+          <Button asChild variant="ghost" size="sm">
+            <Link href={labRoute("/veritascan/documents")}>
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              Add a new document in the Library
+            </Link>
+          </Button>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Per-item evidence chips + an add/remove affordance. Renders nothing on rows
+// with no evidence when the user cannot edit (read-only or legacy no-lab route),
+// so the walk stays uncluttered.
+function ItemEvidence({ itemId, ctx }: { itemId: number; ctx: EvidenceCtx }) {
+  const { toast } = useToast();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const rows = ctx.byItem[itemId] || [];
+  const canEdit = !ctx.readOnly && !!ctx.labId;
+
+  const unlinkMutation = useMutation({
+    mutationFn: async (row: CoverageRow) => {
+      const res = await fetch(
+        `${API_BASE}/api/labs/${ctx.labId}/veritascan/documents/${row.document_id}/links/${row.link_id}`,
+        { method: "DELETE", headers: authHeaders() },
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `Remove failed (${res.status})`);
+      }
+      return res.json();
+    },
+    onSuccess: () => ctx.invalidate(),
+    onError: (err: Error) => toast({ title: "Could not remove evidence", description: err.message, variant: "destructive" }),
+  });
+
+  if (rows.length === 0 && !canEdit) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground mr-0.5">
+        <Link2 className="h-3 w-3" />
+        Evidence
+      </span>
+      {rows.map((row) => (
+        <span
+          key={row.link_id}
+          className="inline-flex items-center gap-1.5 max-w-full rounded-md border border-primary/20 bg-primary/10 text-primary px-2 py-0.5 text-[11px]"
+          title={`${scanDocTypeLabel(row.document_type)}: ${row.title}`}
+        >
+          <FileText className="h-3 w-3 shrink-0" />
+          <a
+            href={row.external_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="truncate max-w-[180px] hover:underline"
+            data-testid={`evidence-open-${row.link_id}`}
+          >
+            {row.display_label || row.title}
+          </a>
+          <ExternalLink className="h-2.5 w-2.5 shrink-0 opacity-60" />
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => unlinkMutation.mutate(row)}
+              disabled={unlinkMutation.isPending}
+              className="ml-0.5 opacity-70 hover:opacity-100"
+              title="Remove this evidence link"
+              data-testid={`evidence-unlink-${row.link_id}`}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </span>
+      ))}
+      {canEdit && (
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          className="inline-flex items-center gap-1 rounded-md border border-dashed border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+          data-testid={`evidence-add-${itemId}`}
+        >
+          <Plus className="h-3 w-3" />
+          {rows.length === 0 ? "Link evidence" : "Add"}
+        </button>
+      )}
+      {pickerOpen && ctx.labId && (
+        <EvidencePicker
+          itemId={itemId}
+          labId={ctx.labId}
+          alreadyLinkedDocIds={new Set(rows.map((r) => r.document_id))}
+          onClose={() => setPickerOpen(false)}
+          onLinked={ctx.invalidate}
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── Single checklist item row ────────────────────────────────────────────────
 function ItemRow({
   item,
@@ -224,6 +482,7 @@ function ItemRow({
   onChange,
   accreditationChoice,
   displayNumber,
+  evidence,
 }: {
   item: ScanItem;
   state: ItemState;
@@ -232,6 +491,7 @@ function ItemRow({
   // Domain-relative ordinal (1, 2, 3...) for the visible row label.
   // Underlying item.id is still the persistence key; this is rendering only.
   displayNumber: number;
+  evidence: EvidenceCtx;
 }) {
   const [citExpanded, setCitExpanded] = useState(false);
   const [notesExpanded, setNotesExpanded] = useState(false);
@@ -359,6 +619,9 @@ function ItemRow({
               onChange={(e) => onChange({ notes: e.target.value })}
             />
           )}
+
+          {/* Evidence-of-compliance links (VeritaScan document library) */}
+          <ItemEvidence itemId={item.id} ctx={evidence} />
         </div>
       </div>
     </div>
@@ -372,12 +635,14 @@ function DomainSection({
   onChange,
   sectionRef,
   accreditationChoice,
+  evidence,
 }: {
   domain: ScanDomain;
   items: Record<number, ItemState>;
   onChange: (id: number, patch: Partial<ItemState>) => void;
   sectionRef?: (el: HTMLDivElement | null) => void;
   accreditationChoice: string;
+  evidence: EvidenceCtx;
 }) {
   // Total items in this domain (used for stats); active items exclude N/A
   // because N/A items render in the parked section at the bottom of the
@@ -440,6 +705,7 @@ function DomainSection({
             }}
             onChange={(patch) => onChange(item.id, patch)}
             accreditationChoice={accreditationChoice}
+            evidence={evidence}
           />
         ))}
       </div>
@@ -458,10 +724,12 @@ function ParkedItemsSection({
   items,
   onChange,
   accreditationChoice,
+  evidence,
 }: {
   items: Record<number, ItemState>;
   onChange: (id: number, patch: Partial<ItemState>) => void;
   accreditationChoice: string;
+  evidence: EvidenceCtx;
 }) {
   const naByDomain: Partial<Record<ScanDomain, ScanItem[]>> = {};
   for (const domain of DOMAINS) {
@@ -522,6 +790,7 @@ function ParkedItemsSection({
                   }}
                   onChange={(patch) => onChange(item.id, patch)}
                   accreditationChoice={accreditationChoice}
+                  evidence={evidence}
                 />
               ))}
             </div>
@@ -626,6 +895,37 @@ export default function VeritaScanScanPage() {
     queryKey: ["/api/account/settings"],
   });
   const accreditationChoice = accountSettings?.accreditation_choice || "CLIA";
+
+  // ── Evidence-of-compliance coverage (VeritaScan document library) ─────────
+  // One coverage fetch for the whole lab, sliced per checklist item below, so
+  // the walk never fires a request per row. Lab-scoped only; on the legacy
+  // non-lab route we skip it and the per-item affordance stays hidden.
+  const coverageKey = activeLabId
+    ? [`/api/labs/${activeLabId}/veritascan/coverage`]
+    : ["veritascan-coverage-disabled"];
+  const coverageQuery = useQuery<CoverageRow[]>({
+    queryKey: coverageKey,
+    enabled: !!activeLabId,
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/veritascan/coverage`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(`Failed to load evidence coverage (${res.status})`);
+      return res.json();
+    },
+  });
+  const evidenceByItem = useMemo(() => {
+    const map: Record<number, CoverageRow[]> = {};
+    for (const row of coverageQuery.data || []) {
+      if (!map[row.checklist_item_id]) map[row.checklist_item_id] = [];
+      map[row.checklist_item_id].push(row);
+    }
+    return map;
+  }, [coverageQuery.data]);
+  const evidenceCtx: EvidenceCtx = {
+    byItem: evidenceByItem,
+    labId: activeLabId ?? null,
+    readOnly,
+    invalidate: () => qc.invalidateQueries({ queryKey: coverageKey }),
+  };
 
   // ── Fetch scan items ────────────────────────────────────────────────────
   const { isLoading: itemsLoading } = useQuery<ItemState[]>({
@@ -1093,6 +1393,7 @@ export default function VeritaScanScanPage() {
               sectionRefs.current[domain] = el;
             }}
             accreditationChoice={accreditationChoice}
+            evidence={evidenceCtx}
           />
         ))}
 
@@ -1103,6 +1404,7 @@ export default function VeritaScanScanPage() {
           items={items}
           onChange={handleItemChange}
           accreditationChoice={accreditationChoice}
+          evidence={evidenceCtx}
         />
       </div>
     </div>
