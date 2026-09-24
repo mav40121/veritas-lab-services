@@ -21,14 +21,18 @@ type CoverageRow = {
   linearityExemptMultical: boolean; linearityExemptNoncal: boolean; linearityExemptWaived: boolean; linearityExemptOther: string; linearityRequired: boolean;
   linearityStatus: LinearityStatus; studyIds: number[]; verdict: string; signed: boolean;
 };
-type MethodComparisonRow = { analyte: string; instruments: string[]; hasStudy: boolean; studyId: number | null; verdict: string; signed: boolean };
+type MethodComparisonStatus = "missing" | "failed" | "completed_unsigned";
+type MethodComparisonRow = { analyte: string; instruments: string[]; hasStudy: boolean; studyId: number | null; verdict: string; signed: boolean; status: MethodComparisonStatus; nextDueOn: string | null; overdue: boolean };
+// A requirement is satisfied for the current cycle only when a passing study is
+// signed AND its next due date (signed + 6 mo) is still in the future.
+function mcSatisfied(m: MethodComparisonRow): boolean { return m.status === "missing" && !!m.nextDueOn && !m.overdue; }
 type UnmappedStudy = { id: number; testName: string; studyType: string; instrument: string; date: string; verdict: string; signed: boolean; coverageAnalyte: string };
 type Coverage = {
   hasMap: boolean;
   summary: {
     combos: number; instruments: number; analytes: number; studies: number;
     linearityRequired: number; linearityCovered: number; linearityReview: number; linearityMissing: number; linearityExempt: number;
-    methodComparisonsNeeded: number; methodComparisonsDone: number;
+    methodComparisonsNeeded: number; methodComparisonsDone: number; methodComparisonsOverdue?: number;
     bySpecialty: { specialty: string; combos: number; required: number; covered: number; review: number; missing: number; exempt: number }[];
   };
   rows: CoverageRow[];
@@ -294,14 +298,15 @@ export default function VeritaCheckCoveragePage() {
   const mcRows = useMemo(() => {
     let base = data?.methodComparisons || [];
     if (mcSpecialty !== "all") base = base.filter((m) => analyteSpecialty.get(m.analyte) === mcSpecialty);
-    if (mcStatus === "attention") base = base.filter((m) => !m.hasStudy || isFail(m.verdict));
-    else if (mcStatus === "missing") base = base.filter((m) => !m.hasStudy);
-    else if (mcStatus === "onfile") base = base.filter((m) => m.hasStudy && !isFail(m.verdict));
-    else if (mcStatus === "fail") base = base.filter((m) => m.hasStudy && isFail(m.verdict));
-    // Default (unsorted) order: gaps first, then studies on file — the original layout.
-    if (!mcSort.key) return base.filter((m) => !m.hasStudy).concat(base.filter((m) => m.hasStudy));
-    // Study column sorts by state: missing (0) < documented FAIL (1) < study on file (2).
-    const studyRank = (m: MethodComparisonRow) => (!m.hasStudy ? 0 : isFail(m.verdict) ? 1 : 2);
+    // Recurrence-aware filters: "satisfied" = signed and next-due still in the future.
+    if (mcStatus === "attention") base = base.filter((m) => !mcSatisfied(m));
+    else if (mcStatus === "missing") base = base.filter((m) => m.status === "missing" && !mcSatisfied(m));
+    else if (mcStatus === "onfile") base = base.filter((m) => mcSatisfied(m));
+    else if (mcStatus === "fail") base = base.filter((m) => m.status === "failed");
+    // Default (unsorted) order: owed now first, then satisfied-this-cycle.
+    if (!mcSort.key) return base.filter((m) => !mcSatisfied(m)).concat(base.filter((m) => mcSatisfied(m)));
+    // Study column sorts by state: owed now (0) < satisfied this cycle (1).
+    const studyRank = (m: MethodComparisonRow) => (mcSatisfied(m) ? 1 : 0);
     const val = (m: MethodComparisonRow): string | number => {
       switch (mcSort.key) {
         case "instruments": return m.instruments.join(", ").toLowerCase();
@@ -401,13 +406,16 @@ export default function VeritaCheckCoveragePage() {
               <th className="py-2 px-3 font-medium w-8"></th>
               <McSortTh label="Analyte" k="analyte" sort={mcSort} setSort={setMcSort} />
               <McSortTh label="Instruments" k="instruments" sort={mcSort} setSort={setMcSort} />
-              <McSortTh label="Study" k="study" sort={mcSort} setSort={setMcSort} />
+              <McSortTh label="Status" k="study" sort={mcSort} setSort={setMcSort} />
               <McSortTh label="Verdict" k="verdict" sort={mcSort} setSort={setMcSort} />
+              <th className="py-2 px-3 font-medium">Next due on</th>
             </tr></thead>
             <tbody>
-              {mcRows.length === 0 && <tr><td colSpan={5} className="py-6 text-center text-muted-foreground text-sm">Nothing matches this filter.</td></tr>}
-              {mcRows.map((m) => (
-                <tr key={m.analyte} className={`border-b border-border/60 ${m.hasStudy ? "cursor-pointer hover:bg-muted/40" : ""}`} onClick={() => openStudy(m.studyId)} title={m.hasStudy ? "Open study" : undefined}>
+              {mcRows.length === 0 && <tr><td colSpan={6} className="py-6 text-center text-muted-foreground text-sm">Nothing matches this filter.</td></tr>}
+              {mcRows.map((m) => {
+                const owedNow = !mcSatisfied(m);
+                return (
+                <tr key={m.analyte} className={`border-b border-border/60 ${m.studyId ? "cursor-pointer hover:bg-muted/40" : ""}`} onClick={() => openStudy(m.studyId)} title={m.studyId ? "Open the most recent study" : undefined}>
                   <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
                     {m.studyId && isGroupable(m.studyId)
                       ? <Checkbox checked={selectedStudies.has(m.studyId)} onCheckedChange={(v) => toggleStudies([m.studyId as number], !!v)} data-testid={`cov-mc-select-${m.studyId}`} aria-label={`Select ${m.analyte} correlation study for a sign-off group`} />
@@ -415,14 +423,18 @@ export default function VeritaCheckCoveragePage() {
                   </td>
                   <td className="py-2 px-3">{m.analyte}</td>
                   <td className="py-2 px-3 text-muted-foreground text-xs">{m.instruments.join(", ")}</td>
-                  <td className="py-2 px-3">{m.hasStudy
-                    ? (isFail(m.verdict)
-                        ? <Badge variant="destructive" className="text-[10px]">#{m.studyId} FAIL</Badge>
-                        : <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">#{m.studyId}{m.signed ? " signed" : ""}</Badge>)
-                    : <Badge variant="outline" className="text-[10px] border-red-500/40 text-red-600">Missing</Badge>}</td>
+                  <td className="py-2 px-3">{m.status === "failed"
+                    ? <Badge variant="destructive" className="text-[10px]">{m.studyId ? `#${m.studyId} ` : ""}Failed</Badge>
+                    : m.status === "completed_unsigned"
+                      ? <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600">{m.studyId ? `#${m.studyId} ` : ""}Completed, unsigned</Badge>
+                      : <Badge variant="outline" className={`text-[10px] ${owedNow ? "border-red-500/40 text-red-600" : "border-border text-muted-foreground"}`}>Missing</Badge>}</td>
                   <td className="py-2 px-3 text-xs uppercase text-muted-foreground">{m.verdict}</td>
+                  <td className="py-2 px-3 text-xs whitespace-nowrap">{m.nextDueOn
+                    ? <span className={m.overdue ? "text-red-600 font-medium" : "text-muted-foreground"}>{m.nextDueOn}{m.overdue ? " (overdue)" : ""}</span>
+                    : <span className="text-muted-foreground">-</span>}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

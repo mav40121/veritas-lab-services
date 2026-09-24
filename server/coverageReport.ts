@@ -33,7 +33,7 @@ type LabwideAnalyte = {
   last_cal_ver?: string | null; last_method_comp?: string | null; last_precision?: string | null;
 };
 type CovRow = { analyte: string; instrument: string; linearityStatus: string; };
-type MethodCompRow = { analyte: string; hasStudy: boolean; };
+type MethodCompRow = { analyte: string; hasStudy: boolean; status?: "missing" | "failed" | "completed_unsigned"; nextDueOn?: string | null; overdue?: boolean };
 type PtRow = { analyteName: string; status?: string | null };
 
 const norm = (s: string | null | undefined) => String(s || "").toLowerCase().replace(/\([^)]*\)/g, "").replace(/[^a-z0-9]+/g, " ").trim();
@@ -63,9 +63,9 @@ export function buildCoverageReportRows(input: {
     if (r.analyte && r.instrument) linByAnalyteInstr.set(`${norm(r.analyte)}|${norm(r.instrument)}`, r.linearityStatus);
     if (r.analyte && !linByAnalyte.has(norm(r.analyte))) linByAnalyte.set(norm(r.analyte), r.linearityStatus);
   }
-  const mcByAnalyte = new Map<string, boolean>();
+  const mcByAnalyte = new Map<string, MethodCompRow>();
   for (const m of methodComparisons || []) {
-    if (m.analyte) mcByAnalyte.set(norm(m.analyte), !!m.hasStudy);
+    if (m.analyte) mcByAnalyte.set(norm(m.analyte), m);
   }
   const ptByAnalyte = new Map<string, string>();
   for (const p of ptCoverage || []) {
@@ -77,8 +77,26 @@ export function buildCoverageReportRows(input: {
     const ni = norm(a.instrument);
     const lin = linByAnalyteInstr.get(`${na}|${ni}`) ?? linByAnalyte.get(na);
     const linearityStatus = lin ? (LINEARITY_LABEL[lin] || lin) : "Missing";
-    const mc = mcByAnalyte.get(na);
-    const methodCompStatus = mc === undefined ? "Not applicable" : (mc ? "Done" : "Needed");
+    const mcRow = mcByAnalyte.get(na);
+    // Recurrence-aware (§493.1281, 6-month): "Done" means satisfied THIS cycle
+    // (signed + next-due in the future), not "a study ever existed". Rows without
+    // the new status fields fall back to the legacy existence label.
+    let methodCompStatus: string;
+    if (mcRow === undefined) {
+      methodCompStatus = "Not applicable";
+    } else if (mcRow.status === undefined) {
+      methodCompStatus = mcRow.hasStudy ? "Done" : "Needed"; // back-compat callers
+    } else if (mcRow.status === "failed") {
+      methodCompStatus = "Failed";
+    } else if (mcRow.status === "completed_unsigned") {
+      methodCompStatus = "Completed, unsigned";
+    } else if (mcRow.status === "missing" && !!mcRow.nextDueOn && !mcRow.overdue) {
+      methodCompStatus = "Current"; // signed, next comparison not yet due
+    } else if (mcRow.overdue) {
+      methodCompStatus = "Overdue";
+    } else {
+      methodCompStatus = "Needed"; // never done
+    }
     const ptRaw = ptByAnalyte.get(na);
     const ptStatus = ptRaw ? (PT_LABEL[ptRaw] || ptRaw) : "Not enrolled";
     return {
