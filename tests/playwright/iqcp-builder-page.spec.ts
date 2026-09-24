@@ -105,4 +105,37 @@ test.describe("IQCP Builder page (VeritaDC)", () => {
     expect(dl.suggestedFilename()).toMatch(/\.pdf$/i);
     await ctx.close();
   });
+
+  // Phase 3b/3c: completing an IQCP files it in VeritaDC with an annual review,
+  // so the plan card gains a "Next review" date. Self-cleans the plan after.
+  test("completing an IQCP surfaces a next-review date", async ({ browser }) => {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, extraHTTPHeaders: { Authorization: `Bearer ${TOKEN}` } });
+    await ctx.addInitScript((t) => { try { localStorage.setItem("veritas_token", t as string); } catch {} }, TOKEN);
+    const page = await ctx.newPage();
+    await page.goto(`${BASE}/labs/${LAB}/veritapolicy-app/iqcp`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2500);
+    await page.getByText("Start a new IQCP").click();
+    await page.waitForTimeout(1000);
+    const combos = page.getByRole("combobox");
+    for (let i = 0; i < 3; i++) { await combos.nth(i).click(); await page.getByRole("option", { name: "Yes", exact: true }).click(); await page.waitForTimeout(200); }
+    await page.waitForTimeout(1200);
+    await page.getByRole("combobox").last().click();
+    await page.getByRole("option").first().click();
+    await page.getByRole("button", { name: /Create IQCP/i }).click();
+    await page.waitForTimeout(2500);
+    await page.getByRole("button", { name: "Review" }).click();
+    await page.waitForTimeout(1000);
+    await page.getByPlaceholder(/approving director/i).fill("Test Director");
+    await Promise.all([
+      page.waitForResponse((r) => r.url().includes("/iqcp/plans/") && r.request().method() === "PATCH"),
+      page.getByRole("button", { name: /Mark IQCP complete/i }).click(),
+    ]);
+    await page.waitForTimeout(2000);
+    await expect(page.getByText(/Next review/i).first()).toBeVisible();
+    // Cleanup: delete the IQCP plans this run created (the paired VeritaDC document
+    // is cleaned in the server smoke).
+    const plans = await (await ctx.request.get(`${BASE}/api/labs/${LAB}/iqcp/plans`)).json();
+    for (const pl of plans) { await ctx.request.delete(`${BASE}/api/labs/${LAB}/iqcp/plans/${pl.id}`); }
+    await ctx.close();
+  });
 });

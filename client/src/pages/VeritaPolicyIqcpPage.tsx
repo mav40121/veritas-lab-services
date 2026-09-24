@@ -154,7 +154,7 @@ function PlanList({ plans, loading, onNew, onOpen, onDeleted, jsonMut, labId }: 
               <CardContent className="p-4 flex items-center justify-between gap-3">
                 <button className="text-left flex-1" onClick={() => p.status !== "not_indicated" && onOpen(p.id)}>
                   <div className="font-medium text-foreground">{p.title || p.instrument_name}</div>
-                  <div className="text-xs text-muted-foreground">{p.instrument_name}{p.approved_by_name ? ` · Approved by ${p.approved_by_name}` : ""}</div>
+                  <div className="text-xs text-muted-foreground">{p.instrument_name}{p.approved_by_name ? ` · Approved by ${p.approved_by_name}` : ""}{p.next_review ? ` · Next review ${new Date(p.next_review).toLocaleDateString()}` : ""}</div>
                 </button>
                 <StatusPill status={p.status} />
                 <Button variant="ghost" size="sm" onClick={() => del(p.id)} className="text-muted-foreground hover:text-destructive"><Trash2 size={15} /></Button>
@@ -350,7 +350,7 @@ function PlanBuilder({ planId, bank, labId, jsonMut, onBack }: any) {
       await jsonMut("PATCH", planUrl, { status: "complete", approvedByName: approver || undefined });
       setDirty({});
       queryClient.invalidateQueries({ queryKey: [planUrl] });
-      toast({ title: "IQCP marked complete" });
+      toast({ title: "IQCP marked complete", description: "Filed in VeritaDC as a controlled document with an annual review." });
       onBack();
     } finally { setBusy(false); }
   };
