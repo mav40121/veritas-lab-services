@@ -16,10 +16,12 @@ import { BulkAddToSignoffGroup } from "@/components/BulkAddToSignoffGroup";
 import { ChevronLeft, ListChecks, GitCompare, Download, ArrowUpDown, Unlink } from "lucide-react";
 
 type LinearityStatus = "covered" | "review" | "missing" | "exempt";
+type CalVerStatus = "missing" | "failed" | "completed_unsigned" | "review" | "exempt";
 type CoverageRow = {
   instrumentTestId: number; specialty: string; analyte: string; instrument: string;
   linearityExemptMultical: boolean; linearityExemptNoncal: boolean; linearityExemptWaived: boolean; linearityExemptOther: string; linearityRequired: boolean;
   linearityStatus: LinearityStatus; studyIds: number[]; verdict: string; signed: boolean;
+  status: CalVerStatus; nextDueOn: string | null; overdue: boolean;
 };
 type MethodComparisonStatus = "missing" | "failed" | "completed_unsigned";
 type MethodComparisonRow = { analyte: string; instruments: string[]; hasStudy: boolean; studyId: number | null; verdict: string; signed: boolean; status: MethodComparisonStatus; nextDueOn: string | null; overdue: boolean };
@@ -66,10 +68,14 @@ const unmappedTypeLabel = (t: string) => UNMAPPED_TYPE_LABEL[t] || t;
 // chip (heavier alarm); "Missing" (no study on file at all) stays a hollow red
 // OUTLINE (a gap to fill), so the two never read as the same badge.
 function linearityBadge(r: CoverageRow) {
-  if (r.linearityStatus === "covered" && isFail(r.verdict)) {
-    return <Badge variant="destructive" className="text-[10px]">Failed</Badge>;
-  }
-  return statusBadge(r.linearityStatus);
+  // Recurrence-aware, mirroring method comparison: a signed study banks the cycle
+  // and reopens at next-due, so "Covered" means satisfied THIS cycle only.
+  if (r.status === "exempt") return <Badge variant="outline" className="text-[10px] border-muted-foreground/30 text-muted-foreground">Not required</Badge>;
+  if (r.status === "review") return <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600">Review</Badge>;
+  if (r.status === "failed") return <Badge variant="destructive" className="text-[10px]">Failed</Badge>;
+  if (r.status === "completed_unsigned") return <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600">Completed, unsigned</Badge>;
+  if (r.linearityStatus === "covered") return <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">Covered</Badge>;
+  return <Badge variant="outline" className="text-[10px] border-red-500/40 text-red-600">Missing</Badge>;
 }
 
 type SortKey = "analyte" | "instrument" | "status";
@@ -484,11 +490,12 @@ export default function VeritaCheckCoveragePage() {
               <SortTh label="Instrument" k="instrument" sort={sort} setSort={setSort} />
               <SortTh label="Status" k="status" sort={sort} setSort={setSort} />
               <th className="py-2 px-3 font-medium">Study</th>
+              <th className="py-2 px-3 font-medium">Next due on</th>
               <th className="py-2 px-3 font-medium text-center">3+ cal</th><th className="py-2 px-3 font-medium text-center">Not calibratable</th>
               <th className="py-2 px-3 font-medium text-center">Waived (not rqd)</th><th className="py-2 px-3 font-medium">Other</th>
             </tr></thead>
             <tbody>
-              {rows.length === 0 && <tr><td colSpan={9} className="py-6 text-center text-muted-foreground text-sm">Nothing matches this filter.</td></tr>}
+              {rows.length === 0 && <tr><td colSpan={10} className="py-6 text-center text-muted-foreground text-sm">Nothing matches this filter.</td></tr>}
               {rows.map((r) => {
                 const gids = r.studyIds.filter(isGroupable);
                 const groupedName = r.studyIds.map(studyGroupName).find(Boolean) || null;
@@ -503,6 +510,9 @@ export default function VeritaCheckCoveragePage() {
                   <td className="py-2 px-3 text-muted-foreground text-xs">{r.instrument}</td>
                   <td className="py-2 px-3">{linearityBadge(r)}</td>
                   <td className="py-2 px-3 text-xs text-muted-foreground">{r.studyIds.length ? r.studyIds.map((i) => `#${i}`).join(", ") : ""}</td>
+                  <td className="py-2 px-3 text-xs whitespace-nowrap">{r.nextDueOn
+                    ? <span className={r.overdue ? "text-red-600 font-medium" : "text-muted-foreground"}>{r.nextDueOn}{r.overdue ? " (overdue)" : ""}</span>
+                    : <span className="text-muted-foreground">-</span>}</td>
                   <td className="py-2 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                     <Checkbox checked={r.linearityExemptMultical} onCheckedChange={(v) => setExempt(r, "multical", !!v)} data-testid={`cov-multical-${r.instrumentTestId}`} />
                   </td>

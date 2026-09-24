@@ -36,6 +36,10 @@ test.describe("VeritaCheck Coverage method-comparison recurrence", () => {
     if (body.includes("No VeritaMap yet")) {
       test.skip(true, "Lab has no map; coverage table not rendered.");
     }
-    await expect(page.getByRole("columnheader", { name: "Next due on" })).toBeVisible();
+    // Both the method-comparison and the Cal Ver / Linearity tables now carry a
+    // recurrence "Next due on" column.
+    const nextDueHeaders = page.getByRole("columnheader", { name: "Next due on" });
+    await expect(nextDueHeaders.first()).toBeVisible();
+    expect(await nextDueHeaders.count()).toBeGreaterThanOrEqual(1);
   });
 });
