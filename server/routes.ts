@@ -20807,6 +20807,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   const VALID_ACCREDITORS = ['CAP','TJC','COLA','CMS','AABB','Other'];
   const VALID_FINDING_STATUSES = ['open','drafting','submitted','accepted','rejected_resubmit','closed'];
+  // A finding is either an inspection deficiency (default) or a PT-failure
+  // investigation. PT rows reuse the CAPA workflow; source_type steers the UI.
+  const VALID_FINDING_SOURCE_TYPES = ['inspection','pt_failure'];
 
   // Resolve the set of accreditors a given lab is allowed to file findings
   // under. CMS is always included because every lab holds CLIA. "Other" is
@@ -20994,6 +20997,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (body.status && !VALID_FINDING_STATUSES.includes(body.status)) {
       return res.status(400).json({ error: `status must be one of: ${VALID_FINDING_STATUSES.join(', ')}` });
     }
+    if (body.source_type && !VALID_FINDING_SOURCE_TYPES.includes(body.source_type)) {
+      return res.status(400).json({ error: `source_type must be one of: ${VALID_FINDING_SOURCE_TYPES.join(', ')}` });
+    }
     // Only gate accreditor changes against the lab's allowed set. Existing
     // findings whose accreditor isn't currently allowed (lab dropped the
     // flag after the fact) stay readable and editable in OTHER fields;
@@ -21037,6 +21043,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         signed_by = ?,
         signed_at = ?,
         external_submission_ref = ?,
+        source_type = COALESCE(?, source_type),
+        pt_program = ?,
+        pt_event = ?,
+        pt_analyte = ?,
+        pt_score = ?,
+        pt_result_summary = ?,
+        root_cause_category = ?,
         updated_at = datetime('now')
       WHERE id = ?`
     ).run(
@@ -21060,6 +21073,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       body.signed_by ?? existing.signed_by ?? null,
       body.signed_at ?? existing.signed_at ?? null,
       body.external_submission_ref ?? existing.external_submission_ref ?? null,
+      body.source_type ?? null,
+      body.pt_program ?? existing.pt_program ?? null,
+      body.pt_event ?? existing.pt_event ?? null,
+      body.pt_analyte ?? existing.pt_analyte ?? null,
+      body.pt_score ?? existing.pt_score ?? null,
+      body.pt_result_summary ?? existing.pt_result_summary ?? null,
+      body.root_cause_category ?? existing.root_cause_category ?? null,
       req.params.id,
     );
     try {
@@ -21624,12 +21644,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       immediate_action, containment, root_cause,
       corrective_action, preventive_action, monitoring_plan,
       completion_date, signed_by, signed_at, external_submission_ref,
+      source_type, pt_program, pt_event, pt_analyte, pt_score,
+      pt_result_summary, root_cause_category,
     } = req.body || {};
     if (!accreditor || !VALID_ACCREDITORS.includes(accreditor)) {
       return res.status(400).json({ error: `accreditor must be one of: ${VALID_ACCREDITORS.join(', ')}` });
     }
     if (status && !VALID_FINDING_STATUSES.includes(status)) {
       return res.status(400).json({ error: `status must be one of: ${VALID_FINDING_STATUSES.join(', ')}` });
+    }
+    if (source_type && !VALID_FINDING_SOURCE_TYPES.includes(source_type)) {
+      return res.status(400).json({ error: `source_type must be one of: ${VALID_FINDING_SOURCE_TYPES.join(', ')}` });
     }
     // Gate against the scoped lab's accreditation flags. labScopeMiddleware
     // already validated this user has membership on req.scope.labId, so
@@ -21652,8 +21677,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         anchor_date, due_date, status,
         immediate_action, containment, root_cause,
         corrective_action, preventive_action, monitoring_plan,
-        completion_date, signed_by, signed_at, external_submission_ref
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        completion_date, signed_by, signed_at, external_submission_ref,
+        source_type, pt_program, pt_event, pt_analyte, pt_score,
+        pt_result_summary, root_cause_category
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       userIdForRow, req.scope.labId, accreditor, inspection_id ?? null, finding_number ?? null, standard_ref ?? null,
       phase_or_severity ?? null, description ?? null, surveyor_notes ?? null,
@@ -21661,6 +21688,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       immediate_action ?? null, containment ?? null, root_cause ?? null,
       corrective_action ?? null, preventive_action ?? null, monitoring_plan ?? null,
       completion_date ?? null, signed_by ?? null, signed_at ?? null, external_submission_ref ?? null,
+      source_type ?? 'inspection', pt_program ?? null, pt_event ?? null, pt_analyte ?? null, pt_score ?? null,
+      pt_result_summary ?? null, root_cause_category ?? null,
     );
     try {
       (db as any).$client.prepare(

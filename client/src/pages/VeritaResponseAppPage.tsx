@@ -20,6 +20,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { PT_ROOT_CAUSE_CATEGORIES } from "@shared/ptFailure";
 import {
   Select,
   SelectContent,
@@ -109,6 +110,16 @@ export default function VeritaResponseAppPage() {
   const [newInspectionId, setNewInspectionId] = useState("");
   const [newAnchorDate, setNewAnchorDate] = useState("");
   const [newDescription, setNewDescription] = useState("");
+  // PT-failure investigation (source_type = 'pt_failure'). Reuses the same
+  // finding record + CAPA workflow; these are the PT-specific head fields.
+  const [newSourceType, setNewSourceType] = useState<"inspection" | "pt_failure">("inspection");
+  const [newPtProgram, setNewPtProgram] = useState("");
+  const [newPtEvent, setNewPtEvent] = useState("");
+  const [newPtAnalyte, setNewPtAnalyte] = useState("");
+  const [newPtScore, setNewPtScore] = useState("");
+  const [newPtResultSummary, setNewPtResultSummary] = useState("");
+  const [newRootCauseCategory, setNewRootCauseCategory] = useState("");
+  const isPt = newSourceType === "pt_failure";
 
   const hasPlanAccess = !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
 
@@ -179,6 +190,13 @@ export default function VeritaResponseAppPage() {
           description: newDescription.trim() || null,
           anchor_date: newAnchorDate || null,
           status: "open",
+          source_type: newSourceType,
+          pt_program: isPt ? (newPtProgram.trim() || null) : null,
+          pt_event: isPt ? (newPtEvent.trim() || null) : null,
+          pt_analyte: isPt ? (newPtAnalyte.trim() || null) : null,
+          pt_score: isPt ? (newPtScore.trim() || null) : null,
+          pt_result_summary: isPt ? (newPtResultSummary.trim() || null) : null,
+          root_cause_category: isPt ? (newRootCauseCategory || null) : null,
         }),
       });
       if (!res.ok) {
@@ -195,6 +213,9 @@ export default function VeritaResponseAppPage() {
       setNewInspectionId("");
       setNewAnchorDate("");
       setNewDescription("");
+      setNewSourceType("inspection");
+      setNewPtProgram(""); setNewPtEvent(""); setNewPtAnalyte(""); setNewPtScore("");
+      setNewPtResultSummary(""); setNewRootCauseCategory("");
       setShowCreate(false);
       await fetchData();
     } catch {
@@ -418,7 +439,12 @@ export default function VeritaResponseAppPage() {
                       className="border-b border-border/50 hover:bg-muted/20 cursor-pointer"
                       onClick={() => navigate(labRoute(`/veritaresponse/${f.id}`))}
                     >
-                      <td className="py-3 px-4 font-medium">{f.accreditor}</td>
+                      <td className="py-3 px-4 font-medium">
+                        {f.accreditor}
+                        {(f as any).source_type === "pt_failure" && (
+                          <Badge className="ml-2 bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 text-[10px] whitespace-nowrap">PT failure</Badge>
+                        )}
+                      </td>
                       <td className="py-3 pr-4 text-muted-foreground">{f.finding_number || "-"}</td>
                       <td className="py-3 pr-4 text-muted-foreground text-xs">{f.standard_ref || "-"}</td>
                       <td className={`py-3 pr-4 text-xs ${dueCls}`}>{dueLabel}</td>
@@ -465,10 +491,52 @@ export default function VeritaResponseAppPage() {
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>New Finding</DialogTitle>
+            <DialogTitle>{isPt ? "Log PT Failure Investigation" : "New Finding"}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-3">
+            {/* Record type: an inspection deficiency or a proficiency-testing
+                failure investigation. PT failures reuse the same CAPA workflow. */}
+            <div className="flex gap-2">
+              <Button type="button" size="sm" variant={!isPt ? "default" : "outline"} className={!isPt ? "bg-[#006064] hover:bg-[#004d50] text-white" : ""} onClick={() => setNewSourceType("inspection")}>Inspection finding</Button>
+              <Button type="button" size="sm" variant={isPt ? "default" : "outline"} className={isPt ? "bg-[#006064] hover:bg-[#004d50] text-white" : ""} onClick={() => setNewSourceType("pt_failure")}>PT failure</Button>
+            </div>
+            {isPt && (
+              <p className="text-xs text-muted-foreground">CLIA 42 CFR 493.801(b): unsuccessful proficiency testing must be investigated and corrected. This opens a finding with the PT context below plus the full corrective-action workflow.</p>
+            )}
+            {isPt && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">PT program / provider</Label>
+                  <Input value={newPtProgram} onChange={(e) => setNewPtProgram(e.target.value)} placeholder="e.g. CAP, API, AAB" className="h-8 text-sm" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Event / mailing</Label>
+                  <Input value={newPtEvent} onChange={(e) => setNewPtEvent(e.target.value)} placeholder="e.g. 2026 C-A" className="h-8 text-sm" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Analyte</Label>
+                  <Input value={newPtAnalyte} onChange={(e) => setNewPtAnalyte(e.target.value)} placeholder="e.g. Glucose" className="h-8 text-sm" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Score</Label>
+                  <Input value={newPtScore} onChange={(e) => setNewPtScore(e.target.value)} placeholder="e.g. 60% (3/5)" className="h-8 text-sm" />
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <Label className="text-xs">Result summary</Label>
+                  <Input value={newPtResultSummary} onChange={(e) => setNewPtResultSummary(e.target.value)} placeholder="Which challenges failed and by how much. No patient data." className="h-8 text-sm" />
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <Label className="text-xs">Root-cause category</Label>
+                  <Select value={newRootCauseCategory} onValueChange={setNewRootCauseCategory}>
+                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select after investigation" /></SelectTrigger>
+                    <SelectContent>
+                      {PT_ROOT_CAUSE_CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Accreditor</Label>
@@ -536,7 +604,7 @@ export default function VeritaResponseAppPage() {
                 />
               </div>
               <div className="space-y-1 col-span-2">
-                <Label className="text-xs">Description of the deficiency</Label>
+                <Label className="text-xs">{isPt ? "Description of the PT failure" : "Description of the deficiency"}</Label>
                 <Textarea
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
@@ -554,7 +622,7 @@ export default function VeritaResponseAppPage() {
               onClick={handleCreate}
               disabled={saving || !newAccreditor}
             >
-              {saving ? "Saving..." : "Create Finding"}
+              {saving ? "Saving..." : isPt ? "Log PT Failure" : "Create Finding"}
             </Button>
           </DialogFooter>
         </DialogContent>

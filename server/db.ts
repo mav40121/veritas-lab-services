@@ -5634,7 +5634,21 @@ sqlite.exec(`
   try {
     const cols = sqlite.prepare("PRAGMA table_info(findings)").all() as { name: string }[];
     if (cols.length > 0) {
-      // Future ALTER TABLE findings ADD COLUMN ... blocks go here.
+      const have = new Set(cols.map((c) => c.name));
+      // PT-failure investigation (VeritaResponse element). A finding can be an
+      // inspection deficiency (default) or a proficiency-testing failure
+      // investigation. PT rows reuse the whole CAPA tail (root_cause ->
+      // corrective/preventive -> monitoring -> sign-off -> status workflow) and
+      // add a PT-specific head. All nullable / defaulted so existing inspection
+      // findings are untouched. source_type is a plain TEXT column validated in
+      // the route (SQLite cannot ALTER a CHECK onto an existing table).
+      if (!have.has("source_type")) sqlite.exec("ALTER TABLE findings ADD COLUMN source_type TEXT NOT NULL DEFAULT 'inspection'");
+      if (!have.has("pt_program")) sqlite.exec("ALTER TABLE findings ADD COLUMN pt_program TEXT");
+      if (!have.has("pt_event")) sqlite.exec("ALTER TABLE findings ADD COLUMN pt_event TEXT");
+      if (!have.has("pt_analyte")) sqlite.exec("ALTER TABLE findings ADD COLUMN pt_analyte TEXT");
+      if (!have.has("pt_score")) sqlite.exec("ALTER TABLE findings ADD COLUMN pt_score TEXT");
+      if (!have.has("pt_result_summary")) sqlite.exec("ALTER TABLE findings ADD COLUMN pt_result_summary TEXT");
+      if (!have.has("root_cause_category")) sqlite.exec("ALTER TABLE findings ADD COLUMN root_cause_category TEXT");
     }
   } catch {
     // fresh DB: CREATE TABLE above handled it
