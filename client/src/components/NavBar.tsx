@@ -225,7 +225,11 @@ export function NavBar() {
               <div className="grid grid-cols-2 gap-0.5 p-1">
                 {allModules.map(m => (
                   <DropdownMenuItem asChild key={m.href}>
-                    <Link href={m.href} className="text-sm py-1.5">{m.label}</Link>
+                    {/* Logged-in users need the in-app readiness dashboard (the
+                        multi-lab roll-up lives there), not the marketing page.
+                        Scope just this entry to the active lab; other modules keep
+                        their marketing routes to avoid mismatched app paths. */}
+                    <Link href={isLoggedIn && m.href === "/readiness" ? labRoute(m.href) : m.href} className="text-sm py-1.5">{m.label}</Link>
                   </DropdownMenuItem>
                 ))}
               </div>
