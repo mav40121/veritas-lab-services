@@ -234,6 +234,11 @@ export function LabSwitcher() {
                       {suffix}
                     </span>
                   )}
+                  {m.isRepository && (
+                    <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 align-middle">
+                      Library
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
                   <span>{m.cliaNumber ? `CLIA ${m.cliaNumber}` : "CLIA not set"}</span>
@@ -349,6 +354,11 @@ export function LabSwitcherMobile({ onAfterSwitch }: { onAfterSwitch?: () => voi
                   {suffix && (
                     <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-primary/10 text-primary align-middle">
                       {suffix}
+                    </span>
+                  )}
+                  {m.isRepository && (
+                    <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 align-middle">
+                      Library
                     </span>
                   )}
                 </div>
