@@ -28,6 +28,7 @@ import {
   AlertOctagon,
   CheckCircle2,
   Lock,
+  GraduationCap,
 } from "lucide-react";
 
 interface ScanSummary {
@@ -41,6 +42,7 @@ interface ScanSummary {
   immediateActionCount: number;
   naCount: number;
   totalItems: number;       // dynamic; equals SCAN_ITEMS.length on the client at scan-creation time
+  isTeaching?: boolean;     // Build #7: scan is a guided teaching example
 }
 
 function ComplianceMeter({ pct }: { pct: number | null }) {
@@ -410,6 +412,12 @@ export default function VeritaScanAppPage() {
                         <span className="font-semibold text-sm leading-tight truncate">
                           {scan.name}
                         </span>
+                        {scan.isTeaching && (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-indigo-700 dark:text-indigo-300 bg-indigo-500/10 border border-indigo-500/30 rounded-full px-2 py-0.5 shrink-0">
+                            <GraduationCap className="h-3 w-3" />
+                            Teaching
+                          </span>
+                        )}
                         <span className="text-xs text-muted-foreground shrink-0">
                           {dateStr}
                         </span>
