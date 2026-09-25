@@ -30,7 +30,9 @@ import {
   Filter,
   GitMerge,
   Info,
+  FileText,
 } from "lucide-react";
+import { ifuSearchUrl } from "@shared/ifu";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useMemberships } from "@/hooks/useMemberships";
@@ -64,6 +66,8 @@ interface InstrumentOnTest {
   role: Role;
   serial_number?: string | null;
   nickname?: string | null;
+  ifu_url?: string | null;
+  instrument_test_id?: number;
 }
 
 interface CorrelationRecord {
@@ -287,8 +291,12 @@ const ROLE_STYLES: Record<Role, string> = {
   POC: "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300",
 };
 
-function InstrumentBadge({ instr }: { instr: InstrumentOnTest }) {
+function InstrumentBadge({ instr, analyte }: { instr: InstrumentOnTest; analyte?: string }) {
   const roleStyle = ROLE_STYLES[instr.role] ?? "bg-muted text-muted-foreground";
+  // IFU: link the lab's stored exact package insert if present; otherwise a
+  // manufacturer + analyte scoped search ("easy pull"). Never a fabricated deep link.
+  const exact = instr.ifu_url && instr.ifu_url.trim() ? instr.ifu_url.trim() : null;
+  const ifuHref = exact || ifuSearchUrl(instr.instrument_name, analyte);
   return (
     <span className="inline-flex flex-col mr-1 mb-0.5">
       <span className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded border border-border bg-muted/50 whitespace-nowrap">
@@ -297,9 +305,20 @@ function InstrumentBadge({ instr }: { instr: InstrumentOnTest }) {
           {instr.role}
         </span>
       </span>
-      {instr.serial_number && (
-        <span className="text-[9px] text-muted-foreground px-1.5">S/N: {instr.serial_number}</span>
-      )}
+      <span className="inline-flex items-center gap-1.5 px-1.5">
+        {instr.serial_number && (
+          <span className="text-[9px] text-muted-foreground">S/N: {instr.serial_number}</span>
+        )}
+        <a
+          href={ifuHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={exact ? "Open the stored IFU (package insert)" : "Find the manufacturer IFU for this assay"}
+          className="text-[9px] text-primary hover:underline inline-flex items-center gap-0.5"
+        >
+          <FileText size={9} />{exact ? "IFU" : "Find IFU"}
+        </a>
+      </span>
     </span>
   );
 }
@@ -1273,7 +1292,7 @@ function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAn
         <div className="flex flex-wrap">
           {instruments.length > 0 ? (
             instruments.map((instr, i) => (
-              <InstrumentBadge key={i} instr={instr} />
+              <InstrumentBadge key={i} instr={instr} analyte={test.analyte} />
             ))
           ) : (
             <span className="text-muted-foreground text-[10px] italic">
