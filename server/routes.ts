@@ -24854,17 +24854,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT id FROM staff_employees WHERE id = ? AND tier2_lab_id = ?"
     ).get(req.params.id, labId);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
-    const { docType, title, url, storageProvider, expirationDate } = req.body || {};
+    const { docType, title, url, storageProvider, expirationDate, credits, activityDate } = req.body || {};
     if (!docType || !STAFF_DOC_TYPES.has(String(docType))) {
       return res.status(400).json({ error: "docType invalid", allowed: Array.from(STAFF_DOC_TYPES) });
     }
     const cleanUrl = validateDocUrl(url);
     if (!cleanUrl) return res.status(400).json({ error: "url must be an http(s) URL" });
+    // VeritaCEU: continuing-education credits + activity date (only meaningful on
+    // ce_credit rows). credits must be a non-negative number if provided.
+    let creditsVal: number | null = null;
+    if (credits !== undefined && credits !== null && credits !== "") {
+      const n = Number(credits);
+      if (!Number.isFinite(n) || n < 0) return res.status(400).json({ error: "credits must be a non-negative number" });
+      creditsVal = n;
+    }
     const now = new Date().toISOString();
     const result = (db as any).$client.prepare(
-      `INSERT INTO staff_employee_documents (employee_id, doc_type, title, url, storage_provider, expiration_date, created_at, created_by_user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(req.params.id, String(docType), typeof title === "string" ? title.trim() || null : null, cleanUrl, typeof storageProvider === "string" ? storageProvider.trim() || null : null, typeof expirationDate === "string" ? expirationDate.trim() || null : null, now, req.userId ?? null);
+      `INSERT INTO staff_employee_documents (employee_id, doc_type, title, url, storage_provider, expiration_date, created_at, created_by_user_id, credits, activity_date)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(req.params.id, String(docType), typeof title === "string" ? title.trim() || null : null, cleanUrl, typeof storageProvider === "string" ? storageProvider.trim() || null : null, typeof expirationDate === "string" ? expirationDate.trim() || null : null, now, req.userId ?? null, creditsVal, typeof activityDate === "string" ? activityDate.trim() || null : null);
     res.json({ id: Number(result.lastInsertRowid) });
   });
 
@@ -24876,7 +24884,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(req.params.id, labId);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
     const docs = (db as any).$client.prepare(
-      `SELECT id, employee_id, doc_type, title, url, storage_provider, expiration_date, created_at
+      `SELECT id, employee_id, doc_type, title, url, storage_provider, expiration_date, created_at, credits, activity_date
        FROM staff_employee_documents
        WHERE employee_id = ?
        ORDER BY created_at DESC`
@@ -24895,6 +24903,85 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!doc) return res.status(404).json({ error: "Document not found" });
     (db as any).$client.prepare("DELETE FROM staff_employee_documents WHERE id = ?").run(req.params.docId);
     res.json({ ok: true });
+  });
+
+  // ── VeritaCEU: continuing-education cycle summary ──────────────────────
+  //
+  // Totals an employee's ce_credit credits inside a trailing rolling cycle and
+  // compares against the required credits for that cycle. The default is the
+  // ASCP CMP standard: 36 points over a 3-year (36-month) cycle. Both are
+  // overridable per request (?required=&cycleMonths=) so a lab can reflect a
+  // different board's rule without a schema change; nothing is invented server
+  // side. Credits are attributed by activity_date when present, else the row's
+  // created_at (so legacy rows entered before the field still count).
+  app.get("/api/labs/:labId/staff/employees/:id/ceu-summary", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const labId = req.scope.labId;
+    const emp = (db as any).$client.prepare(
+      "SELECT id FROM staff_employees WHERE id = ? AND tier2_lab_id = ?"
+    ).get(req.params.id, labId);
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+
+    // Required credits + cycle length: default ASCP 36 / 36 months, clamped.
+    let required = 36;
+    if (req.query.required !== undefined) {
+      const n = Number(req.query.required);
+      if (!Number.isFinite(n) || n <= 0 || n > 1000) return res.status(400).json({ error: "required must be a positive number <= 1000" });
+      required = n;
+    }
+    let cycleMonths = 36;
+    if (req.query.cycleMonths !== undefined) {
+      const n = Number(req.query.cycleMonths);
+      if (!Number.isInteger(n) || n < 1 || n > 120) return res.status(400).json({ error: "cycleMonths must be an integer between 1 and 120" });
+      cycleMonths = n;
+    }
+
+    // Cycle window: [cycleStart, now]. cycleStart = now minus cycleMonths,
+    // computed as UTC start-of-day so the boundary matches the UTC-parsed
+    // activity dates regardless of the server's timezone (an Eastern-time
+    // server otherwise pushed a same-date boundary activity just outside).
+    const now = new Date();
+    const cycleStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - cycleMonths, now.getUTCDate()));
+    const cycleStartIso = cycleStart.toISOString();
+
+    const rows = (db as any).$client.prepare(
+      `SELECT id, title, url, credits, activity_date, created_at
+       FROM staff_employee_documents
+       WHERE employee_id = ? AND doc_type = 'ce_credit'
+       ORDER BY COALESCE(activity_date, created_at) DESC`
+    ).all(req.params.id) as any[];
+
+    let earned = 0;
+    const entries: any[] = [];
+    for (const r of rows) {
+      const when = r.activity_date || r.created_at; // attribution date
+      // activity_date is a bare YYYY-MM-DD; created_at is an ISO timestamp.
+      // Compare on the ISO form of the effective date's start-of-day.
+      const whenIso = /^\d{4}-\d{2}-\d{2}$/.test(String(when))
+        ? new Date(`${when}T00:00:00.000Z`).toISOString()
+        : new Date(when).toISOString();
+      const inCycle = whenIso >= cycleStartIso;
+      const credits = typeof r.credits === "number" ? r.credits : 0;
+      if (inCycle) earned += credits;
+      entries.push({ id: r.id, title: r.title, url: r.url, credits, activityDate: r.activity_date, createdAt: r.created_at, inCycle });
+    }
+    earned = Math.round(earned * 100) / 100;
+    const remaining = Math.max(0, Math.round((required - earned) * 100) / 100);
+    const pct = required > 0 ? Math.min(100, Math.round((earned / required) * 100)) : 0;
+    const met = earned >= required;
+
+    res.json({
+      required,
+      cycleMonths,
+      cycleStart: cycleStartIso.slice(0, 10),
+      earned,
+      remaining,
+      pct,
+      met,
+      entryCount: rows.length,
+      inCycleCount: entries.filter((e) => e.inCycle).length,
+      entries,
+    });
   });
 
   // ── EMPLOYEE INSTRUMENT ASSIGNMENT (PR D, 2026-06-05) ──────────────────

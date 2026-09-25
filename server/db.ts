@@ -1553,6 +1553,10 @@ const newStaffDocCols: [string, string][] = [
   ["storage_provider", "TEXT"],
   ["expiration_date", "TEXT"],
   ["created_by_user_id", "INTEGER"],
+  // VeritaCEU: on doc_type='ce_credit' rows, the continuing-education credits
+  // earned and the activity date, so the cycle meter can total them.
+  ["credits", "REAL"],
+  ["activity_date", "TEXT"],
 ];
 for (const [col, colType] of newStaffDocCols) {
   if (!staffDocCols.includes(col)) {
