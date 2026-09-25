@@ -2123,6 +2123,7 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
   // specific trial labs are marked via POST /api/admin/set-lab-trial.
   ensure("is_trial",                   "ALTER TABLE labs ADD COLUMN is_trial INTEGER NOT NULL DEFAULT 0");
   ensure("is_demo",                    "ALTER TABLE labs ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0"); // representative/sample-data tenant -> UI banner + export stamp (USON demo labs)
+  ensure("is_repository",              "ALTER TABLE labs ADD COLUMN is_repository INTEGER NOT NULL DEFAULT 0"); // shared document/policy library lab -> excluded from the readiness roll-up; not a compliance site
   ensure("preferred_pt_vendor",        "ALTER TABLE labs ADD COLUMN preferred_pt_vendor TEXT");
   // NYS CLEP Phase-0 (2026-07-10): per-lab jurisdiction regime. NY is a
   // CLIA-exempt state; a NY lab is DUAL — NYS DOH/CLEP for state jurisdiction

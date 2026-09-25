@@ -2407,7 +2407,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // labs before first report. Refuses to update name or CLIA if the
   // corresponding lock is set (those freeze on first report, per CLAUDE.md §5).
   app.post("/api/admin/update-lab", (req, res) => {
-    const { secret, labId, labName, cliaNumber, accCap, accTjc, accCola, accAabb, isDemo } = req.body || {};
+    const { secret, labId, labName, cliaNumber, accCap, accTjc, accCola, accAabb, isDemo, isRepository } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     if (!labId) return res.status(400).json({ error: "labId required" });
 
@@ -2442,6 +2442,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (accCola !== undefined) { updates.push("accreditation_cola = ?"); params.push(accCola ? 1 : 0); }
     if (accAabb !== undefined) { updates.push("accreditation_aabb = ?"); params.push(accAabb ? 1 : 0); }
     if (isDemo !== undefined)  { updates.push("is_demo = ?");            params.push(isDemo ? 1 : 0); }
+    if (isRepository !== undefined) { updates.push("is_repository = ?"); params.push(isRepository ? 1 : 0); }
 
     if (updates.length === 0) return res.status(400).json({ error: "Nothing to update" });
 
@@ -6265,6 +6266,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         l.accreditation_cola,
         l.accreditation_aabb,
         l.is_demo,
+        l.is_repository,
         l.primary_regime,
         l.nys_permit_type,
         (SELECT sl.lab_address_state FROM staff_labs sl
@@ -6312,6 +6314,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // NavBar can mount a persistent "sample data" banner and exports can
       // stamp a watermark. Optional on the client for deploy skew.
       isDemo: !!m.is_demo,
+      // Shared document/policy library lab (not a compliance site): excluded from
+      // the readiness roll-up; the switcher labels it so it does not read as a lab.
+      isRepository: !!m.is_repository,
       // NYS CLEP Phase-0: jurisdiction regime (default CLIA). nysSuggested is a
       // soft hint (owner's physical state is NY) that never auto-applies.
       primaryRegime: m.primary_regime || 'CLIA',
@@ -26084,7 +26089,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const client = (db as any).$client;
     const userId = req.user?.userId;
     const labs = client.prepare(
-      "SELECT DISTINCT l.id, l.lab_name, l.clia_number FROM labs l JOIN lab_members m ON m.lab_id = l.id WHERE m.user_id = ? AND m.status = 'active' ORDER BY l.lab_name ASC"
+      "SELECT DISTINCT l.id, l.lab_name, l.clia_number FROM labs l JOIN lab_members m ON m.lab_id = l.id WHERE m.user_id = ? AND m.status = 'active' AND (l.is_repository IS NULL OR l.is_repository = 0) ORDER BY l.lab_name ASC"
     ).all(userId) as any[];
     res.json(labs.map(l => ({ lab_id: l.id, lab_name: l.lab_name, clia_number: l.clia_number, ...computeLabReadiness(client, l.id) })));
   });
