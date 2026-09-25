@@ -4886,6 +4886,10 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inv_transfers_owner ON invento
     // for a surveyor. Any of the four exemptions drops the combo from required.
     ensureVit("linearity_exempt_waived", "ALTER TABLE veritamap_instrument_tests ADD COLUMN linearity_exempt_waived INTEGER NOT NULL DEFAULT 0");
     ensureVit("linearity_exempt_other", "ALTER TABLE veritamap_instrument_tests ADD COLUMN linearity_exempt_other TEXT");
+    // 2026-09-25: IFU (instructions for use / package insert) link per analyte on
+    // an instrument. Lab-enterable exact assay-IFU URL; when blank the UI derives
+    // a manufacturer eIFU-portal link from the instrument name (shared/ifu.ts).
+    ensureVit("ifu_url", "ALTER TABLE veritamap_instrument_tests ADD COLUMN ifu_url TEXT");
   }
 }
 

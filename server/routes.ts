@@ -31,6 +31,7 @@ import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard";
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
+import { isValidIfuUrl } from "@shared/ifu";
 
 // Express already URL-decodes route params before the handler runs, so
 // req.params.analyte for a request to ".../IG%25" arrives as "IG%". Calling
@@ -13822,7 +13823,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!map) return res.status(404).json({ error: "Map not found" });
     const rawTests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? ORDER BY specialty, analyte").all(req.params.id);
     const instrByAnalyte = (db as any).$client.prepare(`
-      SELECT it.analyte, i.id, i.instrument_name, i.role, i.category, i.serial_number
+      SELECT it.id AS instrument_test_id, it.analyte, it.ifu_url, i.id, i.instrument_name, i.role, i.category, i.serial_number
       FROM veritamap_instrument_tests it
       JOIN veritamap_instruments i ON i.id = it.instrument_id
       WHERE it.map_id = ? AND it.active = 1
@@ -13830,7 +13831,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const instrMap: Record<string, any[]> = {};
     for (const row of instrByAnalyte as any[]) {
       if (!instrMap[row.analyte]) instrMap[row.analyte] = [];
-      instrMap[row.analyte].push({ id: row.id, instrument_name: row.instrument_name, role: row.role, category: row.category, serial_number: row.serial_number || null });
+      instrMap[row.analyte].push({ id: row.id, instrument_name: row.instrument_name, role: row.role, category: row.category, serial_number: row.serial_number || null, instrument_test_id: row.instrument_test_id, ifu_url: row.ifu_url || null });
     }
     const testIds = (rawTests as any[]).map((t: any) => t.id);
     const corrByTestId: Record<number, any[]> = {};
@@ -13881,6 +13882,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     next();
   };
   const labOwnerUserId = (req: any) => (req.scope?.lab?.owner_user_id ?? req.userId) as number;
+
+  // Set/clear the IFU (package insert) link for one analyte-on-instrument test in
+  // this lab's map. Lab-entered exact URL; blank clears it (the UI then falls back
+  // to a manufacturer-scoped search derived from the instrument name). http/https
+  // only. requireMapInActiveLab already confirmed the map is in the active lab.
+  app.put("/api/labs/:labId/veritamap/maps/:id/tests/:instrumentTestId/ifu", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
+    const raw = typeof req.body?.ifuUrl === "string" ? req.body.ifuUrl.trim() : "";
+    if (raw && !isValidIfuUrl(raw)) return res.status(400).json({ error: "ifuUrl must be a valid http(s) URL" });
+    const row = (db as any).$client.prepare("SELECT id FROM veritamap_instrument_tests WHERE id = ? AND map_id = ?").get(req.params.instrumentTestId, req.params.id) as any;
+    if (!row) return res.status(404).json({ error: "Test not found in this map" });
+    (db as any).$client.prepare("UPDATE veritamap_instrument_tests SET ifu_url = ? WHERE id = ?").run(raw || null, row.id);
+    res.json({ ok: true, instrument_test_id: row.id, ifu_url: raw || null });
+  });
 
   // GET instruments
   app.get("/api/labs/:labId/veritamap/maps/:id/instruments", authMiddleware, labScopeMiddleware, requireMapInActiveLab, (req: any, res) => {
