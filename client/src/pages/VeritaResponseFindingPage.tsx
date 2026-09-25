@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { rootCauseLabel } from "@shared/ptFailure";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
   Dialog,
@@ -504,6 +505,14 @@ export default function VeritaResponseFindingPage() {
           signed_by: finding.signed_by ?? null,
           signed_at: finding.signed_at ?? null,
           external_submission_ref: finding.external_submission_ref ?? null,
+          // PT-failure head fields; preserved so an edit does not blank them.
+          source_type: finding.source_type ?? null,
+          pt_program: finding.pt_program ?? null,
+          pt_event: finding.pt_event ?? null,
+          pt_analyte: finding.pt_analyte ?? null,
+          pt_score: finding.pt_score ?? null,
+          pt_result_summary: finding.pt_result_summary ?? null,
+          root_cause_category: finding.root_cause_category ?? null,
         }),
       });
       if (!res.ok) {
@@ -799,10 +808,12 @@ export default function VeritaResponseFindingPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">
-            {finding.accreditor} Finding {finding.finding_number || `#${finding.id}`}
+            {finding.source_type === "pt_failure"
+              ? `${finding.accreditor} PT Failure ${finding.finding_number || `#${finding.id}`}`
+              : `${finding.accreditor} Finding ${finding.finding_number || `#${finding.id}`}`}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {finding.standard_ref || "No standard reference recorded"}
+            {finding.standard_ref || (finding.source_type === "pt_failure" ? "42 CFR 493.801(b) proficiency-testing investigation" : "No standard reference recorded")}
           </p>
         </div>
         <Badge className={`${badge.cls} text-sm whitespace-nowrap font-medium px-3 py-1`}>
@@ -810,6 +821,29 @@ export default function VeritaResponseFindingPage() {
           {badge.label}
         </Badge>
       </div>
+
+      {/* PT-failure context (source_type = 'pt_failure'). Read-only summary of the
+          PT event; the corrective-action workflow below is shared with findings. */}
+      {finding.source_type === "pt_failure" && (
+        <Card className="border-purple-200 dark:border-purple-900/40">
+          <CardHeader className="pb-2"><CardTitle className="text-base font-semibold">Proficiency testing event</CardTitle></CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3 text-sm">
+              <div><div className="text-xs text-muted-foreground">Program</div><div className="font-medium">{finding.pt_program || "-"}</div></div>
+              <div><div className="text-xs text-muted-foreground">Event</div><div className="font-medium">{finding.pt_event || "-"}</div></div>
+              <div><div className="text-xs text-muted-foreground">Analyte</div><div className="font-medium">{finding.pt_analyte || "-"}</div></div>
+              <div><div className="text-xs text-muted-foreground">Score</div><div className="font-medium">{finding.pt_score || "-"}</div></div>
+              {finding.pt_result_summary && (
+                <div className="col-span-2 sm:col-span-4"><div className="text-xs text-muted-foreground">Result summary</div><div>{finding.pt_result_summary}</div></div>
+              )}
+              {finding.root_cause_category && (
+                <div className="col-span-2 sm:col-span-4"><div className="text-xs text-muted-foreground">Root-cause category</div><div className="font-medium">{rootCauseLabel(finding.root_cause_category)}</div></div>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">CLIA requires investigation and corrective action for unsuccessful PT. Complete the corrective-action workflow below and sign off.</p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Due-date alert */}
       {finding.due_date && (
