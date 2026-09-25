@@ -25,6 +25,7 @@ import {
   Plus, Trash2, ChevronLeft, Users, Lock, FileDown, Building2,
   CheckCircle2, AlertTriangle, Clock, UserPlus, Edit2, Calendar,
   Download, X, Upload, FileSpreadsheet, FileText, ExternalLink, Archive, FlaskConical,
+  GraduationCap,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -1814,6 +1815,9 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
         {/* PR C: Credentials / Documents card. Linked URLs only; files stay in the lab's own storage. */}
         <EmployeeDocumentsCard employeeId={employee.id} />
 
+        {/* VeritaCEU: continuing-education tracker. ASCP 36/3yr default cycle. */}
+        <VeritaCeuCard employeeId={employee.id} />
+
         {/* PR D: Assigned Instruments card. Many-to-many to VeritaMap instruments. */}
         <AssignedInstrumentsCard employeeId={employee.id} />
 
@@ -1905,6 +1909,10 @@ function EmployeeDocumentsCard({ employeeId }: { employeeId: number }) {
   }
 
   const docTypeLabel = (v: string) => STAFF_DOC_TYPES.find(t => t.value === v)?.label || v;
+  // CE credits have their own card (VeritaCEU) with cycle math; keep them out
+  // of this generic credentials list so they are not shown twice.
+  const credentialDocs = (docs ?? []).filter(d => d.doc_type !== "ce_credit");
+  const credentialDocTypes = STAFF_DOC_TYPES.filter(t => t.value !== "ce_credit");
 
   return (
     <Card className="lg:col-span-2">
@@ -1918,13 +1926,13 @@ function EmployeeDocumentsCard({ employeeId }: { employeeId: number }) {
             <Plus size={14} className="mr-1.5" /> Link Document
           </Button>
         </div>
-        {(docs?.length ?? 0) === 0 ? (
+        {credentialDocs.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No documents linked yet. Link state licenses, ASCP cards, diplomas, or training certificates so they are at hand during a survey. Files stay in your own SharePoint or Drive; we store only the URL.
           </p>
         ) : (
           <div className="space-y-2">
-            {docs!.map(d => {
+            {credentialDocs.map(d => {
               const status = expirationStatus(d.expiration_date);
               const tone = status.tone === "expired" ? "text-red-700 bg-red-500/10 border-red-500/30"
                 : status.tone === "due_soon" ? "text-amber-700 bg-amber-500/10 border-amber-500/30"
@@ -1961,9 +1969,234 @@ function EmployeeDocumentsCard({ employeeId }: { employeeId: number }) {
           open={linkOpen}
           onOpenChange={setLinkOpen}
           title="Link Credential / Document"
-          docTypes={STAFF_DOC_TYPES}
+          docTypes={credentialDocTypes}
           onSubmit={createDoc}
         />
+      </CardContent>
+    </Card>
+  );
+}
+
+// VeritaCeuCard
+//
+// Continuing-education tracker for one employee. Sums ce_credit credits inside
+// a rolling cycle (default ASCP CMP: 36 points over 36 months) and shows a
+// progress meter plus the entries. Add-entry posts a ce_credit document row
+// (URL pointer to the certificate in the lab's own storage) carrying the
+// credits earned and the activity date, so nothing about the certificate file
+// is uploaded here. Cycle length/target are read from the server default; the
+// endpoint accepts overrides for a lab on a different board's rule.
+type CeuEntry = {
+  id: number;
+  title: string | null;
+  url: string;
+  credits: number;
+  activityDate: string | null;
+  createdAt: string;
+  inCycle: boolean;
+};
+type CeuSummary = {
+  required: number;
+  cycleMonths: number;
+  cycleStart: string;
+  earned: number;
+  remaining: number;
+  pct: number;
+  met: boolean;
+  entryCount: number;
+  inCycleCount: number;
+  entries: CeuEntry[];
+};
+
+function VeritaCeuCard({ employeeId }: { employeeId: number }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const activeLabId = useActiveLabId();
+  const readOnly = useIsReadOnly('veritastaff');
+  const [addOpen, setAddOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [url, setUrl] = useState("");
+  const [credits, setCredits] = useState("");
+  const [activityDate, setActivityDate] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const summaryUrl = activeLabId ? `/api/labs/${activeLabId}/staff/employees/${employeeId}/ceu-summary` : null;
+  const docsUrl = activeLabId ? `/api/labs/${activeLabId}/staff/employees/${employeeId}/documents` : null;
+  const { data: summary } = useQuery<CeuSummary | null>({
+    queryKey: [summaryUrl ?? "no-ceu-summary"],
+    queryFn: async () => {
+      if (!summaryUrl) return null;
+      const r = await fetch(`${API_BASE}${summaryUrl}`, { headers: authHeaders() });
+      if (!r.ok) return null;
+      return r.json();
+    },
+    enabled: !!summaryUrl,
+  });
+
+  function reset() {
+    setTitle(""); setUrl(""); setCredits(""); setActivityDate(""); setError(null);
+  }
+
+  async function submitEntry() {
+    setError(null);
+    if (!activeLabId) { setError("Active lab required."); return; }
+    if (!url.trim()) { setError("Paste the URL to the certificate."); return; }
+    if (!/^https?:\/\//i.test(url.trim())) { setError("URL must start with http:// or https://"); return; }
+    const creditsNum = Number(credits);
+    if (!credits.trim() || !Number.isFinite(creditsNum) || creditsNum <= 0) { setError("Enter the credits earned (a number greater than 0)."); return; }
+    setSubmitting(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/staff/employees/${employeeId}/documents`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          docType: "ce_credit",
+          title: title.trim(),
+          url: url.trim(),
+          credits: creditsNum,
+          activityDate: activityDate.trim(),
+        }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+      }
+      toast({ title: "CE credit logged" });
+      reset();
+      setAddOpen(false);
+      queryClient.invalidateQueries({ queryKey: [summaryUrl] });
+      if (docsUrl) queryClient.invalidateQueries({ queryKey: [docsUrl] });
+    } catch (err: any) {
+      setError(err?.message || "Failed to log CE credit.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function deleteEntry(id: number) {
+    if (!activeLabId) return;
+    const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/staff/employee-documents/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      toast({ title: "Delete failed", description: err.error || `HTTP ${r.status}`, variant: "destructive" });
+      return;
+    }
+    toast({ title: "CE credit removed" });
+    queryClient.invalidateQueries({ queryKey: [summaryUrl] });
+    if (docsUrl) queryClient.invalidateQueries({ queryKey: [docsUrl] });
+  }
+
+  const pct = summary?.pct ?? 0;
+  const met = !!summary?.met;
+  const barTone = met ? "bg-emerald-600" : "bg-primary";
+
+  return (
+    <Card className="lg:col-span-2">
+      <CardContent className="p-5">
+        <div className="flex justify-between items-center mb-3">
+          <div className="flex items-center gap-2">
+            <GraduationCap size={16} className="text-primary" />
+            <h3 className="font-semibold">Continuing Education</h3>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setAddOpen(true)} disabled={readOnly}>
+            <Plus size={14} className="mr-1.5" /> Add CE Credit
+          </Button>
+        </div>
+
+        {summary && (
+          <div className="mb-4">
+            <div className="flex items-baseline justify-between mb-1">
+              <span className="text-sm font-medium">
+                {summary.earned} / {summary.required} credits
+                {met
+                  ? <Badge variant="outline" className="ml-2 text-[10px] border text-emerald-700 bg-emerald-500/10 border-emerald-500/30">Cycle met</Badge>
+                  : <Badge variant="outline" className="ml-2 text-[10px] border text-amber-700 bg-amber-500/10 border-amber-500/30">{summary.remaining} to go</Badge>}
+              </span>
+              <span className="text-xs text-muted-foreground">{pct}%</span>
+            </div>
+            <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+              <div className={`h-full ${barTone} transition-all`} style={{ width: `${pct}%` }} />
+            </div>
+            <p className="text-xs text-muted-foreground mt-1.5">
+              Rolling {summary.cycleMonths}-month cycle since {summary.cycleStart}. ASCP CMP standard is 36 points every 3 years; counts credits with an activity date inside the window.
+            </p>
+          </div>
+        )}
+
+        {(summary?.entries.length ?? 0) === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No CE credits logged yet. Add an entry for each completed activity: the credits earned, the date, and a link to the certificate in your own storage. We store the credits and URL, never the file.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {summary!.entries.map(e => (
+              <div key={e.id} className="flex items-center gap-2 border border-border rounded-md p-2">
+                <Badge variant="outline" className="text-[10px] whitespace-nowrap">{e.credits} cr</Badge>
+                <div className="flex-1 min-w-0">
+                  <a href={e.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-primary hover:underline truncate inline-flex items-center gap-1">
+                    <ExternalLink size={12} />
+                    {e.title || e.url}
+                  </a>
+                  <div className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                    <Calendar size={10} />
+                    {e.activityDate || e.createdAt.slice(0, 10)}
+                    {!e.inCycle && <span className="ml-1 italic">outside current cycle</span>}
+                  </div>
+                </div>
+                <ConfirmDialog
+                  title="Remove CE credit?"
+                  message="This removes the logged credit and its certificate link from VeritaStaff. The underlying file in your own storage is not affected."
+                  confirmLabel="Remove"
+                  onConfirm={() => deleteEntry(e.id)}
+                >
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" disabled={readOnly} title="Remove">
+                    <Trash2 size={12} />
+                  </Button>
+                </ConfirmDialog>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <Dialog open={addOpen} onOpenChange={(v) => { if (!v) reset(); setAddOpen(v); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Add CE Credit</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 pt-2">
+              <p className="text-xs text-muted-foreground">
+                Log a completed continuing-education activity. VeritaAssure stores the credits, date, and a link to the certificate; the file stays in your own SharePoint, Drive, or OneDrive.
+              </p>
+              <div>
+                <label className="text-xs font-medium">Activity</label>
+                <Input placeholder="e.g. Hematology case studies, ASCP" value={title} onChange={e => setTitle(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs font-medium">Certificate URL *</label>
+                <Input placeholder="https://..." value={url} onChange={e => setUrl(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-medium">Credits *</label>
+                  <Input type="number" step="0.25" min="0" placeholder="1.0" value={credits} onChange={e => setCredits(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium">Activity date</label>
+                  <Input type="date" value={activityDate} onChange={e => setActivityDate(e.target.value)} />
+                </div>
+              </div>
+              {error && <div className="text-xs text-destructive">{error}</div>}
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => { reset(); setAddOpen(false); }} disabled={submitting}>Cancel</Button>
+                <Button onClick={submitEntry} disabled={submitting}>{submitting ? "Saving..." : "Add"}</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );
