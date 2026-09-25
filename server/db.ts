@@ -1233,6 +1233,16 @@ const scanColNames = scanItemCols.map((c) => c.name);
 if (!scanColNames.includes("completion_source")) sqlite.exec("ALTER TABLE veritascan_items ADD COLUMN completion_source TEXT DEFAULT 'manual'");
 if (!scanColNames.includes("completion_link")) sqlite.exec("ALTER TABLE veritascan_items ADD COLUMN completion_link TEXT");
 if (!scanColNames.includes("completion_note")) sqlite.exec("ALTER TABLE veritascan_items ADD COLUMN completion_note TEXT");
+// VeritaScan teaching mode (Build #7): per-item instructional note surfaced in
+// the read-only Teaching View. Distinct from `notes` (the assessment finding).
+if (!scanColNames.includes("teaching_note")) sqlite.exec("ALTER TABLE veritascan_items ADD COLUMN teaching_note TEXT");
+
+// VeritaScan teaching mode (Build #7): scan-level flags. is_teaching marks a
+// scan as a guided teaching example (excluded from nothing; purely additive);
+// teaching_intro holds its learning objectives / overview text.
+const scanTableCols = (sqlite.prepare("PRAGMA table_info(veritascan_scans)").all() as { name: string }[]).map((c) => c.name);
+if (!scanTableCols.includes("is_teaching")) sqlite.exec("ALTER TABLE veritascan_scans ADD COLUMN is_teaching INTEGER NOT NULL DEFAULT 0");
+if (!scanTableCols.includes("teaching_intro")) sqlite.exec("ALTER TABLE veritascan_scans ADD COLUMN teaching_intro TEXT");
 
 // VeritaScan Evidence Phase A migration safety net (2026-06-02)
 // The three new tables (lab_documents, document_checklist_links,

@@ -16231,7 +16231,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const labId = resolveLegacyLabId(req);
     if (!labId) return res.json([]);
     const scans = (db as any).$client.prepare(
-      "SELECT id, name, created_at, updated_at FROM veritascan_scans WHERE lab_id = ? ORDER BY updated_at DESC"
+      "SELECT id, name, created_at, updated_at, is_teaching FROM veritascan_scans WHERE lab_id = ? ORDER BY updated_at DESC"
     ).all(labId);
     // For each scan, add completion stats
     const result = scans.map((s: any) => {
@@ -16251,6 +16251,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // camelCase mirrors of created_at/updated_at for the frontend
         createdAt: s.created_at,
         updatedAt: s.updated_at,
+        isTeaching: !!s.is_teaching,
         total,
         totalItems: total,
         assessed,
@@ -16322,7 +16323,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/labs/:labId/veritascan/scans", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
     const scans = (db as any).$client.prepare(
-      "SELECT id, name, created_at, updated_at FROM veritascan_scans WHERE lab_id = ? ORDER BY updated_at DESC"
+      "SELECT id, name, created_at, updated_at, is_teaching FROM veritascan_scans WHERE lab_id = ? ORDER BY updated_at DESC"
     ).all(req.scope.labId);
     const result = scans.map((s: any) => {
       const items = (db as any).$client.prepare(
@@ -16338,6 +16339,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const issues = needsAttention + immediateAction;
       return {
         ...s, createdAt: s.created_at, updatedAt: s.updated_at,
+        isTeaching: !!s.is_teaching,
         total, totalItems: total,
         assessed, assessedCount: assessed,
         compliant, compliantCount: compliant,
@@ -16398,7 +16400,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(req.params.id, req.scope.labId);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
     const items = (db as any).$client.prepare(
-      "SELECT item_id, status, notes, owner, due_date, completion_source, completion_link, completion_note FROM veritascan_items WHERE scan_id = ?"
+      "SELECT item_id, status, notes, owner, due_date, completion_source, completion_link, completion_note, teaching_note FROM veritascan_items WHERE scan_id = ?"
     ).all(req.params.id);
     res.json(items);
   });
@@ -16411,17 +16413,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(req.params.id, req.scope.labId);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
     const { status, notes, owner, due_date } = req.body;
+    // teaching_note: only overwrite when the caller sends the field. A plain
+    // status/notes save (no teaching_note key) must not wipe an existing note,
+    // so we pass null when absent and COALESCE keeps the stored value. Sending
+    // an empty string explicitly clears it.
+    const teachingNote = ('teaching_note' in req.body) ? (req.body.teaching_note ?? null) : null;
     const now = new Date().toISOString();
     (db as any).$client.prepare(`
-      INSERT INTO veritascan_items (scan_id, item_id, status, notes, owner, due_date, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO veritascan_items (scan_id, item_id, status, notes, owner, due_date, teaching_note, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(scan_id, item_id) DO UPDATE SET
         status = excluded.status,
         notes = excluded.notes,
         owner = excluded.owner,
         due_date = excluded.due_date,
+        teaching_note = COALESCE(excluded.teaching_note, teaching_note),
         updated_at = excluded.updated_at
-    `).run(req.params.id, req.params.itemId, status || 'Not Assessed', notes || null, owner || null, due_date || null, now);
+    `).run(req.params.id, req.params.itemId, status || 'Not Assessed', notes || null, owner || null, due_date || null, teachingNote, now);
     (db as any).$client.prepare("UPDATE veritascan_scans SET updated_at = ? WHERE id = ?").run(now, req.params.id);
     res.json({ ok: true });
   });
@@ -16437,13 +16445,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!Array.isArray(items)) return res.status(400).json({ error: "items array required" });
     const now = new Date().toISOString();
     const stmt = (db as any).$client.prepare(`
-      INSERT INTO veritascan_items (scan_id, item_id, status, notes, owner, due_date, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO veritascan_items (scan_id, item_id, status, notes, owner, due_date, teaching_note, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(scan_id, item_id) DO UPDATE SET
         status = excluded.status,
         notes = excluded.notes,
         owner = excluded.owner,
         due_date = excluded.due_date,
+        teaching_note = COALESCE(excluded.teaching_note, teaching_note),
         updated_at = excluded.updated_at
     `);
     const tx = (db as any).$client.transaction((rows: any[]) => {
@@ -16455,7 +16464,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const itemId = r.item_id ?? r.itemId;
         if (itemId == null) continue; // skip a malformed row instead of aborting the whole batch
         const dueDate = r.due_date ?? r.dueDate ?? null;
-        stmt.run(req.params.id, itemId, r.status || 'Not Assessed', r.notes || null, r.owner || null, dueDate, now);
+        // Accept teaching_note / teachingNote; absent -> null so COALESCE keeps
+        // the stored note (a status-only save cannot wipe it).
+        const teachingNote = ('teaching_note' in r) ? (r.teaching_note ?? null) : (('teachingNote' in r) ? (r.teachingNote ?? null) : null);
+        stmt.run(req.params.id, itemId, r.status || 'Not Assessed', r.notes || null, r.owner || null, dueDate, teachingNote, now);
       }
     });
     try {
@@ -16465,6 +16477,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     (db as any).$client.prepare("UPDATE veritascan_scans SET updated_at = ? WHERE id = ?").run(now, req.params.id);
     res.json({ ok: true, count: items.length });
+  });
+
+  // VeritaScan teaching mode (Build #7): flag a scan as a guided teaching
+  // example and set its learning-objectives intro. Additive metadata; a
+  // teaching scan behaves like any other scan except the page offers a
+  // read-only Teaching View. Write-gated like every other scan mutation.
+  app.put("/api/labs/:labId/veritascan/scans/:id/teaching", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    const scan = (db as any).$client.prepare(
+      "SELECT id FROM veritascan_scans WHERE id = ? AND lab_id = ?"
+    ).get(req.params.id, req.scope.labId);
+    if (!scan) return res.status(404).json({ error: "Scan not found" });
+    const isTeaching = req.body?.isTeaching ? 1 : 0;
+    const teachingIntro = typeof req.body?.teachingIntro === "string" ? (req.body.teachingIntro.trim() || null) : null;
+    const now = new Date().toISOString();
+    (db as any).$client.prepare(
+      "UPDATE veritascan_scans SET is_teaching = ?, teaching_intro = ?, updated_at = ? WHERE id = ?"
+    ).run(isTeaching, teachingIntro, now, req.params.id);
+    res.json({ ok: true, isTeaching: !!isTeaching, teachingIntro });
   });
 
   // Legacy GET scan-by-id (added for the existing page useQuery that was
@@ -16483,7 +16514,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const scan = userCanAccessScan(req.params.id, req);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
     const items = (db as any).$client.prepare(
-      "SELECT item_id, status, notes, owner, due_date, completion_source, completion_link, completion_note FROM veritascan_items WHERE scan_id = ?"
+      "SELECT item_id, status, notes, owner, due_date, completion_source, completion_link, completion_note, teaching_note FROM veritascan_items WHERE scan_id = ?"
     ).all(req.params.id);
     res.json(items);
   });
@@ -16495,17 +16526,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const scan = userCanAccessScan(req.params.id, req);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
     const { status, notes, owner, due_date } = req.body;
+    const teachingNote = ('teaching_note' in req.body) ? (req.body.teaching_note ?? null) : null;
     const now = new Date().toISOString();
     (db as any).$client.prepare(`
-      INSERT INTO veritascan_items (scan_id, item_id, status, notes, owner, due_date, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO veritascan_items (scan_id, item_id, status, notes, owner, due_date, teaching_note, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(scan_id, item_id) DO UPDATE SET
         status = excluded.status,
         notes = excluded.notes,
         owner = excluded.owner,
         due_date = excluded.due_date,
+        teaching_note = COALESCE(excluded.teaching_note, teaching_note),
         updated_at = excluded.updated_at
-    `).run(req.params.id, req.params.itemId, status || 'Not Assessed', notes || null, owner || null, due_date || null, now);
+    `).run(req.params.id, req.params.itemId, status || 'Not Assessed', notes || null, owner || null, due_date || null, teachingNote, now);
     // Update scan updated_at
     (db as any).$client.prepare("UPDATE veritascan_scans SET updated_at = ? WHERE id = ?").run(now, req.params.id);
     res.json({ ok: true });
@@ -16521,11 +16554,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!Array.isArray(items)) return res.status(400).json({ error: "items array required" });
     const now = new Date().toISOString();
     const stmt = (db as any).$client.prepare(`
-      INSERT INTO veritascan_items (scan_id, item_id, status, notes, owner, due_date, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO veritascan_items (scan_id, item_id, status, notes, owner, due_date, teaching_note, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(scan_id, item_id) DO UPDATE SET
         status = excluded.status, notes = excluded.notes,
         owner = excluded.owner, due_date = excluded.due_date,
+        teaching_note = COALESCE(excluded.teaching_note, teaching_note),
         updated_at = excluded.updated_at
     `);
     const bulkUpdate = (db as any).$client.transaction((items: any[]) => {
@@ -16534,7 +16568,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const itemId = item.item_id ?? item.itemId;
         if (itemId == null) continue; // skip a malformed row instead of aborting the whole batch
         const dueDate = item.due_date ?? item.dueDate ?? null;
-        stmt.run(req.params.id, itemId, item.status || 'Not Assessed', item.notes || null, item.owner || null, dueDate, now);
+        const teachingNote = ('teaching_note' in item) ? (item.teaching_note ?? null) : (('teachingNote' in item) ? (item.teachingNote ?? null) : null);
+        stmt.run(req.params.id, itemId, item.status || 'Not Assessed', item.notes || null, item.owner || null, dueDate, teachingNote, now);
       }
     });
     try {

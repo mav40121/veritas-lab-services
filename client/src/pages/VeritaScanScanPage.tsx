@@ -43,6 +43,9 @@ import {
   ExternalLink,
   Plus,
   Search,
+  GraduationCap,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -56,6 +59,9 @@ interface ScanMeta {
   name: string;
   createdAt: string;
   updatedAt: string;
+  // VeritaScan teaching mode (Build #7).
+  is_teaching?: number;
+  teaching_intro?: string | null;
 }
 
 interface ItemState {
@@ -67,6 +73,9 @@ interface ItemState {
   completionSource?: string;
   completionLink?: string;
   completionNote?: string;
+  // Instructional explanation shown in the Teaching View. Distinct from
+  // `notes`, which is the assessment finding.
+  teachingNote?: string;
 }
 
 // Global running-tally ordinal map. Iterates DOMAINS in display order,
@@ -97,6 +106,7 @@ function buildInitialItems(): Record<number, ItemState> {
       notes: "",
       owner: "",
       dueDate: "",
+      teachingNote: "",
     };
   }
   return map;
@@ -854,6 +864,156 @@ function SidebarDomainRow({
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
+// ─── Teaching View (Build #7) ─────────────────────────────────────────────
+// A guided walkthrough of a scan used as a teaching example. A trainer (writer)
+// authors a teaching note per item explaining what a surveyor looks for and why
+// a status was assigned; a trainee studies the same scan, revealing the model
+// status and explanation item by item. Assessment edits are made in the normal
+// scan view — here writers only author the instructional notes.
+function TeachingCardTrainee({ item, state, accreditationChoice }: {
+  item: ScanItem; state: ItemState; accreditationChoice: string;
+}) {
+  const [revealed, setRevealed] = useState(false);
+  return (
+    <div className="px-3 py-2.5 rounded-lg mb-1.5 border border-border">
+      <div className="flex items-start gap-2.5">
+        <span className="text-[11px] font-mono text-muted-foreground/60 mt-0.5 shrink-0 w-7 text-right">
+          {GLOBAL_ORDINALS[item.id]}
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm leading-snug">{item.question}</p>
+          <CitationRow item={item} expanded accreditationChoice={accreditationChoice} />
+          {!revealed ? (
+            <Button variant="outline" size="sm" className="h-7 text-xs mt-2" onClick={() => setRevealed(true)}>
+              <Eye className="h-3 w-3 mr-1" /> Reveal explanation
+            </Button>
+          ) : (
+            <div className="mt-2 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border ${STATUS_COLORS[state.status]}`}>{state.status}</span>
+                <button type="button" className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1" onClick={() => setRevealed(false)}>
+                  <EyeOff className="h-3 w-3" /> Hide
+                </button>
+              </div>
+              <p className="text-sm whitespace-pre-wrap text-foreground/90">{state.teachingNote}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TeachingCardAuthor({ item, state, onChange, accreditationChoice }: {
+  item: ScanItem; state: ItemState; onChange: (id: number, patch: Partial<ItemState>) => void; accreditationChoice: string;
+}) {
+  return (
+    <div className="px-3 py-2.5 rounded-lg mb-1.5 border border-border">
+      <div className="flex items-start gap-2.5">
+        <span className="text-[11px] font-mono text-muted-foreground/60 mt-0.5 shrink-0 w-7 text-right">
+          {GLOBAL_ORDINALS[item.id]}
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start gap-2">
+            <p className="text-sm leading-snug flex-1">{item.question}</p>
+            <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border ${STATUS_COLORS[state.status]}`}>{state.status}</span>
+          </div>
+          <CitationRow item={item} expanded accreditationChoice={accreditationChoice} />
+          <Textarea
+            className="mt-2 text-xs min-h-[52px] resize-none"
+            placeholder="Teaching note: what a surveyor looks for here and why this status. Shown to trainees in the Teaching View."
+            value={state.teachingNote ?? ""}
+            onChange={(e) => onChange(item.id, { teachingNote: e.target.value })}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TeachingView({ items, onChange, readOnly, accreditationChoice, intro, onSaveIntro, savingIntro }: {
+  items: Record<number, ItemState>;
+  onChange: (id: number, patch: Partial<ItemState>) => void;
+  readOnly: boolean;
+  accreditationChoice: string;
+  intro: string;
+  onSaveIntro: (text: string) => void;
+  savingIntro: boolean;
+}) {
+  const [introDraft, setIntroDraft] = useState(intro);
+  useEffect(() => { setIntroDraft(intro); }, [intro]);
+  const introDirty = introDraft.trim() !== (intro ?? "").trim();
+
+  // Trainee curated set: items the trainer annotated, in report order.
+  const annotated = useMemo(() => {
+    const out: ScanItem[] = [];
+    for (const domain of DOMAINS) {
+      for (const it of SCAN_ITEMS.filter((i) => i.domain === domain)) {
+        if ((items[it.id]?.teachingNote ?? "").trim()) out.push(it);
+      }
+    }
+    return out;
+  }, [items]);
+
+  return (
+    <div>
+      {/* Learning objectives / intro */}
+      {readOnly ? (
+        intro?.trim() ? (
+          <div className="mb-4 rounded-lg border border-indigo-500/30 bg-indigo-500/5 p-3">
+            <div className="flex items-center gap-2 mb-1 text-indigo-700 dark:text-indigo-300">
+              <GraduationCap className="h-4 w-4" />
+              <span className="text-sm font-semibold">Learning objectives</span>
+            </div>
+            <p className="text-sm whitespace-pre-wrap text-foreground/90">{intro}</p>
+          </div>
+        ) : null
+      ) : (
+        <div className="mb-4 rounded-lg border border-border p-3">
+          <div className="flex items-center gap-2 mb-1.5">
+            <GraduationCap className="h-4 w-4 text-primary" />
+            <span className="text-sm font-semibold">Learning objectives</span>
+          </div>
+          <Textarea
+            className="text-xs min-h-[60px] resize-none"
+            placeholder="What should a trainee take away from this scan? Shown at the top of the Teaching View."
+            value={introDraft}
+            onChange={(e) => setIntroDraft(e.target.value)}
+          />
+          <div className="flex justify-end mt-1.5">
+            <Button size="sm" className="h-7 text-xs" disabled={!introDirty || savingIntro} onClick={() => onSaveIntro(introDraft)}>
+              {savingIntro ? "Saving…" : "Save objectives"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {readOnly ? (
+        annotated.length === 0 ? (
+          <p className="text-sm text-muted-foreground">This teaching example has no annotated items yet. Ask the author to add teaching notes.</p>
+        ) : (
+          annotated.map((it) => (
+            <TeachingCardTrainee key={it.id} item={it} state={items[it.id]} accreditationChoice={accreditationChoice} />
+          ))
+        )
+      ) : (
+        DOMAINS.map((domain) => {
+          const domainItems = SCAN_ITEMS.filter((i) => i.domain === domain);
+          if (domainItems.length === 0) return null;
+          return (
+            <div key={domain} className="mb-5">
+              <h3 className="text-sm font-semibold mb-2">{domain}</h3>
+              {domainItems.map((it) => (
+                <TeachingCardAuthor key={it.id} item={it} state={items[it.id]} onChange={onChange} accreditationChoice={accreditationChoice} />
+              ))}
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
 export default function VeritaScanScanPage() {
   const labRoute = useLabRoute();
   const activeLabId = useActiveLabId();
@@ -868,6 +1028,11 @@ export default function VeritaScanScanPage() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [pdfLoading, setPdfLoading] = useState<"executive" | "full" | null>(null);
   const [excelLoading, setExcelLoading] = useState(false);
+  // VeritaScan teaching mode (Build #7): whether the read-only guided Teaching
+  // View is showing instead of the editable scan. Defaults on for a read-only
+  // viewer of a teaching scan (a trainee lands in the walkthrough).
+  const [teachingViewOn, setTeachingViewOn] = useState(false);
+  const teachingViewInit = useRef(false);
 
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -888,6 +1053,39 @@ export default function VeritaScanScanPage() {
   const { data: scanMeta, isLoading: metaLoading } = useQuery<ScanMeta>({
     queryKey: [scanMetaUrl],
     enabled: !isNaN(scanId),
+  });
+  const isTeaching = !!scanMeta?.is_teaching;
+
+  // Once the scan meta loads, a read-only viewer of a teaching scan lands in
+  // the guided Teaching View. Writers stay in the editable scan by default and
+  // toggle in. Runs once so a writer's manual toggle is never overridden.
+  useEffect(() => {
+    if (teachingViewInit.current || !scanMeta) return;
+    teachingViewInit.current = true;
+    if (isTeaching && readOnly) setTeachingViewOn(true);
+  }, [scanMeta, isTeaching, readOnly]);
+
+  // VeritaScan teaching mode: flag the scan as a teaching example and set its
+  // learning-objectives intro. Write-gated server side; disabled for readOnly.
+  const teachingMutation = useMutation({
+    mutationFn: async (payload: { isTeaching: boolean; teachingIntro?: string }) => {
+      const url = activeLabId
+        ? `${API_BASE}/api/labs/${activeLabId}/veritascan/scans/${scanId}/teaching`
+        : null;
+      if (!url) throw new Error("Active lab required for teaching mode.");
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || "Failed to update teaching settings");
+      }
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [scanMetaUrl] }),
+    onError: (e: any) => toast({ title: "Teaching update failed", description: String(e?.message ?? e), variant: "destructive" }),
   });
 
   // ── Phase 3.5: fetch lab accreditation_choice for per-row badge gating ──
@@ -955,6 +1153,7 @@ export default function VeritaScanScanPage() {
           completionSource: (apiItem as any).completion_source || (apiItem as any).completionSource || undefined,
           completionLink: (apiItem as any).completion_link || (apiItem as any).completionLink || undefined,
           completionNote: (apiItem as any).completion_note || (apiItem as any).completionNote || undefined,
+          teachingNote: (apiItem as any).teaching_note || (apiItem as any).teachingNote || "",
         };
       }
       return next;
@@ -1362,6 +1561,16 @@ export default function VeritaScanScanPage() {
               <span>{totalAssessed}/{SCAN_ITEMS.length} assessed</span>
             </div>
             <div className="ml-auto flex items-center gap-2">
+              {isTeaching && (
+                <Badge variant="outline" className="text-[10px] border text-indigo-700 bg-indigo-500/10 border-indigo-500/30">
+                  <GraduationCap className="h-3 w-3 mr-1" /> Teaching example
+                </Badge>
+              )}
+              {isTeaching && (
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setTeachingViewOn((v) => !v)}>
+                  {teachingViewOn ? "Edit scan" : "Teaching View"}
+                </Button>
+              )}
               {saveStatus === "saving" && (
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -1376,36 +1585,63 @@ export default function VeritaScanScanPage() {
               )}
             </div>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Status changes save automatically. Click a domain in the sidebar to
-            navigate.
-          </p>
+          <div className="flex items-center gap-3 mt-1">
+            <p className="text-xs text-muted-foreground">
+              {teachingViewOn
+                ? "Teaching View: a guided, read-only walkthrough for training. Assessment edits are made in the scan."
+                : "Status changes save automatically. Click a domain in the sidebar to navigate."}
+            </p>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => teachingMutation.mutate({ isTeaching: !isTeaching, teachingIntro: scanMeta?.teaching_intro ?? "" })}
+                disabled={teachingMutation.isPending}
+                className="text-xs text-primary hover:underline disabled:opacity-50 whitespace-nowrap"
+              >
+                {isTeaching ? "Remove teaching flag" : "Mark as teaching example"}
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Domain sections */}
-        {DOMAINS.map((domain) => (
-          <DomainSection
-            key={domain}
-            domain={domain}
+        {teachingViewOn ? (
+          <TeachingView
             items={items}
             onChange={handleItemChange}
-            sectionRef={(el) => {
-              sectionRefs.current[domain] = el;
-            }}
+            readOnly={readOnly}
             accreditationChoice={accreditationChoice}
-            evidence={evidenceCtx}
+            intro={scanMeta?.teaching_intro ?? ""}
+            onSaveIntro={(text) => teachingMutation.mutate({ isTeaching: true, teachingIntro: text })}
+            savingIntro={teachingMutation.isPending}
           />
-        ))}
+        ) : (
+          <>
+            {/* Domain sections */}
+            {DOMAINS.map((domain) => (
+              <DomainSection
+                key={domain}
+                domain={domain}
+                items={items}
+                onChange={handleItemChange}
+                sectionRef={(el) => {
+                  sectionRefs.current[domain] = el;
+                }}
+                accreditationChoice={accreditationChoice}
+                evidence={evidenceCtx}
+              />
+            ))}
 
-        {/* Parked (N/A) items section -- always renders last, below every
-            active domain. Lets the lab N/A items they don't apply and have
-            them disappear from active work without losing the audit trail. */}
-        <ParkedItemsSection
-          items={items}
-          onChange={handleItemChange}
-          accreditationChoice={accreditationChoice}
-          evidence={evidenceCtx}
-        />
+            {/* Parked (N/A) items section -- always renders last, below every
+                active domain. Lets the lab N/A items they don't apply and have
+                them disappear from active work without losing the audit trail. */}
+            <ParkedItemsSection
+              items={items}
+              onChange={handleItemChange}
+              accreditationChoice={accreditationChoice}
+              evidence={evidenceCtx}
+            />
+          </>
+        )}
       </div>
     </div>
   );
