@@ -36670,6 +36670,96 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   );
 
+  // GET /documents/:id/signature-report.xlsx — LHF-7 combined signature report.
+  // Fuses the director/approver sign-offs, the writer attestation roster (with
+  // stale-version flags), and the Staff Portal kiosk signatures for ONE policy
+  // into a single surveyor-ready workbook. Closes the competitive gap where the
+  // "who approved" and "who has/has not signed" pictures lived in two separate
+  // views and neither exported. Reuses the customer-facing workbook standard.
+  app.get(
+    "/api/labs/:labId/veritapolicy/documents/:id/signature-report.xlsx",
+    authMiddleware,
+    labScopeMiddleware,
+    async (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const doc = sqlite
+        .prepare("SELECT id, lab_id, title, status, current_version_id FROM policy_documents WHERE id = ?")
+        .get(id) as any;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+
+      // Current version number lives on policy_versions; effective date on the
+      // document. (policy_documents has no policy_number column — that field is
+      // on the separate master-list tracker, so it is intentionally omitted.)
+      const ver = doc.current_version_id
+        ? (sqlite.prepare("SELECT version_number FROM policy_versions WHERE id = ?").get(doc.current_version_id) as any)
+        : null;
+      const effRow = sqlite.prepare("SELECT effective_date FROM policy_documents WHERE id = ?").get(id) as any;
+
+      // Director / approver sign-offs, ascending timeline.
+      const signoffs = sqlite
+        .prepare(
+          `SELECT s.action, s.comment, s.signed_at, s.typed_signature,
+                  u.name AS user_name, u.email AS user_email,
+                  st.step_name, st.step_order
+             FROM policy_signoffs s
+             JOIN users u ON u.id = s.user_id
+             LEFT JOIN policy_approval_steps st ON st.id = s.workflow_step_id
+            WHERE s.document_id = ?
+            ORDER BY s.signed_at ASC`
+        )
+        .all(id) as any[];
+
+      // Writer attestation roster with the same stale-version flag the UI shows.
+      const attRows = sqlite
+        .prepare(
+          `SELECT a.version_id, a.assigned_at, a.completed_at, a.typed_signature,
+                  u.name AS assignee_name, u.email AS assignee_email
+             FROM policy_attestations a
+             JOIN users u ON u.id = a.assigned_to_user_id
+            WHERE a.document_id = ?
+            ORDER BY a.assigned_at DESC`
+        )
+        .all(id) as any[];
+      const attestations = attRows.map((r) => ({
+        ...r,
+        is_stale_version: doc.current_version_id != null && r.version_id !== doc.current_version_id,
+      }));
+
+      // Staff Portal (kiosk) read-and-sign signatures.
+      const staffSignatures = staffPolicySignaturesForDoc(sqlite, doc.lab_id, id);
+
+      const labRow = sqlite
+        .prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?")
+        .get(doc.lab_id) as any;
+
+      const { generatePolicySignatureReportExcel } = await import("./policySignatureReport");
+      const buf = await generatePolicySignatureReportExcel(
+        {
+          doc: { title: doc.title, policy_number: null, status: doc.status },
+          versionNumber: ver?.version_number ?? null,
+          effectiveDate: effRow?.effective_date ?? null,
+          signoffs,
+          attestations,
+          staffSignatures,
+        },
+        { labName: labRow?.lab_name || "Laboratory", cliaNumber: labRow?.clia_number || "Not on file" }
+      );
+
+      const safe =
+        String(doc.title || "policy")
+          .replace(/[^a-z0-9]+/gi, "_")
+          .replace(/^_+|_+$/g, "")
+          .slice(0, 40) || "policy";
+      const date = new Date().toISOString().slice(0, 10);
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="VeritaPolicy_Signature_Report_${safe}_${date}.xlsx"`);
+      res.send(buf);
+    }
+  );
+
   // DELETE /documents/:id/attestations/:assignmentId — un-assign.
   app.delete(
     "/api/labs/:labId/veritapolicy/documents/:id/attestations/:assignmentId",
