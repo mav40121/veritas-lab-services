@@ -1589,6 +1589,22 @@ interface PortalCompetencyDetail {
   remediation_plan: string | null;
   content_hash: string;
   already_acknowledged: boolean;
+  locked?: boolean;
+  items?: Array<{
+    id: number;
+    method_number: number;
+    method_group_id: number | null;
+    method_group_name: string | null;
+    el1_specimen_id: string | null;
+    el2_evidence: string | null;
+    el2_date: string | null;
+    el3_qc_date: string | null;
+    el5_sample_type: string | null;
+    el5_sample_id: string | null;
+    el6_quiz_id: string | null;
+    el6_score: number | null;
+    el6_date_taken: string | null;
+  }>;
 }
 
 function StaffPortalCompetenciesView({
@@ -1609,6 +1625,38 @@ function StaffPortalCompetenciesView({
   const [typedName, setTypedName] = useState<string>(`${employee.first_name}${employee.middle_initial ? ` ${employee.middle_initial}.` : ""} ${employee.last_name}`.trim());
   const [signing, setSigning] = useState(false);
   const [signError, setSignError] = useState<string | null>(null);
+  // Employee self-edit of the factual DATA on their own unsigned assessment.
+  // Keyed by item id -> the editable fields for that element.
+  const [editItems, setEditItems] = useState<Record<number, any>>({});
+  const [savingData, setSavingData] = useState(false);
+  const [dataMsg, setDataMsg] = useState<string | null>(null);
+  const [dataError, setDataError] = useState<string | null>(null);
+
+  function setItemField(itemId: number, field: string, value: string) {
+    setEditItems((prev) => ({ ...prev, [itemId]: { ...(prev[itemId] || {}), [field]: value } }));
+  }
+
+  async function saveMyData() {
+    if (!active || !detail) return;
+    setSavingData(true);
+    setDataError(null);
+    setDataMsg(null);
+    try {
+      const items = Object.entries(editItems).map(([id, fields]) => ({ id: Number(id), ...(fields as any) }));
+      const r = await fetch(`/api/staff-portal-session/competencies/${active.assessment_id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ employee_id: employee.id, items }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      setDataMsg("Your information was saved. Review, then sign below.");
+    } catch (e: any) {
+      setDataError(e.message || "Could not save your information");
+    } finally {
+      setSavingData(false);
+    }
+  }
 
   function fetchList() {
     setList(null);
@@ -1641,7 +1689,25 @@ function StaffPortalCompetenciesView({
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
         return r.json();
       })
-      .then((d: PortalCompetencyDetail) => setDetail(d))
+      .then((d: PortalCompetencyDetail) => {
+        setDetail(d);
+        // Seed the editable data fields from the current item values.
+        const seed: Record<number, any> = {};
+        for (const it of (d.items || [])) {
+          seed[it.id] = {
+            el1SpecimenId: it.el1_specimen_id || "",
+            el2Evidence: it.el2_evidence || "",
+            el2Date: it.el2_date || "",
+            el3QcDate: it.el3_qc_date || "",
+            el5SampleType: it.el5_sample_type || "",
+            el5SampleId: it.el5_sample_id || "",
+            el6QuizId: it.el6_quiz_id || "",
+            el6Score: it.el6_score == null ? "" : String(it.el6_score),
+            el6DateTaken: it.el6_date_taken || "",
+          };
+        }
+        setEditItems(seed);
+      })
       .catch((e: any) => setDetailError(e.message || "Could not load assessment"));
   }
 
@@ -1650,6 +1716,9 @@ function StaffPortalCompetenciesView({
     setDetail(null);
     setDetailError(null);
     setSignError(null);
+    setEditItems({});
+    setDataMsg(null);
+    setDataError(null);
   }
 
   async function submitSignature() {
@@ -1748,6 +1817,76 @@ function StaffPortalCompetenciesView({
               </div>
             )}
           </div>
+
+          {detail && detail.competency_type === "technical" && (detail.items?.length ?? 0) > 0 && !detail.locked && !active.signed && !detail.already_acknowledged && (
+            <div className="border border-border rounded-lg bg-card p-4 mb-4" data-testid="sp-competency-myinfo">
+              <div className="text-sm font-semibold mb-1">Add my information</div>
+              <p className="text-xs text-muted-foreground mb-3">
+                Fill in the details from your own testing: the specimen you ran, dates, and evidence. Your evaluator sets the observer and the Pass result and gives the final approval.
+              </p>
+              <div className="space-y-3">
+                {(() => {
+                  const groups: Record<string, any[]> = {};
+                  for (const it of (detail.items || [])) {
+                    const key = it.method_group_name || "General";
+                    (groups[key] = groups[key] || []).push(it);
+                  }
+                  const fieldCls = "w-full border border-border rounded p-1.5 text-sm bg-background";
+                  return Object.entries(groups).map(([gname, gitems]) => (
+                    <div key={gname} className="border border-border/60 rounded-md p-2">
+                      <div className="text-xs font-medium mb-2">{gname}</div>
+                      <div className="space-y-2">
+                        {gitems.sort((a, b) => a.method_number - b.method_number).map((it) => {
+                          const v = editItems[it.id] || {};
+                          const el = it.method_number;
+                          if (el === 1) return (
+                            <div key={it.id}><label className="text-[11px] text-muted-foreground">Element 1 · Specimen ID observed</label>
+                              <input className={fieldCls} value={v.el1SpecimenId ?? ""} onChange={(e) => setItemField(it.id, "el1SpecimenId", e.target.value)} data-testid="sp-myinfo-el1-specimen" /></div>
+                          );
+                          if (el === 2) return (
+                            <div key={it.id} className="grid grid-cols-2 gap-2">
+                              <div><label className="text-[11px] text-muted-foreground">Element 2 · Evidence</label>
+                                <input className={fieldCls} value={v.el2Evidence ?? ""} onChange={(e) => setItemField(it.id, "el2Evidence", e.target.value)} /></div>
+                              <div><label className="text-[11px] text-muted-foreground">Date</label>
+                                <input type="date" className={fieldCls} value={v.el2Date ?? ""} onChange={(e) => setItemField(it.id, "el2Date", e.target.value)} /></div>
+                            </div>
+                          );
+                          if (el === 3) return (
+                            <div key={it.id}><label className="text-[11px] text-muted-foreground">Element 3 · Date you ran QC</label>
+                              <input type="date" className={fieldCls} value={v.el3QcDate ?? ""} onChange={(e) => setItemField(it.id, "el3QcDate", e.target.value)} /></div>
+                          );
+                          if (el === 5) return (
+                            <div key={it.id} className="grid grid-cols-2 gap-2">
+                              <div><label className="text-[11px] text-muted-foreground">Element 5 · Sample type</label>
+                                <input className={fieldCls} value={v.el5SampleType ?? ""} onChange={(e) => setItemField(it.id, "el5SampleType", e.target.value)} /></div>
+                              <div><label className="text-[11px] text-muted-foreground">Sample ID</label>
+                                <input className={fieldCls} value={v.el5SampleId ?? ""} onChange={(e) => setItemField(it.id, "el5SampleId", e.target.value)} /></div>
+                            </div>
+                          );
+                          if (el === 6) return (
+                            <div key={it.id} className="grid grid-cols-3 gap-2">
+                              <div><label className="text-[11px] text-muted-foreground">Element 6 · Quiz ID</label>
+                                <input className={fieldCls} value={v.el6QuizId ?? ""} onChange={(e) => setItemField(it.id, "el6QuizId", e.target.value)} /></div>
+                              <div><label className="text-[11px] text-muted-foreground">Score</label>
+                                <input className={fieldCls} value={v.el6Score ?? ""} onChange={(e) => setItemField(it.id, "el6Score", e.target.value)} /></div>
+                              <div><label className="text-[11px] text-muted-foreground">Date taken</label>
+                                <input type="date" className={fieldCls} value={v.el6DateTaken ?? ""} onChange={(e) => setItemField(it.id, "el6DateTaken", e.target.value)} /></div>
+                            </div>
+                          );
+                          return null; // Element 4 (maintenance observation) is the evaluator's.
+                        })}
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+              {dataError && <div className="text-xs text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 rounded p-2 mt-3">{dataError}</div>}
+              {dataMsg && <div className="text-xs text-green-800 bg-green-50 border border-green-200 rounded p-2 mt-3" data-testid="sp-myinfo-saved">{dataMsg}</div>}
+              <button type="button" onClick={saveMyData} disabled={savingData} className="mt-3 text-white font-semibold py-2 px-4 rounded-md disabled:opacity-50" style={{ backgroundColor: "#01696F" }} data-testid="sp-myinfo-save">
+                {savingData ? "Saving..." : "Save my information"}
+              </button>
+            </div>
+          )}
 
           {active.signed || detail?.already_acknowledged ? (
             <div className="border border-green-200 bg-green-50 rounded-lg p-4" data-testid="sp-competency-already-signed">
