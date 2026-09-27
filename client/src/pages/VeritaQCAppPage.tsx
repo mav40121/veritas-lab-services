@@ -17,7 +17,7 @@ import {
 import {
   Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { AlertTriangle, CheckCircle2, Lock, FlaskConical, LineChart } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Lock, FlaskConical, LineChart, ClipboardCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 
@@ -981,6 +981,28 @@ export default function VeritaQCAppPage() {
           </div>
           <Button asChild variant="outline" size="sm" className="shrink-0" data-testid="veritaqc-cumsum-link">
             <Link href={`/labs/${activeLabId}/veritacheck/cumsum`}>Open CUMSUM</Link>
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* IQCP entry point. The IQCP builder lives under VeritaDC (document control)
+          because the plan is a controlled document, but a lab manager working daily
+          QC looks for it here, since an IQCP is a risk-based quality control plan.
+          Surface it from VeritaQC so it is discoverable where it is used. */}
+      <Card className="mb-6 border-dashed">
+        <CardContent className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 mb-0.5">
+              <ClipboardCheck className="h-4 w-4 text-primary" />
+              <span className="font-semibold text-sm">IQCP (Individualized Quality Control Plan)</span>
+              <Badge variant="outline" className="text-[10px]">Risk-based QC</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground max-w-2xl">
+              Reduce QC frequency on eligible test systems with a CMS-compliant IQCP: a risk assessment across the five components and three testing phases, a quality control plan, and ongoing quality assessment. Built to 42 CFR 493.1250.
+            </p>
+          </div>
+          <Button asChild variant="outline" size="sm" className="shrink-0" data-testid="veritaqc-iqcp-link">
+            <Link href={`/labs/${activeLabId}/veritapolicy-app/iqcp`}>Build an IQCP</Link>
           </Button>
         </CardContent>
       </Card>
