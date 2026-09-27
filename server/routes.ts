@@ -9441,6 +9441,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!Number.isFinite(employeeId) || employeeId <= 0) {
         return res.status(400).json({ error: "employee_id required" });
       }
+      // Access control (2026-09-27): a staff-portal caller may only read/act on
+      // their OWN competencies. The session already binds the caller to one
+      // staff record; reject any passed employee_id that is not it. Closes the
+      // class where a client-supplied id could reach another employee's record.
+      if (req.staffPortalStaffEmployeeId != null && employeeId !== req.staffPortalStaffEmployeeId) {
+        return res.status(403).json({ error: "You can only access your own competencies." });
+      }
       const sqlite = (db as any).$client;
 
       // Validate the staff employee belongs to this lab via the picker path
@@ -9519,6 +9526,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const employeeId = parseInt(String(req.query.employee_id || ""), 10);
       if (!Number.isFinite(assessmentId) || assessmentId <= 0) return res.status(400).json({ error: "Bad assessment_id" });
       if (!Number.isFinite(employeeId) || employeeId <= 0) return res.status(400).json({ error: "employee_id required" });
+      if (req.staffPortalStaffEmployeeId != null && employeeId !== req.staffPortalStaffEmployeeId) {
+        return res.status(403).json({ error: "You can only access your own competencies." });
+      }
       const sqlite = (db as any).$client;
 
       const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
@@ -9542,6 +9552,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const hash = hashCompetencyAssessment(assessment);
 
+      // Editable-by-employee item rows: only the factual DATA fields the tech
+      // supplies (specimen IDs, dates, evidence, sample refs, quiz refs). The
+      // observer, Pass/Fail verdict, and N/A determinations are the evaluator's
+      // and are NOT returned as editable (kept read-only server-side too).
+      const items = (assessment.competency_type === "technical")
+        ? (sqlite.prepare(
+            `SELECT id, method_number, method_group_id, method_group_name,
+                    el1_specimen_id, el2_evidence, el2_date, el3_qc_date,
+                    el5_sample_type, el5_sample_id, el6_quiz_id, el6_score, el6_date_taken,
+                    el1_observer_initials, el4_observer_initials, passed
+             FROM competency_assessment_items WHERE assessment_id = ?
+             ORDER BY method_group_id, method_number`
+          ).all(assessmentId) as any[])
+        : [];
+
       res.json({
         assessment_id: assessment.id,
         program_id: assessment.program_id,
@@ -9555,8 +9580,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         competency_type: assessment.competency_type,
         status: assessment.status,
         remediation_plan: assessment.remediation_plan,
+        locked: assessment.locked === 1,
         content_hash: hash,
         already_acknowledged: assessment.employee_acknowledged === 1,
+        items,
       });
     } catch (err: any) {
       console.error("[staff-portal-session/competencies GET one] error:", err);
@@ -9577,6 +9604,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const employeeId = parseInt(String(employee_id ?? ""), 10);
       if (!Number.isFinite(assessmentId) || assessmentId <= 0) return res.status(400).json({ error: "Bad assessment_id" });
       if (!Number.isFinite(employeeId) || employeeId <= 0) return res.status(400).json({ error: "employee_id required" });
+      if (req.staffPortalStaffEmployeeId != null && employeeId !== req.staffPortalStaffEmployeeId) {
+        return res.status(403).json({ error: "You can only sign your own competencies." });
+      }
       const typed = typeof typed_signature === "string" ? typed_signature.trim() : "";
       if (!typed) return res.status(400).json({ error: "typed_signature required" });
       if (typed.length > 200) return res.status(400).json({ error: "typed_signature too long" });
@@ -9639,6 +9669,90 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (err: any) {
       console.error("[staff-portal-session/competencies POST sign] error:", err);
       return res.status(500).json({ error: err.message || "competency_sign_failed" });
+    }
+  });
+
+  // PUT /api/staff-portal-session/competencies/:assessment_id
+  // Employee self-service (2026-09-27): add or correct the factual DATA on their
+  // OWN unsigned assessment (specimen IDs, dates, evidence, sample refs, quiz
+  // refs). The observer, Pass/Fail verdict, N/A determinations, and evaluator
+  // are NOT editable here: those are the evaluator's assessment and approval.
+  // Scoped to the AUTHENTICATED staff identity (never a client-supplied id),
+  // UPDATE-only on existing rows of this assessment, 409 once locked.
+  app.put("/api/staff-portal-session/competencies/:assessment_id", staffPortalAuthMiddleware, (req: any, res) => {
+    try {
+      const labId = req.staffPortalLabId;
+      const assessmentId = parseInt(req.params.assessment_id, 10);
+      if (!Number.isFinite(assessmentId) || assessmentId <= 0) return res.status(400).json({ error: "Bad assessment_id" });
+      const selfStaffId = req.staffPortalStaffEmployeeId;
+      if (selfStaffId == null) return res.status(403).json({ error: "No staff identity on this session." });
+      const bodyEmployeeId = req.body?.employee_id;
+      if (bodyEmployeeId != null && Number(bodyEmployeeId) !== selfStaffId) {
+        return res.status(403).json({ error: "You can only edit your own competencies." });
+      }
+      const sqlite = (db as any).$client;
+      const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+      if (!ownerRow) return res.status(404).json({ error: "Lab not found" });
+      const staffLab = staffLabByLabId(labId, ownerRow.owner_user_id) as any;
+      if (!staffLab) return res.status(404).json({ error: "Staff roster not found" });
+      const staffEmployee = sqlite.prepare(
+        "SELECT id FROM staff_employees WHERE id = ? AND lab_id = ? AND status = 'active'"
+      ).get(selfStaffId, staffLab.id) as any;
+      if (!staffEmployee) return res.status(404).json({ error: "Employee not found" });
+      const compEmployee = resolveCompEmployee(sqlite, staffEmployee.id, labId);
+      if (!compEmployee) return res.status(404).json({ error: "No competency record bridged to this staff member" });
+      const assessment = sqlite.prepare(
+        "SELECT * FROM competency_assessments WHERE id = ? AND employee_id = ?"
+      ).get(assessmentId, compEmployee.id) as any;
+      if (!assessment) return res.status(404).json({ error: "Assessment not found for this employee" });
+      if (assessment.locked === 1) return res.status(409).json({ error: "This assessment is signed and locked. Ask your evaluator to unlock it to make changes." });
+
+      const items: any[] = Array.isArray(req.body?.items) ? req.body.items : [];
+      // Whitelist of employee-editable DATA columns. Everything else on the row
+      // (observer initials, passed, N/A flags) is intentionally excluded so a
+      // crafted request cannot flip the verdict or the observer.
+      const DATA_COLS: Record<string, string> = {
+        el1SpecimenId: "el1_specimen_id",
+        el2Evidence: "el2_evidence",
+        el2Date: "el2_date",
+        el3QcDate: "el3_qc_date",
+        el5SampleType: "el5_sample_type",
+        el5SampleId: "el5_sample_id",
+        el6QuizId: "el6_quiz_id",
+        el6Score: "el6_score",
+        el6DateTaken: "el6_date_taken",
+      };
+      const beforeItems = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(assessmentId);
+      let updated = 0;
+      const tx = sqlite.transaction(() => {
+        for (const it of items) {
+          const itemId = Number(it?.id);
+          if (!Number.isFinite(itemId)) continue;
+          const row = sqlite.prepare("SELECT id FROM competency_assessment_items WHERE id = ? AND assessment_id = ?").get(itemId, assessmentId) as any;
+          if (!row) continue; // never touch rows outside this assessment
+          const sets: string[] = []; const vals: any[] = [];
+          for (const [k, col] of Object.entries(DATA_COLS)) {
+            if (k in it) {
+              let v: any = it[k];
+              if (k === "el6Score") v = (v === "" || v == null) ? null : Number(v);
+              else v = (v == null) ? null : String(v);
+              sets.push(`${col} = ?`); vals.push(v);
+            }
+          }
+          if (sets.length) {
+            vals.push(itemId);
+            sqlite.prepare(`UPDATE competency_assessment_items SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
+            updated += 1;
+          }
+        }
+      });
+      tx();
+      const afterItems = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(assessmentId);
+      logAudit({ userId: req.staffPortalUserId, ownerUserId: ownerRow.owner_user_id, module: "veritacomp", action: "update", entityType: "assessment_self_edit", entityId: String(assessmentId), entityLabel: compEmployee.name || undefined, before: { items: beforeItems }, after: { items: afterItems }, ipAddress: req.ip });
+      res.json({ ok: true, updated });
+    } catch (err: any) {
+      console.error("[staff-portal-session/competencies PUT] error:", err);
+      return res.status(500).json({ error: err.message || "competency_self_edit_failed" });
     }
   });
 
