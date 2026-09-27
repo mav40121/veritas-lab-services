@@ -202,6 +202,20 @@ export default function LabMembersPage() {
     onError: (err: any) => toast({ title: "Email change failed", description: String(err?.message || err), variant: "destructive" }),
   });
 
+  // Designate (or clear) the lab's Laboratory Medical Director. Identified by
+  // email so it can name a member or a pending invite; the MD gets one free seat.
+  const [mdOpen, setMdOpen] = useState(false);
+  const [mdFormEmail, setMdFormEmail] = useState("");
+  const [mdFormName, setMdFormName] = useState("");
+  const mdMutation = useMutation({
+    mutationFn: async ({ email, name }: { email: string; name: string }) => {
+      const res = await apiRequest("PUT", `/api/labs/${activeLabId}/medical-director`, { email, name });
+      return res.json();
+    },
+    onSuccess: () => { toast({ title: mdFormEmail.trim() ? "Medical director designated" : "Medical director cleared" }); setMdOpen(false); setMdFormEmail(""); setMdFormName(""); invalidate(); },
+    onError: (err: any) => toast({ title: "Could not set medical director", description: String(err?.message || err), variant: "destructive" }),
+  });
+
   const reissueMutation = useMutation({
     mutationFn: async (seatId: number) => {
       const res = await apiRequest("POST", `/api/labs/${activeLabId}/seat-invites/${seatId}/reissue`);
@@ -304,6 +318,58 @@ export default function LabMembersPage() {
                 All active seats are in use. Inviting another writer requires a tier upgrade or an additional seat.
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Laboratory Medical Director designation. The MD is a distinct class,
+          identified by email (labs.medical_director_email), gets one free seat,
+          and is who VeritaPolicy approvals route to. Owner/admin only. */}
+      {canManage && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-3">
+                <Stethoscope size={18} className="text-teal-700" />
+                <div>
+                  <div className="font-medium">Laboratory Medical Director</div>
+                  {data?.medicalDirector?.email ? (
+                    <div className="text-xs text-muted-foreground">
+                      {data.medicalDirector.name ? `${data.medicalDirector.name} · ` : ""}{data.medicalDirector.email}
+                      <span className="ml-1">(free seat, does not count against the cap)</span>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground">Not assigned. Designate the director whose approval VeritaPolicy routes to; they get one free seat.</div>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button size="sm" variant="outline" data-testid="designate-md-toggle" onClick={() => { setMdFormEmail(data?.medicalDirector?.email || ""); setMdFormName(data?.medicalDirector?.name || ""); setMdOpen(v => !v); }}>
+                  <Stethoscope size={12} className="mr-1" /> {data?.medicalDirector?.email ? "Change" : "Designate"}
+                </Button>
+                {data?.medicalDirector?.email && (
+                  <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => mdMutation.mutate({ email: "", name: "" })} disabled={mdMutation.isPending}>
+                    Clear
+                  </Button>
+                )}
+              </div>
+            </div>
+            {mdOpen && (
+              <div className="mt-3 flex flex-col sm:flex-row gap-2 items-start sm:items-end border-t pt-3">
+                <div className="flex-1 w-full">
+                  <label className="text-xs font-medium block mb-1">Medical director email</label>
+                  <Input type="email" placeholder="director@example.com" value={mdFormEmail} onChange={e => setMdFormEmail(e.target.value)} data-testid="md-email-input" />
+                </div>
+                <div className="flex-1 w-full">
+                  <label className="text-xs font-medium block mb-1">Name (optional)</label>
+                  <Input placeholder="Dr. Jane Smith" value={mdFormName} onChange={e => setMdFormName(e.target.value)} />
+                </div>
+                <Button size="sm" data-testid="md-save" onClick={() => mdMutation.mutate({ email: mdFormEmail.trim(), name: mdFormName.trim() })} disabled={mdMutation.isPending || !mdFormEmail.includes("@")}>
+                  {mdMutation.isPending && <Loader2 className="animate-spin mr-1" size={12} />} Save
+                </Button>
+              </div>
+            )}
+            <p className="text-[11px] text-muted-foreground mt-2">Can be a current member or a pending invite. Policy approvals that route to the medical director resolve to this person once they are an active member.</p>
           </CardContent>
         </Card>
       )}
