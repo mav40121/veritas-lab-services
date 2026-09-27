@@ -71,5 +71,19 @@ check("aggregate no rows = none", aggregateElementStatus([], 3) === "none");
 // 9) Empty assessment (no items) with method groups -> fully incomplete.
 check("no items = all elements incomplete", incompleteElementCells([], [{ id: 1, name: "G" }], 6).length === 6);
 
+// 10) NYS-CLEP (8 elements): El7 Safe Work Practices + El8 Delegated Supervisory.
+check("el7 date_observed is data", elementHasData({ el7_date_observed: "2026-09-01" }, 7));
+check("el8 function_assessed is data", elementHasData({ el8_function_assessed: "Result review" }, 8));
+check("el7 passed w/o data = incomplete", itemElementStatus({ passed: 1 }, 7) === "incomplete");
+check("el8 na = na", itemElementStatus({ el8_na: 1 }, 8) === "na");
+{
+  // A 6-element-complete assessment is INCOMPLETE under the 8-element (NYS) count
+  // until El7/El8 are addressed.
+  const mgs = [{ id: 10, name: "Chem A" }];
+  const sixDone = [1, 2, 3, 4, 5, 6].map((n) => ({ method_group_id: 10, element_number: n, el1_specimen_id: "S", el2_evidence: "E", el3_qc_date: "d", el4_date_observed: "d", el5_sample_id: "x", el6_quiz_id: "Q", passed: 1 }));
+  check("6-complete is still incomplete at elementCount 8", !isAssessmentComplete(sixDone, mgs, 8));
+  check("6-complete IS complete at elementCount 6", isAssessmentComplete(sixDone, mgs, 6));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
