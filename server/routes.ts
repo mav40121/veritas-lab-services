@@ -32,6 +32,7 @@ import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
 import { isValidIfuUrl } from "@shared/ifu";
+import { incompleteElementCells as compIncompleteCells } from "@shared/competencyStatus";
 
 // Express already URL-decodes route params before the handler runs, so
 // req.params.analyte for a request to ".../IG%25" arrives as "IG%". Calling
@@ -23089,12 +23090,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const sqlite = (db as any).$client;
     const assessment = sqlite.prepare(
-      `SELECT a.id, a.locked, p.lab_id FROM competency_assessments a
+      `SELECT a.id, a.locked, a.competency_type, p.lab_id FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
        WHERE a.id = ? AND p.lab_id = ?`
     ).get(req.params.id, req.scope.labId) as any;
     if (!assessment) return res.status(404).json({ error: "Assessment not found" });
     if (assessment.locked === 1) return res.status(409).json({ error: "Assessment is already signed and locked" });
+    // Completeness gate (2026-09-27): a technical competency may not be signed
+    // as complete until every element for every covered test has data or N/A.
+    // Server-side mirror of the client rule so an API caller cannot bypass it.
+    if (assessment.competency_type === "technical") {
+      const items = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(req.params.id) as any[];
+      const covered = Array.from(new Set(items.map((i: any) => i.method_group_id).filter((x: any) => x != null))).map((id: any) => {
+        const mg = sqlite.prepare("SELECT name FROM competency_method_groups WHERE id = ?").get(id) as any;
+        return { id: Number(id), name: mg?.name ?? undefined };
+      });
+      const missing = items.length === 0 ? ["(no competency data entered)"] : compIncompleteCells(items, covered, 6);
+      if (missing.length > 0) {
+        return res.status(409).json({ error: "Assessment is incomplete: every element for every test needs data or N/A before signing.", incomplete: missing.slice(0, 20) });
+      }
+    }
     const now = new Date().toISOString();
     const todayDate = now.slice(0, 10);
     const signedOnPaperRaw = typeof req.body?.signed_on_paper_date === "string" ? req.body.signed_on_paper_date.trim() : "";

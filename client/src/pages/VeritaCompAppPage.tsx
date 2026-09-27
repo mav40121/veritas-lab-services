@@ -73,6 +73,7 @@ import { AuditTrailDialog } from "@/components/AuditTrailDialog";
 import { PermissionTooltip, PERMISSION_REASONS } from "@/components/PermissionTooltip";
 import { CompetencyBulkImportDialog } from "@/components/CompetencyBulkImportDialog";
 import { CompetencyCohortSignoffDialog } from "@/components/CompetencyCohortSignoffDialog";
+import { aggregateElementStatus, incompleteElementCells, type ElStatus } from "@shared/competencyStatus";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -888,8 +889,26 @@ function ProgramListView() {
       )}
 
       {!isLoading && !error && programs && programs.length > 0 && (
-        <div className="space-y-3">
-          {programs.map(p => (
+        <div className="space-y-5">
+          {/* Grouped by department so the list lines up with the coverage map's
+              department axis (Phase 1 of the coverage-derived IA). */}
+          {Object.entries(
+            programs.reduce((acc: Record<string, typeof programs>, p) => {
+              const d = ((p.department || "").trim()) || "Other";
+              (acc[d] = acc[d] || []).push(p);
+              return acc;
+            }, {})
+          )
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([dept, deptPrograms]) => (
+              <div key={dept}>
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{dept}</h3>
+                  <span className="text-xs text-muted-foreground">{"·"} {deptPrograms.length} program{deptPrograms.length !== 1 ? "s" : ""}</span>
+                  <div className="flex-1 border-t border-border/60 ml-2" />
+                </div>
+                <div className="space-y-3">
+                  {deptPrograms.map(p => (
             <Card key={p.id} className="group hover:border-primary/30 transition-colors">
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
@@ -937,7 +956,10 @@ function ProgramListView() {
                 </div>
               </CardContent>
             </Card>
-          ))}
+                  ))}
+                </div>
+              </div>
+            ))}
         </div>
       )}
 
@@ -1920,10 +1942,18 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
   })();
 
   const renderAssessmentCard = (a: typeof assessments[number]) => {
-    const passColor = a.status === "pass" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" :
+    // Completeness (unsigned technical only): "In progress" until every element
+    // for every covered test has data or N/A. Signed records keep their verdict.
+    const locked = (a as any).locked === 1;
+    const aItems = (a.items || []) as any[];
+    const coveredGroups = Array.from(new Set(aItems.map((i) => i.method_group_id).filter((x) => x != null)))
+      .map((id) => ({ id: Number(id), name: program.methodGroups?.find((m) => m.id === Number(id))?.name ?? undefined }));
+    const inProgress = !locked && program.type === "technical" && (aItems.length === 0 || incompleteElementCells(aItems, coveredGroups, 6).length > 0);
+    const passColor = inProgress ? "text-amber-700 bg-amber-500/10 border-amber-500/30" :
+      a.status === "pass" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" :
       a.status === "fail" ? "text-red-600 bg-red-500/10 border-red-500/20" :
       "text-amber-600 bg-amber-500/10 border-amber-500/20";
-    const passLabel = a.status === "pass" ? "Pass" : a.status === "fail" ? "Fail" : "Remediation";
+    const passLabel = inProgress ? "In progress" : a.status === "pass" ? "Pass" : a.status === "fail" ? "Fail" : "Remediation";
     return (
       <Card key={a.id} className="hover:border-primary/30 transition-colors">
             <CardContent className="p-4">
@@ -1956,8 +1986,29 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
                     </Button>
                   )}
                   {(a as any).locked !== 1 && (
-                    <Button variant="outline" size="sm" className="h-8 px-2" title="Sign and lock this assessment" onClick={() => { setSignTarget({ id: a.id, employeeName: a.employee_name, assessmentDate: a.assessment_date }); setSignDate(localTodayISO()); setSignDoc(""); }}>
-                      Sign & Complete
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2"
+                      title={inProgress ? "Every element for every test needs data or N/A before you can sign" : "Sign and lock this assessment"}
+                      onClick={() => {
+                        if (inProgress) {
+                          const missing = aItems.length === 0
+                            ? "No competency data entered yet."
+                            : incompleteElementCells(aItems, coveredGroups, 6).slice(0, 8).join("; ");
+                          toast({
+                            title: "Cannot sign: assessment incomplete",
+                            description: `Every element for every test needs data or N/A first. Still open: ${missing}`,
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+                        setSignTarget({ id: a.id, employeeName: a.employee_name, assessmentDate: a.assessment_date });
+                        setSignDate(localTodayISO());
+                        setSignDoc("");
+                      }}
+                    >
+                      Sign &amp; Complete
                     </Button>
                   )}
                   {(a as any).locked === 1 && (
@@ -2030,27 +2081,39 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
                           { num: 6, name: "Problem-Solving Assessment (Quiz)" },
                         ].map(el => {
                           const elItems = (a.items || []).filter((i: AssessmentItem) => (i.method_number) === el.num);
-                          // Prior approval / historical records may carry element rows
-                          // that were never individually scored (every item defaults
-                          // passed=0). Deriving FAIL there contradicts the director's
-                          // recorded verdict and produced a false "fail across the
-                          // board" wall. Only score elements that were actually
-                          // assessed (a pass flag, an initial, a date, or evidence);
-                          // for unscored elements, mirror the overall status.
-                          const scoredItems = elItems.filter((i: AssessmentItem) =>
-                            !!i.passed || !!i.date_met || !!i.employee_initials || !!i.supervisor_initials || !!(i.evidence && String(i.evidence).trim())
-                          );
-                          const statusLabel = elItems.length === 0
-                            ? "N/A"
-                            : scoredItems.length === 0
-                              ? (a.status === "pass" ? "PASS" : a.status === "fail" ? "FAIL" : "N/A")
-                              : (scoredItems.every((i: AssessmentItem) => i.passed) ? "PASS" : "FAIL");
+                          // Completeness rule (2026-09-27): an element is PASS only when it
+                          // carries the data that element requires AND is passed; with no
+                          // data it is INCOMPLETE, never PASS; N/A is a valid completion.
+                          // For SIGNED/locked records we grandfather the recorded verdict
+                          // (prior/historical rows were never scored per element and must
+                          // not retroactively flip to Incomplete/FAIL).
+                          let statusLabel: string;
+                          if ((a as any).locked === 1) {
+                            const scoredItems = elItems.filter((i: AssessmentItem) =>
+                              !!i.passed || !!i.date_met || !!i.employee_initials || !!i.supervisor_initials || !!(i.evidence && String(i.evidence).trim())
+                            );
+                            statusLabel = elItems.length === 0
+                              ? "N/A"
+                              : scoredItems.length === 0
+                                ? (a.status === "pass" ? "PASS" : a.status === "fail" ? "FAIL" : "N/A")
+                                : (scoredItems.every((i: AssessmentItem) => i.passed) ? "PASS" : "FAIL");
+                          } else {
+                            const st: ElStatus | "none" = aggregateElementStatus(a.items || [], el.num);
+                            statusLabel = st === "pass" ? "PASS" : st === "fail" ? "FAIL" : st === "na" ? "N/A" : "Incomplete";
+                          }
+                          const badgeClass = statusLabel === "PASS"
+                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]"
+                            : statusLabel === "FAIL"
+                              ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px]"
+                              : statusLabel === "Incomplete"
+                                ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 text-[10px]"
+                                : "bg-muted text-muted-foreground text-[10px]";
                           return (
                             <tr key={el.num} className="border-b border-border/50">
                               <td className="py-1 pr-2">{el.num}</td>
                               <td className="py-1 pr-2">{el.name}</td>
                               <td className="py-1 text-center">
-                                <Badge className={statusLabel === "PASS" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]" : statusLabel === "FAIL" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px]" : "bg-muted text-muted-foreground text-[10px]"}>
+                                <Badge className={badgeClass}>
                                   {statusLabel}
                                 </Badge>
                               </td>
