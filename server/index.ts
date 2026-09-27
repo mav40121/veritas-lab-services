@@ -102,6 +102,13 @@ app.use("/api/stripe/webhook", express.raw({ type: "application/json" }));
 
 app.use(
   express.json({
+    // Default is 100KB, which a large VeritaComp assessment overruns: a
+    // technical competency PUT/POST resends every method group x 6 elements
+    // (a 24-method-group program is ~144 item objects), and a big lab can
+    // carry far more. That produced a 413 "request entity too large" on the
+    // edit/create path. 5MB covers the largest realistic competency payload
+    // with headroom; auth + rate limits remain the abuse controls.
+    limit: "5mb",
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
