@@ -1789,6 +1789,13 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
   const activeLabId = useActiveLabId();
   const { toast } = useToast();
   const assessments = program.assessments || [];
+  // NYS-CLEP labs assess 8 elements (adds El7 Safe Work Practices + El8 Delegated
+  // Supervisory Functions, 10 NYCRR 58-1.2(d)); CLIA labs use 6. Drives the
+  // completeness rule, the summary rows, and the Sign-gate so "every element"
+  // means all 8 where 8 apply.
+  const { data: memberships } = useMemberships();
+  const isNys = (memberships || []).find((m) => m.labId === activeLabId)?.primaryRegime === "NYS-CLEP";
+  const compElementCount = isNys ? 8 : 6;
   // Wave (cleanup): lab-scoped queryKey for this component's invalidations.
   // Matches the useQuery in ProgramDetailView at line ~1126 so cache misses
   // can't strand the UI after a mutation.
@@ -1948,7 +1955,7 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
     const aItems = (a.items || []) as any[];
     const coveredGroups = Array.from(new Set(aItems.map((i) => i.method_group_id).filter((x) => x != null)))
       .map((id) => ({ id: Number(id), name: program.methodGroups?.find((m) => m.id === Number(id))?.name ?? undefined }));
-    const inProgress = !locked && program.type === "technical" && (aItems.length === 0 || incompleteElementCells(aItems, coveredGroups, 6).length > 0);
+    const inProgress = !locked && program.type === "technical" && (aItems.length === 0 || incompleteElementCells(aItems, coveredGroups, compElementCount).length > 0);
     const passColor = inProgress ? "text-amber-700 bg-amber-500/10 border-amber-500/30" :
       a.status === "pass" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" :
       a.status === "fail" ? "text-red-600 bg-red-500/10 border-red-500/20" :
@@ -1995,7 +2002,7 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
                         if (inProgress) {
                           const missing = aItems.length === 0
                             ? "No competency data entered yet."
-                            : incompleteElementCells(aItems, coveredGroups, 6).slice(0, 8).join("; ");
+                            : incompleteElementCells(aItems, coveredGroups, compElementCount).slice(0, 8).join("; ");
                           toast({
                             title: "Cannot sign: assessment incomplete",
                             description: `Every element for every test needs data or N/A first. Still open: ${missing}`,
@@ -2061,7 +2068,7 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
               {/* 6-element summary table */}
               {a.items && a.items.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-border">
-                  <div className="text-xs font-semibold mb-2">6 CLIA Competency Elements</div>
+                  <div className="text-xs font-semibold mb-2">{isNys ? "8 NYS CLEP Competency Elements" : "6 CLIA Competency Elements"}</div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
@@ -2079,6 +2086,11 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
                           { num: 4, name: "Direct Observation of Instrument Maintenance" },
                           { num: 5, name: "Blind / PT Sample Performance" },
                           { num: 6, name: "Problem-Solving Assessment (Quiz)" },
+                          // NYS-CLEP only (10 NYCRR 58-1.2(d)): elements 7 and 8.
+                          ...(isNys ? [
+                            { num: 7, name: "Safe Work Practices (NYS)" },
+                            { num: 8, name: "Delegated Supervisory Functions (NYS)" },
+                          ] : []),
                         ].map(el => {
                           const elItems = (a.items || []).filter((i: AssessmentItem) => (i.method_number) === el.num);
                           // Completeness rule (2026-09-27): an element is PASS only when it

@@ -23100,12 +23100,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // as complete until every element for every covered test has data or N/A.
     // Server-side mirror of the client rule so an API caller cannot bypass it.
     if (assessment.competency_type === "technical") {
+      // NYS-CLEP labs require 8 elements (adds El7/El8, 10 NYCRR 58-1.2(d)); CLIA = 6.
+      const labRegime = sqlite.prepare("SELECT primary_regime FROM labs WHERE id = ?").get(req.scope.labId) as any;
+      const elementCount = (labRegime?.primary_regime === "NYS-CLEP") ? 8 : 6;
       const items = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(req.params.id) as any[];
       const covered = Array.from(new Set(items.map((i: any) => i.method_group_id).filter((x: any) => x != null))).map((id: any) => {
         const mg = sqlite.prepare("SELECT name FROM competency_method_groups WHERE id = ?").get(id) as any;
         return { id: Number(id), name: mg?.name ?? undefined };
       });
-      const missing = items.length === 0 ? ["(no competency data entered)"] : compIncompleteCells(items, covered, 6);
+      const missing = items.length === 0 ? ["(no competency data entered)"] : compIncompleteCells(items, covered, elementCount);
       if (missing.length > 0) {
         return res.status(409).json({ error: "Assessment is incomplete: every element for every test needs data or N/A before signing.", incomplete: missing.slice(0, 20) });
       }
