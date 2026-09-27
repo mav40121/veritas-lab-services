@@ -53,6 +53,7 @@ import {
   Trash2,
   Link2,
   ExternalLink,
+  FileSpreadsheet,
 } from "lucide-react";
 
 interface Manual {
@@ -926,6 +927,7 @@ export default function VeritaPolicyMyPoliciesPage() {
   const [viewPdfUrl, setViewPdfUrl] = useState<string>("");
   const [viewTampered, setViewTampered] = useState(false);
   const [viewSignoffs, setViewSignoffs] = useState<any[]>([]);
+  const [downloadingSigReport, setDownloadingSigReport] = useState(false);
 
   // Wave A2.2: Full audit trail dialog state (lazy-loaded when opened).
   const [auditTrailOpen, setAuditTrailOpen] = useState(false);
@@ -1055,6 +1057,38 @@ export default function VeritaPolicyMyPoliciesPage() {
         description: String(err?.message || err),
         variant: "destructive",
       });
+    }
+  };
+
+  // ── LHF-7: combined signature report (director sign-off + full attestation
+  // roster + kiosk staff signatures) as one surveyor-ready Excel workbook. ──
+  const downloadSignatureReport = async (doc: PolicyDocument) => {
+    setDownloadingSigReport(true);
+    try {
+      const token = localStorage.getItem("veritas_token") || "";
+      const res = await fetch(
+        `/api/labs/${activeLabId}/veritapolicy/documents/${doc.id}/signature-report.xlsx`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!res.ok) throw new Error(`Signature report failed (HTTP ${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const date = new Date().toISOString().slice(0, 10);
+      a.download = `VeritaPolicy_Signature_Report_${doc.title.replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 40)}_${date}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast({
+        title: "Signature report failed",
+        description: String(err?.message || err),
+        variant: "destructive",
+      });
+    } finally {
+      setDownloadingSigReport(false);
     }
   };
 
@@ -1743,7 +1777,20 @@ export default function VeritaPolicyMyPoliciesPage() {
               </ul>
             </div>
           )}
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            {viewDoc && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => downloadSignatureReport(viewDoc)}
+                disabled={downloadingSigReport}
+                data-testid="signature-report-button"
+                title="Download the combined signature report: director sign-off, the full attestation roster, and kiosk staff signatures, as one Excel workbook."
+              >
+                <FileSpreadsheet size={14} className="mr-1" />
+                {downloadingSigReport ? "Generating..." : "Signature report (Excel)"}
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"
