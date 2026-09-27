@@ -19,7 +19,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, ChevronLeft, FlaskConical } from "lucide-react";
+import { Loader2, ChevronLeft, FlaskConical, CheckCircle2, Lock } from "lucide-react";
 
 const ELEMENT_NAMES: Record<number, string> = {
   1: "Direct Observation of Routine Patient Test Performance",
@@ -48,9 +48,14 @@ interface TestSystem {
   instrumentId: number; instrumentName: string; department: string | null; complexity: string;
   analyteCount: number; covered: boolean; hasData: boolean; complete: boolean; elements: ElementData[];
 }
+interface CompRecord {
+  assessmentId: number; locked: boolean; completionDate: string | null;
+  evaluatorName: string | null; evaluatorTitle: string | null; evaluatorInitials: string | null;
+  signedOnPaperDate: string | null;
+}
 interface EmployeeView {
   employee: { id: number; name: string; title: string | null; complexity: string };
-  elementCount: number; latestAssessmentId: number | null; testSystems: TestSystem[];
+  elementCount: number; latestAssessmentId: number | null; record: CompRecord | null; testSystems: TestSystem[];
 }
 
 function statusBadge(status: string) {
@@ -72,6 +77,11 @@ export default function VeritaCompEmployeePage() {
   const [activeTs, setActiveTs] = useState<number | null>(null);
   // Edit buffer for the active test system: { [elementNum]: { field: value } }.
   const [form, setForm] = useState<Record<number, any>>({});
+  // Sign & Complete panel state.
+  const [signing, setSigning] = useState(false);
+  const [evalName, setEvalName] = useState("");
+  const [evalTitle, setEvalTitle] = useState("");
+  const [evalInitials, setEvalInitials] = useState("");
 
   const url = activeLabId ? `/api/labs/${activeLabId}/competency/employee/${employeeId}` : null;
   const { data, isLoading, error } = useQuery<EmployeeView>({
@@ -86,6 +96,10 @@ export default function VeritaCompEmployeePage() {
 
   const testSystems = data?.testSystems || [];
   const current = activeTs != null ? testSystems.find((t) => t.instrumentId === activeTs) : testSystems[0];
+  const record = data?.record || null;
+  const locked = !!record?.locked;
+  const completeCount = testSystems.filter((t) => t.complete).length;
+  const allComplete = testSystems.length > 0 && completeCount === testSystems.length;
 
   // Seed the edit buffer whenever the active test system (or fetched data) changes.
   useEffect(() => {
@@ -120,6 +134,39 @@ export default function VeritaCompEmployeePage() {
     onError: (e: any) => toast({ title: "Save failed", description: String(e?.message || e), variant: "destructive" }),
   });
 
+  const signMutation = useMutation({
+    mutationFn: async () => {
+      const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/competency/employee/${employeeId}/sign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ evaluatorName: evalName, evaluatorTitle: evalTitle, evaluatorInitials: evalInitials }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        const msg = d?.incomplete?.length
+          ? `${d.error} Incomplete: ${d.incomplete.slice(0, 6).join("; ")}${d.incomplete.length > 6 ? ` (+${d.incomplete.length - 6} more)` : ""}`
+          : (d.error || `HTTP ${r.status}`);
+        throw new Error(msg);
+      }
+      return d;
+    },
+    onSuccess: () => { toast({ title: "Signed & complete", description: "The competency record is locked for this cycle." }); setSigning(false); if (url) qc.invalidateQueries({ queryKey: [url] }); },
+    onError: (e: any) => toast({ title: "Could not sign", description: String(e?.message || e), variant: "destructive" }),
+  });
+
+  const unlockMutation = useMutation({
+    mutationFn: async () => {
+      if (!record?.assessmentId) throw new Error("No signed record to unlock.");
+      const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/competency/assessments/${record.assessmentId}/unlock`, {
+        method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
+      });
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || `HTTP ${r.status}`); }
+      return r.json();
+    },
+    onSuccess: () => { toast({ title: "Unlocked", description: "The record is open for edits again." }); if (url) qc.invalidateQueries({ queryKey: [url] }); },
+    onError: (e: any) => toast({ title: "Could not unlock", description: String(e?.message || e), variant: "destructive" }),
+  });
+
   const labRoute = (p: string) => (activeLabId ? `/labs/${activeLabId}${p}` : p);
 
   return (
@@ -143,6 +190,73 @@ export default function VeritaCompEmployeePage() {
               Competency by test system, from this person's VeritaStaff&trade; instrument assignments. Analytes run the same way on one instrument are covered by a single competency.
             </p>
           </div>
+
+          {testSystems.length > 0 && (
+            locked ? (
+              <Card className="border-emerald-300 dark:border-emerald-800">
+                <CardContent className="p-4 flex items-start justify-between gap-3 flex-wrap" data-testid="signed-banner">
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 size={18} className="text-emerald-600 mt-0.5 shrink-0" />
+                    <div className="text-sm">
+                      <div className="font-semibold text-emerald-700 dark:text-emerald-400">Signed and complete for this cycle</div>
+                      <div className="text-muted-foreground text-xs mt-0.5">
+                        {record?.evaluatorName}{record?.evaluatorTitle ? `, ${record.evaluatorTitle}` : ""}
+                        {record?.completionDate ? ` · ${new Date(record.completionDate).toLocaleDateString()}` : ""}
+                        {record?.signedOnPaperDate ? ` · signed on paper ${record.signedOnPaperDate}` : ""}
+                      </div>
+                      <div className="text-muted-foreground text-xs mt-0.5">The record is locked. Unlock to make changes.</div>
+                    </div>
+                  </div>
+                  {!readOnly && (
+                    <Button size="sm" variant="outline" onClick={() => unlockMutation.mutate()} disabled={unlockMutation.isPending} data-testid="unlock-record">
+                      {unlockMutation.isPending && <Loader2 className="animate-spin mr-1" size={12} />} Unlock
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Lock size={15} className="text-muted-foreground" />
+                      <span className="font-medium">One record per cycle.</span>
+                      <span className="text-muted-foreground">{completeCount} of {testSystems.length} test systems complete.</span>
+                    </div>
+                    {!readOnly && (
+                      <Button size="sm" onClick={() => setSigning((s) => !s)} disabled={!allComplete} data-testid="open-sign">
+                        Sign &amp; Complete
+                      </Button>
+                    )}
+                  </div>
+                  {!readOnly && !allComplete && (
+                    <p className="text-[11px] text-muted-foreground mt-2">Every assigned test system must be complete (data or N/A on all elements) before you can sign.</p>
+                  )}
+                  {!readOnly && signing && allComplete && (
+                    <div className="mt-3 border-t pt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">Evaluator name</label>
+                        <Input className="text-xs h-8" value={evalName} onChange={(e) => setEvalName(e.target.value)} data-testid="eval-name" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">Evaluator title</label>
+                        <Input className="text-xs h-8" placeholder="Technical Consultant / Supervisor" value={evalTitle} onChange={(e) => setEvalTitle(e.target.value)} data-testid="eval-title" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">Initials</label>
+                        <Input className="text-xs h-8" value={evalInitials} onChange={(e) => setEvalInitials(e.target.value)} data-testid="eval-initials" />
+                      </div>
+                      <div className="sm:col-span-3 flex justify-end">
+                        <Button size="sm" onClick={() => signMutation.mutate()} disabled={signMutation.isPending || !evalName.trim() || !evalTitle.trim()} data-testid="confirm-sign">
+                          {signMutation.isPending && <Loader2 className="animate-spin mr-1" size={12} />} Confirm sign-off
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          )}
 
           {testSystems.length === 0 ? (
             <Card><CardContent className="p-6 text-sm text-muted-foreground">
@@ -195,12 +309,12 @@ export default function VeritaCompEmployeePage() {
                                 <div className="text-xs font-semibold">Element {el.num}: {ELEMENT_NAMES[el.num]}</div>
                                 <div className="flex items-center gap-3 shrink-0">
                                   <label className="flex items-center gap-1 text-[11px] cursor-pointer">
-                                    <input type="checkbox" className="w-3.5 h-3.5" disabled={readOnly} checked={!!f.na}
+                                    <input type="checkbox" className="w-3.5 h-3.5" disabled={readOnly || locked} checked={!!f.na}
                                       onChange={(e) => setField(el.num, "na", e.target.checked)} /> N/A
                                   </label>
                                   {!f.na && (
                                     <label className="flex items-center gap-1 text-[11px] cursor-pointer">
-                                      <input type="checkbox" className="w-3.5 h-3.5" disabled={readOnly} checked={!!f.passed}
+                                      <input type="checkbox" className="w-3.5 h-3.5" disabled={readOnly || locked} checked={!!f.passed}
                                         onChange={(e) => setField(el.num, "passed", e.target.checked)} /> Pass
                                     </label>
                                   )}
@@ -208,7 +322,7 @@ export default function VeritaCompEmployeePage() {
                                 </div>
                               </div>
                               {f.na ? (
-                                <Input placeholder="Justification for N/A (required)" className="text-xs h-8 border-amber-400" disabled={readOnly}
+                                <Input placeholder="Justification for N/A (required)" className="text-xs h-8 border-amber-400" disabled={readOnly || locked}
                                   value={f.naJustification || ""} onChange={(e) => setField(el.num, "naJustification", e.target.value)} data-testid={`element-${el.num}-na-just`} />
                               ) : (
                                 <div className="flex flex-wrap gap-2">
@@ -217,10 +331,10 @@ export default function VeritaCompEmployeePage() {
                                       <label className="text-[10px] text-muted-foreground">{fld.label}</label>
                                       {fld.type === "bool" ? (
                                         <label className="flex items-center gap-1 text-xs h-8">
-                                          <input type="checkbox" className="w-3.5 h-3.5" disabled={readOnly} checked={!!f[fld.key]} onChange={(e) => setField(el.num, fld.key, e.target.checked)} /> Yes
+                                          <input type="checkbox" className="w-3.5 h-3.5" disabled={readOnly || locked} checked={!!f[fld.key]} onChange={(e) => setField(el.num, fld.key, e.target.checked)} /> Yes
                                         </label>
                                       ) : (
-                                        <Input type={fld.type === "number" ? "number" : fld.type === "date" ? "date" : "text"} className="text-xs h-8" disabled={readOnly}
+                                        <Input type={fld.type === "number" ? "number" : fld.type === "date" ? "date" : "text"} className="text-xs h-8" disabled={readOnly || locked}
                                           value={f[fld.key] ?? ""} onChange={(e) => setField(el.num, fld.key, e.target.value)} data-testid={`element-${el.num}-${fld.key}`} />
                                       )}
                                     </div>
@@ -232,9 +346,9 @@ export default function VeritaCompEmployeePage() {
                         })}
                       </div>
 
-                      {!readOnly && (
+                      {!readOnly && !locked && (
                         <div className="flex justify-end mt-3">
-                          <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} data-testid="save-test-system">
+                          <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || locked} data-testid="save-test-system">
                             {saveMutation.isPending && <Loader2 className="animate-spin mr-1" size={12} />} Save {current.instrumentName}
                           </Button>
                         </div>
