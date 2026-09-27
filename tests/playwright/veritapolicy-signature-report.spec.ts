@@ -13,6 +13,7 @@
 //   PW_TOKEN=... PW_LAB_ID=3 npx playwright test veritapolicy-signature-report
 
 import { test, expect } from "@playwright/test";
+import { statSync } from "node:fs";
 import { injectAuth } from "./_auth";
 
 const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
@@ -44,17 +45,20 @@ test.describe("VeritaPolicy: combined signature report download", () => {
     const sigBtn = page.locator('[data-testid="signature-report-button"]');
     await expect(sigBtn.first()).toBeVisible({ timeout: 15000 });
 
-    // Drive the actual download and assert the file.
-    const [download] = await Promise.all([
-      page.waitForEvent("download", { timeout: 30000 }),
-      sigBtn.first().click(),
-    ]);
+    // Drive the actual download. The modal may render a PDF preview that itself
+    // triggers a download in headless Chromium, so wait specifically for the
+    // signature-report workbook rather than the first download that fires.
+    const downloadPromise = page.waitForEvent("download", {
+      predicate: (d) => /Signature_Report/i.test(d.suggestedFilename()),
+      timeout: 30000,
+    });
+    await sigBtn.first().click();
+    const download = await downloadPromise;
     const name = download.suggestedFilename();
     expect(name, `download name (${name})`).toMatch(/VeritaPolicy_Signature_Report_.*\.xlsx$/);
     const path = await download.path();
     expect(path, "download saved to disk").toBeTruthy();
-    const fs = require("fs");
-    const size = path ? fs.statSync(path).size : 0;
+    const size = path ? statSync(path).size : 0;
     expect(size, `xlsx bytes (${size})`).toBeGreaterThan(2000);
     // No page errors surfaced by the click.
     expect(errors, `page errors after click: ${errors.join("; ")}`).toHaveLength(0);
