@@ -5133,6 +5133,182 @@ export async function generateCompetencyPDF(input: CompetencyPDFInput, licenseCt
   }
 }
 
+// ─── Employee-centric competency RECORD (Phase 3b, 2026-09-27) ───────────────
+// One document per employee per cycle: a test-system x element matrix plus the
+// single evaluator sign-off on page 1 (CLAUDE.md section 5). Distinct from the
+// per-assessment generateCompetencyPDF above; this renders the coverage-derived,
+// instrument-keyed record the employee-centric UI produces.
+
+interface EmployeeCompetencyRecordInput {
+  labName: string;
+  cliaNumber?: string;
+  employee: { name: string; title: string | null; complexity: string };
+  elementCount: number;
+  record: {
+    locked: boolean; completionDate: string | null;
+    evaluatorName: string | null; evaluatorTitle: string | null; evaluatorInitials: string | null;
+    signedOnPaperDate: string | null;
+  } | null;
+  testSystems: Array<{
+    instrumentName: string; department: string | null; complexity: string; analyteCount: number;
+    elements: Array<{ num: number; status: string }>;
+  }>;
+}
+
+const EMP_REC_ELEMENT_NAMES: Record<number, string> = {
+  1: "Direct observation of routine patient test performance",
+  2: "Monitoring, recording and reporting of test results",
+  3: "Review of QC, proficiency testing and preventive maintenance records",
+  4: "Direct observation of instrument maintenance and function checks",
+  5: "Assessment of test performance (blind / PT samples)",
+  6: "Problem-solving skills assessment",
+  7: "Safe work practices (NYS)",
+  8: "Delegated supervisory functions (NYS)",
+};
+
+export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecordInput): string {
+  const elementCount = input.elementCount === 8 ? 8 : 6;
+  const cliaDisplay = input.cliaNumber ? esc(input.cliaNumber) : "Not on file - enter in account settings";
+  const signed = !!input.record?.locked;
+  const completionDate = input.record?.completionDate ? String(input.record.completionDate).slice(0, 10) : "";
+  const evalName = esc(input.record?.evaluatorName || "");
+  const evalTitle = esc(input.record?.evaluatorTitle || "");
+  const evalInitials = esc(input.record?.evaluatorInitials || "");
+  const signedOnPaper = input.record?.signedOnPaperDate ? String(input.record.signedOnPaperDate).slice(0, 10) : "";
+  const today = new Date().toISOString().slice(0, 10);
+
+  const chip = (s: string): string => {
+    if (s === "pass") return `<span class="chip c-pass">PASS</span>`;
+    if (s === "na") return `<span class="chip c-na">N/A</span>`;
+    if (s === "fail") return `<span class="chip c-fail">FAIL</span>`;
+    return `<span class="chip c-inc">-</span>`;
+  };
+
+  let anyIncompleteOverall = false;
+  const rows = input.testSystems.map((ts) => {
+    const cells: string[] = [];
+    for (let el = 1; el <= elementCount; el++) {
+      const e = ts.elements.find((x) => x.num === el);
+      cells.push(`<td>${chip(e?.status || "incomplete")}</td>`);
+    }
+    const anyInc = Array.from({ length: elementCount }, (_, i) => ts.elements.find((x) => x.num === i + 1)?.status || "incomplete").some((s) => s === "incomplete");
+    const anyFail = ts.elements.some((x) => x.status === "fail");
+    if (anyInc) anyIncompleteOverall = true;
+    const result = anyInc ? "In progress" : anyFail ? "Not competent" : "Competent";
+    const rClass = anyInc ? "c-amber" : anyFail ? "c-fail" : "c-pass";
+    const dept = ts.department ? esc(ts.department) : "";
+    return `<tr>
+      <td class="sys"><b>${esc(ts.instrumentName)}</b><span>${[dept, esc(ts.complexity), `${ts.analyteCount} analyte${ts.analyteCount === 1 ? "" : "s"}`].filter(Boolean).join(" &middot; ")}</span></td>
+      ${cells.join("")}
+      <td><span class="chip ${rClass}">${result}</span></td>
+    </tr>`;
+  }).join("");
+
+  const elHeaders = Array.from({ length: elementCount }, (_, i) => `<th>El ${i + 1}</th>`).join("");
+  const legend = Array.from({ length: elementCount }, (_, i) => `<div>El ${i + 1}: ${EMP_REC_ELEMENT_NAMES[i + 1]}</div>`).join("");
+  const statusText = signed ? "Signed and complete" : anyIncompleteOverall ? "In progress" : "Complete, awaiting sign-off";
+
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8" />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin:0; color:#28251D; font-family: Arial, Helvetica, sans-serif; font-size:10.5px; line-height:1.35; }
+    .band { background:#01696F; color:#fff; padding:10px 12px; border-radius:4px 4px 0 0; display:flex; justify-content:space-between; align-items:flex-start; }
+    .band h1 { margin:0; font-size:15px; }
+    .band .sub { font-size:9px; opacity:.9; margin-top:2px; }
+    .band .lab { text-align:right; font-size:9.5px; }
+    .band .lab b { font-size:11px; display:block; }
+    .meta { border:1px solid #D0D0D0; border-top:none; padding:8px 12px; display:grid; grid-template-columns: repeat(4, 1fr); gap:6px 14px; }
+    .meta div span { color:#6b6b6b; font-size:8.5px; display:block; text-transform:uppercase; letter-spacing:.4px; }
+    .meta div b { font-size:10.5px; font-weight:600; }
+    .signedbar { margin-top:8px; border:1px solid #9fcdb0; background:#eef7f0; border-radius:4px; padding:7px 11px; font-size:9px; color:#2f6b45; }
+    .reg { font-size:8.5px; color:#6b6b6b; margin:8px 2px 4px; }
+    h2 { color:#01696F; font-size:11px; margin:12px 2px 5px; text-transform:uppercase; letter-spacing:.5px; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { border:1px solid #D0D0D0; padding:5px 6px; text-align:center; vertical-align:middle; }
+    th { background:#E6F2F2; color:#01696F; font-size:8.5px; text-transform:uppercase; letter-spacing:.3px; }
+    td.sys { text-align:left; }
+    td.sys b { font-size:10px; }
+    td.sys span { color:#6b6b6b; font-size:8.5px; display:block; }
+    tr:nth-child(even) td { background:#F4F9F9; }
+    .chip { display:inline-block; padding:1px 7px; border-radius:9px; font-size:8.5px; font-weight:700; }
+    .c-pass { background:#E4F0DA; color:#437A22; }
+    .c-na { background:#EDEDEC; color:#7A7974; }
+    .c-fail { background:#F7E1EE; color:#A12C7B; }
+    .c-inc { background:#F3EAD9; color:#964219; }
+    .c-amber { background:#F3EAD9; color:#964219; }
+    .legend { font-size:8.5px; color:#6b6b6b; margin:6px 2px; display:grid; grid-template-columns: 1fr 1fr; gap:1px 18px; }
+    .sign { border:1.5px solid #01696F; border-radius:4px; margin-top:12px; page-break-inside:avoid; }
+    .sign .h { background:#01696F; color:#fff; padding:5px 10px; font-size:10px; font-weight:700; letter-spacing:.5px; }
+    .sign .body { padding:9px 11px; }
+    .attest { font-size:8.5px; margin:0 0 10px; }
+    .sigrow { display:grid; grid-template-columns: 2fr 1.4fr 0.7fr 1fr; gap:14px; align-items:end; }
+    .sigrow .f span { color:#6b6b6b; font-size:8px; display:block; text-transform:uppercase; letter-spacing:.4px; margin-bottom:1px; }
+    .sigrow .f .val { border-bottom:1px solid #333; min-height:16px; font-size:10.5px; padding-bottom:1px; font-weight:600; }
+  </style></head><body>
+    <div class="band">
+      <div>
+        <h1>VeritaComp&trade; Employee Competency Record</h1>
+        <div class="sub">One record per employee per cycle, covering every assigned test system</div>
+      </div>
+      <div class="lab">
+        <b>${esc(input.labName)}</b>
+        CLIA: ${cliaDisplay}<br>Generated ${today}
+      </div>
+    </div>
+    <div class="meta">
+      <div><span>Employee</span><b>${esc(input.employee.name) || "&nbsp;"}</b></div>
+      <div><span>Title</span><b>${esc(input.employee.title || "") || "&nbsp;"}</b></div>
+      <div><span>Highest complexity</span><b>${esc(input.employee.complexity || "") || "&nbsp;"}</b></div>
+      <div><span>Status</span><b>${statusText}</b></div>
+      <div><span>Test systems</span><b>${input.testSystems.length} assigned</b></div>
+      <div><span>Elements per system</span><b>${elementCount} (${elementCount === 8 ? "NYS CLEP" : "CLIA"})</b></div>
+      <div><span>Completion date</span><b>${completionDate || "&nbsp;"}</b></div>
+      <div><span>Signed on paper</span><b>${signedOnPaper || "&nbsp;"}</b></div>
+    </div>
+    ${signed ? `<div class="signedbar"><b>Signed and complete for this cycle.</b> Evaluator: ${evalName || "(recorded)"}${evalTitle ? `, ${evalTitle}` : ""}${completionDate ? ` on ${completionDate}` : ""}.</div>` : ""}
+    <div class="reg">Technical competency assessed per 42 CFR 493.1235. The required procedures are shown per test system; N/A elements carry a recorded justification. Analytes run the same way on one instrument are covered by a single test-system competency.</div>
+    <h2>Competency by test system</h2>
+    <table>
+      <thead><tr><th style="width:30%">Test system</th>${elHeaders}<th style="width:12%">Result</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="${elementCount + 2}" style="color:#6b6b6b;padding:10px;">No assigned test systems.</td></tr>`}</tbody>
+    </table>
+    <div class="legend">${legend}</div>
+    <div class="sign">
+      <div class="h">EVALUATOR SIGN-OFF</div>
+      <div class="body">
+        <p class="attest">I attest that the competency assessment shown above was completed for the elements and test systems listed. Final approval and clinical determination must be made by the laboratory director or designee.</p>
+        <div class="sigrow">
+          <div class="f"><span>Evaluator name (signature)</span><div class="val">${evalName || "&nbsp;"}</div></div>
+          <div class="f"><span>Title</span><div class="val">${evalTitle || "&nbsp;"}</div></div>
+          <div class="f"><span>Initials</span><div class="val">${evalInitials || "&nbsp;"}</div></div>
+          <div class="f"><span>Date signed</span><div class="val">${completionDate || "&nbsp;"}</div></div>
+        </div>
+      </div>
+    </div>
+  </body></html>`;
+}
+
+export async function generateEmployeeCompetencyRecordPDF(input: EmployeeCompetencyRecordInput, licenseCtx?: Partial<LicenseContext> | null): Promise<Buffer> {
+  const html = buildEmployeeCompetencyRecordHTML(input);
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    const stamped = applyLicenseToPuppeteer(html, COMPETENCY_FOOTER, licenseCtx);
+    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    const pdfBuffer = await page.pdf({
+      format: "Letter",
+      printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: "<span></span>",
+      footerTemplate: stamped.footerTemplate,
+      margin: { top: "14mm", right: "15mm", bottom: "20mm", left: "15mm" },
+    });
+    return stampPdfAuthor(pdfBuffer);
+  } finally {
+    await page.close();
+  }
+}
+
 // ─── CMS 209 Laboratory Personnel Report ────────────────────────────────────
 
 interface CMS209Input {

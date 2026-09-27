@@ -16,7 +16,7 @@ import { registerScheduleRoutes } from "./schedule";
 import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice, getSeatPriceForTier, VC_UNLIMITED_FIRST_YEAR_COUPON, getViewOnlyAddOnConfig } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
-import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer } from "./pdfReport";
+import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateEmployeeCompetencyRecordPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
 import { labLocalDate } from "./dateLocal";
 import { buildWasteReport, generateWasteReportPDF, generateWasteReportExcel, type WasteEventRow, type WasteReportContext } from "./wasteReport";
@@ -26110,17 +26110,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // instrument are covered by one competency per Michael's rule) with per-element
   // status pulled from their existing competency items. Read-only; backs the new
   // "click a name -> tabs per test system" UI. Reuses the /owed derivation shape.
-  app.get("/api/labs/:labId/competency/employee/:employeeId", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
-    const labId = req.scope.labId;
-    const sqlite = (db as any).$client;
-    const empId = Number(req.params.employeeId);
-    if (!Number.isFinite(empId)) return res.status(400).json({ error: "Bad employeeId" });
-
+  // Shared assembly for the employee-centric competency view: assigned test
+  // systems (instruments) with per-element status, plus the signable per-cycle
+  // record's lock/sign state. Used by the GET below AND the record PDF route so
+  // the on-screen view and the printed record never drift. Returns null when the
+  // employee is not found in this lab.
+  const assembleEmployeeCompetencyView = (sqlite: any, labId: number, empId: number): any | null => {
     const emp = sqlite.prepare(
       "SELECT id, first_name, last_name, middle_initial, title, highest_complexity FROM staff_employees WHERE id = ? AND tier2_lab_id = ? AND status = 'active'"
     ).get(empId, labId) as any;
-    if (!emp) return res.status(404).json({ error: "Employee not found" });
+    if (!emp) return null;
 
     const labRow = sqlite.prepare("SELECT primary_regime FROM labs WHERE id = ?").get(labId) as any;
     const elementCount = labRow?.primary_regime === "NYS-CLEP" ? 8 : 6;
@@ -26237,13 +26236,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       };
     }
 
-    res.json({
+    return {
       employee: { id: emp.id, name: `${emp.first_name || ""} ${emp.last_name || ""}`.trim(), title: emp.title || null, complexity: emp.highest_complexity || cLabel(0) },
       elementCount,
       latestAssessmentId,
       record,
       testSystems,
-    });
+    };
+  };
+
+  app.get("/api/labs/:labId/competency/employee/:employeeId", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const sqlite = (db as any).$client;
+    const empId = Number(req.params.employeeId);
+    if (!Number.isFinite(empId)) return res.status(400).json({ error: "Bad employeeId" });
+    const view = assembleEmployeeCompetencyView(sqlite, labId, empId);
+    if (!view) return res.status(404).json({ error: "Employee not found" });
+    res.json(view);
   });
 
   // PUT /api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId
@@ -26459,6 +26469,43 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ipAddress: req.ip,
     });
     res.json({ ok: true, locked: true, assessmentId: assessment.id, completion_date: now, signed_on_paper_date: signedOnPaper });
+  });
+
+  // GET /api/labs/:labId/competency/employee/:employeeId/record-pdf
+  //
+  // Phase 3b (2026-09-27): the per-employee competency record PDF. ONE document
+  // per employee per cycle: a test-system x element matrix + the single evaluator
+  // sign-off on page 1 (CLAUDE.md section 5). Assembled from the same view the
+  // screen uses, so the print never drifts. Returns { token } for the shared
+  // /api/pdf/:token download, mirroring the per-assessment PDF route.
+  app.get("/api/labs/:labId/competency/employee/:employeeId/record-pdf", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const sqlite = (db as any).$client;
+    const empId = Number(req.params.employeeId);
+    if (!Number.isFinite(empId)) return res.status(400).json({ error: "Bad employeeId" });
+    const view = assembleEmployeeCompetencyView(sqlite, labId, empId);
+    if (!view) return res.status(404).json({ error: "Employee not found" });
+    const compLab = sqlite.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?").get(labId) as any;
+    try {
+      const pdfBuffer = await generateEmployeeCompetencyRecordPDF({
+        labName: compLab?.lab_name || "Clinical Laboratory",
+        cliaNumber: compLab?.clia_number || undefined,
+        employee: view.employee,
+        elementCount: view.elementCount,
+        record: view.record,
+        testSystems: view.testSystems,
+      }, licenseCtxFromReq(req));
+      const safeName = String(view.employee?.name || "Employee").replace(/[^a-zA-Z0-9_\- ]/g, "").trim() || "Employee";
+      const date = new Date().toISOString().split("T")[0];
+      const filename = `VeritaComp_Record_${safeName}_${date}.pdf`;
+      const token = storePdfToken(pdfBuffer, filename);
+      if (compLab) markLabReportingLocks(compLab.id);
+      return res.json({ token });
+    } catch (err: any) {
+      console.error("Employee competency record PDF error:", err);
+      return res.status(500).json({ error: "PDF generation failed", detail: err.message });
+    }
   });
 
   // GET /api/labs/:labId/competency/dashboard-stats
