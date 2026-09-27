@@ -1459,12 +1459,21 @@ const newCompItemCols: [string, string][] = [
   ["el8_date", "TEXT"],
   ["el8_na", "INTEGER"],
   ["el8_na_justification", "TEXT"],
+  // Employee-centric competency (2026-09-27): items on employee-per-cycle records
+  // key by the TEST SYSTEM = VeritaMap instrument, not a hand-built method group.
+  // Nullable; legacy program-based items leave it null (they use method_group_id).
+  ["instrument_id", "INTEGER"],
 ];
 for (const [col, colType] of newCompItemCols) {
   if (!compItemColNames.includes(col)) {
     try { sqlite.exec(`ALTER TABLE competency_assessment_items ADD COLUMN ${col} ${colType}`); } catch {}
   }
 }
+
+// Employee-centric competency (2026-09-27): a per-lab implicit "Competency"
+// program holds employee-per-cycle records (auto-created, hidden from the program
+// list). Flag it so it is excluded from the program picker and can be resolved.
+try { sqlite.exec("ALTER TABLE competency_programs ADD COLUMN is_implicit INTEGER NOT NULL DEFAULT 0"); } catch {}
 
 // VeritaComp Customer-Blockers Wave (2026-06-05): completion sign-off and
 // review-period columns on competency_assessments. Customer report from

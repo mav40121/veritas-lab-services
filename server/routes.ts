@@ -26145,6 +26145,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // recent assessment that carries each group). Bridged via competency_employees.
     const compEmp = sqlite.prepare("SELECT id FROM competency_employees WHERE staff_employee_id = ? AND lab_id = ? LIMIT 1").get(empId, labId) as any;
     const itemsByMg = new Map<number, any[]>();
+    const itemsByInstrument = new Map<number, any[]>(); // employee-centric items key by test system
     let latestAssessmentId: number | null = null;
     if (compEmp) {
       const assessments = sqlite.prepare(
@@ -26155,6 +26156,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const items = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(a.id) as any[];
         if (latestAssessmentId == null && items.length) latestAssessmentId = a.id;
         for (const it of items) {
+          if (it.instrument_id != null && !itemsByInstrument.has(it.instrument_id)) {
+            itemsByInstrument.set(it.instrument_id, items.filter((x) => x.instrument_id === it.instrument_id));
+          }
           const mg = it.method_group_id;
           if (mg != null && !itemsByMg.has(mg)) itemsByMg.set(mg, items.filter((x) => x.method_group_id === mg));
         }
@@ -26172,12 +26176,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const catLC = String(inst.category || "").trim().toLowerCase();
       const analytesLC = tests.map((t: any) => String(t.analyte || "").trim().toLowerCase()).filter(Boolean);
       const coveringMg = mgParsed.filter((mg) => mg.instrumentsLC.some((n) => n && (n.includes(instNameLC) || instNameLC.includes(n))) || analytesLC.some((a) => mg.analytesLC.has(a)) || (!!catLC && mg.nameLC.includes(catLC)));
-      const instItems: any[] = [];
-      for (const mg of coveringMg) { const its = itemsByMg.get(mg.id); if (its) instItems.push(...its); }
+      // Prefer the employee-centric instrument-keyed items (Phase 2 entry); fall
+      // back to legacy method-group items so pre-migration data still shows.
+      const directItems = itemsByInstrument.get(inst.id) || [];
+      const instItems: any[] = directItems.length ? directItems : [];
+      if (!instItems.length) { for (const mg of coveringMg) { const its = itemsByMg.get(mg.id); if (its) instItems.push(...its); } }
       const elements = [];
       for (let el = 1; el <= elementCount; el++) {
         const st = compAggregateElementStatus(instItems, el);
-        elements.push({ num: el, status: st === "none" ? "incomplete" : st });
+        const row: any = instItems.find((it: any) => Number(it.element_number ?? it.method_number) === el) || {};
+        // Raw per-element data so the entry form can pre-fill. Only the fields
+        // that element uses are populated; the rest stay empty.
+        const data: any = {
+          passed: !!row.passed,
+          na: !!row[`el${el}_na`],
+          naJustification: row[`el${el}_na_justification`] || "",
+        };
+        if (el === 1) { data.specimenId = row.el1_specimen_id || ""; data.observerInitials = row.el1_observer_initials || ""; }
+        else if (el === 2) { data.evidence = row.el2_evidence || ""; data.date = row.el2_date || ""; }
+        else if (el === 3) { data.qcDate = row.el3_qc_date || ""; }
+        else if (el === 4) { data.dateObserved = row.el4_date_observed || ""; data.observerInitials = row.el4_observer_initials || ""; }
+        else if (el === 5) { data.sampleType = row.el5_sample_type || ""; data.sampleId = row.el5_sample_id || ""; data.acceptable = row.el5_acceptable == null ? null : !!row.el5_acceptable; }
+        else if (el === 6) { data.quizId = row.el6_quiz_id || ""; data.score = row.el6_score == null ? "" : row.el6_score; data.dateTaken = row.el6_date_taken || ""; }
+        else if (el === 7) { data.dateObserved = row.el7_date_observed || ""; data.observerInitials = row.el7_observer_initials || ""; }
+        else if (el === 8) { data.functionAssessed = row.el8_function_assessed || ""; data.date = row.el8_date || ""; }
+        elements.push({ num: el, status: st === "none" ? "incomplete" : st, ...data });
       }
       const incomplete = elements.some((e) => e.status === "incomplete");
       return {
@@ -26186,7 +26209,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         department: inst.category || null,
         complexity: cLabel(maxRank),
         analyteCount: analytesLC.length,
-        covered: coveringMg.length > 0,
+        covered: coveringMg.length > 0 || directItems.length > 0,
         hasData: instItems.length > 0,
         complete: !incomplete && instItems.length > 0,
         elements,
@@ -26199,6 +26222,122 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       latestAssessmentId,
       testSystems,
     });
+  });
+
+  // PUT /api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId
+  //
+  // Employee-centric data entry (2026-09-27, Phase 2). Saves the 6/8 element data
+  // for ONE test system (instrument) into the employee's single current-cycle
+  // competency record. The record lives in a per-lab implicit "Competency"
+  // program (auto-created, hidden from the program list); items key by
+  // instrument_id (test system), not a hand-built method group. Replaces only
+  // this instrument's items, so saving one test system never touches another.
+  // Body: { elements: [{ num, ...element fields..., passed, na, naJustification }] }.
+  app.put("/api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const sqlite = (db as any).$client;
+    const empId = Number(req.params.employeeId);
+    const instrumentId = Number(req.params.instrumentId);
+    if (!Number.isFinite(empId) || !Number.isFinite(instrumentId)) return res.status(400).json({ error: "Bad ids" });
+
+    const emp = sqlite.prepare(
+      "SELECT id, first_name, last_name, hire_date FROM staff_employees WHERE id = ? AND tier2_lab_id = ? AND status = 'active'"
+    ).get(empId, labId) as any;
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+
+    // The instrument must be assigned to this employee and belong to the lab's VeritaMap.
+    const inst = sqlite.prepare(
+      `SELECT i.id, i.instrument_name FROM staff_employee_instruments j
+       JOIN veritamap_instruments i ON j.instrument_id = i.id
+       JOIN veritamap_maps m ON i.map_id = m.id
+       WHERE j.employee_id = ? AND i.id = ? AND m.lab_id = ?`
+    ).get(empId, instrumentId, labId) as any;
+    if (!inst) return res.status(404).json({ error: "Instrument not assigned to this employee" });
+
+    const labRow = sqlite.prepare("SELECT primary_regime, owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+    const elementCount = labRow?.primary_regime === "NYS-CLEP" ? 8 : 6;
+    const ownerUserId = labRow?.owner_user_id ?? req.userId;
+    const now = new Date().toISOString();
+
+    const elements: any[] = Array.isArray(req.body?.elements) ? req.body.elements : [];
+    // Mirror the form rule: an N/A element needs a justification.
+    for (const el of elements) {
+      if (el?.na && !String(el?.naJustification || "").trim()) {
+        return res.status(400).json({ error: `Element ${el?.num}: justification required for N/A.` });
+      }
+    }
+
+    const tx = sqlite.transaction(() => {
+      // Get-or-create the per-lab implicit "Competency" program.
+      let implicit = sqlite.prepare("SELECT id FROM competency_programs WHERE lab_id = ? AND is_implicit = 1 LIMIT 1").get(labId) as any;
+      if (!implicit) {
+        const r = sqlite.prepare(
+          "INSERT INTO competency_programs (user_id, lab_id, name, department, type, is_implicit, created_at, updated_at) VALUES (?, ?, 'Competency', 'All departments', 'technical', 1, ?, ?)"
+        ).run(ownerUserId, labId, now, now);
+        implicit = { id: Number(r.lastInsertRowid) };
+      }
+      // Get-or-create the competency_employees bridge.
+      let compEmp = sqlite.prepare("SELECT id FROM competency_employees WHERE staff_employee_id = ? AND lab_id = ? LIMIT 1").get(empId, labId) as any;
+      if (!compEmp) {
+        const compName = `${emp.first_name || ""} ${emp.last_name || ""}`.trim();
+        const r = sqlite.prepare(
+          "INSERT INTO competency_employees (user_id, lab_id, name, title, hire_date, status, created_at, staff_employee_id) VALUES (?, ?, ?, '', ?, 'active', ?, ?)"
+        ).run(ownerUserId, labId, compName, emp.hire_date || null, now, empId);
+        compEmp = { id: Number(r.lastInsertRowid) };
+      }
+      // Get-or-create the employee's OPEN (unlocked) current-cycle record.
+      let assessment = sqlite.prepare(
+        "SELECT id FROM competency_assessments WHERE program_id = ? AND employee_id = ? AND (locked IS NULL OR locked = 0) ORDER BY id DESC LIMIT 1"
+      ).get(implicit.id, compEmp.id) as any;
+      if (!assessment) {
+        const aDate = now.slice(0, 10);
+        const r = sqlite.prepare(
+          "INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, competency_type, status, created_at) VALUES (?, ?, 'initial', ?, 'technical', 'pass', ?)"
+        ).run(implicit.id, compEmp.id, aDate, now);
+        assessment = { id: Number(r.lastInsertRowid) };
+      }
+      // Replace this instrument's items only.
+      sqlite.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ? AND instrument_id = ?").run(assessment.id, instrumentId);
+      const stmt = sqlite.prepare(
+        `INSERT INTO competency_assessment_items (
+           assessment_id, instrument_id, method_number, element_number, item_label, method_group_name,
+           el1_specimen_id, el1_observer_initials, el1_na, el1_na_justification,
+           el2_evidence, el2_date, el2_na, el2_na_justification,
+           el3_qc_date, el3_na, el3_na_justification,
+           el4_date_observed, el4_observer_initials, el4_na, el4_na_justification,
+           el5_sample_type, el5_sample_id, el5_acceptable, el5_na, el5_na_justification,
+           el6_quiz_id, el6_score, el6_date_taken, el6_na, el6_na_justification,
+           el7_date_observed, el7_observer_initials, el7_na, el7_na_justification,
+           el8_function_assessed, el8_date, el8_na, el8_na_justification,
+           passed
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      const byNum = new Map<number, any>();
+      for (const el of elements) { if (Number.isFinite(Number(el?.num))) byNum.set(Number(el.num), el); }
+      for (let n = 1; n <= elementCount; n++) {
+        const d = byNum.get(n) || {};
+        const na = d.na ? 1 : 0;
+        const naJ = d.na ? (String(d.naJustification || "").trim() || null) : null;
+        stmt.run(
+          assessment.id, instrumentId, n, n, inst.instrument_name, inst.instrument_name,
+          n === 1 ? (d.specimenId ?? null) : null, n === 1 ? (d.observerInitials ?? null) : null, n === 1 ? na : 0, n === 1 ? naJ : null,
+          n === 2 ? (d.evidence ?? null) : null, n === 2 ? (d.date ?? null) : null, n === 2 ? na : 0, n === 2 ? naJ : null,
+          n === 3 ? (d.qcDate ?? null) : null, n === 3 ? na : 0, n === 3 ? naJ : null,
+          n === 4 ? (d.dateObserved ?? null) : null, n === 4 ? (d.observerInitials ?? null) : null, n === 4 ? na : 0, n === 4 ? naJ : null,
+          n === 5 ? (d.sampleType ?? null) : null, n === 5 ? (d.sampleId ?? null) : null, n === 5 ? (d.acceptable != null ? (d.acceptable ? 1 : 0) : null) : null, n === 5 ? na : 0, n === 5 ? naJ : null,
+          n === 6 ? (d.quizId ?? null) : null, n === 6 ? (d.score != null && d.score !== "" ? Number(d.score) : null) : null, n === 6 ? (d.dateTaken ?? null) : null, n === 6 ? na : 0, n === 6 ? naJ : null,
+          n === 7 ? (d.dateObserved ?? null) : null, n === 7 ? (d.observerInitials ?? null) : null, n === 7 ? na : 0, n === 7 ? naJ : null,
+          n === 8 ? (d.functionAssessed ?? null) : null, n === 8 ? (d.date ?? null) : null, n === 8 ? na : 0, n === 8 ? naJ : null,
+          d.passed ? 1 : 0,
+        );
+      }
+      sqlite.prepare("UPDATE competency_assessments SET updated_at = ? WHERE id = ?").run(now, assessment.id);
+      return assessment.id;
+    });
+    const assessmentId = tx();
+    logAudit({ userId: req.userId, ownerUserId, module: "veritacomp", action: "update", entityType: "employee_competency", entityId: String(empId), entityLabel: `${emp.first_name || ""} ${emp.last_name || ""}`.trim() + " / " + inst.instrument_name, ipAddress: req.ip });
+    res.json({ ok: true, assessmentId, instrumentId });
   });
 
   // GET /api/labs/:labId/competency/dashboard-stats
