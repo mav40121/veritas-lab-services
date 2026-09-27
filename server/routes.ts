@@ -998,6 +998,25 @@ function activeLabIdFromContext(req: any): number | null {
   return null;
 }
 
+// Initial-competency due date. New personnel get a 90-day window to record their
+// first competency assessment. For a normal new hire that window runs from the
+// hire date; but for staff IMPORTED into the system long after hire (a bulk
+// roster load, e.g. onboarding an existing multi-site network), the window runs
+// from when the employee was ADDED, so entering a tenured employee does not flag
+// them competency-overdue on day one. Returns the LATER of hire+90 and added+90,
+// which leaves a promptly-entered new hire unchanged (hire+90) while giving an
+// imported tenured employee a full 90-day window from entry. Null only when
+// neither date is parseable; callers fall back to today.
+function initialCompetencyDueDate(hireDate: string | null | undefined, createdAt: string | null | undefined): Date | null {
+  const D = 90 * 24 * 60 * 60 * 1000;
+  const cands: number[] = [];
+  const h = hireDate ? Date.parse(hireDate) : NaN;
+  const c = createdAt ? Date.parse(createdAt) : NaN;
+  if (Number.isFinite(h)) cands.push(h + D);
+  if (Number.isFinite(c)) cands.push(c + D);
+  return cands.length ? new Date(Math.max(...cands)) : null;
+}
+
 
 // ── Per-module write gate for seat users ─────────────────────────────────────
 // Uses the shared resolver so client useIsReadOnly() and this middleware
@@ -25668,7 +25687,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const client = (db as any).$client;
 
     const employees = client.prepare(
-      `SELECT e.id, e.first_name, e.last_name, e.middle_initial, e.title, e.highest_complexity, e.hire_date,
+      `SELECT e.id, e.first_name, e.last_name, e.middle_initial, e.title, e.highest_complexity, e.hire_date, e.created_at,
               s.initial_completed_at,
               s.six_month_due_at, s.six_month_completed_at,
               s.first_annual_due_at, s.first_annual_completed_at,
@@ -25696,8 +25715,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       let nextDue: Date | null = null;
       let reason = "";
       if (!e.initial_completed_at) {
-        const hire = parseDate(e.hire_date);
-        nextDue = hire ? new Date(hire.getTime() + 90 * dayMs) : today;
+        nextDue = initialCompetencyDueDate(e.hire_date, e.created_at) ?? today;
         reason = "Initial competency not completed";
       } else if (e.six_month_due_at && !e.six_month_completed_at) {
         nextDue = parseDate(e.six_month_due_at); reason = "6-month competency due";
@@ -25871,7 +25889,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const labId = req.scope.labId;
     const rows = (db as any).$client.prepare(
-      `SELECT e.id, e.first_name, e.last_name, e.middle_initial, e.title, e.hire_date,
+      `SELECT e.id, e.first_name, e.last_name, e.middle_initial, e.title, e.hire_date, e.created_at,
               s.initial_completed_at,
               s.six_month_due_at, s.six_month_completed_at,
               s.first_annual_due_at, s.first_annual_completed_at,
@@ -25880,7 +25898,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
        LEFT JOIN staff_competency_schedules s ON s.employee_id = e.id
        WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1`
     ).all(labId) as Array<{
-      id: number; first_name: string; last_name: string; middle_initial: string | null; title: string | null; hire_date: string | null;
+      id: number; first_name: string; last_name: string; middle_initial: string | null; title: string | null; hire_date: string | null; created_at: string | null;
       initial_completed_at: string | null;
       six_month_due_at: string | null; six_month_completed_at: string | null;
       first_annual_due_at: string | null; first_annual_completed_at: string | null;
@@ -25914,15 +25932,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       let reason = "";
 
       if (!e.initial_completed_at) {
-        const hire = parse(e.hire_date);
-        if (hire) {
-          const initialDeadline = new Date(hire.getTime() + 90 * dayMs);
-          nextDue = initialDeadline;
-          reason = "Initial competency not completed";
-        } else {
-          nextDue = today;
-          reason = "Initial competency not completed (no hire date)";
-        }
+        const initialDeadline = initialCompetencyDueDate(e.hire_date, e.created_at);
+        nextDue = initialDeadline ?? today;
+        reason = initialDeadline ? "Initial competency not completed" : "Initial competency not completed (no hire date)";
       } else if (e.six_month_due_at && !e.six_month_completed_at) {
         nextDue = parse(e.six_month_due_at);
         reason = "6-month competency due";
@@ -26173,12 +26185,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Mirrors the next-due classification used by /compliance/score.
     try {
       const emps = client.prepare(
-        "SELECT s.initial_completed_at, s.six_month_due_at, s.six_month_completed_at, s.first_annual_due_at, s.first_annual_completed_at, s.annual_due_at, e.hire_date FROM staff_employees e LEFT JOIN staff_competency_schedules s ON s.employee_id = e.id WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1"
+        "SELECT s.initial_completed_at, s.six_month_due_at, s.six_month_completed_at, s.first_annual_due_at, s.first_annual_completed_at, s.annual_due_at, e.hire_date, e.created_at FROM staff_employees e LEFT JOIN staff_competency_schedules s ON s.employee_id = e.id WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1"
       ).all(labId) as any[];
       let od = 0, ds = 0;
       for (const e of emps) {
         let nd: string | null = null;
-        if (!e.initial_completed_at) nd = e.hire_date ? new Date(Date.parse(e.hire_date) + 90 * 86400000).toISOString().slice(0, 10) : today;
+        if (!e.initial_completed_at) { const d = initialCompetencyDueDate(e.hire_date, e.created_at); nd = d ? d.toISOString().slice(0, 10) : today; }
         else if (e.six_month_due_at && !e.six_month_completed_at) nd = String(e.six_month_due_at).slice(0, 10);
         else if (e.first_annual_due_at && !e.first_annual_completed_at) nd = String(e.first_annual_due_at).slice(0, 10);
         else if (e.annual_due_at) nd = String(e.annual_due_at).slice(0, 10);
@@ -26239,7 +26251,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // lab has runway to address them; "overdue" and "due in 30 days"
     // drag the score.
     const empRows = client.prepare(
-      `SELECT e.id, e.hire_date,
+      `SELECT e.id, e.hire_date, e.created_at,
               s.initial_completed_at,
               s.six_month_due_at, s.six_month_completed_at,
               s.first_annual_due_at, s.first_annual_completed_at,
@@ -26252,8 +26264,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     for (const e of empRows) {
       let nextDue: Date | null = null;
       if (!e.initial_completed_at) {
-        const hire = parse(e.hire_date);
-        nextDue = hire ? new Date(hire.getTime() + 90 * dayMs) : today;
+        nextDue = initialCompetencyDueDate(e.hire_date, e.created_at) ?? today;
       } else if (e.six_month_due_at && !e.six_month_completed_at) {
         nextDue = parse(e.six_month_due_at);
       } else if (e.first_annual_due_at && !e.first_annual_completed_at) {
