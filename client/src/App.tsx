@@ -83,6 +83,7 @@ const VeritaTrackAppPage = lazy(() => import("@/pages/VeritaTrackAppPage"));
 const VeritaTrackPage = lazy(() => import("@/pages/VeritaTrackPage"));
 const VeritaCompPage = lazy(() => import("@/pages/VeritaCompPage"));
 const VeritaCompAppPage = lazy(() => import("@/pages/VeritaCompAppPage"));
+const VeritaCompEmployeePage = lazy(() => import("@/pages/VeritaCompEmployeePage"));
 const VeritaPTPage = lazy(() => import("@/pages/VeritaPTPage"));
 const VeritaPTAppPage = lazy(() => import("@/pages/VeritaPTAppPage"));
 const VeritaResponseAppPage = lazy(() => import("@/pages/VeritaResponseAppPage"));
@@ -436,6 +437,7 @@ function AppContent() {
           <Route path="/veritamap-app/:id">{wrapLegacy(VeritaMapMapPage)}</Route>
           <Route path="/veritacomp">{wrapLegacy(VeritaCompPage, "/veritacomp-app")}</Route>
           <Route path="/veritacomp-app">{wrapLegacy(VeritaCompAppPage)}</Route>
+          <Route path="/veritacomp-app/employee/:employeeId">{wrapLegacy(VeritaCompEmployeePage)}</Route>
           <Route path="/veritacomp-app/:programId">{wrapLegacy(VeritaCompAppPage)}</Route>
           <Route path="/veritapt">{wrapLegacy(VeritaPTPage, "/veritapt/app")}</Route>
           <Route path="/veritapt/app">{wrapLegacy(VeritaPTAppPage)}</Route>
@@ -529,6 +531,7 @@ function AppContent() {
           <Route path="/labs/:labId/veritamap-app/:id" component={VeritaMapMapPage} />
           <Route path="/labs/:labId/veritatrack-app" component={VeritaTrackAppPage} />
           <Route path="/labs/:labId/veritacomp-app" component={VeritaCompAppPage} />
+          <Route path="/labs/:labId/veritacomp-app/employee/:employeeId" component={VeritaCompEmployeePage} />
           <Route path="/labs/:labId/veritacomp-app/:programId" component={VeritaCompAppPage} />
           <Route path="/labs/:labId/veritapt/app" component={VeritaPTAppPage} />
           <Route path="/labs/:labId/veritaresponse" component={VeritaResponseAppPage} />

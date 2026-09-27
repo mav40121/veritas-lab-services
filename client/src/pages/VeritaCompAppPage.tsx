@@ -498,6 +498,54 @@ function complexityChipClass(c: string): string {
   return "bg-muted text-muted-foreground border-border";
 }
 
+// Employee-centric entry point (2026-09-27, Phase 1). Every employee with >=1
+// assigned test system, from the same /owed derivation the coverage maps use.
+// Clicking a name opens their competency view (tabs per test system). This is the
+// new primary way into competency; the program list below is being retired.
+function EmployeeRosterSection() {
+  const activeLabId = useActiveLabId();
+  const [, navigate] = useLocation();
+  const url = activeLabId ? `/api/labs/${activeLabId}/competency/owed` : null;
+  const { data } = useQuery<OwedResponse>({ queryKey: [url ?? "no-owed"], enabled: !!activeLabId });
+  const employees = data?.employees || [];
+  const labRoute = (p: string) => (activeLabId ? `/labs/${activeLabId}${p}` : p);
+  if (employees.length === 0) return null;
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-2 mt-1">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Employees</h3>
+        <span className="text-xs text-muted-foreground">{"·"} {employees.length} with assigned test systems</span>
+        <div className="flex-1 border-t border-border/60 ml-2" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {employees.map((e) => {
+          const chip = statusChip(e.status);
+          return (
+            <button
+              key={e.employeeId}
+              onClick={() => navigate(labRoute(`/veritacomp-app/employee/${e.employeeId}`))}
+              data-testid="employee-roster-row"
+              className="text-left rounded-lg border border-border hover:border-primary/40 transition-colors p-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-sm">{e.name}</span>
+                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+              </div>
+              {e.title && <div className="text-xs text-muted-foreground">{e.title}</div>}
+              <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                <span className={`text-[10px] px-1.5 py-0.5 rounded border ${chip.cls}`}>{chip.label}</span>
+                <span className="text-[11px] text-muted-foreground">{e.owedCount} test system{e.owedCount === 1 ? "" : "s"}</span>
+                {e.assessedCount > 0 && <span className="text-[11px] text-emerald-700 dark:text-emerald-400">{e.assessedCount} assessed</span>}
+                {e.gapCount > 0 && <span className="text-[11px] text-amber-700 dark:text-amber-400">{e.gapCount} gap{e.gapCount === 1 ? "" : "s"}</span>}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function CompetenciesOwedSection() {
   const activeLabId = useActiveLabId();
   const [expanded, setExpanded] = useState(false);
@@ -859,6 +907,8 @@ function ProgramListView() {
       <CompetenciesOwedSection />
       {/* #48 Phase 3: required-vs-assessed coverage map, toggle by employee / by instrument */}
       <CompetencyCoverageMap />
+      {/* Employee-centric entry point (Phase 1 of the coverage-derived IA). */}
+      <EmployeeRosterSection />
 
       {isLoading && (
         <div className="space-y-3">
