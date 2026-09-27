@@ -69,4 +69,27 @@ test.describe("VeritaComp: completeness (no PASS without data) + department land
     expect(await headers.count(), "department section headers present").toBeGreaterThan(0);
     await ctx.close();
   });
+
+  // NYS-CLEP: the summary must show the 8-element framework (adds El7/El8).
+  // Env-gated on a NYS-CLEP lab; skips on CLIA labs (the active labs are CLIA,
+  // so this runs once a NYS-CLEP lab such as the Catholic Health / CLEP tenant
+  // is provisioned). PW_NYS_LAB_ID + PW_NYS_PROGRAM_ID.
+  test("NYS-CLEP program shows the 8-element framework", async ({ browser }) => {
+    const NYS_LAB = process.env.PW_NYS_LAB_ID;
+    const NYS_PROGRAM = process.env.PW_NYS_PROGRAM_ID;
+    test.skip(!NYS_LAB || !NYS_PROGRAM, "Set PW_NYS_LAB_ID + PW_NYS_PROGRAM_ID (a NYS-CLEP lab) to run the 8-element check.");
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 1000 } });
+    const page = await ctx.newPage();
+    await injectAuth(page, BASE, TOKEN!);
+    await page.goto(`${BASE}/labs/${NYS_LAB}/veritacomp-app/${NYS_PROGRAM}`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3000);
+    const tab = page.getByRole("tab", { name: /assessments/i }).or(page.getByRole("button", { name: /^assessments$/i }));
+    if (await tab.first().isVisible().catch(() => false)) await tab.first().click().catch(() => {});
+    await page.waitForTimeout(1000);
+    // Header names the 8-element NYS CLEP framework, and El7/El8 rows render.
+    await expect(page.getByText(/8 NYS CLEP Competency Elements/i).first()).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText(/Safe Work Practices/i).first()).toBeVisible();
+    await expect(page.getByText(/Delegated Supervisory Functions/i).first()).toBeVisible();
+    await ctx.close();
+  });
 });
