@@ -33,6 +33,7 @@ import { DocumentLinkDialog, STAFF_DOC_TYPES, expirationStatus } from "@/compone
 import { EmployeeInstrumentsPickerDialog, type LabInstrument, instrumentLabel } from "@/components/EmployeeInstrumentsPickerDialog";
 import { InstrumentStaffAssignDialog } from "@/components/InstrumentStaffAssignDialog";
 import { getStaffTitleLabel, getStaffTitleGroups } from "@shared/staffTitles";
+import { FREE_CEU_CATALOG, FREE_CEU_VERIFIED } from "@shared/freeCeuCatalog";
 
 // ── Types ──────────────────────────────────────────────────────────────
 interface Lab {
@@ -496,7 +497,7 @@ export default function VeritaStaffAppPage() {
             const compStatus = getCompetencyStatus(emp.competencySchedule);
             const roleNames = Array.from(new Set(emp.roles.map((r) => r.role)));
             return (
-              <Card key={emp.id} className="hover:border-primary/30 transition-colors cursor-pointer" onClick={() => navigate(labRoute(`/veritastaff-app/${emp.id}`))}>
+              <Card key={emp.id} data-testid="staff-employee-card" className="hover:border-primary/30 transition-colors cursor-pointer" onClick={() => navigate(labRoute(`/veritastaff-app/${emp.id}`))}>
                 <CardContent className="py-4 px-5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -2162,6 +2163,8 @@ function VeritaCeuCard({ employeeId }: { employeeId: number }) {
           </div>
         )}
 
+        <FreeCeuResources />
+
         <Dialog open={addOpen} onOpenChange={(v) => { if (!v) reset(); setAddOpen(v); }}>
           <DialogContent className="max-w-md">
             <DialogHeader>
@@ -2199,6 +2202,45 @@ function VeritaCeuCard({ employeeId }: { employeeId: number }) {
         </Dialog>
       </CardContent>
     </Card>
+  );
+}
+
+// FreeCeuResources
+//
+// A collapsible list of verified no-cost CE providers for lab professionals,
+// shown inside the VeritaCEU card so a user who still owes credits can find a
+// legitimate free way to earn them. Data (and its provenance) lives in
+// shared/freeCeuCatalog.ts; every link there was verified live.
+function FreeCeuResources() {
+  return (
+    <details className="mt-4 rounded-md border border-border bg-muted/30 p-3" data-testid="free-ceu-resources">
+      <summary className="cursor-pointer text-sm font-medium flex items-center gap-1.5 select-none">
+        <GraduationCap size={14} className="text-primary" />
+        Find free CE ({FREE_CEU_CATALOG.length} verified sources)
+      </summary>
+      <p className="text-xs text-muted-foreground mt-2">
+        No-cost continuing education for laboratory professionals. Links open each provider's own catalog. Confirm an activity's credit type against your certification and state license before you enroll.
+      </p>
+      <ul className="mt-2 space-y-2.5">
+        {FREE_CEU_CATALOG.map((p) => (
+          <li key={p.url} className="text-xs">
+            <a
+              href={p.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-primary hover:underline inline-flex items-center gap-1"
+              data-testid="free-ceu-link"
+            >
+              <ExternalLink size={11} /> {p.name}
+            </a>
+            <span className="ml-1.5 text-muted-foreground">{p.creditTypes.join(", ")}</span>
+            <div className="text-muted-foreground mt-0.5">{p.description}</div>
+            <div className="text-[11px] text-muted-foreground italic mt-0.5">{p.access}</div>
+          </li>
+        ))}
+      </ul>
+      <p className="text-[11px] text-muted-foreground mt-2">Links verified {FREE_CEU_VERIFIED}.</p>
+    </details>
   );
 }
 
