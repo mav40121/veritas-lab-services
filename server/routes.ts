@@ -26332,7 +26332,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           d.passed ? 1 : 0,
         );
       }
-      sqlite.prepare("UPDATE competency_assessments SET updated_at = ? WHERE id = ?").run(now, assessment.id);
+      // competency_assessments has no updated_at column (created_at only); the
+      // record's freshness is not read from here, and the GET orders by
+      // assessment_date/id, so there is nothing to bump. Do not touch a column
+      // that does not exist (it 500s the whole transaction and persists nothing).
       return assessment.id;
     });
     const assessmentId = tx();
