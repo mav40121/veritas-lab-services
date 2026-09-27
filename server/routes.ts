@@ -32,7 +32,7 @@ import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
 import { isValidIfuUrl } from "@shared/ifu";
-import { incompleteElementCells as compIncompleteCells } from "@shared/competencyStatus";
+import { incompleteElementCells as compIncompleteCells, aggregateElementStatus as compAggregateElementStatus } from "@shared/competencyStatus";
 
 // Express already URL-decodes route params before the handler runs, so
 // req.params.analyte for a request to ".../IG%25" arrives as "IG%". Calling
@@ -26100,6 +26100,104 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       employees: results,
       timeline: ["Initial", "6-month", "1st annual", "Annual"],
       totals: { employees: results.length, owed: totalOwed, gaps: totalGaps, assessed: totalAssessed, overdue, dueSoon },
+    });
+  });
+
+  // GET /api/labs/:labId/competency/employee/:employeeId
+  //
+  // Employee-centric competency view (2026-09-27, Phase 1). Returns one person's
+  // TEST SYSTEMS (their VeritaStaff-assigned instruments; analytes on the same
+  // instrument are covered by one competency per Michael's rule) with per-element
+  // status pulled from their existing competency items. Read-only; backs the new
+  // "click a name -> tabs per test system" UI. Reuses the /owed derivation shape.
+  app.get("/api/labs/:labId/competency/employee/:employeeId", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const sqlite = (db as any).$client;
+    const empId = Number(req.params.employeeId);
+    if (!Number.isFinite(empId)) return res.status(400).json({ error: "Bad employeeId" });
+
+    const emp = sqlite.prepare(
+      "SELECT id, first_name, last_name, middle_initial, title, highest_complexity FROM staff_employees WHERE id = ? AND tier2_lab_id = ? AND status = 'active'"
+    ).get(empId, labId) as any;
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+
+    const labRow = sqlite.prepare("SELECT primary_regime FROM labs WHERE id = ?").get(labId) as any;
+    const elementCount = labRow?.primary_regime === "NYS-CLEP" ? 8 : 6;
+
+    // Assigned instruments = test systems.
+    const instruments = sqlite.prepare(
+      `SELECT i.id, i.instrument_name, i.category FROM staff_employee_instruments j
+       JOIN veritamap_instruments i ON j.instrument_id = i.id
+       JOIN veritamap_maps m ON i.map_id = m.id
+       WHERE j.employee_id = ? AND m.lab_id = ? ORDER BY i.category, i.instrument_name`
+    ).all(empId, labId) as any[];
+
+    // Method groups across the lab's programs, for the instrument->coverage match.
+    const methodGroups = sqlite.prepare(
+      `SELECT mg.id, mg.name, mg.instruments, mg.analytes FROM competency_method_groups mg
+       JOIN competency_programs p ON mg.program_id = p.id WHERE p.lab_id = ?`
+    ).all(labId) as any[];
+    const parseArr = (s: string): string[] => { try { const v = JSON.parse(s || "[]"); return Array.isArray(v) ? v.map((x: any) => String(x)) : []; } catch { return []; } };
+    const mgParsed = methodGroups.map((mg: any) => ({ id: mg.id, name: mg.name, instrumentsLC: parseArr(mg.instruments).map((x) => x.toLowerCase()), analytesLC: new Set(parseArr(mg.analytes).map((x) => x.toLowerCase())), nameLC: String(mg.name || "").toLowerCase() }));
+
+    // This employee's existing competency items, keyed by method group (most
+    // recent assessment that carries each group). Bridged via competency_employees.
+    const compEmp = sqlite.prepare("SELECT id FROM competency_employees WHERE staff_employee_id = ? AND lab_id = ? LIMIT 1").get(empId, labId) as any;
+    const itemsByMg = new Map<number, any[]>();
+    let latestAssessmentId: number | null = null;
+    if (compEmp) {
+      const assessments = sqlite.prepare(
+        `SELECT a.id FROM competency_assessments a JOIN competency_programs p ON p.id = a.program_id
+         WHERE a.employee_id = ? AND p.lab_id = ? ORDER BY a.assessment_date DESC, a.id DESC`
+      ).all(compEmp.id, labId) as any[];
+      for (const a of assessments) {
+        const items = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(a.id) as any[];
+        if (latestAssessmentId == null && items.length) latestAssessmentId = a.id;
+        for (const it of items) {
+          const mg = it.method_group_id;
+          if (mg != null && !itemsByMg.has(mg)) itemsByMg.set(mg, items.filter((x) => x.method_group_id === mg));
+        }
+      }
+    }
+
+    const rankC = (c: string): number => { const u = String(c || "").toUpperCase(); return u.startsWith("H") ? 3 : u.startsWith("M") ? 2 : u.startsWith("W") ? 1 : 0; };
+    const cLabel = (r: number): string => (r >= 3 ? "HIGH" : r === 2 ? "MODERATE" : r === 1 ? "WAIVED" : "UNSPECIFIED");
+    const testsStmt = sqlite.prepare("SELECT DISTINCT analyte, complexity FROM veritamap_instrument_tests WHERE instrument_id = ? AND active = 1");
+
+    const testSystems = instruments.map((inst: any) => {
+      const tests = testsStmt.all(inst.id) as any[];
+      const maxRank = tests.reduce((m: number, t: any) => Math.max(m, rankC(t.complexity)), 0);
+      const instNameLC = String(inst.instrument_name || "").trim().toLowerCase();
+      const catLC = String(inst.category || "").trim().toLowerCase();
+      const analytesLC = tests.map((t: any) => String(t.analyte || "").trim().toLowerCase()).filter(Boolean);
+      const coveringMg = mgParsed.filter((mg) => mg.instrumentsLC.some((n) => n && (n.includes(instNameLC) || instNameLC.includes(n))) || analytesLC.some((a) => mg.analytesLC.has(a)) || (!!catLC && mg.nameLC.includes(catLC)));
+      const instItems: any[] = [];
+      for (const mg of coveringMg) { const its = itemsByMg.get(mg.id); if (its) instItems.push(...its); }
+      const elements = [];
+      for (let el = 1; el <= elementCount; el++) {
+        const st = compAggregateElementStatus(instItems, el);
+        elements.push({ num: el, status: st === "none" ? "incomplete" : st });
+      }
+      const incomplete = elements.some((e) => e.status === "incomplete");
+      return {
+        instrumentId: inst.id,
+        instrumentName: inst.instrument_name,
+        department: inst.category || null,
+        complexity: cLabel(maxRank),
+        analyteCount: analytesLC.length,
+        covered: coveringMg.length > 0,
+        hasData: instItems.length > 0,
+        complete: !incomplete && instItems.length > 0,
+        elements,
+      };
+    });
+
+    res.json({
+      employee: { id: emp.id, name: `${emp.first_name || ""} ${emp.last_name || ""}`.trim(), title: emp.title || null, complexity: emp.highest_complexity || cLabel(0) },
+      elementCount,
+      latestAssessmentId,
+      testSystems,
     });
   });
 
