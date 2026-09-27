@@ -41,14 +41,21 @@ test.describe("Staff Portal: employee self-edits their own competency data", () 
     await compTile.click();
     await page.waitForTimeout(1500);
 
-    // Open the first assessment in the list.
-    const firstRow = page.locator('[data-testid="sp-competency-list"] button, [data-testid="sp-competency-list"] [role="button"]').first();
-    if (await firstRow.isVisible().catch(() => false)) await firstRow.click();
-    await page.waitForTimeout(1500);
-
-    const myInfo = page.locator('[data-testid="sp-competency-myinfo"]');
-    const hasMyInfo = await myInfo.isVisible().catch(() => false);
-    test.skip(!hasMyInfo, "No unsigned technical assessment with editable data for this account.");
+    // The "Add my information" form only shows on an unsigned, unacknowledged
+    // technical assessment that has element rows. Iterate the list until one
+    // surfaces it (order is not guaranteed to put an editable one first).
+    const rows = page.getByTestId("sp-competency-row");
+    const rowCount = await rows.count();
+    test.skip(rowCount === 0, "No competencies listed for this account.");
+    let found = false;
+    for (let i = 0; i < rowCount; i++) {
+      await rows.nth(i).click();
+      await page.waitForTimeout(1200);
+      if (await page.getByTestId("sp-competency-myinfo").isVisible().catch(() => false)) { found = true; break; }
+      const back = page.getByTestId("sp-competency-back-to-list");
+      if (await back.isVisible().catch(() => false)) { await back.click(); await page.waitForTimeout(500); }
+    }
+    test.skip(!found, "No unsigned, unacknowledged technical assessment with editable data for this account.");
 
     const specimen = page.locator('[data-testid="sp-myinfo-el1-specimen"]').first();
     await expect(specimen).toBeVisible({ timeout: 8000 });
