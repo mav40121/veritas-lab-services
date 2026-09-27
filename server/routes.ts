@@ -32,7 +32,7 @@ import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
 import { isValidIfuUrl } from "@shared/ifu";
-import { incompleteElementCells as compIncompleteCells, aggregateElementStatus as compAggregateElementStatus } from "@shared/competencyStatus";
+import { incompleteElementCells as compIncompleteCells, incompleteElementCellsByInstrument as compIncompleteCellsByInstrument, aggregateElementStatus as compAggregateElementStatus } from "@shared/competencyStatus";
 
 // Express already URL-decodes route params before the handler runs, so
 // req.params.analyte for a request to ".../IG%25" arrives as "IG%". Calling
@@ -26216,10 +26216,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       };
     });
 
+    // The signable per-cycle record lives in the per-lab implicit "Competency"
+    // program (created lazily by the first per-test-system save). Surface its
+    // lock/sign state so the employee screen can render Signed vs open and the
+    // Sign & Complete control knows the target assessment.
+    const implicitProg = sqlite.prepare("SELECT id FROM competency_programs WHERE lab_id = ? AND is_implicit = 1 LIMIT 1").get(labId) as any;
+    let record: any = null;
+    if (implicitProg && compEmp) {
+      const a = sqlite.prepare(
+        "SELECT id, locked, completion_date, evaluator_name, evaluator_title, evaluator_initials, signed_on_paper_date FROM competency_assessments WHERE program_id = ? AND employee_id = ? ORDER BY id DESC LIMIT 1"
+      ).get(implicitProg.id, compEmp.id) as any;
+      if (a) record = {
+        assessmentId: a.id,
+        locked: a.locked === 1,
+        completionDate: a.completion_date || null,
+        evaluatorName: a.evaluator_name || null,
+        evaluatorTitle: a.evaluator_title || null,
+        evaluatorInitials: a.evaluator_initials || null,
+        signedOnPaperDate: a.signed_on_paper_date || null,
+      };
+    }
+
     res.json({
       employee: { id: emp.id, name: `${emp.first_name || ""} ${emp.last_name || ""}`.trim(), title: emp.title || null, complexity: emp.highest_complexity || cLabel(0) },
       elementCount,
       latestAssessmentId,
+      record,
       testSystems,
     });
   });
@@ -26291,6 +26313,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "SELECT id FROM competency_assessments WHERE program_id = ? AND employee_id = ? AND (locked IS NULL OR locked = 0) ORDER BY id DESC LIMIT 1"
       ).get(implicit.id, compEmp.id) as any;
       if (!assessment) {
+        // One record per cycle: if the latest record is signed and locked, do NOT
+        // silently fork a new one on edit. Block until it is unlocked.
+        const lockedExisting = sqlite.prepare(
+          "SELECT id FROM competency_assessments WHERE program_id = ? AND employee_id = ? AND locked = 1 ORDER BY id DESC LIMIT 1"
+        ).get(implicit.id, compEmp.id) as any;
+        if (lockedExisting) {
+          const e: any = new Error("This competency record is signed and locked. Unlock it before making changes.");
+          e.code = "LOCKED_RECORD";
+          throw e;
+        }
         const aDate = now.slice(0, 10);
         const r = sqlite.prepare(
           "INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, competency_type, status, created_at) VALUES (?, ?, 'initial', ?, 'technical', 'pass', ?)"
@@ -26338,9 +26370,95 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // that does not exist (it 500s the whole transaction and persists nothing).
       return assessment.id;
     });
-    const assessmentId = tx();
+    let assessmentId: number;
+    try {
+      assessmentId = tx();
+    } catch (e: any) {
+      if (e?.code === "LOCKED_RECORD") return res.status(409).json({ error: e.message, locked: true });
+      throw e;
+    }
     logAudit({ userId: req.userId, ownerUserId, module: "veritacomp", action: "update", entityType: "employee_competency", entityId: String(empId), entityLabel: `${emp.first_name || ""} ${emp.last_name || ""}`.trim() + " / " + inst.instrument_name, ipAddress: req.ip });
     res.json({ ok: true, assessmentId, instrumentId });
+  });
+
+  // POST /api/labs/:labId/competency/employee/:employeeId/sign
+  //
+  // Phase 3a (2026-09-27): single evaluator sign-off on the employee's one
+  // current-cycle record. Gated on completeness of EVERY assigned test system
+  // (instrument-keyed): each assigned instrument must carry all 6/8 elements as
+  // data-or-N/A, or the sign is refused (409) with the incomplete list. Locks
+  // the record (completion_date + final_signed_by_user_id + locked=1) and stamps
+  // the evaluator. Reopen via the existing lab-scoped .../assessments/:id/unlock.
+  app.post("/api/labs/:labId/competency/employee/:employeeId/sign", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const sqlite = (db as any).$client;
+    const empId = Number(req.params.employeeId);
+    if (!Number.isFinite(empId)) return res.status(400).json({ error: "Bad employeeId" });
+
+    const evaluatorName = String(req.body?.evaluatorName || "").trim();
+    const evaluatorTitle = String(req.body?.evaluatorTitle || "").trim();
+    const evaluatorInitials = String(req.body?.evaluatorInitials || "").trim();
+    if (!evaluatorName || !evaluatorTitle) return res.status(400).json({ error: "Evaluator name and title are required to sign." });
+
+    const emp = sqlite.prepare(
+      "SELECT id, first_name, last_name FROM staff_employees WHERE id = ? AND tier2_lab_id = ? AND status = 'active'"
+    ).get(empId, labId) as any;
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+
+    const labRow = sqlite.prepare("SELECT primary_regime FROM labs WHERE id = ?").get(labId) as any;
+    const elementCount = labRow?.primary_regime === "NYS-CLEP" ? 8 : 6;
+
+    // Assigned test systems = the employee's assigned instruments on the lab map.
+    const instruments = sqlite.prepare(
+      `SELECT i.id AS id, i.instrument_name AS name FROM staff_employee_instruments j
+       JOIN veritamap_instruments i ON j.instrument_id = i.id
+       JOIN veritamap_maps m ON i.map_id = m.id
+       WHERE j.employee_id = ? AND m.lab_id = ?`
+    ).all(empId, labId) as any[];
+    if (!instruments.length) return res.status(400).json({ error: "This employee has no assigned test systems to sign off." });
+
+    const compEmp = sqlite.prepare("SELECT id FROM competency_employees WHERE staff_employee_id = ? AND lab_id = ? LIMIT 1").get(empId, labId) as any;
+    const implicit = sqlite.prepare("SELECT id FROM competency_programs WHERE lab_id = ? AND is_implicit = 1 LIMIT 1").get(labId) as any;
+    if (!compEmp || !implicit) return res.status(409).json({ error: "No competency data entered yet. Enter each test system's data before signing." });
+
+    const assessment = sqlite.prepare(
+      "SELECT id, locked FROM competency_assessments WHERE program_id = ? AND employee_id = ? ORDER BY id DESC LIMIT 1"
+    ).get(implicit.id, compEmp.id) as any;
+    if (!assessment) return res.status(409).json({ error: "No competency data entered yet. Enter each test system's data before signing." });
+    if (assessment.locked === 1) return res.status(409).json({ error: "This competency record is already signed and locked." });
+
+    const items = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(assessment.id) as any[];
+    const incomplete = compIncompleteCellsByInstrument(items, instruments, elementCount);
+    if (incomplete.length) {
+      return res.status(409).json({ error: "Every assigned test system must be complete (data or N/A on all elements) before signing.", incomplete });
+    }
+
+    // Prior approval: signed on paper on an earlier date, entered into the system now.
+    const now = new Date().toISOString();
+    const todayDate = now.slice(0, 10);
+    const signedOnPaperRaw = typeof req.body?.signed_on_paper_date === "string" ? req.body.signed_on_paper_date.trim() : "";
+    const isBackDated = !!signedOnPaperRaw && signedOnPaperRaw.slice(0, 10) !== todayDate;
+    const documentation = typeof req.body?.documentation === "string" ? req.body.documentation.trim() : "";
+    if (isBackDated && !documentation) {
+      return res.status(400).json({ error: "Written documentation is required when the signed date is not today." });
+    }
+    const signedOnPaper = isBackDated ? signedOnPaperRaw.slice(0, 10) : null;
+    const priorNote = isBackDated ? documentation : null;
+
+    sqlite.prepare(
+      "UPDATE competency_assessments SET completion_date = ?, final_signed_by_user_id = ?, locked = 1, evaluator_name = ?, evaluator_title = ?, evaluator_initials = ?, signed_on_paper_date = ?, prior_approval_note = ? WHERE id = ?"
+    ).run(now, req.userId, evaluatorName, evaluatorTitle, evaluatorInitials || null, signedOnPaper, priorNote, assessment.id);
+
+    logAudit({
+      userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "update",
+      entityType: "employee_competency", entityId: String(empId),
+      entityLabel: `${emp.first_name || ""} ${emp.last_name || ""}`.trim() + " / Sign and Complete" + (signedOnPaper ? " (prior approval)" : ""),
+      before: { locked: 0 },
+      after: { locked: 1, evaluator_name: evaluatorName, evaluator_title: evaluatorTitle, completion_date: now, signed_on_paper_date: signedOnPaper },
+      ipAddress: req.ip,
+    });
+    res.json({ ok: true, locked: true, assessmentId: assessment.id, completion_date: now, signed_on_paper_date: signedOnPaper });
   });
 
   // GET /api/labs/:labId/competency/dashboard-stats

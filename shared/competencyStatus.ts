@@ -79,6 +79,32 @@ export function incompleteElementCells(
   return missing;
 }
 
+/**
+ * Employee-centric variant: the incomplete element cells keyed by TEST SYSTEM
+ * (instrument_id) instead of method group. The per-employee record (Phase 2+)
+ * stores items keyed by instrument_id, so the Sign & Complete gate must check
+ * completeness per assigned instrument. An instrument with no row for an element
+ * counts that element as incomplete, so passing the FULL assigned-instrument
+ * list enforces "every assigned test system complete before sign."
+ */
+export function incompleteElementCellsByInstrument(
+  items: any[],
+  instruments: Array<{ id: number; name?: string | null }>,
+  elementCount: number,
+): string[] {
+  const missing: string[] = [];
+  for (const inst of instruments || []) {
+    for (let el = 1; el <= elementCount; el++) {
+      const row = (items || []).find(
+        (i) => Number(i.instrument_id) === Number(inst.id) && Number(i.element_number ?? i.method_number) === el,
+      );
+      const st = row ? itemElementStatus(row, el) : "incomplete";
+      if (st === "incomplete") missing.push(`${inst.name || `Instrument ${inst.id}`} · Element ${el}`);
+    }
+  }
+  return missing;
+}
+
 /** True when every element for every test is data-or-N/A. */
 export function isAssessmentComplete(
   items: any[],
