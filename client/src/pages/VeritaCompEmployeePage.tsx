@@ -14,12 +14,13 @@ import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { downloadPdfToken } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, ChevronLeft, FlaskConical, CheckCircle2, Lock } from "lucide-react";
+import { Loader2, ChevronLeft, FlaskConical, CheckCircle2, Lock, FileDown } from "lucide-react";
 
 const ELEMENT_NAMES: Record<number, string> = {
   1: "Direct Observation of Routine Patient Test Performance",
@@ -154,6 +155,17 @@ export default function VeritaCompEmployeePage() {
     onError: (e: any) => toast({ title: "Could not sign", description: String(e?.message || e), variant: "destructive" }),
   });
 
+  const pdfMutation = useMutation({
+    mutationFn: async () => {
+      const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/competency/employee/${employeeId}/record-pdf`, { headers: authHeaders() });
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || `HTTP ${r.status}`); }
+      const { token } = await r.json();
+      const safe = String(data?.employee?.name || "Employee").replace(/[^a-zA-Z0-9_\- ]/g, "").trim() || "Employee";
+      downloadPdfToken(token, `VeritaComp_Record_${safe}.pdf`);
+    },
+    onError: (e: any) => toast({ title: "Download failed", description: String(e?.message || e), variant: "destructive" }),
+  });
+
   const unlockMutation = useMutation({
     mutationFn: async () => {
       if (!record?.assessmentId) throw new Error("No signed record to unlock.");
@@ -180,15 +192,22 @@ export default function VeritaCompEmployeePage() {
 
       {data && (
         <>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-bold">{data.employee.name}</h1>
-              {data.employee.title && <span className="text-sm text-muted-foreground">{data.employee.title}</span>}
-              <Badge variant="outline" className="text-[10px]">{data.elementCount === 8 ? "NYS CLEP (8 elements)" : "CLIA (6 elements)"}</Badge>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-2xl font-bold">{data.employee.name}</h1>
+                {data.employee.title && <span className="text-sm text-muted-foreground">{data.employee.title}</span>}
+                <Badge variant="outline" className="text-[10px]">{data.elementCount === 8 ? "NYS CLEP (8 elements)" : "CLIA (6 elements)"}</Badge>
+              </div>
+              <p className="text-sm text-muted-foreground mt-1">
+                Competency by test system, from this person's VeritaStaff&trade; instrument assignments. Analytes run the same way on one instrument are covered by a single competency.
+              </p>
             </div>
-            <p className="text-sm text-muted-foreground mt-1">
-              Competency by test system, from this person's VeritaStaff&trade; instrument assignments. Analytes run the same way on one instrument are covered by a single competency.
-            </p>
+            {testSystems.length > 0 && (
+              <Button size="sm" variant="outline" onClick={() => pdfMutation.mutate()} disabled={pdfMutation.isPending} data-testid="download-record-pdf">
+                {pdfMutation.isPending ? <Loader2 className="animate-spin mr-1" size={12} /> : <FileDown className="mr-1" size={12} />} Download PDF
+              </Button>
+            )}
           </div>
 
           {testSystems.length > 0 && (
