@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type ReactNode } from "react";
+import { useState, useEffect, useMemo, useRef, type ReactNode } from "react";
 import DOMPurify from "dompurify";
 import { Link, useLocation, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -63,6 +63,7 @@ import {
   Archive,
   ChevronDown,
   Link2,
+  Pencil,
 } from "lucide-react";
 import { DocumentLinkDialog, COMP_DOC_TYPES } from "@/components/DocumentLinkDialog";
 import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
@@ -1445,6 +1446,9 @@ function ProgramDetailView({ programId }: { programId: number }) {
   const initialNewAssessment = typeof window !== "undefined" && window.location.search.includes("newAssessment=1");
   const [activeTab, setActiveTab] = useState<"overview" | "assessments" | "employees" | "settings" | "quizzes">(initialNewAssessment ? "assessments" : "overview");
   const [newAssessmentOpen, setNewAssessmentOpen] = useState(initialNewAssessment);
+  // Edit an existing UNSIGNED assessment: holds the assessment (with items) the
+  // dialog opens against. Cleared on close.
+  const [editingAssessment, setEditingAssessment] = useState<any | null>(null);
 
   // Lab-scoped program-detail when activeLabId is set. The legacy endpoint
   // pulls embedded employees by user_id which leaks across labs for
@@ -1556,18 +1560,21 @@ function ProgramDetailView({ programId }: { programId: number }) {
 
       {/* Tab content */}
       {activeTab === "overview" && <OverviewTab program={program} />}
-      {activeTab === "assessments" && <AssessmentsTab program={program} onNewAssessment={() => setNewAssessmentOpen(true)} />}
+      {activeTab === "assessments" && <AssessmentsTab program={program} onNewAssessment={() => setNewAssessmentOpen(true)} onEdit={(a) => setEditingAssessment(a)} />}
       {activeTab === "employees" && <EmployeesTab employees={program.employees || []} programId={program.id} />}
       {activeTab === "quizzes" && <QuizzesTab program={program} />}
       {activeTab === "settings" && <SettingsTab program={program} />}
 
-      {newAssessmentOpen && (
+      {(newAssessmentOpen || editingAssessment) && (
         <NewAssessmentDialog
+          key={editingAssessment ? `edit-${editingAssessment.id}` : "new"}
           program={program}
           employees={program.employees || []}
-          onClose={() => setNewAssessmentOpen(false)}
+          editing={editingAssessment || undefined}
+          onClose={() => { setNewAssessmentOpen(false); setEditingAssessment(null); }}
           onCreated={() => {
             setNewAssessmentOpen(false);
+            setEditingAssessment(null);
             qc.invalidateQueries({ queryKey: [programDetailUrl] });
           }}
         />
@@ -1755,7 +1762,7 @@ function localTodayISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function AssessmentsTab({ program, onNewAssessment }: { program: Program & { assessments: Assessment[] }; onNewAssessment: () => void }) {
+function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program & { assessments: Assessment[] }; onNewAssessment: () => void; onEdit: (a: any) => void }) {
   const qc = useQueryClient();
   const activeLabId = useActiveLabId();
   const { toast } = useToast();
@@ -1943,6 +1950,11 @@ function AssessmentsTab({ program, onNewAssessment }: { program: Program & { ass
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                  {(a as any).locked !== 1 && (
+                    <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" title="Add or correct data on this assessment (specimen IDs, observer, QC dates, evaluator)" data-testid="edit-assessment" onClick={() => onEdit(a)}>
+                      <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
+                    </Button>
+                  )}
                   {(a as any).locked !== 1 && (
                     <Button variant="outline" size="sm" className="h-8 px-2" title="Sign and lock this assessment" onClick={() => { setSignTarget({ id: a.id, employeeName: a.employee_name, assessmentDate: a.assessment_date }); setSignDate(localTodayISO()); setSignDoc(""); }}>
                       Sign & Complete
@@ -2615,11 +2627,15 @@ function NewAssessmentDialog({
   employees,
   onClose,
   onCreated,
+  editing,
 }: {
   program: Program;
   employees: Employee[];
   onClose: () => void;
   onCreated: () => void;
+  // When set, the dialog edits this existing (UNSIGNED) assessment instead of
+  // creating a new one: state hydrates from editing.items and submit PUTs.
+  editing?: any;
 }) {
   const { toast } = useToast();
   const activeLabId = useActiveLabId();
@@ -2632,13 +2648,14 @@ function NewAssessmentDialog({
   const elementCount = isNys ? 8 : 6;
   const activeEmployees = employees.filter(e => e.status === "active");
   const selectedEmployee = activeEmployees.length > 0 ? activeEmployees[0] : null;
-  const [employeeId, setEmployeeId] = useState<number | null>(selectedEmployee?.id || null);
-  const [assessmentType, setAssessmentType] = useState("initial");
-  const [assessmentDate, setAssessmentDate] = useState(new Date().toISOString().split("T")[0]);
+  const [employeeId, setEmployeeId] = useState<number | null>(editing?.employee_id ?? selectedEmployee?.id ?? null);
+  const [assessmentType, setAssessmentType] = useState(editing?.assessment_type || "initial");
+  const [assessmentDate, setAssessmentDate] = useState(editing?.assessment_date || new Date().toISOString().split("T")[0]);
   // Customer-blockers wave 2026-06-05: review period (item #5 from VeritaComp
   // deep-dive). Defaults: end = assessment date, start = end minus 365 days.
-  const [reviewPeriodEnd, setReviewPeriodEnd] = useState(new Date().toISOString().split("T")[0]);
+  const [reviewPeriodEnd, setReviewPeriodEnd] = useState(editing?.review_period_end || new Date().toISOString().split("T")[0]);
   const [reviewPeriodStart, setReviewPeriodStart] = useState(() => {
+    if (editing?.review_period_start) return editing.review_period_start;
     const d = new Date();
     d.setDate(d.getDate() - 365);
     return d.toISOString().split("T")[0];
@@ -2648,7 +2665,7 @@ function NewAssessmentDialog({
   // their own ad-hoc structure (department, year, test system, whatever
   // they want). The autocomplete <datalist> below pulls the lab's already-
   // used folders so a lab settles into ~5-10 stable values organically.
-  const [folder, setFolder] = useState("");
+  const [folder, setFolder] = useState(editing?.folder || "");
   const { data: knownFolders } = useQuery<Array<{ folder: string; count: number }>>({
     queryKey: [activeLabId ? `/api/labs/${activeLabId}/competency/folders` : "no-folders"],
     queryFn: async () => {
@@ -2678,12 +2695,16 @@ function NewAssessmentDialog({
     },
     enabled: !!activeLabId,
   });
-  const [evaluatorName, setEvaluatorName] = useState("");
-  const [evaluatorTitle, setEvaluatorTitle] = useState("");
-  const [evaluatorTitleOther, setEvaluatorTitleOther] = useState("");
-  const [evaluatorInitials, setEvaluatorInitials] = useState("");
-  const [status, setStatus] = useState<"pass" | "fail" | "remediation">("pass");
-  const [remediationPlan, setRemediationPlan] = useState("");
+  // Evaluator title: map a stored value that is not one of the known dropdown
+  // options to the "Other" bucket so edit mode round-trips a custom title.
+  const KNOWN_EVAL_TITLES = ["Laboratory Director", "Technical Consultant (Moderate Complexity)", "Technical Supervisor (High Complexity)", "General Supervisor (Waived/PPM)"];
+  const editEvalTitle = editing?.evaluator_title || "";
+  const [evaluatorName, setEvaluatorName] = useState(editing?.evaluator_name || "");
+  const [evaluatorTitle, setEvaluatorTitle] = useState(editEvalTitle ? (KNOWN_EVAL_TITLES.includes(editEvalTitle) ? editEvalTitle : "Other") : "");
+  const [evaluatorTitleOther, setEvaluatorTitleOther] = useState(editEvalTitle && !KNOWN_EVAL_TITLES.includes(editEvalTitle) ? editEvalTitle : "");
+  const [evaluatorInitials, setEvaluatorInitials] = useState(editing?.evaluator_initials || "");
+  const [status, setStatus] = useState<"pass" | "fail" | "remediation">((editing?.status as any) || "pass");
+  const [remediationPlan, setRemediationPlan] = useState(editing?.remediation_plan || "");
   const [remediationDate, setRemediationDate] = useState("");
   const [creating, setCreating] = useState(false);
 
@@ -2744,9 +2765,84 @@ function NewAssessmentDialog({
   const [waivedItems, setWaivedItems] = useState<Record<number, WaivedItemData>>({});
 
   // Non-technical
-  const [ntAssessmentType, setNtAssessmentType] = useState("orientation");
+  const [ntAssessmentType, setNtAssessmentType] = useState(editing?.assessment_type || "orientation");
   const [nonTechItems, setNonTechItems] = useState<Record<string, NonTechItemData>>({});
   const [ntCompletionDate, setNtCompletionDate] = useState("");
+
+  // Edit mode: hydrate per-element / waived / non-tech state once from the
+  // existing assessment's items, so the form opens pre-filled and a save
+  // replaces the record in place instead of creating a duplicate.
+  const didHydrate = useRef(false);
+  useEffect(() => {
+    if (!editing || didHydrate.current) return;
+    const items: any[] = Array.isArray(editing.items) ? editing.items : [];
+    if (program.type === "technical") {
+      const map: Record<string, TechElementData> = {};
+      for (const it of items) {
+        const mgId = it.method_group_id;
+        const el = it.method_number ?? it.element_number;
+        if (mgId == null || el == null) continue;
+        map[`${el}-${mgId}`] = {
+          passed: !!it.passed,
+          el1_specimen_id: it.el1_specimen_id || "",
+          el1_observer_initials: it.el1_observer_initials || "",
+          el1_na: !!it.el1_na,
+          el1_na_justification: it.el1_na_justification || "",
+          el2_evidence: it.el2_evidence || "",
+          el2_date: it.el2_date || "",
+          el2_na: !!it.el2_na,
+          el2_na_justification: it.el2_na_justification || "",
+          el3_qc_date: it.el3_qc_date || "",
+          el3_na: !!it.el3_na,
+          el3_na_justification: it.el3_na_justification || "",
+          el4_date_observed: it.el4_date_observed || "",
+          el4_observer_initials: it.el4_observer_initials || "",
+          el4_na: !!it.el4_na,
+          el4_na_justification: it.el4_na_justification || "",
+          el5_sample_type: it.el5_sample_type || "",
+          el5_sample_id: it.el5_sample_id || "",
+          el5_acceptable: it.el5_acceptable == null ? null : !!it.el5_acceptable,
+          el5_na: !!it.el5_na,
+          el5_na_justification: it.el5_na_justification || "",
+          el6_quiz_id: it.el6_quiz_id || "",
+          el6_score: it.el6_score == null ? null : Number(it.el6_score),
+          el6_date_taken: it.el6_date_taken || "",
+          el6_na: !!it.el6_na,
+          el6_na_justification: it.el6_na_justification || "",
+          el7_date_observed: it.el7_date_observed || "",
+          el7_observer_initials: it.el7_observer_initials || "",
+          el7_na: !!it.el7_na,
+          el7_na_justification: it.el7_na_justification || "",
+          el8_function_assessed: it.el8_function_assessed || "",
+          el8_date: it.el8_date || "",
+          el8_na: !!it.el8_na,
+          el8_na_justification: it.el8_na_justification || "",
+        } as TechElementData;
+      }
+      setTechData(map);
+    } else if (program.type === "waived") {
+      const map: Record<number, WaivedItemData> = {};
+      const methods: number[] = [];
+      for (const it of items) {
+        const mn = it.waived_method_number ?? it.method_number;
+        if (mn == null) continue;
+        map[mn] = { methodNumber: mn, evidence: it.waived_evidence || "", date: it.waived_date || "", initials: it.waived_initials || "", passed: !!it.passed } as WaivedItemData;
+        methods.push(mn);
+      }
+      setWaivedItems(map);
+      if (methods.length) setWaivedMethods(Array.from(new Set(methods)).sort((a, b) => a - b));
+    } else {
+      const map: Record<string, NonTechItemData> = {};
+      for (const it of items) {
+        const label = it.nt_item_label || it.item_label;
+        if (!label) continue;
+        map[label] = { dateMet: it.nt_date_met || it.date_met || "", empInitials: it.nt_employee_initials || it.employee_initials || "", supInitials: it.nt_supervisor_initials || it.supervisor_initials || "" } as NonTechItemData;
+      }
+      setNonTechItems(map);
+    }
+    didHydrate.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing, program.type]);
 
   // Fetch quizzes for this program
   const { data: quizzes } = useQuery<any[]>({
@@ -3002,11 +3098,16 @@ function NewAssessmentDialog({
     }
 
     try {
-      const createUrl = activeLabId
-        ? `${API_BASE}/api/labs/${activeLabId}/competency/assessments`
-        : `${API_BASE}/api/competency/assessments`;
+      // Edit mode PUTs to the lab-scoped twin, replacing the record in place.
+      const createUrl = editing
+        ? (activeLabId
+            ? `${API_BASE}/api/labs/${activeLabId}/competency/assessments/${editing.id}`
+            : `${API_BASE}/api/competency/assessments/${editing.id}`)
+        : (activeLabId
+            ? `${API_BASE}/api/labs/${activeLabId}/competency/assessments`
+            : `${API_BASE}/api/competency/assessments`);
       const res = await fetch(createUrl, {
-        method: "POST",
+        method: editing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
           programId: program.id,
@@ -3027,9 +3128,13 @@ function NewAssessmentDialog({
           items,
         }),
       });
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || "Failed");
+      }
       onCreated();
-    } catch {
+    } catch (e: any) {
+      toast({ title: editing ? "Save failed" : "Create failed", description: e?.message || "Please try again.", variant: "destructive" });
       setCreating(false);
     }
   }
@@ -3051,7 +3156,7 @@ function NewAssessmentDialog({
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>New {typeLabel(program.type)} Assessment</DialogTitle>
+          <DialogTitle>{editing ? "Edit" : "New"} {typeLabel(program.type)} Assessment</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5">

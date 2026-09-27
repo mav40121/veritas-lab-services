@@ -22829,6 +22829,108 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ id: assessmentId, program_id: programId, employee_id: employeeId, status: status || "pass", created_at: now });
   });
 
+  // Lab-scoped PUT twin (2026-09-27). Enables in-place editing of an UNSIGNED
+  // assessment (add specimen IDs, observer, QC dates, evaluator, etc.) so the
+  // evaluator does not have to delete-and-recreate the record. Mirrors the
+  // delete/sign/unlock twins: pins the program to req.scope.labId, rejects a
+  // locked assessment, replaces items with the full column set (incl el7/el8),
+  // and audit-logs the before/after. The legacy /api/competency/assessments/:id
+  // PUT stays for the single-lab fallback.
+  app.put("/api/labs/:labId/competency/assessments/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const sqlite = (db as any).$client;
+    const labId = req.scope.labId;
+    const before = sqlite.prepare(
+      `SELECT a.* FROM competency_assessments a
+       JOIN competency_programs p ON a.program_id = p.id
+       WHERE a.id = ? AND p.lab_id = ?`
+    ).get(req.params.id, labId) as any;
+    if (!before) return res.status(404).json({ error: "Assessment not found" });
+    if (before.locked === 1) {
+      return res.status(409).json({ error: "Assessment is locked. Unlock first to edit.", locked: true });
+    }
+    const beforeItems = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(req.params.id);
+
+    const { status, evaluatorName, evaluatorTitle, evaluatorInitials, remediationPlan, employeeAcknowledged, supervisorAcknowledged, reviewPeriodStart, reviewPeriodEnd, folder, items } = req.body;
+    const sets: string[] = [];
+    const vals: any[] = [];
+    if (status !== undefined) { sets.push("status = ?"); vals.push(status); }
+    if (evaluatorName !== undefined) { sets.push("evaluator_name = ?"); vals.push(evaluatorName); }
+    if (evaluatorTitle !== undefined) { sets.push("evaluator_title = ?"); vals.push(evaluatorTitle); }
+    if (evaluatorInitials !== undefined) { sets.push("evaluator_initials = ?"); vals.push(evaluatorInitials); }
+    if (remediationPlan !== undefined) { sets.push("remediation_plan = ?"); vals.push(remediationPlan); }
+    if (employeeAcknowledged !== undefined) { sets.push("employee_acknowledged = ?"); vals.push(employeeAcknowledged ? 1 : 0); }
+    if (supervisorAcknowledged !== undefined) { sets.push("supervisor_acknowledged = ?"); vals.push(supervisorAcknowledged ? 1 : 0); }
+    if (reviewPeriodStart !== undefined) { sets.push("review_period_start = ?"); vals.push(reviewPeriodStart); }
+    if (reviewPeriodEnd !== undefined) { sets.push("review_period_end = ?"); vals.push(reviewPeriodEnd); }
+    if (folder !== undefined) {
+      const folderClean = typeof folder === "string" && folder.trim().length > 0 ? folder.trim() : null;
+      sets.push("folder = ?"); vals.push(folderClean);
+    }
+    if (sets.length) {
+      vals.push(req.params.id);
+      sqlite.prepare(`UPDATE competency_assessments SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
+    }
+    if (Array.isArray(items)) {
+      sqlite.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(req.params.id);
+      const stmt = sqlite.prepare(
+        `INSERT INTO competency_assessment_items (
+          assessment_id, method_number, method_group_id, item_label, item_description,
+          evidence, date_met, employee_initials, supervisor_initials, passed, specimen_info,
+          element_number, method_group_name,
+          el1_specimen_id, el1_observer_initials, el1_na, el1_na_justification,
+          el2_evidence, el2_date, el2_na, el2_na_justification,
+          el3_qc_date, el3_na, el3_na_justification,
+          el4_date_observed, el4_observer_initials, el4_na, el4_na_justification,
+          el5_sample_type, el5_sample_id, el5_acceptable, el5_na, el5_na_justification,
+          el6_quiz_id, el6_score, el6_date_taken, el6_na, el6_na_justification,
+          el7_date_observed, el7_observer_initials, el7_na, el7_na_justification,
+          el8_function_assessed, el8_date, el8_na, el8_na_justification,
+          waived_instrument, waived_test, waived_method_number, waived_evidence, waived_date, waived_initials,
+          nt_item_label, nt_item_description, nt_date_met, nt_employee_initials, nt_supervisor_initials
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      for (const item of items) {
+        stmt.run(
+          req.params.id,
+          item.methodNumber ?? null, item.methodGroupId ?? null,
+          item.itemLabel ?? null, item.itemDescription ?? null,
+          item.evidence ?? null, item.dateMet ?? null,
+          item.employeeInitials ?? null, item.supervisorInitials ?? null,
+          item.passed ? 1 : 0, item.specimenInfo ?? null,
+          item.elementNumber ?? null, item.methodGroupName ?? null,
+          item.el1SpecimenId ?? null, item.el1ObserverInitials ?? null,
+          item.el1Na ? 1 : 0, item.el1NaJustification ?? null,
+          item.el2Evidence ?? null, item.el2Date ?? null,
+          item.el2Na ? 1 : 0, item.el2NaJustification ?? null,
+          item.el3QcDate ?? null,
+          item.el3Na ? 1 : 0, item.el3NaJustification ?? null,
+          item.el4DateObserved ?? null, item.el4ObserverInitials ?? null,
+          item.el4Na ? 1 : 0, item.el4NaJustification ?? null,
+          item.el5SampleType ?? null, item.el5SampleId ?? null,
+          item.el5Acceptable != null ? (item.el5Acceptable ? 1 : 0) : null,
+          item.el5Na ? 1 : 0, item.el5NaJustification ?? null,
+          item.el6QuizId ?? null, item.el6Score ?? null, item.el6DateTaken ?? null,
+          item.el6Na ? 1 : 0, item.el6NaJustification ?? null,
+          item.el7DateObserved ?? null, item.el7ObserverInitials ?? null,
+          item.el7Na ? 1 : 0, item.el7NaJustification ?? null,
+          item.el8FunctionAssessed ?? null, item.el8Date ?? null,
+          item.el8Na ? 1 : 0, item.el8NaJustification ?? null,
+          item.waivedInstrument ?? null, item.waivedTest ?? null,
+          item.waivedMethodNumber ?? null, item.waivedEvidence ?? null,
+          item.waivedDate ?? null, item.waivedInitials ?? null,
+          item.ntItemLabel ?? null, item.ntItemDescription ?? null,
+          item.ntDateMet ?? null, item.ntEmployeeInitials ?? null, item.ntSupervisorInitials ?? null
+        );
+      }
+    }
+    const after = sqlite.prepare("SELECT * FROM competency_assessments WHERE id = ?").get(req.params.id);
+    const afterItems = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(req.params.id);
+    const emp = sqlite.prepare("SELECT name FROM competency_employees WHERE id = ?").get(before.employee_id) as any;
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "update", entityType: "assessment", entityId: req.params.id, entityLabel: emp?.name || undefined, before: { assessment: before, items: beforeItems }, after: { assessment: after, items: afterItems }, ipAddress: req.ip });
+    res.json({ ok: true });
+  });
+
   // GET /api/labs/:labId/competency/folders — distinct folder values for the
   // lab, for the autocomplete datalist in the New Assessment dialog.
   // Added 2026-06-05 PR A (customer-blockers wave item #1). Sorted by usage
