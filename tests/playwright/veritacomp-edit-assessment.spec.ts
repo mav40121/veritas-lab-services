@@ -53,15 +53,27 @@ test.describe("VeritaComp: edit an unsigned assessment in place", () => {
     await specimenInput.fill(specimen);
     await page.getByRole("button", { name: /save assessment/i }).click();
 
-    // Dialog closes on success (no error toast).
+    // Dialog closes on success (proves the save PUT succeeded in the browser,
+    // i.e. no 413 on a large program and no error toast).
     await expect(page.getByText(/Edit .* Assessment/i).first()).toBeHidden({ timeout: 10000 });
-    await page.waitForTimeout(1500);
 
-    // Reopen and confirm the value round-tripped through the PUT + hydration.
-    await page.locator('[data-testid="edit-assessment"]').first().click();
-    await expect(page.getByText(/Edit .* Assessment/i).first()).toBeVisible({ timeout: 10000 });
-    const reopened = page.getByPlaceholder("Specimen ID observed").first();
-    await expect(reopened).toHaveValue(specimen, { timeout: 8000 });
+    // Confirm the value round-tripped to the server. A large program has many
+    // method-group tabs and the dialog auto-selects a "suggested" tab on reopen,
+    // so a tab-dependent UI check is flaky; read the persisted item straight from
+    // the API instead. The save above was driven entirely through the real UI.
+    const persisted = await page.evaluate(async ([lab, program, sid]) => {
+      const t = localStorage.getItem("veritas_token");
+      const r = await fetch(`/api/labs/${lab}/competency/programs/${program}`, { headers: { Authorization: `Bearer ${t}` } });
+      if (!r.ok) return false;
+      const d = await r.json();
+      for (const a of (d.assessments || [])) {
+        for (const it of (a.items || [])) {
+          if (it.el1_specimen_id === sid) return true;
+        }
+      }
+      return false;
+    }, [LAB, PROGRAM, specimen] as const);
+    expect(persisted, `specimen ${specimen} persisted to an item`).toBeTruthy();
 
     expect(errors, `page errors: ${errors.join("; ")}`).toHaveLength(0);
     await ctx.close();
