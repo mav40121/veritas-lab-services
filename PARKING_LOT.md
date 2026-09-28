@@ -602,6 +602,21 @@ A prospect asked today whether she could hide the modules or sections her lab do
 
 ---
 
+### 53. VeritaCEU: curated free-continuing-education provider list (seed / reference)
+
+**Effort:** S (1-2 days to seed a curated provider list and surface it in VeritaCEU; XS to just store the reference)
+**Importance:** Low-Medium — quality-of-life for VeritaCEU users (find free CE fast); not blocking any sale.
+
+Jennifer Small (Interim Director, Clinical Laboratory, Lifepoint Health) sent Michael a list (2026-09-25) of sources offering FREE continuing education for the lab, to seed into the future/enhanced VeritaCEU module (for example a "where to find free CE" reference, or a curated provider directory users can browse and log CE against). Free-CE sources named: API, ARUP, Cardinal Health, Fisher Health, MLO, ADLM, Siemens, Cepheid, Abbott, OneLab (CDC), BioRad, LabRoots. Many vendors deliver their CE through Whitehat Communications (e.g., Polymedco). Paid sites (ASCP and similar) occasionally offer a free CE around Lab Week. This is a many-more-exist starter list, not exhaustive.
+
+**Source:** Jennifer Small (jennifer.small@lifepointhealth.net) email 2026-09-25, forwarded by Michael 2026-09-28 for the future CEU module.
+
+**Status:** Open, reference captured. Not started.
+
+**Pre- vs post-COLA:** Post-COLA. No customer urgency.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C47. Unregulated-analyte / Alternative Assessment (AAA) coverage (was #18)

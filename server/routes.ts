@@ -31947,6 +31947,49 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── ADMIN: Volume disk-usage inspector (read-only) ──────────────────────
+  // Lists the files on the persistent data volume with sizes, so an operator can
+  // see what is consuming space when Railway warns the volume is filling. The
+  // SQLite DB + its -wal/-shm and the /data/policies uploads are the expected
+  // consumers; anything else (a stray journal, an old DB copy) shows up here.
+  app.get("/api/admin/disk-usage", (req, res) => {
+    const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    try {
+      const sqlite = (db as any).$client;
+      const dbPath: string = sqlite.name;
+      const root = path.dirname(dbPath);
+      const entries: Array<{ path: string; bytes: number }> = [];
+      let total = 0;
+      const walk = (dir: string, depth: number) => {
+        if (depth > 8 || entries.length > 10000) return;
+        let names: string[] = [];
+        try { names = fs.readdirSync(dir); } catch { return; }
+        for (const name of names) {
+          const full = path.join(dir, name);
+          let st: any;
+          try { st = fs.statSync(full); } catch { continue; }
+          if (st.isDirectory()) walk(full, depth + 1);
+          else { entries.push({ path: full, bytes: st.size }); total += st.size; }
+        }
+      };
+      walk(root, 0);
+      entries.sort((a, b) => b.bytes - a.bytes);
+      const toMB = (b: number) => Number((b / 1048576).toFixed(2));
+      res.json({
+        root,
+        dbPath,
+        fileCount: entries.length,
+        totalBytes: total,
+        totalMB: toMB(total),
+        largest: entries.slice(0, 50).map((e) => ({ path: e.path, mb: toMB(e.bytes) })),
+      });
+    } catch (err: any) {
+      console.error('[disk-usage] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── ADMIN: Upload a competency quiz into a customer's program ──────────
   // For onboarding-help cases where the operator needs to load a quiz on
   // behalf of a customer (no impersonation API exists). Same insert path
