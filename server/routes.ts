@@ -32,7 +32,7 @@ import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
 import { isValidIfuUrl } from "@shared/ifu";
-import { incompleteElementCells as compIncompleteCells, incompleteElementCellsByInstrument as compIncompleteCellsByInstrument, aggregateElementStatus as compAggregateElementStatus } from "@shared/competencyStatus";
+import { incompleteElementCells as compIncompleteCells, incompleteElementCellsByInstrument as compIncompleteCellsByInstrument, aggregateElementStatus as compAggregateElementStatus, competencyCycleWindowDays } from "@shared/competencyStatus";
 
 // Express already URL-decodes route params before the handler runs, so
 // req.params.analyte for a request to ".../IG%25" arrives as "IG%". Calling
@@ -25991,31 +25991,38 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       nameLC: String(mg.name || "").toLowerCase(),
     }));
 
-    // "Have" side of the coverage map: locked, passing competency assessments in
-    // the current cycle (last 365 days = annual) and the method groups they
-    // covered. Bridged staff_employees -> competency_employees (FK, name fallback).
-    const cycleStart = new Date(today.getTime() - 365 * dayMs).toISOString().slice(0, 10);
+    // "Have" side of the coverage map: locked, passing competency assessments and
+    // the method groups they covered, WITH each assessment's date so the "assessed
+    // this cycle" window can be applied PER EMPLOYEE below (first-year employees are
+    // on a semiannual cadence, established employees annual; see
+    // competencyCycleWindowDays / 42 CFR 493.1451(b)(8)). We fetch the widest window
+    // (365 days = annual) here and tighten per employee. Bridged staff_employees ->
+    // competency_employees (FK, name fallback).
+    const widestCycleStart = new Date(today.getTime() - 365 * dayMs).toISOString().slice(0, 10);
     const assessedRows = client.prepare(
-      `SELECT ce.staff_employee_id AS staff_id, ce.name AS comp_name, ai.method_group_id AS mg_id
+      `SELECT ce.staff_employee_id AS staff_id, ce.name AS comp_name, ai.method_group_id AS mg_id, a.assessment_date AS adate
        FROM competency_assessments a
        JOIN competency_programs p ON p.id = a.program_id
        JOIN competency_employees ce ON ce.id = a.employee_id
        JOIN competency_assessment_items ai ON ai.assessment_id = a.id
        WHERE p.lab_id = ? AND a.locked = 1 AND a.status = 'pass' AND ai.passed = 1
          AND ai.method_group_id IS NOT NULL AND a.assessment_date >= ?`
-    ).all(labId, cycleStart) as any[];
-    const assessedByStaffId = new Map<number, Set<number>>();
-    const assessedByName = new Map<string, Set<number>>();
+    ).all(labId, widestCycleStart) as any[];
+    // Per employee: mg_id -> most recent covering assessment date (ms). The
+    // per-employee cadence cutoff is applied where these are consumed below.
+    const assessedByStaffId = new Map<number, Map<number, number>>();
+    const assessedByName = new Map<string, Map<number, number>>();
+    const noteAssessed = (m: Map<any, Map<number, number>>, key: any, mgId: number, dms: number) => {
+      if (!m.has(key)) m.set(key, new Map());
+      const inner = m.get(key)!;
+      const prev = inner.get(mgId);
+      if (prev == null || dms > prev) inner.set(mgId, dms);
+    };
     for (const r of assessedRows) {
-      if (r.staff_id) {
-        if (!assessedByStaffId.has(r.staff_id)) assessedByStaffId.set(r.staff_id, new Set());
-        assessedByStaffId.get(r.staff_id)!.add(r.mg_id);
-      }
+      const d = new Date(r.adate); const dms = Number.isNaN(d.getTime()) ? 0 : d.getTime();
+      if (r.staff_id) noteAssessed(assessedByStaffId, r.staff_id, r.mg_id, dms);
       const nm = String(r.comp_name || "").trim().toLowerCase();
-      if (nm) {
-        if (!assessedByName.has(nm)) assessedByName.set(nm, new Set());
-        assessedByName.get(nm)!.add(r.mg_id);
-      }
+      if (nm) noteAssessed(assessedByName, nm, r.mg_id, dms);
     }
 
     const rankComplexity = (c: string): number => {
@@ -26043,7 +26050,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const results = employees.map((e: any) => {
       const staffNameLC = `${e.first_name || ""} ${e.last_name || ""}`.trim().toLowerCase();
-      const empAssessed = assessedByStaffId.get(e.id) || assessedByName.get(staffNameLC) || new Set<number>();
+      const empAssessed = assessedByStaffId.get(e.id) || assessedByName.get(staffNameLC) || new Map<number, number>();
+      // Cadence-aware "assessed this cycle" cutoff: 6 months for a first-year
+      // (semiannual) employee, 12 months once established (42 CFR 493.1451(b)(8)).
+      const cycleCutoffMs = today.getTime() - competencyCycleWindowDays(e) * dayMs;
       const instruments = instStmt.all(e.id, labId) as any[];
       const owed = instruments.map((inst: any) => {
         const tests = testsStmt.all(inst.id) as any[];
@@ -26063,8 +26073,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             if (!coverage) coverage = { programId: mg.programId, programName: mg.programName, methodGroupId: mg.id, methodGroupName: mg.name };
           }
         }
-        // "have" = a locked passing assessment this cycle on any method group that covers this instrument.
-        const assessed = coveringMgIds.some((id) => empAssessed.has(id));
+        // "have" = a locked passing assessment WITHIN THIS EMPLOYEE'S CADENCE WINDOW
+        // on any method group that covers this instrument (semiannual in year 1).
+        const assessed = coveringMgIds.some((id) => { const d = empAssessed.get(id); return d != null && d >= cycleCutoffMs; });
         return {
           instrumentId: inst.id,
           instrumentName: inst.instrument_name,
