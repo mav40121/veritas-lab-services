@@ -50,6 +50,45 @@ export function decideTaskReminder(opts: {
   return { notify: !approachingKindsSent.has(kind), kind };
 }
 
+export interface NotifiableItem { task: any; kind: string; dueDate: string | null; days: number | null; }
+export interface ReminderGroup { recipients: { email: string; name?: string }[]; items: NotifiableItem[]; }
+
+/**
+ * Split a lab's notifiable tasks into the email digests to send.
+ * - Default (owner-only OFF): one digest of all tasks to the lab recipient list.
+ * - Owner-only ON (#51): one digest per task OWNER (task.owner_email), containing
+ *   only that owner's tasks, so the heme owner never gets the chemistry reminders.
+ *   Tasks with no valid owner email fall back to the lab recipient list in a
+ *   single digest, so a task is never silently dropped from reminders.
+ * Exported pure so scripts/verify-veritatrack-owner-reminders.mts can exercise it.
+ */
+export function groupNotifiableForSend(
+  notifiable: NotifiableItem[],
+  ownerOnly: boolean,
+  labRecipients: { email: string; name?: string }[],
+): ReminderGroup[] {
+  if (notifiable.length === 0) return [];
+  if (!ownerOnly) return [{ recipients: labRecipients, items: notifiable }];
+  const byOwner = new Map<string, NotifiableItem[]>();
+  const fallback: NotifiableItem[] = [];
+  for (const n of notifiable) {
+    const email = String((n.task as any).owner_email || "").trim();
+    if (email && email.includes("@")) {
+      if (!byOwner.has(email)) byOwner.set(email, []);
+      byOwner.get(email)!.push(n);
+    } else {
+      fallback.push(n);
+    }
+  }
+  const groups: ReminderGroup[] = [];
+  for (const [email, items] of byOwner) {
+    const name = (items[0].task as any).owner || undefined;
+    groups.push({ recipients: [{ email, name }], items });
+  }
+  if (fallback.length && labRecipients.length) groups.push({ recipients: labRecipients, items: fallback });
+  return groups;
+}
+
 export interface VeritaTrackReminderSummary {
   labs: number; tasksChecked: number; notifiable: number; emailsSent: number; skipped: number; errors: number;
 }
@@ -135,45 +174,50 @@ export async function runVeritaTrackReminders(): Promise<VeritaTrackReminderSumm
 
     if (!resend) { summary.skipped++; continue; } // configured labs but no mailer: don't log, retry when set
 
-    const lines = notifiable.map(n => {
-      const when = n.days === null ? "never completed"
-        : n.days <= 0 ? `overdue by ${Math.abs(n.days)} day${Math.abs(n.days) === 1 ? "" : "s"} (due ${n.dueDate})`
-        : `due in ${n.days} day${n.days === 1 ? "" : "s"} (${n.dueDate})`;
-      const instr = n.task.instrument ? ` [${n.task.instrument}]` : "";
-      return `- ${n.task.name}${instr}: ${when}`;
-    });
-    const overdueN = notifiable.filter(n => n.days === null || (n.days as number) <= 0).length;
-    const subject = `VeritaTrack reminder: ${notifiable.length} task${notifiable.length === 1 ? "" : "s"} due or overdue at ${labLabel}`;
-    const text = [
-      `Hello,`,
-      ``,
-      `This is an automated VeritaTrack reminder for ${labLabel}.`,
-      ``,
-      `${notifiable.length} task${notifiable.length === 1 ? "" : "s"} need attention (${overdueN} overdue):`,
-      ``,
-      ...lines,
-      ``,
-      `Sign in to VeritaAssure and record the sign-off to clear these reminders.`,
-      ``,
-      `Sent automatically by VeritaTrack from VeritaAssure. To change who receives these or turn them off, update the reminder settings in VeritaTrack.`,
-    ].join("\n");
-
-    try {
-      await resend.emails.send({
-        from: "VeritaAssure <info@veritaslabservices.com>",
-        to: recipients.map(r => r.email),
-        subject,
-        text,
+    // #51: owner-only routing splits the lab's tasks into one digest per owner.
+    const groups = groupNotifiableForSend(notifiable, !!cfg.owner_only, recipients);
+    const insert = sqlite.prepare(
+      "INSERT INTO veritatrack_reminder_log (task_id, lab_id, reminder_kind, due_date, sent_on, recipient_email) VALUES (?,?,?,?,?,?)"
+    );
+    for (const group of groups) {
+      if (!group.recipients.length) continue;
+      const lines = group.items.map(n => {
+        const when = n.days === null ? "never completed"
+          : n.days <= 0 ? `overdue by ${Math.abs(n.days)} day${Math.abs(n.days) === 1 ? "" : "s"} (due ${n.dueDate})`
+          : `due in ${n.days} day${n.days === 1 ? "" : "s"} (${n.dueDate})`;
+        const instr = n.task.instrument ? ` [${n.task.instrument}]` : "";
+        return `- ${n.task.name}${instr}: ${when}`;
       });
-      summary.emailsSent++;
-      const recipientList = recipients.map(r => r.email).join(",");
-      const insert = sqlite.prepare(
-        "INSERT INTO veritatrack_reminder_log (task_id, lab_id, reminder_kind, due_date, sent_on, recipient_email) VALUES (?,?,?,?,?,?)"
-      );
-      for (const n of notifiable) insert.run(n.task.id, cfg.lab_id, n.kind, n.dueDate, today, recipientList);
-    } catch (err: any) {
-      summary.errors++;
-      console.error(`[veritatrack-reminder] send failed for lab ${cfg.lab_id}:`, err?.message || err);
+      const overdueN = group.items.filter(n => n.days === null || (n.days as number) <= 0).length;
+      const subject = `VeritaTrack reminder: ${group.items.length} task${group.items.length === 1 ? "" : "s"} due or overdue at ${labLabel}`;
+      const text = [
+        `Hello,`,
+        ``,
+        `This is an automated VeritaTrack reminder for ${labLabel}.`,
+        ``,
+        `${group.items.length} task${group.items.length === 1 ? "" : "s"} need attention (${overdueN} overdue):`,
+        ``,
+        ...lines,
+        ``,
+        `Sign in to VeritaAssure and record the sign-off to clear these reminders.`,
+        ``,
+        `Sent automatically by VeritaTrack from VeritaAssure. To change who receives these or turn them off, update the reminder settings in VeritaTrack.`,
+      ].join("\n");
+
+      try {
+        await resend.emails.send({
+          from: "VeritaAssure <info@veritaslabservices.com>",
+          to: group.recipients.map(r => r.email),
+          subject,
+          text,
+        });
+        summary.emailsSent++;
+        const recipientList = group.recipients.map(r => r.email).join(",");
+        for (const n of group.items) insert.run(n.task.id, cfg.lab_id, n.kind, n.dueDate, today, recipientList);
+      } catch (err: any) {
+        summary.errors++;
+        console.error(`[veritatrack-reminder] send failed for lab ${cfg.lab_id}:`, err?.message || err);
+      }
     }
   }
 
