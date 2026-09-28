@@ -118,9 +118,10 @@ def check_file(rel, fpath):
         if product_reg.search(line):
             ERRORS.append(f"[{rel}:{i}] Registered trademark ® on product name -- must be ™")
 
-        # EP Evaluator
-        if re.search(r'EP Evaluator', line, re.IGNORECASE):
-            ERRORS.append(f"[{rel}:{i}] 'EP Evaluator' name must not appear -- use 'other evaluation tools'")
+        # EP Evaluator naming rule RELAXED 2026-09-27 (Michael): the name MAY now
+        # appear in public-facing copy. In our field everyone knows the name, and
+        # naming the incumbent makes the menu-to-studies comparison land. The
+        # CAMLAB, LabVine, and dated-manual bans below are unchanged.
 
         # CAMLAB
         if re.search(r'\bCAMLAB\b', line, re.IGNORECASE):
