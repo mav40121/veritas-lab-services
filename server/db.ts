@@ -4363,8 +4363,10 @@ sqlite.exec(`
     on_order_expected_date TEXT,
     on_order_placed_date TEXT,
     created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
-  )
+    updated_at TEXT DEFAULT (datetime('now')),
+    lab_id INTEGER REFERENCES labs(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_inventory_items_lab ON inventory_items(lab_id);
 `);
 
 // Lot-level inventory (Phase 1 of nested-lot tracking). A product (inventory_items
@@ -5565,8 +5567,11 @@ sqlite.exec(`
     signed_at TEXT,
     external_submission_ref TEXT,
     created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
+    updated_at TEXT DEFAULT (datetime('now')),
+    lab_id INTEGER REFERENCES labs(id)
   );
+
+  CREATE INDEX IF NOT EXISTS idx_findings_lab ON findings(lab_id, due_date);
 
   CREATE TABLE IF NOT EXISTS finding_attachments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
