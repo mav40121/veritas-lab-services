@@ -144,7 +144,7 @@ Plain-text questions in chat without numbering, without the ★, or without `[my
   - **Compliance (12):** VeritaCheck™, VeritaMap™, VeritaScan™, VeritaComp™, VeritaPolicy™, VeritaStaff™, VeritaLab™, VeritaPT™, VeritaTrack™, VeritaResponse™, VeritaQC™, VeritaMaintain™ (the rebranded Equipment Maintenance module; route /equipment-app).
   - **Operations (6):** VeritaBench™, VeritaPace™, VeritaShift™, VeritaQA™, VeritaStock™, VeritaOps™.
   - The suite mark itself is VeritaAssure™. Any public-facing copy that gives a module count must say "eighteen" (12 compliance + 6 operations).
-- NO reference to EP Evaluator by name — use "other evaluation tools" if the comparison is needed.
+- EP Evaluator MAY be named in public-facing copy (rule relaxed 2026-09-27 by Michael; historically this was banned). Reasoning: in our field everyone knows the name, and naming the incumbent makes the menu-to-studies comparison land. Keep comparisons factual and non-disparaging.
 - NO CAMLAB references — use "TJC standard".
 - NO dated accreditor manual references in public-facing copy. Never name a TJC, CAP, AABB, or COLA manual by year, month/year, or edition. Use "the current TJC standard" or "TJC standard for laboratory accreditation". The audit script enforces this.
 - NO LabVine Learning references — removed permanently.
