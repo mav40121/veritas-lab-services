@@ -628,6 +628,34 @@ export default function VeritaResponseFindingPage() {
     }
   };
 
+  const handleGenerateInternalNce = async () => {
+    if (!id) return;
+    setRenderState("rendering");
+    setRenderError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/findings/${id}/internal-nce-pdf`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const msg = body.missing && body.missing.length
+          ? `Missing: ${body.missing.join("; ")}`
+          : body.error || `Render failed (${res.status})`;
+        setRenderError(msg);
+        setRenderState("error");
+        return;
+      }
+      const data = await res.json();
+      if (data.token) {
+        window.open(`${API_BASE}/api/pdf/${data.token}`, "_blank");
+      }
+      setRenderState("idle");
+    } catch (e: any) {
+      setRenderError(e?.message || "Network error");
+      setRenderState("error");
+    }
+  };
+
   const handleGenerateCap = async () => {
     if (!id) return;
     setRenderState("rendering");
@@ -1147,6 +1175,33 @@ export default function VeritaResponseFindingPage() {
           </Card>
         );
       })()}
+
+      {/* #36: internal NCE write-up PDF. Shown for internal-event findings; no
+          accreditor gate. Floor: event description + corrective action. */}
+      {finding.source_type === "internal_nce" && (
+        <Card>
+          <CardHeader className="py-3 px-4 border-b">
+            <CardTitle className="text-base font-semibold">Internal NCE write-up (PDF)</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 space-y-2">
+            <div className="text-xs text-muted-foreground">
+              Generates the laboratory's internal non-conforming event report: event context, corrective and preventive action, and the medical-director-or-designee approval block on page 1. For internal quality-management use, not a survey or PT response.
+            </div>
+            {renderState === "error" && renderError && (
+              <div className="text-xs text-red-700 dark:text-red-400">{renderError}</div>
+            )}
+            <Button
+              size="sm"
+              className="bg-[#006064] hover:bg-[#004d50] text-white"
+              onClick={handleGenerateInternalNce}
+              disabled={renderState === "rendering"}
+              data-testid="nce-pdf-btn"
+            >
+              {renderState === "rendering" ? "Generating..." : "Generate internal NCE PDF"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* AABB NER working-draft checklist + render. AABB findings only,
           on a lab flagged for AABB. AABB has structured Sections A-M in

@@ -16,7 +16,7 @@ import { registerScheduleRoutes } from "./schedule";
 import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice, getSeatPriceForTier, VC_UNLIMITED_FIRST_YEAR_COUPON, getViewOnlyAddOnConfig } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
-import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateEmployeeCompetencyRecordPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer } from "./pdfReport";
+import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateEmployeeCompetencyRecordPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer, generateInternalNcePDF, validateInternalNce } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
 import { labLocalDate } from "./dateLocal";
 import { buildWasteReport, generateWasteReportPDF, generateWasteReportExcel, type WasteEventRow, type WasteReportContext } from "./wasteReport";
@@ -21372,6 +21372,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json({ token: storePdfToken(pdfBuffer, filename) });
     } catch (err: any) {
       console.error("[cms-2567-pdf] render failed:", err);
+      res.status(500).json({ error: err?.message || "PDF render failed" });
+    }
+  });
+
+  // #36: internal NCE write-up PDF. Only for internal_nce findings (a lab-found
+  // event). Mirrors the accreditor renderers: access-checked, validated, tokenized.
+  app.get("/api/findings/:id/internal-nce-pdf", authMiddleware, async (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const finding = userCanAccessFinding(req.params.id, req) as any;
+    if (!finding) return res.status(404).json({ error: "Finding not found" });
+    if (finding.source_type !== "internal_nce") {
+      return res.status(400).json({ error: `Internal NCE renderer only applies to internal-event findings; this finding is ${finding.source_type || "inspection"}.` });
+    }
+    const validation = validateInternalNce(finding);
+    if (!validation.ok) {
+      return res.status(400).json({ error: "Internal NCE write-up is incomplete; cannot render", missing: validation.missing });
+    }
+    try {
+      const user = resolveFindingLabIdentity(finding, dataUserId);
+      const pdfBuffer = await generateInternalNcePDF({ finding, user }, licenseCtxFromReq(req, "VeritaResponse™"));
+      const safeName = String(finding.finding_number || finding.id).replace(/[^A-Za-z0-9_-]+/g, "_");
+      const filename = `Internal-NCE_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      try {
+        (db as any).$client.prepare(
+          `INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)`
+        ).run(Number(req.params.id), 'internal_nce_rendered', req.user?.userId ?? null, JSON.stringify({}));
+      } catch {}
+      res.json({ token: storePdfToken(pdfBuffer, filename) });
+    } catch (err: any) {
+      console.error("[internal-nce-pdf] render failed:", err);
       res.status(500).json({ error: err?.message || "PDF render failed" });
     }
   });

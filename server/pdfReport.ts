@@ -7293,3 +7293,180 @@ export async function generateAabbNerPDF(input: Cms2567Input, licenseCtx?: Parti
     await page.close();
   }
 }
+
+// #36: internal non-conforming event (NCE) write-up. Unlike the AABB NER (framed
+// as a transcription draft for an accreditor form), this is the lab's OWN internal
+// record of a lab-found event, closed out by a medical-director-or-owner/admin
+// signature. The signature block sits on page 1 per the PDF rules; footer and
+// author stamp are the shared VeritaResponse ones. Floor: event description +
+// corrective action.
+export function validateInternalNce(finding: any): { ok: boolean; missing: string[] } {
+  const missing: string[] = [];
+  if (!finding?.description || !String(finding.description).trim()) missing.push("Event description");
+  if (!finding?.corrective_action || !String(finding.corrective_action).trim()) missing.push("Corrective action");
+  return { ok: missing.length === 0, missing };
+}
+
+function buildInternalNceHTML(input: Cms2567Input): string {
+  const { finding, user } = input;
+  const labName = escHtml(user?.lab_name || user?.name || "Laboratory");
+  const cliaRaw = user?.clia_number || (user as any)?.cliaNumber || "";
+  const clia = cliaRaw ? escHtml(cliaRaw) : "CLIA: Not on file, enter in account settings";
+  const dateGen = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+
+  const findingNum = escHtml(finding.finding_number || `#${finding.id}`);
+  const eventDate = escHtml(finding.event_date || finding.anchor_date || "Not recorded");
+  const discoveredBy = escHtml(finding.discovered_by || "Not recorded");
+  const severity = escHtml(finding.phase_or_severity || "Not classified");
+
+  const description = escHtml(finding.description || "").replace(/\n/g, "<br>");
+  const surveyorNotes = escHtml(finding.surveyor_notes || "").replace(/\n/g, "<br>");
+  const immediateAction = escHtml(finding.immediate_action || "").replace(/\n/g, "<br>");
+  const containment = escHtml(finding.containment || "").replace(/\n/g, "<br>");
+  const rootCause = escHtml(finding.root_cause || "").replace(/\n/g, "<br>");
+  const correctiveAction = escHtml(finding.corrective_action || "").replace(/\n/g, "<br>");
+  const preventiveAction = escHtml(finding.preventive_action || "").replace(/\n/g, "<br>");
+  const monitoringPlan = escHtml(finding.monitoring_plan || "").replace(/\n/g, "<br>");
+  const completionDate = escHtml(finding.completion_date || "");
+  const signedBy = escHtml(finding.signed_by || "");
+  const signedAt = finding.signed_at ? escHtml(labLocalDate(finding.signed_at, true)) : "";
+  const signoffRole = finding.signoff_role === "medical_director"
+    ? "Signed by the medical director."
+    : finding.signoff_role === "admin" ? "Signed by an owner or admin as director designee." : "";
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Internal NCE Report - ${findingNum}</title>
+<style>
+  @page { size: Letter; margin: 14mm 15mm 16mm 15mm; }
+  body { font-family: 'Calibri', 'Helvetica Neue', Arial, sans-serif; color: #28251D; font-size: 9pt; line-height: 1.4; margin: 0; }
+  .header { border-bottom: 2px solid #01696F; padding-bottom: 8px; margin-bottom: 10px; }
+  .header-top { display: flex; justify-content: space-between; align-items: baseline; }
+  .form-id { font-size: 7.5pt; color: #7A7974; letter-spacing: 0.05em; }
+  .title { font-size: 14pt; font-weight: 700; color: #01696F; margin-top: 4px; }
+  .subtitle { font-size: 9pt; color: #28251D; margin-top: 2px; }
+  .lab-row { display: flex; justify-content: space-between; font-size: 8.5pt; margin-top: 6px; color: #0A3A3D; font-weight: 600; }
+  .ident-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 4px 12px; margin-bottom: 10px; font-size: 8pt; }
+  .ident-grid .label { color: #7A7974; text-transform: uppercase; letter-spacing: 0.04em; font-size: 7pt; }
+  .ident-grid .value { color: #28251D; font-weight: 600; }
+  .section { margin-top: 10px; }
+  .section-head { background: #01696F; color: #FFFFFF; font-weight: 700; font-size: 9pt; padding: 5px 8px; letter-spacing: 0.03em; }
+  .section-sub { font-size: 7.5pt; font-weight: 500; opacity: 0.85; margin-top: 1px; }
+  .section-body { border: 1px solid #D4D1CA; border-top: none; padding: 8px 10px; font-size: 8.5pt; }
+  .resp-element { margin-top: 8px; padding-top: 6px; border-top: 1px dashed #D4D1CA; }
+  .resp-element:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+  .resp-label { font-size: 7pt; color: #01696F; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 2px; }
+  .resp-content { font-size: 8.5pt; color: #28251D; }
+  .resp-content em { color: #7A7974; font-style: italic; }
+  .director-block { margin-top: 14px; border: 1.5px solid #01696F; padding: 10px 12px; background: #F7F6F2; }
+  .director-title { font-size: 8pt; font-weight: 700; color: #01696F; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px; }
+  .director-checkbox { display: inline-block; margin-right: 14px; font-size: 8.5pt; }
+  .director-checkbox .box { display: inline-block; width: 10px; height: 10px; border: 1.5px solid #28251D; margin-right: 4px; vertical-align: middle; }
+  .director-fields { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; margin-top: 8px; font-size: 8pt; }
+  .director-field-label { color: #7A7974; font-size: 7pt; text-transform: uppercase; letter-spacing: 0.04em; }
+  .director-field-value { border-bottom: 1px solid #28251D; min-height: 16px; padding: 2px 0; font-weight: 600; }
+  .director-attestation { margin-top: 8px; font-size: 7.5pt; color: #28251D; font-style: italic; }
+  .footer-note { margin-top: 12px; font-size: 7pt; color: #7A7974; border-top: 1px dashed #D4D1CA; padding-top: 6px; }
+</style></head><body>
+  <div class="header">
+    <div class="header-top">
+      <div>
+        <div class="form-id">INTERNAL NON-CONFORMING EVENT (NCE) REPORT</div>
+        <div class="title">Internal NCE Report</div>
+        <div class="subtitle">Laboratory-initiated non-conforming event, internal write-up and corrective action</div>
+      </div>
+      <div style="text-align:right;font-size:7.5pt;color:#7A7974;">
+        Generated ${escHtml(dateGen)}<br>
+        Event ${findingNum}
+      </div>
+    </div>
+    <div class="lab-row"><span>${labName}</span><span>${clia}</span></div>
+  </div>
+
+  <div class="ident-grid">
+    <div><div class="label">Event Date</div><div class="value">${eventDate}</div></div>
+    <div><div class="label">Discovered By</div><div class="value">${discoveredBy}</div></div>
+    <div><div class="label">Severity / Impact</div><div class="value">${severity}</div></div>
+    <div><div class="label">Event Reference</div><div class="value">${findingNum}</div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      Event Description
+      <div class="section-sub">(What happened, how it was found, immediate impact)</div>
+    </div>
+    <div class="section-body">
+      ${description || "<em>No event description recorded.</em>"}
+      ${surveyorNotes ? `<div style="margin-top:10px;padding-top:6px;border-top:1px dashed #D4D1CA;"><div class="resp-label">Additional Notes</div><div class="resp-content">${surveyorNotes}</div></div>` : ""}
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      Corrective and Preventive Action
+      <div class="section-sub">(Investigation, root cause, and the actions taken)</div>
+    </div>
+    <div class="section-body">
+      ${immediateAction ? `<div class="resp-element"><div class="resp-label">Immediate Action</div><div class="resp-content">${immediateAction}</div></div>` : ""}
+      ${containment ? `<div class="resp-element"><div class="resp-label">Containment</div><div class="resp-content">${containment}</div></div>` : ""}
+      ${rootCause ? `<div class="resp-element"><div class="resp-label">Root Cause Analysis</div><div class="resp-content">${rootCause}</div></div>` : ""}
+      <div class="resp-element"><div class="resp-label">Corrective Action</div><div class="resp-content">${correctiveAction || "<em>Not recorded.</em>"}</div></div>
+      ${preventiveAction ? `<div class="resp-element"><div class="resp-label">Preventive / System-Level Action</div><div class="resp-content">${preventiveAction}</div></div>` : ""}
+      ${monitoringPlan ? `<div class="resp-element"><div class="resp-label">Effectiveness Monitoring</div><div class="resp-content">${monitoringPlan}</div></div>` : ""}
+      ${completionDate ? `<div class="resp-element"><div class="resp-label">Completion Date</div><div class="resp-content">${completionDate}</div></div>` : ""}
+    </div>
+  </div>
+
+  <div class="director-block">
+    <div class="director-title">Medical Director or Designee Approval</div>
+    <div>
+      <span class="director-checkbox"><span class="box"></span>Accepted</span>
+      <span class="director-checkbox"><span class="box"></span>Not accepted, returned for revision</span>
+    </div>
+    <div class="director-fields">
+      <div>
+        <div class="director-field-label">Print Name / Initials</div>
+        <div class="director-field-value">${signedBy || "&nbsp;"}</div>
+      </div>
+      <div>
+        <div class="director-field-label">Signature</div>
+        <div class="director-field-value">&nbsp;</div>
+      </div>
+      <div>
+        <div class="director-field-label">Date</div>
+        <div class="director-field-value">${signedAt || "&nbsp;"}</div>
+      </div>
+    </div>
+    <div class="director-attestation">
+      This internal non-conforming event is reviewed and approved by the medical director or designee. ${signoffRole} Final determination of the corrective and preventive actions rests with the laboratory director or designee.
+    </div>
+  </div>
+
+  <div class="footer-note">
+    Generated by VeritaResponse&trade; from VeritaAssure&trade;. This is the laboratory's internal record of a lab-found non-conforming event and its corrective action, for internal quality-management use. It is not a survey, inspection, or proficiency-testing response.
+  </div>
+</body></html>`;
+}
+
+export async function generateInternalNcePDF(input: Cms2567Input, licenseCtx?: Partial<LicenseContext> | null): Promise<Buffer> {
+  const validation = validateInternalNce(input.finding);
+  if (!validation.ok) {
+    throw new Error(`Internal NCE report cannot be rendered: missing ${validation.missing.join(", ")}`);
+  }
+  const html = buildInternalNceHTML(input);
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    const stamped = applyLicenseToPuppeteer(html, VERITARESPONSE_FOOTER_TEMPLATE, licenseCtx);
+    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    const pdfBuffer = await page.pdf({
+      format: "Letter",
+      printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: "<span></span>",
+      footerTemplate: stamped.footerTemplate,
+      margin: { top: "14mm", right: "15mm", bottom: "16mm", left: "15mm" },
+    });
+    return stampPdfAuthor(pdfBuffer);
+  } finally {
+    await page.close();
+  }
+}
