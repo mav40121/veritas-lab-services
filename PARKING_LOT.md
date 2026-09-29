@@ -561,44 +561,15 @@ A prospect asked today whether she could hide the modules or sections her lab do
 ---
 
 
-### 50. Competency "assessed this cycle" uses a flat 365-day window
-
-**Effort:** S-M - anchor the coverage-map "assessed this cycle" to the person's actual CLIA cadence (semiannual in year 1 per 42 CFR 493.1451(b)(8), annual thereafter) from staff_competency_schedules, instead of the v1 flat 365-day lookback.
-**Importance:** Medium - in an employee's first year the semiannual windows differ from a flat annual window, so a first-year assessment could read as current slightly longer or shorter than the true cadence. Fine for the common annual case; refine for year-1 accuracy.
-
-**Source:** 2026-09-24 session, VeritaComp coverage map (#48 Phase 3) v1 simplification, noted in PR #1319.
+_(item #50 closed 2026-09-28; shipped PR #1356, prod-verified, see C49 below)_
 
 ---
 
-### 51. VeritaTrack task owner + owner-scoped reminder routing
-
-**Effort:** S-M (1-3 days to ~1.5 weeks) — add an owner on a VeritaTrack task, selectable from the lab's built VeritaStaff roster, plus a reminder option that routes the reminder email to only that owner instead of a lab-wide send. Likely a nullable owner column on the task/reminder record + a "notify owner only" recipient mode + the send path filtering recipients accordingly. Size firms up after a look at the current VeritaTrack reminder recipient model.
-
-**Importance:** Medium — cuts reminder-email noise so people only get the tasks that are theirs; a real adoption / quality-of-life win, not blocking any sale.
-
-**What:** Michael, verbatim (2026-09-28): "In veritatask, we should be able to assign an owner from staff that are built, then in the reminder section, we should be able to designate reminder emails only to the owner. The hem person does not need the chemistry reminders, etc." Module note: there is no VeritaTask module in the codebase; the task/reminder surface is VeritaTrack (`client/src/pages/VeritaTrackAppPage.tsx`), so this lands there. Today VeritaTrack tasks are not owned by a specific staff member and reminder emails are not recipient-scoped to an owner. The build adds (a) an owner selector on each task drawn from the lab's VeritaStaff roster, and (b) a reminder setting that routes the reminder email to only that owner. Confirm the current reminder recipient model before sizing.
-
-**Source:** 2026-09-28 session, Michael "for later (placeholder)" optimization #1 (relaying from the Lab Members / VeritaAssure screens).
-
-**Status:** Open, not started. Placeholder pending build. Open questions: is the owner a `staff_employee` or a seat user, and how are reminder recipients currently chosen.
-
-**Pre- vs post-COLA:** Post-COLA. No customer urgency.
+_(item #51 closed 2026-09-28; shipped PR #1358, prod-verified, see C50 below)_
 
 ---
 
-### 52. Medical Director seat via account-grant dropdown (designate / transfer MD)
-
-**Effort:** S-M (1-3 days to ~1.5 weeks) — move MD-seat assignment onto the same per-member role dropdown used to promote to admin / reduce to staff (add "Medical Director" as a grantable role), gated to one MD per location, plus a "designate medical director or transfer medical director" block modeled on the existing transfer-ownership block for the change-MD case.
-
-**Importance:** Medium-High — the MD seat is a recurring friction point (Georgetown, SCAHC MD designations keep surfacing); unifying it with the existing role-grant UX removes a bespoke flow and cleanly supports the one-MD-per-location rule.
-
-**What:** Michael, verbatim (2026-09-28): "The way we are doing the medical director seat is silly. Why not just use the account grant dropdown to give a medical director seat. If the person is already in, then we should just be able to grant the medical director seat the same way we promote people to admin or reduce them to staff as long as we only have 1 per location. Maybe do another block like the transfer ownership block as 'designate medical director or transfer medical director'." So: fold the MD seat into the existing member role dropdown (Admin / Staff / ... + Medical Director) with a single-MD-per-lab constraint, and add a dedicated designate-or-transfer-MD block that mirrors the transfer-ownership UX for changing the MD. Cross-ref [[project_medical_director_designation]] and the seat model.
-
-**Source:** 2026-09-28 session, Michael "for later (placeholder)" optimization #3 (relaying from the Lab Members screen).
-
-**Status:** Open, not started. Placeholder. Confirm the current MD-seat assignment path and the one-MD-per-location enforcement point before sizing.
-
-**Pre- vs post-COLA:** Post-COLA. No customer urgency.
+_(item #52 core closed 2026-09-28; shipped PR #1361 member-picker, prod-verified, see C51 below. Residual optional UX tracked there.)_
 
 ---
 
@@ -618,6 +589,32 @@ Jennifer Small (Interim Director, Clinical Laboratory, Lifepoint Health) sent Mi
 ---
 
 ## CLOSED (audit trail)
+
+### C49. Competency "assessed this cycle" cadence-aware window (was #50)
+
+**Effort:** was S-M / **Importance:** Medium
+
+**Closure evidence:** Shipped PR #1356 (squash-merged to main, prod-verified live on c13f959c 2026-09-28). Added `competencyCycleWindowDays(schedule)` in `shared/competencyStatus.ts` returning 183 days in year 1 (initial_completed_at set, first_annual_completed_at null) else 365; `/api/labs/:labId/competency/owed` now gates `assessed` on each person's cadence cutoff instead of a flat 365-day lookback. Receipts: `scripts/verify-competency-cycle-window.mts` 8/8 (first-year vs annual + boundary); prod `GET /api/labs/3/competency/owed` returns 200 with the new path live. Backend-only, no schema change.
+
+---
+
+### C50. VeritaTrack task owner + owner-only reminder routing (was #51)
+
+**Effort:** was S-M / **Importance:** Medium
+
+**Closure evidence:** Shipped PR #1358 (prod-verified live on c13f959c 2026-09-28). Added `owner_employee_id` + `owner_email` on `veritatrack_tasks` and `owner_only` on `veritatrack_reminder_config` (idempotent PRAGMA-guarded ALTERs); task create/update accept an owner picked from the VeritaStaff roster; RemindersPanel gained an owner-only toggle; the reminder runner groups one digest per owner_email when owner-only is on, unowned tasks falling back to the lab list. Receipts: `scripts/verify-veritatrack-owner-reminders.mts` 11/11; prod schema confirmed (reminder-config returns `owner_only`, all 152 lab-3 tasks carry the owner columns); browser Gate-3 on prod confirmed the owner picker + owner-email field + `reminder-owner-only` toggle render with no page errors.
+
+---
+
+### C51. Designate Medical Director by picking a lab member (was #52, core)
+
+**Effort:** was S-M / **Importance:** Medium-High
+
+**Closure evidence:** Shipped PR #1361 (prod-verified live on c13f959c 2026-09-28). Added a member/pending-invite `<select>` (`data-testid="md-member-select"`) to the MD designation block on LabMembersPage that fills the director email, reusing the existing `PUT /api/labs/:labId/medical-director` (no schema or access-model change). Receipts: `tests/playwright/lab-members-medical-director.spec.ts` passes on prod (designate + restore round-trip); browser Gate-3 confirmed `md-member-select` renders with 7 options (Unassigned + the lab's 6 members).
+
+**Residual (optional, reopen a scoped item only if the exact UX is wanted):** the original #52 also floated folding MD into the per-member role dropdown (Admin / Staff / + Medical Director) and a dedicated "designate/transfer medical director" block mirroring transfer-ownership. The shipped member-picker addresses the core friction (designate an existing member as MD without retyping the email); the role-dropdown-grant and transfer-MD-block framings were not built.
+
+---
 
 ### C47. Unregulated-analyte / Alternative Assessment (AAA) coverage (was #18)
 
