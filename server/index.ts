@@ -234,6 +234,36 @@ app.use((req, res, next) => {
     console.error("[snapshot] Scheduler setup error:", err.message);
   }
 
+  // Schedule daily TLS cert-expiry check (2026-09-29). Runs ~20s after boot so a
+  // bad cert surfaces right on deploy, then daily at midnight UTC, mirroring the
+  // snapshot scheduler. Alerts via Resend when a public cert is expired, expiring
+  // within 14 days, or unreachable. Born from the Sanford incident: a lapsed www
+  // cert got the site blocked by a hospital TLS proxy. See server/certMonitor.ts.
+  try {
+    const { runCertExpiryCheck } = await import("./certMonitor");
+    setTimeout(() => {
+      runCertExpiryCheck().catch((err) => console.error("[cert-monitor] Boot run failed:", err?.message || err));
+    }, 20000);
+    const scheduleCertCheck = () => {
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setUTCHours(24, 0, 0, 0);
+      const msUntilMidnight = midnight.getTime() - now.getTime();
+      setTimeout(() => {
+        console.log("[cert-monitor] Running daily cert-expiry check...");
+        runCertExpiryCheck().catch((err) => console.error("[cert-monitor] Run failed:", err?.message || err));
+        setInterval(() => {
+          console.log("[cert-monitor] Running daily cert-expiry check...");
+          runCertExpiryCheck().catch((err) => console.error("[cert-monitor] Run failed:", err?.message || err));
+        }, 24 * 60 * 60 * 1000);
+      }, msUntilMidnight);
+      console.log(`[cert-monitor] Daily cert-expiry check scheduled in ${Math.round(msUntilMidnight / 60000)} minutes`);
+    };
+    scheduleCertCheck();
+  } catch (err: any) {
+    console.error("[cert-monitor] Scheduler setup error:", err.message);
+  }
+
   // Schedule VeritaResponse due-date reminder dispatch at midnight UTC.
   // Mirrors the snapshot scheduler shape so both daily jobs share their
   // failure semantics. Reminder dispatch is idempotent (UNIQUE constraint
