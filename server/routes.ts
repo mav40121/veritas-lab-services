@@ -20995,9 +20995,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   const VALID_ACCREDITORS = ['CAP','TJC','COLA','CMS','AABB','Other'];
   const VALID_FINDING_STATUSES = ['open','drafting','submitted','accepted','rejected_resubmit','closed'];
-  // A finding is either an inspection deficiency (default) or a PT-failure
-  // investigation. PT rows reuse the CAPA workflow; source_type steers the UI.
-  const VALID_FINDING_SOURCE_TYPES = ['inspection','pt_failure'];
+  // A finding is an inspection deficiency (default), a PT-failure investigation,
+  // or an internal non-conforming event (#36: a lab-found issue with no survey or
+  // PT trigger). All three reuse the CAPA workflow; source_type steers the UI.
+  // internal_nce carries no accreditor deadline and its sign-off is gated to the
+  // designated medical director or a lab owner/admin.
+  const VALID_FINDING_SOURCE_TYPES = ['inspection','pt_failure','internal_nce'];
 
   // Resolve the set of accreditors a given lab is allowed to file findings
   // under. CMS is always included because every lab holds CLIA. "Other" is
@@ -21834,8 +21837,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       completion_date, signed_by, signed_at, external_submission_ref,
       source_type, pt_program, pt_event, pt_analyte, pt_score,
       pt_result_summary, root_cause_category,
+      event_date, discovered_by,
     } = req.body || {};
-    if (!accreditor || !VALID_ACCREDITORS.includes(accreditor)) {
+    // #36: an internal NCE is a lab-found event with no survey/PT trigger. It is
+    // not filed under an accreditor and carries no accreditor deadline; it stores
+    // 'Other' as a neutral accreditor to satisfy the findings.accreditor NOT NULL
+    // / CHECK column.
+    const isInternalNce = source_type === 'internal_nce';
+    const effectiveAccreditor = isInternalNce
+      ? (accreditor && VALID_ACCREDITORS.includes(accreditor) ? accreditor : 'Other')
+      : accreditor;
+    if (!isInternalNce && (!accreditor || !VALID_ACCREDITORS.includes(accreditor))) {
       return res.status(400).json({ error: `accreditor must be one of: ${VALID_ACCREDITORS.join(', ')}` });
     }
     if (status && !VALID_FINDING_STATUSES.includes(status)) {
@@ -21847,15 +21859,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Gate against the scoped lab's accreditation flags. labScopeMiddleware
     // already validated this user has membership on req.scope.labId, so
     // using that labId directly (instead of the user's primary) is correct
-    // for the lab-scoped variant.
+    // for the lab-scoped variant. Skipped for an internal NCE, which is not
+    // filed under an accrediting body.
     const allowed = getLabAllowedAccreditors(req.scope.labId);
-    if (!allowed.has(accreditor)) {
+    if (!isInternalNce && !allowed.has(accreditor)) {
       return res.status(400).json({
         error: `This lab is not flagged as ${accreditor}-accredited. Update the lab's accreditation settings or pick an allowed accreditor.`,
         allowed: Array.from(allowed),
       });
     }
-    const due_date = dueDateForFinding(accreditor, anchor_date ?? null);
+    const due_date = isInternalNce ? null : dueDateForFinding(accreditor, anchor_date ?? null);
     const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
     const userIdForRow = ownerRow?.owner_user_id ?? req.userId;
     const result = (db as any).$client.prepare(
@@ -21870,22 +21883,66 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         pt_result_summary, root_cause_category
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
-      userIdForRow, req.scope.labId, accreditor, inspection_id ?? null, finding_number ?? null, standard_ref ?? null,
+      userIdForRow, req.scope.labId, effectiveAccreditor, inspection_id ?? null, finding_number ?? null, standard_ref ?? null,
       phase_or_severity ?? null, description ?? null, surveyor_notes ?? null,
-      anchor_date ?? null, due_date, status ?? 'open',
+      (isInternalNce ? (anchor_date ?? event_date ?? null) : (anchor_date ?? null)), due_date, status ?? 'open',
       immediate_action ?? null, containment ?? null, root_cause ?? null,
       corrective_action ?? null, preventive_action ?? null, monitoring_plan ?? null,
       completion_date ?? null, signed_by ?? null, signed_at ?? null, external_submission_ref ?? null,
       source_type ?? 'inspection', pt_program ?? null, pt_event ?? null, pt_analyte ?? null, pt_score ?? null,
       pt_result_summary ?? null, root_cause_category ?? null,
     );
+    // #36: stamp the internal-NCE-specific fields after insert (kept out of the
+    // shared INSERT column list so the inspection/PT paths stay untouched).
+    if (isInternalNce) {
+      try {
+        (db as any).$client.prepare(
+          "UPDATE findings SET event_date = ?, discovered_by = ? WHERE id = ?"
+        ).run(event_date ?? null, discovered_by ?? null, Number(result.lastInsertRowid));
+      } catch {}
+    }
     try {
       (db as any).$client.prepare(
         `INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)`
-      ).run(Number(result.lastInsertRowid), 'created', req.user?.userId ?? null, JSON.stringify({ accreditor, status: status ?? 'open' }));
+      ).run(Number(result.lastInsertRowid), 'created', req.user?.userId ?? null, JSON.stringify({ accreditor: effectiveAccreditor, source_type: source_type ?? 'inspection', status: status ?? 'open' }));
     } catch {}
     const created = (db as any).$client.prepare("SELECT * FROM findings WHERE id = ?").get(Number(result.lastInsertRowid));
     res.status(201).json(created);
+  });
+
+  // #36: MD-or-admin sign-off for a VeritaResponse finding, primarily the internal
+  // NCE write-up. Per Michael's 9/28 scope, a lab-found event gets the designated
+  // medical director OR an owner/admin signature. The MD is resolved by matching an
+  // active member's email to labs.medical_director_email (same rule as the QC
+  // MD-cosign and VeritaPolicy medical_director routing); owner/admin passes via
+  // req.scope.role. Anyone else gets 403. Signing stamps signed_by/signed_at/
+  // signoff_role, closes the finding, and writes an audit-trail row.
+  app.post("/api/labs/:labId/findings/:id/signoff", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const finding = sqlite.prepare("SELECT * FROM findings WHERE id = ? AND lab_id = ?").get(Number(req.params.id), req.scope.labId) as any;
+    if (!finding) return res.status(404).json({ error: "Finding not found in this lab" });
+    const mdRow = sqlite.prepare(
+      "SELECT lm.user_id FROM lab_members lm JOIN users u ON u.id = lm.user_id JOIN labs l ON l.id = lm.lab_id WHERE lm.lab_id = ? AND lm.status = 'active' AND l.medical_director_email IS NOT NULL AND lower(u.email) = lower(l.medical_director_email) LIMIT 1"
+    ).get(req.scope.labId) as any;
+    const isMd = !!mdRow && mdRow.user_id === req.userId;
+    const isOwnerAdmin = req.scope.role === "owner" || req.scope.role === "admin";
+    if (!isMd && !isOwnerAdmin) {
+      return res.status(403).json({ error: "Only the designated medical director or a lab owner/admin can sign off this event." });
+    }
+    const signoff_role = isMd ? "medical_director" : "admin";
+    const signerRow = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
+    const signerName = String(req.body?.signed_by ?? "").trim() || (signerRow?.name ? String(signerRow.name).trim() : "") || "Authorized signer";
+    const now = new Date().toISOString();
+    sqlite.prepare(
+      "UPDATE findings SET signed_by = ?, signed_at = ?, signoff_role = ?, status = 'closed', completion_date = COALESCE(completion_date, ?), updated_at = datetime('now') WHERE id = ?"
+    ).run(signerName, now, signoff_role, now.slice(0, 10), finding.id);
+    try {
+      sqlite.prepare(
+        `INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)`
+      ).run(finding.id, 'signed_off', req.userId ?? null, JSON.stringify({ signoff_role, signed_by: signerName }));
+    } catch {}
+    const updated = sqlite.prepare("SELECT * FROM findings WHERE id = ?").get(finding.id);
+    res.json(updated);
   });
 
   // ── VERITACOMP ─────────────────────────────────────────────────────────

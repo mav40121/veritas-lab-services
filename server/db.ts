@@ -5688,6 +5688,13 @@ sqlite.exec(`
       if (!have.has("pt_score")) sqlite.exec("ALTER TABLE findings ADD COLUMN pt_score TEXT");
       if (!have.has("pt_result_summary")) sqlite.exec("ALTER TABLE findings ADD COLUMN pt_result_summary TEXT");
       if (!have.has("root_cause_category")) sqlite.exec("ALTER TABLE findings ADD COLUMN root_cause_category TEXT");
+      // #36 internal NCE (2026-09-29): a lab-found non-conforming event, a third
+      // source_type alongside 'inspection' and 'pt_failure'. event_date is when the
+      // event occurred or was discovered; discovered_by is who found it; signoff_role
+      // records whether the medical director or an owner/admin signed the write-up.
+      if (!have.has("event_date")) sqlite.exec("ALTER TABLE findings ADD COLUMN event_date TEXT");
+      if (!have.has("discovered_by")) sqlite.exec("ALTER TABLE findings ADD COLUMN discovered_by TEXT");
+      if (!have.has("signoff_role")) sqlite.exec("ALTER TABLE findings ADD COLUMN signoff_role TEXT");
     }
   } catch {
     // fresh DB: CREATE TABLE above handled it
