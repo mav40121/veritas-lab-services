@@ -32012,6 +32012,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── ADMIN: TLS certificate status (read-only) ───────────────────────────
+  // On-demand view of the public TLS cert expiry for the monitored hosts, so the
+  // operator can confirm the site is not serving an expired or soon-to-expire
+  // certificate (the 2026-09-29 Sanford block). Mirrors the nightly cert monitor.
+  app.get("/api/admin/cert-status", async (req, res) => {
+    const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    try {
+      const { getCertExpiry, MONITORED_HOSTS, WARN_DAYS } = await import("./certMonitor");
+      const hosts = await Promise.all(MONITORED_HOSTS.map((h: string) => getCertExpiry(h)));
+      res.json({ warnDays: WARN_DAYS, checkedAt: new Date().toISOString(), hosts });
+    } catch (err: any) {
+      console.error('[cert-status] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── ADMIN: Upload a competency quiz into a customer's program ──────────
   // For onboarding-help cases where the operator needs to load a quiz on
   // behalf of a customer (no impersonation API exists). Same insert path
