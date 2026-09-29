@@ -36,6 +36,7 @@ import {
   Copy,
   Download,
   Trash2,
+  Printer,
 } from "lucide-react";
 
 interface ManualRow {
@@ -222,8 +223,8 @@ export default function VeritaPolicyCompliancePage() {
   const { headline, perManual, overdueList, dueSoonList, perUserAttest, perStaffAttest = [], pendingReviewList } = data;
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
-      <VeritaPolicyTabs active="compliance" />
+    <div id="compliance-print-area" className="max-w-6xl mx-auto p-6 space-y-6">
+      <div className="no-print"><VeritaPolicyTabs active="compliance" /></div>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Compliance Dashboard</h1>
@@ -233,7 +234,13 @@ export default function VeritaPolicyCompliancePage() {
             reminders and auto-expire.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 no-print">
+          {/* MediaLab parity #39 item 5: print view. A clean, chrome-free printout
+              of the dashboard (nav, tabs, and buttons dropped) for the surveyor or
+              Quality Committee, instead of the raw default browser print. */}
+          <Button variant="outline" size="sm" onClick={() => window.print()}>
+            <Printer size={14} className="mr-1" /> Print
+          </Button>
           {/* MediaLab parity #39 item 3: xlsx export. Hands the surveyor a
               workbook of the same numbers shown on this page so they can
               filter/sort it themselves. */}
