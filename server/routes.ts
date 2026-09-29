@@ -31990,6 +31990,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── ADMIN: Backup integrity log (read-only) ─────────────────────────────
+  // Surfaces the nightly backup integrity-check history (the recorded PRAGMA
+  // integrity_check result plus per-run user/study/table counts) so the
+  // operator can confirm whether an "ANOMALY" alert reflects real data loss or
+  // an expected operational change (e.g. deleting internal test records). See
+  // server/backup.ts checkBackupIntegrity().
+  app.get("/api/admin/backup-integrity-log", (req, res) => {
+    const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    try {
+      const sqlite = (db as any).$client;
+      const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 200);
+      const rows = sqlite.prepare(
+        "SELECT id, run_at, file_size_bytes, sqlite_integrity_check, user_count, real_user_count, study_count, table_count, all_ok FROM backup_integrity_log ORDER BY id DESC LIMIT ?",
+      ).all(limit);
+      res.json({ count: rows.length, rows });
+    } catch (err: any) {
+      console.error('[backup-integrity-log] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── ADMIN: Upload a competency quiz into a customer's program ──────────
   // For onboarding-help cases where the operator needs to load a quiz on
   // behalf of a customer (no impersonation API exists). Same insert path

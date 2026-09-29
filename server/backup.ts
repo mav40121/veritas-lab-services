@@ -124,9 +124,18 @@ async function notifyIntegrityIssue(checks: Record<string, any>, filename: strin
 // integrity issues alert separately via notifyIntegrityIssue).
 function checkBackupIntegrity(gzippedFileBytes: number): { ok: boolean; checks: Record<string, any> } {
   const sqlite = (db as any).$client;
+  // Baseline = the PREVIOUS run (most recent row), NOT the last all-green run.
+  // Using the last all-green run wedges the count checks permanently after any
+  // legitimate one-time decrease: once study/user count drops below the last
+  // green high-water mark (e.g. an operator deleting internal test records), no
+  // run can go green again, the baseline never advances, and the SAME anomaly
+  // re-alerts every night. Comparing to the previous run flags a NEW decrease
+  // once, then the new level becomes the baseline and the alert clears; a real
+  // ongoing loss still trips on every further drop. Structural corruption is
+  // caught independently by the PRAGMA integrity_check below, which has no baseline.
   const prior = sqlite
     .prepare(
-      "SELECT user_count, real_user_count, study_count, table_count FROM backup_integrity_log WHERE all_ok = 1 ORDER BY id DESC LIMIT 1",
+      "SELECT user_count, real_user_count, study_count, table_count FROM backup_integrity_log ORDER BY id DESC LIMIT 1",
     )
     .get() as any;
 
@@ -142,7 +151,7 @@ function checkBackupIntegrity(gzippedFileBytes: number): { ok: boolean; checks: 
   }
   const integrityOk = integrityResult === "ok";
 
-  // 3. User count: stable or increasing vs prior successful run.
+  // 3. User count: stable or increasing vs the previous run (see baseline note above).
   // The OK decision is based on REAL users only. Internal/test accounts live
   // solely on Michael-owned domains (veritaslabservices.com, veritaslab.com);
   // no external customer uses them. QA/Playwright accounts (qa-*@veritaslabservices.com)
@@ -157,7 +166,7 @@ function checkBackupIntegrity(gzippedFileBytes: number): { ok: boolean; checks: 
   const priorReal = prior?.real_user_count ?? null;
   const userCountOk = realUserCount > 0 && (priorReal == null || realUserCount >= priorReal);
 
-  // 4. Study count: stable or increasing vs prior successful run
+  // 4. Study count: stable or increasing vs the previous run
   const studyCount = (sqlite.prepare("SELECT COUNT(*) as cnt FROM studies").get() as any).cnt as number;
   const studyCountOk = studyCount >= 0 && (!prior || studyCount >= prior.study_count);
 
