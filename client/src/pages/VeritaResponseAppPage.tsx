@@ -112,14 +112,18 @@ export default function VeritaResponseAppPage() {
   const [newDescription, setNewDescription] = useState("");
   // PT-failure investigation (source_type = 'pt_failure'). Reuses the same
   // finding record + CAPA workflow; these are the PT-specific head fields.
-  const [newSourceType, setNewSourceType] = useState<"inspection" | "pt_failure">("inspection");
+  const [newSourceType, setNewSourceType] = useState<"inspection" | "pt_failure" | "internal_nce">("inspection");
   const [newPtProgram, setNewPtProgram] = useState("");
   const [newPtEvent, setNewPtEvent] = useState("");
   const [newPtAnalyte, setNewPtAnalyte] = useState("");
   const [newPtScore, setNewPtScore] = useState("");
   const [newPtResultSummary, setNewPtResultSummary] = useState("");
   const [newRootCauseCategory, setNewRootCauseCategory] = useState("");
+  // #36 internal NCE: a lab-found event with no survey/PT trigger.
+  const [newEventDate, setNewEventDate] = useState("");
+  const [newDiscoveredBy, setNewDiscoveredBy] = useState("");
   const isPt = newSourceType === "pt_failure";
+  const isNce = newSourceType === "internal_nce";
 
   const hasPlanAccess = !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
 
@@ -182,15 +186,17 @@ export default function VeritaResponseAppPage() {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
-          accreditor: newAccreditor,
-          inspection_id: newInspectionId.trim() || null,
-          finding_number: newFindingNumber.trim() || null,
-          standard_ref: newStandardRef.trim() || null,
+          accreditor: isNce ? null : newAccreditor,
+          inspection_id: isNce ? null : (newInspectionId.trim() || null),
+          finding_number: isNce ? null : (newFindingNumber.trim() || null),
+          standard_ref: isNce ? null : (newStandardRef.trim() || null),
           phase_or_severity: newPhaseOrSeverity.trim() || null,
           description: newDescription.trim() || null,
-          anchor_date: newAnchorDate || null,
+          anchor_date: isNce ? null : (newAnchorDate || null),
           status: "open",
           source_type: newSourceType,
+          event_date: isNce ? (newEventDate || null) : null,
+          discovered_by: isNce ? (newDiscoveredBy.trim() || null) : null,
           pt_program: isPt ? (newPtProgram.trim() || null) : null,
           pt_event: isPt ? (newPtEvent.trim() || null) : null,
           pt_analyte: isPt ? (newPtAnalyte.trim() || null) : null,
@@ -216,6 +222,7 @@ export default function VeritaResponseAppPage() {
       setNewSourceType("inspection");
       setNewPtProgram(""); setNewPtEvent(""); setNewPtAnalyte(""); setNewPtScore("");
       setNewPtResultSummary(""); setNewRootCauseCategory("");
+      setNewEventDate(""); setNewDiscoveredBy("");
       setShowCreate(false);
       await fetchData();
     } catch {
@@ -444,6 +451,9 @@ export default function VeritaResponseAppPage() {
                         {(f as any).source_type === "pt_failure" && (
                           <Badge className="ml-2 bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 text-[10px] whitespace-nowrap">PT failure</Badge>
                         )}
+                        {(f as any).source_type === "internal_nce" && (
+                          <Badge className="ml-2 bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 text-[10px] whitespace-nowrap">Internal NCE</Badge>
+                        )}
                       </td>
                       <td className="py-3 pr-4 text-muted-foreground">{f.finding_number || "-"}</td>
                       <td className="py-3 pr-4 text-muted-foreground text-xs">{f.standard_ref || "-"}</td>
@@ -491,15 +501,17 @@ export default function VeritaResponseAppPage() {
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{isPt ? "Log PT Failure Investigation" : "New Finding"}</DialogTitle>
+            <DialogTitle>{isPt ? "Log PT Failure Investigation" : isNce ? "Log Internal Event (NCE)" : "New Finding"}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-3">
-            {/* Record type: an inspection deficiency or a proficiency-testing
-                failure investigation. PT failures reuse the same CAPA workflow. */}
-            <div className="flex gap-2">
-              <Button type="button" size="sm" variant={!isPt ? "default" : "outline"} className={!isPt ? "bg-[#006064] hover:bg-[#004d50] text-white" : ""} onClick={() => setNewSourceType("inspection")}>Inspection finding</Button>
+            {/* Record type: an inspection deficiency, a proficiency-testing failure
+                investigation, or an internal non-conforming event (#36). All three
+                reuse the same CAPA workflow; only the head fields differ. */}
+            <div className="flex gap-2 flex-wrap">
+              <Button type="button" size="sm" variant={(!isPt && !isNce) ? "default" : "outline"} className={(!isPt && !isNce) ? "bg-[#006064] hover:bg-[#004d50] text-white" : ""} onClick={() => setNewSourceType("inspection")}>Inspection finding</Button>
               <Button type="button" size="sm" variant={isPt ? "default" : "outline"} className={isPt ? "bg-[#006064] hover:bg-[#004d50] text-white" : ""} onClick={() => setNewSourceType("pt_failure")}>PT failure</Button>
+              <Button type="button" size="sm" variant={isNce ? "default" : "outline"} className={isNce ? "bg-[#006064] hover:bg-[#004d50] text-white" : ""} onClick={() => setNewSourceType("internal_nce")}>Internal event (NCE)</Button>
             </div>
             {isPt && (
               <p className="text-xs text-muted-foreground">CLIA 42 CFR 493.801(b): unsuccessful proficiency testing must be investigated and corrected. This opens a finding with the PT context below plus the full corrective-action workflow.</p>
@@ -538,55 +550,78 @@ export default function VeritaResponseAppPage() {
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">
+              {isNce && (
+                <>
+                  <div className="space-y-1 col-span-2">
+                    <p className="text-xs text-muted-foreground">An internal non-conforming event is a lab-found issue (specimen, reagent, equipment, result reporting, etc.) with no survey or PT trigger. It opens the full corrective-action workflow and requires the medical director or an owner/admin to sign off the write-up.</p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Event date</Label>
+                    <Input type="date" value={newEventDate} onChange={(e) => setNewEventDate(e.target.value)} className="h-8 text-sm" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Discovered by</Label>
+                    <Input value={newDiscoveredBy} onChange={(e) => setNewDiscoveredBy(e.target.value)} placeholder="Name or role who found it" className="h-8 text-sm" />
+                  </div>
+                </>
+              )}
+              {!isNce && (
+                <>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Accreditor</Label>
+                    <Select value={newAccreditor} onValueChange={(v) => setNewAccreditor(v as Accreditor)}>
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {visibleAccreditors.map((a) => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">{anchorLabel}</Label>
+                    <Input
+                      type="date"
+                      value={newAnchorDate}
+                      onChange={(e) => setNewAnchorDate(e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1 col-span-2">
+                    <p className="text-xs text-muted-foreground">{deadlineNote}</p>
+                    {previewDue && (
+                      <p className="text-xs">
+                        <span className="font-semibold text-[#006064]">Computed due date:</span>{" "}
+                        <span className="font-mono">{previewDue}</span>
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+              {!isNce && (
+                <>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Finding #</Label>
+                    <Input
+                      value={newFindingNumber}
+                      onChange={(e) => setNewFindingNumber(e.target.value)}
+                      placeholder="e.g. 1 or RFI 03.01.01.01"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Standard or CFR reference</Label>
+                    <Input
+                      value={newStandardRef}
+                      onChange={(e) => setNewStandardRef(e.target.value)}
+                      placeholder="e.g. GEN.20377 or 42 CFR 493.1251"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                </>
+              )}
               <div className="space-y-1">
-                <Label className="text-xs">Accreditor</Label>
-                <Select value={newAccreditor} onValueChange={(v) => setNewAccreditor(v as Accreditor)}>
-                  <SelectTrigger className="h-8 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {visibleAccreditors.map((a) => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">{anchorLabel}</Label>
-                <Input
-                  type="date"
-                  value={newAnchorDate}
-                  onChange={(e) => setNewAnchorDate(e.target.value)}
-                  className="h-8 text-sm"
-                />
-              </div>
-              <div className="space-y-1 col-span-2">
-                <p className="text-xs text-muted-foreground">{deadlineNote}</p>
-                {previewDue && (
-                  <p className="text-xs">
-                    <span className="font-semibold text-[#006064]">Computed due date:</span>{" "}
-                    <span className="font-mono">{previewDue}</span>
-                  </p>
-                )}
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Finding #</Label>
-                <Input
-                  value={newFindingNumber}
-                  onChange={(e) => setNewFindingNumber(e.target.value)}
-                  placeholder="e.g. 1 or RFI 03.01.01.01"
-                  className="h-8 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Standard or CFR reference</Label>
-                <Input
-                  value={newStandardRef}
-                  onChange={(e) => setNewStandardRef(e.target.value)}
-                  placeholder="e.g. GEN.20377 or 42 CFR 493.1251"
-                  className="h-8 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Phase / Severity</Label>
+                <Label className="text-xs">{isNce ? "Severity / impact" : "Phase / Severity"}</Label>
                 <Input
                   value={newPhaseOrSeverity}
                   onChange={(e) => setNewPhaseOrSeverity(e.target.value)}
@@ -594,17 +629,19 @@ export default function VeritaResponseAppPage() {
                   className="h-8 text-sm"
                 />
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Inspection ID (optional)</Label>
-                <Input
-                  value={newInspectionId}
-                  onChange={(e) => setNewInspectionId(e.target.value)}
-                  placeholder="Internal or accreditor reference"
-                  className="h-8 text-sm"
-                />
-              </div>
+              {!isNce && (
+                <div className="space-y-1">
+                  <Label className="text-xs">Inspection ID (optional)</Label>
+                  <Input
+                    value={newInspectionId}
+                    onChange={(e) => setNewInspectionId(e.target.value)}
+                    placeholder="Internal or accreditor reference"
+                    className="h-8 text-sm"
+                  />
+                </div>
+              )}
               <div className="space-y-1 col-span-2">
-                <Label className="text-xs">{isPt ? "Description of the PT failure" : "Description of the deficiency"}</Label>
+                <Label className="text-xs">{isPt ? "Description of the PT failure" : isNce ? "Description of the event" : "Description of the deficiency"}</Label>
                 <Textarea
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
@@ -620,9 +657,9 @@ export default function VeritaResponseAppPage() {
             <Button
               className="bg-[#006064] hover:bg-[#004d50] text-white"
               onClick={handleCreate}
-              disabled={saving || !newAccreditor}
+              disabled={saving || (!isNce && !newAccreditor)}
             >
-              {saving ? "Saving..." : isPt ? "Log PT Failure" : "Create Finding"}
+              {saving ? "Saving..." : isPt ? "Log PT Failure" : isNce ? "Log Internal Event" : "Create Finding"}
             </Button>
           </DialogFooter>
         </DialogContent>
