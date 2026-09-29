@@ -355,18 +355,43 @@ export default function LabMembersPage() {
               </div>
             </div>
             {mdOpen && (
-              <div className="mt-3 flex flex-col sm:flex-row gap-2 items-start sm:items-end border-t pt-3">
-                <div className="flex-1 w-full">
-                  <label className="text-xs font-medium block mb-1">Medical director email</label>
-                  <Input type="email" placeholder="director@example.com" value={mdFormEmail} onChange={e => setMdFormEmail(e.target.value)} data-testid="md-email-input" />
+              <div className="mt-3 border-t pt-3 space-y-2">
+                <div className="w-full">
+                  <label className="text-xs font-medium block mb-1">Designate a current member (or pending invite)</label>
+                  <select
+                    className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm"
+                    data-testid="md-member-select"
+                    value={mdFormEmail || ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setMdFormEmail(val);
+                      const m = (data?.members || []).find(mm => (mm.email || "").toLowerCase() === val.toLowerCase());
+                      setMdFormName(m?.name || "");
+                    }}
+                  >
+                    <option value="">Select a person on this lab...</option>
+                    {(data?.members || []).map(m => (
+                      <option key={`m-${m.user_id}`} value={m.email}>{m.name ? `${m.name} - ${m.email}` : m.email}</option>
+                    ))}
+                    {(data?.pendingInvites || []).map(p => (
+                      <option key={`p-${p.seat_id}`} value={p.seat_email}>{`${p.seat_email} (pending invite)`}</option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-muted-foreground mt-1">Pick someone already on the lab to make them the medical director, or type an outside director's email below.</p>
                 </div>
-                <div className="flex-1 w-full">
-                  <label className="text-xs font-medium block mb-1">Name (optional)</label>
-                  <Input placeholder="Dr. Jane Smith" value={mdFormName} onChange={e => setMdFormName(e.target.value)} />
+                <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-end">
+                  <div className="flex-1 w-full">
+                    <label className="text-xs font-medium block mb-1">Medical director email</label>
+                    <Input type="email" placeholder="director@example.com" value={mdFormEmail} onChange={e => setMdFormEmail(e.target.value)} data-testid="md-email-input" />
+                  </div>
+                  <div className="flex-1 w-full">
+                    <label className="text-xs font-medium block mb-1">Name (optional)</label>
+                    <Input placeholder="Dr. Jane Smith" value={mdFormName} onChange={e => setMdFormName(e.target.value)} />
+                  </div>
+                  <Button size="sm" data-testid="md-save" onClick={() => mdMutation.mutate({ email: mdFormEmail.trim(), name: mdFormName.trim() })} disabled={mdMutation.isPending || !mdFormEmail.includes("@")}>
+                    {mdMutation.isPending && <Loader2 className="animate-spin mr-1" size={12} />} Save
+                  </Button>
                 </div>
-                <Button size="sm" data-testid="md-save" onClick={() => mdMutation.mutate({ email: mdFormEmail.trim(), name: mdFormName.trim() })} disabled={mdMutation.isPending || !mdFormEmail.includes("@")}>
-                  {mdMutation.isPending && <Loader2 className="animate-spin mr-1" size={12} />} Save
-                </Button>
               </div>
             )}
             <p className="text-[11px] text-muted-foreground mt-2">Can be a current member or a pending invite. Policy approvals that route to the medical director resolve to this person once they are an active member.</p>
