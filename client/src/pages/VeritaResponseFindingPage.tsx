@@ -530,6 +530,33 @@ export default function VeritaResponseFindingPage() {
     }
   };
 
+  // #36: gated sign-off for an internal NCE. Calls the server endpoint that only
+  // lets the designated medical director or a lab owner/admin sign; the server
+  // stamps signed_by/signed_at/signoff_role and closes the finding.
+  const [signingOff, setSigningOff] = useState(false);
+  const handleSignoff = async () => {
+    if (!finding || !id || !activeLabId) return;
+    setSigningOff(true);
+    try {
+      const res = await fetch(`${findingUrl}/signoff`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ signed_by: (finding.signed_by || "").trim() || null }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast({ variant: "destructive", title: "Could not sign off", description: body?.error || `Request failed (${res.status})` });
+        return;
+      }
+      setFinding(body);
+      toast({ title: "Signed off", description: body?.signoff_role === "medical_director" ? "Recorded as the medical director." : "Recorded as an owner/admin." });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Could not sign off", description: e?.message || "Network error" });
+    } finally {
+      setSigningOff(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!id) return;
     // Audit #8: only navigate away on a confirmed delete; surface failures.
@@ -579,6 +606,34 @@ export default function VeritaResponseFindingPage() {
     setRenderError(null);
     try {
       const res = await fetch(`${API_BASE}/api/findings/${id}/cms-2567-pdf`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const msg = body.missing && body.missing.length
+          ? `Missing: ${body.missing.join("; ")}`
+          : body.error || `Render failed (${res.status})`;
+        setRenderError(msg);
+        setRenderState("error");
+        return;
+      }
+      const data = await res.json();
+      if (data.token) {
+        window.open(`${API_BASE}/api/pdf/${data.token}`, "_blank");
+      }
+      setRenderState("idle");
+    } catch (e: any) {
+      setRenderError(e?.message || "Network error");
+      setRenderState("error");
+    }
+  };
+
+  const handleGenerateInternalNce = async () => {
+    if (!id) return;
+    setRenderState("rendering");
+    setRenderError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/findings/${id}/internal-nce-pdf`, {
         headers: authHeaders(),
       });
       if (!res.ok) {
@@ -1121,6 +1176,33 @@ export default function VeritaResponseFindingPage() {
         );
       })()}
 
+      {/* #36: internal NCE write-up PDF. Shown for internal-event findings; no
+          accreditor gate. Floor: event description + corrective action. */}
+      {finding.source_type === "internal_nce" && (
+        <Card>
+          <CardHeader className="py-3 px-4 border-b">
+            <CardTitle className="text-base font-semibold">Internal NCE write-up (PDF)</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 space-y-2">
+            <div className="text-xs text-muted-foreground">
+              Generates the laboratory's internal non-conforming event report: event context, corrective and preventive action, and the medical-director-or-designee approval block on page 1. For internal quality-management use, not a survey or PT response.
+            </div>
+            {renderState === "error" && renderError && (
+              <div className="text-xs text-red-700 dark:text-red-400">{renderError}</div>
+            )}
+            <Button
+              size="sm"
+              className="bg-[#006064] hover:bg-[#004d50] text-white"
+              onClick={handleGenerateInternalNce}
+              disabled={renderState === "rendering"}
+              data-testid="nce-pdf-btn"
+            >
+              {renderState === "rendering" ? "Generating..." : "Generate internal NCE PDF"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* AABB NER working-draft checklist + render. AABB findings only,
           on a lab flagged for AABB. AABB has structured Sections A-M in
           the official form; this PDF is framed as a working draft for
@@ -1398,6 +1480,27 @@ export default function VeritaResponseFindingPage() {
             <Label className="text-xs">Signed at</Label>
             <Input type="datetime-local" value={finding.signed_at ? finding.signed_at.slice(0, 16) : ""} onChange={(e) => setField("signed_at", e.target.value ? e.target.value + ":00" : null)} className="h-9 text-sm" />
           </div>
+          {finding.source_type === "internal_nce" && (
+            <div className="col-span-2 flex flex-wrap items-center gap-3 pt-1 border-t mt-1">
+              <Button
+                type="button"
+                size="sm"
+                className="bg-[#006064] hover:bg-[#004d50] text-white"
+                onClick={handleSignoff}
+                disabled={signingOff || !activeLabId}
+                data-testid="nce-signoff-btn"
+              >
+                {signingOff ? "Signing..." : "Sign off (medical director / owner or admin)"}
+              </Button>
+              {finding.signoff_role && (
+                <span className="text-xs text-muted-foreground">
+                  Signed off by {finding.signoff_role === "medical_director" ? "the medical director" : "an owner/admin"}
+                  {finding.signed_at ? ` on ${String(finding.signed_at).slice(0, 10)}` : ""}.
+                </span>
+              )}
+              <span className="text-[11px] text-muted-foreground w-full">Only the designated medical director or a lab owner/admin can sign off an internal event.</span>
+            </div>
+          )}
         </CardContent>
       </Card>
 
