@@ -111,13 +111,15 @@ export function registerVeritaTrackRoutes(
       lead_days: row ? row.lead_days : 14,
       overdue_cadence_days: row ? row.overdue_cadence_days : 2,
       recipients,
+      owner_only: row ? !!row.owner_only : false,
       configured: !!row,
     };
   }
 
   function writeReminderConfig(labId: number, body: any) {
-    const { enabled, lead_days, overdue_cadence_days, recipients } = body || {};
+    const { enabled, lead_days, overdue_cadence_days, recipients, owner_only } = body || {};
     const enabledInt = enabled ? 1 : 0;
+    const ownerOnlyInt = owner_only ? 1 : 0;
     const lead = Math.max(1, Math.min(60, Number.isFinite(+lead_days) ? Math.round(+lead_days) : 14));
     const cadence = Math.max(1, Math.min(30, Number.isFinite(+overdue_cadence_days) ? Math.round(+overdue_cadence_days) : 2));
     let recips: { email: string; name?: string }[] = [];
@@ -132,16 +134,16 @@ export function registerVeritaTrackRoutes(
     const existing = sqlite.prepare("SELECT id FROM veritatrack_reminder_config WHERE lab_id = ?").get(labId) as any;
     if (existing) {
       sqlite.prepare(
-        "UPDATE veritatrack_reminder_config SET enabled=?, lead_days=?, overdue_cadence_days=?, recipients_json=?, updated_at=? WHERE lab_id=?"
-      ).run(enabledInt, lead, cadence, recipientsJson, now, labId);
+        "UPDATE veritatrack_reminder_config SET enabled=?, lead_days=?, overdue_cadence_days=?, recipients_json=?, owner_only=?, updated_at=? WHERE lab_id=?"
+      ).run(enabledInt, lead, cadence, recipientsJson, ownerOnlyInt, now, labId);
     } else {
       sqlite.prepare(
-        "INSERT INTO veritatrack_reminder_config (lab_id, enabled, lead_days, overdue_cadence_days, recipients_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?)"
-      ).run(labId, enabledInt, lead, cadence, recipientsJson, now, now);
+        "INSERT INTO veritatrack_reminder_config (lab_id, enabled, lead_days, overdue_cadence_days, recipients_json, owner_only, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)"
+      ).run(labId, enabledInt, lead, cadence, recipientsJson, ownerOnlyInt, now, now);
     }
     return {
-      config: { lab_id: labId, enabled: !!enabledInt, lead_days: lead, overdue_cadence_days: cadence, recipients: recips, configured: true },
-      detail: `enabled=${enabledInt} lead=${lead} cadence=${cadence} recips=${recips.length}`,
+      config: { lab_id: labId, enabled: !!enabledInt, lead_days: lead, overdue_cadence_days: cadence, recipients: recips, owner_only: !!ownerOnlyInt, configured: true },
+      detail: `enabled=${enabledInt} lead=${lead} cadence=${cadence} recips=${recips.length} ownerOnly=${ownerOnlyInt}`,
     };
   }
 
@@ -477,8 +479,9 @@ export function registerVeritaTrackRoutes(
   app.post("/api/veritatrack/tasks", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
     if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
-    const { name, category, instrument, owner, frequency, frequency_months, map_analyte, map_field, notes } = req.body;
+    const { name, category, instrument, owner, owner_employee_id, owner_email, frequency, frequency_months, map_analyte, map_field, notes } = req.body;
     if (!name) return res.status(400).json({ error: "name required" });
+    const cleanOwnerEmail = (owner_email && String(owner_email).includes("@")) ? String(owner_email).trim() : null;
     const freqMonths = frequency_months || frequencyToMonths(frequency || "Monthly");
     const now = new Date().toISOString();
     // write-path Shape A (resolver unification PR B): tag via the SAME shared
@@ -496,8 +499,8 @@ export function registerVeritaTrackRoutes(
       if (derived) { ma = derived.map_analyte; mf = derived.map_field; }
     }
     const r = sqlite.prepare(
-      "INSERT INTO veritatrack_tasks (user_id,name,category,instrument,owner,frequency,frequency_months,map_analyte,map_field,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
-    ).run(userId, name, category || "Other", instrument || null, owner || null, frequency || "Monthly", freqMonths, ma || null, mf || null, notes || null, now, now);
+      "INSERT INTO veritatrack_tasks (user_id,name,category,instrument,owner,owner_employee_id,owner_email,frequency,frequency_months,map_analyte,map_field,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    ).run(userId, name, category || "Other", instrument || null, owner || null, owner_employee_id || null, cleanOwnerEmail, frequency || "Monthly", freqMonths, ma || null, mf || null, notes || null, now, now);
     try {
       sqlite.prepare("UPDATE veritatrack_tasks SET lab_id = ? WHERE id = ?").run(newLabId, r.lastInsertRowid);
     } catch {}
@@ -518,14 +521,20 @@ export function registerVeritaTrackRoutes(
       if (status === 403) return res.status(403).json({ error: "You don't have access to this task's lab" });
       return res.status(404).json({ error: "Task not found" });
     }
-    const { name, category, instrument, owner, frequency, frequency_months, notes, active } = req.body;
+    const { name, category, instrument, owner, owner_employee_id, owner_email, frequency, frequency_months, notes, active } = req.body;
     const freqMonths = frequency_months || frequencyToMonths(frequency || "Monthly");
     // Keep the VeritaMap linkage when the edit form omits map_analyte/map_field,
     // so a routine edit never silently unlinks an imported task from the map.
     const link = preserveMapLink(req.body, existing as any);
+    // #51: preserve owner_employee_id / owner_email when the edit omits them, so a
+    // routine edit never silently clears a task's owner or its reminder address.
+    const ownerEmpId = owner_employee_id === undefined ? ((existing as any).owner_employee_id ?? null) : (owner_employee_id || null);
+    const ownerEmailVal = owner_email === undefined
+      ? ((existing as any).owner_email ?? null)
+      : ((owner_email && String(owner_email).includes("@")) ? String(owner_email).trim() : null);
     sqlite.prepare(
-      "UPDATE veritatrack_tasks SET name=?,category=?,instrument=?,owner=?,frequency=?,frequency_months=?,map_analyte=?,map_field=?,notes=?,active=?,updated_at=datetime('now') WHERE id=?"
-    ).run(name, category || "Other", instrument || null, owner || null, frequency || "Monthly", freqMonths, link.map_analyte, link.map_field, notes || null, active !== false ? 1 : 0, taskId);
+      "UPDATE veritatrack_tasks SET name=?,category=?,instrument=?,owner=?,owner_employee_id=?,owner_email=?,frequency=?,frequency_months=?,map_analyte=?,map_field=?,notes=?,active=?,updated_at=datetime('now') WHERE id=?"
+    ).run(name, category || "Other", instrument || null, owner || null, ownerEmpId, ownerEmailVal, frequency || "Monthly", freqMonths, link.map_analyte, link.map_field, notes || null, active !== false ? 1 : 0, taskId);
     const wasDeactivated = (existing as any).active === 1 && active === false;
     trackAudit({
       labId: (existing as any).lab_id ?? null, taskId,

@@ -1025,7 +1025,10 @@ function StaffPortalPinCard({ labId }: { labId: number }) {
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          Lab staff sign into the Staff Portal at <code className="font-mono text-xs bg-slate-100 px-1 rounded">/staff-access</code> with the lab's CLIA and this 6-digit PIN. Policies and competencies are available to every employee on your VeritaStaff&trade; roster; inventory adjustments and audit-trail viewing are per-employee toggles. Rotate the PIN if it leaks or someone leaves.
+          Lab staff sign into the Staff Portal at <code className="font-mono text-xs bg-slate-100 px-1 rounded">/staff-access</code> with the lab's CLIA and this 6-digit PIN. The Staff Portal is for your <strong>read-and-sign staff</strong>: they acknowledge policies, self-attest competency, record QC, and (when enabled) run inventory scans, but they do not get full editing access and do not consume an active seat. People who <strong>edit and sign</strong> (run studies, review QC, manage the lab) belong on active seats, and your medical director and other reviewers get free reviewer seats. You choose who sits where in the Lab Members list above; this card only turns Staff Portal access on or off for the whole lab.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Policies and competencies are available to every employee on your VeritaStaff&trade; roster; inventory adjustments and audit-trail viewing are per-employee toggles. Rotate the PIN if it leaks or someone leaves.
         </p>
 
         {isLoading ? (

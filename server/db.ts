@@ -3097,9 +3097,15 @@ sqlite.exec(`
 {
   try {
     const cfgCols = (sqlite.prepare("PRAGMA table_info(veritatrack_reminder_config)").all() as { name: string }[]).map(c => c.name);
-    void cfgCols; // Future ALTER TABLE veritatrack_reminder_config ADD COLUMN ... blocks go here.
+    // #51 (2026-09-28): owner-only reminder routing. When set, the nightly runner
+    // emails each task's owner only their own tasks instead of one lab-wide digest.
+    if (!cfgCols.includes("owner_only")) sqlite.exec("ALTER TABLE veritatrack_reminder_config ADD COLUMN owner_only INTEGER NOT NULL DEFAULT 0");
     const logCols = (sqlite.prepare("PRAGMA table_info(veritatrack_reminder_log)").all() as { name: string }[]).map(c => c.name);
     void logCols; // Future ALTER TABLE veritatrack_reminder_log ADD COLUMN ... blocks go here.
+    // #51: per-task owner drawn from the VeritaStaff roster + the email reminders route to.
+    const taskCols = (sqlite.prepare("PRAGMA table_info(veritatrack_tasks)").all() as { name: string }[]).map(c => c.name);
+    if (!taskCols.includes("owner_employee_id")) sqlite.exec("ALTER TABLE veritatrack_tasks ADD COLUMN owner_employee_id INTEGER");
+    if (!taskCols.includes("owner_email")) sqlite.exec("ALTER TABLE veritatrack_tasks ADD COLUMN owner_email TEXT");
   } catch {
     // fresh DB: CREATE TABLE above handled it
   }
@@ -4363,8 +4369,10 @@ sqlite.exec(`
     on_order_expected_date TEXT,
     on_order_placed_date TEXT,
     created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
-  )
+    updated_at TEXT DEFAULT (datetime('now')),
+    lab_id INTEGER REFERENCES labs(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_inventory_items_lab ON inventory_items(lab_id);
 `);
 
 // Lot-level inventory (Phase 1 of nested-lot tracking). A product (inventory_items
@@ -5565,8 +5573,11 @@ sqlite.exec(`
     signed_at TEXT,
     external_submission_ref TEXT,
     created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
+    updated_at TEXT DEFAULT (datetime('now')),
+    lab_id INTEGER REFERENCES labs(id)
   );
+
+  CREATE INDEX IF NOT EXISTS idx_findings_lab ON findings(lab_id, due_date);
 
   CREATE TABLE IF NOT EXISTS finding_attachments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -29,6 +29,8 @@ interface Task {
   category: string;
   instrument?: string | null;
   owner?: string | null;
+  owner_employee_id?: number | null;
+  owner_email?: string | null;
   frequency: string;
   frequency_months: number;
   map_analyte?: string | null;
@@ -277,8 +279,22 @@ function TaskFormDialog({ trigger, existing, onDone, trackApi, tasksKey, dashKey
   const [category, setCategory] = useState(existing?.category || "Other");
   const [instrument, setInstrument] = useState(existing?.instrument || "");
   const [owner, setOwner] = useState(existing?.owner || "");
+  const [ownerEmployeeId, setOwnerEmployeeId] = useState<number | null>(existing?.owner_employee_id ?? null);
+  const [ownerEmail, setOwnerEmail] = useState(existing?.owner_email || "");
+  const [staff, setStaff] = useState<{ id: number; first_name?: string; last_name?: string }[]>([]);
   const [frequency, setFrequency] = useState(existing?.frequency || "Monthly");
   const [notes, setNotes] = useState(existing?.notes || "");
+
+  // #51: owner is chosen from the built VeritaStaff roster. Fetch it when the
+  // dialog opens (lab-scoped when a lab is active, legacy otherwise).
+  useEffect(() => {
+    if (!open) return;
+    const staffApi = trackApi.replace(/veritatrack$/, "staff/employees");
+    fetch(staffApi, { headers: authHeaders() })
+      .then(r => (r.ok ? r.json() : []))
+      .then(d => setStaff(Array.isArray(d) ? d : (d?.employees || [])))
+      .catch(() => setStaff([]));
+  }, [open, trackApi]);
 
   const mut = useMutation({
     mutationFn: async () => {
@@ -291,7 +307,7 @@ function TaskFormDialog({ trigger, existing, onDone, trackApi, tasksKey, dashKey
       const r = await fetch(url, {
         method: existing ? "PUT" : "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ name, category, instrument: instrument || null, owner: owner || null, frequency, notes: notes || null }),
+        body: JSON.stringify({ name, category, instrument: instrument || null, owner: owner || null, owner_employee_id: ownerEmployeeId, owner_email: ownerEmail || null, frequency, notes: notes || null }),
       });
       if (!r.ok) throw new Error(await r.text());
       return r.json();
@@ -310,6 +326,7 @@ function TaskFormDialog({ trigger, existing, onDone, trackApi, tasksKey, dashKey
       if (o && existing) {
         setName(existing.name); setCategory(existing.category);
         setInstrument(existing.instrument || ""); setOwner(existing.owner || "");
+        setOwnerEmployeeId(existing.owner_employee_id ?? null); setOwnerEmail(existing.owner_email || "");
         setFrequency(existing.frequency); setNotes(existing.notes || "");
       }
     }}>
@@ -339,8 +356,24 @@ function TaskFormDialog({ trigger, existing, onDone, trackApi, tasksKey, dashKey
             </div>
             <div>
               <label className="text-xs text-muted-foreground font-medium block mb-1">Owner</label>
-              <Input placeholder="e.g. Chem Sup" value={owner} onChange={e => setOwner(e.target.value)} className="h-8 text-sm" />
+              <Select value={ownerEmployeeId != null ? String(ownerEmployeeId) : "none"} onValueChange={(v) => {
+                if (v === "none") { setOwnerEmployeeId(null); setOwner(""); return; }
+                const emp = staff.find(s => String(s.id) === v);
+                setOwnerEmployeeId(emp ? emp.id : null);
+                setOwner(emp ? `${emp.first_name || ""} ${emp.last_name || ""}`.trim() : "");
+              }}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select staff" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Unassigned</SelectItem>
+                  {staff.map(s => <SelectItem key={s.id} value={String(s.id)}>{`${s.last_name || ""}, ${s.first_name || ""}`.replace(/^,\s*|,\s*$/g, "").trim() || `Staff ${s.id}`}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground font-medium block mb-1">Owner email (for reminders)</label>
+            <Input placeholder="owner@lab.org" value={ownerEmail} onChange={e => setOwnerEmail(e.target.value)} className="h-8 text-sm" />
+            <p className="text-[11px] text-muted-foreground mt-1">Used when reminders are set to notify only the task owner.</p>
           </div>
           <div>
             <label className="text-xs text-muted-foreground font-medium block mb-1">Frequency</label>
@@ -691,6 +724,7 @@ interface ReminderConfig {
   lead_days: number;
   overdue_cadence_days: number;
   recipients: { email: string; name?: string }[];
+  owner_only?: boolean;
   configured: boolean;
 }
 
@@ -711,6 +745,7 @@ function RemindersPanel({ trackApi, cfgKey }: { trackApi: string; cfgKey: string
   const [leadDays, setLeadDays] = useState(14);
   const [cadence, setCadence] = useState(2);
   const [recipients, setRecipients] = useState<{ email: string; name?: string }[]>([]);
+  const [ownerOnly, setOwnerOnly] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [newName, setNewName] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -723,6 +758,7 @@ function RemindersPanel({ trackApi, cfgKey }: { trackApi: string; cfgKey: string
       setLeadDays(data.lead_days);
       setCadence(data.overdue_cadence_days);
       setRecipients(data.recipients || []);
+      setOwnerOnly(!!data.owner_only);
     }
   }, [data]);
 
@@ -742,7 +778,7 @@ function RemindersPanel({ trackApi, cfgKey }: { trackApi: string; cfgKey: string
       const r = await fetch(`${trackApi}/reminder-config`, {
         method: "PUT",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled, lead_days: leadDays, overdue_cadence_days: cadence, recipients }),
+        body: JSON.stringify({ enabled, lead_days: leadDays, overdue_cadence_days: cadence, recipients, owner_only: ownerOnly }),
       });
       if (!r.ok) {
         const j = await r.json().catch(() => ({} as any));
@@ -751,6 +787,7 @@ function RemindersPanel({ trackApi, cfgKey }: { trackApi: string; cfgKey: string
       const saved = await r.json();
       qc.setQueryData([cfgKey], saved);
       setRecipients(saved.recipients || []);
+      setOwnerOnly(!!saved.owner_only);
       setSaveState("saved");
       setTimeout(() => setSaveState(s => (s === "saved" ? "idle" : s)), 2500);
     } catch (e: any) {
@@ -793,6 +830,13 @@ function RemindersPanel({ trackApi, cfgKey }: { trackApi: string; cfgKey: string
         <p className="text-xs text-muted-foreground mb-3">
           Who receives the reminder emails. If you leave this empty, reminders go to the lab owner.
         </p>
+        <label className="flex items-start gap-2 mb-3 cursor-pointer" data-testid="reminder-owner-only">
+          <input type="checkbox" checked={ownerOnly} onChange={e => setOwnerOnly(e.target.checked)} className="mt-0.5" />
+          <span className="text-xs text-foreground">
+            <span className="font-medium">Send each task to its owner only.</span>{" "}
+            <span className="text-muted-foreground">When on, each task's reminder goes to that task's Owner email instead of the list below, so the heme owner never gets the chemistry reminders. Tasks with no owner email fall back to this list, so nothing is missed.</span>
+          </span>
+        </label>
         {recipients.length > 0 && (
           <div className="space-y-2 mb-3">
             {recipients.map(r => (
