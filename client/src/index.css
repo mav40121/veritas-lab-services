@@ -158,3 +158,29 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .dark input[type="time"]::-webkit-calendar-picker-indicator {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%232CA6AE' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpolyline points='12 6 12 12 16 14'/%3E%3C/svg%3E");
 }
+
+/* MediaLab parity #39 item 5: print view. When a page opts in with an
+   #compliance-print-area container (VeritaPolicy Compliance Dashboard), print
+   only that section on a clean white page, dropping the app nav/chrome and any
+   .no-print controls, so the surveyor or Quality Committee gets a tidy printout
+   instead of the raw default browser print. .no-print is a general utility. */
+.no-print { }
+@media print {
+  body { background: #fff !important; }
+  body * { visibility: hidden !important; }
+  #compliance-print-area,
+  #compliance-print-area * { visibility: visible !important; }
+  #compliance-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 0.25in;
+    color: #000 !important;
+  }
+  .no-print { display: none !important; }
+  #compliance-print-area .rounded-lg,
+  #compliance-print-area table { break-inside: avoid; page-break-inside: avoid; }
+}

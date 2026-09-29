@@ -455,17 +455,17 @@ _(item #37 closed 2026-05-28; see C28 below)_
 **Why it parks:** None of these gaps block customer sign-ups; the build is functional and verified at the API + UI happy-path level (35/35 API + 19/19 UI test pass against live prod per the qa-policy-build.js + qa-policy-ui.js scripts). But they will surface in head-to-head sales calls against MediaLab. Triage by hot prospect feedback.
 
 **Recommended sequence when taken up:**
-1. PDF watermarking (highest "feels enterprise" signal, ~half day)
-2. Quizzes on attestations (compliance defensibility, ~half day)
-3. Excel export of compliance dashboard (surveyor request, ~half day)
+1. ~~PDF watermarking~~ **SHIPPED.** The policy DOCX download stamps "Downloaded by <name> on <date>" (server/veritapolicyDocx.ts) plus the opt-in UNCONTROLLED COPY diagonal watermark; policy documents download as DOCX, so there is no clean-PDF path left to overlay.
+2. ~~Quizzes on attestations~~ **SHIPPED.** PolicyQuizAuthorDialog (authoring) + StaffPortal QuizTake / attempt endpoint (staff take + score).
+3. ~~Excel export of compliance dashboard~~ **SHIPPED.** GET /api/labs/:labId/veritapolicy/compliance/xlsx plus an "Export xlsx" button on the Compliance Dashboard (per the §6 Excel Standard).
 4. ~~Auto-expire cron (closes Phase 6B gap, ~half day)~~ **SHIPPED 2026-06-02.** PR #510 = state-machine flip with audit log + admin endpoint. PR #514 = write-path edit-lock guards on PATCH /documents/:id and POST /attestations/:id/complete (other paths already had state-machine guards). End-to-end verified on prod via qa-auto-expire-test harness (PR #511 + #512 + #513 + the harness extension in #514).
-5. Print stylesheet (minor polish, ~1 hour)
+5. ~~Print stylesheet (minor polish, ~1 hour)~~ **SHIPPED 2026-09-29 (PR #1367).** Print button + @media print on the Compliance Dashboard (prints only #compliance-print-area, drops app chrome/.no-print).
 
-Items 6+ (SSO, delegation, in-browser editing, etc.) are larger and should be customer-triggered.
+All five small parity items are now shipped. Items 6+ (SSO/AD, approval delegation, in-browser DOCX editing, per-department role mapping, reviewer-phrase library, cross-policy linking, customizable email templates) are larger and remain customer-triggered.
 
 **Source:** 2026-05-29 QA pass after C29 shipped (qa-policy-build.js + qa-policy-ui.js: 54/54 happy path verified). Honest depth assessment surfaced by Michael's "how confident are you" question — see C29 entry for full QA receipts.
 
-**Status:** Open, customer-triggered. No urgency until a prospect specifically asks for one of the listed depth items.
+**Status:** Small-item sequence COMPLETE (items 1-5 all shipped; verified against the codebase 2026-09-29, print view PR #1367). Remaining depth items (SSO/AD, delegation, in-browser editing, per-department roles, reviewer-phrase library, cross-policy linking, customizable email templates) are larger and stay customer-triggered. Re-open a scoped sub-item only when a prospect asks.
 
 **Pre- vs post-COLA:** Post-COLA. Defensive against MediaLab in head-to-head sales calls.
 
