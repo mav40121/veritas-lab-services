@@ -556,7 +556,7 @@ A prospect asked today whether she could hide the modules or sections her lab do
 
 **Source:** 2026-09-23 session, Michael relaying a prospect ask from a demo today.
 
-**Status:** Open. Not started. Needs a one-line scope confirmation (which master list).
+**Status:** SHIPPED (PR #1364, in origin/main; predates this session, entry was stale). Built as the VeritaDC (VeritaPolicy) Master List "Show only applicable" toggle in `client/src/pages/VeritaPolicyAppPage.tsx`: per-lab, localStorage-persisted keyed by `vp_hide_na_${activeLabId}` (resets on lab switch, so no cross-lab stale state), opt-in default-off, filters rows where `status === "na"`. Scope resolved to VeritaDC per the prospect ask. Verified against origin/main 2026-09-29.
 
 ---
 
