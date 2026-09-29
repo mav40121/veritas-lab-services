@@ -113,3 +113,31 @@ export function isAssessmentComplete(
 ): boolean {
   return incompleteElementCells(items, methodGroups, elementCount).length === 0;
 }
+
+/**
+ * "Assessed this cycle" lookback window, in days, for one employee.
+ *
+ * CLIA competency cadence (42 CFR 493.1451(b)(8) / 493.1235): in an employee's
+ * FIRST year performing a test the requirement is semiannual (competency at ~6
+ * months and again at ~1 year); once the first annual is completed it becomes
+ * annual. So whether a covering assessment still counts as "current" depends on
+ * the person's regime: a first-year employee's assessment goes stale at ~6
+ * months, an established employee's at ~12 months. The v1 coverage map used a
+ * flat 365-day window for everyone, which read a first-year employee as current
+ * for longer than their true semiannual cadence.
+ *
+ * Regime = first-year (semiannual, 183 days) while the person has STARTED their
+ * schedule (initial completed) but has NOT yet completed their first annual;
+ * otherwise established (annual, 365 days). No schedule, or not-yet-started,
+ * defaults to 365 so the window is never tightened on someone with no cadence on
+ * record.
+ */
+export function competencyCycleWindowDays(schedule: {
+  initial_completed_at?: string | null;
+  first_annual_completed_at?: string | null;
+} | null | undefined): number {
+  const s = schedule || {};
+  const startedSchedule = !!str((s as any).initial_completed_at);
+  const firstAnnualDone = !!str((s as any).first_annual_completed_at);
+  return startedSchedule && !firstAnnualDone ? 183 : 365;
+}
