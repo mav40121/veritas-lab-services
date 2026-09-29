@@ -238,7 +238,7 @@ export default function VeritaPolicyCompliancePage() {
           {/* MediaLab parity #39 item 5: print view. A clean, chrome-free printout
               of the dashboard (nav, tabs, and buttons dropped) for the surveyor or
               Quality Committee, instead of the raw default browser print. */}
-          <Button variant="outline" size="sm" onClick={() => window.print()}>
+          <Button variant="outline" size="sm" data-testid="compliance-print-btn" onClick={() => window.print()}>
             <Printer size={14} className="mr-1" /> Print
           </Button>
           {/* MediaLab parity #39 item 3: xlsx export. Hands the surveyor a
