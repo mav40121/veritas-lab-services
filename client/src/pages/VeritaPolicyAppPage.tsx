@@ -137,6 +137,18 @@ export default function VeritaPolicyAppPage() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterSection, setFilterSection] = useState("all");
   const [filterServiceLine, setFilterServiceLine] = useState("all");
+  // #47: per-lab "hide N/A" master-list view toggle. Opt-in, default off; keyed by
+  // activeLabId and re-read on lab switch so the choice never bleeds across labs.
+  const [hideNa, setHideNa] = useState(false);
+  useEffect(() => {
+    if (activeLabId == null) { setHideNa(false); return; }
+    try { setHideNa(localStorage.getItem(`vp_hide_na_${activeLabId}`) === "1"); }
+    catch { setHideNa(false); }
+  }, [activeLabId]);
+  const toggleHideNa = (v: boolean) => {
+    setHideNa(v);
+    try { if (activeLabId != null) localStorage.setItem(`vp_hide_na_${activeLabId}`, v ? "1" : "0"); } catch {}
+  };
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [editingPolicyName, setEditingPolicyName] = useState<Record<string, string>>({});
   const [bulkConfirm, setBulkConfirm] = useState<{ section: string; rows: MasterPolicy[]; markNa: boolean } | null>(null);
@@ -429,6 +441,7 @@ export default function VeritaPolicyAppPage() {
     if (filterStatus !== "all" && p.status !== filterStatus) return false;
     if (filterSection !== "all" && p.section !== filterSection) return false;
     if (filterServiceLine !== "all" && p.service_line !== filterServiceLine) return false;
+    if (hideNa && p.status === "na") return false;
     if (search) {
       const s = search.toLowerCase();
       const hay = [p.policy_id, p.policy_name, p.subspecialty, p.description, p.cfr_citations,
@@ -612,6 +625,14 @@ export default function VeritaPolicyAppPage() {
             {serviceLines.map(sl => <option key={sl} value={sl}>{sl}</option>)}
           </select>
         )}
+        <label
+          data-testid="hide-na-toggle"
+          title="Hide the requirements this lab has marked N/A"
+          className="flex items-center gap-1.5 text-sm text-foreground h-8 px-2 cursor-pointer select-none border border-border rounded bg-background"
+        >
+          <input type="checkbox" checked={hideNa} onChange={e => toggleHideNa(e.target.checked)} />
+          <span>Show only applicable</span>
+        </label>
       </div>
 
       {/* Master List table */}
