@@ -1853,6 +1853,53 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return res.json({ ok: true, labId: scopeLab, reparented, orphans });
   });
 
+  // POST /api/admin/deactivate-seats — soft-deactivate specific user_seats rows
+  // by id (status -> 'deactivated', which every seat count and the ownership
+  // audit exclude). PRECISE: acts only on the ids passed, never a sweep, so it is
+  // safe on live client accounts. dryRun returns the target rows (with each
+  // seat's lab owner for context) without writing. Idempotent: ids already
+  // deactivated are reported as skipped, and unknown ids as notFound. Sibling to
+  // reparent-orphan-seats; use this to retire vestigial seats (e.g. a self-seat
+  // an owner holds on their own lab) rather than re-parent them. ADMIN_SECRET.
+  // Body: { secret, seatIds: number[], dryRun? }.
+  app.post("/api/admin/deactivate-seats", (req, res) => {
+    const { secret, seatIds, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!Array.isArray(seatIds) || seatIds.length === 0) {
+      return res.status(400).json({ error: "seatIds (non-empty array) required" });
+    }
+    const ids = seatIds.map((n: any) => Number(n));
+    if (ids.some((n: number) => !Number.isInteger(n))) {
+      return res.status(400).json({ error: "seatIds must be integers" });
+    }
+    const sqlite = (db as any).$client;
+    const placeholders = ids.map(() => "?").join(",");
+    const rows = sqlite.prepare(
+      `SELECT us.id, us.owner_user_id, us.seat_user_id, us.seat_email, us.seat_type,
+              us.status, us.lab_id, l.owner_user_id AS lab_owner_user_id, l.lab_name
+       FROM user_seats us LEFT JOIN labs l ON l.id = us.lab_id
+       WHERE us.id IN (${placeholders})`,
+    ).all(...ids) as any[];
+    const found = new Set(rows.map((r) => r.id));
+    const notFound = ids.filter((n: number) => !found.has(n));
+    const alreadyDeactivated = rows.filter((r) => r.status === "deactivated").map((r) => r.id);
+    const toDeactivate = rows.filter((r) => r.status !== "deactivated");
+    if (dryRun) {
+      return res.json({ dryRun: true, wouldDeactivate: toDeactivate, alreadyDeactivated, notFound });
+    }
+    let deactivated = 0;
+    if (toDeactivate.length > 0) {
+      const dp = toDeactivate.map(() => "?").join(",");
+      deactivated = sqlite
+        .prepare(`UPDATE user_seats SET status = 'deactivated' WHERE id IN (${dp})`)
+        .run(...toDeactivate.map((r) => r.id)).changes;
+    }
+    console.log(
+      `[admin/deactivate-seats] deactivated=${deactivated} ids=${JSON.stringify(toDeactivate.map((r) => r.id))} already=${JSON.stringify(alreadyDeactivated)} notFound=${JSON.stringify(notFound)}`,
+    );
+    res.json({ ok: true, deactivated, deactivatedRows: toDeactivate, alreadyDeactivated, notFound });
+  });
+
   // Seed / upsert monthly inventory valuation snapshots for the demo. Admin-gated.
   // Body: { secret, rows: [{ lab_id, year_month, avg_value_on_hand, opening_value?,
   //   closing_value?, waste_value?, waste_note? }] }. Upserts on (lab_id, year_month).
