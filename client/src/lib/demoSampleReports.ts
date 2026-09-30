@@ -16,10 +16,13 @@ import {
   calculatePTCoag,
   calculatePrecision,
   calculateSensitivity,
+  calculateCalVer,
+  calculateMethodComparison,
   type QCRangeDataPoint,
   type LotToLotDataPoint,
   type PrecisionDataPoint,
   type SensitivityInput,
+  type DataPoint,
 } from "@/lib/calculations";
 
 const DEMO_LAB_NAME = "Riverside Regional Medical Center";
@@ -358,6 +361,75 @@ function buildSensitivitySample() {
   return { study, results };
 }
 
+// ─── Sample 6: Calibration Verification / Linearity (Glucose, CLSI EP06) ────
+
+function buildCalVerSample() {
+  // Glucose, 5 levels across the reportable range. TEa 10% or 6 mg/dL, whichever
+  // is greater (§493.931). Clean PASS with high R-squared, establishing the AMR.
+  const dataPoints: DataPoint[] = [
+    { level: 1, expectedValue: 52,  instrumentValues: { "Roche Cobas 8000": 53 } },
+    { level: 2, expectedValue: 118, instrumentValues: { "Roche Cobas 8000": 115 } },
+    { level: 3, expectedValue: 255, instrumentValues: { "Roche Cobas 8000": 259 } },
+    { level: 4, expectedValue: 402, instrumentValues: { "Roche Cobas 8000": 396 } },
+    { level: 5, expectedValue: 548, instrumentValues: { "Roche Cobas 8000": 557 } },
+  ];
+  const results = calculateCalVer(dataPoints, ["Roche Cobas 8000"], 0.10, true, 6);
+
+  const study = {
+    id: -6, userId: -1, createdByUserId: -1,
+    testName: "Glucose Calibration Verification / Linearity",
+    instrument: "Roche Cobas 8000",
+    analyst: "J. Hall, MLS(ASCP)",
+    date: "2026-09-15",
+    studyType: "cal_ver",
+    cliaAllowableError: 0.10, teaIsPercentage: 1, teaUnit: "%",
+    cliaAbsoluteFloor: 6, cliaAbsoluteUnit: "mg/dL",
+    dataPoints: JSON.stringify(dataPoints),
+    instruments: JSON.stringify(["Roche Cobas 8000"]),
+    status: results.overallPass ? "pass" : "fail",
+    createdAt: "2026-09-15T09:00:00.000Z",
+    _labName: DEMO_LAB_NAME, _cliaNumber: DEMO_CLIA,
+  };
+
+  return { study, results };
+}
+
+// ─── Sample 7: Correlation / Method Comparison (Glucose, CLSI EP09) ──────────
+
+function buildMethodComparisonSample() {
+  // Glucose: candidate method (Roche Cobas 8000) vs the established reference
+  // method (Abbott Alinity c), 40 paired patient samples. Deming regression +
+  // Bland-Altman + per-specimen TEa pass rule (10% or 6 mg/dL). Clean PASS.
+  const PRIMARY = "Abbott Alinity c";   // established / reference method (x)
+  const COMP = "Roche Cobas 8000";      // candidate / new method (y)
+  const prng = (seed: number) => { let s = seed; return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return (s / 0x7fffffff) * 2 - 1; }; };
+  const rnd = prng(42);
+  const xs = [46,58,63,71,79,84,88,92,97,101,105,110,116,122,128,135,141,148,155,162,170,178,187,196,205,214,224,235,247,259,272,286,301,317,334,352,371,398,432,471];
+  const dataPoints: DataPoint[] = xs.map((x, i) => ({
+    level: i + 1, expectedValue: x,
+    instrumentValues: { [COMP]: Math.round((x * 0.99 + 2 + rnd() * 2) * 10) / 10 },
+  }));
+  const results = calculateMethodComparison(dataPoints, [COMP], 0.10, true, 6);
+
+  const study = {
+    id: -7, userId: -1, createdByUserId: -1,
+    testName: "Glucose Correlation / Method Comparison",
+    instrument: COMP,
+    analyst: "J. Hall, MLS(ASCP)",
+    date: "2026-09-16",
+    studyType: "method_comparison",
+    cliaAllowableError: 0.10, teaIsPercentage: 1, teaUnit: "%",
+    cliaAbsoluteFloor: 6, cliaAbsoluteUnit: "mg/dL",
+    dataPoints: JSON.stringify(dataPoints),
+    instruments: JSON.stringify([PRIMARY, COMP]),
+    status: results.overallPass ? "pass" : "fail",
+    createdAt: "2026-09-16T09:00:00.000Z",
+    _labName: DEMO_LAB_NAME, _cliaNumber: DEMO_CLIA,
+  };
+
+  return { study, results };
+}
+
 // ─── Export: ordered list of demo samples ───────────────────────────────────
 
 export interface DemoSample {
@@ -371,6 +443,24 @@ export interface DemoSample {
 }
 
 export const DEMO_SAMPLES: DemoSample[] = [
+  {
+    key: "correlation-method-comparison",
+    label: "Correlation / Method Comparison",
+    blurb: "Paired patient-sample comparison of a candidate method against the established method, with Deming regression, Bland-Altman, and a per-specimen total-allowable-error pass rule.",
+    clsi: "CLSI EP09",
+    cfr: "42 CFR §493.1253(b)(2)",
+    filename: "VeritaCheck_Sample_Correlation_Method_Comparison.pdf",
+    build: buildMethodComparisonSample,
+  },
+  {
+    key: "calibration-verification-linearity",
+    label: "Calibration Verification / Linearity",
+    blurb: "Confirms accurate recovery across the full reportable range against assigned values, establishing the analytical measurement range (AMR). Dual-criterion pass rule per level.",
+    clsi: "CLSI EP06",
+    cfr: "42 CFR §493.1255(b)(3)",
+    filename: "VeritaCheck_Sample_Calibration_Verification_Linearity.pdf",
+    build: buildCalVerSample,
+  },
   {
     key: "qc-lot-verification",
     label: "QC Lot Verification",
