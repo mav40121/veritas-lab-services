@@ -3450,6 +3450,61 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // Admin: correct the MANUFACTURER target values (mean / SD / range / expiration)
+  // on EXISTING control lots. The customer API supports create, status-change, and
+  // full lot-changeover, but has no in-place edit of a lot's assigned values, so a
+  // mis-entered manufacturer mean/SD or a blank range/expiration could not be fixed
+  // without re-creating the lot and detaching its results. This targeted UPDATE
+  // matches every lot on a lab for a given lot_number + analyte substring + level
+  // (so both analyzers get the same assigned values) and sets the manufacturer
+  // fields. mean + SD are always set; range / sd_interval / expiration are only
+  // set when provided (COALESCE keeps the existing value otherwise). It NEVER
+  // touches qc_results or the observed mean+SD that Westgard runs on. ADMIN_SECRET.
+  //   Body: { secret, labId, lotNumber, analyteContains, level, mfrMean, mfrSd,
+  //           mfrRangeLow?, mfrRangeHigh?, mfrSdInterval?, expirationDate? }
+  app.post("/api/admin/qc/set-lot-mfr-values", (req: any, res) => {
+    const { secret, labId, lotNumber, analyteContains, level, mfrMean, mfrSd, mfrRangeLow, mfrRangeHigh, mfrSdInterval, expirationDate } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!labId || !lotNumber || !analyteContains || !level) {
+      return res.status(400).json({ error: "labId, lotNumber, analyteContains, level required" });
+    }
+    const meanN = Number(mfrMean);
+    const sdN = Number(mfrSd);
+    if (!Number.isFinite(meanN) || !Number.isFinite(sdN)) {
+      return res.status(400).json({ error: "mfrMean and mfrSd must be numbers" });
+    }
+    const optNum = (v: any) => (v === undefined || v === null || v === "" ? null : Number(v));
+    const lowN = optNum(mfrRangeLow), highN = optNum(mfrRangeHigh), intervalN = optNum(mfrSdInterval);
+    if ([lowN, highN, intervalN].some((x) => x !== null && !Number.isFinite(x))) {
+      return res.status(400).json({ error: "mfrRangeLow / mfrRangeHigh / mfrSdInterval must be numbers when provided" });
+    }
+    const exp = expirationDate === undefined || expirationDate === null || expirationDate === "" ? null : String(expirationDate);
+    const sqlite = (db as any).$client;
+    const now = new Date().toISOString();
+    const cols = "id, analyte, level, lot_number, mfr_mean, mfr_sd, mfr_range_low, mfr_range_high, mfr_sd_interval, expiration_date";
+    const findSql = `SELECT ${cols} FROM qc_control_lots WHERE lab_id = ? AND lot_number = ? AND analyte LIKE ? AND level = ?`;
+    const findArgs = [Number(labId), String(lotNumber), `%${analyteContains}%`, String(level)];
+    const before = sqlite.prepare(findSql).all(...findArgs) as any[];
+    if (before.length === 0) {
+      return res.status(404).json({ error: "No control lots matched", labId, lotNumber, analyteContains, level });
+    }
+    try {
+      sqlite.exec("BEGIN");
+      const stmt = sqlite.prepare(
+        "UPDATE qc_control_lots SET mfr_mean = ?, mfr_sd = ?, mfr_range_low = COALESCE(?, mfr_range_low), mfr_range_high = COALESCE(?, mfr_range_high), mfr_sd_interval = COALESCE(?, mfr_sd_interval), expiration_date = COALESCE(?, expiration_date), updated_at = ? WHERE id = ?"
+      );
+      for (const m of before) stmt.run(meanN, sdN, lowN, highN, intervalN, exp, now, m.id);
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[qc/set-lot-mfr-values] failed:", err.message);
+      return res.status(500).json({ error: err.message || "update failed" });
+    }
+    const after = sqlite.prepare(findSql).all(...findArgs);
+    console.log(`[qc/set-lot-mfr-values] lab=${labId} lot=${lotNumber} analyte~${analyteContains} ${level}: updated ${before.length} lot(s) mean=${meanN} sd=${sdN} range=[${lowN},${highN}] exp=${exp || "(unchanged)"}`);
+    res.json({ ok: true, matched: before.length, before, after });
+  });
+
   // ─── VeritaQC Phase 1A: Westgard evaluator + result POST ─────────────────
   // Phase 0 shipped the schema. Phase 1A adds the server-side rule evaluator
   // and the customer endpoint that tech staff use to log a QC result. The
