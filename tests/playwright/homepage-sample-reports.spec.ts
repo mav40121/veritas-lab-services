@@ -15,7 +15,10 @@ test.describe("Homepage: sample-report gallery", () => {
     await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
     await expect(page.getByRole("heading", { name: "See a real signed report" })).toBeVisible();
     const buttons = page.getByRole("button", { name: /Download sample PDF/ });
-    expect(await buttons.count()).toBeGreaterThanOrEqual(5);
+    expect(await buttons.count()).toBeGreaterThanOrEqual(7);
+    // The two most common studies were added 2026-09-29 (previously absent).
+    await expect(page.getByText("Correlation / Method Comparison", { exact: false }).first()).toBeVisible();
+    await expect(page.getByText("Calibration Verification / Linearity", { exact: false }).first()).toBeVisible();
   });
 
   test("no mobile overflow at 390px with the new section", async ({ page }) => {
