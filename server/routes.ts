@@ -3345,6 +3345,37 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Admin: dump the six VeritaQC tables for forensic verification. Optional
   // labId narrows lots/results/corrective_actions/period_reviews/rule_settings
   // to one lab; violations are always returned in full (small table).
+  // Read-only kiosk (Staff Portal) usage diagnostic (2026-09-30). Answers "is the
+  // CLIA+PIN kiosk being used" across all its write surfaces, for the kiosk-retirement
+  // decision. ADMIN_SECRET-gated, no writes. Reports labs with a PIN provisioned, plus
+  // last-14-day and all-time counts of kiosk policy sign-offs, competency sign-offs,
+  // and kiosk-entered QC (operator_staff_employee_id) / QC notes (source='staff_portal').
+  app.get("/api/admin/staff-portal-usage", (req: any, res) => {
+    const secret = (req.query && req.query.secret) || req.headers["x-admin-secret"];
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const cutoff = new Date(Date.now() - 14 * 86400000).toISOString();
+    const all = (sql: string, ...args: any[]) => { try { return sqlite.prepare(sql).all(...args); } catch (e: any) { return [{ error: String(e?.message || e) }]; } };
+    const one = (sql: string, ...args: any[]) => { try { return sqlite.prepare(sql).get(...args); } catch (e: any) { return { error: String(e?.message || e) }; } };
+    res.json({
+      window_days: 14,
+      cutoff,
+      labs_with_pin: all("SELECT id, lab_name, staff_portal_pin_updated_at FROM labs WHERE staff_portal_pin_hash IS NOT NULL AND staff_portal_pin_hash != ''"),
+      last_14_days: {
+        policy_signatures: all("SELECT lab_id, COUNT(*) AS n, MAX(signed_at) AS last_at FROM staff_portal_policy_signatures WHERE signed_at >= ? GROUP BY lab_id", cutoff),
+        competency_signoffs: all("SELECT lab_id, COUNT(*) AS n, MAX(signed_at) AS last_at FROM staff_portal_competency_signoffs WHERE signed_at >= ? GROUP BY lab_id", cutoff),
+        qc_kiosk_entries: all("SELECT lab_id, COUNT(*) AS n, MAX(created_at) AS last_at FROM qc_results WHERE operator_staff_employee_id IS NOT NULL AND created_at >= ? GROUP BY lab_id", cutoff),
+        qc_kiosk_notes: all("SELECT lab_id, COUNT(*) AS n, MAX(created_at) AS last_at FROM qc_result_notes WHERE source = 'staff_portal' AND created_at >= ? GROUP BY lab_id", cutoff),
+      },
+      all_time_totals: {
+        policy_signatures: one("SELECT COUNT(*) AS n, MAX(signed_at) AS last_at FROM staff_portal_policy_signatures"),
+        competency_signoffs: one("SELECT COUNT(*) AS n, MAX(signed_at) AS last_at FROM staff_portal_competency_signoffs"),
+        qc_kiosk_entries: one("SELECT COUNT(*) AS n, MAX(created_at) AS last_at FROM qc_results WHERE operator_staff_employee_id IS NOT NULL"),
+        qc_kiosk_notes: one("SELECT COUNT(*) AS n, MAX(created_at) AS last_at FROM qc_result_notes WHERE source = 'staff_portal'"),
+      },
+    });
+  });
+
   app.post("/api/admin/qc-dump", (req, res) => {
     const { secret, labId } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
