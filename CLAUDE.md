@@ -306,7 +306,7 @@ Apply to every task, not just large ones.
 
 **Per-seat additional-seat model:** each tier's $/seat rate applies to ACTIVE seats above the tier-included count. No more total-seat-count bands. To get a lower per-seat rate, the customer upgrades tiers. The function `getSeatPriceForTier(plan)` in `server/stripe.ts` returns the tier-indexed add-on rate.
 
-**Staff Portal (read-and-sign access for non-writer staff)** — retires the prior $99/seat view-only model as of 2026-06-08 (locked at 0 paying labs, no grandfathering risk). One shared lab kiosk login (CLIA + PIN, synthetic JWT, per-event signature capture cross-referenced to VeritaStaff™ employee dropdown). Surveyor-defensible audit trail. Used for policy read-and-sign, competency self-attestation, inventory adjustments, credential viewing, corrective-action acknowledgements.
+**Staff Portal (read-and-sign access for non-writer staff)** — retires the prior $99/seat view-only model as of 2026-06-08 (locked at 0 paying labs, no grandfathering risk). Read-and-sign staff sign in with their own email and password (Staff seats issued from the flat band below), with per-event signature capture cross-referenced to the VeritaStaff™ roster. Surveyor-defensible audit trail. Used for policy read-and-sign, competency self-attestation, inventory adjustments, credential viewing, corrective-action acknowledgements. NOTE: the former CLIA + PIN shared-kiosk mechanism (and the separate inventory-count kiosk) were removed 2026-09-30; the Staff Portal is real per-person accounts, never a shared kiosk. See the `reference_seat_model_and_kiosk_retirement` memory.
 
 Pricing is a flat band by staff count, not per user. Pitch line: **"You pay for who edits, plus a small flat band for who reads."**
 
