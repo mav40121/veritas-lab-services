@@ -10228,6 +10228,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
     const { email, role: requestedRole, permissions, seatType: requestedSeatType } = req.body || {};
     if (!email || !email.includes("@")) return res.status(400).json({ error: "Valid email required" });
+    // Three seat types on invite: Staff, Admin, and Medical Director. MD is the one
+    // FREE seat and is designated by email (labs.medical_director_email); its base
+    // membership role is a normal write seat (staff-level) so it can approve policies
+    // and co-sign QC. The MD-specific powers resolve by email match, and approving
+    // requires write access, so the MD is intentionally not a read-only reviewer.
+    const isMd = requestedRole === "medical_director";
     const role = requestedRole === "admin" ? "admin" : "staff";
     // parking-lot #33 PR 2: seat_type comes through here so the new
     // user_seats row carries the writer-vs-reviewer distinction. Default
@@ -10273,7 +10279,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     const currentActive = gateActive + 1 /* owner counts as active */;
     const currentViewOnly = gateViewOnly;
-    if (seatType === "active" && currentActive + 1 > maxActiveSeats) {
+    if (!isMd && seatType === "active" && currentActive + 1 > maxActiveSeats) {
       return res.status(402).json({
         error: "seat_limit_reached",
         seatType: "active",
@@ -10352,6 +10358,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           `INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
            VALUES (?, ?, ?, '{}', 'active', 0, ?, ?, ?)`
         ).run(req.scope.labId, seatUserId, role, now, now, now);
+      }
+      // Medical Director invite: designate this person as the lab's MD in the same
+      // transaction. MD is identified by email (works while still a pending invite)
+      // and is the one FREE seat, which is why the active-seat cap was skipped above.
+      // Reassigns if the lab already had a different MD (the prior MD's seat then
+      // re-counts as a normal active seat, since the free exclusion keys off this email).
+      if (isMd) {
+        const mdName = (existingUser && (existingUser as any).name) ? (existingUser as any).name : null;
+        sqlite.prepare(
+          "UPDATE labs SET medical_director_email = ?, medical_director_name = ?, updated_at = ? WHERE id = ?"
+        ).run(normalizedEmail, mdName, now, req.scope.labId);
+        console.log(`[labs/${req.scope.labId}/members POST] designated Medical Director -> ${normalizedEmail} (role=medical_director invite)`);
       }
       sqlite.exec("COMMIT");
     } catch (err: any) {

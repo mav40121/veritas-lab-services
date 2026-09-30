@@ -145,7 +145,7 @@ export default function LabMembersPage() {
 
   // Invite form state
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"admin" | "staff">("staff");
+  const [inviteRole, setInviteRole] = useState<"admin" | "staff" | "medical_director">("staff");
   // parking-lot #33 PR 2: seat-type split at invite time. 'active' = writer
   // (counts against tier cap); 'view_only' = reviewer (medical director,
   // technical consultant, supervisor; capped per tier 1/2/3 with $99/yr
@@ -202,17 +202,17 @@ export default function LabMembersPage() {
     onError: (err: any) => toast({ title: "Email change failed", description: String(err?.message || err), variant: "destructive" }),
   });
 
-  // Designate (or clear) the lab's Laboratory Medical Director. Identified by
-  // email so it can name a member or a pending invite; the MD gets one free seat.
-  const [mdOpen, setMdOpen] = useState(false);
-  const [mdFormEmail, setMdFormEmail] = useState("");
-  const [mdFormName, setMdFormName] = useState("");
+  // Set (or clear) the lab's Laboratory Medical Director. Identified by email so it
+  // can name a current member, the owner, or a pending invite; the MD gets one free
+  // seat. Invoked from the per-member row actions below and from an invite with the
+  // Medical Director role. (The standalone "Designate" card was retired 2026-09-30
+  // when MD became a first-class role in the invite + member-row controls.)
   const mdMutation = useMutation({
     mutationFn: async ({ email, name }: { email: string; name: string }) => {
       const res = await apiRequest("PUT", `/api/labs/${activeLabId}/medical-director`, { email, name });
       return res.json();
     },
-    onSuccess: () => { toast({ title: mdFormEmail.trim() ? "Medical director designated" : "Medical director cleared" }); setMdOpen(false); setMdFormEmail(""); setMdFormName(""); invalidate(); },
+    onSuccess: (_data, variables) => { toast({ title: variables.email && variables.email.trim() ? "Medical director set" : "Medical director cleared" }); invalidate(); },
     onError: (err: any) => toast({ title: "Could not set medical director", description: String(err?.message || err), variant: "destructive" }),
   });
 
@@ -322,82 +322,11 @@ export default function LabMembersPage() {
         </Card>
       )}
 
-      {/* Laboratory Medical Director designation. The MD is a distinct class,
-          identified by email (labs.medical_director_email), gets one free seat,
-          and is who VeritaPolicy approvals route to. Owner/admin only. */}
-      {canManage && (
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-3">
-                <Stethoscope size={18} className="text-teal-700" />
-                <div>
-                  <div className="font-medium">Laboratory Medical Director</div>
-                  {data?.medicalDirector?.email ? (
-                    <div className="text-xs text-muted-foreground">
-                      {data.medicalDirector.name ? `${data.medicalDirector.name} · ` : ""}{data.medicalDirector.email}
-                      <span className="ml-1">(free seat, does not count against the cap)</span>
-                    </div>
-                  ) : (
-                    <div className="text-xs text-muted-foreground">Not assigned. Designate the director whose approval VeritaPolicy routes to; they get one free seat.</div>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <Button size="sm" variant="outline" data-testid="designate-md-toggle" onClick={() => { setMdFormEmail(data?.medicalDirector?.email || ""); setMdFormName(data?.medicalDirector?.name || ""); setMdOpen(v => !v); }}>
-                  <Stethoscope size={12} className="mr-1" /> {data?.medicalDirector?.email ? "Change" : "Designate"}
-                </Button>
-                {data?.medicalDirector?.email && (
-                  <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => mdMutation.mutate({ email: "", name: "" })} disabled={mdMutation.isPending}>
-                    Clear
-                  </Button>
-                )}
-              </div>
-            </div>
-            {mdOpen && (
-              <div className="mt-3 border-t pt-3 space-y-2">
-                <div className="w-full">
-                  <label className="text-xs font-medium block mb-1">Designate a current member (or pending invite)</label>
-                  <select
-                    className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm"
-                    data-testid="md-member-select"
-                    value={mdFormEmail || ""}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setMdFormEmail(val);
-                      const m = (data?.members || []).find(mm => (mm.email || "").toLowerCase() === val.toLowerCase());
-                      setMdFormName(m?.name || "");
-                    }}
-                  >
-                    <option value="">Select a person on this lab...</option>
-                    {(data?.members || []).map(m => (
-                      <option key={`m-${m.user_id}`} value={m.email}>{m.name ? `${m.name} - ${m.email}` : m.email}</option>
-                    ))}
-                    {(data?.pendingInvites || []).map(p => (
-                      <option key={`p-${p.seat_id}`} value={p.seat_email}>{`${p.seat_email} (pending invite)`}</option>
-                    ))}
-                  </select>
-                  <p className="text-[11px] text-muted-foreground mt-1">Pick someone already on the lab to make them the medical director, or type an outside director's email below.</p>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-end">
-                  <div className="flex-1 w-full">
-                    <label className="text-xs font-medium block mb-1">Medical director email</label>
-                    <Input type="email" placeholder="director@example.com" value={mdFormEmail} onChange={e => setMdFormEmail(e.target.value)} data-testid="md-email-input" />
-                  </div>
-                  <div className="flex-1 w-full">
-                    <label className="text-xs font-medium block mb-1">Name (optional)</label>
-                    <Input placeholder="Dr. Jane Smith" value={mdFormName} onChange={e => setMdFormName(e.target.value)} />
-                  </div>
-                  <Button size="sm" data-testid="md-save" onClick={() => mdMutation.mutate({ email: mdFormEmail.trim(), name: mdFormName.trim() })} disabled={mdMutation.isPending || !mdFormEmail.includes("@")}>
-                    {mdMutation.isPending && <Loader2 className="animate-spin mr-1" size={12} />} Save
-                  </Button>
-                </div>
-              </div>
-            )}
-            <p className="text-[11px] text-muted-foreground mt-2">Can be a current member or a pending invite. Policy approvals that route to the medical director resolve to this person once they are an active member.</p>
-          </CardContent>
-        </Card>
-      )}
+      {/* 2026-09-30: The standalone "Designate Medical Director" card was retired.
+          Medical Director is now a first-class seat type: pick it in "Invite a new
+          member" for a new person, or use "Make medical director" on any existing
+          member row below (the owner included). It remains one free seat, identified
+          by email, and is who VeritaPolicy approvals and QC co-sign route to. */}
 
       {/* 2026-06-12: Inventory Kiosk PIN UI retired (Michael: "I thought we
           had eliminated pins?"). The Wave K standalone /inventory kiosk was
@@ -430,9 +359,10 @@ export default function LabMembersPage() {
               </div>
               <div>
                 <Label htmlFor="invite-role" className="text-xs">Role</Label>
-                <select id="invite-role" value={inviteRole} onChange={e => setInviteRole(e.target.value as "admin" | "staff")} className="w-full h-10 border border-input bg-background rounded-md px-3 text-sm" disabled={!isOwner && inviteRole === "admin"}>
+                <select id="invite-role" value={inviteRole} onChange={e => setInviteRole(e.target.value as "admin" | "staff" | "medical_director")} className="w-full h-10 border border-input bg-background rounded-md px-3 text-sm">
                   <option value="staff">Staff</option>
                   <option value="admin" disabled={!isOwner}>Admin{!isOwner ? " (owner only)" : ""}</option>
+                  <option value="medical_director">Medical Director</option>
                 </select>
               </div>
               <div className="flex items-end">
@@ -442,7 +372,7 @@ export default function LabMembersPage() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Every member is an active (writer) seat and counts against the tier seat cap, except your medical director, who gets one free seat that does not count against the cap. Staff who only read and sign policies, self-attest competency, or acknowledge corrective actions do not need a seat: they use the Staff Portal. Admins can invite/remove members and manage lab settings. They cannot change billing or transfer ownership. Staff get operational access only.
+              Every member gets an email login and an active (writer) seat that counts against your tier's seat cap. The one exception is your Medical Director, who gets one free seat that does not count. Pick the role on invite: Staff (operational access), Admin (also invites and removes members and manages lab settings, but cannot change billing or transfer ownership), or Medical Director (the free seat, and the person VeritaPolicy approvals and QC co-sign route to). You can also set or change the Medical Director on any existing member in the table below, the owner included. Read-and-sign-only staff use the Staff Portal and do not consume a seat.
             </p>
           </CardContent>
         </Card>
@@ -509,7 +439,12 @@ export default function LabMembersPage() {
                             </>
                           )}
                         </td>
-                        <td className="py-2 pr-3">{roleBadge(isMedicalDirector(m.email) ? "medical_director" : m.role)}</td>
+                        <td className="py-2 pr-3">
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {roleBadge(m.role)}
+                            {isMedicalDirector(m.email) && medicalDirectorBadge()}
+                          </div>
+                        </td>
                         <td className="py-2 pr-3">{seatTypeBadge(m.seat_type || "active")}</td>
                         <td className="py-2 pr-3 text-muted-foreground">{fmtDate(m.last_active_at || m.accepted_at)}</td>
                         <td className="py-2 pr-3 text-right space-x-1">
@@ -522,6 +457,20 @@ export default function LabMembersPage() {
                             <Button size="sm" variant="outline" onClick={() => roleMutation.mutate({ memberId: m.membership_id, role: "staff" })} disabled={roleMutation.isPending}>
                               <ShieldOff size={12} className="mr-1" /> Demote to staff
                             </Button>
+                          )}
+                          {/* Medical Director is an additive designation (one free seat),
+                              not a role swap, so it is available on ANY member row, the
+                              owner included. */}
+                          {canManage && (
+                            isMedicalDirector(m.email) ? (
+                              <Button size="sm" variant="ghost" data-testid="clear-md-btn" onClick={() => mdMutation.mutate({ email: "", name: "" })} disabled={mdMutation.isPending} title="Remove this person as the lab's Medical Director">
+                                <Stethoscope size={12} className="mr-1" /> Clear medical director
+                              </Button>
+                            ) : (
+                              <Button size="sm" variant="outline" data-testid="make-md-btn" onClick={() => mdMutation.mutate({ email: m.email, name: m.name || "" })} disabled={mdMutation.isPending} title="Make this person the lab's Medical Director (one free seat)">
+                                <Stethoscope size={12} className="mr-1" /> Make medical director
+                              </Button>
+                            )
                           )}
                           {canManage && !isMemberOwner && editEmailFor !== m.membership_id && (
                             <Button size="sm" variant="ghost" onClick={() => { setEditEmailFor(m.membership_id); setEditEmailValue(m.email); }} disabled={emailMutation.isPending} title="Correct this member's login email in place">
@@ -577,6 +526,17 @@ export default function LabMembersPage() {
                             <Button size="sm" variant="outline" onClick={() => reissueMutation.mutate(inv.seat_id)} disabled={reissueMutation.isPending}>
                               <RotateCw size={12} className="mr-1" /> Reissue
                             </Button>
+                          )}
+                          {canManage && (
+                            isMedicalDirector(inv.seat_email) ? (
+                              <Button size="sm" variant="ghost" onClick={() => mdMutation.mutate({ email: "", name: "" })} disabled={mdMutation.isPending} title="Remove this pending invite as the lab's Medical Director">
+                                <Stethoscope size={12} className="mr-1" /> Clear medical director
+                              </Button>
+                            ) : (
+                              <Button size="sm" variant="outline" onClick={() => mdMutation.mutate({ email: inv.seat_email, name: "" })} disabled={mdMutation.isPending} title="Make this pending invite the lab's Medical Director (one free seat)">
+                                <Stethoscope size={12} className="mr-1" /> Make medical director
+                              </Button>
+                            )
                           )}
                           {canManage && (
                             <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => {
