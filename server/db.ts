@@ -2158,18 +2158,25 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
   ensure("nys_permit_type",  "ALTER TABLE labs ADD COLUMN nys_permit_type TEXT NOT NULL DEFAULT 'none'");  // none | in-state | out-of-state
   ensure("nys_confirmed_by", "ALTER TABLE labs ADD COLUMN nys_confirmed_by INTEGER");
   ensure("nys_confirmed_at", "ALTER TABLE labs ADD COLUMN nys_confirmed_at TEXT");
-  // Wave K1 (2026-06-07): Inventory PIN. Shared 6-digit code that grants
-  // a scoped JWT (subject = inv:lab_<id>) good only for reading the
-  // inventory_items list and adjusting quantity_on_hand. Hashed at rest
-  // with pbkdf2-sha256 + a per-lab 16-byte salt. failed_attempts +
-  // locked_until provide rate-limiting on the login endpoint
-  // (K2). Director / admin rotate via /inventory-pin/regenerate;
-  // tech kiosk authenticates via POST /api/inventory-login (K2).
-  ensure("inventory_pin_hash",         "ALTER TABLE labs ADD COLUMN inventory_pin_hash TEXT");
-  ensure("inventory_pin_salt",         "ALTER TABLE labs ADD COLUMN inventory_pin_salt TEXT");
-  ensure("inventory_pin_updated_at",   "ALTER TABLE labs ADD COLUMN inventory_pin_updated_at TEXT");
-  ensure("inventory_pin_locked_until", "ALTER TABLE labs ADD COLUMN inventory_pin_locked_until TEXT");
-  ensure("inventory_pin_failed_attempts", "ALTER TABLE labs ADD COLUMN inventory_pin_failed_attempts INTEGER DEFAULT 0");
+  // 2026-09-30 — Inventory kiosk (CLIA+PIN) RETIRED. Its login/session endpoints
+  // and the InventoryKioskPage are gone; the shared-PIN columns are dead. Drop
+  // them (guarded: existence-checked, try/catch so a failure logs instead of
+  // crashing boot). The Staff Portal's Adjust Inventory module (individual login)
+  // is unaffected.
+  for (const col of [
+    "inventory_pin_hash",
+    "inventory_pin_salt",
+    "inventory_pin_updated_at",
+    "inventory_pin_locked_until",
+    "inventory_pin_failed_attempts",
+  ]) {
+    try {
+      const cols = (sqlite.prepare("PRAGMA table_info(labs)").all() as { name: string }[]).map((c) => c.name);
+      if (cols.includes(col)) sqlite.exec(`ALTER TABLE labs DROP COLUMN ${col}`);
+    } catch (e: any) {
+      console.warn(`[migration] could not drop labs.${col}:`, e?.message || e);
+    }
+  }
 
   // 2026-09-30 — Staff Portal CLIA+PIN kiosk RETIRED. The Staff Portal now uses
   // real email+password accounts (auth-unification), so the shared-PIN columns are
