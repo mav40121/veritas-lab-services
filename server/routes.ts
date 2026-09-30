@@ -26,6 +26,7 @@ import { buildCoverageReportRows, generateCoverageReportExcel } from "./coverage
 import { CATEGORY_TO_MAP_FIELD, analyteFromTaskName, MAP_SIGNOFF_FIELDS } from "./veritatrackMapSync";
 import { evaluateManualDiff } from "./rumke";
 import { auditVeritamapConsistency } from "./veritamapConsistency";
+import { auditSystemOwnership } from "./systemOwnershipAudit";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard";
@@ -31061,6 +31062,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
     res.json(auditVeritamapConsistency((db as any).$client));
+  });
+
+  // GET /api/admin/system-ownership-audit — Phase 0 of the System/Organization
+  // entity work (docs/SYSTEM_ENTITY_DESIGN.md). Read-only: groups every lab by
+  // its owner (the current "implicit system"), marks multi-lab owners as Phase-1
+  // organization candidates, and flags any active seat whose owner_user_id has
+  // drifted from its lab's current owner (the seat-pool-drift / San Carlos
+  // siloing shape that POST /api/admin/reparent-orphan-seats fixes). No writes.
+  // ADMIN_SECRET-gated. Body/query/header secret, same as the sibling audits.
+  app.get("/api/admin/system-ownership-audit", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    res.json(auditSystemOwnership((db as any).$client));
   });
 
   // On-demand path for the nightly linearity-exemption drop guard. Read-only:
