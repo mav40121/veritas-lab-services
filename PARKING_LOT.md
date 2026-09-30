@@ -394,18 +394,7 @@ _(items #34 and #35 closed 2026-05-24; see C23 and C24 below)_
 
 ---
 
-### 36. New module: laboratory non-conforming event documentation
-
-**Effort:** L (initial estimate, pending Michael's scope walkthrough — likely new DB tables, form UI, list / filter / status workflow, attachments, signoffs, exportable summary; comparable in shape to VeritaResponse™ or VeritaQC™)
-**Importance:** High — every accredited laboratory (TJC, CAP, COLA, AABB) has to document non-conforming events under their quality management system standards. No existing Verita module covers this surface; VeritaResponse™ handles post-survey citations and VeritaQC™ handles QC-rule violations, but the general-purpose NCE workflow is a gap.
-
-**What:** Build a module to document laboratory non-conforming events (NCEs). Surfaces a lab needs to capture include specimen rejection, temperature excursions, reagent issues, equipment failures, result-reporting errors, transcription errors, lost specimens, contamination events, and similar quality incidents. Full scope, target accreditor mapping, terminology preference (NCE / NCR / event / incident / occurrence), and how it should relate to the existing VeritaQC corrective-action engine and VeritaResponse deficiency tracker are TBD pending Michael's scope walkthrough.
-
-**Scope decision (2026-09-28, Michael — this is the walkthrough #36 was waiting on):** Build the NCE write-up INSIDE VeritaResponse, not as a standalone module. Verbatim: "Veritaresponse: We should build documentation for a non-conforming event as well (lab finds an issue in their lab, nothing to do with a survey/inspection/pt sample) to do their own internal write up and get medical director (or other admin) signature on it." Key scoping now settled: (a) the trigger is a lab-found INTERNAL issue, explicitly NOT a survey / inspection / PT-sample deficiency (that is VeritaResponse's existing findings flow); (b) it is the lab's own internal write-up; (c) it must capture a medical director OR other admin signature. So VeritaResponse gains a second finding type (internal NCE) alongside its existing survey/inspection deficiency type, reusing the same corrective-action / signoff spine but with the MD-or-admin signature gate. Still to confirm at build: relationship to the VeritaQC corrective-action engine (a QC-rule violation is a related-but-distinct source), terminology (NCE / NCR / occurrence), and whether the MD-signature requirement should reuse the same MD-designation the seat work in #52 formalizes.
-
-**Status:** Scoped, not started (updated 2026-09-28). Now lands in VeritaResponse per Michael's direction above; the earlier "new standalone module" framing is superseded. Do not start building until Michael greenlights it as active work; sizing here is still a placeholder.
-
-**Pre- vs post-COLA:** Post-COLA. No customer urgency yet, but high strategic value once defined — closes a real gap every lab has and that no other Verita module currently serves.
+_(item #36 closed 2026-09-29; shipped PR #1368, prod-verified, see C52 below)_
 
 ---
 
@@ -589,6 +578,12 @@ Jennifer Small (Interim Director, Clinical Laboratory, Lifepoint Health) sent Mi
 ---
 
 ## CLOSED (audit trail)
+
+### C52. VeritaResponse internal NCE / non-conforming event (was #36)
+
+**Effort:** was L (shipped as MEDIUM) / **Importance:** High
+
+**Closure evidence:** Shipped PR #1368 (squash-merged to main 29cc6e23 2026-09-29, deployed, Gate-3 passed on prod). Built inside VeritaResponse as a third finding `source_type = 'internal_nce'` (a lab-found event with no survey/PT trigger, per Michael's 2026-09-28 scope): added `event_date` / `discovered_by` / `signoff_role` columns (PRAGMA ALTER pattern), reused the CAPA / history / effectiveness spine, added an MD-or-owner/admin gated sign-off endpoint (`POST /api/labs/:labId/findings/:id/signoff`, 403s anyone who is not the designated MD or an owner/admin) reusing the `labs.medical_director_email` designation, and a section 5-compliant internal-NCE write-up PDF (`generateInternalNcePDF`, signature block on page 1). Client: "Internal event (NCE)" record type in the New Finding dialog (event date + discovered-by, survey fields hidden), a list badge, a gated sign-off button, and a PDF card. Receipts: env-gated Playwright spec `tests/playwright/veritaresponse-internal-nce.spec.ts` passed against prod; local PDF render-inspect (signature on page 1, correct CFR + statistics, no em dashes); tsc clean; audit 0 errors.
 
 ### C49. Competency "assessed this cycle" cadence-aware window (was #50)
 
