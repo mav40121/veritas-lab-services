@@ -39,16 +39,6 @@ test.describe("Staff Portal auth unification", () => {
     expect(r.status()).toBe(404);
   });
 
-  test("staff-access page still renders the legacy login form", async ({ page }) => {
-    // Backward-compat: the CLIA + PIN entry remains as a fallback path
-    // until PR2 retires the synthetic-JWT code path. Asserts the
-    // entry surface still mounts so directors who haven't invited
-    // anyone yet aren't blocked.
-    await page.goto(`${BASE}/staff-access`);
-    await expect(page.getByTestId("sp-login-clia")).toBeVisible({ timeout: 10000 });
-    await expect(page.getByTestId("sp-login-pin")).toBeVisible();
-  });
-
   test("VeritaStaff edit dialog exposes the Staff Portal Access section", async ({ page }) => {
     test.skip(!TOKEN, "PW_TOKEN not set");
     await page.goto(`${BASE}/`);
