@@ -2171,17 +2171,25 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
   ensure("inventory_pin_locked_until", "ALTER TABLE labs ADD COLUMN inventory_pin_locked_until TEXT");
   ensure("inventory_pin_failed_attempts", "ALTER TABLE labs ADD COLUMN inventory_pin_failed_attempts INTEGER DEFAULT 0");
 
-  // 2026-06-08 — Staff Portal PIN. Same shape as the inventory PIN above
-  // but a separate hash/salt because the two surfaces have different
-  // permission scopes (Staff Portal can sign policies and competencies
-  // for every staff member; the inventory kiosk only adjusts qty).
-  // Rotated by the lab director; staff member logs in via
-  // POST /api/staff-portal-login with the CLIA + this PIN.
-  ensure("staff_portal_pin_hash",         "ALTER TABLE labs ADD COLUMN staff_portal_pin_hash TEXT");
-  ensure("staff_portal_pin_salt",         "ALTER TABLE labs ADD COLUMN staff_portal_pin_salt TEXT");
-  ensure("staff_portal_pin_updated_at",   "ALTER TABLE labs ADD COLUMN staff_portal_pin_updated_at TEXT");
-  ensure("staff_portal_pin_locked_until", "ALTER TABLE labs ADD COLUMN staff_portal_pin_locked_until TEXT");
-  ensure("staff_portal_pin_failed_attempts", "ALTER TABLE labs ADD COLUMN staff_portal_pin_failed_attempts INTEGER DEFAULT 0");
+  // 2026-09-30 — Staff Portal CLIA+PIN kiosk RETIRED. The Staff Portal now uses
+  // real email+password accounts (auth-unification), so the shared-PIN columns are
+  // dead. Drop them. Guarded: only drops a column that still exists, and a failure
+  // is logged rather than allowed to crash boot. (The separate inventory kiosk PIN
+  // columns above are untouched; they are retired in their own cleanup.)
+  for (const col of [
+    "staff_portal_pin_hash",
+    "staff_portal_pin_salt",
+    "staff_portal_pin_updated_at",
+    "staff_portal_pin_locked_until",
+    "staff_portal_pin_failed_attempts",
+  ]) {
+    try {
+      const cols = (sqlite.prepare("PRAGMA table_info(labs)").all() as { name: string }[]).map((c) => c.name);
+      if (cols.includes(col)) sqlite.exec(`ALTER TABLE labs DROP COLUMN ${col}`);
+    } catch (e: any) {
+      console.warn(`[migration] could not drop labs.${col}:`, e?.message || e);
+    }
+  }
 
   // Enterprise inventory (VeritaStock multi-location). Nullable self-FK:
   // null means this lab is standalone or a warehouse; a set value means
