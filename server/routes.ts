@@ -2663,6 +2663,104 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // Admin: provision a brand-new OWNER + their lab in one shot. This is the
+  // piece provision-comp-lab was missing: it requires an EXISTING user with a
+  // primary lab, which a net-new prospect does not have. This creates the owner
+  // account in a "set your own password" state (a random, unusable bcrypt hash
+  // plus a reset token returned as an onboarding link — the operator NEVER sets
+  // the real password), creates the lab owned by them (comped), an owner
+  // membership with is_primary_lab=1, and sets plan/seat_count. Returns the
+  // onboarding link for the operator to forward. ADMIN_SECRET-gated.
+  //   Body: { secret, ownerEmail, ownerName?, labName, cliaNumber, plan?,
+  //           accreditationBody?, seatCount?, expiresAt? }
+  app.post("/api/admin/provision-owner-lab", async (req: any, res) => {
+    const { secret, ownerEmail, ownerName, labName, cliaNumber, plan, accreditationBody, seatCount, expiresAt } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!ownerEmail || !String(ownerEmail).includes("@") || !labName || !cliaNumber) {
+      return res.status(400).json({ error: "ownerEmail, labName, cliaNumber required" });
+    }
+    const validPlans = ["clinic", "waived", "community", "hospital", "enterprise", "large_hospital"];
+    const resolvedPlan = plan || "hospital";
+    if (!validPlans.includes(resolvedPlan)) {
+      return res.status(400).json({ error: `plan must be one of: ${validPlans.join(", ")}` });
+    }
+    const validAccreditors = [null, undefined, "", "CAP", "TJC", "COLA", "AABB"];
+    if (!validAccreditors.includes(accreditationBody)) {
+      return res.status(400).json({ error: "accreditationBody must be CAP, TJC, COLA, AABB, or omitted" });
+    }
+    const resolvedExpiresAt = expiresAt || "2099-12-31T00:00:00.000Z";
+    if (typeof resolvedExpiresAt !== "string" || Number.isNaN(Date.parse(resolvedExpiresAt))) {
+      return res.status(400).json({ error: "expiresAt must be an ISO datetime string" });
+    }
+    const sqlite = (db as any).$client;
+    const normEmail = String(ownerEmail).toLowerCase().trim();
+    if (storage.getUserByEmail(normEmail)) {
+      return res.status(409).json({ error: "A user with that email already exists; use provision-comp-lab instead." });
+    }
+    const cliaConflict = sqlite.prepare("SELECT id, lab_name FROM labs WHERE clia_number = ?").get(String(cliaNumber).trim()) as any;
+    if (cliaConflict) {
+      return res.status(409).json({ error: `CLIA ${cliaNumber} already in use by lab id=${cliaConflict.id} (${cliaConflict.lab_name})` });
+    }
+    const seatN = Number.isFinite(Number(seatCount)) && Number(seatCount) > 0
+      ? Math.floor(Number(seatCount))
+      : (PLAN_SEATS[resolvedPlan] || 1);
+    const now = new Date().toISOString();
+    // Random, unusable password: the owner sets their real one via the reset link.
+    const throwaway = await bcrypt.hash(crypto.randomUUID() + crypto.randomUUID(), 10);
+    let newUserId: number;
+    let newLabId: number;
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    try {
+      const u = storage.createUser(normEmail, throwaway, ownerName ? String(ownerName) : "");
+      newUserId = u.id;
+      sqlite.exec("BEGIN");
+      sqlite.prepare(
+        "UPDATE users SET hipaa_acknowledged = 1, hipaa_acknowledged_at = ?, plan = ?, seat_count = ? WHERE id = ?"
+      ).run(now, resolvedPlan, seatN, newUserId);
+      const labResult = sqlite.prepare(
+        `INSERT INTO labs (
+          clia_number, lab_name, owner_user_id,
+          accreditation_cap, accreditation_tjc, accreditation_cola, accreditation_aabb,
+          clia_locked, lab_name_locked,
+          plan, subscription_status, subscription_expires_at, plan_expires_at,
+          stripe_customer_id, stripe_subscription_id,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, 'active', ?, ?, NULL, NULL, ?, ?)`
+      ).run(
+        String(cliaNumber).trim(), String(labName).trim(), newUserId,
+        accreditationBody === "CAP" ? 1 : 0,
+        accreditationBody === "TJC" ? 1 : 0,
+        accreditationBody === "COLA" ? 1 : 0,
+        accreditationBody === "AABB" ? 1 : 0,
+        resolvedPlan, resolvedExpiresAt, resolvedExpiresAt, now, now,
+      );
+      newLabId = Number(labResult.lastInsertRowid);
+      sqlite.prepare(
+        `INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
+         VALUES (?, ?, 'owner', '{}', 'active', 1, ?, ?, ?)`
+      ).run(newLabId, newUserId, now, now, now);
+      const resetExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days for hand-relayed onboarding
+      sqlite.prepare("INSERT OR REPLACE INTO reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)").run(newUserId, resetToken, resetExpires);
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[provision-owner-lab] failed:", err.message);
+      return res.status(500).json({ error: err.message || "Failed to provision owner + lab" });
+    }
+    const onboardingUrl = `${FRONTEND_URL}/reset-password?token=${resetToken}`;
+    // Do not log the token: it grants password-set access to the new owner account.
+    console.log(`[provision-owner-lab] lab_id=${newLabId} (${labName}) owner user_id=${newUserId} (${normEmail}) plan=${resolvedPlan} seats=${seatN} accreditor=${accreditationBody || "(none)"}`);
+    res.json({
+      ok: true,
+      lab_id: newLabId,
+      owner_user_id: newUserId,
+      ownerEmail: normEmail,
+      plan: resolvedPlan,
+      activeSeats: seatN,
+      onboardingUrl,
+    });
+  });
+
   // Admin: idempotent provisioning primitive for a multi-location VeritaStock
   // demo tenant. Find-or-create a comped lab by (owner_user_id, lab_name) with
   // NO CLIA (it is a demo location, not a real certificate), keep it comped on
