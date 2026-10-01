@@ -30,6 +30,7 @@ import { auditSystemOwnership } from "./systemOwnershipAudit";
 import { computeBackfillCandidates } from "./organizationBackfill";
 import { orgSeatCapForOwner } from "./organizationSeats";
 import { orgRoleForUserOnLab, labRoleFromOrgRole, transferBlockedOutOfOrg, isActiveOrgMember, resolveOwnerOrgId } from "./organizationRoles";
+import { planProvisionLabs, accreditationFlagsFor } from "./organizationProvision";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard";
@@ -31420,6 +31421,131 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       .get(orgId, uid);
     console.log(`[admin/organizations/members] org=${orgId} user=${uid} role=${role} status=${st} ${existing ? "updated" : "inserted"}`);
     res.json({ ok: true, member: saved, action: existing ? "updated" : "inserted" });
+  });
+
+  // POST /api/admin/organizations/provision-system — Phase 3a: stand up a whole
+  // system in one call (docs/SYSTEM_ENTITY_DESIGN.md). Creates/reuses the org,
+  // creates the member labs + the repository lab, links them all to the org,
+  // adds the owner as an org_owner member, and sets the seat pool. Composes the
+  // Phase 1/2 primitives; writes NO billing (that is Phase 3b). The billing
+  // owner must already exist (provision does not create user accounts).
+  // Idempotent: reuses the org, reuses labs by CLIA that the owner already owns,
+  // skips an existing membership. A CLIA that belongs to a DIFFERENT owner is
+  // rejected, never hijacked. ADMIN_SECRET-gated.
+  // Body: { secret, dryRun?, organization: { name, billingOwnerUserId, plan?,
+  //   activeSeatPool? }, labs: [{ labName, cliaNumber, plan?, accreditation?,
+  //   isRepository? }] }.
+  app.post("/api/admin/organizations/provision-system", (req, res) => {
+    const { secret, dryRun, organization, labs } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const orgName = String(organization?.name || "").trim();
+    const ownerId = Number(organization?.billingOwnerUserId);
+    if (!orgName || !Number.isInteger(ownerId)) {
+      return res.status(400).json({ error: "organization.name and organization.billingOwnerUserId (integer) are required" });
+    }
+    const owner = sqlite.prepare("SELECT id FROM users WHERE id = ?").get(ownerId);
+    if (!owner) return res.status(404).json({ error: "billing owner (billingOwnerUserId) not found" });
+    if (!Array.isArray(labs) || labs.length === 0) {
+      return res.status(400).json({ error: "labs[] (at least one) is required" });
+    }
+    const orgPlan = organization?.plan != null ? String(organization.plan) : null;
+    const poolRaw = organization?.activeSeatPool;
+    const plannedPool = Number.isInteger(Number(poolRaw)) && Number(poolRaw) > 0 ? Number(poolRaw) : null;
+
+    // Build the CLIA -> owner map so the plan can classify create/reuse/foreign.
+    const existingByClia = new Map<string, number>();
+    for (const r of sqlite.prepare("SELECT clia_number, owner_user_id FROM labs WHERE clia_number IS NOT NULL").all() as any[]) {
+      if (r.clia_number) existingByClia.set(String(r.clia_number).trim(), Number(r.owner_user_id));
+    }
+    const labPlan = planProvisionLabs(labs, ownerId, existingByClia);
+    const errors = labPlan.filter((p) => p.action === "error");
+    const existingOrg = sqlite.prepare("SELECT id, name, active_seat_pool FROM organizations WHERE billing_owner_user_id = ?").get(ownerId) as any;
+
+    if (dryRun === true) {
+      return res.json({
+        dryRun: true,
+        org: { name: orgName, billingOwnerUserId: ownerId, plan: orgPlan, activeSeatPool: plannedPool, reuseExisting: !!existingOrg, existingOrgId: existingOrg?.id ?? null },
+        labs: labPlan,
+        errors,
+      });
+    }
+    if (errors.length) return res.status(400).json({ error: "validation", errors });
+
+    const now = new Date().toISOString();
+    const applied: any[] = [];
+    try {
+      sqlite.exec("BEGIN");
+      // Org: create or reuse (by billing owner, mirrors the backfill endpoint).
+      let orgId: number;
+      if (existingOrg) {
+        orgId = existingOrg.id;
+        sqlite.prepare("UPDATE organizations SET name = ?, updated_at = ? WHERE id = ?").run(orgName, now, orgId);
+        if (orgPlan != null) sqlite.prepare("UPDATE organizations SET plan = ?, updated_at = ? WHERE id = ?").run(orgPlan, now, orgId);
+      } else {
+        orgId = Number(
+          sqlite
+            .prepare("INSERT INTO organizations (name, billing_owner_user_id, plan, created_at, updated_at) VALUES (?, ?, ?, ?, ?)")
+            .run(orgName, ownerId, orgPlan, now, now).lastInsertRowid,
+        );
+      }
+
+      // Labs: create new ones under the owner + owner membership; re-link reused.
+      for (const p of labPlan) {
+        const src = (labs as any[]).find((l) => String(l?.cliaNumber || "").trim() === p.cliaNumber);
+        const flags = accreditationFlagsFor(src?.accreditation);
+        if (p.action === "create") {
+          const labId = Number(
+            sqlite
+              .prepare(
+                `INSERT INTO labs (clia_number, lab_name, owner_user_id, organization_id, is_repository,
+                   accreditation_cap, accreditation_tjc, accreditation_cola, accreditation_aabb, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              )
+              .run(p.cliaNumber, p.labName, ownerId, orgId, p.isRepository ? 1 : 0,
+                flags.accreditation_cap, flags.accreditation_tjc, flags.accreditation_cola, flags.accreditation_aabb, now, now).lastInsertRowid,
+          );
+          sqlite
+            .prepare("INSERT INTO lab_members (lab_id, user_id, role, status, is_primary_lab, accepted_at, created_at, updated_at) VALUES (?, ?, 'owner', 'active', 0, ?, ?, ?)")
+            .run(labId, ownerId, now, now, now);
+          applied.push({ cliaNumber: p.cliaNumber, labId, action: "created", isRepository: p.isRepository });
+        } else {
+          // reuse: the owner already owns this CLIA. Link it to the org and make
+          // sure the owner membership exists. Never changes owner_user_id.
+          const existing = sqlite.prepare("SELECT id FROM labs WHERE clia_number = ? AND owner_user_id = ?").get(p.cliaNumber, ownerId) as any;
+          sqlite.prepare("UPDATE labs SET organization_id = ?, updated_at = ? WHERE id = ?").run(orgId, now, existing.id);
+          const mem = sqlite.prepare("SELECT id FROM lab_members WHERE lab_id = ? AND user_id = ?").get(existing.id, ownerId) as any;
+          if (!mem) {
+            sqlite
+              .prepare("INSERT INTO lab_members (lab_id, user_id, role, status, is_primary_lab, accepted_at, created_at, updated_at) VALUES (?, ?, 'owner', 'active', 0, ?, ?, ?)")
+              .run(existing.id, ownerId, now, now, now);
+          }
+          applied.push({ cliaNumber: p.cliaNumber, labId: existing.id, action: "reused", isRepository: p.isRepository });
+        }
+      }
+
+      // Owner is the org_owner (insert if missing).
+      const existingMember = sqlite.prepare("SELECT id FROM organization_members WHERE organization_id = ? AND user_id = ?").get(orgId, ownerId) as any;
+      if (!existingMember) {
+        sqlite
+          .prepare("INSERT INTO organization_members (organization_id, user_id, org_role, status, created_at, updated_at) VALUES (?, ?, 'org_owner', 'active', ?, ?)")
+          .run(orgId, ownerId, now, now);
+      }
+
+      // Seat pool.
+      if (plannedPool != null) {
+        sqlite.prepare("UPDATE organizations SET active_seat_pool = ?, updated_at = ? WHERE id = ?").run(plannedPool, now, orgId);
+      }
+      sqlite.exec("COMMIT");
+
+      const orgRow = sqlite.prepare("SELECT id, name, billing_owner_user_id, plan, active_seat_pool FROM organizations WHERE id = ?").get(orgId);
+      console.log(`[admin/organizations/provision-system] org=${orgId} owner=${ownerId} labs=${JSON.stringify(applied.map((a) => ({ c: a.cliaNumber, id: a.labId, a: a.action })))}`);
+      res.json({ ok: true, organization: orgRow, labs: applied });
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[admin/organizations/provision-system] failed:", err.message);
+      res.status(500).json({ error: err.message || "provision failed" });
+    }
   });
 
   // On-demand path for the nightly linearity-exemption drop guard. Read-only:
