@@ -29,7 +29,7 @@ import { auditVeritamapConsistency } from "./veritamapConsistency";
 import { auditSystemOwnership } from "./systemOwnershipAudit";
 import { computeBackfillCandidates } from "./organizationBackfill";
 import { orgSeatCapForOwner } from "./organizationSeats";
-import { orgRoleForUserOnLab, labRoleFromOrgRole } from "./organizationRoles";
+import { orgRoleForUserOnLab, labRoleFromOrgRole, transferBlockedOutOfOrg, isActiveOrgMember, resolveOwnerOrgId } from "./organizationRoles";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard";
@@ -6704,6 +6704,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         `INSERT INTO lab_members (lab_id, user_id, role, status, is_primary_lab, accepted_at, created_at, updated_at)
          VALUES (?, ?, 'owner', 'active', 0, ?, ?, ?)`
       ).run(newLabId, req.userId, now, now, now);
+      // PR 2c: a new lab created by an owner whose existing labs already belong
+      // to an organization inherits that org, so a growing system stays linked.
+      // Standalone owners (no org) are unaffected. The just-inserted lab still
+      // has organization_id NULL, so resolveOwnerOrgId ignores it.
+      const inheritOrgId = resolveOwnerOrgId((db as any).$client, req.userId);
+      if (inheritOrgId != null) {
+        (db as any).$client.prepare("UPDATE labs SET organization_id = ?, updated_at = ? WHERE id = ?").run(inheritOrgId, now, newLabId);
+      }
       const newOwnerMembership = (db as any).$client.prepare(
         "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?"
       ).get(newLabId, req.userId);
@@ -10862,7 +10870,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (newOwnerId === req.userId) return res.status(400).json({ error: "Cannot transfer ownership to yourself" });
 
     const sqlite = (db as any).$client;
-    const lab = sqlite.prepare("SELECT id, owner_user_id, lab_name FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    const lab = sqlite.prepare("SELECT id, owner_user_id, lab_name, organization_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
     if (!lab) return res.status(404).json({ error: "Lab not found" });
     if (lab.owner_user_id !== req.userId) {
       // Defensive: scope says role='owner' but labs.owner_user_id is someone else. Bail rather than mutate.
@@ -10873,6 +10881,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(req.scope.labId, newOwnerId) as any;
     if (!newOwnerMember) {
       return res.status(404).json({ error: "Target user is not an active member of this lab; invite them first" });
+    }
+    // PR 2c (docs/SYSTEM_ENTITY_DESIGN.md): a lab that belongs to an organization
+    // may not be transferred OUT of it. The new owner must be an active member of
+    // that same org, otherwise the transfer would orphan the lab from the system.
+    // Detach the lab from the org first to move it out. Standalone labs
+    // (organization_id NULL) are unaffected.
+    const labOrgId = lab.organization_id ?? null;
+    if (labOrgId != null && transferBlockedOutOfOrg(labOrgId, isActiveOrgMember(sqlite, newOwnerId, labOrgId))) {
+      return res.status(403).json({
+        error: "This lab belongs to an organization. Transfer it to a member of that organization, or detach it from the organization first.",
+        code: "ORG_LAB_TRANSFER_BLOCKED",
+      });
     }
     const oldOwnerMember = sqlite.prepare(
       "SELECT id, user_id, role, is_primary_lab FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'"
