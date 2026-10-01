@@ -78,3 +78,31 @@ export function computeOrgInvoice(items: NormalizedLineItem[]): {
     perLab,
   };
 }
+
+// ── Phase 3c: org subscription covers its member labs (additive) ────────────
+// Option 1 bills the system once for all its labs, so an org-linked lab inherits
+// the organization's subscription coverage. This is applied additively: we take
+// the LATER of the lab's own expiry and the org's, so org coverage can only
+// EXTEND a lab's access, never reduce it. Standalone labs (no org) are untouched.
+
+// Pure: the later (more generous) of two ISO expiry strings. null means "no
+// expiry on this side" and loses to any real date; two nulls stay null.
+export function laterExpiry(a: string | null | undefined, b: string | null | undefined): string | null {
+  if (!a) return b ?? null;
+  if (!b) return a ?? null;
+  return new Date(a).getTime() >= new Date(b).getTime() ? a : b;
+}
+
+// SQLite: the subscription_expires_at of the organization that owns `labId`, or
+// null when the lab is standalone (organization_id NULL) or the org tables are
+// absent. Used by labScopeMiddleware to overlay org coverage onto the lab.
+export function orgSubscriptionExpiryForLab(sqlite: any, labId: number): string | null {
+  try {
+    const row = sqlite
+      .prepare("SELECT o.subscription_expires_at AS exp FROM labs l JOIN organizations o ON o.id = l.organization_id WHERE l.id = ? AND l.organization_id IS NOT NULL LIMIT 1")
+      .get(labId) as any;
+    return row?.exp ?? null;
+  } catch {
+    return null;
+  }
+}

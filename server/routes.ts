@@ -31,7 +31,7 @@ import { computeBackfillCandidates } from "./organizationBackfill";
 import { orgSeatCapForOwner } from "./organizationSeats";
 import { orgRoleForUserOnLab, labRoleFromOrgRole, transferBlockedOutOfOrg, isActiveOrgMember, resolveOwnerOrgId } from "./organizationRoles";
 import { planProvisionLabs, accreditationFlagsFor } from "./organizationProvision";
-import { normalizeLineItems, computeOrgInvoice } from "./organizationBilling";
+import { normalizeLineItems, computeOrgInvoice, laterExpiry, orgSubscriptionExpiryForLab } from "./organizationBilling";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard";
@@ -6856,6 +6856,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     let role: string | null = baseRole;
     if (baseRole !== "owner" && orgLabRole === "admin") role = "admin";
 
+    // Phase 3c (docs/SYSTEM_ENTITY_DESIGN.md): an org-linked lab inherits the
+    // organization's subscription coverage (Option 1 bills the system once for
+    // all its labs). Additive only: take the LATER of the lab's own expiry and
+    // the org's, so org coverage can EXTEND access but never shorten it. The
+    // trial hard-lock above is unaffected (it reads labFields directly), and a
+    // standalone lab (no org) gets orgExpiry=null, so its value is unchanged.
+    const effectiveSubExpiry = laterExpiry(labFields.subscription_expires_at, orgSubscriptionExpiryForLab(sqlite, labId));
+
     req.scope = {
       labId,
       userId,
@@ -6876,7 +6884,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // no existing route reads this field.
         study_credits: labFields.study_credits,
         subscription_status: labFields.subscription_status,
-        subscription_expires_at: labFields.subscription_expires_at,
+        // Phase 3c: org coverage overlaid (later of lab's own and the org's).
+        subscription_expires_at: effectiveSubExpiry,
         plan_expires_at: labFields.plan_expires_at,
         stripe_customer_id: labFields.stripe_customer_id,
         lab_name: labFields.lab_name,
