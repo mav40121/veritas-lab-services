@@ -9,6 +9,7 @@ import {
   PRECISION_FAQ,
   TJC_INSPECTION_FAQ,
   MOCK_INSPECTION_FAQ,
+  CHOOSE_SOFTWARE_FAQ,
   CPRT_FAQ,
   MANUAL_LOGS_FAQ,
   REFINT_ARTICLE_FAQ,
@@ -488,6 +489,17 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
       ],
     }),
   },
+  "/resources/how-to-choose-lab-compliance-software": {
+    title: "How to Choose Lab Compliance Software, 2026 Buyer's Guide",
+    description: "A former Joint Commission surveyor's six-question guide to evaluating lab compliance software for a clinical laboratory: accreditor fit, lifecycle coverage, surveyor-defensible output, PHI risk, who built it, and pricing.",
+    jsonLd: articleJsonLd({
+      headline: "How to Choose Lab Compliance Software, 2026 Buyer's Guide",
+      description: "A former Joint Commission surveyor's six-question guide to evaluating lab compliance software for a clinical laboratory: accreditor fit, lifecycle coverage, surveyor-defensible output, PHI risk, who built it, and pricing.",
+      articleBody: "Lab compliance software helps a clinical laboratory document and maintain what CLIA and its accreditor expect: performance verification, proficiency testing, quality control, competency, policies, personnel, and inspection readiness. Choosing one is less about counting features than about one question: will its output hold up in front of a surveyor. Evaluate six things. Does it match your accreditor, crosswalked to CLIA plus TJC, CAP, or COLA, not a generic checklist. Does it cover the whole compliance lifecycle or just one piece. Will its outputs survive a surveyor, stating the regulatory determination, citing the 42 CFR Part 493 section, and carrying a director signature block on the page with the results. Does it store protected health information, adding a HIPAA surface you may not need. Who built it, and have they conducted surveys. How does it price, and can you try it on transparent published pricing with a real free trial. Sections: six questions to ask; the kinds of tools you will find; where VeritaAssure fits; frequently asked questions.",
+      path: "/resources/how-to-choose-lab-compliance-software",
+      datePublished: "2026-10-01",
+    }),
+  },
   "/resources/how-to-validate-veritacheck-clia": {
     title: "How to Validate VeritaCheck\u2122 for CLIA Compliance | Veritas Lab Services",
     description: "Software validation documentation for VeritaCheck\u2122 under CLIA requirements. How to validate laboratory information systems and comply with 42 CFR 493.1252.",
@@ -734,6 +746,15 @@ const mockInspectionBreadcrumb: Record<string, unknown> = {
     { "@type": "ListItem", position: 3, name: "What Happens During a TJC Laboratory Inspection" },
   ],
 };
+const chooseSoftwareBreadcrumb: Record<string, unknown> = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    { "@type": "ListItem", position: 1, name: "Home", item: `${BASE_URL}/` },
+    { "@type": "ListItem", position: 2, name: "Resources", item: `${BASE_URL}/resources` },
+    { "@type": "ListItem", position: 3, name: "How to Choose Lab Compliance Software" },
+  ],
+};
 const tjcSurveyHowTo: Record<string, unknown> = {
   "@context": "https://schema.org",
   "@type": "HowTo",
@@ -767,6 +788,7 @@ const ROUTE_FAQ: Record<string, FaqQA[]> = {
   "/resources/how-to-perform-method-comparison-study": METHODCOMP_FAQ,
   "/resources/precision-verification-report-interpretation-guide": PRECISION_FAQ,
   "/resources/tjc-laboratory-inspection-what-to-expect": MOCK_INSPECTION_FAQ,
+  "/resources/how-to-choose-lab-compliance-software": CHOOSE_SOFTWARE_FAQ,
   "/resources/cost-per-reportable-test-four-layer-framework": CPRT_FAQ,
   "/resources/manual-logs-why-most-labs-should-stop": MANUAL_LOGS_FAQ,
 };
@@ -803,6 +825,7 @@ const ROUTE_EXTRA_JSONLD: Record<string, Record<string, unknown>[]> = {
       "term-tracer-methodology",
     ),
   ],
+  "/resources/how-to-choose-lab-compliance-software": [chooseSoftwareBreadcrumb],
   "/resources/cost-per-reportable-test-four-layer-framework": [
     definedTermJsonLd(
       "Cost per reportable test",
