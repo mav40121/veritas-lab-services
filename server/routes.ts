@@ -31749,6 +31749,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       sqlite.prepare("DELETE FROM staff_position_descriptions WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM policy_quiz_questions WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM intacct_export_config WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM organization_billing_line_items WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM lab_audit_log WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM lab_members WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM labs WHERE id = ?").run(id);
