@@ -80,7 +80,7 @@ export default function TeaLookupPage() {
           <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
           <div className="text-amber-800 dark:text-amber-300">
             <strong>Important:</strong> CLIA TEa values are federally published as the PT acceptable performance criterion. Most labs (with medical director or designee approval under §493.1253(b)(2) and §493.1255(b)(3)) adopt the same value as the calibration verification acceptance criterion. Your lab may adopt tighter internal criteria (ADLM recommends half of CLIA PT TEa for enhanced quality). Always verify against the current{" "}
-            <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">eCFR</a> before use in compliance decisions.
+            <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">eCFR</a> before use in compliance decisions. If you are choosing a platform to apply these limits automatically, here is how to choose <Link href="/resources/how-to-choose-lab-compliance-software" className="underline font-medium hover:text-amber-900">lab compliance software</Link>.
           </div>
         </div>
 

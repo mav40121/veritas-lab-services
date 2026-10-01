@@ -112,7 +112,7 @@ export default function ArticleMockInspectionPage() {
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">From finding to corrective action</h2>
           <p>A finding is only closed when the corrective action is defensible, and a defensible corrective action has three parts: the root cause, the action taken, and the verification that the action worked. Naming the root cause is what separates a real fix from a promise to try harder. The verification of effectiveness is what a surveyor looks for on the next visit. Final sign-off rests with the medical director or designee. A mock inspection that produces findings without corrective actions has only rehearsed the bad news.</p>
 
-          <p>That is the work VeritaAssure™ was built to make repeatable, from the proficiency testing and correlation records a surveyor pulls first to the competency, policy, and readiness documentation the tracers eventually reach. The method in this article works with any tool or none. What matters is that you run it before someone else does.</p>
+          <p>That is the work VeritaAssure™ was built to make repeatable, from the proficiency testing and correlation records a surveyor pulls first to the competency, policy, and readiness documentation the tracers eventually reach. If you are evaluating a platform to manage this, here is how to choose <Link href="/resources/how-to-choose-lab-compliance-software" className="text-primary hover:underline">lab compliance software</Link>. The method in this article works with any tool or none. What matters is that you run it before someone else does.</p>
 
           <div className="rounded-xl border-2 border-primary/20 bg-primary/5 p-6 my-8">
             <div className="flex items-start gap-3">

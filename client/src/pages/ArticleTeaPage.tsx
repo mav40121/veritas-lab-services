@@ -205,6 +205,7 @@ return (
             <li>If all levels fall within TEa: <strong>PASS</strong>. If any level exceeds TEa: <strong>FAIL</strong>. Investigate before reporting patient results</li>
             <li>Document the TEa source (42 CFR citation) in your study report for surveyor reference</li>
           </ol>
+          <p>If you are evaluating a platform to manage verification like this across your whole test menu, here is how to choose <Link href="/resources/how-to-choose-lab-compliance-software" className="text-primary hover:underline">lab compliance software</Link>.</p>
 
           {/* VeritaCheck CTA */}
           <div className="rounded-xl border-2 border-primary/20 bg-primary/5 p-6 my-8">

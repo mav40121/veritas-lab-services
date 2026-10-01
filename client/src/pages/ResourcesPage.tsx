@@ -20,6 +20,17 @@ const articles = [
     featured: true,
   },
   {
+    slug: "how-to-choose-lab-compliance-software",
+    title: "How to Choose Lab Compliance Software: A 2026 Buyer's Guide",
+    summary: "A former Joint Commission surveyor's six-question guide to evaluating lab compliance software for a clinical laboratory: accreditor fit, lifecycle coverage, surveyor-defensible output, PHI risk, who built it, and pricing.",
+    category: "Buyer's Guide",
+    readTime: "9 min read",
+    author: "Michael Veri",
+    date: "October 2026",
+    tags: ["Buyer's Guide", "Lab Compliance Software", "Accreditation", "CLIA", "VeritaAssure™"],
+    featured: true,
+  },
+  {
     slug: "post-analytical-critical-values-corrected-reports",
     title: "The Last Mile: Why a Correct Result Still Reaches the Patient Wrong",
     summary: "A former Joint Commission surveyor on the post-analytical phase: the critical value list your medical staff must own, the read-back that confirms a call was actually received, the corrected report CLIA requires you to phone in under 42 CFR 493.1291(k), and the autoverification rules quietly releasing results no one reads.",

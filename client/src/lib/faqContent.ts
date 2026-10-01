@@ -21,6 +21,26 @@ export interface FaqCategory {
   items: FaqQA[];
 }
 
+// /resources/how-to-choose-lab-compliance-software  (visible "Frequently Asked Questions")
+export const CHOOSE_SOFTWARE_FAQ: FaqQA[] = [
+  {
+    q: "What is lab compliance software?",
+    a: "Lab compliance software is a platform that helps a clinical laboratory document and maintain the requirements CLIA and its accreditor expect: performance verification, proficiency testing, quality control, competency assessment, policy control, personnel records, and inspection readiness. The best tools tie each record to the specific regulatory requirement a surveyor will check, so the laboratory can show a defensible answer on demand."
+  },
+  {
+    q: "What should I look for when choosing lab compliance software?",
+    a: "Evaluate six things: whether its content is crosswalked to your specific accreditor (CLIA, CAP, TJC, or COLA); whether it covers the full compliance lifecycle or just one task; whether its outputs cite the CFR requirement and carry a director signature block so they survive a survey; whether it stores protected health information and adds HIPAA risk; who built it and whether they have conducted surveys; and whether it offers transparent pricing and a real free trial."
+  },
+  {
+    q: "Is a laboratory information system (LIS) the same as compliance software?",
+    a: "No. A laboratory information system runs and reports testing; compliance is a secondary feature at best. Compliance software is purpose-built to document performance verification, proficiency testing, quality control, competency, policy, and inspection readiness in a form a surveyor accepts. Many laboratories run both."
+  },
+  {
+    q: "Does lab compliance software need to store patient data?",
+    a: "It should not. The core compliance work runs on de-identified study data, lot numbers, and quality control values, none of which is protected health information. A platform that avoids storing PHI removes a HIPAA and breach-risk surface from the laboratory's compliance program."
+  },
+];
+
 // /resources/clia-tea-what-lab-directors-dont-know  (visible "Frequently Asked Questions")
 export const TEA_ARTICLE_FAQ: FaqQA[] = [
             {
