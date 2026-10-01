@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import { useAuth } from "@/components/AuthContext";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
@@ -39,6 +39,13 @@ export default function ReadinessDashboardPage() {
   const { user, isLoggedIn } = useAuth();
   const activeLabId = useActiveLabId();
   const hasPlanAccess = !!user && SUITE_PLANS.includes(user.plan);
+  // Per-system overview: the lab switcher links each org's "Network overview"
+  // entry in with ?org=<id>, so the command center can scope to that one system.
+  const search = useSearch();
+  const orgFilter = (() => {
+    const n = Number(new URLSearchParams(search).get("org"));
+    return Number.isInteger(n) && n > 0 ? n : null;
+  })();
 
   const [data, setData] = useState<Readiness | null>(null);
   const [rollup, setRollup] = useState<Readiness[]>([]);
@@ -100,12 +107,14 @@ export default function ReadinessDashboardPage() {
         // first — a regional owner covering many sites wants the roll-up, not
         // one lab's cards. The active lab's own detail follows below. Single-lab
         // accounts see only their lab's detail (no roll-up), order unchanged.
-        const isMultiLab = rollup.length > 1;
-        const s = isMultiLab ? summarizeRollup(rollup as any) : null;
-        // Phase 1 org grouping: when every site in the roll-up belongs to one
-        // organization, name the network after it; a mixed set keeps the generic
-        // label (no user spans multiple orgs today).
-        const rollupOrgNames = Array.from(new Set(rollup.map(l => l.organization_name).filter(Boolean))) as string[];
+        // When the switcher links in with ?org=<id>, scope the roll-up to that
+        // organization's sites so the command center shows just that system, not
+        // every lab the user is on. No filter = the full roll-up (unchanged).
+        const scopedRollup = orgFilter != null ? rollup.filter(l => (l.organization_id ?? null) === orgFilter) : rollup;
+        const isMultiLab = scopedRollup.length > 1;
+        const s = isMultiLab ? summarizeRollup(scopedRollup as any) : null;
+        // Name the network after its organization when the roll-up is one org.
+        const rollupOrgNames = Array.from(new Set(scopedRollup.map(l => l.organization_name).filter(Boolean))) as string[];
         const networkTitle = rollupOrgNames.length === 1 ? `Network readiness: ${rollupOrgNames[0]}` : "Network readiness";
         const cellBg = (st: string) =>
           st === "overdue" ? "bg-red-500/15 text-red-700 dark:text-red-300"
