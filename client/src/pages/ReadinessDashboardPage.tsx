@@ -15,6 +15,8 @@ interface ModuleReadiness {
 }
 interface Readiness {
   lab_id: number; lab_name: string | null; clia_number: string | null;
+  // System/Organization entity (Phase 1): set when the lab belongs to an org.
+  organization_id?: number | null; organization_name?: string | null;
   modules: ModuleReadiness[];
   overall: { modules_total: number; modules_ok: number; attention_items: number; overdue_items: number; status: "ok" | "attention" | "overdue" };
 }
@@ -100,6 +102,11 @@ export default function ReadinessDashboardPage() {
         // accounts see only their lab's detail (no roll-up), order unchanged.
         const isMultiLab = rollup.length > 1;
         const s = isMultiLab ? summarizeRollup(rollup as any) : null;
+        // Phase 1 org grouping: when every site in the roll-up belongs to one
+        // organization, name the network after it; a mixed set keeps the generic
+        // label (no user spans multiple orgs today).
+        const rollupOrgNames = Array.from(new Set(rollup.map(l => l.organization_name).filter(Boolean))) as string[];
+        const networkTitle = rollupOrgNames.length === 1 ? `Network readiness: ${rollupOrgNames[0]}` : "Network readiness";
         const cellBg = (st: string) =>
           st === "overdue" ? "bg-red-500/15 text-red-700 dark:text-red-300"
           : st === "attention" ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
@@ -148,7 +155,7 @@ export default function ReadinessDashboardPage() {
         const networkView = s && (
           <div className="space-y-4">
             <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-base">Network readiness</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-base">{networkTitle}</CardTitle></CardHeader>
               <CardContent>
                 <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
                   <div><div className="text-2xl font-bold">{s.ready}/{s.sites}</div><div className="text-xs text-muted-foreground">sites ready</div></div>

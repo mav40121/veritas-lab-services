@@ -268,15 +268,31 @@ anything customer-facing.
 ## 8. Migration of existing implicit systems
 
 Handled by the Phase 1 backfill endpoint, idempotent and dry-runnable, one system
-at a time with a per-system verify:
+at a time with a per-system verify.
 
-- **San Carlos** is the first migration test case. It carries the known siloing
-  shape (member labs that may sit under different owners), so it exercises the
-  guard from Phase 0 and the backfill's owner-reconciliation path.
-- **Gameday** (Mike Hiltunen, client labs 19/29/30) is the clean multi-lab case:
-  one owner, several labs, no repository. Good control.
+CORRECTION (Phase 0 audit, 2026-09-30): the earlier draft named San Carlos as the
+siloing-risk case. The live audit showed the opposite.
+
+- **San Carlos** (SCAHC, owner #37, labs 2 and 6) is CLEAN at the ownership
+  level: both labs sit under one owner. It is the clean multi-lab case, not the
+  risk case. Backfilled as org#3.
+- **Gameday** (Mike Hiltunen, owner #66, labs 19/29/30) is where the real drift
+  was: three of Mike's seats on his own labs were parented to a different owner
+  (the seat-pool-drift shape). Phase 0 deactivated those vestigial self-seats,
+  so the ownership audit now reads zero orphans. Backfilled as org#1.
+- **UMass Milford** (owner #33, labs 4/5) backfilled as org#2; **US Oncology
+  Network (Demo)** (owner #69, labs 25-28, all `is_demo`) backfilled as org#4 as
+  a safe test case for the roll-up/switcher grouping.
 - **Heywood** (2 labs, verbal yes) and **Lifepoint / Angela** (Raleigh General,
-  with a repository lab) validate the repository-lab-in-an-org path.
+  with a repository lab) will validate the repository-lab-in-an-org path when
+  they sign.
+
+Deferred guard (from Phase 0): the transfer-ownership and lab-create guard was
+deferred because, before the entity existed, there was nothing to protect (the
+transfer route already re-parents seats atomically). Now that `organizations`
+exists, the guard has a concrete meaning for Phase 2: a lab with an
+`organization_id` cannot be transferred to an owner outside the org without the
+org link moving too. Implement it alongside the Phase 2 seat/role move.
 
 Note: Gameday labs are REAL client data. No fabricated writes during migration
 (CLAUDE.md §8 DATA PROVENANCE RULE). Migration only sets `organization_id` and
