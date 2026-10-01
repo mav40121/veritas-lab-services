@@ -31124,6 +31124,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(auditSystemOwnership((db as any).$client));
   });
 
+  // GET /api/admin/organizations — Phase 1 read view of the System/Organization
+  // entity (docs/SYSTEM_ENTITY_DESIGN.md). Read-only: lists organizations with
+  // their linked member labs and active member count. Empty until the backfill
+  // (PR B) runs. Proves the schema is live once deployed. ADMIN_SECRET-gated.
+  app.get("/api/admin/organizations", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const sqlite = (db as any).$client;
+    const orgs = sqlite.prepare("SELECT * FROM organizations ORDER BY id").all() as any[];
+    const organizations = orgs.map((o: any) => {
+      const labs = sqlite
+        .prepare("SELECT id, lab_name, clia_number, is_repository, plan FROM labs WHERE organization_id = ? ORDER BY id")
+        .all(o.id);
+      const memberCount = (sqlite
+        .prepare("SELECT COUNT(*) AS n FROM organization_members WHERE organization_id = ? AND status != 'deactivated'")
+        .get(o.id) as any).n;
+      return { ...o, labs, memberCount };
+    });
+    res.json({ organizations, count: organizations.length });
+  });
+
   // On-demand path for the nightly linearity-exemption drop guard. Read-only:
   // compares each lab's two most recent snapshots and reports maps whose active
   // exemption count fell sharply (a wipe). Same audit the 05:00 UTC job runs.

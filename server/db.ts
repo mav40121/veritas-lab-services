@@ -2220,7 +2220,84 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
   // endpoint) write — same non-destructive ALTER+DEFAULT discipline as above.
   ensure("medical_director_email", "ALTER TABLE labs ADD COLUMN medical_director_email TEXT");
   ensure("medical_director_name",  "ALTER TABLE labs ADD COLUMN medical_director_name TEXT");
+  // 2026-09-30 — System/Organization entity (Phase 1, docs/SYSTEM_ENTITY_DESIGN.md).
+  // Nullable link to organizations.id: NULL = standalone lab (behaves exactly as
+  // today; this is the entire backward-compat guarantee), non-null = member of
+  // that system. Added empty with no backfill here (the admin backfill endpoint
+  // links the existing implicit systems). Plain INTEGER, not a REFERENCES clause,
+  // because organizations is created just below this block (same pattern as
+  // parent_warehouse_lab_id). Pure grouping in Phase 1; no seat/role/billing read
+  // from it yet, so the column is inert and fully reversible until consumed.
+  ensure("organization_id",        "ALTER TABLE labs ADD COLUMN organization_id INTEGER");
 }
+
+// ── Organizations (System entity) — Phase 1 of docs/SYSTEM_ENTITY_DESIGN.md ──
+// A first-class "system": one customer that owns multiple labs. Introduced as a
+// PURE GROUPING. labs.organization_id links a lab to its system; the readiness
+// roll-up and lab switcher will group by it (PR C). Seats, roles, and billing
+// are NOT read from these tables yet (Phase 2/3). They exist now so the admin
+// backfill (PR B) can link the already-live implicit systems (labs sharing one
+// owner_user_id) with zero behavior change. Fully reversible: inert until
+// consumed. Every column is in the CREATE below so a fresh boot is complete;
+// the PRAGMA-checked ALTERs guard an earlier partial ship (CLAUDE.md NEW DB
+// TABLE RULE).
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS organizations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    billing_owner_user_id INTEGER,
+    plan TEXT,
+    active_seat_pool INTEGER,
+    staff_seat_band TEXT,
+    subscription_status TEXT,
+    subscription_expires_at TEXT,
+    stripe_customer_id TEXT,
+    stripe_subscription_id TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (billing_owner_user_id) REFERENCES users(id)
+  );
+  CREATE TABLE IF NOT EXISTS organization_members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    org_role TEXT NOT NULL DEFAULT 'org_admin',
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (organization_id) REFERENCES organizations(id),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(organization_id, user_id)
+  );
+`);
+// Defensive ALTERs: no-ops on the fresh CREATE above; add any column missing
+// from an earlier partial ship. created_at/updated_at fall back to plain TEXT
+// because SQLite cannot ALTER ADD a column with a non-constant default.
+{
+  const orgCols = (sqlite.prepare("PRAGMA table_info(organizations)").all() as any[]).map((c: any) => c.name);
+  const ensureOrg = (col: string, sql: string) => { if (!orgCols.includes(col)) { try { sqlite.exec(sql); orgCols.push(col); } catch {} } };
+  ensureOrg("name",                    "ALTER TABLE organizations ADD COLUMN name TEXT");
+  ensureOrg("billing_owner_user_id",   "ALTER TABLE organizations ADD COLUMN billing_owner_user_id INTEGER");
+  ensureOrg("plan",                    "ALTER TABLE organizations ADD COLUMN plan TEXT");
+  ensureOrg("active_seat_pool",        "ALTER TABLE organizations ADD COLUMN active_seat_pool INTEGER");
+  ensureOrg("staff_seat_band",         "ALTER TABLE organizations ADD COLUMN staff_seat_band TEXT");
+  ensureOrg("subscription_status",     "ALTER TABLE organizations ADD COLUMN subscription_status TEXT");
+  ensureOrg("subscription_expires_at", "ALTER TABLE organizations ADD COLUMN subscription_expires_at TEXT");
+  ensureOrg("stripe_customer_id",      "ALTER TABLE organizations ADD COLUMN stripe_customer_id TEXT");
+  ensureOrg("stripe_subscription_id",  "ALTER TABLE organizations ADD COLUMN stripe_subscription_id TEXT");
+  ensureOrg("created_at",              "ALTER TABLE organizations ADD COLUMN created_at TEXT");
+  ensureOrg("updated_at",              "ALTER TABLE organizations ADD COLUMN updated_at TEXT");
+
+  const omCols = (sqlite.prepare("PRAGMA table_info(organization_members)").all() as any[]).map((c: any) => c.name);
+  const ensureOm = (col: string, sql: string) => { if (!omCols.includes(col)) { try { sqlite.exec(sql); omCols.push(col); } catch {} } };
+  ensureOm("org_role",   "ALTER TABLE organization_members ADD COLUMN org_role TEXT NOT NULL DEFAULT 'org_admin'");
+  ensureOm("status",     "ALTER TABLE organization_members ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  ensureOm("created_at", "ALTER TABLE organization_members ADD COLUMN created_at TEXT");
+  ensureOm("updated_at", "ALTER TABLE organization_members ADD COLUMN updated_at TEXT");
+}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_org_members_org  ON organization_members(organization_id, status)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_org_members_user ON organization_members(user_id, status)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_labs_org ON labs(organization_id) WHERE organization_id IS NOT NULL`); } catch {}
 
 // users.default_lab_id — bare-route redirect target (per doc Section 4).
 // Updated on every authenticated page hit in Phase 2; not the source of
