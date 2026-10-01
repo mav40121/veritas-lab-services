@@ -6454,10 +6454,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const memberships = (db as any).$client.prepare(`
       SELECT
         lm.id AS membership_id,
-        lm.lab_id,
-        lm.role,
+        l.id AS lab_id,
+        COALESCE(lm.role, 'admin') AS role,
         lm.permissions_json,
-        lm.is_primary_lab,
+        COALESCE(lm.is_primary_lab, 0) AS is_primary_lab,
         lm.last_active_at,
         l.clia_number,
         l.lab_name,
@@ -6485,11 +6485,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             AND lc.expiration_date != ''
           ORDER BY lc.expiration_date DESC
           LIMIT 1) AS clia_cert_expiration_date
-      FROM lab_members lm
-      JOIN labs l ON lm.lab_id = l.id
-      WHERE lm.user_id = ? AND lm.status = 'active'
-      ORDER BY lm.is_primary_lab DESC, lm.id ASC
-    `).all(req.userId) as any[];
+      FROM labs l
+      LEFT JOIN lab_members lm ON lm.lab_id = l.id AND lm.user_id = ? AND lm.status = 'active'
+      WHERE (
+        lm.id IS NOT NULL
+        OR l.organization_id IN (
+          SELECT om.organization_id FROM organization_members om
+          WHERE om.user_id = ? AND om.status = 'active' AND om.org_role IN ('org_owner', 'org_admin')
+        )
+      )
+      ORDER BY COALESCE(lm.is_primary_lab, 0) DESC, l.id ASC
+    `).all(req.userId, req.userId) as any[];
 
     // 2026-06-12 (account-seats guard fix): is_primary_lab FOLLOWS the NavBar
     // switcher (POST /api/labs/me/default flips it), so it cannot identify the
@@ -6528,6 +6534,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // skew; a null org id renders the lab ungrouped exactly as before.
       organizationId: m.organization_id ?? null,
       organizationName: m.organization_name ?? null,
+      // Phase 2d: this lab is visible purely via an org_owner/org_admin role on
+      // its organization (no per-lab membership). role is 'admin' in that case.
+      viaOrg: m.membership_id == null,
       // NYS CLEP Phase-0: jurisdiction regime (default CLIA). nysSuggested is a
       // soft hint (owner's physical state is NY) that never auto-applies.
       primaryRegime: m.primary_regime || 'CLIA',
@@ -26862,9 +26871,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasReadinessAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "A VeritaAssure subscription is required" });
     const client = (db as any).$client;
     const userId = req.user?.userId;
+    // Phase 2d: a lab shows in the roll-up when the user is an active lab member
+    // OR an active org_owner/org_admin of the lab's organization (so a system
+    // governance user sees the whole network). Repository labs stay excluded.
     const labs = client.prepare(
-      "SELECT DISTINCT l.id, l.lab_name, l.clia_number, l.organization_id, (SELECT o.name FROM organizations o WHERE o.id = l.organization_id) AS organization_name FROM labs l JOIN lab_members m ON m.lab_id = l.id WHERE m.user_id = ? AND m.status = 'active' AND (l.is_repository IS NULL OR l.is_repository = 0) ORDER BY l.lab_name ASC"
-    ).all(userId) as any[];
+      `SELECT DISTINCT l.id, l.lab_name, l.clia_number, l.organization_id,
+              (SELECT o.name FROM organizations o WHERE o.id = l.organization_id) AS organization_name
+         FROM labs l
+         LEFT JOIN lab_members m ON m.lab_id = l.id AND m.user_id = ? AND m.status = 'active'
+        WHERE (l.is_repository IS NULL OR l.is_repository = 0)
+          AND (
+            m.id IS NOT NULL
+            OR l.organization_id IN (
+              SELECT om.organization_id FROM organization_members om
+              WHERE om.user_id = ? AND om.status = 'active' AND om.org_role IN ('org_owner', 'org_admin')
+            )
+          )
+        ORDER BY l.lab_name ASC`
+    ).all(userId, userId) as any[];
     res.json(labs.map(l => ({ lab_id: l.id, lab_name: l.lab_name, clia_number: l.clia_number, organization_id: l.organization_id ?? null, organization_name: l.organization_name ?? null, ...computeLabReadiness(client, l.id) })));
   });
 

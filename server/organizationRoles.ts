@@ -55,6 +55,23 @@ export function orgDerivedLabRole(sqlite: any, userId: number, labId: number): "
   return labRoleFromOrgRole(orgRoleForUserOnLab(sqlite, userId, labId));
 }
 
+// Phase 2d: overview visibility. A lab appears in a user's lab switcher and
+// readiness roll-up when they are an active lab member OR an active
+// org_owner/org_admin of the lab's organization. This lets a system governance
+// user (designated org_admin via POST /api/admin/organizations/members) see the
+// whole network without a per-lab membership and without a writer seat (org
+// membership creates no user_seats row). Mirrors the SQL in /api/labs/me and
+// /api/readiness/rollup. Mirrored by scripts/verify-org-overview.mjs.
+export function labVisibleToUser(args: {
+  isActiveLabMember: boolean;
+  labOrganizationId: number | null;
+  userOrgAdminOrgIds: number[];
+}): boolean {
+  if (args.isActiveLabMember) return true;
+  if (args.labOrganizationId != null && args.userOrgAdminOrgIds.includes(args.labOrganizationId)) return true;
+  return false;
+}
+
 // ── PR 2c: transfer / create guard (docs/SYSTEM_ENTITY_DESIGN.md) ───────────
 // Q3 (Michael 2026-10-01): a lab that belongs to an organization may not be
 // transferred OUT of that organization, and a new lab created by an owner who
