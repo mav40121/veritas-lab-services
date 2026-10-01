@@ -28,6 +28,7 @@ import { evaluateManualDiff } from "./rumke";
 import { auditVeritamapConsistency } from "./veritamapConsistency";
 import { auditSystemOwnership } from "./systemOwnershipAudit";
 import { computeBackfillCandidates } from "./organizationBackfill";
+import { orgSeatCapForOwner } from "./organizationSeats";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard";
@@ -9836,7 +9837,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const ownerPlan = ownerRow?.plan || "free";
         const planSeatLimit = PLAN_SEATS[ownerPlan] ?? (PLAN_LIMITS as any)[ownerPlan]?.maxAnalysts ?? 1;
         const dbSeats = ownerRow?.seat_count || 0;
-        const activeIncluded = Math.max(dbSeats, planSeatLimit);
+        const activeIncluded = orgSeatCapForOwner(sqlite, lab.owner_user_id, dbSeats, planSeatLimit);
         const addon = getViewOnlyAddOnConfig();
         // Three-type seat model: active (writers), medical director (one free
         // seat per lab, tied to the director designation), staff portal. The
@@ -9996,7 +9997,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const ownerPlan = ownerRow.plan || "free";
     const planSeatLimit = PLAN_SEATS[ownerPlan] ?? (PLAN_LIMITS as any)[ownerPlan]?.maxAnalysts ?? 1;
     const dbSeats = ownerRow.seat_count || 0;
-    const maxActiveSeats = Math.max(dbSeats, planSeatLimit);
+    // Phase 2a: org-aware cap. Org-linked labs draw from organizations.active_seat_pool;
+    // standalone labs keep max(seat_count, PLAN_SEATS[plan]).
+    const maxActiveSeats = orgSeatCapForOwner(sqlite, labOwnerId, dbSeats, planSeatLimit);
     const maxViewOnlySeats = PLAN_VIEW_ONLY_SEATS[ownerPlan] ?? 0;
     // Three-type model: the designated medical director(s) across the owner's
     // labs sit on a free seat and are excluded from the active-seat count.
@@ -28209,7 +28212,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const userRow = (db as any).$client.prepare("SELECT seat_count, plan FROM users WHERE id = ?").get(req.userId) as any;
     const dbSeats = userRow?.seat_count || 1;
     const planMax = (PLAN_LIMITS as any)[userRow?.plan]?.maxAnalysts || 1;
-    const effectiveSeats = Math.max(dbSeats, planMax);
+    // Phase 2a: org-aware cap (org pool when the owner's labs belong to an org).
+    const effectiveSeats = orgSeatCapForOwner((db as any).$client, req.userId, dbSeats, planMax);
     res.json({ seats, seat_count: effectiveSeats });
   });
 
@@ -28225,7 +28229,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Use PLAN_SEATS for new tier plans, fall back to old PLAN_LIMITS for legacy plans
     const planSeatLimit = PLAN_SEATS[userPlan] ?? (PLAN_LIMITS as any)[userPlan]?.maxAnalysts ?? 1;
     const dbSeats = userRow?.seat_count || 0;
-    const maxActiveSeats = Math.max(dbSeats, planSeatLimit);
+    // Phase 2a: org-aware cap (org pool when the owner's labs belong to an org).
+    const maxActiveSeats = orgSeatCapForOwner((db as any).$client, req.userId, dbSeats, planSeatLimit);
     const maxViewOnlySeats = PLAN_VIEW_ONLY_SEATS[userPlan] ?? 0;
     const seatBreakdown = (db as any).$client.prepare(
       `SELECT
@@ -31258,6 +31263,40 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     console.log(`[admin/organizations/backfill] applied=${JSON.stringify(applied.map((r) => ({ o: r.ownerUserId, org: r.orgId, labs: r.labsLinked, err: r.error })))}`);
     res.json({ ok: true, applied });
+  });
+
+  // POST /api/admin/organizations/backfill-seat-pools — Phase 2a migration.
+  // Set each organization's active_seat_pool to its billing owner's current
+  // active-seat cap (max(users.seat_count, PLAN_SEATS[plan])), so the org-aware
+  // gate produces the exact same number the owner had (Q1: pool = current cap).
+  // Idempotent (only writes when the value differs). dryRun returns the plan
+  // without writing. ADMIN_SECRET-gated. Body: { secret, dryRun? }.
+  app.post("/api/admin/organizations/backfill-seat-pools", (req, res) => {
+    const { secret, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const orgs = sqlite
+      .prepare("SELECT id, name, billing_owner_user_id, active_seat_pool FROM organizations ORDER BY id")
+      .all() as any[];
+    const results: any[] = [];
+    let updated = 0;
+    for (const o of orgs) {
+      const owner = o.billing_owner_user_id
+        ? (sqlite.prepare("SELECT plan, seat_count FROM users WHERE id = ?").get(o.billing_owner_user_id) as any)
+        : null;
+      const plan = owner?.plan || "free";
+      const planSeats = PLAN_SEATS[plan] ?? 1;
+      const computedPool = Math.max(owner?.seat_count || 0, planSeats);
+      const willChange = o.active_seat_pool !== computedPool;
+      results.push({ orgId: o.id, name: o.name, billingOwnerUserId: o.billing_owner_user_id, ownerPlan: plan, currentPool: o.active_seat_pool, computedPool, willChange });
+      if (!dryRun && willChange) {
+        sqlite.prepare("UPDATE organizations SET active_seat_pool = ?, updated_at = ? WHERE id = ?").run(computedPool, new Date().toISOString(), o.id);
+        updated++;
+      }
+    }
+    if (dryRun) return res.json({ dryRun: true, results });
+    console.log(`[admin/organizations/backfill-seat-pools] updated=${updated}`);
+    res.json({ ok: true, updated, results });
   });
 
   // On-demand path for the nightly linearity-exemption drop guard. Read-only:
