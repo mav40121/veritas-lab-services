@@ -1,5 +1,7 @@
+import { Fragment } from "react";
 import { Link, useLocation } from "wouter";
 import { useMemberships, type Membership } from "@/hooks/useMemberships";
+import { groupMembershipsByOrg, hasOrgGrouping } from "@/lib/orgGrouping";
 import { useActiveLabId, withLabPrefix } from "@/hooks/useActiveLabId";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { setActiveLabId } from "@/lib/auth";
@@ -176,6 +178,8 @@ export function LabSwitcher() {
   const { memberships, current, switchTo } = state;
 
   const currentSuffix = distinguishingSuffix(current, memberships);
+  const groups = groupMembershipsByOrg(memberships);
+  const showOrgHeaders = hasOrgGrouping(groups);
 
   return (
     <DropdownMenu>
@@ -215,7 +219,21 @@ export function LabSwitcher() {
           Switch lab
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {memberships.map(m => {
+        {groups.map(g => (
+          <Fragment key={g.orgId ?? "ungrouped"}>
+            {showOrgHeaders && (
+              <DropdownMenuLabel className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-foreground">
+                {g.orgId != null ? (
+                  <>
+                    <Building2 size={12} className="text-primary shrink-0" />
+                    <span className="truncate">{g.orgName || "System"}</span>
+                  </>
+                ) : (
+                  "Other labs"
+                )}
+              </DropdownMenuLabel>
+            )}
+            {g.labs.map(m => {
           const isCurrent = m.labId === current.labId;
           const suffix = distinguishingSuffix(m, memberships);
           return (
@@ -281,7 +299,9 @@ export function LabSwitcher() {
               </div>
             </DropdownMenuItem>
           );
-        })}
+            })}
+          </Fragment>
+        ))}
         {(current.role === "owner" || current.role === "admin") && (
           <>
             <DropdownMenuSeparator />
@@ -322,6 +342,8 @@ export function LabSwitcherMobile({ onAfterSwitch }: { onAfterSwitch?: () => voi
   }
   if (!state) return null;
   const { memberships, current, switchTo } = state;
+  const groups = groupMembershipsByOrg(memberships);
+  const showOrgHeaders = hasOrgGrouping(groups);
 
   return (
     <div className="px-1 py-2 border-t border-border mt-2">
@@ -330,7 +352,21 @@ export function LabSwitcherMobile({ onAfterSwitch }: { onAfterSwitch?: () => voi
         <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Switch lab</span>
       </div>
       <div className="flex flex-col">
-        {memberships.map(m => {
+        {groups.map(g => (
+          <Fragment key={g.orgId ?? "ungrouped"}>
+            {showOrgHeaders && (
+              <div className="px-3 pt-2 pb-1 flex items-center gap-1.5 text-[11px] font-semibold text-foreground">
+                {g.orgId != null ? (
+                  <>
+                    <Building2 size={12} className="text-primary shrink-0" />
+                    <span className="truncate">{g.orgName || "System"}</span>
+                  </>
+                ) : (
+                  "Other labs"
+                )}
+              </div>
+            )}
+            {g.labs.map(m => {
           const isCurrent = m.labId === current.labId;
           const suffix = distinguishingSuffix(m, memberships);
           const cert = cliaCertDisplay(m.cliaCertExpirationDate);
@@ -394,7 +430,9 @@ export function LabSwitcherMobile({ onAfterSwitch }: { onAfterSwitch?: () => voi
               </div>
             </button>
           );
-        })}
+            })}
+          </Fragment>
+        ))}
       </div>
     </div>
   );

@@ -45,6 +45,12 @@ export interface Membership {
   // and export watermark. Optional for deploy skew (older responses omit it).
   isDemo?: boolean;
   isRepository?: boolean;
+  // System/Organization entity (Phase 1). Set when this lab belongs to an org
+  // (a multi-lab customer "system"); null/undefined for a standalone lab. The
+  // LabSwitcher groups labs by organizationId under organizationName. Optional
+  // for deploy skew; a missing value renders the lab ungrouped as before.
+  organizationId?: number | null;
+  organizationName?: string | null;
   // Default review interval (months) for a NEW policy on this lab: 24 (biennial,
   // the CLIA/CAP floor) or 12 (annual) for a state that requires it (MA). The
   // VeritaPolicy upload dialog seeds its interval picker from this. Optional for

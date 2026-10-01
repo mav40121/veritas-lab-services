@@ -6468,6 +6468,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         l.is_repository,
         l.primary_regime,
         l.nys_permit_type,
+        l.organization_id,
+        (SELECT o.name FROM organizations o WHERE o.id = l.organization_id) AS organization_name,
         (SELECT sl.lab_address_state FROM staff_labs sl
           WHERE sl.user_id = l.owner_user_id ORDER BY sl.id DESC LIMIT 1) AS owner_state,
         (SELECT lc.expiration_date
@@ -6516,6 +6518,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Shared document/policy library lab (not a compliance site): excluded from
       // the readiness roll-up; the switcher labels it so it does not read as a lab.
       isRepository: !!m.is_repository,
+      // System/Organization entity (Phase 1). Null when the lab is standalone
+      // (not in an org). The switcher groups labs by organizationId and shows
+      // organizationName as the group header. Optional on the client for deploy
+      // skew; a null org id renders the lab ungrouped exactly as before.
+      organizationId: m.organization_id ?? null,
+      organizationName: m.organization_name ?? null,
       // NYS CLEP Phase-0: jurisdiction regime (default CLIA). nysSuggested is a
       // soft hint (owner's physical state is NY) that never auto-applies.
       primaryRegime: m.primary_regime || 'CLIA',
@@ -26736,9 +26744,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const client = (db as any).$client;
     const userId = req.user?.userId;
     const labs = client.prepare(
-      "SELECT DISTINCT l.id, l.lab_name, l.clia_number FROM labs l JOIN lab_members m ON m.lab_id = l.id WHERE m.user_id = ? AND m.status = 'active' AND (l.is_repository IS NULL OR l.is_repository = 0) ORDER BY l.lab_name ASC"
+      "SELECT DISTINCT l.id, l.lab_name, l.clia_number, l.organization_id, (SELECT o.name FROM organizations o WHERE o.id = l.organization_id) AS organization_name FROM labs l JOIN lab_members m ON m.lab_id = l.id WHERE m.user_id = ? AND m.status = 'active' AND (l.is_repository IS NULL OR l.is_repository = 0) ORDER BY l.lab_name ASC"
     ).all(userId) as any[];
-    res.json(labs.map(l => ({ lab_id: l.id, lab_name: l.lab_name, clia_number: l.clia_number, ...computeLabReadiness(client, l.id) })));
+    res.json(labs.map(l => ({ lab_id: l.id, lab_name: l.lab_name, clia_number: l.clia_number, organization_id: l.organization_id ?? null, organization_name: l.organization_name ?? null, ...computeLabReadiness(client, l.id) })));
   });
 
   app.get("/api/labs/:labId/compliance/score", authMiddleware, labScopeMiddleware, (req: any, res) => {
