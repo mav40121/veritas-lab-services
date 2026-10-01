@@ -577,6 +577,51 @@ Jennifer Small (Interim Director, Clinical Laboratory, Lifepoint Health) sent Mi
 
 ---
 
+### 54. VeritaTrack: quarterly task loads as monthly until re-saved (frequency display/state bug)
+
+**Effort:** S (1-3 days: reproduce, find where the task-create frequency is stored vs rendered on the list, fix the load/display path)
+**Importance:** Medium — data-integrity/UX. A task entered as quarterly that shows as monthly on the tracker until someone re-saves it can drive the wrong due cadence and false "overdue" signals; silent and easy to miss.
+
+Michael loaded a task into VeritaTrack on a quarterly basis; it landed on the list as a MONTHLY item. Opening "edit" on that item showed the frequency correctly as quarterly, and on save+exit the list corrected itself to quarterly. So the stored value appears correct (quarterly) but the initial list render after create shows monthly, i.e. a stale/defaulted frequency on the create-to-list path that a re-save refreshes. Repro target: reproduce in Michael's lab (owner #17), capture the create payload vs the list row, and locate whether it is a write-time default or a read/render mismatch. Likely a small fix once the exact path is identified.
+
+**Source:** Michael, 2026-10-01 (parking lot).
+
+**Status:** Open, not started. Needs reproduction in Michael's lab first.
+
+**Pre- vs post-COLA:** Either; small.
+
+---
+
+### 55. VeritaScan: let sites add their own custom questions
+
+**Effort:** M (1-2 weeks: a per-lab custom-question model, admin UI to author them, inclusion in the scan run + scoring/readiness, and export rendering)
+**Importance:** Medium-High — site-requested flexibility and a differentiator; lets a lab extend the standardized scan with its own internal checks without us hard-coding them.
+
+Today VeritaScan items come from our curated master set. Sites want the ability to add custom questions of their own (lab- or network-specific checks) alongside ours. Shipping this means a per-lab custom-item store, an authoring UI (add/edit/retire a question, pick its domain), and wiring the custom items into the scan run, the readiness/scoring math, and the PDF/Excel exports so they appear as first-class items. Scope the interaction with the standardized scoring (do custom items count toward readiness %, or sit in a separate section?) before building.
+
+**Source:** Michael, 2026-10-01 (parking lot).
+
+**Status:** Open, not started. Needs a short design decision on scoring treatment.
+
+**Pre- vs post-COLA:** Post-COLA unless a named prospect asks.
+
+---
+
+### 56. VeritaQC: flag/popup when a datapoint is outside +/- 2 SD at entry
+
+**Effort:** S-M (3 days to ~1.5 weeks: compute mean/SD context at entry, warn when |z| > 2, surface an inline flag + a confirm/acknowledge prompt; reuse the existing LJ/Westgard evaluation)
+**Importance:** High — patient-safety/usability gap. Right now an out-of-2SD control result is accepted silently; unless the tech scrolls to the Levey-Jennings chart they have no idea it was out, so a real QC excursion can be missed at the moment it matters.
+
+When a tech enters a QC datapoint that falls outside +/- 2 SD of the control mean, VeritaQC currently just records it with no signal; the only way to notice is to open the LJ chart. Michael wants an immediate flag or popup at entry so the out-of-range result is unmissable (e.g. highlight the value + a toast/confirm that names the rule, 1-2s / 2-2s context). The SD/mean and rule evaluation already exist for the LJ chart and Westgard logic; this surfaces that evaluation at the point of entry rather than only in the chart view. Decide whether it is a soft warning (acknowledge and proceed) or ties into requiring a note/corrective action.
+
+**Source:** Michael, 2026-10-01 (parking lot).
+
+**Status:** Open, not started.
+
+**Pre- vs post-COLA:** Either; strong quality-of-life + safety win.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C52. VeritaResponse internal NCE / non-conforming event (was #36)
