@@ -106,3 +106,40 @@ export function orgSubscriptionExpiryForLab(sqlite: any, labId: number): string 
     return null;
   }
 }
+
+// ── Phase 3d: build the org's Stripe subscription from the billing line items ─
+// Option 1 = ONE subscription on the org with one item per line item. System
+// tier is custom-quoted, so each item uses inline price_data (a negotiated
+// annual unit_amount) rather than a catalog price. This is the pure request
+// builder; the admin endpoint attaches org.stripe_customer_id and fires Stripe.
+
+export type StripeSubItem = {
+  price_data: {
+    currency: string;
+    unit_amount: number;
+    recurring: { interval: "year" };
+    product_data: { name: string };
+  };
+  quantity: number;
+  metadata: Record<string, string>;
+};
+
+// Pure: one Stripe subscription item per billing line item. A zero-amount line
+// (e.g. an included repository) is kept as a $0 item so the invoice still lists
+// the site. The per-lab metadata lets the webhook/line map back to the lab.
+export function buildOrgSubscriptionItems(items: NormalizedLineItem[], currency = "usd"): StripeSubItem[] {
+  return items.map((it) => {
+    const metadata: Record<string, string> = {};
+    if (it.labId != null) metadata.labId = String(it.labId);
+    return {
+      price_data: {
+        currency,
+        unit_amount: it.annualAmountCents,
+        recurring: { interval: "year" as const },
+        product_data: { name: it.description || (it.labId != null ? `Lab ${it.labId}` : "System line item") },
+      },
+      quantity: 1,
+      metadata,
+    };
+  });
+}

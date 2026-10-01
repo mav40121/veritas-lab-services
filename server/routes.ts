@@ -31,7 +31,7 @@ import { computeBackfillCandidates } from "./organizationBackfill";
 import { orgSeatCapForOwner } from "./organizationSeats";
 import { orgRoleForUserOnLab, labRoleFromOrgRole, transferBlockedOutOfOrg, isActiveOrgMember, resolveOwnerOrgId } from "./organizationRoles";
 import { planProvisionLabs, accreditationFlagsFor } from "./organizationProvision";
-import { normalizeLineItems, computeOrgInvoice, laterExpiry, orgSubscriptionExpiryForLab } from "./organizationBilling";
+import { normalizeLineItems, computeOrgInvoice, laterExpiry, orgSubscriptionExpiryForLab, buildOrgSubscriptionItems } from "./organizationBilling";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard";
@@ -31631,6 +31631,59 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const orgRow = sqlite.prepare("SELECT id, name, plan, subscription_status, subscription_expires_at, active_seat_pool FROM organizations WHERE id = ?").get(orgId);
     console.log(`[admin/organizations/${orgId}/billing] lines=${items.length} total_cents=${invoice.totalCents} status=${subscriptionStatus ?? "(unchanged)"}`);
     res.json({ ok: true, organization: orgRow, invoice });
+  });
+
+  // POST /api/admin/organizations/:orgId/billing/stripe-subscription — Phase 3d:
+  // create the ONE Stripe subscription for the system from its 3b billing line
+  // items (Option 1: one sub, one item per line, inline custom price_data since
+  // System tier is custom-quoted). dryRun (DEFAULT) returns the exact params
+  // WITHOUT calling Stripe, so the request shape is verifiable offline. Firing
+  // the live subscription requires confirm:true AND the org's stripe_customer_id,
+  // and persists stripe_subscription_id + status + renewal from Stripe's result.
+  // ADMIN_SECRET-gated. Body: { secret, confirm?, currency? }.
+  //
+  // NOTE: the live path is exercised against Stripe TEST mode only until verified;
+  // it is never auto-run. Migrating an existing system's per-lab subscriptions
+  // onto this org sub is a separate, deliberate per-system step, not done here.
+  app.post("/api/admin/organizations/:orgId/billing/stripe-subscription", async (req: any, res) => {
+    const { secret, confirm, currency } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const orgId = Number(req.params.orgId);
+    if (!Number.isInteger(orgId)) return res.status(400).json({ error: "invalid orgId" });
+    const org = sqlite.prepare("SELECT id, name, stripe_customer_id, stripe_subscription_id FROM organizations WHERE id = ?").get(orgId) as any;
+    if (!org) return res.status(404).json({ error: "organization not found" });
+    const rows = sqlite
+      .prepare("SELECT lab_id, description, annual_amount_cents FROM organization_billing_line_items WHERE organization_id = ? AND status = 'active' ORDER BY lab_id IS NULL, lab_id, id")
+      .all(orgId) as any[];
+    if (rows.length === 0) return res.status(400).json({ error: "no active billing line items; set billing first (POST .../billing)" });
+    const items = rows.map((r: any) => ({ labId: r.lab_id ?? null, description: r.description ?? null, annualAmountCents: r.annual_amount_cents }));
+    const subItems = buildOrgSubscriptionItems(items, typeof currency === "string" && currency ? currency : "usd");
+    const params = { customer: org.stripe_customer_id || null, items: subItems, metadata: { organizationId: String(orgId) } };
+
+    // dryRun is the default; only an explicit confirm:true fires Stripe.
+    if (confirm !== true) {
+      return res.json({ dryRun: true, orgId, stripeCustomerId: org.stripe_customer_id || null, itemCount: subItems.length, params });
+    }
+    if (!stripe) return res.status(503).json({ error: "Stripe not configured" });
+    if (!org.stripe_customer_id) return res.status(400).json({ error: "organization has no stripe_customer_id; create/attach the Stripe customer first" });
+    try {
+      const sub = await stripe.subscriptions.create({
+        customer: org.stripe_customer_id,
+        items: subItems as any,
+        metadata: { organizationId: String(orgId) },
+      } as any);
+      const now = new Date().toISOString();
+      const subAny = sub as any;
+      const expiresAt = subAny.current_period_end ? new Date(subAny.current_period_end * 1000).toISOString() : null;
+      sqlite.prepare("UPDATE organizations SET stripe_subscription_id = ?, subscription_status = ?, subscription_expires_at = ?, updated_at = ? WHERE id = ?")
+        .run(subAny.id, subAny.status || "active", expiresAt, now, orgId);
+      console.log(`[admin/organizations/${orgId}/billing/stripe-subscription] created sub=${sub.id} status=${sub.status} items=${subItems.length}`);
+      res.json({ ok: true, orgId, stripeSubscriptionId: sub.id, status: sub.status, subscriptionExpiresAt: expiresAt });
+    } catch (err: any) {
+      console.error(`[admin/organizations/${orgId}/billing/stripe-subscription] failed:`, err.message);
+      res.status(502).json({ error: err.message || "Stripe subscription create failed" });
+    }
   });
 
   // On-demand path for the nightly linearity-exemption drop guard. Read-only:
