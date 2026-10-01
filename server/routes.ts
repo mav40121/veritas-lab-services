@@ -10451,18 +10451,50 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // to the staff member). Pass deliverEmail:false to create the invite and
     // return its link WITHOUT emailing the staff, so a director can hand the
     // link out themselves (e.g. forward all links in one message).
-    const { staff_employee_id, email, deliverEmail } = req.body || {};
-    const staffEmpId = parseInt(String(staff_employee_id ?? ""), 10);
-    if (!Number.isFinite(staffEmpId) || staffEmpId <= 0) return res.status(400).json({ error: "staff_employee_id required" });
+    // 2026-10-01: a read-and-sign Staff invite can now come straight from the Lab
+    // Members page with just a name + email (no pre-existing VeritaStaff roster
+    // entry). When staff_employee_id is omitted but firstName/lastName are given,
+    // auto-create a read-and-sign roster stub (performs_testing=0) so the
+    // signature trail still cross-references the roster; the director can refine
+    // the row later in VeritaStaff. Read-and-sign staff draw from the Staff Portal
+    // band (honor-system), NOT the active writer cap, so this path never hits the
+    // 15-seat wall that the /members active-seat invite enforces.
+    const { staff_employee_id, email, deliverEmail, firstName, lastName, title } = req.body || {};
     if (!email || !String(email).includes("@")) return res.status(400).json({ error: "Valid email required" });
     const normalizedEmail = String(email).toLowerCase().trim();
 
     const sqlite = (db as any).$client;
-    const lab = sqlite.prepare("SELECT id, owner_user_id, lab_name FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    const lab = sqlite.prepare("SELECT id, owner_user_id, lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
     if (!lab) return res.status(404).json({ error: "Lab not found" });
     const labOwnerId = lab.owner_user_id;
     const ownerRow = sqlite.prepare("SELECT id, name, email, clia_lab_name, hospital_name FROM users WHERE id = ?").get(labOwnerId) as any;
     if (!ownerRow) return res.status(500).json({ error: "Lab owner user not found" });
+
+    let staffEmpId = parseInt(String(staff_employee_id ?? ""), 10);
+    if (!Number.isFinite(staffEmpId) || staffEmpId <= 0) {
+      // No roster row chosen: create a read-and-sign stub from the invited name.
+      const fn = String(firstName ?? "").trim();
+      const ln = String(lastName ?? "").trim();
+      if (!fn || !ln) {
+        return res.status(400).json({ error: "Provide staff_employee_id, or firstName and lastName to add a new read-and-sign staff member" });
+      }
+      let staffLab = sqlite.prepare("SELECT * FROM staff_labs WHERE tier2_lab_id = ?").get(req.scope.labId) as any;
+      if (!staffLab) {
+        staffLab = seedStaffLabFromAccount(sqlite, { tier2LabId: req.scope.labId, userId: labOwnerId, labName: lab.lab_name, cliaNumber: lab.clia_number });
+      }
+      if (!staffLab) {
+        return res.status(400).json({ error: "Add the lab's name and CLIA number before adding read-and-sign staff." });
+      }
+      const nowStamp = new Date().toISOString();
+      // user_id carries the account OWNER id (NOT NULL; the staffer's own identity
+      // resolves via user_seats.seat_user_id on accept — same convention as the
+      // /staff/employees create path). performs_testing=0: read-and-sign, no
+      // competency burden. Inventory/audit grants default off; refine in VeritaStaff.
+      const insEmp = sqlite.prepare(
+        "INSERT INTO staff_employees (lab_id, tier2_lab_id, user_id, last_name, first_name, title, highest_complexity, performs_testing, can_adjust_inventory, can_view_audit, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
+      ).run(staffLab.id, req.scope.labId, labOwnerId, ln, fn, String(title ?? "").trim() || null, 'H', 0, 0, 0, 'active', nowStamp, nowStamp);
+      staffEmpId = Number(insEmp.lastInsertRowid);
+    }
 
     // Validate the staff_employee belongs to this lab + is active.
     const staffEmp = sqlite.prepare(
