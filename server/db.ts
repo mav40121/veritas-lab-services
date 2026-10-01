@@ -2299,6 +2299,43 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_org_members_org  ON organizati
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_org_members_user ON organization_members(user_id, status)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_labs_org ON labs(organization_id) WHERE organization_id IS NOT NULL`); } catch {}
 
+// Phase 3b (docs/SYSTEM_ENTITY_DESIGN.md): org-level billing, Option 1 =
+// ONE subscription/renewal on the organization with PER-LAB line items (one
+// invoice to the system, each lab a line item for the customer's own cost
+// allocation). The org's own subscription fields (plan, subscription_status,
+// subscription_expires_at, stripe_customer_id, stripe_subscription_id) already
+// exist on the organizations table; this table holds the per-lab line items.
+// System tier is custom-quoted, so annual_amount_cents is a negotiated input,
+// not a computed rate. NEW DB TABLE RULE: CREATE + PRAGMA-checked ALTERs below.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS organization_billing_line_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER NOT NULL,
+    lab_id INTEGER,
+    description TEXT,
+    annual_amount_cents INTEGER NOT NULL DEFAULT 0,
+    currency TEXT NOT NULL DEFAULT 'usd',
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (organization_id) REFERENCES organizations(id),
+    FOREIGN KEY (lab_id) REFERENCES labs(id)
+  );
+`);
+{
+  const bliCols = (sqlite.prepare("PRAGMA table_info(organization_billing_line_items)").all() as any[]).map((c: any) => c.name);
+  const ensureBli = (col: string, sql: string) => { if (!bliCols.includes(col)) { try { sqlite.exec(sql); bliCols.push(col); } catch {} } };
+  ensureBli("organization_id",     "ALTER TABLE organization_billing_line_items ADD COLUMN organization_id INTEGER");
+  ensureBli("lab_id",              "ALTER TABLE organization_billing_line_items ADD COLUMN lab_id INTEGER");
+  ensureBli("description",         "ALTER TABLE organization_billing_line_items ADD COLUMN description TEXT");
+  ensureBli("annual_amount_cents", "ALTER TABLE organization_billing_line_items ADD COLUMN annual_amount_cents INTEGER NOT NULL DEFAULT 0");
+  ensureBli("currency",            "ALTER TABLE organization_billing_line_items ADD COLUMN currency TEXT NOT NULL DEFAULT 'usd'");
+  ensureBli("status",              "ALTER TABLE organization_billing_line_items ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  ensureBli("created_at",          "ALTER TABLE organization_billing_line_items ADD COLUMN created_at TEXT");
+  ensureBli("updated_at",          "ALTER TABLE organization_billing_line_items ADD COLUMN updated_at TEXT");
+}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_org_billing_items_org ON organization_billing_line_items(organization_id, status)`); } catch {}
+
 // users.default_lab_id — bare-route redirect target (per doc Section 4).
 // Updated on every authenticated page hit in Phase 2; not the source of
 // truth for scope. URL is. Nullable; FK to labs is informational only
