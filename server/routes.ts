@@ -27,6 +27,7 @@ import { CATEGORY_TO_MAP_FIELD, analyteFromTaskName, MAP_SIGNOFF_FIELDS } from "
 import { evaluateManualDiff } from "./rumke";
 import { auditVeritamapConsistency } from "./veritamapConsistency";
 import { auditSystemOwnership } from "./systemOwnershipAudit";
+import { computeBackfillCandidates } from "./organizationBackfill";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard";
@@ -31143,6 +31144,80 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return { ...o, labs, memberCount };
     });
     res.json({ organizations, count: organizations.length });
+  });
+
+  // POST /api/admin/organizations/backfill — Phase 1b: link the already-live
+  // implicit systems (labs sharing one owner_user_id) to first-class
+  // organizations rows (docs/SYSTEM_ENTITY_DESIGN.md). Reversible pure grouping;
+  // it only sets labs.organization_id and inserts org/member rows, never touches
+  // seats, billing, or measurement data. ADMIN_SECRET-gated.
+  //   dryRun (default when no apply list): returns candidate implicit systems
+  //     with a suggested name each; writes nothing.
+  //   apply: body.organizations = [{ ownerUserId, name }] (EXPLICIT). For each,
+  //     create (or reuse) one org, link ALL that owner's labs, and add the owner
+  //     as an org_owner member. Idempotent: reuses an existing org for the owner,
+  //     only links labs not already linked, and skips an existing membership.
+  // Body: { secret, dryRun?, organizations?: [{ ownerUserId, name }] }.
+  app.post("/api/admin/organizations/backfill", (req, res) => {
+    const { secret, dryRun, organizations } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const labs = sqlite
+      .prepare("SELECT id, lab_name, owner_user_id, is_demo, is_repository, organization_id FROM labs")
+      .all() as any[];
+    const users = sqlite.prepare("SELECT id, email, name FROM users").all() as any[];
+    const applyList = Array.isArray(organizations) ? organizations : null;
+    if (dryRun === true || !applyList) {
+      return res.json({ dryRun: true, candidates: computeBackfillCandidates(labs, users) });
+    }
+    const applied: any[] = [];
+    for (const item of applyList) {
+      const ownerUserId = Number(item?.ownerUserId);
+      const name = String(item?.name || "").trim();
+      if (!Number.isInteger(ownerUserId) || !name) {
+        applied.push({ ownerUserId: item?.ownerUserId, error: "ownerUserId (integer) and name required" });
+        continue;
+      }
+      const owner = sqlite.prepare("SELECT id FROM users WHERE id = ?").get(ownerUserId);
+      if (!owner) { applied.push({ ownerUserId, error: "owner not found" }); continue; }
+      const ownerLabs = sqlite.prepare("SELECT id FROM labs WHERE owner_user_id = ?").all(ownerUserId) as any[];
+      if (ownerLabs.length === 0) { applied.push({ ownerUserId, error: "owner has no labs" }); continue; }
+      const existingOrg = sqlite.prepare("SELECT id FROM organizations WHERE billing_owner_user_id = ?").get(ownerUserId) as any;
+      try {
+        sqlite.exec("BEGIN");
+        let orgId: number;
+        if (existingOrg) {
+          orgId = existingOrg.id;
+        } else {
+          const now = new Date().toISOString();
+          const ins = sqlite
+            .prepare("INSERT INTO organizations (name, billing_owner_user_id, created_at, updated_at) VALUES (?, ?, ?, ?)")
+            .run(name, ownerUserId, now, now);
+          orgId = Number(ins.lastInsertRowid);
+        }
+        const labsLinked = sqlite
+          .prepare("UPDATE labs SET organization_id = ? WHERE owner_user_id = ? AND (organization_id IS NULL OR organization_id = ?)")
+          .run(orgId, ownerUserId, orgId).changes;
+        let memberAdded = 0;
+        const existingMember = sqlite
+          .prepare("SELECT id FROM organization_members WHERE organization_id = ? AND user_id = ?")
+          .get(orgId, ownerUserId);
+        if (!existingMember) {
+          const now2 = new Date().toISOString();
+          sqlite
+            .prepare("INSERT INTO organization_members (organization_id, user_id, org_role, status, created_at, updated_at) VALUES (?, ?, 'org_owner', 'active', ?, ?)")
+            .run(orgId, ownerUserId, now2, now2);
+          memberAdded = 1;
+        }
+        sqlite.exec("COMMIT");
+        applied.push({ ownerUserId, orgId, name, reusedExistingOrg: !!existingOrg, labsLinked, memberAdded });
+      } catch (err: any) {
+        try { sqlite.exec("ROLLBACK"); } catch {}
+        applied.push({ ownerUserId, error: err.message || "backfill failed" });
+      }
+    }
+    console.log(`[admin/organizations/backfill] applied=${JSON.stringify(applied.map((r) => ({ o: r.ownerUserId, org: r.orgId, labs: r.labsLinked, err: r.error })))}`);
+    res.json({ ok: true, applied });
   });
 
   // On-demand path for the nightly linearity-exemption drop guard. Read-only:
