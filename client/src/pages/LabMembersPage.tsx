@@ -146,6 +146,19 @@ export default function LabMembersPage() {
   // Invite form state
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "staff" | "medical_director">("staff");
+  // 2026-10-01: "Staff" now means a read-and-sign Staff Portal seat (drawn from
+  // the Staff Portal band, NOT the active writer cap). A new read-and-sign person
+  // is added by name + email here and auto-rostered in VeritaStaff. Admin stays an
+  // active writer seat; Medical Director stays the one free seat.
+  const [inviteFirstName, setInviteFirstName] = useState("");
+  const [inviteLastName, setInviteLastName] = useState("");
+  // Read-and-sign (Staff Portal) seats for this lab, for the count + list. Owner/
+  // admin only; a non-manager's query simply returns nothing and the UI hides it.
+  const { data: staffPortalData } = useQuery<{ invites?: Array<{ id: number; email: string; status: string; employee_name: string | null; employee_title: string | null }> }>({
+    queryKey: [`/api/labs/${activeLabId}/staff-portal-invites`],
+    enabled: !!activeLabId,
+  });
+  const staffPortalInvites = staffPortalData?.invites ?? [];
   // parking-lot #33 PR 2: seat-type split at invite time. 'active' = writer
   // (counts against tier cap); 'view_only' = reviewer (medical director,
   // technical consultant, supervisor; capped per tier 1/2/3 with $99/yr
@@ -159,14 +172,25 @@ export default function LabMembersPage() {
 
   const inviteMutation = useMutation({
     mutationFn: async () => {
+      if (inviteRole === "staff") {
+        // Read-and-sign Staff Portal seat (Staff Portal band, not the active cap).
+        // Sends name + email; the server auto-creates the VeritaStaff roster stub.
+        const res = await apiRequest("POST", `/api/labs/${activeLabId}/staff-portal-invites`, {
+          firstName: inviteFirstName, lastName: inviteLastName, email: inviteEmail,
+        });
+        return res.json();
+      }
       const res = await apiRequest("POST", `/api/labs/${activeLabId}/members`, { email: inviteEmail, role: inviteRole, seatType: inviteSeatType });
       return res.json();
     },
     onSuccess: (r) => {
-      toast({ title: "Invitation sent", description: r.emailSent ? `Email delivered to ${inviteEmail}` : `Seat created. Email delivery failed — share the invite link manually.` });
+      toast({ title: "Invitation sent", description: r.emailSent === false ? `Invite created. Email delivery failed; share the invite link manually.` : `Email sent to ${inviteEmail}` });
       setInviteEmail("");
+      setInviteFirstName("");
+      setInviteLastName("");
       setInviteRole("staff");
       invalidate();
+      queryClient.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/staff-portal-invites`] });
     },
     onError: (err: any) => toast({ title: "Invite failed", description: String(err?.message || err), variant: "destructive" }),
   });
@@ -306,9 +330,9 @@ export default function LabMembersPage() {
                   staff belong in the Staff Portal, not seats. */}
               <div className="flex items-center gap-3">
                 <div>
-                  <div className="font-medium">Read-and-sign staff</div>
+                  <div className="font-medium" data-testid="staff-portal-count">{staffPortalInvites.length} read-and-sign staff</div>
                   <div className="text-xs text-muted-foreground">
-                    Staff who only read and sign use the Staff Portal at /staff-access. They do not consume seats. Your medical director gets one free seat; other reviewers use active seats.
+                    Bench staff who read and sign policies, record QC, and take inventory. They draw from your Staff Portal band, not your active seats, so adding them never uses an active seat. Add one above with the Staff (read and sign) role.
                   </div>
                 </div>
               </div>
@@ -336,27 +360,45 @@ export default function LabMembersPage() {
                 model. Every invited member is an active (writer) seat; the
                 mutation pins seatType to "active". Read-and-sign people use
                 the Staff Portal instead of a seat. */}
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_140px_auto] gap-2">
-              <div>
-                <Label htmlFor="invite-email" className="text-xs">Email</Label>
-                <Input id="invite-email" type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="member@example.com" />
+            <div className="space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_190px_auto] gap-2">
+                <div>
+                  <Label htmlFor="invite-email" className="text-xs">Email</Label>
+                  <Input id="invite-email" type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="member@example.com" />
+                </div>
+                <div>
+                  <Label htmlFor="invite-role" className="text-xs">Role</Label>
+                  <select id="invite-role" value={inviteRole} onChange={e => setInviteRole(e.target.value as "admin" | "staff" | "medical_director")} className="w-full h-10 border border-input bg-background rounded-md px-3 text-sm" data-testid="invite-role-select">
+                    <option value="staff">Staff (read and sign)</option>
+                    <option value="admin" disabled={!isOwner}>Admin / active{!isOwner ? " (owner only)" : ""}</option>
+                    <option value="medical_director">Medical Director (free)</option>
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    onClick={() => inviteMutation.mutate()}
+                    disabled={inviteMutation.isPending || !inviteEmail.includes("@") || (inviteRole === "staff" && (!inviteFirstName.trim() || !inviteLastName.trim()))}
+                    data-testid="invite-send-btn"
+                  >
+                    {inviteMutation.isPending && <Loader2 className="animate-spin mr-1" size={14} />} Send invite
+                  </Button>
+                </div>
               </div>
-              <div>
-                <Label htmlFor="invite-role" className="text-xs">Role</Label>
-                <select id="invite-role" value={inviteRole} onChange={e => setInviteRole(e.target.value as "admin" | "staff" | "medical_director")} className="w-full h-10 border border-input bg-background rounded-md px-3 text-sm">
-                  <option value="staff">Staff</option>
-                  <option value="admin" disabled={!isOwner}>Admin{!isOwner ? " (owner only)" : ""}</option>
-                  <option value="medical_director">Medical Director</option>
-                </select>
-              </div>
-              <div className="flex items-end">
-                <Button onClick={() => inviteMutation.mutate()} disabled={inviteMutation.isPending || !inviteEmail.includes("@")}>
-                  {inviteMutation.isPending && <Loader2 className="animate-spin mr-1" size={14} />} Send invite
-                </Button>
-              </div>
+              {inviteRole === "staff" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <Label htmlFor="invite-first" className="text-xs">First name</Label>
+                    <Input id="invite-first" value={inviteFirstName} onChange={e => setInviteFirstName(e.target.value)} placeholder="First name" data-testid="invite-first-name" />
+                  </div>
+                  <div>
+                    <Label htmlFor="invite-last" className="text-xs">Last name</Label>
+                    <Input id="invite-last" value={inviteLastName} onChange={e => setInviteLastName(e.target.value)} placeholder="Last name" data-testid="invite-last-name" />
+                  </div>
+                </div>
+              )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Every member gets an email login and an active (writer) seat that counts against your tier's seat cap. The one exception is your Medical Director, who gets one free seat that does not count. Pick the role on invite: Staff (operational access), Admin (also invites and removes members and manages lab settings, but cannot change billing or transfer ownership), or Medical Director (the free seat, and the person VeritaPolicy approvals and QC co-sign route to). You can also set or change the Medical Director on any existing member in the table below, the owner included. Read-and-sign-only staff use the Staff Portal and do not consume a seat.
+              Three kinds of access. Admin / active seats are your writers: they create studies, upload policies, and enter or review data, and they count against your tier's active-seat cap. Staff seats are read and sign: bench staff who read and sign policies, record QC, and take inventory. They draw from your Staff Portal band, not your active seats, so adding them does not use an active seat. Medical Director is one free seat and is the person VeritaPolicy approvals and QC co-sign route to. You can also set or change the Medical Director on any existing member in the table below, the owner included.
             </p>
           </CardContent>
         </Card>
