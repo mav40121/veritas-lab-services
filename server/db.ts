@@ -732,6 +732,43 @@ sqlite.exec(`
   }
 }
 
+// pt_vendor_programs — the PT vendor program CATALOG (what programs each vendor
+// offers and the analytes each includes). Drives the enrollment modal's Program
+// Name dropdown so a lab picks a real vendor program instead of free text. Rows
+// are loaded by POST /api/admin/veritapt/vendor-programs from vendor-sourced,
+// operator-VERIFIED data only (never fabricated); the `source` column records
+// provenance per the DATA PROVENANCE RULE. One pt_category per program row (the
+// common case); the program's specific tests live in analytes_json (a JSON array).
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS pt_vendor_programs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vendor TEXT NOT NULL,
+    program_code TEXT,
+    program_name TEXT NOT NULL,
+    pt_category TEXT NOT NULL,
+    analytes_json TEXT NOT NULL DEFAULT '[]',
+    source TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(vendor, program_name)
+  );
+`);
+{
+  const pvpCols = (sqlite.prepare("PRAGMA table_info(pt_vendor_programs)").all() as any[]).map((c: any) => c.name);
+  const ensurePvp = (col: string, sql: string) => { if (!pvpCols.includes(col)) { try { sqlite.exec(sql); pvpCols.push(col); } catch {} } };
+  ensurePvp("vendor",        "ALTER TABLE pt_vendor_programs ADD COLUMN vendor TEXT");
+  ensurePvp("program_code",  "ALTER TABLE pt_vendor_programs ADD COLUMN program_code TEXT");
+  ensurePvp("program_name",  "ALTER TABLE pt_vendor_programs ADD COLUMN program_name TEXT");
+  ensurePvp("pt_category",   "ALTER TABLE pt_vendor_programs ADD COLUMN pt_category TEXT");
+  ensurePvp("analytes_json", "ALTER TABLE pt_vendor_programs ADD COLUMN analytes_json TEXT NOT NULL DEFAULT '[]'");
+  ensurePvp("source",        "ALTER TABLE pt_vendor_programs ADD COLUMN source TEXT");
+  ensurePvp("active",        "ALTER TABLE pt_vendor_programs ADD COLUMN active INTEGER NOT NULL DEFAULT 1");
+  ensurePvp("created_at",    "ALTER TABLE pt_vendor_programs ADD COLUMN created_at TEXT");
+  ensurePvp("updated_at",    "ALTER TABLE pt_vendor_programs ADD COLUMN updated_at TEXT");
+}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pt_vendor_programs ON pt_vendor_programs(vendor, active)`); } catch {}
+
 // pt_enrollments_v2 vendor-CHECK migration (idempotent).
 // SQLite cannot ALTER an existing CHECK constraint in place — the column
 // must be rebuilt. This block reads the live table definition from

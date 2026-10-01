@@ -184,6 +184,26 @@ export default function VeritaPTAppPage() {
   const [newProgramName, setNewProgramName] = useState("");
   const [newCategory, setNewCategory] = useState("");
   const [newYear, setNewYear] = useState(String(new Date().getFullYear()));
+  // Vendor program catalog driving the Program Name dropdown (GET /api/veritapt/programs).
+  const [vendorPrograms, setVendorPrograms] = useState<Array<{ programCode: string | null; programName: string; ptCategory: string; analytes: string[] }>>([]);
+  const [selectedProgram, setSelectedProgram] = useState<{ programName: string; ptCategory: string; analytes: string[] } | null>(null);
+
+  // Load the selected vendor's program catalog for the Program Name dropdown.
+  // The catalog is vendor-global, so this hits the fixed /api/veritapt/programs
+  // path (not the lab-scoped ptApi). "Other" has no catalog (free-text fallback).
+  useEffect(() => {
+    if (!showEnrollModal || newVendor === "Other") { setVendorPrograms([]); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`${API_BASE}/api/veritapt/programs?vendor=${encodeURIComponent(newVendor)}`, { headers: authHeaders() });
+        if (!r.ok) { if (!cancelled) setVendorPrograms([]); return; }
+        const j = await r.json();
+        if (!cancelled) setVendorPrograms(Array.isArray(j?.programs) ? j.programs : []);
+      } catch { if (!cancelled) setVendorPrograms([]); }
+    })();
+    return () => { cancelled = true; };
+  }, [showEnrollModal, newVendor]);
 
   // New AAA record form state
   const [newAaaAnalyte, setNewAaaAnalyte] = useState("");
@@ -281,6 +301,7 @@ export default function VeritaPTAppPage() {
       setNewVendor("CAP");
       setNewProgramName("");
       setNewCategory("");
+      setSelectedProgram(null);
       setNewYear(String(new Date().getFullYear()));
       setShowEnrollModal(false);
       await fetchData();
@@ -795,7 +816,7 @@ export default function VeritaPTAppPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs">Vendor</Label>
-                  <Select value={newVendor} onValueChange={setNewVendor}>
+                  <Select value={newVendor} onValueChange={(v) => { setNewVendor(v); setNewProgramName(""); setNewCategory(""); setSelectedProgram(null); }}>
                     <SelectTrigger className="h-8 text-sm">
                       <SelectValue />
                     </SelectTrigger>
@@ -817,24 +838,71 @@ export default function VeritaPTAppPage() {
                 </div>
                 <div className="space-y-1 col-span-2">
                   <Label className="text-xs">Program Name</Label>
-                  <Input
-                    value={newProgramName}
-                    onChange={(e) => setNewProgramName(e.target.value)}
-                    placeholder="e.g. CAP Chemistry Survey (C)"
-                    className="h-8 text-sm"
-                  />
+                  {newVendor !== "Other" && vendorPrograms.length > 0 ? (
+                    <Select
+                      value={newProgramName}
+                      onValueChange={(name) => {
+                        const p = vendorPrograms.find((x) => x.programName === name) || null;
+                        setNewProgramName(name);
+                        setSelectedProgram(p);
+                        if (p) setNewCategory(p.ptCategory);
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder={`Select a ${newVendor} program`} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {vendorPrograms.map((p) => (
+                          <SelectItem key={p.programName} value={p.programName}>
+                            {p.programName}{p.programCode ? ` (${p.programCode})` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <>
+                      <Input
+                        value={newProgramName}
+                        onChange={(e) => { setNewProgramName(e.target.value); setSelectedProgram(null); }}
+                        placeholder="e.g. CAP Chemistry Survey (C)"
+                        className="h-8 text-sm"
+                      />
+                      {newVendor !== "Other" && (
+                        <p className="text-xs text-muted-foreground">No {newVendor} catalog loaded yet. Type the program name, or ask Veritas to load the {newVendor} catalog.</p>
+                      )}
+                    </>
+                  )}
                 </div>
                 <div className="space-y-1 col-span-2">
                   <Label className="text-xs">PT Category</Label>
-                  <Select value={newCategory} onValueChange={setNewCategory}>
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PT_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">Enrolling by category covers all regulated analytes in that group.</p>
+                  {selectedProgram ? (
+                    <div className="rounded-md border px-3 py-2 text-sm bg-background">
+                      <span className="font-medium">{newCategory}</span>
+                      <span className="text-xs text-muted-foreground"> (from program)</span>
+                      {selectedProgram.analytes.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-xs text-muted-foreground mb-1">Tests included ({selectedProgram.analytes.length}):</p>
+                          <div className="flex flex-wrap gap-1">
+                            {selectedProgram.analytes.map((a) => (
+                              <Badge key={a} variant="secondary" className="text-[10px] font-normal">{a}</Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <Select value={newCategory} onValueChange={setNewCategory}>
+                        <SelectTrigger className="h-8 text-sm">
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PT_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">Enrolling by category covers all regulated analytes in that group.</p>
+                    </>
+                  )}
                 </div>
               </div>
               <Button

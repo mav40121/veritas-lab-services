@@ -172,6 +172,7 @@ import { logCount } from "./countLedger";
 import { reconcileLots } from "./inventoryLots";
 import { CLSI_COMPLIANCE_MATRIX_B64, SOFTWARE_VALIDATION_TEMPLATE_B64, SPECIMEN_TUBE_LABELING_GUIDE_B64 } from "./downloadAssets";
 import { cliaAnalytes, ptCategoryLinks } from "./cliaAnalytes";
+import { validateVendorPrograms, PT_VENDORS } from "./ptVendorCatalog";
 import { hasCanonicalTea } from "./backfillAbsoluteFloor";
 import { DEMO_USER_EMAIL } from "./constants";
 
@@ -29755,6 +29756,71 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     (db as any).$client.prepare("DELETE FROM pt_events WHERE enrollment_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM pt_enrollments WHERE id = ?").run(req.params.id);
     res.json({ ok: true });
+  });
+
+  // GET /api/veritapt/programs?vendor=API — the vendor program CATALOG that
+  // drives the enrollment modal's Program Name dropdown. Returns each program the
+  // vendor offers with its PT category and the analytes it includes, so the lab
+  // picks a real program instead of typing free text. Empty when a vendor's
+  // catalog has not been loaded yet (the client falls back to free text).
+  app.get("/api/veritapt/programs", authMiddleware, (req: any, res) => {
+    if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
+    const sqlite = (db as any).$client;
+    const vendor = String(req.query.vendor || "").trim();
+    const rows = vendor
+      ? sqlite.prepare("SELECT vendor, program_code, program_name, pt_category, analytes_json FROM pt_vendor_programs WHERE vendor = ? AND active = 1 ORDER BY pt_category, program_name").all(vendor)
+      : sqlite.prepare("SELECT vendor, program_code, program_name, pt_category, analytes_json FROM pt_vendor_programs WHERE active = 1 ORDER BY vendor, pt_category, program_name").all();
+    const programs = (rows as any[]).map((r) => {
+      let analytes: string[] = [];
+      try { analytes = JSON.parse(r.analytes_json || "[]"); } catch {}
+      return { vendor: r.vendor, programCode: r.program_code ?? null, programName: r.program_name, ptCategory: r.pt_category, analytes };
+    });
+    res.json({ vendor: vendor || null, programs });
+  });
+
+  // POST /api/admin/veritapt/vendor-programs — load the vendor program catalog
+  // from vendor-sourced, operator-VERIFIED data (never fabricated; `source`
+  // records provenance). Idempotent upsert on (vendor, program_name); dryRun
+  // returns the parsed plan; replaceVendor wipes that vendor's catalog first for
+  // a clean reload. ADMIN_SECRET-gated. Body: { secret, dryRun?, replaceVendor?,
+  //   programs: [{ vendor, programCode?, programName, ptCategory, analytes[], source? }] }.
+  app.post("/api/admin/veritapt/vendor-programs", (req: any, res) => {
+    const { secret, dryRun, replaceVendor, programs } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const { items, errors } = validateVendorPrograms(programs || []);
+    if (dryRun === true) return res.json({ dryRun: true, count: items.length, items, errors });
+    if (errors.length) return res.status(400).json({ error: "validation", errors });
+    const sqlite = (db as any).$client;
+    const now = new Date().toISOString();
+    let wiped = 0;
+    try {
+      sqlite.exec("BEGIN");
+      if (replaceVendor && (PT_VENDORS as readonly string[]).includes(String(replaceVendor))) {
+        wiped = sqlite.prepare("DELETE FROM pt_vendor_programs WHERE vendor = ?").run(String(replaceVendor)).changes;
+      }
+      const upsert = sqlite.prepare(`
+        INSERT INTO pt_vendor_programs (vendor, program_code, program_name, pt_category, analytes_json, source, active, created_at, updated_at)
+        VALUES (@vendor, @programCode, @programName, @ptCategory, @analytesJson, @source, 1, @now, @now)
+        ON CONFLICT(vendor, program_name) DO UPDATE SET
+          program_code = excluded.program_code,
+          pt_category = excluded.pt_category,
+          analytes_json = excluded.analytes_json,
+          source = excluded.source,
+          active = 1,
+          updated_at = excluded.updated_at
+      `);
+      for (const it of items) {
+        upsert.run({ vendor: it.vendor, programCode: it.programCode, programName: it.programName, ptCategory: it.ptCategory, analytesJson: JSON.stringify(it.analytes), source: it.source, now });
+      }
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[admin/veritapt/vendor-programs] failed:", err.message);
+      return res.status(500).json({ error: err.message || "catalog load failed" });
+    }
+    const totalActive = (sqlite.prepare("SELECT COUNT(*) AS n FROM pt_vendor_programs WHERE active = 1").get() as any).n;
+    console.log(`[admin/veritapt/vendor-programs] loaded=${items.length} wiped=${wiped} totalActive=${totalActive}`);
+    res.json({ ok: true, loaded: items.length, wiped, totalActive });
   });
 
   // List events for user (optional enrollmentId filter)
