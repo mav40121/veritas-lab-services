@@ -29,6 +29,7 @@ import { auditVeritamapConsistency } from "./veritamapConsistency";
 import { auditSystemOwnership } from "./systemOwnershipAudit";
 import { computeBackfillCandidates } from "./organizationBackfill";
 import { orgSeatCapForOwner } from "./organizationSeats";
+import { orgRoleForUserOnLab, labRoleFromOrgRole } from "./organizationRoles";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard";
@@ -6767,7 +6768,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // the accreditation_* flags so Excel/PDF export handlers don't have to
     // do a second DB round-trip and stop silently defaulting to
     // "Laboratory" / "Not on file" / CFR-only-no-accreditor-column.
-    const row = (db as any).$client.prepare(`
+    const sqlite = (db as any).$client;
+    const row = sqlite.prepare(`
       SELECT lm.id AS membership_id, lm.role AS role, lm.permissions_json AS permissions_json,
              l.id AS lab_id, l.plan AS plan, l.study_credits AS study_credits, l.subscription_status AS subscription_status,
              l.subscription_expires_at AS subscription_expires_at, l.is_trial AS is_trial,
@@ -6781,7 +6783,40 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       LEFT JOIN labs l ON l.id = lm.lab_id
       WHERE lm.user_id = ? AND lm.lab_id = ? AND lm.status = 'active' LIMIT 1
     `).get(userId, labId) as any;
-    if (!row) return res.status(403).json({ error: "No active membership for this lab" });
+
+    // Phase 2b (docs/SYSTEM_ENTITY_DESIGN.md): org-role elevation. A user who is
+    // an active org_owner/org_admin of the organization that owns this lab gets
+    // admin-equivalent access to EVERY lab in that org, even without a per-lab
+    // lab_members row. Org roles confer "admin" only (manage members + write);
+    // owner-only powers (transfer/delete) stay with the per-lab owner, so
+    // isLabOwner() remains false for an org admin. Standalone labs
+    // (organization_id IS NULL) confer nothing here, so their behavior is
+    // identical to before. One query, so it is cheap on the hot path.
+    const orgRoleValue = orgRoleForUserOnLab(sqlite, userId, labId);
+    const orgLabRole = labRoleFromOrgRole(orgRoleValue); // "admin" | null
+
+    // No per-lab membership AND no org grant -> no access.
+    if (!row && !orgLabRole) return res.status(403).json({ error: "No active membership for this lab" });
+
+    // Source the lab fields. When there is a membership the JOIN already carried
+    // them; an org admin reaching a sibling lab with no membership needs a direct
+    // read so req.scope.lab is fully populated (plan/subscription/identity that
+    // downstream subscription gates and exports rely on).
+    let labFields: any = row;
+    if (!labFields) {
+      labFields = sqlite.prepare(`
+        SELECT l.id AS lab_id, l.plan AS plan, l.study_credits AS study_credits, l.subscription_status AS subscription_status,
+               l.subscription_expires_at AS subscription_expires_at, l.is_trial AS is_trial,
+               l.owner_user_id AS owner_user_id,
+               l.plan_expires_at AS plan_expires_at, l.stripe_customer_id AS stripe_customer_id,
+               l.lab_name AS lab_name, l.clia_number AS clia_number,
+               l.accreditation_tjc AS accreditation_tjc, l.accreditation_cap AS accreditation_cap,
+               l.accreditation_cola AS accreditation_cola, l.accreditation_aabb AS accreditation_aabb,
+               l.is_demo AS is_demo
+        FROM labs l WHERE l.id = ? LIMIT 1
+      `).get(labId) as any;
+      if (!labFields) return res.status(403).json({ error: "No active membership for this lab" });
+    }
 
     // 2026-07-15: card-less trial hard-lock. A trial lab (is_trial=1) is fully
     // blocked once its subscription_expires_at has passed — reads AND writes,
@@ -6790,54 +6825,72 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // getAccessLevel/requireWriteAccess grant lapsed PAYING labs: a trial does
     // not get to keep browsing the product after it ends. Scoped to this lab
     // only, so the member can still log in and use any other lab they belong to.
-    if (Number(row.is_trial) === 1 && row.subscription_expires_at) {
-      if (new Date() >= new Date(row.subscription_expires_at)) {
+    if (Number(labFields.is_trial) === 1 && labFields.subscription_expires_at) {
+      if (new Date() >= new Date(labFields.subscription_expires_at)) {
         return res.status(403).json({
           error: "This trial has ended. Contact Veritas Lab Services to continue.",
           code: "TRIAL_EXPIRED",
-          expiredAt: row.subscription_expires_at,
+          expiredAt: labFields.subscription_expires_at,
         });
       }
     }
 
     let permissions: Record<string, any> = {};
-    try { permissions = JSON.parse(row.permissions_json || '{}'); } catch {}
+    try { permissions = JSON.parse(row?.permissions_json || '{}'); } catch {}
+
+    // Effective role. A per-lab owner keeps "owner" (org roles never downgrade
+    // nor usurp the per-lab owner). Otherwise an org admin/owner is elevated to
+    // "admin"; failing that, the per-lab role stands. On the org-only path (no
+    // membership row) baseRole is null, so role becomes "admin".
+    const baseRole: string | null = row?.role ?? null;
+    let role: string | null = baseRole;
+    if (baseRole !== "owner" && orgLabRole === "admin") role = "admin";
 
     req.scope = {
       labId,
       userId,
-      role: row.role,
+      role,
       permissions,
-      membershipId: row.membership_id,
+      membershipId: row?.membership_id ?? null,
+      // Phase 2b diagnostics: whether access came purely from an org role (no
+      // per-lab membership) and the raw org_role. Additive; existing readers
+      // only consult req.scope.role.
+      viaOrg: !row,
+      orgRole: orgRoleValue,
       lab: {
-        id: row.lab_id,
-        plan: row.plan,
+        id: labFields.lab_id,
+        plan: labFields.plan,
         // study_credits carried so credit-aware lab-scoped handlers (the
         // VeritaCheck free-study gate in POST /api/labs/:labId/studies) can
         // read the lab's pooled credits without a second query. Additive:
         // no existing route reads this field.
-        study_credits: row.study_credits,
-        subscription_status: row.subscription_status,
-        subscription_expires_at: row.subscription_expires_at,
-        plan_expires_at: row.plan_expires_at,
-        stripe_customer_id: row.stripe_customer_id,
-        lab_name: row.lab_name,
-        clia_number: row.clia_number,
-        accreditation_tjc: row.accreditation_tjc,
-        accreditation_cap: row.accreditation_cap,
-        accreditation_cola: row.accreditation_cola,
-        accreditation_aabb: row.accreditation_aabb,
+        study_credits: labFields.study_credits,
+        subscription_status: labFields.subscription_status,
+        subscription_expires_at: labFields.subscription_expires_at,
+        plan_expires_at: labFields.plan_expires_at,
+        stripe_customer_id: labFields.stripe_customer_id,
+        lab_name: labFields.lab_name,
+        clia_number: labFields.clia_number,
+        accreditation_tjc: labFields.accreditation_tjc,
+        accreditation_cap: labFields.accreditation_cap,
+        accreditation_cola: labFields.accreditation_cola,
+        accreditation_aabb: labFields.accreditation_aabb,
         // USON bake-off: carried so licenseCtxFromReq can stamp the sample-data
         // mark on this lab's PDF/Excel exports without a second query.
-        is_demo: row.is_demo,
+        is_demo: labFields.is_demo,
       },
     };
 
     // Refresh last_active_at + auto-update users.default_lab_id so the
-    // bare-/dashboard redirect (Phase 2b) resumes here next time.
+    // bare-/dashboard redirect (Phase 2b) resumes here next time. The
+    // last_active_at touch only applies when there is a membership row to
+    // update; an org admin reaching a sibling lab has none, so skip it (but
+    // still record the lab as their resume target).
     const nowIso = new Date().toISOString();
-    (db as any).$client.prepare("UPDATE lab_members SET last_active_at = ? WHERE id = ?").run(nowIso, row.membership_id);
-    (db as any).$client.prepare("UPDATE users SET default_lab_id = ? WHERE id = ?").run(labId, userId);
+    if (row?.membership_id) {
+      sqlite.prepare("UPDATE lab_members SET last_active_at = ? WHERE id = ?").run(nowIso, row.membership_id);
+    }
+    sqlite.prepare("UPDATE users SET default_lab_id = ? WHERE id = ?").run(labId, userId);
 
     next();
   }
@@ -31297,6 +31350,56 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (dryRun) return res.json({ dryRun: true, results });
     console.log(`[admin/organizations/backfill-seat-pools] updated=${updated}`);
     res.json({ ok: true, updated, results });
+  });
+
+  // POST /api/admin/organizations/members — Phase 2b: designate (or revoke) an
+  // organization member's role. This is the grant path that makes org-role
+  // elevation usable: an org_admin added here can manage members and write
+  // across every lab in the organization (enforced in labScopeMiddleware).
+  // Idempotent upsert on the UNIQUE(organization_id, user_id) key. Setting
+  // status='deactivated' revokes access without deleting history. ADMIN_SECRET
+  // -gated. Body: { secret, organizationId, userId, orgRole?, status? }.
+  //   orgRole: 'org_admin' (default) | 'org_owner'
+  //   status:  'active' (default)     | 'deactivated'
+  app.post("/api/admin/organizations/members", (req, res) => {
+    const { secret, organizationId, userId, orgRole, status } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const orgId = Number(organizationId);
+    const uid = Number(userId);
+    if (!Number.isInteger(orgId) || !Number.isInteger(uid)) {
+      return res.status(400).json({ error: "organizationId (integer) and userId (integer) required" });
+    }
+    const role = orgRole === undefined || orgRole === null ? "org_admin" : String(orgRole);
+    if (role !== "org_admin" && role !== "org_owner") {
+      return res.status(400).json({ error: "orgRole must be 'org_admin' or 'org_owner'" });
+    }
+    const st = status === undefined || status === null ? "active" : String(status);
+    if (st !== "active" && st !== "deactivated") {
+      return res.status(400).json({ error: "status must be 'active' or 'deactivated'" });
+    }
+    const org = sqlite.prepare("SELECT id FROM organizations WHERE id = ?").get(orgId);
+    if (!org) return res.status(404).json({ error: "organization not found" });
+    const user = sqlite.prepare("SELECT id FROM users WHERE id = ?").get(uid);
+    if (!user) return res.status(404).json({ error: "user not found" });
+    const now = new Date().toISOString();
+    const existing = sqlite
+      .prepare("SELECT id FROM organization_members WHERE organization_id = ? AND user_id = ?")
+      .get(orgId, uid) as any;
+    if (existing) {
+      sqlite
+        .prepare("UPDATE organization_members SET org_role = ?, status = ?, updated_at = ? WHERE id = ?")
+        .run(role, st, now, existing.id);
+    } else {
+      sqlite
+        .prepare("INSERT INTO organization_members (organization_id, user_id, org_role, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(orgId, uid, role, st, now, now);
+    }
+    const saved = sqlite
+      .prepare("SELECT id, organization_id, user_id, org_role, status, created_at, updated_at FROM organization_members WHERE organization_id = ? AND user_id = ?")
+      .get(orgId, uid);
+    console.log(`[admin/organizations/members] org=${orgId} user=${uid} role=${role} status=${st} ${existing ? "updated" : "inserted"}`);
+    res.json({ ok: true, member: saved, action: existing ? "updated" : "inserted" });
   });
 
   // On-demand path for the nightly linearity-exemption drop guard. Read-only:
