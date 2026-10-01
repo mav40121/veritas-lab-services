@@ -31,6 +31,7 @@ import { computeBackfillCandidates } from "./organizationBackfill";
 import { orgSeatCapForOwner } from "./organizationSeats";
 import { orgRoleForUserOnLab, labRoleFromOrgRole, transferBlockedOutOfOrg, isActiveOrgMember, resolveOwnerOrgId } from "./organizationRoles";
 import { planProvisionLabs, accreditationFlagsFor } from "./organizationProvision";
+import { normalizeLineItems, computeOrgInvoice, laterExpiry, orgSubscriptionExpiryForLab, buildOrgSubscriptionItems } from "./organizationBilling";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard";
@@ -6855,6 +6856,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     let role: string | null = baseRole;
     if (baseRole !== "owner" && orgLabRole === "admin") role = "admin";
 
+    // Phase 3c (docs/SYSTEM_ENTITY_DESIGN.md): an org-linked lab inherits the
+    // organization's subscription coverage (Option 1 bills the system once for
+    // all its labs). Additive only: take the LATER of the lab's own expiry and
+    // the org's, so org coverage can EXTEND access but never shorten it. The
+    // trial hard-lock above is unaffected (it reads labFields directly), and a
+    // standalone lab (no org) gets orgExpiry=null, so its value is unchanged.
+    const effectiveSubExpiry = laterExpiry(labFields.subscription_expires_at, orgSubscriptionExpiryForLab(sqlite, labId));
+
     req.scope = {
       labId,
       userId,
@@ -6875,7 +6884,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // no existing route reads this field.
         study_credits: labFields.study_credits,
         subscription_status: labFields.subscription_status,
-        subscription_expires_at: labFields.subscription_expires_at,
+        // Phase 3c: org coverage overlaid (later of lab's own and the org's).
+        subscription_expires_at: effectiveSubExpiry,
         plan_expires_at: labFields.plan_expires_at,
         stripe_customer_id: labFields.stripe_customer_id,
         lab_name: labFields.lab_name,
@@ -31548,6 +31558,134 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // GET /api/admin/organizations/:orgId/billing — Phase 3b: the org's billing
+  // object and single-invoice rollup (per-lab line items + total + renewal).
+  // ADMIN_SECRET-gated. Read-only.
+  app.get("/api/admin/organizations/:orgId/billing", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const sqlite = (db as any).$client;
+    const orgId = Number(req.params.orgId);
+    if (!Number.isInteger(orgId)) return res.status(400).json({ error: "invalid orgId" });
+    const org = sqlite.prepare("SELECT id, name, billing_owner_user_id, plan, subscription_status, subscription_expires_at, stripe_customer_id, stripe_subscription_id, active_seat_pool FROM organizations WHERE id = ?").get(orgId) as any;
+    if (!org) return res.status(404).json({ error: "organization not found" });
+    const rows = sqlite
+      .prepare("SELECT id, lab_id, description, annual_amount_cents, currency, status FROM organization_billing_line_items WHERE organization_id = ? AND status = 'active' ORDER BY lab_id IS NULL, lab_id, id")
+      .all(orgId) as any[];
+    const items = rows.map((r: any) => ({ labId: r.lab_id ?? null, description: r.description ?? null, annualAmountCents: r.annual_amount_cents }));
+    res.json({ organization: org, lineItems: rows, invoice: computeOrgInvoice(items) });
+  });
+
+  // POST /api/admin/organizations/:orgId/billing — Phase 3b: set the org's
+  // billing (Option 1: one subscription/renewal, per-lab line items). Replaces
+  // the org's active line items wholesale (so re-posting is idempotent), and
+  // updates the org's own subscription fields (status / renewal date / plan).
+  // Writes NO Stripe: System tier is custom-quoted and this records the agreed
+  // terms as the single-invoice/renewal object. Firing the actual Stripe
+  // subscription is a separate, test-mode-verified step. dryRun returns the
+  // computed invoice without writing. ADMIN_SECRET-gated. Body:
+  //   { secret, dryRun?, lineItems: [{ labId?, description?, annualAmountCents }],
+  //     subscriptionStatus?, subscriptionExpiresAt?, plan? }.
+  app.post("/api/admin/organizations/:orgId/billing", (req, res) => {
+    const { secret, dryRun, lineItems, subscriptionStatus, subscriptionExpiresAt, plan } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const orgId = Number(req.params.orgId);
+    if (!Number.isInteger(orgId)) return res.status(400).json({ error: "invalid orgId" });
+    const org = sqlite.prepare("SELECT id FROM organizations WHERE id = ?").get(orgId) as any;
+    if (!org) return res.status(404).json({ error: "organization not found" });
+
+    const { items, errors } = normalizeLineItems(lineItems);
+    // Each lab-scoped line item must reference a lab that belongs to THIS org.
+    if (errors.length === 0) {
+      for (let i = 0; i < items.length; i++) {
+        const labId = items[i].labId;
+        if (labId == null) continue;
+        const owned = sqlite.prepare("SELECT 1 FROM labs WHERE id = ? AND organization_id = ? LIMIT 1").get(labId, orgId);
+        if (!owned) errors.push(`lineItems[${i}].labId ${labId} is not a lab in this organization`);
+      }
+    }
+    const invoice = computeOrgInvoice(items);
+    if (dryRun === true) return res.json({ dryRun: true, orgId, invoice, errors });
+    if (errors.length) return res.status(400).json({ error: "validation", errors });
+
+    const now = new Date().toISOString();
+    try {
+      sqlite.exec("BEGIN");
+      // Replace the active line items wholesale (idempotent re-post).
+      sqlite.prepare("DELETE FROM organization_billing_line_items WHERE organization_id = ?").run(orgId);
+      const ins = sqlite.prepare(
+        "INSERT INTO organization_billing_line_items (organization_id, lab_id, description, annual_amount_cents, currency, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'usd', 'active', ?, ?)",
+      );
+      for (const it of items) ins.run(orgId, it.labId, it.description, it.annualAmountCents, now, now);
+      // Update the org's own subscription fields when provided.
+      if (subscriptionStatus !== undefined) sqlite.prepare("UPDATE organizations SET subscription_status = ?, updated_at = ? WHERE id = ?").run(String(subscriptionStatus), now, orgId);
+      if (subscriptionExpiresAt !== undefined) sqlite.prepare("UPDATE organizations SET subscription_expires_at = ?, updated_at = ? WHERE id = ?").run(subscriptionExpiresAt == null ? null : String(subscriptionExpiresAt), now, orgId);
+      if (plan !== undefined) sqlite.prepare("UPDATE organizations SET plan = ?, updated_at = ? WHERE id = ?").run(plan == null ? null : String(plan), now, orgId);
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[admin/organizations/:orgId/billing] failed:", err.message);
+      return res.status(500).json({ error: err.message || "set billing failed" });
+    }
+    const orgRow = sqlite.prepare("SELECT id, name, plan, subscription_status, subscription_expires_at, active_seat_pool FROM organizations WHERE id = ?").get(orgId);
+    console.log(`[admin/organizations/${orgId}/billing] lines=${items.length} total_cents=${invoice.totalCents} status=${subscriptionStatus ?? "(unchanged)"}`);
+    res.json({ ok: true, organization: orgRow, invoice });
+  });
+
+  // POST /api/admin/organizations/:orgId/billing/stripe-subscription — Phase 3d:
+  // create the ONE Stripe subscription for the system from its 3b billing line
+  // items (Option 1: one sub, one item per line, inline custom price_data since
+  // System tier is custom-quoted). dryRun (DEFAULT) returns the exact params
+  // WITHOUT calling Stripe, so the request shape is verifiable offline. Firing
+  // the live subscription requires confirm:true AND the org's stripe_customer_id,
+  // and persists stripe_subscription_id + status + renewal from Stripe's result.
+  // ADMIN_SECRET-gated. Body: { secret, confirm?, currency? }.
+  //
+  // NOTE: the live path is exercised against Stripe TEST mode only until verified;
+  // it is never auto-run. Migrating an existing system's per-lab subscriptions
+  // onto this org sub is a separate, deliberate per-system step, not done here.
+  app.post("/api/admin/organizations/:orgId/billing/stripe-subscription", async (req: any, res) => {
+    const { secret, confirm, currency } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const orgId = Number(req.params.orgId);
+    if (!Number.isInteger(orgId)) return res.status(400).json({ error: "invalid orgId" });
+    const org = sqlite.prepare("SELECT id, name, stripe_customer_id, stripe_subscription_id FROM organizations WHERE id = ?").get(orgId) as any;
+    if (!org) return res.status(404).json({ error: "organization not found" });
+    const rows = sqlite
+      .prepare("SELECT lab_id, description, annual_amount_cents FROM organization_billing_line_items WHERE organization_id = ? AND status = 'active' ORDER BY lab_id IS NULL, lab_id, id")
+      .all(orgId) as any[];
+    if (rows.length === 0) return res.status(400).json({ error: "no active billing line items; set billing first (POST .../billing)" });
+    const items = rows.map((r: any) => ({ labId: r.lab_id ?? null, description: r.description ?? null, annualAmountCents: r.annual_amount_cents }));
+    const subItems = buildOrgSubscriptionItems(items, typeof currency === "string" && currency ? currency : "usd");
+    const params = { customer: org.stripe_customer_id || null, items: subItems, metadata: { organizationId: String(orgId) } };
+
+    // dryRun is the default; only an explicit confirm:true fires Stripe.
+    if (confirm !== true) {
+      return res.json({ dryRun: true, orgId, stripeCustomerId: org.stripe_customer_id || null, itemCount: subItems.length, params });
+    }
+    if (!stripe) return res.status(503).json({ error: "Stripe not configured" });
+    if (!org.stripe_customer_id) return res.status(400).json({ error: "organization has no stripe_customer_id; create/attach the Stripe customer first" });
+    try {
+      const sub = await stripe.subscriptions.create({
+        customer: org.stripe_customer_id,
+        items: subItems as any,
+        metadata: { organizationId: String(orgId) },
+      } as any);
+      const now = new Date().toISOString();
+      const subAny = sub as any;
+      const expiresAt = subAny.current_period_end ? new Date(subAny.current_period_end * 1000).toISOString() : null;
+      sqlite.prepare("UPDATE organizations SET stripe_subscription_id = ?, subscription_status = ?, subscription_expires_at = ?, updated_at = ? WHERE id = ?")
+        .run(subAny.id, subAny.status || "active", expiresAt, now, orgId);
+      console.log(`[admin/organizations/${orgId}/billing/stripe-subscription] created sub=${sub.id} status=${sub.status} items=${subItems.length}`);
+      res.json({ ok: true, orgId, stripeSubscriptionId: sub.id, status: sub.status, subscriptionExpiresAt: expiresAt });
+    } catch (err: any) {
+      console.error(`[admin/organizations/${orgId}/billing/stripe-subscription] failed:`, err.message);
+      res.status(502).json({ error: err.message || "Stripe subscription create failed" });
+    }
+  });
+
   // On-demand path for the nightly linearity-exemption drop guard. Read-only:
   // compares each lab's two most recent snapshots and reports maps whose active
   // exemption count fell sharply (a wipe). Same audit the 05:00 UTC job runs.
@@ -31673,6 +31811,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       sqlite.prepare("DELETE FROM staff_position_descriptions WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM policy_quiz_questions WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM intacct_export_config WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM organization_billing_line_items WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM lab_audit_log WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM lab_members WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM labs WHERE id = ?").run(id);
