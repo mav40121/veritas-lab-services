@@ -83,3 +83,29 @@ export function planProvisionLabs(
   }
   return plan;
 }
+
+// Phase 2d follow-on (Michael 2026-10-01, option 1): decide whether and how to
+// grant the OPERATOR (Michael) an org_admin membership on a provisioned system,
+// so his account is the seat-free master overview. Phase 2d (labVisibleToUser)
+// confers visibility of every lab in an org from an active org_owner/org_admin
+// membership, and an org membership creates NO user_seats row, so this costs no
+// writer seat. Pure; mirrored by scripts/verify-operator-overview-grant.mjs.
+//
+//   "insert"  -> no membership yet; add org_admin/active
+//   "promote" -> a non-owner membership exists but is not active org_admin; set it
+//   "skip"    -> operator account missing, operator IS the org owner, operator is
+//                already an active org_admin, or operator is the org_owner
+//                (never demote an owner)
+export function operatorOverviewGrant(args: {
+  ownerUserId: number;
+  operatorUserId: number | null;
+  existing: { orgRole: string; status: string } | null;
+}): "insert" | "promote" | "skip" {
+  const { ownerUserId, operatorUserId, existing } = args;
+  if (operatorUserId == null) return "skip"; // operator account not found by email
+  if (operatorUserId === ownerUserId) return "skip"; // already the org_owner
+  if (!existing) return "insert";
+  if (existing.orgRole === "org_owner") return "skip"; // never demote an owner
+  if (existing.orgRole === "org_admin" && existing.status === "active") return "skip"; // already set
+  return "promote"; // reactivate a deactivated row, or raise org_admin from another role
+}

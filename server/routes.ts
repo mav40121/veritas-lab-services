@@ -30,7 +30,7 @@ import { auditSystemOwnership } from "./systemOwnershipAudit";
 import { computeBackfillCandidates } from "./organizationBackfill";
 import { orgSeatCapForOwner } from "./organizationSeats";
 import { orgRoleForUserOnLab, labRoleFromOrgRole, transferBlockedOutOfOrg, isActiveOrgMember, resolveOwnerOrgId } from "./organizationRoles";
-import { planProvisionLabs, accreditationFlagsFor } from "./organizationProvision";
+import { planProvisionLabs, accreditationFlagsFor, operatorOverviewGrant } from "./organizationProvision";
 import { normalizeLineItems, computeOrgInvoice, laterExpiry, orgSubscriptionExpiryForLab, buildOrgSubscriptionItems } from "./organizationBilling";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
@@ -1248,6 +1248,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── ADMIN ────────────────────────────────────────────────────────────────
   const ADMIN_SECRET = process.env.ADMIN_SECRET!;
+
+  // The operator (Michael) account email. Phase 2d follow-on: provision-system
+  // grants this account a seat-free org_admin membership on every system so it
+  // is the cross-system master overview. Env-overridable; defaults to Michael's
+  // address. Not a secret.
+  const OPERATOR_OVERVIEW_EMAIL = (process.env.OPERATOR_EMAIL || "verilabguy@gmail.com").trim();
 
   // Plan display name mapping
   const PLAN_DISPLAY_NAMES: Record<string, string> = {
@@ -31630,6 +31636,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         sqlite
           .prepare("INSERT INTO organization_members (organization_id, user_id, org_role, status, created_at, updated_at) VALUES (?, ?, 'org_owner', 'active', ?, ?)")
           .run(orgId, ownerId, now, now);
+      }
+
+      // Master overview (Phase 2d follow-on): ensure the operator (Michael) is an
+      // active org_admin of every provisioned system, seat-free. Resolve by email
+      // so no id is hardcoded; the pure helper decides insert/promote/skip and
+      // never demotes an org_owner.
+      const operatorRow = sqlite.prepare("SELECT id FROM users WHERE lower(email) = lower(?)").get(OPERATOR_OVERVIEW_EMAIL) as any;
+      const operatorExisting = operatorRow
+        ? (sqlite.prepare("SELECT org_role AS orgRole, status FROM organization_members WHERE organization_id = ? AND user_id = ?").get(orgId, Number(operatorRow.id)) as any)
+        : null;
+      const grant = operatorOverviewGrant({
+        ownerUserId: ownerId,
+        operatorUserId: operatorRow ? Number(operatorRow.id) : null,
+        existing: operatorExisting ? { orgRole: operatorExisting.orgRole, status: operatorExisting.status } : null,
+      });
+      if (grant === "insert") {
+        sqlite
+          .prepare("INSERT INTO organization_members (organization_id, user_id, org_role, status, created_at, updated_at) VALUES (?, ?, 'org_admin', 'active', ?, ?)")
+          .run(orgId, Number(operatorRow.id), now, now);
+      } else if (grant === "promote") {
+        sqlite
+          .prepare("UPDATE organization_members SET org_role = 'org_admin', status = 'active', updated_at = ? WHERE organization_id = ? AND user_id = ?")
+          .run(now, orgId, Number(operatorRow.id));
       }
 
       // Seat pool.
