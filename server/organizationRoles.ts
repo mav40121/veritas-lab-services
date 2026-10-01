@@ -54,3 +54,52 @@ export function orgRoleForUserOnLab(sqlite: any, userId: number, labId: number):
 export function orgDerivedLabRole(sqlite: any, userId: number, labId: number): "admin" | null {
   return labRoleFromOrgRole(orgRoleForUserOnLab(sqlite, userId, labId));
 }
+
+// ── PR 2c: transfer / create guard (docs/SYSTEM_ENTITY_DESIGN.md) ───────────
+// Q3 (Michael 2026-10-01): a lab that belongs to an organization may not be
+// transferred OUT of that organization, and a new lab created by an owner who
+// already has an organization inherits it.
+
+// Pure: should a transfer be BLOCKED because it would move an org-linked lab out
+// of its organization? A standalone lab (labOrgId null) is never blocked. An
+// org lab is blocked unless the new owner is an active member of that org.
+export function transferBlockedOutOfOrg(labOrgId: number | null, newOwnerIsActiveOrgMember: boolean): boolean {
+  if (labOrgId == null) return false;
+  return !newOwnerIsActiveOrgMember;
+}
+
+// Pure: the organization a newly created lab should inherit, given the distinct
+// org ids the creating owner's EXISTING labs already belong to. Inherit only
+// when unambiguous (exactly one org); otherwise none (standalone, or an owner
+// whose labs span more than one org).
+export function inheritedOrgIdForNewLab(distinctOrgIds: number[]): number | null {
+  const uniq = Array.from(new Set(distinctOrgIds.filter((n) => Number.isInteger(n) && n > 0)));
+  return uniq.length === 1 ? uniq[0] : null;
+}
+
+// SQLite: is the user an ACTIVE member of this organization?
+export function isActiveOrgMember(sqlite: any, userId: number, orgId: number): boolean {
+  try {
+    const row = sqlite
+      .prepare("SELECT 1 AS ok FROM organization_members WHERE organization_id = ? AND user_id = ? AND status = 'active' LIMIT 1")
+      .get(orgId, userId) as any;
+    return !!row;
+  } catch {
+    return false;
+  }
+}
+
+// SQLite: the single organization the owner's existing labs belong to, or null
+// when there is none or it is ambiguous. The owner's brand-new lab (still
+// organization_id NULL at call time) is naturally excluded by the IS NOT NULL
+// filter, so this can be called right after the new lab is inserted.
+export function resolveOwnerOrgId(sqlite: any, ownerUserId: number): number | null {
+  try {
+    const rows = sqlite
+      .prepare("SELECT DISTINCT organization_id AS org FROM labs WHERE owner_user_id = ? AND organization_id IS NOT NULL")
+      .all(ownerUserId) as any[];
+    return inheritedOrgIdForNewLab(rows.map((r) => Number(r.org)));
+  } catch {
+    return null;
+  }
+}
