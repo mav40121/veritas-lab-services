@@ -38,15 +38,15 @@ test.describe("Lab switcher — Network overview entry", () => {
     await expect(trigger).toBeVisible({ timeout: 10000 });
     await trigger.click();
 
-    // The "Network overview" item sits at the top of the dropdown, above the
-    // "Switch lab" group.
-    const overview = page.getByRole("menuitem", { name: /network overview/i });
+    // A "Network overview" item sits inside each organization's section (one per
+    // system, not a single global entry). Click the first one.
+    const overview = page.getByRole("menuitem", { name: /network overview/i }).first();
     await expect(overview).toBeVisible();
     await overview.click();
 
-    // Lands on the readiness page; multi-lab accounts land on the network
-    // command center (heading "Inspection Readiness").
-    await expect(page).toHaveURL(/\/labs\/\d+\/readiness/);
+    // Lands on the readiness page scoped to that system (?org=<id>); multi-lab
+    // systems land on the network command center (heading "Inspection Readiness").
+    await expect(page).toHaveURL(/\/labs\/\d+\/readiness(\?org=\d+)?/);
     await expect(page.getByRole("heading", { name: /inspection readiness/i })).toBeVisible({ timeout: 10000 });
   });
 });

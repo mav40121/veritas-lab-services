@@ -215,19 +215,6 @@ export function LabSwitcher() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80">
-        {/* Network overview: the Inspection Readiness command center across every
-            lab the user is on (the readiness roll-up). Surfaced here because
-            multi-lab owners/admins look for the "overview" in the switcher, not
-            buried as the first item of the 20-entry VeritaAssure module menu.
-            Routes through the active lab so useActiveLabId resolves; the page
-            lands multi-lab accounts on the network command center first. */}
-        <DropdownMenuItem asChild>
-          <Link href={`/labs/${current.labId}/readiness`} className="flex items-center gap-2 py-2 cursor-pointer">
-            <Gauge size={14} className="text-primary shrink-0" />
-            <span className="text-sm font-medium">Network overview</span>
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
           Switch lab
         </DropdownMenuLabel>
@@ -245,6 +232,20 @@ export function LabSwitcher() {
                   "Other labs"
                 )}
               </DropdownMenuLabel>
+            )}
+            {/* Per-system overview: a system's readiness roll-up belongs to that
+                system, so the "Network overview" entry lives inside each org's
+                section (not as one global entry). Opens the readiness command
+                center filtered to this org, routed through one of its labs so
+                useActiveLabId resolves. Standalone "Other labs" (no org) get no
+                system overview. */}
+            {g.orgId != null && g.labs.length > 0 && (
+              <DropdownMenuItem asChild>
+                <Link href={`/labs/${g.labs[0].labId}/readiness?org=${g.orgId}`} className="flex items-center gap-2 py-1.5 pl-6 cursor-pointer">
+                  <Gauge size={13} className="text-primary shrink-0" />
+                  <span className="text-xs font-medium">Network overview</span>
+                </Link>
+              </DropdownMenuItem>
             )}
             {g.labs.map(m => {
           const isCurrent = m.labId === current.labId;
@@ -360,17 +361,7 @@ export function LabSwitcherMobile({ onAfterSwitch }: { onAfterSwitch?: () => voi
 
   return (
     <div className="px-1 py-2 border-t border-border mt-2">
-      {/* Network overview (readiness roll-up) — mobile parity with the desktop
-          switcher entry. Routes through the active lab and closes the drawer. */}
-      <Link
-        href={`/labs/${current.labId}/readiness`}
-        onClick={() => onAfterSwitch?.()}
-        className="flex items-center gap-2 px-3 py-2 rounded-md text-left hover:bg-secondary transition-colors"
-      >
-        <Gauge size={14} className="text-primary shrink-0" />
-        <span className="text-sm font-medium">Network overview</span>
-      </Link>
-      <div className="px-2 pt-2 pb-1.5 flex items-center gap-1.5">
+      <div className="px-2 pb-1.5 flex items-center gap-1.5">
         <Building2 size={13} className="text-primary shrink-0" />
         <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Switch lab</span>
       </div>
@@ -388,6 +379,17 @@ export function LabSwitcherMobile({ onAfterSwitch }: { onAfterSwitch?: () => voi
                   "Other labs"
                 )}
               </div>
+            )}
+            {/* Per-system overview inside each org section (mobile parity). */}
+            {g.orgId != null && g.labs.length > 0 && (
+              <Link
+                href={`/labs/${g.labs[0].labId}/readiness?org=${g.orgId}`}
+                onClick={() => onAfterSwitch?.()}
+                className="flex items-center gap-2 px-3 py-1.5 pl-6 rounded-md text-left hover:bg-secondary transition-colors"
+              >
+                <Gauge size={13} className="text-primary shrink-0" />
+                <span className="text-xs font-medium">Network overview</span>
+              </Link>
             )}
             {g.labs.map(m => {
           const isCurrent = m.labId === current.labId;
