@@ -16851,8 +16851,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const orgId = orgRow?.organization_id ?? null;
     if (!orgId) return res.json({ organizationId: null, documents: [] });
     const rows = sqlite.prepare(
-      `SELECT d.id, d.title, d.description, d.category, d.url, d.added_by_user_id,
-              u.name AS added_by_name, d.created_at, d.updated_at
+      `SELECT d.id, d.title, d.description, d.category, d.url,
+              d.doc_kind, d.file_name, d.file_type, d.file_size, d.hipaa_acknowledged,
+              d.added_by_user_id, u.name AS added_by_name, d.created_at, d.updated_at
          FROM system_documents d
          LEFT JOIN users u ON u.id = d.added_by_user_id
         WHERE d.organization_id = ? AND d.status = 'active'
@@ -16883,6 +16884,61 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const row = sqlite.prepare("SELECT id, title, description, category, url, added_by_user_id, created_at, updated_at FROM system_documents WHERE id = ?").get(id);
     console.log(`[repository/documents] org=${orgId} lab=${req.scope.labId} added doc ${id} by user ${uid}`);
     res.json({ ok: true, document: row });
+  });
+
+  // POST /api/labs/:labId/repository/documents/upload — upload a FILE (stored as a
+  // BLOB in the DB, so it is shared org-wide and included in the DB backup). Each
+  // upload REQUIRES a HIPAA acknowledgment; without it the file is rejected.
+  app.post("/api/labs/:labId/repository/documents/upload", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    const m = require("multer");
+    const upload = m({ storage: m.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } }).single("file");
+    upload(req, res, (err: any) => {
+      if (err) return res.status(400).json({ error: err.code === "LIMIT_FILE_SIZE" ? "File too large (max 25 MB)." : "Upload failed." });
+      const sqlite = (db as any).$client;
+      const orgRow = sqlite.prepare("SELECT organization_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
+      const orgId = orgRow?.organization_id ?? null;
+      if (!orgId) return res.status(400).json({ error: "This lab is not part of a system; the shared repository is only available to labs in an organization." });
+      if (!req.file?.buffer) return res.status(400).json({ error: "No file uploaded." });
+      const ack = String(req.body?.hipaaAcknowledged ?? "").toLowerCase();
+      if (ack !== "true" && ack !== "1" && ack !== "on" && ack !== "yes") {
+        return res.status(400).json({ error: "HIPAA acknowledgment is required before a file can be uploaded." });
+      }
+      const title = String(req.body?.title ?? "").trim() || req.file.originalname || "Untitled document";
+      const description = String(req.body?.description ?? "").trim() || null;
+      const category = String(req.body?.category ?? "").trim() || null;
+      const now = new Date().toISOString();
+      const uid = req.user?.id ?? req.userId ?? null;
+      const id = Number(
+        sqlite.prepare(
+          `INSERT INTO system_documents
+             (organization_id, title, description, category, url, doc_kind, file_name, file_type, file_size, file_data, hipaa_acknowledged, hipaa_ack_at, added_by_user_id, status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, '', 'file', ?, ?, ?, ?, 1, ?, ?, 'active', ?, ?)`,
+        ).run(orgId, title, description, category, req.file.originalname || title, req.file.mimetype || "application/octet-stream", req.file.size, req.file.buffer, now, uid, now, now).lastInsertRowid,
+      );
+      const row = sqlite.prepare("SELECT id, title, description, category, url, doc_kind, file_name, file_type, file_size, hipaa_acknowledged, added_by_user_id, created_at, updated_at FROM system_documents WHERE id = ?").get(id);
+      console.log(`[repository/documents] org=${orgId} lab=${req.scope.labId} uploaded FILE doc ${id} (${req.file.size}b, hipaa-ack) by user ${uid}`);
+      res.json({ ok: true, document: row });
+    });
+  });
+
+  // GET /api/labs/:labId/repository/documents/:docId/download — stream a file doc's
+  // BLOB. Org-scoped so one system cannot read another's files.
+  app.get("/api/labs/:labId/repository/documents/:docId/download", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const orgRow = sqlite.prepare("SELECT organization_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    const orgId = orgRow?.organization_id ?? null;
+    if (!orgId) return res.status(400).json({ error: "This lab is not part of a system." });
+    const docId = Number(req.params.docId);
+    if (!Number.isInteger(docId)) return res.status(400).json({ error: "invalid document id" });
+    const doc = sqlite.prepare(
+      "SELECT file_name, file_type, file_size, file_data FROM system_documents WHERE id = ? AND organization_id = ? AND status = 'active' AND doc_kind = 'file'",
+    ).get(docId) as any;
+    if (!doc?.file_data) return res.status(404).json({ error: "File not found." });
+    const safeName = String(doc.file_name || "document").replace(/[^\w.\- ]+/g, "_");
+    res.setHeader("Content-Type", doc.file_type || "application/octet-stream");
+    res.setHeader("Content-Disposition", `attachment; filename="${safeName}"`);
+    if (doc.file_size) res.setHeader("Content-Length", String(doc.file_size));
+    res.send(Buffer.from(doc.file_data));
   });
 
   // DELETE /api/labs/:labId/repository/documents/:docId — remove a shared document
