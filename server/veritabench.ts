@@ -206,7 +206,7 @@ export function registerVeritaBenchRoutes(
   });
 
   // POST /api/productivity - upsert a month
-  app.post("/api/productivity", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/productivity", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const labId = resolveOpsLabId(req);
@@ -240,7 +240,7 @@ export function registerVeritaBenchRoutes(
   });
 
   // DELETE /api/productivity/:id - delete a month entry
-  app.delete("/api/productivity/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/productivity/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
@@ -287,7 +287,7 @@ export function registerVeritaBenchRoutes(
     res.json(buildForecastResponse(accountId, resolveOpsLabId(req)));
   });
 
-  app.post("/api/productivity/forecast", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/productivity/forecast", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const labId = resolveOpsLabId(req);
@@ -330,7 +330,7 @@ export function registerVeritaBenchRoutes(
     res.json(buildGridResponse(accountId, resolveOpsLabId(req)));
   });
 
-  app.post("/api/staffing-grid", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/staffing-grid", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const labId = resolveOpsLabId(req);
@@ -581,7 +581,7 @@ export function registerVeritaBenchRoutes(
   });
 
   // POST /api/staffing-studies - create study
-  app.post("/api/staffing-studies", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/staffing-studies", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { name, department, start_date } = req.body;
@@ -615,7 +615,7 @@ export function registerVeritaBenchRoutes(
   // adequate for the volume and complexity, or records a gap and the plan to
   // close it. Cites 42 CFR 493.1445(e)(5). An empty determination clears the
   // attestation (re-open for re-review).
-  app.post("/api/staffing-studies/:id/attest-adequacy", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/staffing-studies/:id/attest-adequacy", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
@@ -645,7 +645,7 @@ export function registerVeritaBenchRoutes(
   });
 
   // POST /api/staffing-studies/:id/data - batch upsert hourly data
-  app.post("/api/staffing-studies/:id/data", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/staffing-studies/:id/data", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
@@ -678,7 +678,7 @@ export function registerVeritaBenchRoutes(
   });
 
   // DELETE /api/staffing-studies/:id - delete study and cascade data
-  app.delete("/api/staffing-studies/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/staffing-studies/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
@@ -1337,7 +1337,7 @@ export function registerVeritaBenchRoutes(
   //
   // The whole SELECT-UPDATE-INSERT runs in a sqlite transaction so two
   // concurrent scans of the same barcode can't read stale quantities.
-  app.post("/api/inventory/scan", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/inventory/scan", authMiddleware, requireWriteAccess, requireModuleEdit('veritastock'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const rawBarcode = req.body?.barcode_value;
@@ -1450,7 +1450,7 @@ export function registerVeritaBenchRoutes(
   // so existing scan-history queries keep working.
   const scanLabScopeMW = (app as any).locals?.labScopeMiddleware;
   if (scanLabScopeMW) {
-    app.post("/api/labs/:labId/inventory/scan", authMiddleware, scanLabScopeMW, requireWriteAccess, (req: any, res) => {
+    app.post("/api/labs/:labId/inventory/scan", authMiddleware, scanLabScopeMW, requireWriteAccess, requireModuleEdit('veritastock'), (req: any, res) => {
       if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
       const labId = req.scope.labId;
       const rawBarcode = req.body?.barcode_value;
@@ -1603,7 +1603,7 @@ export function registerVeritaBenchRoutes(
   });
 
   // POST /api/inventory - create new inventory item
-  app.post("/api/inventory", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/inventory", authMiddleware, requireWriteAccess, requireModuleEdit('veritastock'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, storage_temp, storage_temp_threshold, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, unit_cost, on_order_qty, on_order_expected_date, on_order_placed_date } = req.body;
@@ -1686,7 +1686,7 @@ export function registerVeritaBenchRoutes(
   }
 
   // PUT /api/inventory/:id - update an inventory item
-  app.put("/api/inventory/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.put("/api/inventory/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritastock'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
@@ -1793,7 +1793,7 @@ export function registerVeritaBenchRoutes(
   //   body: { new_count?, new_quantity?, reason? }
   // Director-side counterpart of the kiosk + staff portal adjust endpoints.
   // Same count_unit -> usage_unit conversion. Access via Shape A guard.
-  app.post("/api/inventory/:id/adjust", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/inventory/:id/adjust", authMiddleware, requireWriteAccess, requireModuleEdit('veritastock'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const { id } = req.params;
     const itemId = Number(id);
@@ -1888,7 +1888,7 @@ export function registerVeritaBenchRoutes(
   // order. This is a DEDICATED endpoint on purpose: PUT /api/inventory/:id is a
   // full-replace that would zero on-hand/burn on a partial body, so receiving
   // must never go through it. Access via the same Shape A guard as /adjust.
-  app.post("/api/inventory/:id/receive", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/inventory/:id/receive", authMiddleware, requireWriteAccess, requireModuleEdit('veritastock'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const { id } = req.params;
     const itemId = Number(id);
@@ -2049,7 +2049,7 @@ export function registerVeritaBenchRoutes(
   // lead-time drift flag: the materials manager owns the parameter, so it is
   // never auto-changed, only applied on their action. Dedicated endpoint so a
   // partial PUT cannot full-replace and zero other fields.
-  app.post("/api/inventory/:id/lead-time", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/inventory/:id/lead-time", authMiddleware, requireWriteAccess, requireModuleEdit('veritastock'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const itemId = Number(req.params.id);
     if (!Number.isFinite(itemId) || itemId <= 0) return res.status(400).json({ error: "Invalid item id" });
@@ -2074,7 +2074,7 @@ export function registerVeritaBenchRoutes(
   // current month's snapshot so the trend reflects it. Dedicated endpoint (not a
   // partial PUT, which would full-replace and zero on-hand).
   const WASTE_REASONS = new Set(["expired", "damaged", "recalled", "lost"]);
-  app.post("/api/inventory/:id/write-off", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/inventory/:id/write-off", authMiddleware, requireWriteAccess, requireModuleEdit('veritastock'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const { id } = req.params;
     const itemId = Number(id);
@@ -2156,7 +2156,7 @@ export function registerVeritaBenchRoutes(
   });
 
   // DELETE /api/inventory/:id - delete an inventory item
-  app.delete("/api/inventory/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/inventory/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritastock'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const { id } = req.params;
     const { item: row, status: resolveStatus } = resolveInventoryItemForMutation(id, req);
@@ -2363,7 +2363,7 @@ export function registerVeritaBenchRoutes(
   });
 
   // POST /api/pi/departments - create department
-  app.post("/api/pi/departments", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/pi/departments", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { name, sort_order } = req.body;
@@ -2381,7 +2381,7 @@ export function registerVeritaBenchRoutes(
   });
 
   // PUT /api/pi/departments/:id - update department
-  app.put("/api/pi/departments/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.put("/api/pi/departments/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
@@ -2400,7 +2400,7 @@ export function registerVeritaBenchRoutes(
   });
 
   // DELETE /api/pi/departments/:id - delete department (cascade metrics + entries)
-  app.delete("/api/pi/departments/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/pi/departments/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
@@ -2428,7 +2428,7 @@ export function registerVeritaBenchRoutes(
   });
 
   // POST /api/pi/metrics - create metric
-  app.post("/api/pi/metrics", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/pi/metrics", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { department_id, name, unit, direction, benchmark_green, benchmark_yellow, benchmark_red, sort_order,
@@ -2448,7 +2448,7 @@ export function registerVeritaBenchRoutes(
   });
 
   // PUT /api/pi/metrics/:id - update metric (including benchmark thresholds)
-  app.put("/api/pi/metrics/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.put("/api/pi/metrics/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
@@ -2480,7 +2480,7 @@ export function registerVeritaBenchRoutes(
   });
 
   // DELETE /api/pi/metrics/:id - delete metric (cascade entries)
-  app.delete("/api/pi/metrics/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/pi/metrics/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
@@ -2551,7 +2551,7 @@ export function registerVeritaBenchRoutes(
   });
 
   // POST /api/pi/entries - upsert entry (metric_id + year + month unique)
-  app.post("/api/pi/entries", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/pi/entries", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { metric_id, year, month, value, volume, notes } = req.body;
@@ -2587,7 +2587,7 @@ export function registerVeritaBenchRoutes(
   // quality indicator misses its benchmark (a red month), the QA loop expects
   // the lab to document the root cause and corrective action. Operates on an
   // existing entry, account-scoped. An empty body clears the RCA.
-  app.post("/api/pi/entries/:id/rca", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/pi/entries/:id/rca", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
@@ -2611,7 +2611,7 @@ export function registerVeritaBenchRoutes(
   });
 
   // DELETE /api/pi/entries/:id - delete entry
-  app.delete("/api/pi/entries/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/pi/entries/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
@@ -2670,7 +2670,7 @@ export function registerVeritaBenchRoutes(
   });
 
   // PUT /api/pi/plan - upsert the single active plan (create if none exists).
-  app.put("/api/pi/plan", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.put("/api/pi/plan", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const b = req.body || {};
@@ -2696,7 +2696,7 @@ export function registerVeritaBenchRoutes(
   });
 
   // POST /api/pi/plan/priorities - add an improvement priority to the plan.
-  app.post("/api/pi/plan/priorities", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/pi/plan/priorities", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { plan_id, process_name, stakeholder_requirements, goal, improvement_activities, linked_metric_id, linked_department_id, sort_order } = req.body || {};
@@ -2715,7 +2715,7 @@ export function registerVeritaBenchRoutes(
   });
 
   // PUT /api/pi/plan/priorities/:id - update a priority (account-scoped).
-  app.put("/api/pi/plan/priorities/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.put("/api/pi/plan/priorities/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
@@ -2734,7 +2734,7 @@ export function registerVeritaBenchRoutes(
   });
 
   // DELETE /api/pi/plan/priorities/:id - remove a priority (account-scoped).
-  app.delete("/api/pi/plan/priorities/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/pi/plan/priorities/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
@@ -2747,7 +2747,7 @@ export function registerVeritaBenchRoutes(
   // POST /api/pi/plan/reviews - record an annual leadership review (EP2). The
   // review log is append-only (an audit record); next_review_due is stamped
   // 12 months out so the plan flags itself overdue.
-  app.post("/api/pi/plan/reviews", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/pi/plan/reviews", authMiddleware, requireWriteAccess, requireModuleEdit('veritabench'), (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { plan_id, reviewed_by, reviewer_title, review_date, changes_summary } = req.body || {};
@@ -3012,7 +3012,7 @@ export function registerVeritaBenchRoutes(
     // PUT /api/labs/:labId/veritastock/intacct-config, save the export config
     // (transaction definition, GL account, dimensions, date format, and the
     // editable Intacct-header -> source column mapping). Config edit, not code.
-    app.put("/api/labs/:labId/veritastock/intacct-config", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    app.put("/api/labs/:labId/veritastock/intacct-config", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastock'), (req: any, res) => {
       if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
       const labId = req.scope.labId;
       const config = sanitizeIntacctConfig(req.body?.config ?? req.body);
@@ -3349,7 +3349,7 @@ export function registerVeritaBenchRoutes(
       }
     });
 
-    app.post("/api/labs/:labId/inventory", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    app.post("/api/labs/:labId/inventory", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastock'), (req: any, res) => {
       if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
       const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, storage_temp, storage_temp_threshold, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, unit_cost, on_order_qty, on_order_expected_date, on_order_placed_date } = req.body;
       if (!item_name) return res.status(400).json({ error: "item_name is required" });
