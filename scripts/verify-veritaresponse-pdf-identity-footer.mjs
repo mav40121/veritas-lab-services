@@ -34,8 +34,9 @@ ok("#1 helper resolves the FINDING's lab from the labs table",
   /SELECT lab_name, clia_number FROM labs WHERE id = \?/.test(routes));
 ok("#1 helper falls back to a RAW users read (clia_lab_name present, unlike the typed select)",
   /SELECT clia_lab_name, clia_number FROM users WHERE id = \?/.test(routes));
-ok("#1 all 5 PDF routes now call resolveFindingLabIdentity(finding, dataUserId)",
-  (routes.match(/const user = resolveFindingLabIdentity\(finding, dataUserId\)/g) || []).length === 5);
+// The VeritaResponse POC/PDF suite grew from 5 to 6 generators; all call the helper.
+ok("#1 all 6 PDF routes now call resolveFindingLabIdentity(finding, dataUserId)",
+  (routes.match(/const user = resolveFindingLabIdentity\(finding, dataUserId\)/g) || []).length === 6);
 ok("#1 no PDF route still uses the typed getUserById for identity",
   !/const user = await storage\.getUserById\(dataUserId\);/.test(routes));
 
@@ -50,13 +51,14 @@ ok("#5 footer carries Page X of Y",
 const tplBlock = (pdf.match(/const VERITARESPONSE_FOOTER_TEMPLATE = `[\s\S]*?`;/) || [""])[0];
 ok("#5 footer template contains NO em-dash (char or \\u2014 escape)",
   tplBlock.length > 0 && !tplBlock.includes("—") && !tplBlock.includes("\\u2014"));
-ok("#5 all 5 VeritaResponse generators now pass VERITARESPONSE_FOOTER_TEMPLATE",
-  (pdf.match(/applyLicenseToPuppeteer\(html, VERITARESPONSE_FOOTER_TEMPLATE, licenseCtx\)/g) || []).length === 5);
-// The 5 VeritaResponse builders must no longer pass "" -- but the CMS-209 federal
-// replica (one deliberate empty-footer call) must remain untouched.
+ok("#5 all 6 VeritaResponse generators now pass VERITARESPONSE_FOOTER_TEMPLATE",
+  (pdf.match(/applyLicenseToPuppeteer\(html, VERITARESPONSE_FOOTER_TEMPLATE, licenseCtx\)/g) || []).length === 6);
+// The VeritaResponse builders must not pass "" as the footer. The CMS-209 federal
+// form no longer renders HTML at all (generateCMS209PDF fills the official
+// cms-209-template.pdf AcroForm), so there are now ZERO empty-footer Puppeteer calls.
 const emptyFooterCalls = (pdf.match(/applyLicenseToPuppeteer\(html, "", licenseCtx\)/g) || []).length;
-ok("#5 exactly ONE empty-footer call remains (the deliberate CMS-209 federal-form replica)",
-  emptyFooterCalls === 1);
+ok("#5 no empty-footer Puppeteer call remains (CMS-209 moved to the official AcroForm fill)",
+  emptyFooterCalls === 0);
 
 console.log("\n=== #1 functional proof: the exact SQL the helper runs, on a fixture DB ===");
 const db = new Database(":memory:");

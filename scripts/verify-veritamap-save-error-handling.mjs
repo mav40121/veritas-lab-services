@@ -29,7 +29,7 @@ const analyte = grab("handleSaveAnalyteValues");
 const amr = grab("handleSaveAmrValues");
 
 for (const [label, body, setter, toastTitle] of [
-  ["analyte-values (critical values / ref range / units)", analyte, "setAnalyteValuesMap", "Critical values not saved"],
+  ["analyte-values (critical values / ref range / units)", analyte, "setAnalyteValuesMap", "Values not saved"],
   ["amr-values (per instrument)", amr, "setAmrValuesMap", "AMR not saved"],
 ]) {
   ok(`${label}: handler found`, body.length > 0);

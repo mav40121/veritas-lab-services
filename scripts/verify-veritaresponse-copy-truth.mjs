@@ -38,7 +38,11 @@ ok("DemoLabPage: scopes the cross-link to a 42 CFR 493 standard",
   (demo.match(/when the finding cites a 42 CFR 493 standard/g) || []).length >= 2);
 
 // no em-dashes introduced (the strings we touched)
-ok("no em-dash in the VeritaAssure blurb", !/Renders a CMS-2567-compatible[\s\S]*?—/.test(va));
+// Scope the check to the blurb STRING itself ([^"]* stops at its closing quote).
+// The old /Renders...[\s\S]*?—/ spanned the whole file to an unrelated JSX code
+// comment's em-dash (allowed per Sec 3), a false positive.
+const blurb = (va.match(/Renders a CMS-2567-compatible[^"]*/) || [""])[0];
+ok("no em-dash in the VeritaResponse blurb", blurb.length > 0 && !blurb.includes("—"));
 
 console.log(fails === 0 ? "\n=== VERITARESPONSE COPY TRUTH: PASS ===" : `\n=== ${fails} FAIL ===`);
 process.exit(fails === 0 ? 0 : 1);
