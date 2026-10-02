@@ -38,8 +38,11 @@ for (const route of ["/veritascan", "/veritamap", "/veritacomp"]) {
   ok(`static.ts: ${route} wired into the noscript chain`, new RegExp(`routePath === "${route}"`).test(staticTs));
 }
 const blockTerms = [
-  "168 compliance questions across 10 laboratory domains",
-  "blood bank / transfusion service",
+  // Count corrected 168 -> 173 (scorecard #1, 2026-07-10); the authoritative
+  // receipt is verify-veritascan-item-count.mjs, which computes it from
+  // veritaScanData.ts. Domain phrasing is "blood bank and transfusion".
+  "173 compliance questions across 10 laboratory domains",
+  "blood bank and transfusion",
   "master regulatory map",
   "IQCP status",
   "all three types",
@@ -57,7 +60,7 @@ if (!BASE) {
   process.exit(fails === 0 ? 0 : 1);
 }
 const marker = {
-  "/veritascan": "168 compliance questions",
+  "/veritascan": "173 compliance questions",
   "/veritamap": "master regulatory map",
   "/veritacomp": "manages laboratory competency assessment across all three types",
 };
