@@ -10,6 +10,7 @@ import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { useMemberships, allowedAccreditorsForMembership } from "@/hooks/useMemberships";
 import { downloadPdfToken } from "@/lib/utils";
+import VeritaCeuAppPage from "@/pages/VeritaCeuAppPage";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -171,6 +172,20 @@ function getCompetencyStatus(schedule: CompetencySchedule | null): { label: stri
   return { label: "Current", color: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" };
 }
 
+// Top-level switcher between the staff roster and the embedded VeritaCEU
+// (Continuing Education) dashboard. CE lives as a tab in VeritaStaff, not a
+// separate module.
+function StaffTabs({ active, onChange }: { active: "roster" | "ce"; onChange: (t: "roster" | "ce") => void }) {
+  const cls = (on: boolean) =>
+    `px-3 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${on ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`;
+  return (
+    <div className="flex gap-1 mb-5 border-b border-border">
+      <button onClick={() => onChange("roster")} className={cls(active === "roster")}>Staff</button>
+      <button onClick={() => onChange("ce")} className={cls(active === "ce")}>Continuing Education</button>
+    </div>
+  );
+}
+
 // ── Main Component ──────────────────────────────────────────────────────
 
 export default function VeritaStaffAppPage() {
@@ -189,6 +204,8 @@ export default function VeritaStaffAppPage() {
   const [generatingPacket, setGeneratingPacket] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [showInstrumentAssign, setShowInstrumentAssign] = useState(false);
+  // VeritaCEU rides in VeritaStaff as a tab (not a separate module).
+  const [staffTab, setStaffTab] = useState<"roster" | "ce">("roster");
 
   // Auth + plan check
   const hasAccess = isLoggedIn && !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
@@ -336,8 +353,23 @@ export default function VeritaStaffAppPage() {
     );
   }
 
+  // VeritaCEU tab: the embedded Continuing Education dashboard (same lab scope).
+  if (staffTab === "ce") {
+    return (
+      <div className="container-default py-8">
+        <h1 className="font-serif text-3xl font-bold flex items-center gap-2 mb-4">
+          <Building2 size={28} className="text-primary" />
+          VeritaStaff{"™"}
+        </h1>
+        <StaffTabs active="ce" onChange={setStaffTab} />
+        <VeritaCeuAppPage embedded />
+      </div>
+    );
+  }
+
   return (
     <div className="container-default py-8">
+      <StaffTabs active="roster" onChange={setStaffTab} />
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
@@ -376,9 +408,6 @@ export default function VeritaStaffAppPage() {
               </Button>
               <Button variant="outline" size="sm" onClick={() => setShowInstrumentAssign(true)} disabled={readOnly} title="Assign staff from the instrument side: pick a test system or manual test, check off who runs it" data-testid="button-assign-by-instrument">
                 <FlaskConical size={14} className="mr-1.5" /> Assign by Instrument
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => navigate(labRoute("/veritaceu-app"))} title="VeritaCEU: continuing-education cycle status across the whole team">
-                <GraduationCap size={14} className="mr-1.5" /> CE Dashboard
               </Button>
               <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={handleGenerate209} disabled={generating209 || readOnly}>
                 <FileDown size={14} className="mr-1.5" /> {generating209 ? "Generating..." : "Generate CMS 209"}

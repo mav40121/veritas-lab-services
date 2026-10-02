@@ -65,7 +65,7 @@ interface CeProfile {
 type SortKey = "status" | "name";
 type Tab = "status" | "directory" | "requirements";
 
-export default function VeritaCeuAppPage() {
+export default function VeritaCeuAppPage({ embedded = false }: { embedded?: boolean } = {}) {
   const labId = useActiveLabId();
   const labRoute = useLabRoute();
   const { user } = useAuth();
@@ -150,19 +150,21 @@ export default function VeritaCeuAppPage() {
     );
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
-      <div className="flex items-start justify-between gap-4 mb-6">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <GraduationCap className="h-5 w-5 text-primary" />
-            <h1 className="text-2xl font-bold tracking-tight">VeritaCEU</h1>
+    <div className={embedded ? "" : "max-w-4xl mx-auto px-4 sm:px-6 py-8"}>
+      {!embedded && (
+        <div className="flex items-start justify-between gap-4 mb-6">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <GraduationCap className="h-5 w-5 text-primary" />
+              <h1 className="text-2xl font-bold tracking-tight">VeritaCEU</h1>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Continuing-education cycle status across your team. ASCP CMP standard is 36 points every 3 years;
+              log credits on each person&rsquo;s VeritaStaff&trade; record.
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Continuing-education cycle status across your team. ASCP CMP standard is 36 points every 3 years;
-            log credits on each person&rsquo;s VeritaStaff&trade; record.
-          </p>
         </div>
-      </div>
+      )}
 
       {/* Tab toggle */}
       <div className="flex gap-1 mb-5 border-b border-border">
