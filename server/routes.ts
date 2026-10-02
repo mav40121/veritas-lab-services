@@ -1037,6 +1037,21 @@ function requireModuleEdit(module: string) {
       ).get(activeLabId, req.userId);
       if (ownsLab) return next();
 
+      // Lab/org ADMINS have full edit access, parity with owners. An admin is a
+      // privileged management role; without this an admin whose seat is not
+      // edit-all was wrongly 403'd on every module write ("admin could not do
+      // admin functions", 2026-10-02). Mirrors the owner/admin membership check
+      // used across member management and labScopeMiddleware (lab_members role
+      // owner/admin, or org_owner/org_admin on the lab's organization).
+      const adminMember = (db as any).$client.prepare(
+        "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' AND role IN ('owner','admin') LIMIT 1"
+      ).get(activeLabId, req.userId)
+        || (db as any).$client.prepare(
+          `SELECT 1 FROM organization_members om JOIN labs l ON l.organization_id = om.organization_id
+            WHERE l.id = ? AND om.user_id = ? AND om.status = 'active' AND om.org_role IN ('org_owner','org_admin') LIMIT 1`
+        ).get(activeLabId, req.userId);
+      if (adminMember) return next();
+
       // Otherwise check if the caller has an active seat IN THIS lab.
       const seatRow = (db as any).$client.prepare(
         "SELECT permissions FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
@@ -38852,7 +38867,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // VeritaTrack routes
   const { registerVeritaTrackRoutes } = await import('./veritatrack');
-  registerVeritaTrackRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
+  registerVeritaTrackRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit, resolveActiveLabForRequest);
 
   const { registerVeritaCheckVerificationRoutes } = await import('./veritacheck_verification');
   registerVeritaCheckVerificationRoutes(app, authMiddleware, requireWriteAccess);
