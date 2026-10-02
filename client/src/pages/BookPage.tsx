@@ -46,7 +46,7 @@ function NotifyForm() {
           e.preventDefault();
           const input = e.currentTarget.elements.namedItem("email") as HTMLInputElement;
           const email = input.value;
-          fetch("/api/notify", {
+          fetch("/api/newsletter/subscribe", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email, source: "book" }),

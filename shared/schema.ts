@@ -182,6 +182,8 @@ export const SEAT_MODULE_KEYS = [
   'veritabench',  // covers VeritaPace, VeritaShift, VeritaQA (all under /veritabench/*)
   'veritastock',  // VeritaStock inventory manager
   'veritaresponse',  // VeritaResponse post-survey deficiency response (parking-lot #17)
+  'veritaops',  // VeritaOps CPRT/leverage: write routes are gated by requireModuleEdit('veritaops'),
+                // so it MUST be grantable here or custom-permission seats are locked out of all VeritaOps edits.
 ] as const;
 
 export type SeatModuleKey = typeof SEAT_MODULE_KEYS[number];
