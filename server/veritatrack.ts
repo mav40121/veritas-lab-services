@@ -1058,7 +1058,12 @@ export function registerVeritaTrackRoutes(
       if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
       const { name, category, instrument, owner, frequency, frequency_months, map_analyte, map_field, notes } = req.body || {};
       if (!name?.trim()) return res.status(400).json({ error: "name required" });
-      const freqMonths = Number(frequency_months || 1);
+      // #54: the client sends only the `frequency` STRING (e.g. "Quarterly"),
+      // not frequency_months. Deriving months from the string (as the legacy
+      // create + the edit path already do) keeps the two columns consistent;
+      // the old `Number(frequency_months || 1)` defaulted every create to 1,
+      // so a Quarterly task rendered as Monthly in the list until re-saved.
+      const freqMonths = Number(frequency_months) || frequencyToMonths(frequency || "Monthly");
       const now = new Date().toISOString();
       const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
       const userIdForRow = ownerRow?.owner_user_id ?? req.userId;
