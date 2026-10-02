@@ -2385,7 +2385,14 @@ sqlite.exec(`
     title TEXT NOT NULL,
     description TEXT,
     category TEXT,
-    url TEXT NOT NULL,
+    url TEXT,
+    doc_kind TEXT NOT NULL DEFAULT 'link',
+    file_name TEXT,
+    file_type TEXT,
+    file_size INTEGER,
+    file_data BLOB,
+    hipaa_acknowledged INTEGER NOT NULL DEFAULT 0,
+    hipaa_ack_at TEXT,
     added_by_user_id INTEGER,
     status TEXT NOT NULL DEFAULT 'active',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -2406,6 +2413,17 @@ sqlite.exec(`
   ensureSysDoc("status",           "ALTER TABLE system_documents ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
   ensureSysDoc("created_at",       "ALTER TABLE system_documents ADD COLUMN created_at TEXT");
   ensureSysDoc("updated_at",       "ALTER TABLE system_documents ADD COLUMN updated_at TEXT");
+  // File uploads (coexist with URL-pointer links): doc_kind 'link' | 'file'.
+  // Files are stored as BLOBs in the DB (same pattern as docx_blob/file_data
+  // elsewhere), so they ARE included in the /api/admin/backup-db download, unlike
+  // volume files. Each file upload requires a HIPAA acknowledgment.
+  ensureSysDoc("doc_kind",           "ALTER TABLE system_documents ADD COLUMN doc_kind TEXT NOT NULL DEFAULT 'link'");
+  ensureSysDoc("file_name",          "ALTER TABLE system_documents ADD COLUMN file_name TEXT");
+  ensureSysDoc("file_type",          "ALTER TABLE system_documents ADD COLUMN file_type TEXT");
+  ensureSysDoc("file_size",          "ALTER TABLE system_documents ADD COLUMN file_size INTEGER");
+  ensureSysDoc("file_data",          "ALTER TABLE system_documents ADD COLUMN file_data BLOB");
+  ensureSysDoc("hipaa_acknowledged", "ALTER TABLE system_documents ADD COLUMN hipaa_acknowledged INTEGER NOT NULL DEFAULT 0");
+  ensureSysDoc("hipaa_ack_at",       "ALTER TABLE system_documents ADD COLUMN hipaa_ack_at TEXT");
 }
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_system_documents_org ON system_documents(organization_id, status)`); } catch {}
 
