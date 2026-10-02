@@ -32,6 +32,7 @@ import { orgSeatCapForOwner } from "./organizationSeats";
 import { orgRoleForUserOnLab, labRoleFromOrgRole, transferBlockedOutOfOrg, isActiveOrgMember, resolveOwnerOrgId } from "./organizationRoles";
 import { planProvisionLabs, accreditationFlagsFor, operatorOverviewGrant } from "./organizationProvision";
 import { validateSystemDocument } from "./systemRepository";
+import { validateCustomItem, isValidCustomStatus } from "./veritascanCustomItems";
 import { normalizeLineItems, computeOrgInvoice, laterExpiry, orgSubscriptionExpiryForLab, buildOrgSubscriptionItems } from "./organizationBilling";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
@@ -16361,6 +16362,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const delScan = (db as any).$client.prepare("SELECT * FROM veritascan_scans WHERE id = ?").get(req.params.id) as any;
     const delScanItems = (db as any).$client.prepare("SELECT item_id, status, notes FROM veritascan_items WHERE scan_id = ?").all(req.params.id);
     logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritascan", action: "delete", entityType: "scan", entityId: req.params.id, entityLabel: delScan?.name, before: { scan: delScan, items: delScanItems }, ipAddress: req.ip });
+    // #55: clear the per-scan custom-item statuses (FK scan_id) before the scan,
+    // or deleting the scan orphans them (delete-cascade orphan guard).
+    (db as any).$client.prepare("DELETE FROM veritascan_custom_item_status WHERE scan_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM veritascan_items WHERE scan_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM veritascan_scans WHERE id = ?").run(req.params.id);
     res.json({ ok: true });
@@ -16427,6 +16431,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const delScan = (db as any).$client.prepare("SELECT * FROM veritascan_scans WHERE id = ?").get(req.params.id) as any;
     const delScanItems = (db as any).$client.prepare("SELECT item_id, status, notes FROM veritascan_items WHERE scan_id = ?").all(req.params.id);
     logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritascan", action: "delete", entityType: "scan", entityId: req.params.id, entityLabel: delScan?.name, before: { scan: delScan, items: delScanItems }, ipAddress: req.ip });
+    // #55: clear the per-scan custom-item statuses (FK scan_id) before the scan,
+    // or deleting the scan orphans them (delete-cascade orphan guard).
+    (db as any).$client.prepare("DELETE FROM veritascan_custom_item_status WHERE scan_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM veritascan_items WHERE scan_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM veritascan_scans WHERE id = ?").run(req.params.id);
     res.json({ ok: true });
@@ -16550,6 +16557,90 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "UPDATE veritascan_scans SET is_teaching = ?, teaching_intro = ?, updated_at = ? WHERE id = ?"
     ).run(isTeaching, teachingIntro, now, req.params.id);
     res.json({ ok: true, isTeaching: !!isTeaching, teachingIntro });
+  });
+
+  // ── VeritaScan custom questions (parking-lot #55) ────────────────────────
+  // Per-lab authored scan items that sit ALONGSIDE the 173-item master set and
+  // are scored in a separate section (phase 3) that does not count toward the
+  // standardized readiness %. These endpoints are the author/edit/retire CRUD;
+  // lab-scoped, gated on hasScanAccess + requireModuleEdit, mirroring the
+  // Evidence Library document CRUD. Retire is a soft status flip (never a
+  // hard delete) so historical scans that referenced the item stay intact.
+  app.get("/api/labs/:labId/veritascan/custom-items", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    const sqlite = (db as any).$client;
+    const includeRetired = req.query.include_retired === "1";
+    const rows = sqlite.prepare(
+      `SELECT id, lab_id, domain, question, tjc, cap, cfr, aabb, cola, status, retired_at, created_by_user_id, created_at, updated_at
+       FROM veritascan_custom_items
+       WHERE lab_id = ?${includeRetired ? "" : " AND status = 'active'"}
+       ORDER BY created_at ASC, id ASC`
+    ).all(req.scope.labId);
+    res.json(rows);
+  });
+
+  app.post("/api/labs/:labId/veritascan/custom-items", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    const v = validateCustomItem(req.body || {});
+    if (!v.ok) return res.status(400).json({ error: v.error });
+    const sqlite = (db as any).$client;
+    const now = new Date().toISOString();
+    const ins = sqlite.prepare(
+      `INSERT INTO veritascan_custom_items (lab_id, domain, question, tjc, cap, cfr, aabb, cola, status, created_by_user_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)`
+    ).run(req.scope.labId, v.value.domain, v.value.question, v.value.tjc, v.value.cap, v.value.cfr, v.value.aabb, v.value.cola, req.userId, now, now);
+    const row = sqlite.prepare("SELECT * FROM veritascan_custom_items WHERE id = ?").get(Number(ins.lastInsertRowid));
+    res.status(201).json(row);
+  });
+
+  app.patch("/api/labs/:labId/veritascan/custom-items/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    const sqlite = (db as any).$client;
+    const existing = sqlite.prepare(
+      "SELECT * FROM veritascan_custom_items WHERE id = ? AND lab_id = ?"
+    ).get(Number(req.params.id), req.scope.labId);
+    if (!existing) return res.status(404).json({ error: "Custom item not found" });
+    const now = new Date().toISOString();
+
+    // Status flip (retire / reactivate) is handled on its own so an edit and a
+    // retire can arrive in one PATCH without the content validator rejecting a
+    // status-only call.
+    let nextStatus: string = existing.status;
+    let nextRetiredAt: string | null = existing.retired_at;
+    if (req.body?.status !== undefined) {
+      const s = String(req.body.status);
+      if (s !== "active" && s !== "retired") return res.status(400).json({ error: "status must be 'active' or 'retired'" });
+      nextStatus = s;
+      nextRetiredAt = s === "retired" ? (existing.retired_at || now) : null;
+    }
+
+    // Content edit is optional: only re-validate when any content field is present.
+    const hasContentEdit = ["question", "domain", "tjc", "cap", "cfr", "aabb", "cola"].some(k => req.body?.[k] !== undefined);
+    let content = {
+      question: existing.question, domain: existing.domain,
+      tjc: existing.tjc, cap: existing.cap, cfr: existing.cfr, aabb: existing.aabb, cola: existing.cola,
+    };
+    if (hasContentEdit) {
+      const v = validateCustomItem({
+        question: req.body.question !== undefined ? req.body.question : existing.question,
+        domain: req.body.domain !== undefined ? req.body.domain : existing.domain,
+        tjc: req.body.tjc !== undefined ? req.body.tjc : existing.tjc,
+        cap: req.body.cap !== undefined ? req.body.cap : existing.cap,
+        cfr: req.body.cfr !== undefined ? req.body.cfr : existing.cfr,
+        aabb: req.body.aabb !== undefined ? req.body.aabb : existing.aabb,
+        cola: req.body.cola !== undefined ? req.body.cola : existing.cola,
+      });
+      if (!v.ok) return res.status(400).json({ error: v.error });
+      content = v.value;
+    }
+
+    sqlite.prepare(
+      `UPDATE veritascan_custom_items
+       SET domain = ?, question = ?, tjc = ?, cap = ?, cfr = ?, aabb = ?, cola = ?, status = ?, retired_at = ?, updated_at = ?
+       WHERE id = ?`
+    ).run(content.domain, content.question, content.tjc, content.cap, content.cfr, content.aabb, content.cola, nextStatus, nextRetiredAt, now, existing.id);
+    const row = sqlite.prepare("SELECT * FROM veritascan_custom_items WHERE id = ?").get(existing.id);
+    res.json(row);
   });
 
   // Legacy GET scan-by-id (added for the existing page useQuery that was
@@ -31994,6 +32085,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       sqlite.prepare("DELETE FROM staff_duty_change_events WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM staff_position_descriptions WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM policy_quiz_questions WHERE lab_id = ?").run(id);
+      // #55: VeritaScan custom questions (child of labs) and their per-scan
+      // statuses (child of veritascan_custom_items). Status rows cleared first.
+      sqlite.prepare("DELETE FROM veritascan_custom_item_status WHERE custom_item_id IN (SELECT id FROM veritascan_custom_items WHERE lab_id = ?)").run(id);
+      sqlite.prepare("DELETE FROM veritascan_custom_items WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM intacct_export_config WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM organization_billing_line_items WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM lab_audit_log WHERE lab_id = ?").run(id);
