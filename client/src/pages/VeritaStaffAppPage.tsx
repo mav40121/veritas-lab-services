@@ -2024,6 +2024,26 @@ function VeritaCeuCard({ employeeId }: { employeeId: number }) {
   const [activityDate, setActivityDate] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [transcriptLoading, setTranscriptLoading] = useState(false);
+
+  async function downloadTranscript() {
+    if (!activeLabId) { toast({ title: "Active lab required.", variant: "destructive" }); return; }
+    setTranscriptLoading(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/veritaceu/employees/${employeeId}/transcript`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || `HTTP ${r.status}`); }
+      const { token, filename } = await r.json();
+      downloadPdfToken(token, filename || "CE_Transcript.pdf");
+    } catch (err: any) {
+      toast({ title: "Could not generate transcript", description: err?.message || "Try again.", variant: "destructive" });
+    } finally {
+      setTranscriptLoading(false);
+    }
+  }
 
   const summaryUrl = activeLabId ? `/api/labs/${activeLabId}/staff/employees/${employeeId}/ceu-summary` : null;
   const docsUrl = activeLabId ? `/api/labs/${activeLabId}/staff/employees/${employeeId}/documents` : null;
@@ -2106,9 +2126,14 @@ function VeritaCeuCard({ employeeId }: { employeeId: number }) {
             <GraduationCap size={16} className="text-primary" />
             <h3 className="font-semibold">Continuing Education</h3>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setAddOpen(true)} disabled={readOnly}>
-            <Plus size={14} className="mr-1.5" /> Add CE Credit
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={downloadTranscript} disabled={transcriptLoading} title="Download the CE transcript (PDF)">
+              <FileText size={14} className="mr-1.5" /> {transcriptLoading ? "Generating…" : "Transcript"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setAddOpen(true)} disabled={readOnly}>
+              <Plus size={14} className="mr-1.5" /> Add CE Credit
+            </Button>
+          </div>
         </div>
 
         {summary && (

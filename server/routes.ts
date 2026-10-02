@@ -16,7 +16,7 @@ import { registerScheduleRoutes } from "./schedule";
 import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice, getSeatPriceForTier, VC_UNLIMITED_FIRST_YEAR_COUPON, getViewOnlyAddOnConfig } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
-import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateEmployeeCompetencyRecordPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer, generateInternalNcePDF, validateInternalNce } from "./pdfReport";
+import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateEmployeeCompetencyRecordPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer, generateInternalNcePDF, validateInternalNce, generateCeuTranscriptPDF } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
 import { labLocalDate } from "./dateLocal";
 import { buildWasteReport, generateWasteReportPDF, generateWasteReportExcel, type WasteEventRow, type WasteReportContext } from "./wasteReport";
@@ -25757,6 +25757,62 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     sqlite.prepare("UPDATE staff_employees SET ceu_profile_id = ?, updated_at = ? WHERE id = ?").run(profileId, new Date().toISOString(), Number(req.params.id));
     res.json({ ok: true, employeeId: Number(req.params.id), profileId });
+  });
+
+  // VeritaCEU phase 3: per-employee CE transcript PDF (internal-use record for
+  // license renewal / surveys). Returns a single-use token for /api/pdf/:token.
+  app.post("/api/labs/:labId/veritaceu/employees/:id/transcript", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const sqlite = (db as any).$client;
+    const labId = req.scope.labId;
+    const emp = sqlite.prepare(
+      "SELECT id, first_name, last_name, middle_initial, title, ceu_profile_id FROM staff_employees WHERE id = ? AND tier2_lab_id = ?"
+    ).get(Number(req.params.id), labId) as any;
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+
+    const reqd = loadCeuResolver(sqlite, labId).for(emp.ceu_profile_id);
+    // Requirement name for the transcript header: assigned profile -> default -> null.
+    let requirementName: string | null = null;
+    if (emp.ceu_profile_id) {
+      const p = sqlite.prepare("SELECT name FROM veritaceu_requirement_profiles WHERE id = ? AND lab_id = ? AND status = 'active'").get(emp.ceu_profile_id, labId) as any;
+      if (p) requirementName = p.name;
+    }
+    if (!requirementName) {
+      const d = sqlite.prepare("SELECT name FROM veritaceu_requirement_profiles WHERE lab_id = ? AND status = 'active' AND is_default = 1 LIMIT 1").get(labId) as any;
+      if (d) requirementName = `${d.name} (default)`;
+    }
+
+    const rows = sqlite.prepare(
+      "SELECT id, title, url, credits, activity_date, created_at FROM staff_employee_documents WHERE employee_id = ? AND doc_type = 'ce_credit' ORDER BY COALESCE(activity_date, created_at) DESC"
+    ).all(Number(req.params.id)) as any[];
+    const s = computeCeuSummary(rows, reqd.required, reqd.cycleMonths);
+    const name = [emp.first_name, emp.middle_initial, emp.last_name].filter(Boolean).join(" ").trim() || `Employee #${emp.id}`;
+    const lab = req.scope.lab || {};
+
+    try {
+      const pdfBuffer = await generateCeuTranscriptPDF({
+        labName: lab.lab_name || "Laboratory",
+        cliaNumber: lab.clia_number || "",
+        employeeName: name,
+        employeeTitle: emp.title || null,
+        requirementName,
+        required: reqd.required,
+        cycleMonths: reqd.cycleMonths,
+        cycleStart: s.cycleStartIso.slice(0, 10),
+        earned: s.earned,
+        remaining: s.remaining,
+        pct: s.pct,
+        met: s.met,
+        entries: s.entries,
+      }, licenseCtxFromReq(req));
+      if (!pdfBuffer || pdfBuffer.length === 0) return res.status(500).json({ error: "PDF generation failed" });
+      const safeName = name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim() || "Employee";
+      const filename = `CE_Transcript_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      res.json({ token: storePdfToken(pdfBuffer, filename), filename });
+    } catch (e: any) {
+      console.error("[veritaceu/transcript] error:", e?.message);
+      res.status(500).json({ error: "PDF generation failed" });
+    }
   });
 
   // ── EMPLOYEE INSTRUMENT ASSIGNMENT (PR D, 2026-06-05) ──────────────────
