@@ -146,3 +146,40 @@ export function analytesShareGroup(a: string, b: string): boolean {
   const gb = idx.get(_normSyn(b));
   return !!ga && ga === gb;
 }
+
+// Correlation-grouping key for the 5-part WBC differential. The method-comparison
+// requirement groups analytes by EXACT string, so a manual differential (reported
+// as PERCENTAGES, e.g. a lab labels the line "Lymphs") never pairs with the
+// analyzer's percentage point ("Lymph%", "LY%") even though they are the same
+// measurand on the same patient, measured two ways. This returns a canonical key
+// so like-with-like differential points collapse into one correlation requirement.
+//
+// It is deliberately %-vs-# AWARE: a percentage never shares a key with an absolute
+// count. Pairing a manual % against an analyzer # would be wrong (different
+// measurand), and the owner flagged that over-match explicitly. Returns null for
+// anything that is not one of the standard WBC differential classes, so every
+// non-differential analyte falls through to exact-string grouping, unchanged.
+const _DIFF_CLASS_PATTERNS: Array<[RegExp, string]> = [
+  [/^(ly|lymph|lymphs|lymphocyte|lymphocytes)$/, "lymphocyte"],
+  [/^(ne|neut|neuts|neutrophil|neutrophils|seg|segs|segmented|poly|polys)$/, "neutrophil"],
+  [/^(mo|mono|monos|monocyte|monocytes)$/, "monocyte"],
+  [/^(eo|eos|eosinophil|eosinophils)$/, "eosinophil"],
+  [/^(ba|baso|basos|basophil|basophils)$/, "basophil"],
+];
+export function diffCorrelationKey(raw: string): string | null {
+  const lower = String(raw || "").toLowerCase();
+  // Read the %-vs-# marker BEFORE stripping non-alphanumerics.
+  const isPct = /%|percent|\bpct\b/.test(lower);
+  const isAbs = /#|absolute|\babs\b|count|x\s*10|10\^|cells?\b|\/\s*u?l\b|\/\s*mc?l\b|k\/u?l|k\/mc?l/.test(lower);
+  // Reduce to a letters-only class token, then drop marker words so spelled-out
+  // forms ("Absolute lymphocytes", "Lymphocyte count") still resolve to the class.
+  let token = lower.replace(/\([^)]*\)/g, "").replace(/[^a-z]/g, "");
+  token = token.replace(/absolute|percent|count|abs|pct|total|cells?/g, "");
+  let cls: string | null = null;
+  for (const [re, c] of _DIFF_CLASS_PATTERNS) if (re.test(token)) { cls = c; break; }
+  if (!cls) return null;
+  // A bare differential class with no marker is a PERCENT by convention: manual
+  // diffs are reported as %, so a line labeled just "Lymphs" means lymph percent.
+  const kind = isPct ? "pct" : isAbs ? "abs" : "pct";
+  return `diff:${cls}:${kind}`;
+}
