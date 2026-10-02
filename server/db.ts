@@ -2409,6 +2409,73 @@ sqlite.exec(`
 }
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_system_documents_org ON system_documents(organization_id, status)`); } catch {}
 
+// ── VeritaScan custom questions (parking-lot #55) ──────────────────────────
+// Labs author their own scan items alongside the curated 173-item master set
+// (client/src/lib/veritaScanData.ts). Custom items are stored per-lab here and
+// get their OWN per-scan status table so they can never collide with the master
+// id space (veritascan_items.UNIQUE(scan_id, item_id)) and are scored in a
+// SEPARATE section that does not count toward the standardized readiness %.
+try {
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS veritascan_custom_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lab_id INTEGER NOT NULL,
+      domain TEXT,
+      question TEXT NOT NULL,
+      tjc TEXT, cap TEXT, cfr TEXT, aabb TEXT, cola TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      retired_at TEXT,
+      created_by_user_id INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (lab_id) REFERENCES labs(id),
+      FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+    );
+    CREATE TABLE IF NOT EXISTS veritascan_custom_item_status (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      scan_id INTEGER NOT NULL,
+      custom_item_id INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'Not Assessed',
+      notes TEXT,
+      owner TEXT,
+      due_date TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(scan_id, custom_item_id),
+      FOREIGN KEY (scan_id) REFERENCES veritascan_scans(id),
+      FOREIGN KEY (custom_item_id) REFERENCES veritascan_custom_items(id)
+    );
+  `);
+} catch {}
+{
+  const vsCustCols = (sqlite.prepare("PRAGMA table_info(veritascan_custom_items)").all() as any[]).map((c: any) => c.name);
+  const ensureCust = (col: string, sql: string) => { if (!vsCustCols.includes(col)) { try { sqlite.exec(sql); vsCustCols.push(col); } catch {} } };
+  ensureCust("lab_id",             "ALTER TABLE veritascan_custom_items ADD COLUMN lab_id INTEGER");
+  ensureCust("domain",             "ALTER TABLE veritascan_custom_items ADD COLUMN domain TEXT");
+  ensureCust("question",           "ALTER TABLE veritascan_custom_items ADD COLUMN question TEXT");
+  ensureCust("tjc",                "ALTER TABLE veritascan_custom_items ADD COLUMN tjc TEXT");
+  ensureCust("cap",                "ALTER TABLE veritascan_custom_items ADD COLUMN cap TEXT");
+  ensureCust("cfr",                "ALTER TABLE veritascan_custom_items ADD COLUMN cfr TEXT");
+  ensureCust("aabb",               "ALTER TABLE veritascan_custom_items ADD COLUMN aabb TEXT");
+  ensureCust("cola",               "ALTER TABLE veritascan_custom_items ADD COLUMN cola TEXT");
+  ensureCust("status",             "ALTER TABLE veritascan_custom_items ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  ensureCust("retired_at",         "ALTER TABLE veritascan_custom_items ADD COLUMN retired_at TEXT");
+  ensureCust("created_by_user_id", "ALTER TABLE veritascan_custom_items ADD COLUMN created_by_user_id INTEGER");
+  ensureCust("created_at",         "ALTER TABLE veritascan_custom_items ADD COLUMN created_at TEXT");
+  ensureCust("updated_at",         "ALTER TABLE veritascan_custom_items ADD COLUMN updated_at TEXT");
+
+  const vsStatCols = (sqlite.prepare("PRAGMA table_info(veritascan_custom_item_status)").all() as any[]).map((c: any) => c.name);
+  const ensureStat = (col: string, sql: string) => { if (!vsStatCols.includes(col)) { try { sqlite.exec(sql); vsStatCols.push(col); } catch {} } };
+  ensureStat("scan_id",        "ALTER TABLE veritascan_custom_item_status ADD COLUMN scan_id INTEGER");
+  ensureStat("custom_item_id", "ALTER TABLE veritascan_custom_item_status ADD COLUMN custom_item_id INTEGER");
+  ensureStat("status",         "ALTER TABLE veritascan_custom_item_status ADD COLUMN status TEXT NOT NULL DEFAULT 'Not Assessed'");
+  ensureStat("notes",          "ALTER TABLE veritascan_custom_item_status ADD COLUMN notes TEXT");
+  ensureStat("owner",          "ALTER TABLE veritascan_custom_item_status ADD COLUMN owner TEXT");
+  ensureStat("due_date",       "ALTER TABLE veritascan_custom_item_status ADD COLUMN due_date TEXT");
+  ensureStat("updated_at",     "ALTER TABLE veritascan_custom_item_status ADD COLUMN updated_at TEXT");
+}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_vs_custom_items_lab ON veritascan_custom_items(lab_id, status)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_vs_custom_status_scan ON veritascan_custom_item_status(scan_id)`); } catch {}
+
 // users.default_lab_id — bare-route redirect target (per doc Section 4).
 // Updated on every authenticated page hit in Phase 2; not the source of
 // truth for scope. URL is. Nullable; FK to labs is informational only
