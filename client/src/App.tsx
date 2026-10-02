@@ -544,7 +544,7 @@ function AppContent() {
           <Route path="/labs/:labId/veritaresponse/:id" component={VeritaResponseFindingPage} />
           <Route path="/labs/:labId/veritastaff-app" component={VeritaStaffAppPage} />
           <Route path="/labs/:labId/veritastaff-app/:employeeId" component={VeritaStaffAppPage} />
-          <Route path="/labs/:labId/veritaceu-app" component={VeritaCeuAppPage} />
+          <Route path="/labs/:labId/veritaceu-app">{() => <VeritaCeuAppPage />}</Route>
           <Route path="/labs/:labId/veritalab-app" component={VeritaLabAppPage} />
           <Route path="/labs/:labId/veritaqc-app" component={VeritaQCAppPage} />
           <Route path="/labs/:labId/equipment-app" component={EquipmentAppPage} />
