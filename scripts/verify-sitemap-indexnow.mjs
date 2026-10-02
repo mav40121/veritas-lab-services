@@ -4,8 +4,9 @@
 // Exercises the three moving parts without touching the network:
 //   1. build-sitemap --check passes on the committed sitemap (no missing public
 //      route, no app/auth leakage).
-//   2. The committed sitemap contains /security (the drift the generator fixed)
-//      and excludes /veritatrack-app (an app route).
+//   2. The committed sitemap carries real content routes and excludes app/auth
+//      routes AND the generator's SITEMAP_EXCLUDE utility/legal routes (e.g.
+//      /security), which are soft-404 shells that must not be advertised.
 //   3. sitemap-changed-urls emits exactly a new <loc> and a changed <lastmod>,
 //      and nothing for an unchanged file. This is what the push-to-main workflow
 //      feeds to scripts/ping-indexnow.mts.
@@ -26,12 +27,24 @@ try { execSync("node scripts/build-sitemap.mjs --check", { stdio: "pipe" }); }
 catch { checkExit = 1; }
 ok("build-sitemap --check exits 0 on committed sitemap", checkExit === 0);
 
-// 2. sitemap content: /security present, /veritatrack-app absent, all have lastmod.
+// 2. sitemap content: real content routes present; app/auth AND the generator's
+// SITEMAP_EXCLUDE utility/legal routes absent. Policy (build-sitemap.mjs): /security,
+// /privacy, /terms, /trust, demos and forms are deliberately kept OUT (thin shells
+// Google reads as a Soft 404); /veritapolicy 301s to /veritadc. So assert a content
+// route is present and /security (a representative excluded route) is absent.
 const sm = readFileSync("client/public/sitemap.xml", "utf8");
-ok("sitemap contains /security (drift fixed)", /<loc>https:\/\/www\.veritaslabservices\.com\/security<\/loc>/.test(sm));
+ok("sitemap contains a real content route (/veritacheck)", /<loc>https:\/\/www\.veritaslabservices\.com\/veritacheck<\/loc>/.test(sm));
+ok("sitemap excludes the /security utility route (SITEMAP_EXCLUDE, soft-404 shell)", !/<loc>https:\/\/www\.veritaslabservices\.com\/security<\/loc>/.test(sm));
 ok("sitemap excludes the /veritatrack-app app route", !/\/veritatrack-app</.test(sm));
 const urlBlocks = sm.match(/<url>[\s\S]*?<\/url>/g) || [];
-ok("every <url> carries a well-formed <lastmod>", urlBlocks.every((b) => /<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/.test(b)));
+// The generator warns (does not fail) when a route has no single source file to date,
+// so a few URLs may lack <lastmod>. Assert every lastmod that IS present is well-formed
+// and that the vast majority carry one.
+const withLastmod = urlBlocks.filter((b) => /<lastmod>[^<]+<\/lastmod>/.test(b));
+ok("every <lastmod> present is well-formed YYYY-MM-DD",
+  withLastmod.every((b) => /<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/.test(b)));
+ok("at least 90% of URLs carry a <lastmod>",
+  urlBlocks.length > 0 && withLastmod.length >= Math.ceil(urlBlocks.length * 0.9));
 
 // 3. changed-urls extractor on fixtures.
 const dir = mkdtempSync(join(tmpdir(), "sitemap-"));

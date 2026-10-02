@@ -155,20 +155,26 @@ console.log("\nCase 5: shipped source -- the stamp merges instead of assigning")
 console.log("\nCase 6: shipped source -- licenseCtxFromReq prefers the ROUTE's lab");
 {
   const routes = readFileSync(new URL("../server/routes.ts", import.meta.url), "utf8").replace(/\r\n/g, "\n");
-  const raw = routes.slice(routes.indexOf("function licenseCtxFromReq"), routes.indexOf("function licenseCtxFromReq") + 2600);
+  // Window widened 2600 -> 4000: the 2026-07-16 refactor added comment blocks that
+  // push the req?.scope?.lab (offset ~3087) and resolveActiveLabForRequest (~3170)
+  // statements past the old 2600-char slice.
+  const raw = routes.slice(routes.indexOf("function licenseCtxFromReq"), routes.indexOf("function licenseCtxFromReq") + 4000);
   // Strip // comment lines before position-matching. The comment above this
   // code NAMES resolveActiveLabForRequest while explaining why it is now the
   // fallback, so an un-stripped search finds the prose ahead of the statement
   // and reports the order backwards. (Same trap as the PR 4 verify, where a
   // comment containing "Age / Sex Band" matched the header search.)
   const fn = raw.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
-  const scopeIdx = fn.indexOf("req?.scope?.lab?.lab_name");
+  // 2026-07-16 refactor: req.scope.lab is now read as an OBJECT (so the export can
+  // also read is_demo off it), so the preference reads `req?.scope?.lab` first and
+  // derives activeLab?.lab_name after; the fallback guard keys on activeLab/callerUserId.
+  const scopeIdx = fn.indexOf("req?.scope?.lab");
   const resolverIdx = fn.indexOf("resolveActiveLabForRequest");
   check("req.scope.lab is consulted at all", scopeIdx > 0);
   check("req.scope.lab is consulted BEFORE the header resolver",
     scopeIdx > 0 && resolverIdx > 0 && scopeIdx < resolverIdx, `scope@${scopeIdx} resolver@${resolverIdx}`);
   check("the header resolver only runs when scope did not answer",
-    /if \(!activeLabName && req\?\.userId\)/.test(fn));
+    /if \(!activeLab && callerUserId\)/.test(fn));
 }
 
 console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}\n`);

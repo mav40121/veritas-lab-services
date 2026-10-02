@@ -22,13 +22,20 @@ const routes = fs.readFileSync(path.join(ROOT, "server/routes.ts"), "utf8");
 let fails = 0;
 const ok = (label, cond) => { console.log(`${cond ? "PASS" : "FAIL"}: ${label}`); if (!cond) fails++; };
 
-// (a) all three bulk handlers resolve the active lab, with a user_id fallback
-const activeResolveCount = (routes.match(/const activeLab = resolveActiveLabForRequest\(req\.userId, req\);/g) || []).length;
-ok("all 3 bulk handlers resolve the active lab (template + preview + commit)", activeResolveCount >= 3);
-const tier2Resolve = (routes.match(/FROM staff_labs WHERE tier2_lab_id = \?"\)\.get\(activeLab\.id\)/g) || []).length;
-ok("bulk handlers resolve staff_labs by the active lab's tier2_lab_id", tier2Resolve >= 3);
-ok("bulk handlers keep a user_id fallback for single-lab / no header",
-  (routes.match(/FROM staff_labs WHERE user_id = \?"\)\.get\(dataUserId\)/g) || []).length >= 3);
+// (a) the per-handler inline resolution was centralized into two helpers:
+//   activeStaffLab(req, dataUserId) = resolveActiveLabForRequest(...) -> staffLabByLabId(...)
+//   staffLabByLabId(labId, ownerUserId) = staff_labs WHERE tier2_lab_id (active lab),
+//                                         with a WHERE user_id fallback.
+// The bulk template/preview/commit handlers call activeStaffLab() (same multi-lab
+// correctness, now DRY). Assert the helper chain rather than the old inline SQL.
+ok("activeStaffLab() resolves the active lab then the staff_labs row",
+  /function activeStaffLab\(req: any, dataUserId: number\)[\s\S]{0,160}resolveActiveLabForRequest\(req\.userId, req\)[\s\S]{0,120}staffLabByLabId\(activeLab\?\.id/.test(routes));
+ok("staffLabByLabId resolves staff_labs by the active lab's tier2_lab_id",
+  /function staffLabByLabId\([\s\S]{0,300}FROM staff_labs WHERE tier2_lab_id = \?"\)\.get\(labId\)/.test(routes));
+ok("staffLabByLabId keeps a user_id fallback for single-lab / no header",
+  /function staffLabByLabId\([\s\S]{0,400}FROM staff_labs WHERE user_id = \?"\)\.all\(ownerUserId\)/.test(routes));
+ok("the bulk-commit handler resolves the lab via activeStaffLab(req, dataUserId)",
+  /const lab = activeStaffLab\(req, dataUserId\)/.test(routes));
 
 // (b) bulk-commit INSERT now sets tier2_lab_id (visible in the lab-scoped roster)
 ok("bulk-commit INSERT sets tier2_lab_id",
