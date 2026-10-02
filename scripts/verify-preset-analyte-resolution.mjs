@@ -141,7 +141,11 @@ const needs = (name, type, cov, want, note) => {
   ok ? pass++ : fail++;
 };
 needs("AST", "method_comparison", null, true, "unmatched name -> prompt");
-needs("ERYTHROCYTE COUNT (RBC)", "cal_ver", null, true, "unmatched name -> prompt");
+needs("AST", "cal_ver", null, true, "unmatched name, cal_ver is attributable -> prompt");
+// "ERYTHROCYTE COUNT (RBC)" is NOT unmatched: analyteMatch resolves it to the "RBC"
+// map analyte (the "(RBC)" is in the name; corrob above treats it as an RBC study),
+// so it is name-matched and must NOT prompt. (Older assertion wrongly expected true.)
+needs("ERYTHROCYTE COUNT (RBC)", "cal_ver", null, false, "name matches the RBC map analyte -> no prompt");
 needs("Glucose", "method_comparison", null, false, "name matches map -> no prompt");
 needs("AST", "method_comparison", "Aspartate aminotransferase (AST) (SGOT)", false, "already attributed -> no prompt");
 needs("Widget", "precision", null, false, "non-coverage type -> no prompt");
