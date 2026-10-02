@@ -334,6 +334,15 @@ export default function VeritaQCAppPage() {
   // resolvable from the Daily Review missing-CA action.
   const [caFailCount, setCaFailCount] = useState(0);
 
+  // #56: a Westgard WARNING (1-2s: a single control point 2 to 3 SD from the
+  // mean) is a soft signal, not a rejection. It used to surface only as a brief
+  // toast that was easy to miss. Hold the tech on a must-acknowledge dialog that
+  // names the rule(s) and the detail, then let them continue. No corrective
+  // action is required; the result is already saved (acknowledge-and-proceed).
+  const [warnAckOpen, setWarnAckOpen] = useState(false);
+  const [warnViolations, setWarnViolations] = useState<ViolationRow[]>([]);
+  const [warnValueLabel, setWarnValueLabel] = useState("");
+
   // Add-Control-Lot dialog state. Drives the 8-field form that creates a
   // new entry in qc_control_lots via POST /api/labs/:labId/qc/control-lots.
   // On success the dropdown auto-selects the new lot so the tech can log
@@ -593,10 +602,13 @@ export default function VeritaQCAppPage() {
         setCaFailCount(0);
         setCaModalOpen(true);
       } else if (data.violations.length > 0) {
-        toast({
-          title: `Warning: ${data.violations.map(v => v.rule_code).join(", ")}`,
-          description: "Logged. Review at monthly attestation.",
-        });
+        // #56: hold the tech on a must-acknowledge dialog instead of a transient
+        // toast, so a 2-to-3 SD point is never missed at entry. Soft: no CA.
+        setWarnViolations(data.violations);
+        setWarnValueLabel(
+          `${valueNum}${selectedLot ? ` (${selectedLot.analyte} ${selectedLot.level})` : ""}`
+        );
+        setWarnAckOpen(true);
       } else {
         toast({ title: "Result logged", description: "No Westgard rules fired." });
       }
@@ -1468,6 +1480,47 @@ export default function VeritaQCAppPage() {
             <Button onClick={handleCaSubmit} disabled={caSubmitting || !caActionTaken.trim()}>
               {caSubmitting ? "Saving..." : "File corrective action"}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* #56: soft Westgard warning (1-2s). Must-acknowledge so a 2-to-3 SD
+          point is never missed at entry, but no corrective action is required.
+          The result is already logged; this is acknowledge-and-proceed. */}
+      <Dialog open={warnAckOpen} onOpenChange={setWarnAckOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              QC warning: result outside 2 SD
+            </DialogTitle>
+            <DialogDescription>
+              This result logged with a Westgard warning. No corrective action is
+              required, but review it before you continue.
+            </DialogDescription>
+          </DialogHeader>
+          {warnValueLabel && (
+            <div className="text-sm text-muted-foreground">
+              Entered value: <span className="font-semibold text-foreground">{warnValueLabel}</span>
+            </div>
+          )}
+          <div className="space-y-2">
+            {warnViolations.map((v, i) => (
+              <div
+                key={v.id ?? `${v.rule_code}-${i}`}
+                className="rounded-md border border-amber-500/20 bg-amber-500/5 p-3 text-sm"
+              >
+                <div className="font-semibold text-amber-700">{v.rule_code}</div>
+                {v.detail && <div className="text-xs text-amber-700/80 mt-0.5">{v.detail}</div>}
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Logged for review at the monthly QC attestation. If a rejection rule had
+            fired, a corrective action would be required instead.
+          </p>
+          <div className="flex justify-end">
+            <Button onClick={() => setWarnAckOpen(false)}>Acknowledge and continue</Button>
           </div>
         </DialogContent>
       </Dialog>
