@@ -17,7 +17,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const src = fs.readFileSync(path.join(ROOT, "client/src/pages/VeritaBenchPIPage.tsx"), "utf8");
+// The /veritabench/pi route's page was renamed VeritaBenchPIPage.tsx -> VeritaQAPage.tsx
+// (App.tsx: `<Route path="/veritabench/pi" component={VeritaQAPage} />`). Spec filename
+// is unchanged. The hardening code (#3/#19/#16/#18) carried over with the rename.
+const src = fs.readFileSync(path.join(ROOT, "client/src/pages/VeritaQAPage.tsx"), "utf8");
 const spec = fs.readFileSync(path.join(ROOT, "tests/playwright/veritabench-pi-hardening.spec.ts"), "utf8");
 let fails = 0;
 const ok = (label, cond) => { console.log(`${cond ? "PASS" : "FAIL"}: ${label}`); if (!cond) fails++; };
