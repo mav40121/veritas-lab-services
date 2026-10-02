@@ -1640,8 +1640,128 @@ export default function VeritaScanScanPage() {
               accreditationChoice={accreditationChoice}
               evidence={evidenceCtx}
             />
+
+            {/* #55 phase 3: the lab's own custom questions, scored in their own
+                section (excluded from the standardized readiness %). */}
+            <CustomQuestionsSection scanId={scanId} labId={activeLabId} readOnly={readOnly} />
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Custom / site-specific questions section (parking-lot #55, phase 3) ──────
+// The lab's own custom scan items, assessed alongside the standardized set but
+// scored in THIS separate section. It has its own tally and never feeds the
+// standardized readiness % (that math stays over SCAN_ITEMS only). Self-
+// contained: own query + per-item save, so it cannot touch the master scoring.
+interface CustomScanItem {
+  custom_item_id: number;
+  domain: string | null;
+  question: string;
+  tjc: string | null; cap: string | null; cfr: string | null; aabb: string | null; cola: string | null;
+  status: ScanStatus;
+  notes: string | null; owner: string | null; due_date: string | null;
+}
+
+const CUSTOM_STATUS_OPTIONS: ScanStatus[] = [
+  "Not Assessed", "Compliant", "Needs Attention", "Immediate Action", "N/A",
+];
+
+function CustomQuestionsSection({
+  scanId, labId, readOnly,
+}: { scanId: number; labId: number | null; readOnly: boolean }) {
+  const { toast } = useToast();
+  const [statuses, setStatuses] = useState<Record<number, ScanStatus>>({});
+
+  const key = labId
+    ? [`/api/labs/${labId}/veritascan/scans/${scanId}/custom-items`]
+    : ["vs-custom-items-disabled"];
+  const { data } = useQuery<CustomScanItem[]>({
+    queryKey: key,
+    enabled: !!labId && !isNaN(scanId),
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/labs/${labId}/veritascan/scans/${scanId}/custom-items`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(`Failed to load custom questions (${res.status})`);
+      return res.json();
+    },
+  });
+
+  useEffect(() => {
+    if (!data) return;
+    setStatuses((prev) => {
+      const next = { ...prev };
+      for (const r of data) if (next[r.custom_item_id] === undefined) next[r.custom_item_id] = (r.status as ScanStatus) || "Not Assessed";
+      return next;
+    });
+  }, [data]);
+
+  const saveStatus = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: ScanStatus }) => {
+      const res = await fetch(`${API_BASE}/api/labs/${labId}/veritascan/scans/${scanId}/custom-items/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      return res.json();
+    },
+    onError: () => toast({ title: "Custom question not saved", description: "Your last change was rejected. Try again.", variant: "destructive" }),
+  });
+
+  if (!labId || !data || data.length === 0) return null;
+
+  const effective = (r: CustomScanItem): ScanStatus => statuses[r.custom_item_id] ?? r.status ?? "Not Assessed";
+  const applicable = data.filter((r) => effective(r) !== "N/A");
+  const compliant = applicable.filter((r) => effective(r) === "Compliant").length;
+  const pct = applicable.length > 0 ? (compliant / applicable.length) * 100 : null;
+
+  const onChange = (id: number, status: ScanStatus) => {
+    setStatuses((p) => ({ ...p, [id]: status }));
+    saveStatus.mutate({ id, status });
+  };
+
+  return (
+    <div className="mb-10">
+      <div className="flex items-center gap-3 mb-3 flex-wrap">
+        <Badge variant="outline" className="text-xs font-semibold px-2.5 py-1 border-primary/30 text-primary">
+          Custom / site-specific
+        </Badge>
+        <span className="text-xs text-muted-foreground">{data.length} question{data.length !== 1 ? "s" : ""}</span>
+        {pct !== null && (
+          <span className={`text-xs font-semibold ${scoreColor(pct)}`}>{Math.round(pct)}% compliant</span>
+        )}
+        <span className="text-[11px] text-muted-foreground/70">Not included in the standardized readiness score</span>
+      </div>
+      <div className="space-y-0.5">
+        {data.map((r) => {
+          const st = effective(r);
+          return (
+            <div key={r.custom_item_id} className={`px-3 py-2.5 rounded-lg mb-1 transition-colors ${rowBorderClass(st)}`}>
+              <div className="flex-1 min-w-0">
+                {r.domain && <Badge variant="outline" className="text-[10px] mb-1">{r.domain}</Badge>}
+                <p className="text-sm leading-snug">{r.question}</p>
+                {(r.tjc || r.cap || r.cfr || r.aabb || r.cola) && (
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    {[
+                      r.tjc && `TJC: ${r.tjc}`, r.cap && `CAP: ${r.cap}`, r.cfr && `CFR: ${r.cfr}`,
+                      r.aabb && `AABB: ${r.aabb}`, r.cola && `COLA: ${r.cola}`,
+                    ].filter(Boolean).join("  ·  ")}
+                  </p>
+                )}
+                <div className="mt-2">
+                  <Select value={st} onValueChange={(v) => onChange(r.custom_item_id, v as ScanStatus)} disabled={readOnly}>
+                    <SelectTrigger className={`h-7 text-xs w-40 border ${STATUS_COLORS[st]}`}><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CUSTOM_STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

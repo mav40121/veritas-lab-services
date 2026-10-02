@@ -16495,6 +16495,53 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // ── VeritaScan custom questions on a scan (parking-lot #55, phase 3) ──────
+  // The lab's ACTIVE custom questions joined with their per-scan status. These
+  // are assessed in their OWN section and scored separately; they never enter
+  // the standardized readiness denominator (that math is over SCAN_ITEMS only).
+  app.get("/api/labs/:labId/veritascan/scans/:id/custom-items", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    const sqlite = (db as any).$client;
+    const scan = sqlite.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId);
+    if (!scan) return res.status(404).json({ error: "Scan not found" });
+    const rows = sqlite.prepare(`
+      SELECT ci.id AS custom_item_id, ci.domain, ci.question, ci.tjc, ci.cap, ci.cfr, ci.aabb, ci.cola,
+             COALESCE(s.status, 'Not Assessed') AS status, s.notes, s.owner, s.due_date
+      FROM veritascan_custom_items ci
+      LEFT JOIN veritascan_custom_item_status s ON s.custom_item_id = ci.id AND s.scan_id = ?
+      WHERE ci.lab_id = ? AND ci.status = 'active'
+      ORDER BY ci.created_at ASC, ci.id ASC
+    `).all(req.params.id, req.scope.labId);
+    res.json(rows);
+  });
+
+  app.put("/api/labs/:labId/veritascan/scans/:id/custom-items/:customItemId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    const sqlite = (db as any).$client;
+    const scan = sqlite.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId);
+    if (!scan) return res.status(404).json({ error: "Scan not found" });
+    // The custom item must belong to THIS lab (guard against a cross-lab id).
+    const ci = sqlite.prepare("SELECT id FROM veritascan_custom_items WHERE id = ? AND lab_id = ?").get(req.params.customItemId, req.scope.labId);
+    if (!ci) return res.status(404).json({ error: "Custom question not found in this lab" });
+    const { status, notes, owner, due_date } = req.body || {};
+    if (status !== undefined && !isValidCustomStatus(status)) {
+      return res.status(400).json({ error: "invalid status" });
+    }
+    const now = new Date().toISOString();
+    sqlite.prepare(`
+      INSERT INTO veritascan_custom_item_status (scan_id, custom_item_id, status, notes, owner, due_date, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(scan_id, custom_item_id) DO UPDATE SET
+        status = excluded.status,
+        notes = excluded.notes,
+        owner = excluded.owner,
+        due_date = excluded.due_date,
+        updated_at = excluded.updated_at
+    `).run(req.params.id, req.params.customItemId, status || 'Not Assessed', notes || null, owner || null, due_date || null, now);
+    sqlite.prepare("UPDATE veritascan_scans SET updated_at = ? WHERE id = ?").run(now, req.params.id);
+    res.json({ ok: true });
+  });
+
   // Lab-scoped bulk item upsert (matches the auto-save PUT pattern).
   app.put("/api/labs/:labId/veritascan/scans/:id/items", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
     if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
