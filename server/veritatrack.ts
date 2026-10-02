@@ -73,9 +73,19 @@ export function registerVeritaTrackRoutes(
   app: Express,
   authMiddleware: any,
   requireWriteAccess: any,
-  requireModuleEdit: any
+  requireModuleEdit: any,
+  resolveActiveLabForRequest: any
 ) {
   const sqlite = (db as any).$client;
+
+  // Resolve the lab the caller is acting WITHIN, for the subscription/access check.
+  // On lab-scoped routes req.scope.lab is set (with its plan). On the UNSCOPED
+  // /api/veritatrack/* routes (all task writes, incl. sign-off) it is NOT, so fall
+  // back to the active lab (X-Active-Lab-Id / context). Without this, hasTrackAccess
+  // read the caller's PERSONAL plan, which is 'free' for an admin who reaches the lab
+  // via membership (owner/admin), and 403'd every action with "subscription required".
+  // 2026-10-02: this is the bug behind "I have an admin seat but can't do admin functions".
+  const trackLab = (req: any) => req?.scope?.lab ?? (req?.userId ? resolveActiveLabForRequest(req.userId, req) : null);
 
   // Wave B3 (2026-06-12): append-only VeritaTrack audit writer. Never throws
   // into the caller; an audit failure must not break a sign-off or an edit.
@@ -159,7 +169,7 @@ export function registerVeritaTrackRoutes(
     "/api/labs/:labId/veritatrack/worklist",
     authMiddleware,
     (req: any, res) => {
-      if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+      if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
       // SECURITY (multi-lab IDOR fix, 2026-07-11): resolve + membership-validate
       // the lab via resolveLegacyLabId (the SAME guard the /tasks list read uses
       // at line ~349) instead of trusting req.params.labId. Without this, the
@@ -418,7 +428,7 @@ export function registerVeritaTrackRoutes(
   // viewing /veritatrack on a secondary lab were seeing primary-lab
   // tasks bleed in.
   app.get("/api/veritatrack/tasks", authMiddleware, (req: any, res) => {
-    if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
+    if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const labId = resolveLegacyLabId((db as any).$client, req);
     if (!labId) return res.json([]);
     const tasks = sqlite.prepare(
@@ -437,7 +447,7 @@ export function registerVeritaTrackRoutes(
 
   // GET single task with all sign-offs \u2014 Shape A guard via resolveRowForMutation.
   app.get("/api/veritatrack/tasks/:id", authMiddleware, (req: any, res) => {
-    if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
+    if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const { row: task, status } = resolveRowForMutation<any>((db as any).$client, "veritatrack_tasks", Number(req.params.id), req);
     if (!task) {
       if (status === 403) return res.status(403).json({ error: "You don't have access to this task's lab" });
@@ -457,7 +467,7 @@ export function registerVeritaTrackRoutes(
   // One config row per lab. GET returns the ★ defaults when unset so the client
   // renders the panel with no create step (enabled defaults OFF).
   app.get("/api/veritatrack/reminder-config", authMiddleware, (req: any, res) => {
-    if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+    if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
     const labId = resolveLegacyLabId(sqlite, req);
     if (!labId) return res.status(400).json({ error: "No active lab" });
     res.json(readReminderConfig(labId));
@@ -467,7 +477,7 @@ export function registerVeritaTrackRoutes(
   // VeritaTrack module edit). Empty recipient list is allowed: the nightly
   // runner falls back to the lab owner so reminders are never silently off.
   app.put("/api/veritatrack/reminder-config", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
-    if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+    if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
     const labId = resolveLegacyLabId(sqlite, req);
     if (!labId) return res.status(400).json({ error: "No active lab" });
     const { config, detail } = writeReminderConfig(labId, req.body);
@@ -477,7 +487,7 @@ export function registerVeritaTrackRoutes(
 
   // POST create task
   app.post("/api/veritatrack/tasks", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
-    if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
+    if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const { name, category, instrument, owner, owner_employee_id, owner_email, frequency, frequency_months, map_analyte, map_field, notes } = req.body;
     if (!name) return res.status(400).json({ error: "name required" });
@@ -514,7 +524,7 @@ export function registerVeritaTrackRoutes(
   // the task's lab_id. Previously a co-owner / lab admin / seeded-task user
   // got 404 on edit even though the list endpoint showed the row.
   app.put("/api/veritatrack/tasks/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
-    if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
+    if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const taskId = Number(req.params.id);
     const { row: existing, status } = resolveRowForMutation((db as any).$client, "veritatrack_tasks", taskId, req);
     if (!existing) {
@@ -547,7 +557,7 @@ export function registerVeritaTrackRoutes(
 
   // DELETE (soft) task \u2014 Shape A guard via resolveRowForMutation.
   app.delete("/api/veritatrack/tasks/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
-    if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
+    if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const taskId = Number(req.params.id);
     const { row: existing, status } = resolveRowForMutation((db as any).$client, "veritatrack_tasks", taskId, req);
     if (!existing) {
@@ -561,7 +571,7 @@ export function registerVeritaTrackRoutes(
 
   // POST sign off a task \u2014 Shape A guard via resolveRowForMutation.
   app.post("/api/veritatrack/tasks/:id/signoff", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
-    if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
+    if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const taskId = Number(req.params.id);
     const { row: task, status } = resolveRowForMutation<any>((db as any).$client, "veritatrack_tasks", taskId, req);
@@ -603,7 +613,7 @@ export function registerVeritaTrackRoutes(
 
   // DELETE a sign-off \u2014 Shape A guard via resolveRowForMutation.
   app.delete("/api/veritatrack/signoffs/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
-    if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
+    if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const signoffId = Number(req.params.id);
     const { row: existing, status } = resolveRowForMutation((db as any).$client, "veritatrack_signoffs", signoffId, req);
     if (!existing) {
@@ -629,7 +639,7 @@ export function registerVeritaTrackRoutes(
   // through the same ownership guard the mutations use, then returns the
   // append-only event log newest-first.
   app.get("/api/veritatrack/tasks/:id/audit", authMiddleware, (req: any, res) => {
-    if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+    if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
     const { row: task, status } = resolveRowForMutation<any>((db as any).$client, "veritatrack_tasks", Number(req.params.id), req);
     if (!task) {
       if (status === 403) return res.status(403).json({ error: "You don't have access to this task's lab" });
@@ -655,7 +665,7 @@ export function registerVeritaTrackRoutes(
   // so an analyte that lives in two maps (Glucose on CW Bylas AND on SCAHC)
   // only produces one task per field-definition.
   app.post("/api/veritatrack/import-from-map", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
-    if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
+    if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     // Multi-lab fix: read the maps of the ACTIVE lab (X-Active-Lab-Id), not the
     // owner's home users.lab_id. A multi-lab owner viewing Lab B used to import
@@ -736,7 +746,7 @@ export function registerVeritaTrackRoutes(
 
   // GET dashboard summary
   app.get("/api/veritatrack/dashboard", authMiddleware, (req: any, res) => {
-    if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
+    if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     // #9 multi-lab fix (2026-07-11): scope the legacy dashboard by lab_id via
     // resolveLegacyLabId (the same guard the /tasks list read uses), not by
     // user_id, so a multi-lab owner's summary counts match the visible list
@@ -768,7 +778,7 @@ export function registerVeritaTrackRoutes(
 
   // POST seed default tasks (idempotent)
   app.post("/api/veritatrack/seed-defaults", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
-    if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
+    if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     // Multi-lab fix: seed into the ACTIVE lab (X-Active-Lab-Id). Was user_id
     // only, so seeded tasks got lab_id=NULL and never appeared in the lab's
@@ -843,7 +853,7 @@ export function registerVeritaTrackRoutes(
 
   // POST Excel export
   app.post("/api/veritatrack/export/excel", authMiddleware, async (req: any, res) => {
-    if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
+    if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     // Multi-lab fix: export the ACTIVE lab's tasks (X-Active-Lab-Id), not every
     // task under user_id across all labs. A surveyor-facing export must never
@@ -1039,7 +1049,7 @@ export function registerVeritaTrackRoutes(
   const labScopeMiddleware = (app as any).locals?.labScopeMiddleware;
   if (labScopeMiddleware) {
     app.get("/api/labs/:labId/veritatrack/tasks", authMiddleware, labScopeMiddleware, (req: any, res) => {
-      if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+      if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
       const tasks = sqlite.prepare(
         "SELECT * FROM veritatrack_tasks WHERE lab_id = ? AND active = 1 ORDER BY category, name"
       ).all(req.scope.labId) as any[];
@@ -1055,7 +1065,7 @@ export function registerVeritaTrackRoutes(
     });
 
     app.post("/api/labs/:labId/veritatrack/tasks", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
-      if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+      if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
       const { name, category, instrument, owner, frequency, frequency_months, map_analyte, map_field, notes } = req.body || {};
       if (!name?.trim()) return res.status(400).json({ error: "name required" });
       // #54: the client sends only the `frequency` STRING (e.g. "Quarterly"),
@@ -1084,7 +1094,7 @@ export function registerVeritaTrackRoutes(
     });
 
     app.get("/api/labs/:labId/veritatrack/dashboard", authMiddleware, labScopeMiddleware, (req: any, res) => {
-      if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+      if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
       const tasks = sqlite.prepare(
         "SELECT * FROM veritatrack_tasks WHERE lab_id = ? AND active = 1"
       ).all(req.scope.labId) as any[];
@@ -1119,12 +1129,12 @@ export function registerVeritaTrackRoutes(
     // writeReminderConfig with the legacy route above so there is one source of
     // truth for defaults and validation.
     app.get("/api/labs/:labId/veritatrack/reminder-config", authMiddleware, labScopeMiddleware, (req: any, res) => {
-      if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+      if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
       res.json(readReminderConfig(req.scope.labId));
     });
 
     app.put("/api/labs/:labId/veritatrack/reminder-config", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
-      if (!hasTrackAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+      if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
       const { config, detail } = writeReminderConfig(req.scope.labId, req.body);
       trackAudit({ labId: req.scope.labId, taskId: null, event: "reminder_config_updated", detail, byUserId: req.user?.userId ?? null });
       res.json(config);
