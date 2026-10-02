@@ -7,7 +7,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { setActiveLabId } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Building2, Check, Users, Gauge } from "lucide-react";
+import { ChevronDown, Building2, Check, Users, Gauge, FolderOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isSingleSiteDemo, SINGLE_SITE_DEMO_NAME } from "@/lib/host";
 
@@ -247,6 +247,14 @@ export function LabSwitcher() {
                 </Link>
               </DropdownMenuItem>
             )}
+            {g.orgId != null && g.labs.length > 0 && (
+              <DropdownMenuItem asChild>
+                <Link href={`/labs/${g.labs[0].labId}/repository`} className="flex items-center gap-2 py-1.5 pl-6 cursor-pointer">
+                  <FolderOpen size={13} className="text-primary shrink-0" />
+                  <span className="text-xs font-medium">Shared documents</span>
+                </Link>
+              </DropdownMenuItem>
+            )}
             {g.labs.map(m => {
           const isCurrent = m.labId === current.labId;
           const suffix = distinguishingSuffix(m, memberships);
@@ -389,6 +397,16 @@ export function LabSwitcherMobile({ onAfterSwitch }: { onAfterSwitch?: () => voi
               >
                 <Gauge size={13} className="text-primary shrink-0" />
                 <span className="text-xs font-medium">Network overview</span>
+              </Link>
+            )}
+            {g.orgId != null && g.labs.length > 0 && (
+              <Link
+                href={`/labs/${g.labs[0].labId}/repository`}
+                onClick={() => onAfterSwitch?.()}
+                className="flex items-center gap-2 px-3 py-1.5 pl-6 rounded-md text-left hover:bg-secondary transition-colors"
+              >
+                <FolderOpen size={13} className="text-primary shrink-0" />
+                <span className="text-xs font-medium">Shared documents</span>
               </Link>
             )}
             {g.labs.map(m => {

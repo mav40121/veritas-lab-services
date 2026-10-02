@@ -96,6 +96,7 @@ const VeritaLabAppPage = lazy(() => import("@/pages/VeritaLabAppPage"));
 const VeritaQCAppPage = lazy(() => import("@/pages/VeritaQCAppPage"));
 const EquipmentAppPage = lazy(() => import("@/pages/EquipmentAppPage"));
 const ReadinessDashboardPage = lazy(() => import("@/pages/ReadinessDashboardPage"));
+const SystemRepositoryPage = lazy(() => import("@/pages/SystemRepositoryPage"));
 const VeritaQCDailyReviewPage = lazy(() => import("@/pages/VeritaQCDailyReviewPage"));
 const VeritaPolicyAppPage = lazy(() => import("@/pages/VeritaPolicyAppPage"));
 const VeritaPolicyMyPoliciesPage = lazy(() => import("@/pages/VeritaPolicyMyPoliciesPage"));
@@ -542,6 +543,7 @@ function AppContent() {
           <Route path="/labs/:labId/veritaqc-app" component={VeritaQCAppPage} />
           <Route path="/labs/:labId/equipment-app" component={EquipmentAppPage} />
           <Route path="/labs/:labId/readiness" component={ReadinessDashboardPage} />
+          <Route path="/labs/:labId/repository" component={SystemRepositoryPage} />
           <Route path="/labs/:labId/veritaqc-app/review" component={VeritaQCDailyReviewPage} />
           <Route path="/labs/:labId/veritapolicy-app" component={VeritaPolicyAppPage} />
           <Route path="/labs/:labId/veritapolicy-app/my-policies" component={VeritaPolicyMyPoliciesPage} />
