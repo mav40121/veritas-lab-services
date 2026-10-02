@@ -30,7 +30,12 @@ const PRODUCTS = [
   { route: "/veritascan",   fn: "renderVeritaScanContent",   id: "#veritascan",   mark: "VeritaScan" },
   { route: "/veritamap",    fn: "renderVeritaMapContent",    id: "#veritamap",    mark: "VeritaMap" },
   { route: "/veritacomp",   fn: "renderVeritaCompContent",   id: "#veritacomp",   mark: "VeritaComp" },
-  { route: "/veritapolicy", fn: "renderVeritaPolicyContent", id: "#veritapolicy", mark: "VeritaPolicy" },
+  // The product rebranded VeritaPolicy -> VeritaDC: the public route is /veritadc
+  // and the graph node is #veritadc (name "VeritaDC"). The render fn and page
+  // component kept their old VeritaPolicy names internally. The block keeps an
+  // intentional "(formerly VeritaPolicy)" continuity phrase, so mark stays the
+  // CURRENT brand the block leads with: VeritaDC.
+  { route: "/veritadc",     fn: "renderVeritaPolicyContent", id: "#veritadc",     mark: "VeritaDC" },
   { route: "/veritastaff",  fn: "renderVeritaStaffContent",  id: "#veritastaff",  mark: "VeritaStaff" },
   // Batch 3
   { route: "/veritatrack",  fn: "renderVeritaTrackContent",  id: "#veritatrack",  mark: "VeritaTrack" },
@@ -228,7 +233,10 @@ console.log("\nCase 4b: VeritaBench lives at /calculator; /veritabench is a lega
   // Both halves, because asserting only the absence is what let this read as an
   // open TODO ("VeritaBench is missing, blocked on a product decision") when in
   // fact VeritaBench shipped and /veritabench is simply the wrong page for it.
-  const bench = readFileSync(new URL("../client/src/pages/VeritaBenchPage.tsx", import.meta.url), "utf8");
+  // The /veritabench slug's page was renamed VeritaBenchPage.tsx -> VeritaPacePage.tsx
+  // (App.tsx: `<Route path="/veritabench" component={VeritaPacePage} />`). Read the
+  // page that actually serves the slug, not the old filename.
+  const pace = readFileSync(new URL("../client/src/pages/VeritaPacePage.tsx", import.meta.url), "utf8");
   const ops = readFileSync(new URL("../client/src/pages/OperationsPage.tsx", import.meta.url), "utf8");
 
   // The route map, straight from the page that owns it.
@@ -244,7 +252,7 @@ console.log("\nCase 4b: VeritaBench lives at /calculator; /veritabench is a lega
   check("VeritaBench's page (/calculator) IS prerendered", /routePath === "\/calculator"[\s\S]{0,80}renderProductivityCalculatorContent\(\)/.test(staticSrc));
 
   // Absence: the legacy slug renders VeritaPace, so no VeritaBench block there.
-  check("VeritaBenchPage renders VeritaPace (why the slug gets no block)", /VeritaPace/.test(bench));
+  check("VeritaPacePage renders VeritaPace (why the /veritabench slug gets no block)", /VeritaPace/.test(pace));
   check("no /veritabench prerender is wired", !/routePath === "\/veritabench"/.test(staticSrc));
   check("no #veritabench node in the graph", !graph.some((n) => n["@id"]?.endsWith("#veritabench")));
 }
