@@ -377,6 +377,9 @@ export default function VeritaStaffAppPage() {
               <Button variant="outline" size="sm" onClick={() => setShowInstrumentAssign(true)} disabled={readOnly} title="Assign staff from the instrument side: pick a test system or manual test, check off who runs it" data-testid="button-assign-by-instrument">
                 <FlaskConical size={14} className="mr-1.5" /> Assign by Instrument
               </Button>
+              <Button variant="outline" size="sm" onClick={() => navigate(labRoute("/veritaceu-app"))} title="VeritaCEU: continuing-education cycle status across the whole team">
+                <GraduationCap size={14} className="mr-1.5" /> CE Dashboard
+              </Button>
               <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={handleGenerate209} disabled={generating209 || readOnly}>
                 <FileDown size={14} className="mr-1.5" /> {generating209 ? "Generating..." : "Generate CMS 209"}
               </Button>

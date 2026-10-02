@@ -25477,6 +25477,34 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // VeritaCEU shared cycle math (phase 1). Single source of truth for both the
+  // per-employee ceu-summary and the lab-wide roster-summary so the two can never
+  // diverge. Pure: credits attributed by activity_date when present, else the
+  // row's created_at; a credit counts when its effective date is inside the
+  // [now - cycleMonths, now] UTC window. See scripts/verify-veritaceu-cycle.mjs.
+  function computeCeuSummary(creditRows: any[], required: number, cycleMonths: number) {
+    const now = new Date();
+    const cycleStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - cycleMonths, now.getUTCDate()));
+    const cycleStartIso = cycleStart.toISOString();
+    let earned = 0;
+    const entries: any[] = [];
+    for (const r of creditRows) {
+      const when = r.activity_date || r.created_at;
+      const whenIso = /^\d{4}-\d{2}-\d{2}$/.test(String(when))
+        ? new Date(`${when}T00:00:00.000Z`).toISOString()
+        : new Date(when).toISOString();
+      const inCycle = whenIso >= cycleStartIso;
+      const credits = typeof r.credits === "number" ? r.credits : 0;
+      if (inCycle) earned += credits;
+      entries.push({ id: r.id, title: r.title, url: r.url, credits, activityDate: r.activity_date, createdAt: r.created_at, inCycle });
+    }
+    earned = Math.round(earned * 100) / 100;
+    const remaining = Math.max(0, Math.round((required - earned) * 100) / 100);
+    const pct = required > 0 ? Math.min(100, Math.round((earned / required) * 100)) : 0;
+    const met = earned >= required;
+    return { earned, remaining, pct, met, cycleStartIso, entries, inCycleCount: entries.filter((e) => e.inCycle).length };
+  }
+
   // ── VeritaCEU: continuing-education cycle summary ──────────────────────
   //
   // Totals an employee's ce_credit credits inside a trailing rolling cycle and
@@ -25508,14 +25536,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       cycleMonths = n;
     }
 
-    // Cycle window: [cycleStart, now]. cycleStart = now minus cycleMonths,
-    // computed as UTC start-of-day so the boundary matches the UTC-parsed
-    // activity dates regardless of the server's timezone (an Eastern-time
-    // server otherwise pushed a same-date boundary activity just outside).
-    const now = new Date();
-    const cycleStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - cycleMonths, now.getUTCDate()));
-    const cycleStartIso = cycleStart.toISOString();
-
     const rows = (db as any).$client.prepare(
       `SELECT id, title, url, credits, activity_date, created_at
        FROM staff_employee_documents
@@ -25523,37 +25543,71 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
        ORDER BY COALESCE(activity_date, created_at) DESC`
     ).all(req.params.id) as any[];
 
-    let earned = 0;
-    const entries: any[] = [];
-    for (const r of rows) {
-      const when = r.activity_date || r.created_at; // attribution date
-      // activity_date is a bare YYYY-MM-DD; created_at is an ISO timestamp.
-      // Compare on the ISO form of the effective date's start-of-day.
-      const whenIso = /^\d{4}-\d{2}-\d{2}$/.test(String(when))
-        ? new Date(`${when}T00:00:00.000Z`).toISOString()
-        : new Date(when).toISOString();
-      const inCycle = whenIso >= cycleStartIso;
-      const credits = typeof r.credits === "number" ? r.credits : 0;
-      if (inCycle) earned += credits;
-      entries.push({ id: r.id, title: r.title, url: r.url, credits, activityDate: r.activity_date, createdAt: r.created_at, inCycle });
-    }
-    earned = Math.round(earned * 100) / 100;
-    const remaining = Math.max(0, Math.round((required - earned) * 100) / 100);
-    const pct = required > 0 ? Math.min(100, Math.round((earned / required) * 100)) : 0;
-    const met = earned >= required;
-
+    const s = computeCeuSummary(rows, required, cycleMonths);
     res.json({
       required,
       cycleMonths,
-      cycleStart: cycleStartIso.slice(0, 10),
-      earned,
-      remaining,
-      pct,
-      met,
+      cycleStart: s.cycleStartIso.slice(0, 10),
+      earned: s.earned,
+      remaining: s.remaining,
+      pct: s.pct,
+      met: s.met,
       entryCount: rows.length,
-      inCycleCount: entries.filter((e) => e.inCycle).length,
-      entries,
+      inCycleCount: s.inCycleCount,
+      entries: s.entries,
     });
+  });
+
+  // ── VeritaCEU: lab-wide CE roster summary (phase 1 dashboard) ───────────
+  // Every active employee's CE cycle status in one call, reusing the SAME
+  // computeCeuSummary math as the per-employee endpoint. Employees with no CE
+  // entries appear as 0 earned (short), never dropped by the join.
+  app.get("/api/labs/:labId/veritaceu/roster-summary", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const sqlite = (db as any).$client;
+    const labId = req.scope.labId;
+    let required = 36;
+    if (req.query.required !== undefined) {
+      const n = Number(req.query.required);
+      if (!Number.isFinite(n) || n <= 0 || n > 1000) return res.status(400).json({ error: "required must be a positive number <= 1000" });
+      required = n;
+    }
+    let cycleMonths = 36;
+    if (req.query.cycleMonths !== undefined) {
+      const n = Number(req.query.cycleMonths);
+      if (!Number.isInteger(n) || n < 1 || n > 120) return res.status(400).json({ error: "cycleMonths must be an integer between 1 and 120" });
+      cycleMonths = n;
+    }
+
+    const emps = sqlite.prepare(
+      "SELECT id, first_name, last_name, middle_initial, title FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active' ORDER BY last_name, first_name"
+    ).all(labId) as any[];
+    const creditRows = sqlite.prepare(
+      `SELECT d.employee_id AS employee_id, d.id AS id, d.title AS title, d.url AS url,
+              d.credits AS credits, d.activity_date AS activity_date, d.created_at AS created_at
+       FROM staff_employee_documents d
+       JOIN staff_employees e ON e.id = d.employee_id
+       WHERE e.tier2_lab_id = ? AND d.doc_type = 'ce_credit'`
+    ).all(labId) as any[];
+    const byEmp = new Map<number, any[]>();
+    for (const r of creditRows) { const a = byEmp.get(r.employee_id) || []; a.push(r); byEmp.set(r.employee_id, a); }
+
+    const roster = emps.map((e) => {
+      const rows = byEmp.get(e.id) || [];
+      const s = computeCeuSummary(rows, required, cycleMonths);
+      const name = [e.first_name, e.middle_initial, e.last_name].filter(Boolean).join(" ").trim() || `Employee #${e.id}`;
+      const lastActivityDate = rows.reduce((acc: string | null, r: any) => {
+        const d = r.activity_date || (r.created_at ? String(r.created_at).slice(0, 10) : null);
+        return d && (!acc || d > acc) ? d : acc;
+      }, null as string | null);
+      return {
+        employeeId: e.id, name, title: e.title || null,
+        earned: s.earned, required, remaining: s.remaining, pct: s.pct, met: s.met,
+        inCycleCount: s.inCycleCount, totalEntries: rows.length, lastActivityDate,
+      };
+    });
+    const metCount = roster.filter((r) => r.met).length;
+    res.json({ required, cycleMonths, employeeCount: roster.length, metCount, shortCount: roster.length - metCount, roster });
   });
 
   // ── EMPLOYEE INSTRUMENT ASSIGNMENT (PR D, 2026-06-05) ──────────────────
