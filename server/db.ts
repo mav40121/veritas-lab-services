@@ -7091,8 +7091,49 @@ try {
   if (!cols.includes("user_id")) {
     try { sqlite.exec("ALTER TABLE staff_employees ADD COLUMN user_id INTEGER REFERENCES users(id)"); } catch {}
   }
+  // VeritaCEU phase 4: the CE requirement profile this employee is assigned.
+  // Nullable; null means "use the lab's default profile", and if the lab has no
+  // default the ASCP CMP 36/3yr fallback applies. No backfill write.
+  if (!cols.includes("ceu_profile_id")) {
+    try { sqlite.exec("ALTER TABLE staff_employees ADD COLUMN ceu_profile_id INTEGER"); } catch {}
+  }
 }
 try { sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_employees_user_id_unique ON staff_employees(user_id) WHERE user_id IS NOT NULL"); } catch {}
+
+// VeritaCEU phase 4 (parking-lot #55): per-lab CE requirement profiles. A named
+// requirement (credits + cycle months), e.g. "ASCP CMP" 36/36, "NY State License",
+// "None". One profile per lab may be the default; employees reference one via
+// staff_employees.ceu_profile_id. The dashboard and per-employee summary score each
+// person against their profile (-> lab default -> ASCP 36/36 fallback).
+try {
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS veritaceu_requirement_profiles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lab_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      required_credits REAL NOT NULL DEFAULT 36,
+      cycle_months INTEGER NOT NULL DEFAULT 36,
+      is_default INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (lab_id) REFERENCES labs(id)
+    );
+  `);
+} catch {}
+{
+  const ceuProfCols = (sqlite.prepare("PRAGMA table_info(veritaceu_requirement_profiles)").all() as any[]).map((c: any) => c.name);
+  const ensureProf = (col: string, sql: string) => { if (!ceuProfCols.includes(col)) { try { sqlite.exec(sql); ceuProfCols.push(col); } catch {} } };
+  ensureProf("lab_id",           "ALTER TABLE veritaceu_requirement_profiles ADD COLUMN lab_id INTEGER");
+  ensureProf("name",             "ALTER TABLE veritaceu_requirement_profiles ADD COLUMN name TEXT");
+  ensureProf("required_credits", "ALTER TABLE veritaceu_requirement_profiles ADD COLUMN required_credits REAL NOT NULL DEFAULT 36");
+  ensureProf("cycle_months",     "ALTER TABLE veritaceu_requirement_profiles ADD COLUMN cycle_months INTEGER NOT NULL DEFAULT 36");
+  ensureProf("is_default",       "ALTER TABLE veritaceu_requirement_profiles ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0");
+  ensureProf("status",           "ALTER TABLE veritaceu_requirement_profiles ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  ensureProf("created_at",       "ALTER TABLE veritaceu_requirement_profiles ADD COLUMN created_at TEXT");
+  ensureProf("updated_at",       "ALTER TABLE veritaceu_requirement_profiles ADD COLUMN updated_at TEXT");
+}
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veritaceu_requirement_profiles(lab_id, status)"); } catch {}
 
 // 2026-06-09 Auth unification: link a Staff Portal seat invite to the
 // specific VeritaStaff row it was created for. On accept, the new

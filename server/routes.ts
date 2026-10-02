@@ -25505,6 +25505,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return { earned, remaining, pct, met, cycleStartIso, entries, inCycleCount: entries.filter((e) => e.inCycle).length };
   }
 
+  // VeritaCEU phase 4: resolve each employee's CE requirement (credits + cycle)
+  // from their assigned profile, falling back to the lab's default profile, then
+  // the ASCP CMP 36/3yr standard. Only active profiles are loaded, so an employee
+  // pointing at a retired profile cleanly falls back without an orphan.
+  function loadCeuResolver(sqlite: any, labId: number) {
+    const profiles = sqlite.prepare(
+      "SELECT id, required_credits, cycle_months, is_default FROM veritaceu_requirement_profiles WHERE lab_id = ? AND status = 'active'"
+    ).all(labId) as any[];
+    const byId = new Map<number, { required: number; cycleMonths: number }>();
+    let def: { required: number; cycleMonths: number } | null = null;
+    for (const p of profiles) {
+      const entry = { required: Number(p.required_credits), cycleMonths: Number(p.cycle_months) };
+      byId.set(Number(p.id), entry);
+      if (p.is_default) def = entry;
+    }
+    const fallback = { required: 36, cycleMonths: 36 };
+    return {
+      default: def || fallback,
+      for(profileId: number | null | undefined) {
+        if (profileId != null && byId.has(Number(profileId))) return byId.get(Number(profileId))!;
+        return def || fallback;
+      },
+    };
+  }
+
   // ── VeritaCEU: continuing-education cycle summary ──────────────────────
   //
   // Totals an employee's ce_credit credits inside a trailing rolling cycle and
@@ -25518,18 +25543,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const labId = req.scope.labId;
     const emp = (db as any).$client.prepare(
-      "SELECT id FROM staff_employees WHERE id = ? AND tier2_lab_id = ?"
-    ).get(req.params.id, labId);
+      "SELECT id, ceu_profile_id FROM staff_employees WHERE id = ? AND tier2_lab_id = ?"
+    ).get(req.params.id, labId) as any;
     if (!emp) return res.status(404).json({ error: "Employee not found" });
 
-    // Required credits + cycle length: default ASCP 36 / 36 months, clamped.
-    let required = 36;
+    // Required credits + cycle length: from the employee's assigned requirement
+    // profile (-> lab default -> ASCP 36/36). An explicit ?required=&cycleMonths=
+    // still overrides, so a one-off query can reflect a different board's rule.
+    const prof = loadCeuResolver((db as any).$client, labId).for(emp.ceu_profile_id);
+    let required = prof.required;
     if (req.query.required !== undefined) {
       const n = Number(req.query.required);
       if (!Number.isFinite(n) || n <= 0 || n > 1000) return res.status(400).json({ error: "required must be a positive number <= 1000" });
       required = n;
     }
-    let cycleMonths = 36;
+    let cycleMonths = prof.cycleMonths;
     if (req.query.cycleMonths !== undefined) {
       const n = Number(req.query.cycleMonths);
       if (!Number.isInteger(n) || n < 1 || n > 120) return res.status(400).json({ error: "cycleMonths must be an integer between 1 and 120" });
@@ -25566,21 +25594,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const sqlite = (db as any).$client;
     const labId = req.scope.labId;
-    let required = 36;
+    // Optional global overrides; otherwise each employee's requirement comes from
+    // their assigned profile (-> lab default -> ASCP 36/36).
+    let reqOverride: number | null = null;
     if (req.query.required !== undefined) {
       const n = Number(req.query.required);
       if (!Number.isFinite(n) || n <= 0 || n > 1000) return res.status(400).json({ error: "required must be a positive number <= 1000" });
-      required = n;
+      reqOverride = n;
     }
-    let cycleMonths = 36;
+    let cycleOverride: number | null = null;
     if (req.query.cycleMonths !== undefined) {
       const n = Number(req.query.cycleMonths);
       if (!Number.isInteger(n) || n < 1 || n > 120) return res.status(400).json({ error: "cycleMonths must be an integer between 1 and 120" });
-      cycleMonths = n;
+      cycleOverride = n;
     }
+    const resolver = loadCeuResolver(sqlite, labId);
 
     const emps = sqlite.prepare(
-      "SELECT id, first_name, last_name, middle_initial, title FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active' ORDER BY last_name, first_name"
+      "SELECT id, first_name, last_name, middle_initial, title, ceu_profile_id FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active' ORDER BY last_name, first_name"
     ).all(labId) as any[];
     const creditRows = sqlite.prepare(
       `SELECT d.employee_id AS employee_id, d.id AS id, d.title AS title, d.url AS url,
@@ -25594,6 +25625,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const roster = emps.map((e) => {
       const rows = byEmp.get(e.id) || [];
+      const prof = resolver.for(e.ceu_profile_id);
+      const required = reqOverride ?? prof.required;
+      const cycleMonths = cycleOverride ?? prof.cycleMonths;
       const s = computeCeuSummary(rows, required, cycleMonths);
       const name = [e.first_name, e.middle_initial, e.last_name].filter(Boolean).join(" ").trim() || `Employee #${e.id}`;
       const lastActivityDate = rows.reduce((acc: string | null, r: any) => {
@@ -25602,12 +25636,127 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }, null as string | null);
       return {
         employeeId: e.id, name, title: e.title || null,
-        earned: s.earned, required, remaining: s.remaining, pct: s.pct, met: s.met,
+        profileId: e.ceu_profile_id ?? null,
+        earned: s.earned, required, cycleMonths, remaining: s.remaining, pct: s.pct, met: s.met,
         inCycleCount: s.inCycleCount, totalEntries: rows.length, lastActivityDate,
       };
     });
     const metCount = roster.filter((r) => r.met).length;
-    res.json({ required, cycleMonths, employeeCount: roster.length, metCount, shortCount: roster.length - metCount, roster });
+    res.json({
+      required: reqOverride ?? resolver.default.required,
+      cycleMonths: cycleOverride ?? resolver.default.cycleMonths,
+      employeeCount: roster.length, metCount, shortCount: roster.length - metCount, roster,
+    });
+  });
+
+  // ── VeritaCEU: CE requirement profiles (phase 4) ────────────────────────
+  // Per-lab named requirements (credits + cycle months) assignable per employee.
+  function validateCeuProfile(body: any): { ok: true; value: { name: string; required_credits: number; cycle_months: number } } | { ok: false; error: string } {
+    const name = typeof body?.name === "string" ? body.name.trim() : "";
+    if (!name) return { ok: false, error: "name is required" };
+    if (name.length > 100) return { ok: false, error: "name must be 100 characters or fewer" };
+    const required_credits = Number(body?.required_credits);
+    if (!Number.isFinite(required_credits) || required_credits <= 0 || required_credits > 1000) {
+      return { ok: false, error: "required_credits must be a positive number <= 1000" };
+    }
+    const cycle_months = Number(body?.cycle_months);
+    if (!Number.isInteger(cycle_months) || cycle_months < 1 || cycle_months > 120) {
+      return { ok: false, error: "cycle_months must be an integer between 1 and 120" };
+    }
+    return { ok: true, value: { name, required_credits, cycle_months } };
+  }
+
+  app.get("/api/labs/:labId/veritaceu/requirement-profiles", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const sqlite = (db as any).$client;
+    const includeRetired = req.query.include_retired === "1";
+    const rows = sqlite.prepare(
+      `SELECT id, name, required_credits, cycle_months, is_default, status, created_at, updated_at
+       FROM veritaceu_requirement_profiles
+       WHERE lab_id = ?${includeRetired ? "" : " AND status = 'active'"}
+       ORDER BY is_default DESC, name ASC`
+    ).all(req.scope.labId) as any[];
+    // Attach how many active employees are assigned to each profile.
+    const counts = sqlite.prepare(
+      "SELECT ceu_profile_id AS pid, COUNT(*) AS n FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active' AND ceu_profile_id IS NOT NULL GROUP BY ceu_profile_id"
+    ).all(req.scope.labId) as any[];
+    const countMap = new Map<number, number>(counts.map((c: any) => [Number(c.pid), Number(c.n)]));
+    res.json(rows.map((r: any) => ({ ...r, assignedCount: countMap.get(Number(r.id)) || 0 })));
+  });
+
+  app.post("/api/labs/:labId/veritaceu/requirement-profiles", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritastaff"), (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const v = validateCeuProfile(req.body || {});
+    if (!v.ok) return res.status(400).json({ error: v.error });
+    const sqlite = (db as any).$client;
+    const now = new Date().toISOString();
+    const makeDefault = req.body?.is_default ? 1 : 0;
+    const tx = sqlite.transaction(() => {
+      if (makeDefault) sqlite.prepare("UPDATE veritaceu_requirement_profiles SET is_default = 0, updated_at = ? WHERE lab_id = ?").run(now, req.scope.labId);
+      const ins = sqlite.prepare(
+        "INSERT INTO veritaceu_requirement_profiles (lab_id, name, required_credits, cycle_months, is_default, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'active', ?, ?)"
+      ).run(req.scope.labId, v.value.name, v.value.required_credits, v.value.cycle_months, makeDefault, now, now);
+      return Number(ins.lastInsertRowid);
+    });
+    const id = tx();
+    res.status(201).json(sqlite.prepare("SELECT * FROM veritaceu_requirement_profiles WHERE id = ?").get(id));
+  });
+
+  app.patch("/api/labs/:labId/veritaceu/requirement-profiles/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritastaff"), (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const sqlite = (db as any).$client;
+    const existing = sqlite.prepare("SELECT * FROM veritaceu_requirement_profiles WHERE id = ? AND lab_id = ?").get(Number(req.params.id), req.scope.labId) as any;
+    if (!existing) return res.status(404).json({ error: "Profile not found" });
+    const now = new Date().toISOString();
+
+    let status = existing.status;
+    if (req.body?.status !== undefined) {
+      const s = String(req.body.status);
+      if (s !== "active" && s !== "retired") return res.status(400).json({ error: "status must be 'active' or 'retired'" });
+      status = s;
+    }
+    // Content edit (optional): only re-validate when a content field is present.
+    let content = { name: existing.name, required_credits: existing.required_credits, cycle_months: existing.cycle_months };
+    if (["name", "required_credits", "cycle_months"].some((k) => req.body?.[k] !== undefined)) {
+      const v = validateCeuProfile({
+        name: req.body.name !== undefined ? req.body.name : existing.name,
+        required_credits: req.body.required_credits !== undefined ? req.body.required_credits : existing.required_credits,
+        cycle_months: req.body.cycle_months !== undefined ? req.body.cycle_months : existing.cycle_months,
+      });
+      if (!v.ok) return res.status(400).json({ error: v.error });
+      content = v.value;
+    }
+    // Default handling: setting is_default=1 clears others; a retired profile
+    // cannot be the default.
+    let isDefault = existing.is_default;
+    if (req.body?.is_default !== undefined) isDefault = req.body.is_default ? 1 : 0;
+    if (status === "retired") isDefault = 0;
+
+    const tx = sqlite.transaction(() => {
+      if (isDefault) sqlite.prepare("UPDATE veritaceu_requirement_profiles SET is_default = 0, updated_at = ? WHERE lab_id = ? AND id <> ?").run(now, req.scope.labId, existing.id);
+      sqlite.prepare(
+        "UPDATE veritaceu_requirement_profiles SET name = ?, required_credits = ?, cycle_months = ?, is_default = ?, status = ?, updated_at = ? WHERE id = ?"
+      ).run(content.name, content.required_credits, content.cycle_months, isDefault, status, now, existing.id);
+    });
+    tx();
+    res.json(sqlite.prepare("SELECT * FROM veritaceu_requirement_profiles WHERE id = ?").get(existing.id));
+  });
+
+  // Assign (or clear) an employee's requirement profile.
+  app.put("/api/labs/:labId/veritaceu/employees/:id/profile", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritastaff"), (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const sqlite = (db as any).$client;
+    const emp = sqlite.prepare("SELECT id FROM staff_employees WHERE id = ? AND tier2_lab_id = ?").get(Number(req.params.id), req.scope.labId);
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+    const raw = req.body?.profileId;
+    let profileId: number | null = null;
+    if (raw !== null && raw !== undefined && raw !== "") {
+      const p = sqlite.prepare("SELECT id FROM veritaceu_requirement_profiles WHERE id = ? AND lab_id = ? AND status = 'active'").get(Number(raw), req.scope.labId);
+      if (!p) return res.status(404).json({ error: "Profile not found in this lab" });
+      profileId = Number(raw);
+    }
+    sqlite.prepare("UPDATE staff_employees SET ceu_profile_id = ?, updated_at = ? WHERE id = ?").run(profileId, new Date().toISOString(), Number(req.params.id));
+    res.json({ ok: true, employeeId: Number(req.params.id), profileId });
   });
 
   // ── EMPLOYEE INSTRUMENT ASSIGNMENT (PR D, 2026-06-05) ──────────────────
@@ -32265,6 +32414,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // statuses (child of veritascan_custom_items). Status rows cleared first.
       sqlite.prepare("DELETE FROM veritascan_custom_item_status WHERE custom_item_id IN (SELECT id FROM veritascan_custom_items WHERE lab_id = ?)").run(id);
       sqlite.prepare("DELETE FROM veritascan_custom_items WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM veritaceu_requirement_profiles WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM intacct_export_config WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM organization_billing_line_items WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM lab_audit_log WHERE lab_id = ?").run(id);
