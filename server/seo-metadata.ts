@@ -460,7 +460,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     }),
   },
   "/resources/how-to-perform-method-comparison-study": {
-    title: "How to Perform a Method Comparison Study for CLIA | Veritas Lab Services",
+    title: "How to Perform a Method Comparison Study (Clinical Lab, CLIA)",
     description: "Step-by-step guide to performing a CLIA-compliant method comparison study, including sample requirements, statistical analysis, and acceptable bias thresholds.",
     jsonLd: articleJsonLd({
       headline: "How to Perform a Method Comparison Study in Your Clinical Laboratory",
@@ -471,8 +471,8 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     }),
   },
   "/resources/tjc-laboratory-inspection-what-to-expect": {
-    title: "What Happens During a TJC Laboratory Inspection, 2026 Guide | Veritas Lab Services",
-    description: "A former Joint Commission surveyor walks through a laboratory survey phase by phase, the tour, PT review, records, tracers, personnel, and procedures, and how to rehearse it with a mock inspection.",
+    title: "Laboratory Mock Inspection: A Joint Commission Survey Walkthrough",
+    description: "Rehearse a Joint Commission laboratory survey before it is real. A former TJC surveyor (200+ inspections) walks each phase, PT, tracers, personnel, and how to run your own mock inspection.",
     jsonLd: articleJsonLd({
       headline: "The Anatomy of a Joint Commission Laboratory Survey",
       description: "A former Joint Commission surveyor walks through a laboratory survey phase by phase, the tour, PT review, records, tracers, personnel, and procedures, and how to rehearse it with a mock inspection.",
@@ -617,8 +617,8 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     }),
   },
   "/resources/cost-per-reportable-test-four-layer-framework": {
-    title: "CPRT Four-Layer Framework | Veritas Lab Services",
-    description: "The CPRT four-layer framework (reagents, labor, equipment, overhead) built on CLSI GP11-A. How to use it for budget, capital, and contract negotiations.",
+    title: "Cost Per Reportable Test: The Four-Layer CPRT Framework",
+    description: "Calculate your true cost per reportable test with a four-layer model: reagents, labor, equipment, and overhead, built on CLSI GP11-A. For budgets, capital, and contracts.",
     jsonLd: articleJsonLd({
       headline: "What Your Tests Actually Cost: A Four-Layer CPRT Framework for Clinical Laboratories",
       description: "The CPRT four-layer framework (reagents, labor, equipment, overhead) built on CLSI GP11-A. How to use it for budget, capital, and contract negotiations.",
