@@ -2373,6 +2373,42 @@ sqlite.exec(`
 }
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_org_billing_items_org ON organization_billing_line_items(organization_id, status)`); } catch {}
 
+// System repository: a shared document space for a system/organization, housed on
+// the org's repository lab and keyed to organization_id so every lab in the system
+// sees the same shared documents. URL-pointer model (consistent with VeritaScan,
+// HIPAA-free): rows hold links to documents the system hosts elsewhere, never files.
+// NEW DB TABLE RULE: CREATE + PRAGMA-checked ALTERs below.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS system_documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    category TEXT,
+    url TEXT NOT NULL,
+    added_by_user_id INTEGER,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (organization_id) REFERENCES organizations(id),
+    FOREIGN KEY (added_by_user_id) REFERENCES users(id)
+  );
+`);
+{
+  const sysDocCols = (sqlite.prepare("PRAGMA table_info(system_documents)").all() as any[]).map((c: any) => c.name);
+  const ensureSysDoc = (col: string, sql: string) => { if (!sysDocCols.includes(col)) { try { sqlite.exec(sql); sysDocCols.push(col); } catch {} } };
+  ensureSysDoc("organization_id",  "ALTER TABLE system_documents ADD COLUMN organization_id INTEGER");
+  ensureSysDoc("title",            "ALTER TABLE system_documents ADD COLUMN title TEXT");
+  ensureSysDoc("description",      "ALTER TABLE system_documents ADD COLUMN description TEXT");
+  ensureSysDoc("category",         "ALTER TABLE system_documents ADD COLUMN category TEXT");
+  ensureSysDoc("url",              "ALTER TABLE system_documents ADD COLUMN url TEXT");
+  ensureSysDoc("added_by_user_id", "ALTER TABLE system_documents ADD COLUMN added_by_user_id INTEGER");
+  ensureSysDoc("status",           "ALTER TABLE system_documents ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  ensureSysDoc("created_at",       "ALTER TABLE system_documents ADD COLUMN created_at TEXT");
+  ensureSysDoc("updated_at",       "ALTER TABLE system_documents ADD COLUMN updated_at TEXT");
+}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_system_documents_org ON system_documents(organization_id, status)`); } catch {}
+
 // users.default_lab_id — bare-route redirect target (per doc Section 4).
 // Updated on every authenticated page hit in Phase 2; not the source of
 // truth for scope. URL is. Nullable; FK to labs is informational only

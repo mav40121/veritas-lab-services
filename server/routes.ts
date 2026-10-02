@@ -31,6 +31,7 @@ import { computeBackfillCandidates } from "./organizationBackfill";
 import { orgSeatCapForOwner } from "./organizationSeats";
 import { orgRoleForUserOnLab, labRoleFromOrgRole, transferBlockedOutOfOrg, isActiveOrgMember, resolveOwnerOrgId } from "./organizationRoles";
 import { planProvisionLabs, accreditationFlagsFor, operatorOverviewGrant } from "./organizationProvision";
+import { validateSystemDocument } from "./systemRepository";
 import { normalizeLineItems, computeOrgInvoice, laterExpiry, orgSubscriptionExpiryForLab, buildOrgSubscriptionItems } from "./organizationBilling";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
@@ -16697,6 +16698,70 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("[veritascan/export.xlsx] error:", err);
       res.status(500).json({ error: err.message || "export_failed" });
     }
+  });
+
+  // ── System repository (shared documents for a system/organization) ──────────
+  // Lives on the org's repository lab; keyed to organization_id so every lab in the
+  // system shares one document set. URL-pointer model (see server/systemRepository.ts).
+  // org id is read from the labs table (not req.scope) so it is always authoritative.
+
+  // GET /api/labs/:labId/repository/documents — the system's shared documents.
+  // labScopeMiddleware already gates that the caller may access this lab.
+  app.get("/api/labs/:labId/repository/documents", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const orgRow = sqlite.prepare("SELECT organization_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    const orgId = orgRow?.organization_id ?? null;
+    if (!orgId) return res.json({ organizationId: null, documents: [] });
+    const rows = sqlite.prepare(
+      `SELECT d.id, d.title, d.description, d.category, d.url, d.added_by_user_id,
+              u.name AS added_by_name, d.created_at, d.updated_at
+         FROM system_documents d
+         LEFT JOIN users u ON u.id = d.added_by_user_id
+        WHERE d.organization_id = ? AND d.status = 'active'
+        ORDER BY COALESCE(d.category, '') COLLATE NOCASE, d.created_at DESC`,
+    ).all(orgId);
+    res.json({ organizationId: orgId, documents: rows });
+  });
+
+  // POST /api/labs/:labId/repository/documents — add a shared document pointer.
+  app.post("/api/labs/:labId/repository/documents", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const orgRow = sqlite.prepare("SELECT organization_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    const orgId = orgRow?.organization_id ?? null;
+    if (!orgId) return res.status(400).json({ error: "This lab is not part of a system; the shared repository is only available to labs in an organization." });
+    const parsed = validateSystemDocument(req.body || {});
+    if (!parsed.ok) return res.status(400).json({ error: parsed.error });
+    const now = new Date().toISOString();
+    const { title, url, category, description } = parsed.value;
+    const uid = req.user?.id ?? req.userId ?? null;
+    const id = Number(
+      sqlite
+        .prepare(
+          `INSERT INTO system_documents (organization_id, title, description, category, url, added_by_user_id, status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)`,
+        )
+        .run(orgId, title, description, category, url, uid, now, now).lastInsertRowid,
+    );
+    const row = sqlite.prepare("SELECT id, title, description, category, url, added_by_user_id, created_at, updated_at FROM system_documents WHERE id = ?").get(id);
+    console.log(`[repository/documents] org=${orgId} lab=${req.scope.labId} added doc ${id} by user ${uid}`);
+    res.json({ ok: true, document: row });
+  });
+
+  // DELETE /api/labs/:labId/repository/documents/:docId — remove a shared document
+  // (soft delete -> status 'archived'). Scoped to the caller's own org so one system
+  // cannot touch another's rows.
+  app.delete("/api/labs/:labId/repository/documents/:docId", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const orgRow = sqlite.prepare("SELECT organization_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    const orgId = orgRow?.organization_id ?? null;
+    if (!orgId) return res.status(400).json({ error: "This lab is not part of a system." });
+    const docId = Number(req.params.docId);
+    if (!Number.isInteger(docId)) return res.status(400).json({ error: "invalid document id" });
+    const r = sqlite
+      .prepare("UPDATE system_documents SET status = 'archived', updated_at = ? WHERE id = ? AND organization_id = ? AND status = 'active'")
+      .run(new Date().toISOString(), docId, orgId);
+    if (r.changes === 0) return res.status(404).json({ error: "document not found in this system" });
+    res.json({ ok: true, removed: docId });
   });
 
   // GET /api/labs/:labId/veritascan/documents — list documents for this lab
