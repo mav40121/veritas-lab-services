@@ -41,5 +41,11 @@ ok("no hasTrackAccess call still reads req.scope?.lab directly", !/hasTrackAcces
 ok("hasTrackAccess calls go through trackLab(req)", (track.match(/hasTrackAccess\(req\.user, trackLab\(req\)\)/g) || []).length >= 15);
 ok("resolveActiveLabForRequest is threaded into registerVeritaTrackRoutes", /registerVeritaTrackRoutes\(app, authMiddleware, requireWriteAccess, requireModuleEdit, resolveActiveLabForRequest\)/.test(routes));
 
+console.log("\n3. Global fallback: unscoped routes get the ACTIVE lab's scope (so EVERY module's access check uses the lab plan, not the personal plan)");
+const am = routes.slice(routes.indexOf("function authMiddleware"), routes.indexOf("function authMiddleware") + 7000);
+ok("authMiddleware sets req.scope fallback from resolveActiveLabForRequest when unset",
+  /if \(!req\.scope\)[\s\S]{0,400}resolveActiveLabForRequest\(req\.userId, req\)[\s\S]{0,200}req\.scope = \{ lab: activeLab/.test(am));
+ok("fallback is non-fatal (wrapped in try/catch)", /if \(!req\.scope\) \{\s*try \{/.test(am));
+
 console.log(`\n${fails === 0 ? "ALL PASS" : fails + " FAIL"}`);
 process.exit(fails === 0 ? 0 : 1);

@@ -914,6 +914,24 @@ function authMiddleware(req: any, res: any, next: any) {
       return res.status(403).json({ error: "demo_restricted", message: "This action is disabled in the live demo." });
     }
 
+    // Fallback active-lab scope for UNSCOPED routes. labScopeMiddleware only runs on
+    // /api/labs/:labId/* routes, where it sets req.scope.lab (with the lab's plan +
+    // identity). Unscoped routes (e.g. every /api/veritatrack/* and /api/veritaops/*
+    // write) had no req.scope.lab, so per-module access checks like
+    // hasTrackAccess/hasOpsAccess(req.user, req.scope?.lab) fell back to the caller's
+    // PERSONAL plan, which is 'free' for an admin/member who reaches the lab via
+    // membership rather than a personal subscription, and 403'd every action with
+    // "subscription required". Resolve the active lab (membership-validated) so those
+    // checks see the LAB's plan. labScopeMiddleware overrides this on scoped routes;
+    // no handler guards on req.scope presence (audited), and resolveActiveLabForRequest
+    // only ever returns a lab the caller may access. 2026-10-02.
+    if (!req.scope) {
+      try {
+        const activeLab = resolveActiveLabForRequest(req.userId, req);
+        if (activeLab) req.scope = { lab: activeLab, labId: activeLab.id, role: null };
+      } catch { /* non-fatal: leave req.scope unset, callers keep prior behavior */ }
+    }
+
     next();
   } catch {
     res.status(401).json({ error: "Invalid token" });
