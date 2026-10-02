@@ -159,6 +159,16 @@ function renderVeritaStockContent(): string {
   return `<h2>VeritaStock&#8482; inventory and reagent management</h2><p>VeritaStock&#8482; tracks reagent and supply inventory across departments with burn-rate par levels, lead-time-aware reorder alerts, and expiration tracking. Days on hand and reorder points are calculated from real consumption and real vendor lead times rather than from a number somebody typed once, so the reorder point moves when the burn rate moves. Expiration tracking carries a configurable warning window per item, and standing orders are managed with quarterly review reminders. Status is color-coded Reorder Now, Expiring Soon, OK, and Standing Order, so a shelf that is about to bite you is visible before it does. Included with VeritaAssure&#8482; Suite plans on Clinic, Community, Hospital, and Enterprise.</p>`;
 }
 
+// Crawlable prerender body for the homepage ("/"). The homepage was a ~512-char
+// shell (title + description + nav), so crawlers and AI answer engines saw almost
+// no content on the site's most authoritative page for the contested commercial
+// queries (lab compliance software, laboratory compliance platform). Copy mirrors
+// the suite's own positioning (see renderVeritaAssureContent) and links to the
+// buyer guide so the homepage passes authority to the cluster target.
+function renderHomepageContent(): string {
+  return `<h2>Lab compliance software for clinical laboratories</h2><p>VeritaAssure&#8482; is all-in-one laboratory compliance software from Veritas Lab Services, LLC: performance verification, inspection readiness, proficiency testing, competency assessment, policy and document control, personnel records, certificate tracking, daily quality control, and post-survey deficiency response in one browser-based platform. It is built by a former Joint Commission laboratory surveyor with more than 200 facility inspections, for CLIA-certified laboratories accredited by The Joint Commission, the College of American Pathologists, or COLA, and for CLIA-only laboratories. No desktop install, and no protected health information is stored.</p><p>The laboratory compliance platform is eighteen modules in two streams. The twelve compliance modules are VeritaCheck&#8482; (performance verification studies with CFR-cited PDF reports), VeritaMap&#8482; (the test-menu regulatory map), VeritaScan&#8482; (self-inspection readiness across 173 items in 10 domains), VeritaComp&#8482; (competency assessment on the CLIA six-element timeline), VeritaDC&#8482; (policy and document control), VeritaStaff&#8482; (personnel roster and CMS 209), VeritaLab&#8482; (certificate and accreditation tracking), VeritaPT&#8482; (proficiency testing tracking), VeritaTrack&#8482; (the regulatory compliance calendar), VeritaQC&#8482; (daily quality control against Westgard multi-rules), VeritaResponse&#8482; (plan-of-correction tracking), and VeritaMaintain&#8482; (equipment maintenance). Six operations modules cover laboratory productivity, staffing, quality metrics, inventory, and cost per reportable test. The modules share data, so the test menu drives performance verification, competency assignment, and proficiency testing checks in one place.</p><p>Choosing a laboratory compliance platform? Read the guide on <a href="/resources/how-to-choose-lab-compliance-software">how to choose lab compliance software</a>, compare <a href="/pricing">pricing</a>, or explore the <a href="/veritaassure">VeritaAssure&#8482; suite</a>. VeritaAssure&#8482; states the regulatory result; final approval and clinical determination rest with the laboratory director or designee.</p>`;
+}
+
 function getIndexHtml(distPath: string): string {
   if (!cachedIndexHtml) {
     let html = fs.readFileSync(path.resolve(distPath, "index.html"), "utf-8");
@@ -256,7 +266,9 @@ function injectSeoTags(html: string, routePath: string, meta: SEOMetadata): stri
   // absent from the raw HTML, append the full dataset so it is crawlable without
   // running JS.
   let noscriptInner = `<h1>${meta.title}</h1><p>${meta.description}</p><nav><a href="/">Home</a> | <a href="/veritaassure">VeritaAssure&#8482;</a> | <a href="/veritacheck">VeritaCheck&#8482;</a> | <a href="/veritascan">VeritaScan&#8482;</a> | <a href="/veritamap">VeritaMap&#8482;</a> | <a href="/pricing">Pricing</a> | <a href="/contact">Contact</a></nav>`;
-  if (routePath === "/resources/clia-tea-lookup") {
+  if (routePath === "/") {
+    noscriptInner += renderHomepageContent();
+  } else if (routePath === "/resources/clia-tea-lookup") {
     noscriptInner += renderTeaLookupTable();
   } else if (routePath === "/calculator") {
     noscriptInner += renderProductivityCalculatorContent();
