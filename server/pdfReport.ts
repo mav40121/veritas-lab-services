@@ -4108,6 +4108,18 @@ interface VeritaScanPDFItem {
   due_date?: string;
 }
 
+// parking-lot #55 phase 4: the lab's own custom scan items, rendered in their
+// own section and scored separately (never in the standardized readiness %).
+interface VeritaScanPDFCustomItem {
+  domain: string | null;
+  question: string;
+  tjc?: string | null; cap?: string | null; cfr?: string | null; aabb?: string | null; cola?: string | null;
+  status: string;
+  owner?: string | null;
+  due_date?: string | null;
+  notes?: string | null;
+}
+
 interface VeritaScanPDFData {
   scanName: string;
   createdAt: string;
@@ -4116,6 +4128,7 @@ interface VeritaScanPDFData {
   cliaNumber?: string;
   labName?: string;
   preferredStandards?: AccreditationBody[] | null;
+  customItems?: VeritaScanPDFCustomItem[];
 }
 
 const SCAN_STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
@@ -4324,6 +4337,45 @@ function buildVeritaScanFullHTML(data: VeritaScanPDFData): string {
       </table>`;
   }
 
+  // #55 phase 4: the lab's custom questions in their OWN section with their own
+  // tally. Never folded into complianceRate above (that is over the master set).
+  const customItems = data.customItems || [];
+  let customSection = "";
+  if (customItems.length > 0) {
+    const cApplicable = customItems.filter((i) => i.status !== "N/A").length;
+    const cCompliant = customItems.filter((i) => i.status === "Compliant").length;
+    const cRate = cApplicable > 0 ? Math.round((cCompliant / cApplicable) * 100) : null;
+    const cAccHeaders = selectedAccreditors.map((a) => `<th>${a.label}</th>`).join("");
+    const cRows = customItems.map((item, idx) => {
+      const sc = SCAN_STATUS_COLORS[item.status] || SCAN_STATUS_COLORS["Not Assessed"];
+      const accCells = selectedAccreditors.map((a) => {
+        const v = (item as any)[a.key] as string | undefined;
+        const display = v && v !== "N/A" ? v : "-";
+        return `<td style="font-size:6.5pt">${display}</td>`;
+      }).join("");
+      return `<tr class="${idx % 2 === 1 ? "stripe" : ""}" style="page-break-inside:avoid">
+        <td style="max-width:220px;word-wrap:break-word;font-size:7pt">${item.question}</td>
+        <td style="font-size:6.5pt">${item.domain || "-"}</td>
+        <td style="font-size:6.5pt">${item.cfr || "-"}</td>
+        ${accCells}
+        <td><span style="background:${sc.bg};color:${sc.fg};padding:1px 5px;border-radius:3px;font-size:6.5pt;font-weight:600;white-space:nowrap">${item.status}</span></td>
+        <td style="font-size:7pt">${item.owner || ""}</td>
+        <td style="font-size:7pt">${item.due_date || ""}</td>
+        <td style="font-size:6.5pt;max-width:100px;word-wrap:break-word">${item.notes || ""}</td>
+      </tr>`;
+    }).join("");
+    customSection = `
+      <div style="page-break-before:always"></div>
+      <div style="border-top:2px solid #B0D8D8;margin-top:14px;padding-top:6px;page-break-after:avoid">
+        <div class="section-label" style="font-size:10pt;margin:0 0 2px;color:${TEAL};page-break-after:avoid">Custom / site-specific questions</div>
+        <div style="font-size:7pt;color:${MUTED};margin-bottom:6px">${customItems.length} question${customItems.length !== 1 ? "s" : ""}${cRate !== null ? ` &middot; ${cRate}% compliant` : ""} &middot; Not included in the standardized readiness score above.</div>
+      </div>
+      <table>
+        <thead><tr><th>Compliance Question</th><th>Domain</th><th>CFR</th>${cAccHeaders}<th>Status</th><th>Owner</th><th>Due</th><th>Notes</th></tr></thead>
+        <tbody>${cRows}</tbody>
+      </table>`;
+  }
+
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}
     .page-num::after { content: "Page " counter(page); }
     body { counter-reset: page; }
@@ -4362,6 +4414,7 @@ function buildVeritaScanFullHTML(data: VeritaScanPDFData): string {
     <!-- Page 2+: domain detail sections, natural flow -->
     <div style="page-break-before:always"></div>
     ${domainSections}
+    ${customSection}
   </body></html>`;
 }
 
