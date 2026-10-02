@@ -536,19 +536,6 @@ What's deferred: the actual user flow at `https://www.veritaslabservices.com/lab
 
 
 
-### 47. Hide sections a lab does not use from a master list, to reduce clutter (prospect-requested)
-
-**Effort:** S-M (a few days to ~2 weeks depending on scope) — a lab-level visibility toggle that hides not-applicable or unused sections from a master-list view. Smaller if it is a "hide N/A" filter on the existing VeritaDC master list, larger if it also spans VeritaScan domains.
-**Importance:** Medium-High — came straight from a live prospect today as an onboarding-friction point; a lab that does not run a service line should not have to wade past its requirements.
-
-A prospect asked today whether she could hide the modules or sections her lab does not use from the master list, to cut confusion and clutter. VeritaDC (formerly VeritaPolicy) already auto-marks non-applicable requirements as N/A via the service-line toggles, but it still shows them, so the ask is to hide them from view entirely, not just flag them. Scope needs one clarification with the operator: whether "master list" means the VeritaDC Master List categories, the VeritaScan domains, or both. A simple "show only applicable / hide N/A" view toggle persisted per lab would satisfy the core request; a fuller version lets the lab choose which sections to hide.
-
-**Source:** 2026-09-23 session, Michael relaying a prospect ask from a demo today.
-
-**Status:** SHIPPED (PR #1364, in origin/main; predates this session, entry was stale). Built as the VeritaDC (VeritaPolicy) Master List "Show only applicable" toggle in `client/src/pages/VeritaPolicyAppPage.tsx`: per-lab, localStorage-persisted keyed by `vp_hide_na_${activeLabId}` (resets on lab switch, so no cross-lab stale state), opt-in default-off, filters rows where `status === "na"`. Scope resolved to VeritaDC per the prospect ask. Verified against origin/main 2026-09-29.
-
----
-
 
 _(item #50 closed 2026-09-28; shipped PR #1356, prod-verified, see C49 below)_
 
@@ -562,22 +549,19 @@ _(item #52 core closed 2026-09-28; shipped PR #1361 member-picker, prod-verified
 
 ---
 
-### 53. VeritaCEU: curated free-continuing-education provider list (seed / reference)
-
-**Effort:** S (1-2 days to seed a curated provider list and surface it in VeritaCEU; XS to just store the reference)
-**Importance:** Low-Medium — quality-of-life for VeritaCEU users (find free CE fast); not blocking any sale.
-
-Jennifer Small (Interim Director, Clinical Laboratory, Lifepoint Health) sent Michael a list (2026-09-25) of sources offering FREE continuing education for the lab, to seed into the future/enhanced VeritaCEU module (for example a "where to find free CE" reference, or a curated provider directory users can browse and log CE against). Free-CE sources named: API, ARUP, Cardinal Health, Fisher Health, MLO, ADLM, Siemens, Cepheid, Abbott, OneLab (CDC), BioRad, LabRoots. Many vendors deliver their CE through Whitehat Communications (e.g., Polymedco). Paid sites (ASCP and similar) occasionally offer a free CE around Lab Week. This is a many-more-exist starter list, not exhaustive.
-
-**Source:** Jennifer Small (jennifer.small@lifepointhealth.net) email 2026-09-25, forwarded by Michael 2026-09-28 for the future CEU module.
-
-**Status:** Open, reference captured. Not started.
-
-**Pre- vs post-COLA:** Post-COLA. No customer urgency.
-
----
-
 ## CLOSED (audit trail)
+
+### C57. Hide sections a lab does not use from a master list (was #47)
+
+**Effort:** was S-M / **Importance:** Medium-High (prospect-requested)
+
+**Closure evidence:** Shipped PR #1364 (in origin/main), the entry was stale in OPEN. Built as the VeritaDC (VeritaPolicy) Master List "Show only applicable" toggle in client/src/pages/VeritaPolicyAppPage.tsx: per-lab, localStorage-persisted (`vp_hide_na_${activeLabId}`, resets on lab switch so no cross-lab stale state), opt-in default-off, filters rows where status === "na". Scope resolved to VeritaDC per the prospect ask. Verified against origin/main 2026-09-29.
+
+### C56. VeritaCEU: curated free continuing-education provider list (was #53)
+
+**Effort:** was S / **Importance:** Low-Medium
+
+**Closure evidence:** Shipped as VeritaCEU phase 2 (PR #1410, squash bea451a2, deployed 2026-10-02). The "Find free CE" tab in VeritaCEU lists all 13 providers from Jennifer Small's 2026-09-25 list, grouped by type (society/publication, government, reference laboratory, diagnostics vendor, proficiency testing, webinar aggregator), each with a real CE URL web-verified 2026-10-02: ADLM Learning Lab, MLO, LabRoots, CDC OneLab REACH, ARUP, Bio-Rad, Abbott, Siemens Healthineers, Cardinal Health, Cepheid, Fisher Healthcare, American Proficiency Institute (with its customer-gated caveat noted), and Whitehat as the vendor aggregator, plus the Lab Week tip. Data in client/src/lib/freeCeProviders.ts; browser-verified light + dark. Receipt: tests/playwright/veritaceu-free-ce-directory.spec.ts.
 
 ### C55. VeritaScan: let sites add their own custom questions (was #55)
 
