@@ -19,7 +19,8 @@ import { useLabRoute } from "@/hooks/useLabRoute";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { GraduationCap, Lock, ChevronRight, ArrowUpDown } from "lucide-react";
+import { GraduationCap, Lock, ChevronRight, ArrowUpDown, ExternalLink } from "lucide-react";
+import { FREE_CE_PROVIDERS, CE_CATEGORY_ORDER, FREE_CE_TIP } from "@/lib/freeCeProviders";
 
 interface RosterRow {
   employeeId: number;
@@ -60,6 +61,7 @@ export default function VeritaCeuAppPage() {
 
   const [shortOnly, setShortOnly] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("status");
+  const [tab, setTab] = useState<"status" | "directory">("status");
 
   const summaryQuery = useQuery<RosterSummary>({
     queryKey: [`/api/labs/${labId}/veritaceu/roster-summary`],
@@ -112,6 +114,25 @@ export default function VeritaCeuAppPage() {
         </div>
       </div>
 
+      {/* Tab toggle */}
+      <div className="flex gap-1 mb-5 border-b border-border">
+        <button
+          onClick={() => setTab("status")}
+          className={`px-3 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${tab === "status" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+        >
+          Team status
+        </button>
+        <button
+          onClick={() => setTab("directory")}
+          className={`px-3 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${tab === "directory" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+        >
+          Find free CE
+        </button>
+      </div>
+
+      {tab === "directory" && <FreeCeDirectory />}
+
+      {tab === "status" && <>
       {/* Summary band */}
       {data && (
         <div className="grid grid-cols-3 gap-3 mb-5">
@@ -184,6 +205,46 @@ export default function VeritaCeuAppPage() {
           </Link>
         ))}
       </div>
+      </>}
+    </div>
+  );
+}
+
+// ─── Free CE provider directory (phase 2, parking-lot #53) ───────────────────
+// A curated "where to find free CE" reference, grouped by provider type. Static
+// content from client/src/lib/freeCeProviders.ts. External links open in a new tab.
+function FreeCeDirectory() {
+  const groups = CE_CATEGORY_ORDER
+    .map((cat) => ({ cat, items: FREE_CE_PROVIDERS.filter((p) => p.category === cat) }))
+    .filter((g) => g.items.length > 0);
+  return (
+    <div className="space-y-6">
+      <p className="text-sm text-muted-foreground">
+        Where your team can find free continuing education. Each source was free and P.A.C.E.-eligible at last
+        review; open a provider for its current offerings.
+      </p>
+      {groups.map(({ cat, items }) => (
+        <div key={cat}>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">{cat}</h2>
+          <div className="space-y-2">
+            {items.map((p) => (
+              <a key={p.name} href={p.url} target="_blank" rel="noopener noreferrer" className="block">
+                <Card className="hover:border-primary/40 transition-colors">
+                  <CardContent className="py-3">
+                    <div className="font-medium flex items-center gap-1.5">
+                      {p.name}
+                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-0.5">{p.description}</p>
+                    {p.note && <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">{p.note}</p>}
+                  </CardContent>
+                </Card>
+              </a>
+            ))}
+          </div>
+        </div>
+      ))}
+      <p className="text-xs text-muted-foreground italic">{FREE_CE_TIP}</p>
     </div>
   );
 }
