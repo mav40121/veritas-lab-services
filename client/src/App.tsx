@@ -74,6 +74,7 @@ const TeaLookupPage = lazy(() => import("@/pages/TeaLookupPage"));
 const VeritaScanAppPage = lazy(() => import("@/pages/VeritaScanAppPage"));
 const VeritaScanScanPage = lazy(() => import("@/pages/VeritaScanScanPage"));
 const VeritaScanDocumentLibraryPage = lazy(() => import("@/pages/VeritaScanDocumentLibraryPage"));
+const VeritaScanCustomQuestionsPage = lazy(() => import("@/pages/VeritaScanCustomQuestionsPage"));
 const VeritaScanInspectionProofPage = lazy(() => import("@/pages/VeritaScanInspectionProofPage"));
 const VeritaMapAppPage = lazy(() => import("@/pages/VeritaMapAppPage"));
 const VeritaMapBuildPage = lazy(() => import("@/pages/VeritaMapBuildPage"));
@@ -522,6 +523,8 @@ function AppContent() {
           <Route path="/labs/:labId/veritascan-app" component={VeritaScanAppPage} />
           <Route path="/labs/:labId/veritascan/documents" component={VeritaScanDocumentLibraryPage} />
           <Route path="/veritascan/documents">{wrapLegacy(VeritaScanDocumentLibraryPage)}</Route>
+          <Route path="/labs/:labId/veritascan/custom-questions" component={VeritaScanCustomQuestionsPage} />
+          <Route path="/veritascan/custom-questions">{wrapLegacy(VeritaScanCustomQuestionsPage)}</Route>
           <Route path="/labs/:labId/veritascan/inspection-proof" component={VeritaScanInspectionProofPage} />
           <Route path="/veritascan/inspection-proof">{wrapLegacy(VeritaScanInspectionProofPage)}</Route>
           <Route path="/labs/:labId/veritascan-app/:id" component={VeritaScanScanPage} />

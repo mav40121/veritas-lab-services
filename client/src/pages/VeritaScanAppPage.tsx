@@ -7,6 +7,7 @@ import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useLabRoute } from "@/hooks/useLabRoute";
 import { SCAN_ITEMS } from "@/lib/veritaScanData";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +30,7 @@ import {
   CheckCircle2,
   Lock,
   GraduationCap,
+  ListChecks,
 } from "lucide-react";
 
 interface ScanSummary {
@@ -150,6 +152,7 @@ export default function VeritaScanAppPage() {
   // the active lab. Inner scan endpoints (items, excel, pdf) stay on
   // legacy URLs since they're scan-id-keyed.
   const activeLabId = useActiveLabId();
+  const labRoute = useLabRoute();
   const scansUrl = activeLabId
     ? `/api/labs/${activeLabId}/veritascan/scans`
     : `/api/veritascan/scans`;
@@ -280,6 +283,14 @@ export default function VeritaScanAppPage() {
           </p>
         </div>
 
+        <div className="flex items-center gap-2 shrink-0">
+        {/* Custom Questions: lab-authored scan items (parking-lot #55) */}
+        <Button asChild variant="outline">
+          <Link href={labRoute("/veritascan/custom-questions")}>
+            <ListChecks className="h-4 w-4 mr-1.5" />
+            Custom Questions
+          </Link>
+        </Button>
         {/* New Scan button + dialog */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
@@ -339,6 +350,7 @@ export default function VeritaScanAppPage() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Loading */}
