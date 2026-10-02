@@ -17737,6 +17737,69 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         sort: false, autoFilter: true, pivotTables: false,
       });
 
+      // ── Custom / site-specific questions (parking-lot #55 phase 4) ─────────
+      // The lab's own custom scan items go on their OWN worksheet. They are
+      // scored separately in the app and are not part of the standardized item
+      // set, so they are never mixed into the VeritaScan sheet or its totals.
+      const customRows = (db as any).$client.prepare(`
+        SELECT ci.domain, ci.question, ci.tjc, ci.cap, ci.cfr, ci.aabb, ci.cola,
+               COALESCE(s.status,'Not Assessed') AS status, s.owner, s.due_date, s.notes
+        FROM veritascan_custom_items ci
+        LEFT JOIN veritascan_custom_item_status s ON s.custom_item_id = ci.id AND s.scan_id = ?
+        WHERE ci.lab_id = ? AND ci.status = 'active'
+        ORDER BY ci.created_at ASC, ci.id ASC
+      `).all(scanId, scan.lab_id) as any[];
+      if (customRows.length > 0) {
+        const cws = wb.addWorksheet("Custom Questions");
+        const cHeaders = ["Domain", "Compliance Question", "42 CFR Citation", ...accreditorHeaders, "Status", "Owner", "Due Date", "Notes"];
+        const cWidths = [28, 80, 24, ...accreditorWidths, 18, 20, 16, 40];
+        cws.columns = cHeaders.map((h, i) => ({ header: h, key: `c${i}`, width: cWidths[i] }));
+        for (const r of customRows) {
+          const accCells = xlsxSelected.map(a => { const v = (r as any)[a.key]; return v && v !== "N/A" ? v : ""; });
+          cws.addRow([r.domain || "", r.question, r.cfr || "", ...accCells, r.status || "Not Assessed", r.owner || "", r.due_date || "", r.notes || ""]);
+        }
+        const chRow = cws.getRow(1);
+        chRow.height = 20;
+        chRow.eachCell((cell) => {
+          cell.font = { name: "Calibri", bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
+          cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+          cell.border = thinBorder;
+        });
+        const cStatusCol = cHeaders.indexOf("Status") + 1;
+        for (let r = 2; r <= customRows.length + 1; r++) {
+          const row = cws.getRow(r);
+          const bg = r % 2 === 0 ? "FFEBF3F8" : "FFFFFFFF";
+          row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+            cell.font = { name: "Calibri", color: { argb: "FF28251D" }, size: 10 };
+            cell.alignment = { vertical: "middle", wrapText: true };
+            cell.border = thinBorder;
+            if (colNumber === cStatusCol) {
+              const val = String(cell.value || "");
+              if (/Immediate Action|Non-[Cc]ompliant/i.test(val)) cell.font = { name: "Calibri", bold: true, color: { argb: "FFA12C7B" }, size: 10 };
+              else if (/Needs Attention|Not Assessed/i.test(val)) cell.font = { name: "Calibri", bold: true, color: { argb: "FF964219" }, size: 10 };
+              else if (/Compliant/i.test(val)) cell.font = { name: "Calibri", bold: true, color: { argb: "FF437A22" }, size: 10 };
+              else if (/N\/A/i.test(val)) cell.font = { name: "Calibri", bold: true, color: { argb: "FF7A7974" }, size: 10 };
+            }
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } };
+          });
+        }
+        cws.views = [{ state: "frozen" as const, ySplit: 1 }];
+        const cLast = cHeaders.length;
+        const cLastLetter = cLast <= 26
+          ? String.fromCharCode(64 + cLast)
+          : String.fromCharCode(64 + Math.floor((cLast - 1) / 26)) + String.fromCharCode(65 + ((cLast - 1) % 26));
+        cws.autoFilter = { from: "A1", to: `${cLastLetter}1` };
+        cws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaScan Custom Questions (site-specific; not in the standardized readiness score)&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+        cws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
+        await cws.protect(exportPwd, {
+          selectLockedCells: true, selectUnlockedCells: true,
+          formatCells: false, formatColumns: false, formatRows: false,
+          insertRows: false, insertColumns: false, insertHyperlinks: false,
+          deleteRows: false, deleteColumns: false, sort: false, autoFilter: true, pivotTables: false,
+        });
+      }
+
       // Workbook opens to the About sheet (sheet 1, activeTab 0).
       wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
                     firstSheet: 0, activeTab: 0, visibility: "visible" }];
@@ -17837,6 +17900,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
     }
 
+    // #55 phase 4: the lab's active custom questions + their per-scan status,
+    // for the separate "Custom / site-specific" section (scored on its own).
+    const pdfCustomItems = (db as any).$client.prepare(`
+      SELECT ci.domain, ci.question, ci.tjc, ci.cap, ci.cfr, ci.aabb, ci.cola,
+             COALESCE(s.status,'Not Assessed') AS status, s.owner, s.due_date, s.notes
+      FROM veritascan_custom_items ci
+      LEFT JOIN veritascan_custom_item_status s ON s.custom_item_id = ci.id AND s.scan_id = ?
+      WHERE ci.lab_id = ? AND ci.status = 'active'
+      ORDER BY ci.created_at ASC, ci.id ASC
+    `).all(scanId, scan.lab_id);
+
     try {
       const pdfBuffer = await generateVeritaScanPDF(
         {
@@ -17847,6 +17921,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           cliaNumber: scanCliaNumber,
           labName: scanLabName,
           preferredStandards: scanPreferredStandards as any,
+          customItems: pdfCustomItems,
         },
         type as "executive" | "full",
         licenseCtxFromReq(req)
