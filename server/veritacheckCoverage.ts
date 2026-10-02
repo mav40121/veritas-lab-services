@@ -18,7 +18,7 @@
 // Instrument matching uses the map's registered nickname first (the map knows
 // "Bonnie" is the Ortho VITROS 5600), then falls back to model-token overlap.
 
-import { aliasesForPresetLabel, presetKeyForLabel, analytesShareGroup } from "@shared/presetAnalytes";
+import { aliasesForPresetLabel, presetKeyForLabel, analytesShareGroup, diffCorrelationKey } from "@shared/presetAnalytes";
 
 export type LinearityStatus = "covered" | "review" | "missing" | "exempt";
 // Recurrence-aware cal-ver / linearity status, mirroring method comparison
@@ -257,22 +257,35 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
   // Method comparisons: analytes running on 2+ instruments need a correlation.
   // Count DISTINCT instrument_ids (two units of the same model still count as
   // two, and both are shown via instLabel so the pair is legible).
-  const instByAnalyte = new Map<string, Set<number>>();
+  // Group by a canonical key, not the raw analyte string, so a manual differential
+  // percentage ("Lymphs") and the analyzer's percentage point ("Lymph%"/"LY%")
+  // collapse into ONE correlation requirement (diffCorrelationKey). Non-differential
+  // analytes return null and fall back to the exact string, so their grouping is
+  // unchanged. Each group keeps its member analyte strings (for study matching,
+  // which still runs the full fuzzy matcher) and a stable display label.
+  const groups = new Map<string, { instIds: Set<number>; analytes: Set<string> }>();
   for (const c of combos) {
-    if (!instByAnalyte.has(c.analyte)) instByAnalyte.set(c.analyte, new Set());
-    instByAnalyte.get(c.analyte)!.add(c.instrument_id);
+    const key = diffCorrelationKey(c.analyte) ?? c.analyte;
+    let g = groups.get(key);
+    if (!g) { g = { instIds: new Set(), analytes: new Set() }; groups.set(key, g); }
+    g.instIds.add(c.instrument_id);
+    g.analytes.add(c.analyte);
   }
   const methodComparisons: MethodComparisonRow[] = [];
   let mcNeeded = 0, mcDone = 0, mcOverdue = 0;
-  for (const [analyte, instIds] of instByAnalyte) {
+  for (const g of groups.values()) {
+    const instIds = g.instIds;
     if (instIds.size < 2) continue;
+    // Stable display label for the correlation row: the alphabetically first member
+    // analyte (e.g. "Lymph%" or "Lymphs"). The instruments column shows both units.
+    const analyte = [...g.analytes].sort()[0];
     mcNeeded++;
     // Recurrence: look at the MOST RECENT matching study (method comparison OR
     // correlation). A signed passing study banks the current cycle and sets the
     // next due date (signed date + 6 mo); it does not satisfy the requirement
     // forever. Failed / unsigned / never-done all read as owed now.
     const cands = studies
-      .filter((s) => MC_STUDY_TYPES.has(s.study_type) && matchesAnalyte(s, analyte))
+      .filter((s) => MC_STUDY_TYPES.has(s.study_type) && [...g.analytes].some((a) => matchesAnalyte(s, a)))
       .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
     const latest = cands[0] || null;
     let status: MethodComparisonStatus = "missing";
@@ -340,7 +353,7 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
     summary: {
       combos: combos.length,
       instruments: instruments.length,
-      analytes: instByAnalyte.size,
+      analytes: new Set(combos.map((c) => c.analyte)).size,
       studies: studies.length,
       linearityRequired: linRequired,
       linearityCovered: linCovered,
