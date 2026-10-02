@@ -7523,3 +7523,112 @@ export async function generateInternalNcePDF(input: Cms2567Input, licenseCtx?: P
     await page.close();
   }
 }
+
+// ─── VeritaCEU: per-employee Continuing Education transcript (phase 3) ────────
+// Internal-use CE record for license renewal / surveys. No director signature
+// (it is a personnel record, not a compliance verdict). Lists the employee's CE
+// credits and their cycle status against the assigned requirement.
+export interface CeuTranscriptInput {
+  labName: string;
+  cliaNumber: string;
+  employeeName: string;
+  employeeTitle: string | null;
+  requirementName: string | null;
+  required: number;
+  cycleMonths: number;
+  cycleStart: string;
+  earned: number;
+  remaining: number;
+  pct: number;
+  met: boolean;
+  entries: { title: string | null; credits: number; activityDate: string | null; createdAt: string; inCycle: boolean }[];
+}
+
+const CEU_TRANSCRIPT_FOOTER = `<div style="width:100%;padding:4px 15mm;font-family:sans-serif">
+  <div style="border-top:1px solid #d2d7dc;padding-top:3px">
+    <div style="display:flex;justify-content:space-between;font-size:7px;color:#646e78;margin-top:2px">
+      <span>VeritaAssure™ | VeritaCEU™ | Confidential - For Internal Lab Use Only</span>
+      <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
+    </div>
+  </div>
+</div>`;
+
+function ceuEsc(s: string): string {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function buildCeuTranscriptHTML(input: CeuTranscriptInput): string {
+  const statusColor = input.met ? PASS : "#d97706";
+  const statusLabel = input.met ? "Cycle met" : `${input.remaining} credit${input.remaining === 1 ? "" : "s"} remaining`;
+  const sorted = [...input.entries].sort((a, b) => {
+    const da = a.activityDate || String(a.createdAt).slice(0, 10);
+    const dbb = b.activityDate || String(b.createdAt).slice(0, 10);
+    return da < dbb ? 1 : da > dbb ? -1 : 0;
+  });
+  const rows = sorted.map((e, i) => {
+    const date = e.activityDate || String(e.createdAt).slice(0, 10);
+    return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
+      <td style="font-size:8pt;white-space:nowrap">${ceuEsc(date)}</td>
+      <td style="font-size:8pt">${ceuEsc(e.title || "(untitled activity)")}</td>
+      <td style="font-size:8pt;text-align:center">${e.credits}</td>
+      <td style="font-size:8pt;text-align:center">${e.inCycle ? "Yes" : "No"}</td>
+    </tr>`;
+  }).join("");
+  const totalLogged = input.entries.reduce((s, e) => s + (Number(e.credits) || 0), 0);
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${CSS}</style></head><body>
+    <div class="report-header">
+      <div>
+        <div class="logo">VeritaCEU™</div>
+        <div class="logo-sub">by Veritas Lab Services - veritaslabservices.com</div>
+        <div style="font-size:8.5pt;font-weight:600;color:#28251D;margin-top:1px;">${ceuEsc(input.labName || "Laboratory")}</div>
+        <div style="font-size:8pt;color:${input.cliaNumber ? "#555" : "#999"};margin-top:2px;">CLIA: ${ceuEsc(input.cliaNumber || "Not on file - enter your CLIA number in account settings")}</div>
+      </div>
+      <div class="header-right">Generated ${today()}</div>
+    </div>
+    <div class="report-title">Continuing Education Transcript</div>
+    <div class="report-title-sub">${ceuEsc(input.employeeName)}${input.employeeTitle ? ` &middot; ${ceuEsc(input.employeeTitle)}` : ""}</div>
+    <hr class="divider">
+
+    <div style="display:flex;gap:18px;align-items:flex-start;margin:6px 0 10px;">
+      <div style="flex:0 0 auto;text-align:center;padding:6px 16px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;">
+        <div style="font-size:20pt;font-weight:700;color:${statusColor};line-height:1.2">${input.earned} / ${input.required}</div>
+        <div style="font-size:7pt;color:${MUTED};text-transform:uppercase;letter-spacing:0.04em">Credits this cycle</div>
+      </div>
+      <div style="flex:1;font-size:8.5pt;color:#28251D;line-height:1.6">
+        <div><strong>Requirement:</strong> ${ceuEsc(input.requirementName || "ASCP CMP (default)")}, ${input.required} credits every ${input.cycleMonths} months</div>
+        <div><strong>Cycle window:</strong> ${ceuEsc(input.cycleStart)} to ${today()}</div>
+        <div><strong>Status:</strong> <span style="color:${statusColor};font-weight:700">${statusLabel}</span> (${input.pct}%)</div>
+        <div style="color:${MUTED};font-size:7.5pt;margin-top:2px">${input.entries.length} logged activit${input.entries.length === 1 ? "y" : "ies"}, ${totalLogged} credits total; ${input.earned} inside the current cycle.</div>
+      </div>
+    </div>
+
+    <table>
+      <thead><tr><th style="width:90px">Date</th><th>Continuing Education Activity</th><th style="width:60px;text-align:center">Credits</th><th style="width:70px;text-align:center">In cycle</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="4" style="font-size:8pt;color:${MUTED};text-align:center;padding:12px">No continuing education logged.</td></tr>`}</tbody>
+    </table>
+
+    <div style="margin-top:14px;font-size:7.5pt;color:${MUTED};font-style:italic;line-height:1.5;">This transcript is an internal record generated from the lab's VeritaStaff continuing-education log. It is not a certificate of completion; retain the issuing provider's certificates as the primary documentation. The ASCP CMP standard is 36 points every 3 years; your lab may set a different requirement.</div>
+  </body></html>`;
+}
+
+export async function generateCeuTranscriptPDF(input: CeuTranscriptInput, licenseCtx?: Partial<LicenseContext> | null): Promise<Buffer> {
+  const html = buildCeuTranscriptHTML(input);
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    const stamped = applyLicenseToPuppeteer(html, CEU_TRANSCRIPT_FOOTER, licenseCtx);
+    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    const pdfBuffer = await page.pdf({
+      format: "Letter",
+      printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: "<span></span>",
+      footerTemplate: stamped.footerTemplate,
+      margin: { top: "14mm", right: "15mm", bottom: "20mm", left: "15mm" },
+    });
+    return stampPdfAuthor(pdfBuffer);
+  } finally {
+    await page.close();
+  }
+}
