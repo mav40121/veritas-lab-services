@@ -25,6 +25,9 @@ export interface AuthUser {
   email: string;
   name: string;
   plan: string;
+  // The user's OWN plan (users.plan), preserved even when `plan` above is
+  // overlaid with the active lab's plan by AuthProvider. Billing reads this.
+  personalPlan?: string | null;
   studyCredits: number;
   hasCompletedOnboarding?: boolean;
   subscriptionExpiresAt?: string | null;

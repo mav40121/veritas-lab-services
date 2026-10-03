@@ -280,7 +280,8 @@ export default function AccountSettingsPage() {
   // discount validation and checkout. If the user is on free/per_study, the
   // Activate Subscription flow falls back to community so the discount panel
   // still works for legacy demo accounts; this should be rare in practice.
-  const userPriceType = planToPriceType(user?.plan) || "community";
+  // Billing uses the user's OWN plan, not the active-lab overlay on user.plan.
+  const userPriceType = planToPriceType(user?.personalPlan ?? user?.plan) || "community";
 
   async function applyDiscount() {
     if (!discountCode.trim()) return;

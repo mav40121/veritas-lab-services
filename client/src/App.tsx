@@ -596,11 +596,11 @@ export default function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
-          <AuthProvider>
-            <Router>
+          <Router>
+            <AuthProvider>
               <AppContent />
-            </Router>
-          </AuthProvider>
+            </AuthProvider>
+          </Router>
         </ThemeProvider>
       </QueryClientProvider>
     </ErrorBoundary>
