@@ -549,6 +549,15 @@ _(item #52 core closed 2026-09-28; shipped PR #1361 member-picker, prod-verified
 
 ---
 
+### 58. Manual Differential complexity is MODERATE in VeritaMap, should be HIGH
+
+**Effort:** XS (under 1 day)
+**Importance:** High — a wrong complexity under-applies HIGH-complexity requirements, producing a false readiness picture and regulatory exposure.
+
+VeritaMap is showing Manual Differential as MODERATE complexity; per CLIA it is HIGH complexity (Michael, authoritative on CLIA). Complexity is a regulatory property that drives PT enrollment (493.801), performance verification (493.1253), competency elements and cadence (493.1235), QC design (493.1256), and personnel requirements (Subpart M), so a moderate-instead-of-high value quietly under-applies the stricter high-complexity rules (e.g. technical supervisor, tighter personnel/QC). Likely root cause is the instrument-menu seed assigning Manual Differential MODERATE, which would affect every lab that seeded it, not just one. Fix path: correct the seed default AND fix existing maps via `POST /api/admin/veritamap/set-complexity` (re-posting through `seed-instrument-menu` cannot fix it — INSERT OR IGNORE no-ops into skipped[]); confirm the FDA/CLIA categorization while doing so ([[feedback_complexity_verify_against_fda]]). Parked by Michael 2026-10-03 mid-competency-build.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C57. Hide sections a lab does not use from a master list (was #47)
