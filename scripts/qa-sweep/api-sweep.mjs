@@ -106,17 +106,19 @@ const adminId = one(`SELECT lm.user_id FROM lab_members lm JOIN users u ON u.id 
     AND lower(u.email) != COALESCE((SELECT lower(medical_director_email) FROM labs WHERE id = ?), '')
   LIMIT 1`, LAB, ownerId, LAB)?.user_id
   || one(`SELECT user_id FROM lab_members WHERE lab_id=? AND role='admin' AND status='active' AND user_id != ? LIMIT 1`, LAB, ownerId)?.user_id;
-// Prefer a VIEW-ONLY seat (the true read-and-sign staff archetype) so the staff persona
-// genuinely tests restricted access. A seat granted edit (edit_all or per-module "edit")
-// is a writer and would correctly behave like one, masking real over-permission. Fall
-// back to any staff-role seat, then any seat.
-const seatId = one(`SELECT seat_user_id FROM user_seats WHERE lab_id=? AND seat_user_id IS NOT NULL AND status='active'
-      AND (seat_type='view_only' OR permissions LIKE '%view_all%' OR (permissions NOT LIKE '%edit%')) LIMIT 1`, LAB)?.seat_user_id
-  || one(`SELECT us.seat_user_id FROM user_seats us
-      JOIN lab_members lm ON lm.lab_id = us.lab_id AND lm.user_id = us.seat_user_id AND lm.status = 'active'
-      WHERE us.lab_id = ? AND us.seat_user_id IS NOT NULL AND us.status = 'active' AND lm.role = 'staff'
-      LIMIT 1`, LAB)?.seat_user_id
-  || one(`SELECT seat_user_id FROM user_seats WHERE lab_id=? AND seat_user_id IS NOT NULL AND status='active' LIMIT 1`, LAB)?.seat_user_id;
+// The staff login's REAL door is the Staff Portal (staffPortalAuthMiddleware), which
+// admits only a seat_type='staff_portal' seat (or a user linked to a staff_employees
+// row). The main /api/labs/:id/* API requires a lab_members row, so a seat with no
+// membership is correctly 403'd there -- that is NOT the staff door. So pick a
+// staff_portal seat first (the real read-and-sign archetype); fall back to any active
+// seat only so the persona still populates on a lab that predates the portal seat type.
+const portalSeatRow = one(`SELECT seat_user_id FROM user_seats WHERE lab_id=? AND seat_user_id IS NOT NULL AND status='active' AND seat_type='staff_portal' LIMIT 1`, LAB);
+const anySeatRow = portalSeatRow || one(`SELECT seat_user_id FROM user_seats WHERE lab_id=? AND seat_user_id IS NOT NULL AND status='active' LIMIT 1`, LAB);
+const seatId = anySeatRow?.seat_user_id;
+// True only when the picked seat is an actual Staff Portal seat, so the portal door
+// should admit it. When false, the staff login cannot be validated on this lab (the QA
+// org needs a staff_portal seat) and the portal sweep reports that as a setup gap.
+const seatIsPortal = !!portalSeatRow;
 
 // Expected write access is derived from the member's ACTUAL lab role, not the persona
 // label: owner/admin are writers; a plain staff member is not. This matters because the
@@ -131,7 +133,7 @@ const mk = (name, uid, extra = {}) => { const role = roleOf(uid); const writer =
 const personas = [
   mk('owner', ownerId),
   mk('admin-member', adminId),
-  mk('staff-seat', seatId),
+  mk('staff-seat', seatId, { portal: true, portalSeat: seatIsPortal }), // staff login: real door is the Staff Portal
   mk('medical-director', mdId, { isMd: true }), // director-only powers; writer only if also owner/admin
 ].filter(p => p.userId)
  // Dedupe: never test the same user under two persona names (e.g. an admin who also
@@ -185,6 +187,23 @@ const ARTIFACTS = [
 const MD_ONLY = [
   { m: 'POST', p: `${L}/qc/period-reviews/md-cosign`, body: { control_lot_id: 999999999, period_year: 2099, period_month: 1 }, label: 'QC period-review MD co-sign' },
 ];
+// The staff login's REAL door: the Staff Portal (/api/staff-portal-session/*), gated by
+// staffPortalAuthMiddleware. The staff persona is tested TWO WAYS: the main /api/labs/:id/*
+// routes must BLOCK it (it is a seat, not a member -- that is by design), and THESE portal
+// routes must ADMIT it (read-and-sign, plus the operational RECORD writes). A portal read
+// that 401/403s is UNDER-PERMISSION (staff wrongly locked out of their own door).
+const STAFF_PORTAL_READS = [
+  '/api/staff-portal-session/qc/lots', '/api/staff-portal-session/qc/results',
+  '/api/staff-portal-session/employees', '/api/staff-portal-session/policies',
+  '/api/staff-portal-session/inventory/items', '/api/staff-portal-session/my-activity',
+  '/api/staff-portal-session/competencies', '/api/staff-portal-session/quizzes',
+];
+// Operational writes the access model says staff MUST be able to do (RECORD, not AUTHOR).
+// Empty body: a reached write returns 400/404/200 (PASS); a 403/401 is UNDER-PERMISSION
+// (the staff door wrongly blocks an operational action -- MedStar depends on QC entry).
+const STAFF_PORTAL_WRITES = [
+  { p: '/api/staff-portal-session/qc/results', label: 'Enter QC result (staff RECORD)' },
+];
 
 async function hit(path, token, method = 'GET', body) {
   const headers = { Authorization: `Bearer ${token}`, 'X-Active-Lab-Id': String(LAB) };
@@ -204,17 +223,26 @@ const token = (p) => jwt.sign({ userId: p.userId }, SECRET, { expiresIn: '1h' })
 for (const p of personas) {
   const t = token(p);
   console.log(`\n================ ${p.name} (user ${p.userId}) ================`);
-  console.log('--- reads ---');
+  console.log(p.portal ? '--- main-API reads (staff seat: EXPECTED to be blocked; 200 = leak) ---' : '--- reads ---');
   for (const ep of READS) {
     const r = await hit(ep, t);
-    let v;
-    if (r.status === 200) v = 'PASS';
-    else if (r.status === 403) v = 'ACCESS-FAIL';
-    else if (r.status >= 500) v = 'SERVER-ERR';
-    else if (r.status === 400) v = 'needs-params';
-    else v = `HTTP-${r.status}`;
-    if (v === 'ACCESS-FAIL' || v === 'SERVER-ERR') flagged.push({ persona: p.name, kind: 'READ', ep, v, status: r.status, snip: r.snip });
-    console.log(`  ${v.padEnd(13)} ${String(r.status).padEnd(4)} ${ep}`);
+    let v, hard = false;
+    if (p.portal) {
+      // The main API is not the staff door. A seat with no membership SHOULD be 403'd
+      // here; a 200 would be an over-permission leak; a 500 is still a real bug.
+      if (r.status === 403) v = 'PASS(blocked, expected)';
+      else if (r.status >= 500) { v = 'SERVER-ERR'; hard = true; }
+      else if (r.status === 200) { v = 'OVER-PERM(main-api leak)'; hard = true; }
+      else v = `HTTP-${r.status}`;
+    } else {
+      if (r.status === 200) v = 'PASS';
+      else if (r.status === 403) { v = 'ACCESS-FAIL'; hard = true; }
+      else if (r.status >= 500) { v = 'SERVER-ERR'; hard = true; }
+      else if (r.status === 400) v = 'needs-params';
+      else v = `HTTP-${r.status}`;
+    }
+    if (hard) flagged.push({ persona: p.name, kind: 'READ', ep, v, status: r.status, snip: r.snip });
+    console.log(`  ${v.padEnd(26)} ${String(r.status).padEnd(4)} ${ep}`);
   }
   // Write access, checked BOTH ways against the expectation (p.canWrite):
   //   writer expected  -> 403 is UNDER-PERMISSION (wrongly blocked)
@@ -253,9 +281,16 @@ for (const p of personas) {
   console.log('--- document generators ---');
   for (const a of ARTIFACTS) {
     const r = await hit(a.p, t, a.m, a.m === 'POST' ? {} : undefined);
-    const v = r.status === 200 ? 'PASS' : r.status === 403 ? 'ACCESS-FAIL' : r.status >= 500 ? 'SERVER-ERR' : `HTTP-${r.status}`;
-    if (v !== 'PASS' && !(v.startsWith('HTTP') && !p.canWrite)) flagged.push({ persona: p.name, kind: 'ARTIFACT', ep: a.label, v, status: r.status, snip: r.snip });
-    console.log(`  ${v.padEnd(13)} ${String(r.status).padEnd(4)} ${a.label}`);
+    let v, hard = false;
+    if (r.status === 200) v = 'PASS';
+    else if (r.status >= 500) { v = 'SERVER-ERR'; hard = true; }
+    else if (r.status === 403) {
+      if (p.portal) v = 'PASS(blocked, expected)';            // staff: main-API artifact is not their door
+      else if (p.canWrite) { v = 'ACCESS-FAIL'; hard = true; } // a writer wrongly blocked is a real bug
+      else v = 'blocked';                                      // non-writer member: acceptable, not flagged
+    } else v = `HTTP-${r.status}`;
+    if (hard) flagged.push({ persona: p.name, kind: 'ARTIFACT', ep: a.label, v, status: r.status, snip: r.snip });
+    console.log(`  ${v.padEnd(24)} ${String(r.status).padEnd(4)} ${a.label}`);
   }
   if (mdId) {
     console.log('--- medical-director-only actions ---');
@@ -273,6 +308,38 @@ for (const p of personas) {
       }
       if (hard) flagged.push({ persona: p.name, kind: 'MD-ACTION', ep: a.label, v, status: r.status, snip: r.snip });
       console.log(`  ${v.padEnd(22)} ${String(r.status).padEnd(4)} ${a.label}`);
+    }
+  }
+  // Staff login's real door: the Staff Portal. Only meaningful for the staff persona.
+  if (p.portal) {
+    if (!p.portalSeat) {
+      // No staff_portal seat on this lab -> the staff login cannot be validated here.
+      // This is a QA-fixture gap (add a staff_portal seat to the QA lab), surfaced as a
+      // flag so it is not silently skipped, labelled SETUP so it reads as fixture, not bug.
+      console.log('--- staff portal: SKIPPED (no staff_portal seat on this lab; cannot validate the staff login) ---');
+      flagged.push({ persona: p.name, kind: 'PORTAL-SETUP', ep: 'staff_portal seat', v: 'NO-PORTAL-SEAT(add one to the QA lab to validate the staff login)', status: 0, snip: '' });
+    } else {
+      console.log('--- staff portal reads (expect PASS; 401/403 = staff locked out of their own door) ---');
+      for (const ep of STAFF_PORTAL_READS) {
+        const r = await hit(ep, t);
+        let v, hard = false;
+        if (r.status === 200) v = 'PASS';
+        else if (r.status === 401 || r.status === 403) { v = 'PORTAL-READ-BLOCKED(under-perm)'; hard = true; }
+        else if (r.status >= 500) { v = 'SERVER-ERR'; hard = true; }
+        else v = `HTTP-${r.status}`;
+        if (hard) flagged.push({ persona: p.name, kind: 'PORTAL-READ', ep, v, status: r.status, snip: r.snip });
+        console.log(`  ${v.padEnd(30)} ${String(r.status).padEnd(4)} ${ep}`);
+      }
+      console.log('--- staff portal operational writes (expect reached; 401/403 = under-perm) ---');
+      for (const a of STAFF_PORTAL_WRITES) {
+        const r = await hit(a.p, t, 'POST', {});
+        let v, hard = false;
+        if (r.status === 401 || r.status === 403) { v = 'PORTAL-WRITE-BLOCKED(under-perm)'; hard = true; }
+        else if (r.status >= 500) { v = 'SERVER-ERR'; hard = true; }
+        else v = (r.status === 200 || r.status === 201) ? 'PASS(wrote)' : `PASS(reached ${r.status})`;
+        if (hard) flagged.push({ persona: p.name, kind: 'PORTAL-WRITE', ep: a.label, v, status: r.status, snip: r.snip });
+        console.log(`  ${v.padEnd(30)} ${String(r.status).padEnd(4)} ${a.label}`);
+      }
     }
   }
 }
