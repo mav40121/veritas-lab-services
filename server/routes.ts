@@ -21028,7 +21028,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const rows = sqlite.prepare("SELECT * FROM lab_equipment WHERE lab_id = ? AND status <> 'retired' ORDER BY instrument_name ASC").all(req.scope.labId) as any[];
     res.json(rows.map(r => ({ ...r, maintenance_status: equipmentStatus(r.next_due_date) })));
   });
-  app.post("/api/labs/:labId/equipment", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/labs/:labId/equipment", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamaintain'), (req: any, res) => {
     if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
     const { instrument_name, manufacturer, model, serial_number, location, pm_interval_days, next_due_date, notes } = req.body || {};
     if (!instrument_name || !String(instrument_name).trim()) return res.status(400).json({ error: "instrument_name required" });
@@ -21075,11 +21075,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
     res.json(readEquipmentReminderConfig(req.scope.labId));
   });
-  app.put("/api/labs/:labId/equipment/reminder-config", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+  app.put("/api/labs/:labId/equipment/reminder-config", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamaintain'), (req: any, res) => {
     if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
     res.json(writeEquipmentReminderConfig(req.scope.labId, req.body));
   });
-  app.put("/api/labs/:labId/equipment/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+  app.put("/api/labs/:labId/equipment/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamaintain'), (req: any, res) => {
     if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
     const id = Number(req.params.id); const sqlite = (db as any).$client;
     const ex = sqlite.prepare("SELECT * FROM lab_equipment WHERE id = ? AND lab_id = ?").get(id, req.scope.labId) as any;
@@ -21098,7 +21098,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const row = sqlite.prepare("SELECT * FROM lab_equipment WHERE id = ?").get(id) as any;
     res.json({ ...row, maintenance_status: equipmentStatus(row.next_due_date) });
   });
-  app.delete("/api/labs/:labId/equipment/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/labs/:labId/equipment/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamaintain'), (req: any, res) => {
     if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
     const id = Number(req.params.id); const sqlite = (db as any).$client;
     const ex = sqlite.prepare("SELECT id FROM lab_equipment WHERE id = ? AND lab_id = ?").get(id, req.scope.labId);
@@ -21114,7 +21114,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!ex) return res.status(404).json({ error: "Equipment not found in this lab" });
     res.json(sqlite.prepare("SELECT * FROM equipment_maintenance_events WHERE equipment_id = ? ORDER BY event_date DESC, id DESC").all(id));
   });
-  app.post("/api/labs/:labId/equipment/:id/events", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/labs/:labId/equipment/:id/events", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamaintain'), (req: any, res) => {
     if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
     const id = Number(req.params.id); const sqlite = (db as any).$client;
     const ex = sqlite.prepare("SELECT * FROM lab_equipment WHERE id = ? AND lab_id = ?").get(id, req.scope.labId) as any;
