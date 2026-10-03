@@ -1243,17 +1243,21 @@ function narrativeHTML(
     const calAuthority = criterionAuthorityPhrase(analyteName, cfrSection);
     const calLabel = criterionLabel(analyteName);
     if (results.overallPass) {
-      narrative = `All ${results.totalCount} calibration levels for ${analyteName} fell within the ${calAdj} calibration verification acceptance criterion of ±${cliaPct}% (${calSource}). `;
-      if (meetsAdlm) {
-        narrative += `The maximum observed error of ${sf(maxErr, 1)}% also meets the ADLM-recommended internal goal of ±${adlmPct}%, indicating performance well above the ${calAdj} acceptance criterion. `;
-      } else {
-        narrative += `The maximum observed error of ${sf(maxErr, 1)}% meets the ${calAdj} acceptance criterion; the ADLM recommends an internal goal of ±${adlmPct}% for enhanced quality assurance. `;
+      narrative = `All ${results.totalCount} calibration levels for ${analyteName} fell within the ${calAdj} calibration verification acceptance criterion of ${teaStr} (${calSource}). `;
+      // ADLM "half of CLIA TEa" goal is a percentage concept; omit it for absolute-TEa
+      // analytes (e.g. Sodium +/-4 mmol/L), where "half" and the %-based maxErr are meaningless.
+      if (!isAbsolute) {
+        if (meetsAdlm) {
+          narrative += `The maximum observed error of ${sf(maxErr, 1)}% also meets the ADLM-recommended internal goal of ±${adlmPct}%, indicating performance well above the ${calAdj} acceptance criterion. `;
+        } else {
+          narrative += `The maximum observed error of ${sf(maxErr, 1)}% meets the ${calAdj} acceptance criterion; the ADLM recommends an internal goal of ±${adlmPct}% for enhanced quality assurance. `;
+        }
       }
       narrative += `The regression slope of ${sf(slopeVal, 3)} (ideal: 1.000) and intercept of ${sf(interceptVal, 3)} (ideal: 0) indicate ${slopeInterp} and ${interceptInterp}. This instrument is performing within the ${calAdj} limits across its reportable range. `;
       narrative += `<b>Each calibration level was individually evaluated against the ${calAdj} acceptance criterion (${calLabel}) of ${teaStr} ${calAuthority}. All levels satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
       const failCount = results.totalCount - results.passCount;
-      narrative = `${failCount} of ${results.totalCount} calibration level${failCount > 1 ? "s" : ""} for ${analyteName} exceeded the ${calAdj} calibration verification acceptance criterion of ±${cliaPct}% (${calSource}). `;
+      narrative = `${failCount} of ${results.totalCount} calibration level${failCount > 1 ? "s" : ""} for ${analyteName} exceeded the ${calAdj} calibration verification acceptance criterion of ${teaStr} (${calSource}). `;
       narrative += `The regression slope of ${sf(slopeVal, 3)} and intercept of ${sf(interceptVal, 3)} suggest ${slopeInterp} and ${interceptInterp}. `;
       narrative += `<b>Each calibration level was individually evaluated against the ${calAdj} acceptance criterion (${calLabel}) of ${teaStr} ${calAuthority}. One or more levels did not satisfy this criterion; see the per-level table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
