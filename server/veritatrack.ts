@@ -4,6 +4,7 @@ import { db } from "./db";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
 import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
+import { blockNonOperatorSeat } from "./seatAccess";
 import { preserveMapLink, applyMapSignoffWriteback, deriveMapLink, analyteFromTaskName } from "./veritatrackMapSync";
 import { labLocalDate } from "./dateLocal";
 
@@ -428,6 +429,7 @@ export function registerVeritaTrackRoutes(
   // viewing /veritatrack on a secondary lab were seeing primary-lab
   // tasks bleed in.
   app.get("/api/veritatrack/tasks", authMiddleware, (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const labId = resolveLegacyLabId((db as any).$client, req);
     if (!labId) return res.json([]);
@@ -749,6 +751,7 @@ export function registerVeritaTrackRoutes(
 
   // GET dashboard summary
   app.get("/api/veritatrack/dashboard", authMiddleware, (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     // #9 multi-lab fix (2026-07-11): scope the legacy dashboard by lab_id via
     // resolveLegacyLabId (the same guard the /tasks list read uses), not by
