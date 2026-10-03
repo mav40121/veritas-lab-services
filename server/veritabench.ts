@@ -9,6 +9,7 @@ import { logConsumption } from "./consumptionLedger";
 import { logCount } from "./countLedger";
 import { addLot, reconcileLots } from "./inventoryLots";
 import { resolveLegacyLabId } from "./labAccessGuard";
+import { blockNonOperatorSeat } from "./seatAccess";
 import { DEMO_USER_EMAIL } from "./constants";
 import { labLocalDate } from "./dateLocal";
 import { applyLicenseToExcelJS } from "./licenseStamp";
@@ -196,6 +197,7 @@ export function registerVeritaBenchRoutes(
   };
 
   app.get("/api/productivity", authMiddleware, (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const labId = resolveOpsLabId(req);
@@ -325,6 +327,7 @@ export function registerVeritaBenchRoutes(
   };
 
   app.get("/api/staffing-grid", authMiddleware, (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     res.json(buildGridResponse(accountId, resolveOpsLabId(req)));
@@ -571,6 +574,7 @@ export function registerVeritaBenchRoutes(
 
   // GET /api/staffing-studies - list studies for account
   app.get("/api/staffing-studies", authMiddleware, (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const labId = resolveOpsLabId(req);
@@ -895,6 +899,7 @@ export function registerVeritaBenchRoutes(
   // Shape A broader sweep (2026-06-09): account_id scope leaked across labs
   // for multi-lab owners. Lab-scope via resolveLegacyLabId.
   app.get("/api/inventory", authMiddleware, (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const labId = resolveLegacyLabId((db as any).$client, req);
     if (!labId) return res.json([]);
@@ -911,6 +916,7 @@ export function registerVeritaBenchRoutes(
   // The trigger formula lives in decorateInventoryItem above; we filter
   // here rather than recomputing.
   app.get("/api/inventory/reorder-list", authMiddleware, (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const labId = resolveLegacyLabId((db as any).$client, req);
     if (!labId) return res.json({ items: [], totalCount: 0, generatedAt: new Date().toISOString() });
@@ -2360,6 +2366,7 @@ export function registerVeritaBenchRoutes(
 
   // GET /api/pi/departments - list departments (returns empty array if none exist)
   app.get("/api/pi/departments", authMiddleware, (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const rows = sqlite.prepare(
