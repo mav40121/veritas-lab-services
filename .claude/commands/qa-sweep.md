@@ -1,5 +1,5 @@
 ---
-description: Comprehensive pre-demo QA sweep across all three login types (owner, admin-member, demo seat) on a copy of production data. Catches access, plan-gating, and render bugs before a client or a demo does.
+description: Comprehensive pre-demo QA sweep across all four login types (owner, admin-member, staff seat, medical director) on a copy of production data. Catches access, plan-gating, role, and render bugs before a client or a demo does.
 ---
 
 Run a full QA sweep that would catch access, plan-gating, document-generation, and render bugs before a client or a live demo does. Work through these steps in order. Do NOT claim it passed without the receipts (the matrix + the browser results). This is safe: everything runs against a disposable COPY of production, never production itself.
@@ -18,7 +18,7 @@ This sweep runs ONLY against Michael's own QA system, never a client account. Th
 
 ## 3. API + document-generator sweep across all three personas
 - Run: `JWT_SECRET=<localsecret> node scripts/qa-sweep/api-sweep.mjs --base http://localhost:5199 --db <copy> --org 5` (or `--lab <id>` for a specific lab in the QA system).
-- It auto-discovers, on a lab inside the QA org: the owner, an admin-member (reaches the lab via membership, the persona that failed the USON demo), and a demo seat; mints a JWT for each; and sweeps every module's reads, a write-access probe, and the document generators (CMS 209, VeritaMap/VeritaCheck exports). It will refuse to run without `--org` or `--lab`, and refuses any lab outside the QA org, so it can never sweep a client account.
+- It auto-discovers, on a lab inside the QA org, four logins: the owner, an admin-member (reaches the lab via membership, the persona that failed the USON demo), a staff seat, and the medical director (the active member whose email matches the lab's `medical_director_email`). It mints a JWT for each and sweeps every module's reads, a write-access probe, the document generators (CMS 209, VeritaMap/VeritaCheck exports), and the director-only actions (QC co-sign), checking two ways: the MD must reach them and every other login must be blocked. It refuses to run without `--org` or `--lab`, and refuses any lab outside the QA org, so it can never sweep a client account.
 - A non-zero exit means hard failures: a 403 or 500 on a read, a write blocked for owner/admin, a 500, or a failed generator. Capture the FLAGGED list.
 
 ## 4. Browser gate + render sweep (the plan-gate class the API cannot see)

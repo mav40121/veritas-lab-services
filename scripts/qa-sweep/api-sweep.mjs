@@ -1,13 +1,16 @@
 // scripts/qa-sweep/api-sweep.mjs
 //
-// Authenticated API + artifact sweep across the THREE login types that matter:
+// Authenticated API + artifact sweep across the FOUR login types that matter:
 //   1. owner            - the lab's owner_user_id
 //   2. admin-member     - an active 'admin' lab_members row (reaches the lab via
 //                         membership, often with a free personal plan: the exact
 //                         persona that failed the USON demo)
-//   3. demo-seat        - an active user_seats seat_user on the lab
+//   3. demo-seat        - an active user_seats seat_user on the lab (read-and-sign staff)
+//   4. medical-director - the active member whose email matches labs.medical_director_email;
+//                         has director-only powers (QC co-sign, policy approval, findings
+//                         sign-off, CMS 209 LD line) that no other login exercises
 //
-// It auto-discovers those three users on a lab INSIDE the owned QA system (--org)
+// It auto-discovers those users on a lab INSIDE the owned QA system (--org)
 // from a database copy, mints a JWT for each (JWT_SECRET must match the running
 // server), then for each persona exercises every module's reads, a write-access
 // probe, and the document generators against a RUNNING server. Prints a pass/fail
@@ -77,13 +80,27 @@ if (ORG !== null && FORCE_LAB && lab.organization_id !== ORG) {
 }
 const LAB = lab.id;
 const ownerId = lab.owner_user_id;
-const adminId = one(`SELECT user_id FROM lab_members WHERE lab_id=? AND role='admin' AND status='active' AND user_id != ? LIMIT 1`, LAB, ownerId)?.user_id;
+// The medical director is the active member whose email matches labs.medical_director_email.
+// It is a distinct ACCESS persona (approve major policy revisions, co-sign QC, sign off
+// findings, the LD line on the CMS 209) even though it is not a distinct lab_members.role.
+const mdId = one(`SELECT lm.user_id FROM lab_members lm JOIN users u ON u.id = lm.user_id
+  JOIN labs l ON l.id = lm.lab_id
+  WHERE lm.lab_id = ? AND lm.status = 'active' AND l.medical_director_email IS NOT NULL
+    AND lower(u.email) = lower(l.medical_director_email) LIMIT 1`, LAB)?.user_id;
+// Prefer an admin-member who is NOT the MD, so the admin and medical-director personas are
+// different users (on a small lab the MD is often also an admin); fall back to any admin.
+const adminId = one(`SELECT lm.user_id FROM lab_members lm JOIN users u ON u.id = lm.user_id
+  WHERE lm.lab_id = ? AND lm.role = 'admin' AND lm.status = 'active' AND lm.user_id != ?
+    AND lower(u.email) != COALESCE((SELECT lower(medical_director_email) FROM labs WHERE id = ?), '')
+  LIMIT 1`, LAB, ownerId, LAB)?.user_id
+  || one(`SELECT user_id FROM lab_members WHERE lab_id=? AND role='admin' AND status='active' AND user_id != ? LIMIT 1`, LAB, ownerId)?.user_id;
 const seatId = one(`SELECT seat_user_id FROM user_seats WHERE lab_id=? AND seat_user_id IS NOT NULL AND status='active' LIMIT 1`, LAB)?.seat_user_id;
 
 const personas = [
   { name: 'owner', userId: ownerId, canWrite: true },
   { name: 'admin-member', userId: adminId, canWrite: true },
   { name: 'demo-seat', userId: seatId, canWrite: false }, // seat writes may be legitimately view-only
+  { name: 'medical-director', userId: mdId, canWrite: false, isMd: true }, // director-only powers; not a general writer
 ].filter(p => p.userId);
 console.log(`Target lab: ${LAB} (${one(`SELECT lab_name FROM labs WHERE id=?`, LAB)?.lab_name}) plan=${one(`SELECT plan FROM labs WHERE id=?`, LAB)?.plan}`);
 console.log('Personas:', personas.map(p => `${p.name}=${p.userId}`).join(', '));
@@ -115,6 +132,14 @@ const ARTIFACTS = [
   { m: 'POST', p: `${L}/staff/cms209`, label: 'CMS 209 PDF' },
   { m: 'GET', p: `${L}/veritamap/coverage-report.xlsx`, label: 'VeritaMap coverage xlsx' },
   { m: 'GET', p: `${L}/veritacheck/coverage/export`, label: 'VeritaCheck coverage export' },
+];
+// Director-only actions: only the designated Medical Director may reach these. The QC
+// period-review co-sign is the canonical one: with a well-formed body it passes field
+// validation and reaches the identity gate, which returns 403 for anyone who is not the
+// MD and 409 for the MD on a non-existent record. Probed two-way (gated on an MD existing):
+// the MD must NOT be blocked (403 = fail); every other login must be (403 = pass).
+const MD_ONLY = [
+  { m: 'POST', p: `${L}/qc/period-reviews/md-cosign`, body: { control_lot_id: 999999999, period_year: 2099, period_month: 1 }, label: 'QC period-review MD co-sign' },
 ];
 
 async function hit(path, token, method = 'GET', body) {
@@ -166,6 +191,24 @@ for (const p of personas) {
     const v = r.status === 200 ? 'PASS' : r.status === 403 ? 'ACCESS-FAIL' : r.status >= 500 ? 'SERVER-ERR' : `HTTP-${r.status}`;
     if (v !== 'PASS' && !(v.startsWith('HTTP') && !p.canWrite)) flagged.push({ persona: p.name, kind: 'ARTIFACT', ep: a.label, v, status: r.status, snip: r.snip });
     console.log(`  ${v.padEnd(13)} ${String(r.status).padEnd(4)} ${a.label}`);
+  }
+  if (mdId) {
+    console.log('--- medical-director-only actions ---');
+    for (const a of MD_ONLY) {
+      const r = await hit(a.p, t, a.m, a.body);
+      let v, hard = false;
+      if (r.status >= 500) { v = 'SERVER-ERR'; hard = true; }
+      else if (p.isMd) {
+        if (r.status === 403) { v = 'ACCESS-FAIL(MD blocked)'; hard = true; }
+        else v = 'PASS(MD reached)';
+      } else {
+        if (r.status === 403) v = 'PASS(blocked)';
+        else if (r.status === 401 || r.status === 404) v = `HTTP-${r.status}`;
+        else { v = 'OVER-PERMISSION'; hard = true; }
+      }
+      if (hard) flagged.push({ persona: p.name, kind: 'MD-ACTION', ep: a.label, v, status: r.status, snip: r.snip });
+      console.log(`  ${v.padEnd(22)} ${String(r.status).padEnd(4)} ${a.label}`);
+    }
   }
 }
 
