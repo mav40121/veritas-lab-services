@@ -56,19 +56,31 @@ if (!FORCE_LAB && ORG === null) {
 const db = new Database(DB_PATH, { readonly: true });
 const one = (sql, ...a) => db.prepare(sql).get(...a);
 
-// ---- discover the target lab + the three personas on it ----
+// ---- discover the target lab + the personas on it ----
 // Scoped to the QA organization (--org), never a free-for-all scan of prod.
 // Membership in a paid org = paid, so org-scoped discovery does NOT filter on the
-// (often stale) lab-level plan column; it just needs active members. Prefer a lab
-// with an admin-member distinct from the owner (the persona that failed the USON
-// demo), else any lab in the org with active members.
+// (often stale) lab-level plan column; it just needs active members. Pick the lab
+// with the RICHEST persona coverage so the sweep actually exercises all four logins:
+//   1. a lab with a designated medical director who is an active member (only such a
+//      lab can exercise the 4th login; this is the whole point of the MD persona),
+//   2. else a lab with an admin-member distinct from the owner (the USON-demo persona),
+//   3. else any lab in the org with active members.
+// Ordering by lab id alone is wrong: it grabbed Riverside (no MD, no seats) over
+// Michaels Lab, silently dropping the director and staff logins.
 const lab = FORCE_LAB
   ? one(`SELECT id, owner_user_id, organization_id FROM labs WHERE id = ?`, FORCE_LAB)
-  : (one(`SELECT id, owner_user_id, organization_id FROM labs l
+  : (one(`SELECT l.id, l.owner_user_id, l.organization_id FROM labs l
           WHERE l.organization_id = ? AND l.owner_user_id IS NOT NULL
-            AND EXISTS (SELECT 1 FROM lab_members m WHERE m.lab_id = l.id AND m.status='active'
-                        AND m.role='admin' AND m.user_id != l.owner_user_id)
+            AND l.medical_director_email IS NOT NULL AND TRIM(l.medical_director_email) != ''
+            AND EXISTS (SELECT 1 FROM lab_members m JOIN users u ON u.id = m.user_id
+                        WHERE m.lab_id = l.id AND m.status='active'
+                          AND lower(u.email) = lower(l.medical_director_email))
           ORDER BY l.id LIMIT 1`, ORG)
+     || one(`SELECT id, owner_user_id, organization_id FROM labs l
+             WHERE l.organization_id = ? AND l.owner_user_id IS NOT NULL
+               AND EXISTS (SELECT 1 FROM lab_members m WHERE m.lab_id = l.id AND m.status='active'
+                           AND m.role='admin' AND m.user_id != l.owner_user_id)
+             ORDER BY l.id LIMIT 1`, ORG)
      || one(`SELECT id, owner_user_id, organization_id FROM labs l
              WHERE l.organization_id = ? AND l.owner_user_id IS NOT NULL
                AND EXISTS (SELECT 1 FROM lab_members m WHERE m.lab_id = l.id AND m.status='active')
@@ -94,14 +106,24 @@ const adminId = one(`SELECT lm.user_id FROM lab_members lm JOIN users u ON u.id 
     AND lower(u.email) != COALESCE((SELECT lower(medical_director_email) FROM labs WHERE id = ?), '')
   LIMIT 1`, LAB, ownerId, LAB)?.user_id
   || one(`SELECT user_id FROM lab_members WHERE lab_id=? AND role='admin' AND status='active' AND user_id != ? LIMIT 1`, LAB, ownerId)?.user_id;
-const seatId = one(`SELECT seat_user_id FROM user_seats WHERE lab_id=? AND seat_user_id IS NOT NULL AND status='active' LIMIT 1`, LAB)?.seat_user_id;
+// Prefer a seat held by a plain 'staff' member (true read-and-sign access), so the
+// staff persona is genuinely lower-privilege and not an admin who merely also holds a
+// seat; fall back to any active seat.
+const seatId = one(`SELECT us.seat_user_id FROM user_seats us
+    JOIN lab_members lm ON lm.lab_id = us.lab_id AND lm.user_id = us.seat_user_id AND lm.status = 'active'
+    WHERE us.lab_id = ? AND us.seat_user_id IS NOT NULL AND us.status = 'active' AND lm.role = 'staff'
+    LIMIT 1`, LAB)?.seat_user_id
+  || one(`SELECT seat_user_id FROM user_seats WHERE lab_id=? AND seat_user_id IS NOT NULL AND status='active' LIMIT 1`, LAB)?.seat_user_id;
 
 const personas = [
   { name: 'owner', userId: ownerId, canWrite: true },
   { name: 'admin-member', userId: adminId, canWrite: true },
-  { name: 'demo-seat', userId: seatId, canWrite: false }, // seat writes may be legitimately view-only
+  { name: 'staff-seat', userId: seatId, canWrite: false }, // seat writes may be legitimately view-only
   { name: 'medical-director', userId: mdId, canWrite: false, isMd: true }, // director-only powers; not a general writer
-].filter(p => p.userId);
+].filter(p => p.userId)
+ // Dedupe: never test the same user under two persona names (e.g. an admin who also
+ // holds a seat). Keep the first by the priority order above.
+ .filter((p, i, arr) => arr.findIndex(x => x.userId === p.userId) === i);
 console.log(`Target lab: ${LAB} (${one(`SELECT lab_name FROM labs WHERE id=?`, LAB)?.lab_name}) plan=${one(`SELECT plan FROM labs WHERE id=?`, LAB)?.plan}`);
 console.log('Personas:', personas.map(p => `${p.name}=${p.userId}`).join(', '));
 db.close();
