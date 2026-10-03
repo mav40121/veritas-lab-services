@@ -938,12 +938,16 @@ export function registerVeritaBenchRoutes(
   // fresh from the labs table when the requester has a lab, falling back
   // to the user's clia_lab_name / clia_number for legacy single-lab users.
   app.post("/api/inventory/reorder-list/pdf", authMiddleware, async (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
+    // Lab-scope the export (matches the GET twins). Was account_id = owner, which on a
+    // multi-lab account listed EVERY lab's items under one lab's header (cross-lab leak).
+    const labId = resolveLegacyLabId((db as any).$client, req);
     try {
       const rows = sqlite.prepare(
-        "SELECT * FROM inventory_items WHERE account_id = ? ORDER BY item_name ASC"
-      ).all(accountId);
+        "SELECT * FROM inventory_items WHERE lab_id = ? ORDER BY item_name ASC"
+      ).all(labId);
       const decorated = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder);
       const items = applyReorderFilters(decorated, req.query) as ReorderItem[];
 
@@ -1034,12 +1038,15 @@ export function registerVeritaBenchRoutes(
   // only two left unlocked), so this route does not go through the PDF
   // token store - we return the buffer inline with Content-Disposition.
   app.post("/api/inventory/reorder-list/excel", authMiddleware, async (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
+    // Lab-scope the export (matches the GET twins); account_id leaked every lab's items.
+    const labId = resolveLegacyLabId((db as any).$client, req);
     try {
       const rows = sqlite.prepare(
-        "SELECT * FROM inventory_items WHERE account_id = ? ORDER BY item_name ASC"
-      ).all(accountId);
+        "SELECT * FROM inventory_items WHERE lab_id = ? ORDER BY item_name ASC"
+      ).all(labId);
       const decorated = (rows as any[]).map(decorateInventoryItem).filter(it => it.needs_reorder);
       const items = applyReorderFilters(decorated, req.query) as ReorderItem[];
 

@@ -15561,20 +15561,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         work_performed_date, signoff_date, signoff_by_user_id, signoff_by_name,
         next_due, notes, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(test_a_id, test_b_id) DO UPDATE SET
-        correlation_group_id = excluded.correlation_group_id,
-        correlation_method = excluded.correlation_method,
-        acceptable_criteria = excluded.acceptable_criteria,
-        actual_bias_or_sd = excluded.actual_bias_or_sd,
-        pass_fail = excluded.pass_fail,
-        work_performed_date = excluded.work_performed_date,
-        signoff_date = excluded.signoff_date,
-        signoff_by_user_id = excluded.signoff_by_user_id,
-        signoff_by_name = excluded.signoff_by_name,
-        next_due = excluded.next_due,
-        notes = excluded.notes,
-        updated_at = excluded.updated_at
     `);
+    // NOTE: plain INSERT (no ON CONFLICT). veritamap_test_correlations intentionally has
+    // NO UNIQUE(test_a_id, test_b_id) - that key was removed (db.ts:919) so a pair can
+    // appear in multiple correlation groups. The stale ON CONFLICT(test_a_id,test_b_id)
+    // had no matching unique key, so SQLite threw at prepare and this endpoint 500'd on
+    // EVERY call. Matches the single-pair POST /correlations sibling, which also appends.
     const bulk = (db as any).$client.transaction(() => {
       for (const [lo, hi] of normalized) {
         stmt.run(
