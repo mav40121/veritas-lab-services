@@ -3936,7 +3936,7 @@ export async function generateIqcpPDF(
   <div class="sec">
     <h2>Determination</h2>
     <div class="kv"><b>Prepared</b> ${fmt(plan?.created_at) || today}</div>
-    <div class="kv"><b>Effective date</b> ${isComplete && approvedDate ? approvedDate : "On laboratory director approval below"}</div>
+    <div class="kv"><b>Effective date</b> ${isComplete && approvedDate ? approvedDate : "On laboratory director or designee approval below"}</div>
     <div class="kv"><b>Scope</b> ${scopeText}</div>
     <div class="det">
       <b>An IQCP is indicated for this test system.</b> The three-question pre-screen is met:

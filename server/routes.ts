@@ -15966,7 +15966,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const department = instruments[0]?.category || t.specialty || "";
         const isWaived = t.complexity === "WAIVED";
         const correlReq = !isWaived && instrCount >= 2 ? "Yes" : "No";
-        const cfr = VERITAMAP_CFR_MAP[t.specialty] ?? "§493.945";
+        const cfr = VERITAMAP_CFR_MAP[t.specialty] ?? "§493.931";
         const calVerStatus = isWaived ? "N/A (Waived)" : getComplianceStatus(t.last_cal_ver, 6);
         const mcStatus = isWaived ? "N/A (Waived)" : getComplianceStatus(t.last_method_comp, 6);
         const precStatus = isWaived ? "N/A (Waived)" : getComplianceStatus(t.last_precision, 6);
