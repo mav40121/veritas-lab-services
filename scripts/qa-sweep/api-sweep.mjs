@@ -1,0 +1,153 @@
+// scripts/qa-sweep/api-sweep.mjs
+//
+// Authenticated API + artifact sweep across the THREE login types that matter:
+//   1. owner            - the lab's owner_user_id
+//   2. admin-member     - an active 'admin' lab_members row (reaches the lab via
+//                         membership, often with a free personal plan: the exact
+//                         persona that failed the USON demo)
+//   3. demo-seat        - an active user_seats seat_user on the lab
+//
+// It auto-discovers those three users on a PAID (non-free) lab from a database
+// copy, mints a JWT for each (JWT_SECRET must match the running server), then for
+// each persona exercises every module's reads, a write-access probe, and the
+// document generators against a RUNNING server. Prints a pass/fail matrix and
+// exits non-zero if any hard failure is found (403/500 on a read, a write blocked
+// for owner/admin, a 500, or a failed document generator).
+//
+// Usage (the /qa-sweep command wires this up):
+//   JWT_SECRET=<server secret> node scripts/qa-sweep/api-sweep.mjs \
+//     --base http://localhost:5199 --db /path/to/prod-copy.db [--lab <id>]
+//
+// READ-ONLY against the DB (discovery only). Write probes send invalid bodies, so
+// they test ACCESS without persisting junk; run against a disposable copy anyway.
+
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const Database = require('better-sqlite3');
+const jwt = require('jsonwebtoken');
+
+function arg(name, def) { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : def; }
+const BASE = (arg('--base', 'http://localhost:5199')).replace(/\/$/, '');
+const DB_PATH = arg('--db');
+const FORCE_LAB = arg('--lab') ? Number(arg('--lab')) : null;
+const SECRET = process.env.JWT_SECRET;
+if (!DB_PATH) { console.error('FATAL: --db <path to a DB copy> is required'); process.exit(2); }
+if (!SECRET) { console.error('FATAL: JWT_SECRET env is required (must match the running server)'); process.exit(2); }
+
+const db = new Database(DB_PATH, { readonly: true });
+const one = (sql, ...a) => db.prepare(sql).get(...a);
+
+// ---- discover a paid lab + the three personas on it ----
+// Prefer a paid lab that actually has an admin-member distinct from the owner
+// (the persona that failed the USON demo); fall back to any paid lab with members.
+const lab = FORCE_LAB
+  ? one(`SELECT id, owner_user_id, organization_id FROM labs WHERE id = ?`, FORCE_LAB)
+  : (one(`SELECT id, owner_user_id, organization_id FROM labs l
+          WHERE l.plan NOT IN ('free','per_study') AND l.owner_user_id IS NOT NULL
+            AND EXISTS (SELECT 1 FROM lab_members m WHERE m.lab_id = l.id AND m.status='active'
+                        AND m.role='admin' AND m.user_id != l.owner_user_id)
+          ORDER BY l.id LIMIT 1`)
+     || one(`SELECT id, owner_user_id, organization_id FROM labs l
+             WHERE l.plan NOT IN ('free','per_study') AND l.owner_user_id IS NOT NULL
+               AND EXISTS (SELECT 1 FROM lab_members m WHERE m.lab_id = l.id AND m.status='active')
+             ORDER BY l.id LIMIT 1`));
+if (!lab) { console.error('FATAL: no paid lab with active members found in the DB copy'); process.exit(2); }
+const LAB = lab.id;
+const ownerId = lab.owner_user_id;
+const adminId = one(`SELECT user_id FROM lab_members WHERE lab_id=? AND role='admin' AND status='active' AND user_id != ? LIMIT 1`, LAB, ownerId)?.user_id;
+const seatId = one(`SELECT seat_user_id FROM user_seats WHERE lab_id=? AND seat_user_id IS NOT NULL AND status='active' LIMIT 1`, LAB)?.seat_user_id;
+
+const personas = [
+  { name: 'owner', userId: ownerId, canWrite: true },
+  { name: 'admin-member', userId: adminId, canWrite: true },
+  { name: 'demo-seat', userId: seatId, canWrite: false }, // seat writes may be legitimately view-only
+].filter(p => p.userId);
+console.log(`Target lab: ${LAB} (${one(`SELECT lab_name FROM labs WHERE id=?`, LAB)?.lab_name}) plan=${one(`SELECT plan FROM labs WHERE id=?`, LAB)?.plan}`);
+console.log('Personas:', personas.map(p => `${p.name}=${p.userId}`).join(', '));
+db.close();
+
+const L = `/api/labs/${LAB}`;
+const READS = [
+  '/members', '/studies', '/veritacheck/coverage', '/veritacheck/lab-instruments',
+  '/veritamap/maps', '/veritamap/labwide', '/veritascan/scans', '/veritascan/documents',
+  '/veritascan/coverage', '/competency/programs', '/competency/employees',
+  '/competency/dashboard-stats', '/competency/owed', '/staff/lab', '/staff/employees',
+  '/staff/position-descriptions', '/staff/credentials-dashboard-stats', '/pt/enrollments',
+  '/pt/coverage', '/pt/aa-records', '/equipment', '/findings', '/iqcp/plans',
+  '/iqcp/eligible-tests', '/veritalab/certificates', '/veritaceu/roster-summary',
+  '/qc/recent', '/qc/lots', '/readiness', '/compliance/score',
+  '/veritapolicy/documents', '/veritapolicy/manuals', '/veritapolicy/workflows',
+].map(p => `${L}${p}`).concat([
+  '/api/veritatrack/tasks', '/api/veritatrack/dashboard', '/api/productivity',
+  '/api/staffing-grid', '/api/staffing-studies', '/api/pi/departments', '/api/inventory',
+  '/api/inventory/reorder-list', '/api/veritaops/studies',
+]);
+const WRITES = [
+  `${L}/studies`, `${L}/veritamap/maps`, `${L}/veritascan/scans`, `${L}/competency/programs`,
+  `${L}/staff/employees`, `${L}/pt/enrollments`, `${L}/equipment`, `${L}/findings`,
+  `${L}/qc/results`, `${L}/veritalab/certificates`, `${L}/veritapolicy/manuals`,
+  '/api/veritatrack/tasks', '/api/productivity', '/api/inventory', '/api/pi/metrics', '/api/veritaops/studies',
+];
+const ARTIFACTS = [
+  { m: 'POST', p: `${L}/staff/cms209`, label: 'CMS 209 PDF' },
+  { m: 'GET', p: `${L}/veritamap/coverage-report.xlsx`, label: 'VeritaMap coverage xlsx' },
+  { m: 'GET', p: `${L}/veritacheck/coverage/export`, label: 'VeritaCheck coverage export' },
+];
+
+async function hit(path, token, method = 'GET', body) {
+  const headers = { Authorization: `Bearer ${token}`, 'X-Active-Lab-Id': String(LAB) };
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  try {
+    const r = await fetch(BASE + path, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
+    let snip = '';
+    const ct = r.headers.get('content-type') || '';
+    if (ct.includes('application/json')) snip = (await r.text()).slice(0, 140).replace(/\s+/g, ' ');
+    else snip = `[${ct} ${r.headers.get('content-length') || '?'}b]`;
+    return { status: r.status, snip };
+  } catch (e) { return { status: 0, snip: 'FETCH-ERR ' + e.message }; }
+}
+
+const flagged = [];
+const token = (p) => jwt.sign({ userId: p.userId }, SECRET, { expiresIn: '1h' });
+for (const p of personas) {
+  const t = token(p);
+  console.log(`\n================ ${p.name} (user ${p.userId}) ================`);
+  console.log('--- reads ---');
+  for (const ep of READS) {
+    const r = await hit(ep, t);
+    let v;
+    if (r.status === 200) v = 'PASS';
+    else if (r.status === 403) v = 'ACCESS-FAIL';
+    else if (r.status >= 500) v = 'SERVER-ERR';
+    else if (r.status === 400) v = 'needs-params';
+    else v = `HTTP-${r.status}`;
+    if (v === 'ACCESS-FAIL' || v === 'SERVER-ERR') flagged.push({ persona: p.name, kind: 'READ', ep, v, status: r.status, snip: r.snip });
+    console.log(`  ${v.padEnd(13)} ${String(r.status).padEnd(4)} ${ep}`);
+  }
+  console.log('--- write access probes (invalid body) ---');
+  for (const ep of WRITES) {
+    const r = await hit(ep, t, 'POST', {});
+    let v;
+    if (r.status === 403) v = 'ACCESS-BLOCKED';
+    else if (r.status === 400 || r.status === 422) v = 'PASS(validation)';
+    else if (r.status === 200 || r.status === 201) v = 'PASS(wrote)';
+    else if (r.status >= 500) v = 'SERVER-ERR';
+    else v = `HTTP-${r.status}`;
+    const hard = v === 'SERVER-ERR' || (v === 'ACCESS-BLOCKED' && p.canWrite);
+    if (hard) flagged.push({ persona: p.name, kind: 'WRITE', ep, v, status: r.status, snip: r.snip });
+    console.log(`  ${v.padEnd(16)} ${String(r.status).padEnd(4)} ${ep}`);
+  }
+  console.log('--- document generators ---');
+  for (const a of ARTIFACTS) {
+    const r = await hit(a.p, t, a.m, a.m === 'POST' ? {} : undefined);
+    const v = r.status === 200 ? 'PASS' : r.status === 403 ? 'ACCESS-FAIL' : r.status >= 500 ? 'SERVER-ERR' : `HTTP-${r.status}`;
+    if (v !== 'PASS' && !(v.startsWith('HTTP') && !p.canWrite)) flagged.push({ persona: p.name, kind: 'ARTIFACT', ep: a.label, v, status: r.status, snip: r.snip });
+    console.log(`  ${v.padEnd(13)} ${String(r.status).padEnd(4)} ${a.label}`);
+  }
+}
+
+console.log('\n\n================ FLAGGED (hard failures) ================');
+if (!flagged.length) console.log('  none');
+for (const f of flagged) console.log(`  [${f.persona}] ${f.kind} ${f.v} ${f.status} ${f.ep}  ${f.snip || ''}`);
+console.log(`\nTOTAL HARD FAILURES: ${flagged.length}`);
+process.exit(flagged.length ? 1 : 0);
