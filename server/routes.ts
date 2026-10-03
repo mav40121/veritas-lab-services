@@ -25094,42 +25094,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       } catch {}
     }
 
-    // Create competency schedule if performs testing
+    // Create competency schedule if performs testing. Due dates come from the shared
+    // engine (server/competencySchedule.ts): NYS non-waived staff are hire-anchored at
+    // create (hire+6/+12/+24); every other case stays null until the initial competency
+    // is recorded, so no 6-month is pre-seeded for national-only or waived-only staff.
     if (performsTesting) {
-      const accreditor = lab.accreditation_body;
-      const includesTJCorCAP = ["TJC", "CAP"].includes(accreditor);
-      const includesNYS = lab.includes_nys === 1;
-      const hire = hireDate ? new Date(hireDate) : new Date();
-
-      let sixMonthDue: string | null = null;
-      let nysSixMonthDue: string | null = null;
-
-      if (includesTJCorCAP && !includesNYS) {
-        // 6-month due from initial completion (set later), leave null for now
-        sixMonthDue = null;
-      } else {
-        // CLIA only or NYS: 6 months from hire
-        const sixFromHire = new Date(hire);
-        sixFromHire.setMonth(sixFromHire.getMonth() + 6);
-        sixMonthDue = sixFromHire.toISOString().split('T')[0];
-      }
-
-      if (includesNYS) {
-        const nysSix = new Date(hire);
-        nysSix.setMonth(nysSix.getMonth() + 6);
-        nysSixMonthDue = nysSix.toISOString().split('T')[0];
-      }
-
-      if (includesTJCorCAP && includesNYS) {
-        // TJC/CAP + NYS: 6 months from hire satisfies both
-        const sixFromHire = new Date(hire);
-        sixFromHire.setMonth(sixFromHire.getMonth() + 6);
-        sixMonthDue = sixFromHire.toISOString().split('T')[0];
-      }
-
+      const seed = competencySeedAtCreate({
+        accreditor: lab.accreditation_body, nys: lab.includes_nys === 1,
+        highestComplexity: highestComplexity || 'H', hireDate: hireDate || null,
+      });
       (db as any).$client.prepare(
-        "INSERT INTO staff_competency_schedules (employee_id, lab_id, six_month_due_at, nys_six_month_due_at) VALUES (?,?,?,?)"
-      ).run(empId, lab.id, sixMonthDue, nysSixMonthDue);
+        "INSERT INTO staff_competency_schedules (employee_id, lab_id, six_month_due_at, first_annual_due_at, annual_due_at, nys_six_month_due_at) VALUES (?,?,?,?,?,?)"
+      ).run(empId, lab.id, seed.six_month_due_at, seed.first_annual_due_at, seed.annual_due_at, seed.nys_six_month_due_at);
     }
 
     // Return the created employee with roles
@@ -25308,46 +25284,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ...emp, roles, competencySchedule: schedule || null });
   });
 
-  // PR E3 of the VeritaComp customer-blockers wave (2026-06-05): auto-populate
-  // the staff_competency_schedules milestones from hire_date per the CLIA
-  // timeline encoded in CLAUDE.md §5:
-  //   - six_month_due_at  = hire + 6 months
-  //   - first_annual_due_at = hire + 12 months  (6 months after the 6-month)
-  //   - annual_due_at     = hire + 24 months    (1 year after the 1st annual)
-  // Initial competency has no due_at column; "before performing testing" is
-  // the regulatory requirement and the supervisor stamps initial_completed_at
-  // when they sign off.
-  //
-  // Idempotent. Only populates NULL columns so a lab that hand-set a
-  // milestone (e.g. moved the 6-month forward) does not lose it. Existing
-  // POST handler still computes six_month_due_at on its own per the
-  // accreditor / NYS rules; this helper layers first_annual + annual on top
-  // and back-fills six_month if missing.
-  function ensureCompetencyScheduleMilestones(empId: number | bigint, labId: number, hireDateStr: string | null | undefined) {
-    if (!hireDateStr) return;
-    const hire = new Date(hireDateStr);
-    if (Number.isNaN(hire.getTime())) return;
-    const ymd = (d: Date) => d.toISOString().split('T')[0];
-    const six = new Date(hire); six.setMonth(six.getMonth() + 6);
-    const firstAnnual = new Date(hire); firstAnnual.setMonth(firstAnnual.getMonth() + 12);
-    const annual = new Date(hire); annual.setMonth(annual.getMonth() + 24);
-    const client = (db as any).$client;
-    const row = client.prepare("SELECT id, six_month_due_at, first_annual_due_at, annual_due_at FROM staff_competency_schedules WHERE employee_id = ?").get(empId) as any;
-    if (!row) {
-      client.prepare(
-        "INSERT INTO staff_competency_schedules (employee_id, lab_id, six_month_due_at, first_annual_due_at, annual_due_at) VALUES (?,?,?,?,?)"
-      ).run(empId, labId, ymd(six), ymd(firstAnnual), ymd(annual));
-      return;
-    }
-    const sets: string[] = [];
-    const vals: any[] = [];
-    if (!row.six_month_due_at) { sets.push("six_month_due_at = ?"); vals.push(ymd(six)); }
-    if (!row.first_annual_due_at) { sets.push("first_annual_due_at = ?"); vals.push(ymd(firstAnnual)); }
-    if (!row.annual_due_at) { sets.push("annual_due_at = ?"); vals.push(ymd(annual)); }
-    if (sets.length === 0) return;
-    vals.push(empId);
-    client.prepare(`UPDATE staff_competency_schedules SET ${sets.join(", ")} WHERE employee_id = ?`).run(...vals);
-  }
+  // (The old hire-anchored ensureCompetencyScheduleMilestones back-fill was removed
+  // 2026-10-03. Create/update now seed via competencySeedAtCreate -- NYS non-waived
+  // hire-anchored only -- and recorded completions drive due dates through the
+  // recording endpoints via competencyDueColumns. See server/competencySchedule.ts.)
 
   // Create employee in the active lab
   app.post("/api/labs/:labId/staff/employees", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
@@ -25363,10 +25303,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // (EmployeeDialog always sends both). The lab-scoped handlers previously
     // omitted them, so on a multi-lab account (which always routes here) the
     // grant silently no-op'd. Persist them, matching the legacy + bulk paths.
-    // Atomic: employee row + roles + competency schedule + milestone back-fill
-    // all commit together, so a mid-sequence throw cannot leave a half-written
-    // employee (e.g. a row with no roles). ensureCompetencyScheduleMilestones
-    // uses plain prepared statements (no nested transaction), so this is safe.
+    // Atomic: employee row + roles + competency schedule seed all commit together,
+    // so a mid-sequence throw cannot leave a half-written employee (e.g. a row with
+    // no roles). competencySeedAtCreate is pure and the INSERT uses plain prepared
+    // statements (no nested transaction), so this is safe.
     const sqlite = (db as any).$client;
     const empId = sqlite.transaction(() => {
       const result = sqlite.prepare(
@@ -25383,37 +25323,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         for (const r of roles) roleStmt.run(id, lab.id, tier2LabId, r.role, r.specialtyNumber || null, entireLabFlag(r));
       }
       if (performsTesting) {
-        const accreditor = lab.accreditation_body;
-        const includesTJCorCAP = ["TJC", "CAP"].includes(accreditor);
-        const includesNYS = lab.includes_nys === 1;
-        const hire = hireDate ? new Date(hireDate) : new Date();
-        let sixMonthDue: string | null = null;
-        let nysSixMonthDue: string | null = null;
-        if (includesTJCorCAP && !includesNYS) {
-          sixMonthDue = null;
-        } else {
-          const sixFromHire = new Date(hire);
-          sixFromHire.setMonth(sixFromHire.getMonth() + 6);
-          sixMonthDue = sixFromHire.toISOString().split('T')[0];
-        }
-        if (includesNYS) {
-          const nysSix = new Date(hire);
-          nysSix.setMonth(nysSix.getMonth() + 6);
-          nysSixMonthDue = nysSix.toISOString().split('T')[0];
-        }
-        if (includesTJCorCAP && includesNYS) {
-          const sixFromHire = new Date(hire);
-          sixFromHire.setMonth(sixFromHire.getMonth() + 6);
-          sixMonthDue = sixFromHire.toISOString().split('T')[0];
-        }
+        // Shared engine seed: NYS non-waived = hire-anchored (hire+6/+12/+24); every
+        // other case null until the initial competency is recorded. Replaces the old
+        // inline hire-anchored block + the ensureCompetencyScheduleMilestones back-fill,
+        // which seeded a 6-month for everyone (over-applied it to waived-only staff).
+        const seed = competencySeedAtCreate({
+          accreditor: lab.accreditation_body, nys: lab.includes_nys === 1,
+          highestComplexity: highestComplexity || 'H', hireDate: hireDate || null,
+        });
         sqlite.prepare(
-          "INSERT INTO staff_competency_schedules (employee_id, lab_id, six_month_due_at, nys_six_month_due_at) VALUES (?,?,?,?)"
-        ).run(id, lab.id, sixMonthDue, nysSixMonthDue);
-      }
-      // PR E3: layer first_annual_due_at + annual_due_at + back-fill six_month
-      // on top of whatever the accreditor-specific block above already wrote.
-      if (performsTesting && hireDate) {
-        ensureCompetencyScheduleMilestones(id, lab.id, hireDate);
+          "INSERT INTO staff_competency_schedules (employee_id, lab_id, six_month_due_at, first_annual_due_at, annual_due_at, nys_six_month_due_at) VALUES (?,?,?,?,?,?)"
+        ).run(id, lab.id, seed.six_month_due_at, seed.first_annual_due_at, seed.annual_due_at, seed.nys_six_month_due_at);
       }
       return id;
     })();
@@ -25437,9 +25357,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // The lab-scoped PUT previously omitted them, so a multi-lab director toggling
     // access saw "Employee updated" while the grant never wrote. Matches legacy PUT.
     // Atomic: the employee UPDATE, the roles DELETE + re-insert, and the
-    // milestone back-fill commit together. Without this, a throw between the
+    // competency-schedule seed commit together. Without this, a throw between the
     // DELETE and the re-insert (e.g. a bad specialty_number) left the employee
-    // with ZERO roles. ensureCompetencyScheduleMilestones has no nested txn.
+    // with ZERO roles. The seed uses plain prepared statements (no nested txn).
     const sqlite = (db as any).$client;
     sqlite.transaction(() => {
       sqlite.prepare(
@@ -25464,12 +25384,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const roleStmt = sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, tier2_lab_id, role, specialty_number, all_specialties) VALUES (?,?,?,?,?,?)");
         for (const r of roles) roleStmt.run(req.params.id, emp.lab_id, tier2LabId, r.role, r.specialtyNumber || null, entireLabFlag(r));
       }
-      // PR E3: ensure milestones populate when hire_date is now present and
-      // performs_testing is on. Same idempotent helper used at POST time.
+      // Seed a competency schedule row if this employee now performs testing and has
+      // none yet (NYS non-waived = hire-anchored; every other case null until the initial
+      // competency is recorded). Never overwrite an existing row -- recorded completions
+      // drive its due dates via the recording endpoint. Replaces the old blanket
+      // hire+6/+12/+24 back-fill, which over-applied the 6-month to waived-only staff.
       const effectivePerformsTesting = performsTesting !== undefined ? !!performsTesting : !!emp.performs_testing;
-      const effectiveHireDate = hireDate !== undefined ? hireDate : emp.hire_date;
-      if (effectivePerformsTesting && effectiveHireDate) {
-        ensureCompetencyScheduleMilestones(Number(req.params.id), emp.lab_id, effectiveHireDate);
+      if (effectivePerformsTesting) {
+        const hasRow = sqlite.prepare("SELECT id FROM staff_competency_schedules WHERE employee_id = ?").get(req.params.id);
+        if (!hasRow) {
+          const slab = sqlite.prepare("SELECT accreditation_body, includes_nys FROM staff_labs WHERE id = ?").get(emp.lab_id) as any;
+          const seed = competencySeedAtCreate({
+            accreditor: slab?.accreditation_body, nys: slab?.includes_nys === 1,
+            highestComplexity: highestComplexity || emp.highest_complexity || 'H',
+            hireDate: (hireDate !== undefined ? hireDate : emp.hire_date) || null,
+          });
+          sqlite.prepare(
+            "INSERT INTO staff_competency_schedules (employee_id, lab_id, six_month_due_at, first_annual_due_at, annual_due_at, nys_six_month_due_at) VALUES (?,?,?,?,?,?)"
+          ).run(req.params.id, emp.lab_id, seed.six_month_due_at, seed.first_annual_due_at, seed.annual_due_at, seed.nys_six_month_due_at);
+        }
       }
     })();
     const updated = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ?").get(req.params.id);
@@ -28347,32 +28280,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
         const now = new Date().toISOString();
         const sqlite = (db as any).$client;
-        const includesTJCorCAP = ["TJC", "CAP"].includes(lab.accreditation_body);
-        const includesNYS = lab.includes_nys === 1;
-
-        const computeSchedule = (hireDate: string | null) => {
-          const hire = hireDate ? new Date(hireDate) : new Date();
-          let sixMonthDue: string | null = null;
-          let nysSixMonthDue: string | null = null;
-          if (includesTJCorCAP && !includesNYS) {
-            sixMonthDue = null;
-          } else {
-            const sixFromHire = new Date(hire);
-            sixFromHire.setMonth(sixFromHire.getMonth() + 6);
-            sixMonthDue = sixFromHire.toISOString().split("T")[0];
-          }
-          if (includesNYS) {
-            const nysSix = new Date(hire);
-            nysSix.setMonth(nysSix.getMonth() + 6);
-            nysSixMonthDue = nysSix.toISOString().split("T")[0];
-          }
-          if (includesTJCorCAP && includesNYS) {
-            const sixFromHire = new Date(hire);
-            sixFromHire.setMonth(sixFromHire.getMonth() + 6);
-            sixMonthDue = sixFromHire.toISOString().split("T")[0];
-          }
-          return { sixMonthDue, nysSixMonthDue };
-        };
+        // Shared engine seed, per imported row: NYS non-waived = hire-anchored
+        // (hire+6/+12/+24); every other case null until the initial competency is
+        // recorded. Replaces the old inline hire-anchored block that seeded a 6-month
+        // for everyone. server/competencySchedule.ts.
+        const computeSchedule = (hireDate: string | null, highestComplexity: string | null) =>
+          competencySeedAtCreate({
+            accreditor: lab.accreditation_body, nys: lab.includes_nys === 1,
+            highestComplexity: highestComplexity || 'H', hireDate: hireDate || null,
+          });
 
         // tier2_lab_id is REQUIRED: the lab-scoped roster reads WHERE tier2_lab_id,
         // so a bulk INSERT that omits it makes the imported employee invisible in
@@ -28386,7 +28302,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const deleteRolesStmt = sqlite.prepare("DELETE FROM staff_roles WHERE employee_id = ?");
         const insertRoleStmt = sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number) VALUES (?,?,?,?)");
         const insertScheduleStmt = sqlite.prepare(
-          "INSERT INTO staff_competency_schedules (employee_id, lab_id, six_month_due_at, nys_six_month_due_at) VALUES (?,?,?,?)"
+          "INSERT INTO staff_competency_schedules (employee_id, lab_id, six_month_due_at, first_annual_due_at, annual_due_at, nys_six_month_due_at) VALUES (?,?,?,?,?,?)"
         );
         const hasScheduleStmt = sqlite.prepare("SELECT id FROM staff_competency_schedules WHERE employee_id = ?");
 
@@ -28409,8 +28325,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
                 insertRoleStmt.run(empId, lab.id, role.role, role.specialtyNumber);
               }
               if (p.performsTesting === 1) {
-                const sched = computeSchedule(p.hireDate);
-                insertScheduleStmt.run(empId, lab.id, sched.sixMonthDue, sched.nysSixMonthDue);
+                const sched = computeSchedule(p.hireDate, p.highestComplexity);
+                insertScheduleStmt.run(empId, lab.id, sched.six_month_due_at, sched.first_annual_due_at, sched.annual_due_at, sched.nys_six_month_due_at);
               }
               results.push({ rowNumber: r.rowNumber, action: "insert", employeeId: empId });
               beforeAfterAudit.push({ rowNumber: r.rowNumber, action: "insert", employeeId: empId, parsed: p });
@@ -28432,8 +28348,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               if (p.performsTesting === 1) {
                 const has = hasScheduleStmt.get(p.employeeId);
                 if (!has) {
-                  const sched = computeSchedule(p.hireDate);
-                  insertScheduleStmt.run(p.employeeId, lab.id, sched.sixMonthDue, sched.nysSixMonthDue);
+                  const sched = computeSchedule(p.hireDate, p.highestComplexity);
+                  insertScheduleStmt.run(p.employeeId, lab.id, sched.six_month_due_at, sched.first_annual_due_at, sched.annual_due_at, sched.nys_six_month_due_at);
                 }
               }
               results.push({ rowNumber: r.rowNumber, action: "update", employeeId: p.employeeId });
