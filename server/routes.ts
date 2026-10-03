@@ -32648,6 +32648,82 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, deleted, transfer: tlog, totalRows, manifest: man, orphansAfter, plannedOwnership });
   });
 
+  // POST /api/admin/labs/transfer-owner — ADMIN: transfer ONE lab's ownership to a
+  // new owner WITHOUT deleting any content, and optionally attach the lab to an
+  // organization. This is the no-wipe sibling of reset-and-reassign: use it to
+  // re-parent an existing lab (e.g. hand the Riverside demo fixture to Michael and
+  // pull it into the QA system) when the user-facing transfer route cannot run
+  // because the lab's owner_user_id is an account we must not impersonate.
+  // Body: { secret, labId, newOwnerUserId, oldOwnerUserId?, attachToOrgId?,
+  //         makeOrgOwner?, movePrimary?, confirm?, dryRun? }
+  //  - dryRun (or missing confirm) returns the plan without mutating.
+  //  - movePrimary defaults FALSE here (unlike reset-and-reassign): an admin
+  //    re-parent must not hijack the new owner's primary lab, and must leave the
+  //    old owner's is_primary intact so demo-account lab resolution is unchanged.
+  //  - makeOrgOwner defaults FALSE: only flip org ownership when explicitly asked.
+  app.post("/api/admin/labs/transfer-owner", (req, res) => {
+    const { secret, labId, newOwnerUserId, oldOwnerUserId, attachToOrgId,
+            makeOrgOwner = false, movePrimary = false, confirm, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const lid = Number(labId);
+    if (!Number.isInteger(lid) || lid <= 0) return res.status(400).json({ error: "labId required" });
+    const newOwner = Number(newOwnerUserId);
+    if (!Number.isInteger(newOwner) || newOwner <= 0) return res.status(400).json({ error: "newOwnerUserId required" });
+    const sqlite = (db as any).$client;
+
+    const lab = sqlite.prepare("SELECT id, lab_name, owner_user_id, organization_id FROM labs WHERE id = ?").get(lid) as any;
+    if (!lab) return res.status(404).json({ error: "lab not found", labId: lid });
+    const oldOwner = lab.owner_user_id as number;
+    if (oldOwnerUserId != null && Number(oldOwnerUserId) !== oldOwner) {
+      return res.status(409).json({ error: "oldOwnerUserId does not match current owner", expected: oldOwner });
+    }
+    if (newOwner === oldOwner) return res.status(400).json({ error: "newOwnerUserId already owns this lab" });
+    const newOwnerRow = sqlite.prepare("SELECT id, email, name FROM users WHERE id = ?").get(newOwner);
+    if (!newOwnerRow) return res.status(404).json({ error: "newOwnerUserId does not exist" });
+    const isMember = sqlite.prepare("SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'").get(lid, newOwner);
+    if (!isMember) return res.status(409).json({ error: "newOwnerUserId is not an active member of this lab; invite first" });
+
+    let attachOrg: number | null = null;
+    if (attachToOrgId != null) {
+      attachOrg = Number(attachToOrgId);
+      if (!Number.isInteger(attachOrg) || attachOrg <= 0) return res.status(400).json({ error: "attachToOrgId must be a positive integer" });
+      const org = sqlite.prepare("SELECT id FROM organizations WHERE id = ?").get(attachOrg);
+      if (!org) return res.status(404).json({ error: "attachToOrgId does not exist", attachToOrgId: attachOrg });
+      if (lab.organization_id != null && lab.organization_id !== attachOrg) {
+        return res.status(409).json({ error: "lab already belongs to a different organization; detach it first", currentOrgId: lab.organization_id });
+      }
+    }
+    // Org used for the makeOrgOwner path: the attach target, else the lab's current org.
+    const orgForOwnership: number | null = attachOrg != null ? attachOrg : (lab.organization_id ?? null);
+
+    const plan = {
+      labId: lid, labName: lab.lab_name, oldOwner,
+      newOwner: { id: newOwnerRow.id, email: newOwnerRow.email, name: newOwnerRow.name },
+      attachToOrgId: attachOrg, currentOrgId: lab.organization_id ?? null,
+      makeOrgOwner: !!(makeOrgOwner && orgForOwnership), movePrimary: !!movePrimary,
+    };
+    if (confirm !== true || dryRun === true) {
+      return res.json({ dryRun: true, plan });
+    }
+
+    let tlog: any = [];
+    const tx = sqlite.transaction(() => {
+      if (attachOrg != null && lab.organization_id == null) {
+        sqlite.prepare("UPDATE labs SET organization_id = ?, updated_at = ? WHERE id = ?").run(attachOrg, new Date().toISOString(), lid);
+      }
+      tlog = transferOwnership(sqlite, {
+        labIds: [lid], newOwnerId: newOwner, oldOwnerId: oldOwner,
+        orgId: orgForOwnership, makeOrgOwner: !!makeOrgOwner, movePrimary: !!movePrimary,
+      });
+    });
+    tx();
+
+    const after = sqlite.prepare("SELECT id, lab_name, owner_user_id, organization_id FROM labs WHERE id = ?").get(lid);
+    const members = sqlite.prepare("SELECT user_id, role, status, is_primary_lab FROM lab_members WHERE lab_id = ? ORDER BY user_id").all(lid);
+    console.log(`[ADMIN] labs/transfer-owner lab=${lid} oldOwner=${oldOwner} newOwner=${newOwner} attachOrg=${attachOrg} makeOrgOwner=${!!makeOrgOwner} movePrimary=${!!movePrimary} at=${new Date().toISOString()}`);
+    res.json({ ok: true, transfer: tlog, plan, after, members });
+  });
+
   app.post("/api/admin/veritamap/resync-complexity", (req, res) => {
     const { secret, dryRun } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
