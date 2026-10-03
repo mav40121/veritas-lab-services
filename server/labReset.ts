@@ -143,6 +143,13 @@ export function manifest(scope: Record<string, Set<string>>): Array<{ table: str
 
 export function applyDeletion(sqlite: Sqlite, scope: Record<string, Set<string>>, pk: Record<string, string>): number {
   let total = 0;
+  // Production runs with foreign_keys ON. `scope` is the COMPLETE transitive
+  // closure of the target labs, so the FINAL state is FK-consistent, but the
+  // per-table deletes below are not ordered child-before-parent. defer_foreign_keys
+  // moves FK enforcement to COMMIT (valid only inside a transaction, which the
+  // caller provides; it auto-resets at transaction end), so the unordered deletes
+  // do not trip constraints while the end state still passes the FK check.
+  sqlite.exec('PRAGMA defer_foreign_keys = ON');
   for (const [table, set] of Object.entries(scope)) {
     const ids = [...set];
     if (!ids.length) continue;

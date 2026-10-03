@@ -15,7 +15,11 @@ const require = createRequire(import.meta.url);
 const Database = require("better-sqlite3");
 
 const db = new Database(":memory:");
-db.pragma("foreign_keys = OFF");
+// Run with FK enforcement ON to match production (better-sqlite3 / the app run
+// with foreign_keys ON). This is what the earlier OFF run masked: applyDeletion
+// deletes parents before children, so it relies on PRAGMA defer_foreign_keys to
+// move the FK check to COMMIT. Keep this ON so the receipt proves that path.
+db.pragma("foreign_keys = ON");
 db.exec(`
   CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, name TEXT);
   CREATE TABLE organizations (id INTEGER PRIMARY KEY, name TEXT, billing_owner_user_id INTEGER, created_at TEXT, updated_at TEXT);
