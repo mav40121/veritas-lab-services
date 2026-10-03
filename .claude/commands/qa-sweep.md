@@ -4,7 +4,7 @@ description: Comprehensive pre-demo QA sweep across all three login types (owner
 
 Run a full QA sweep that would catch access, plan-gating, document-generation, and render bugs before a client or a live demo does. Work through these steps in order. Do NOT claim it passed without the receipts (the matrix + the browser results). This is safe: everything runs against a disposable COPY of production, never production itself.
 
-If the user passed an argument (e.g. a lab id or "prod"), honor it; otherwise use the defaults below.
+This sweep runs ONLY against Michael's own QA system, never a client account. The default target is org 5 ("Veritas QA System": Michaels Lab, NYS demo lab, Riverside). If the user passes a specific lab id, honor it with `--lab <id>` (the sweep refuses any lab outside the QA org). Never point it at a client or prospect lab.
 
 ## 1. Credentials + a fresh production copy
 - Pull `ADMIN_SECRET` and `JWT_SECRET` from Railway env per CLAUDE.md credential handling. Never echo them.
@@ -17,8 +17,8 @@ If the user passed an argument (e.g. a lab id or "prod"), honor it; otherwise us
 - Never disable `PRAGMA foreign_keys`: production enforces them, and turning them off hides real bugs (that masked the 2026-10-03 reset FK failure).
 
 ## 3. API + document-generator sweep across all three personas
-- Run: `JWT_SECRET=<localsecret> node scripts/qa-sweep/api-sweep.mjs --base http://localhost:5199 --db <copy>`
-- It auto-discovers, on a paid lab: the owner, an admin-member (reaches the lab via membership, the persona that failed the USON demo), and a demo seat; mints a JWT for each; and sweeps every module's reads, a write-access probe, and the document generators (CMS 209, VeritaMap/VeritaCheck exports).
+- Run: `JWT_SECRET=<localsecret> node scripts/qa-sweep/api-sweep.mjs --base http://localhost:5199 --db <copy> --org 5` (or `--lab <id>` for a specific lab in the QA system).
+- It auto-discovers, on a lab inside the QA org: the owner, an admin-member (reaches the lab via membership, the persona that failed the USON demo), and a demo seat; mints a JWT for each; and sweeps every module's reads, a write-access probe, and the document generators (CMS 209, VeritaMap/VeritaCheck exports). It will refuse to run without `--org` or `--lab`, and refuses any lab outside the QA org, so it can never sweep a client account.
 - A non-zero exit means hard failures: a 403 or 500 on a read, a write blocked for owner/admin, a 500, or a failed generator. Capture the FLAGGED list.
 
 ## 4. Browser gate + render sweep (the plan-gate class the API cannot see)

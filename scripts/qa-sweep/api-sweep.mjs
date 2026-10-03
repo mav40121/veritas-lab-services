@@ -7,16 +7,20 @@
 //                         persona that failed the USON demo)
 //   3. demo-seat        - an active user_seats seat_user on the lab
 //
-// It auto-discovers those three users on a PAID (non-free) lab from a database
-// copy, mints a JWT for each (JWT_SECRET must match the running server), then for
-// each persona exercises every module's reads, a write-access probe, and the
-// document generators against a RUNNING server. Prints a pass/fail matrix and
-// exits non-zero if any hard failure is found (403/500 on a read, a write blocked
-// for owner/admin, a 500, or a failed document generator).
+// It auto-discovers those three users on a lab INSIDE the owned QA system (--org)
+// from a database copy, mints a JWT for each (JWT_SECRET must match the running
+// server), then for each persona exercises every module's reads, a write-access
+// probe, and the document generators against a RUNNING server. Prints a pass/fail
+// matrix and exits non-zero if any hard failure is found (403/500 on a read, a
+// write blocked for owner/admin, a 500, or a failed document generator).
+//
+// Target scoping (never a client account): pass --org <id> (the Michael-owned
+// "Veritas QA System", org 5) or an explicit --lab <id>. One is REQUIRED; there is
+// no blind "first paid lab" fallback (that once picked a client lab, San Carlos).
 //
 // Usage (the /qa-sweep command wires this up):
 //   JWT_SECRET=<server secret> node scripts/qa-sweep/api-sweep.mjs \
-//     --base http://localhost:5199 --db /path/to/prod-copy.db [--lab <id>]
+//     --base http://localhost:5199 --db /path/to/prod-copy.db --org 5 [--lab <id>]
 //
 // READ-ONLY against the DB (discovery only). Write probes send invalid bodies, so
 // they test ACCESS without persisting junk; run against a disposable copy anyway.
@@ -30,28 +34,47 @@ function arg(name, def) { const i = process.argv.indexOf(name); return i >= 0 ? 
 const BASE = (arg('--base', 'http://localhost:5199')).replace(/\/$/, '');
 const DB_PATH = arg('--db');
 const FORCE_LAB = arg('--lab') ? Number(arg('--lab')) : null;
+const ORG = arg('--org') ? Number(arg('--org')) : null;
 const SECRET = process.env.JWT_SECRET;
 if (!DB_PATH) { console.error('FATAL: --db <path to a DB copy> is required'); process.exit(2); }
 if (!SECRET) { console.error('FATAL: JWT_SECRET env is required (must match the running server)'); process.exit(2); }
+if (ORG !== null && !Number.isInteger(ORG)) { console.error('FATAL: --org must be an integer'); process.exit(2); }
+// Never sweep a client account. Require an explicit target: the owned QA system
+// (--org, the Michael-owned "Veritas QA System", org 5) or a specific --lab. The
+// old blind "first paid lab" fallback picked San Carlos (a client) on the first
+// run; that path is gone.
+if (!FORCE_LAB && ORG === null) {
+  console.error('FATAL: pass --org <id> (the Michael-owned QA system: org 5 "Veritas QA System") or --lab <id>.');
+  console.error('This sweep refuses to auto-select an arbitrary paid lab: it can land on a CLIENT account');
+  console.error('(the first run picked San Carlos). QA runs only on the owned test system.');
+  process.exit(2);
+}
 
 const db = new Database(DB_PATH, { readonly: true });
 const one = (sql, ...a) => db.prepare(sql).get(...a);
 
-// ---- discover a paid lab + the three personas on it ----
-// Prefer a paid lab that actually has an admin-member distinct from the owner
-// (the persona that failed the USON demo); fall back to any paid lab with members.
+// ---- discover the target lab + the three personas on it ----
+// Scoped to the QA organization (--org), never a free-for-all scan of prod.
+// Membership in a paid org = paid, so org-scoped discovery does NOT filter on the
+// (often stale) lab-level plan column; it just needs active members. Prefer a lab
+// with an admin-member distinct from the owner (the persona that failed the USON
+// demo), else any lab in the org with active members.
 const lab = FORCE_LAB
   ? one(`SELECT id, owner_user_id, organization_id FROM labs WHERE id = ?`, FORCE_LAB)
   : (one(`SELECT id, owner_user_id, organization_id FROM labs l
-          WHERE l.plan NOT IN ('free','per_study') AND l.owner_user_id IS NOT NULL
+          WHERE l.organization_id = ? AND l.owner_user_id IS NOT NULL
             AND EXISTS (SELECT 1 FROM lab_members m WHERE m.lab_id = l.id AND m.status='active'
                         AND m.role='admin' AND m.user_id != l.owner_user_id)
-          ORDER BY l.id LIMIT 1`)
+          ORDER BY l.id LIMIT 1`, ORG)
      || one(`SELECT id, owner_user_id, organization_id FROM labs l
-             WHERE l.plan NOT IN ('free','per_study') AND l.owner_user_id IS NOT NULL
+             WHERE l.organization_id = ? AND l.owner_user_id IS NOT NULL
                AND EXISTS (SELECT 1 FROM lab_members m WHERE m.lab_id = l.id AND m.status='active')
-             ORDER BY l.id LIMIT 1`));
-if (!lab) { console.error('FATAL: no paid lab with active members found in the DB copy'); process.exit(2); }
+             ORDER BY l.id LIMIT 1`, ORG));
+if (!lab) { console.error(`FATAL: no lab with active members found${ORG !== null ? ` in org ${ORG}` : ''}${FORCE_LAB ? ` (lab ${FORCE_LAB})` : ''}`); process.exit(2); }
+if (ORG !== null && FORCE_LAB && lab.organization_id !== ORG) {
+  console.error(`FATAL: --lab ${FORCE_LAB} is in org ${lab.organization_id}, not the QA org ${ORG}; refusing to sweep outside the test system`);
+  process.exit(2);
+}
 const LAB = lab.id;
 const ownerId = lab.owner_user_id;
 const adminId = one(`SELECT user_id FROM lab_members WHERE lab_id=? AND role='admin' AND status='active' AND user_id != ? LIMIT 1`, LAB, ownerId)?.user_id;
