@@ -163,10 +163,18 @@ export interface TransferOpts {
   oldOwnerId: number;
   orgId?: number | null;
   makeOrgOwner?: boolean;
+  // When true (default), if the transferred lab was the OLD owner's primary lab,
+  // that primary flag moves to the new owner (reset-and-reassign behavior: a fresh
+  // owner with no other primary should land on the lab they just received).
+  // Admin re-parenting of an existing lab passes false so it does NOT hijack the
+  // new owner's existing primary lab, and leaves the old owner's primary intact
+  // (e.g. the demo account keeps Riverside as its primary so public /demo still
+  // resolves there after the lab is handed to Michael).
+  movePrimary?: boolean;
 }
 
 export function transferOwnership(sqlite: Sqlite, opts: TransferOpts): Array<{ labId: number; seatsReparented: number }> {
-  const { labIds, newOwnerId, oldOwnerId, orgId = null, makeOrgOwner = true } = opts;
+  const { labIds, newOwnerId, oldOwnerId, orgId = null, makeOrgOwner = true, movePrimary = true } = opts;
   const now = new Date().toISOString();
   const log: Array<{ labId: number; seatsReparented: number }> = [];
   for (const labId of labIds) {
@@ -174,7 +182,7 @@ export function transferOwnership(sqlite: Sqlite, opts: TransferOpts): Array<{ l
     sqlite.prepare("UPDATE lab_members SET role = 'admin', updated_at = ? WHERE lab_id = ? AND user_id = ? AND role = 'owner'").run(now, labId, oldOwnerId);
     sqlite.prepare("UPDATE lab_members SET role = 'owner', updated_at = ? WHERE lab_id = ? AND user_id = ? AND status = 'active'").run(now, labId, newOwnerId);
     const op = sqlite.prepare('SELECT is_primary_lab FROM lab_members WHERE lab_id = ? AND user_id = ?').get(labId, oldOwnerId);
-    if (op && op.is_primary_lab === 1) {
+    if (movePrimary && op && op.is_primary_lab === 1) {
       sqlite.prepare('UPDATE lab_members SET is_primary_lab = 0, updated_at = ? WHERE lab_id = ? AND user_id = ?').run(now, labId, oldOwnerId);
       sqlite.prepare('UPDATE lab_members SET is_primary_lab = 0, updated_at = ? WHERE user_id = ? AND is_primary_lab = 1').run(now, newOwnerId);
       sqlite.prepare('UPDATE lab_members SET is_primary_lab = 1, updated_at = ? WHERE lab_id = ? AND user_id = ?').run(now, labId, newOwnerId);
