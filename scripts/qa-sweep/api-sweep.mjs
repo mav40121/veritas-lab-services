@@ -106,26 +106,40 @@ const adminId = one(`SELECT lm.user_id FROM lab_members lm JOIN users u ON u.id 
     AND lower(u.email) != COALESCE((SELECT lower(medical_director_email) FROM labs WHERE id = ?), '')
   LIMIT 1`, LAB, ownerId, LAB)?.user_id
   || one(`SELECT user_id FROM lab_members WHERE lab_id=? AND role='admin' AND status='active' AND user_id != ? LIMIT 1`, LAB, ownerId)?.user_id;
-// Prefer a seat held by a plain 'staff' member (true read-and-sign access), so the
-// staff persona is genuinely lower-privilege and not an admin who merely also holds a
-// seat; fall back to any active seat.
-const seatId = one(`SELECT us.seat_user_id FROM user_seats us
-    JOIN lab_members lm ON lm.lab_id = us.lab_id AND lm.user_id = us.seat_user_id AND lm.status = 'active'
-    WHERE us.lab_id = ? AND us.seat_user_id IS NOT NULL AND us.status = 'active' AND lm.role = 'staff'
-    LIMIT 1`, LAB)?.seat_user_id
+// Prefer a VIEW-ONLY seat (the true read-and-sign staff archetype) so the staff persona
+// genuinely tests restricted access. A seat granted edit (edit_all or per-module "edit")
+// is a writer and would correctly behave like one, masking real over-permission. Fall
+// back to any staff-role seat, then any seat.
+const seatId = one(`SELECT seat_user_id FROM user_seats WHERE lab_id=? AND seat_user_id IS NOT NULL AND status='active'
+      AND (seat_type='view_only' OR permissions LIKE '%view_all%' OR (permissions NOT LIKE '%edit%')) LIMIT 1`, LAB)?.seat_user_id
+  || one(`SELECT us.seat_user_id FROM user_seats us
+      JOIN lab_members lm ON lm.lab_id = us.lab_id AND lm.user_id = us.seat_user_id AND lm.status = 'active'
+      WHERE us.lab_id = ? AND us.seat_user_id IS NOT NULL AND us.status = 'active' AND lm.role = 'staff'
+      LIMIT 1`, LAB)?.seat_user_id
   || one(`SELECT seat_user_id FROM user_seats WHERE lab_id=? AND seat_user_id IS NOT NULL AND status='active' LIMIT 1`, LAB)?.seat_user_id;
 
+// Expected write access is derived from the member's ACTUAL lab role, not the persona
+// label: owner/admin are writers; a plain staff member is not. This matters because the
+// medical director is often ALSO an admin (then they are correctly expected to write);
+// a pure non-admin MD would be a non-writer. canWrite drives the two-way access check.
+const roleOf = (uid) => uid ? (one(`SELECT role FROM lab_members WHERE lab_id=? AND user_id=? AND status='active' LIMIT 1`, LAB, uid)?.role || 'none') : null;
+// A user is an expected WRITER if they own/admin the lab OR hold a seat that grants edit
+// (edit_all or any per-module "edit"). A pure view_only seat is a non-writer. This keeps
+// the two-way access check honest regardless of which member we picked for a persona.
+const seatWriterOf = (uid) => { if (!uid) return false; const perm = one(`SELECT permissions FROM user_seats WHERE lab_id=? AND seat_user_id=? AND status='active' LIMIT 1`, LAB, uid)?.permissions || ''; return /edit_all/.test(perm) || /"\w+"\s*:\s*"edit"/.test(perm); };
+const mk = (name, uid, extra = {}) => { const role = roleOf(uid); const writer = role === 'owner' || role === 'admin' || seatWriterOf(uid); return { name, userId: uid, role, canWrite: writer, ...extra }; };
 const personas = [
-  { name: 'owner', userId: ownerId, canWrite: true },
-  { name: 'admin-member', userId: adminId, canWrite: true },
-  { name: 'staff-seat', userId: seatId, canWrite: false }, // seat writes may be legitimately view-only
-  { name: 'medical-director', userId: mdId, canWrite: false, isMd: true }, // director-only powers; not a general writer
+  mk('owner', ownerId),
+  mk('admin-member', adminId),
+  mk('staff-seat', seatId),
+  mk('medical-director', mdId, { isMd: true }), // director-only powers; writer only if also owner/admin
 ].filter(p => p.userId)
  // Dedupe: never test the same user under two persona names (e.g. an admin who also
  // holds a seat). Keep the first by the priority order above.
  .filter((p, i, arr) => arr.findIndex(x => x.userId === p.userId) === i);
 console.log(`Target lab: ${LAB} (${one(`SELECT lab_name FROM labs WHERE id=?`, LAB)?.lab_name}) plan=${one(`SELECT plan FROM labs WHERE id=?`, LAB)?.plan}`);
-console.log('Personas:', personas.map(p => `${p.name}=${p.userId}`).join(', '));
+console.log('Personas:', personas.map(p => `${p.name}=${p.userId}(role=${p.role},expect-write=${p.canWrite ? 'Y' : 'N'})`).join(', '));
+if (personas.find(p => p.isMd)?.canWrite) console.log('NOTE: the medical-director persona is also owner/admin, so write expectations cannot isolate a pure reviewer MD on this lab.');
 db.close();
 
 const L = `/api/labs/${LAB}`;
@@ -147,8 +161,16 @@ const READS = [
 const WRITES = [
   `${L}/studies`, `${L}/veritamap/maps`, `${L}/veritascan/scans`, `${L}/competency/programs`,
   `${L}/staff/employees`, `${L}/pt/enrollments`, `${L}/equipment`, `${L}/findings`,
-  `${L}/qc/results`, `${L}/veritalab/certificates`, `${L}/veritapolicy/manuals`,
-  '/api/veritatrack/tasks', '/api/productivity', '/api/inventory', '/api/pi/metrics', '/api/veritaops/studies',
+  `${L}/qc/results`, `${L}/qc/control-lots`, `${L}/veritalab/certificates`, `${L}/veritapolicy/manuals`,
+  `${L}/schedule/shifts`, `${L}/veritastock/vendors`,
+  '/api/veritatrack/tasks', '/api/productivity', '/api/inventory', '/api/pi/metrics',
+  '/api/veritaops/studies', '/api/staffing-studies',
+];
+// Owner-only actions: only the lab OWNER may reach these (admins, staff, MD blocked).
+// Bodies are shaped to pass the owner gate and then fail on a bogus target, so the
+// owner reaches (404/400) while non-owners are blocked (403) BEFORE any mutation.
+const OWNER_ONLY = [
+  { m: 'POST', p: `${L}/transfer-ownership`, body: { newOwnerUserId: 999999999, confirm: false }, label: 'Transfer lab ownership' },
 ];
 const ARTIFACTS = [
   { m: 'POST', p: `${L}/staff/cms209`, label: 'CMS 209 PDF' },
@@ -194,18 +216,39 @@ for (const p of personas) {
     if (v === 'ACCESS-FAIL' || v === 'SERVER-ERR') flagged.push({ persona: p.name, kind: 'READ', ep, v, status: r.status, snip: r.snip });
     console.log(`  ${v.padEnd(13)} ${String(r.status).padEnd(4)} ${ep}`);
   }
-  console.log('--- write access probes (invalid body) ---');
+  // Write access, checked BOTH ways against the expectation (p.canWrite):
+  //   writer expected  -> 403 is UNDER-PERMISSION (wrongly blocked)
+  //   non-writer        -> anything but 403 is OVER-PERMISSION (reached a write it should not)
+  // A non-writer reaching may be a legit per-seat edit grant or an ungated endpoint;
+  // flagged as "verify" rather than asserted a bug.
+  console.log(`--- write access probes (expect-write=${p.canWrite ? 'Y' : 'N'}) ---`);
   for (const ep of WRITES) {
     const r = await hit(ep, t, 'POST', {});
-    let v;
-    if (r.status === 403) v = 'ACCESS-BLOCKED';
-    else if (r.status === 400 || r.status === 422) v = 'PASS(validation)';
-    else if (r.status === 200 || r.status === 201) v = 'PASS(wrote)';
-    else if (r.status >= 500) v = 'SERVER-ERR';
-    else v = `HTTP-${r.status}`;
-    const hard = v === 'SERVER-ERR' || (v === 'ACCESS-BLOCKED' && p.canWrite);
+    const blocked = r.status === 403, serverErr = r.status >= 500, authErr = r.status === 401 || r.status === 404;
+    let v, hard = false;
+    if (serverErr) { v = 'SERVER-ERR'; hard = true; }
+    else if (p.canWrite) { // should be able to write
+      if (blocked) { v = 'UNDER-PERM(writer blocked)'; hard = true; }
+      else if (authErr) v = `HTTP-${r.status}`;
+      else v = (r.status === 200 || r.status === 201) ? 'PASS(wrote)' : 'PASS(reached)';
+    } else { // should NOT be able to write
+      if (blocked) v = 'PASS(blocked)';
+      else if (authErr) v = `HTTP-${r.status}`;
+      else { v = 'OVER-PERM(verify)'; hard = true; }
+    }
     if (hard) flagged.push({ persona: p.name, kind: 'WRITE', ep, v, status: r.status, snip: r.snip });
-    console.log(`  ${v.padEnd(16)} ${String(r.status).padEnd(4)} ${ep}`);
+    console.log(`  ${v.padEnd(26)} ${String(r.status).padEnd(4)} ${ep}`);
+  }
+  console.log('--- owner-only actions (expect: owner reaches, all others blocked) ---');
+  for (const a of OWNER_ONLY) {
+    const r = await hit(a.p, t, a.m, a.body);
+    const blocked = r.status === 403, isOwner = p.role === 'owner';
+    let v, hard = false;
+    if (r.status >= 500) { v = 'SERVER-ERR'; hard = true; }
+    else if (isOwner) { if (blocked) { v = 'UNDER-PERM(owner blocked)'; hard = true; } else v = 'PASS(owner reached)'; }
+    else { if (blocked) v = 'PASS(blocked)'; else { v = 'OVER-PERM(non-owner reached)'; hard = true; } }
+    if (hard) flagged.push({ persona: p.name, kind: 'OWNER-ONLY', ep: a.label, v, status: r.status, snip: r.snip });
+    console.log(`  ${v.padEnd(26)} ${String(r.status).padEnd(4)} ${a.label}`);
   }
   console.log('--- document generators ---');
   for (const a of ARTIFACTS) {
