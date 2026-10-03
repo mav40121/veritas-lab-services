@@ -34233,10 +34233,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const userId = req.ownerUserId;
     const reqId = parseInt(req.params.id);
     const { status, is_na, na_reason, lab_policy_id, policy_name, notes } = req.body;
+    // Lab-scoped upsert (Phase 3.3b): key on (lab_id, requirement_id) and stamp the ACTIVE
+    // lab, so a multi-lab owner's requirement edits stay separate per lab instead of
+    // collapsing onto a single home-lab row. Falls back to the user's home lab for legacy
+    // single-lab flows where no active lab resolves.
+    const reqLabId = resolveLegacyLabId(req) ?? (sqlite.prepare("SELECT lab_id FROM users WHERE id = ?").get(userId) as any)?.lab_id ?? null;
     sqlite.prepare(`
-      INSERT INTO veritapolicy_requirement_status (user_id, requirement_id, status, is_na, na_reason, lab_policy_id, policy_name, notes, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-      ON CONFLICT(user_id, requirement_id) DO UPDATE SET
+      INSERT INTO veritapolicy_requirement_status (user_id, lab_id, requirement_id, status, is_na, na_reason, lab_policy_id, policy_name, notes, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(lab_id, requirement_id) DO UPDATE SET
         status = COALESCE(excluded.status, status),
         is_na = COALESCE(excluded.is_na, is_na),
         na_reason = COALESCE(excluded.na_reason, na_reason),
@@ -34244,13 +34249,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         policy_name = excluded.policy_name,
         notes = COALESCE(excluded.notes, notes),
         updated_at = excluded.updated_at
-    `).run(userId, reqId, status || 'not_started', is_na ? 1 : 0, na_reason || null, lab_policy_id || null, policy_name || null, notes || null);
-    // Phase 3.2 dual-write lab_id (see schema block in db.ts).
-    try {
-      sqlite.prepare(
-        "UPDATE veritapolicy_requirement_status SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE user_id = ? AND requirement_id = ? AND lab_id IS NULL"
-      ).run(userId, userId, reqId);
-    } catch {}
+    `).run(userId, reqLabId, reqId, status || 'not_started', is_na ? 1 : 0, na_reason || null, lab_policy_id || null, policy_name || null, notes || null);
     res.json({ ok: true });
   });
 
