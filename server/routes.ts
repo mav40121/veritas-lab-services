@@ -1075,7 +1075,29 @@ function requireModuleEdit(module: string) {
       const seatRow = (db as any).$client.prepare(
         "SELECT permissions FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
       ).get(req.userId, activeLabId) as any;
-      if (!seatRow) return next(); // no seat in this lab -> not a seat user here -> pass
+      if (!seatRow) {
+        // No seat in this lab. Owners and lab/org admins already passed above, so a
+        // caller reaching here with an ACTIVE MEMBERSHIP is a non-owner/non-admin
+        // member (e.g. a 'staff' lab_member who was never issued an edit seat). Per
+        // the read-and-sign model those members are view-only and must NOT get edit
+        // by default. Pre-2026-10-03 this branch passed unconditionally, so a seatless
+        // staff member could write every requireModuleEdit-gated module; the /qa-sweep
+        // access matrix flagged it. NOTE: this gate is NOT on the QC entry routes
+        // (qc/results etc. are membership-gated on purpose so techs can record QC, which
+        // MedStar relies on), so this change does not affect QC entry.
+        // A caller who is NOT a member only reaches here via a legacy unprefixed route
+        // that resolved activeLabId from the Referer; preserve the prior pass-through
+        // for that case so legacy single-lab flows do not regress.
+        const isActiveMember = (db as any).$client.prepare(
+          "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
+        ).get(activeLabId, req.userId);
+        if (isActiveMember) {
+          return res.status(403).json({
+            error: `You have view-only access to ${module}. Ask the account owner to grant edit access.`
+          });
+        }
+        return next();
+      }
       let labSeatPermissions: SeatPermissions = {} as SeatPermissions;
       try { labSeatPermissions = JSON.parse(seatRow.permissions || '{}') as SeatPermissions; } catch {}
       const perm = resolveSeatPermission(labSeatPermissions, module);
@@ -21115,7 +21137,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!ex) return res.status(404).json({ error: "Equipment not found in this lab" });
     res.json(sqlite.prepare("SELECT * FROM equipment_maintenance_events WHERE equipment_id = ? ORDER BY event_date DESC, id DESC").all(id));
   });
-  app.post("/api/labs/:labId/equipment/:id/events", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamaintain'), (req: any, res) => {
+  // Logging a maintenance EVENT is operational work a tech performs, so staff may do it:
+  // gated by lab membership + active subscription, NOT requireModuleEdit (which stays on
+  // add/edit/delete equipment and reminder-config, the setup actions). The equipment row
+  // is still confirmed to belong to this lab below.
+  app.post("/api/labs/:labId/equipment/:id/events", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
     const id = Number(req.params.id); const sqlite = (db as any).$client;
     const ex = sqlite.prepare("SELECT * FROM lab_equipment WHERE id = ? AND lab_id = ?").get(id, req.scope.labId) as any;

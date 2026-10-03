@@ -569,8 +569,11 @@ export function registerVeritaTrackRoutes(
     res.json({ ok: true });
   });
 
-  // POST sign off a task \u2014 Shape A guard via resolveRowForMutation.
-  app.post("/api/veritatrack/tasks/:id/signoff", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
+  // POST sign off a task. Logging COMPLETION is operational work a tech performs, so
+  // staff may do it: gated by membership + active subscription (requireWriteAccess), NOT
+  // requireModuleEdit (which stays on create/edit/delete task, the setup actions). The
+  // handler's resolveRowForMutation still enforces the task belongs to the caller's lab.
+  app.post("/api/veritatrack/tasks/:id/signoff", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
     const taskId = Number(req.params.id);
