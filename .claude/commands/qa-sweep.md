@@ -16,7 +16,7 @@ This sweep runs ONLY against Michael's own QA system, never a client account. Th
 - Wait until `GET http://localhost:5199/api/staff/specialties` returns 200 (boot runs migrations on the copy; give it time).
 - Never disable `PRAGMA foreign_keys`: production enforces them, and turning them off hides real bugs (that masked the 2026-10-03 reset FK failure).
 
-## 3. API + document-generator sweep across all three personas
+## 3. API + document-generator sweep across all four personas
 - Run: `JWT_SECRET=<localsecret> node scripts/qa-sweep/api-sweep.mjs --base http://localhost:5199 --db <copy> --org 5` (or `--lab <id>` for a specific lab in the QA system).
 - It auto-discovers, on a lab inside the QA org, four logins: the owner, an admin-member (reaches the lab via membership, the persona that failed the USON demo), a staff seat, and the medical director (the active member whose email matches the lab's `medical_director_email`). It mints a JWT for each and sweeps every module's reads, a write-access probe, the document generators (CMS 209, VeritaMap/VeritaCheck exports), and the director-only actions (QC co-sign), checking two ways: the MD must reach them and every other login must be blocked. It refuses to run without `--org` or `--lab`, and refuses any lab outside the QA org, so it can never sweep a client account.
 - A non-zero exit means hard failures: a 403 or 500 on a read, a write blocked for owner/admin, a 500, or a failed generator. Capture the FLAGGED list.
@@ -34,7 +34,7 @@ Using the built-in browser against http://localhost:5199 as the admin-member on 
 Look at each result; a 200 is not the same as "it worked".
 
 ## 6. Report + teardown
-- Report a pass/fail matrix across the three personas and every module. List each failure with persona, route, and status. State plainly what passed and what did not; do not round up.
+- Report a pass/fail matrix across the four personas and every module. List each failure with persona, route, and status. State plainly what passed and what did not; do not round up.
 - Kill the local server by its listening port and remove the DB copy from the scratchpad.
 
 Treat every finding as real until you have verified it.

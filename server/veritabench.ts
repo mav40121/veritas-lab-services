@@ -1337,7 +1337,13 @@ export function registerVeritaBenchRoutes(
   //
   // The whole SELECT-UPDATE-INSERT runs in a sqlite transaction so two
   // concurrent scans of the same barcode can't read stale quantities.
-  app.post("/api/inventory/scan", authMiddleware, requireWriteAccess, requireModuleEdit('veritastock'), (req: any, res) => {
+  // Inventory OPERATIONAL actions below (scan, adjust, receive, write-off) change the
+  // AMOUNT ON HAND and are everyday tech work, so staff may do them: gated by membership
+  // + active subscription, NOT requireModuleEdit. Adding or editing an item (create, PUT,
+  // lead-time) stays requireModuleEdit (setup / writer-only). Per Michael 2026-10-03:
+  // "Inventory is something staff should be able to do; they just should not be able to
+  // add or edit items (other than amount on hand)."
+  app.post("/api/inventory/scan", authMiddleware, requireWriteAccess, (req: any, res) => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const rawBarcode = req.body?.barcode_value;
@@ -1450,7 +1456,7 @@ export function registerVeritaBenchRoutes(
   // so existing scan-history queries keep working.
   const scanLabScopeMW = (app as any).locals?.labScopeMiddleware;
   if (scanLabScopeMW) {
-    app.post("/api/labs/:labId/inventory/scan", authMiddleware, scanLabScopeMW, requireWriteAccess, requireModuleEdit('veritastock'), (req: any, res) => {
+    app.post("/api/labs/:labId/inventory/scan", authMiddleware, scanLabScopeMW, requireWriteAccess, (req: any, res) => { // operational (amount on hand): staff-allowed
       if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
       const labId = req.scope.labId;
       const rawBarcode = req.body?.barcode_value;
@@ -1793,7 +1799,7 @@ export function registerVeritaBenchRoutes(
   //   body: { new_count?, new_quantity?, reason? }
   // Director-side counterpart of the kiosk + staff portal adjust endpoints.
   // Same count_unit -> usage_unit conversion. Access via Shape A guard.
-  app.post("/api/inventory/:id/adjust", authMiddleware, requireWriteAccess, requireModuleEdit('veritastock'), (req: any, res) => {
+  app.post("/api/inventory/:id/adjust", authMiddleware, requireWriteAccess, (req: any, res) => { // operational (amount on hand): staff-allowed
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const { id } = req.params;
     const itemId = Number(id);
@@ -1888,7 +1894,7 @@ export function registerVeritaBenchRoutes(
   // order. This is a DEDICATED endpoint on purpose: PUT /api/inventory/:id is a
   // full-replace that would zero on-hand/burn on a partial body, so receiving
   // must never go through it. Access via the same Shape A guard as /adjust.
-  app.post("/api/inventory/:id/receive", authMiddleware, requireWriteAccess, requireModuleEdit('veritastock'), (req: any, res) => {
+  app.post("/api/inventory/:id/receive", authMiddleware, requireWriteAccess, (req: any, res) => { // operational (amount on hand): staff-allowed
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const { id } = req.params;
     const itemId = Number(id);
@@ -2074,7 +2080,7 @@ export function registerVeritaBenchRoutes(
   // current month's snapshot so the trend reflects it. Dedicated endpoint (not a
   // partial PUT, which would full-replace and zero on-hand).
   const WASTE_REASONS = new Set(["expired", "damaged", "recalled", "lost"]);
-  app.post("/api/inventory/:id/write-off", authMiddleware, requireWriteAccess, requireModuleEdit('veritastock'), (req: any, res) => {
+  app.post("/api/inventory/:id/write-off", authMiddleware, requireWriteAccess, (req: any, res) => { // operational (amount on hand): staff-allowed
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const { id } = req.params;
     const itemId = Number(id);
