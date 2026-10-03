@@ -28652,11 +28652,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const roles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(emp.id);
       return { ...emp, roles };
     });
+    const labMd209 = (db as any).$client.prepare("SELECT medical_director_name FROM labs WHERE id = ?").get(tier2LabId) as any;
     try {
       const pdfBuffer = await generateCMS209PDF({
         lab,
         employees: expandEntireLabRoles(employeesWithRoles, getLabSpecialtyNumbers(lab.id)),
         specialties: CMS_SPECIALTIES,
+        medicalDirectorName: labMd209?.medical_director_name || null,
       }, licenseCtxFromReq(req));
       const date = new Date().toISOString().split("T")[0];
       const filename = `CMS_209_${lab.clia_number}_${date}.pdf`;
@@ -28684,11 +28686,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return { ...emp, roles };
     });
 
+    const labMd209 = (db as any).$client.prepare("SELECT medical_director_name FROM labs WHERE id = ?").get(lab.tier2_lab_id) as any;
     try {
       const pdfBuffer = await generateCMS209PDF({
         lab,
         employees: expandEntireLabRoles(employeesWithRoles, getLabSpecialtyNumbers(lab.id)),
         specialties: CMS_SPECIALTIES,
+        medicalDirectorName: labMd209?.medical_director_name || null,
       }, licenseCtxFromReq(req));
       const date = new Date().toISOString().split("T")[0];
       const filename = `CMS_209_${lab.clia_number}_${date}.pdf`;

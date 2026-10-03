@@ -5383,6 +5383,7 @@ interface CMS209Input {
     roles: { role: string; specialty_number: number | null }[];
   }[];
   specialties: Record<number, string>;
+  medicalDirectorName?: string | null;
 }
 
 function buildCMS209HTML(input: CMS209Input): string {
@@ -5599,21 +5600,31 @@ interface CMS209Row { name: string; ld: boolean; cc: boolean; tc: string; ts: st
 
 // One employee's rows: a single row, unless they hold TC/TS specialties, in
 // which case one row per specialty (name + the other roles ride the first row).
+const CMS209_CLIA_ROLES = ["LD", "CC", "TC", "TS", "GS", "TP", "CT", "CT_GS"] as const;
+
+function cms209FmtName(e: { last_name: string; first_name: string; middle_initial?: string | null }): string {
+  return `${e.last_name}, ${e.first_name}${e.middle_initial ? " " + e.middle_initial : ""}`;
+}
+// Order-insensitive name key for matching a free-text MD designation ("David
+// McCormick") to a roster employee ("McCormick" / "David"), ignoring case + punctuation.
+function cms209NameTokens(s: string): string {
+  return (s || "").toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean).sort().join(" ");
+}
+
 function buildEmployeeRows(emp: CMS209Input["employees"][number]): CMS209Row[] {
   const empRoles = emp.roles || [];
-  if (!emp.performs_testing && !empRoles.some(r => ["LD", "CC", "TC", "TS", "GS"].includes(r.role))) return [];
   const roleSet = new Set(empRoles.map(r => r.role));
+  // Appears on the 209 only if the director assigned a CLIA position. Dropped the
+  // old performs_testing-based inclusion: it placed un-designated staff on the form.
+  if (!CMS209_CLIA_ROLES.some(role => roleSet.has(role))) return [];
   const tcSpecs = empRoles.filter(r => r.role === "TC" && r.specialty_number).map(r => r.specialty_number!);
   const tsSpecs = empRoles.filter(r => r.role === "TS" && r.specialty_number).map(r => r.specialty_number!);
   const name = `${emp.last_name}, ${emp.first_name}${emp.middle_initial ? " " + emp.middle_initial : ""}`;
   const specs = Array.from(new Set([...tcSpecs, ...tsSpecs])).sort((a, b) => a - b);
-  // TP is checked when the TP role is actually assigned in VeritaAssure. The
-  // performs_testing flag only auto-adds TP for a person with NO supervisory /
-  // director role, so a bench tech is still documented but a Lab Director,
-  // Consultant, or Supervisor who happens to perform testing is never derived
-  // into Testing Personnel (a documented CLIA position they were not assigned).
-  const isSupervisory = ["LD", "CC", "TC", "TS", "GS"].some(r => roleSet.has(r));
-  const tp = roleSet.has("TP") || (emp.performs_testing === 1 && !isSupervisory);
+  // TP prints only when the TP position is explicitly assigned. performs_testing is
+  // a roster attribute, not a CLIA position, so it never derives TP (deriving it put
+  // un-designated staff on the form as Testing Personnel). Fixed 2026-10-03.
+  const tp = roleSet.has("TP");
   if (!specs.length) {
     return [{ name, ld: roleSet.has("LD"), cc: roleSet.has("CC"), tc: "", ts: "", gs: roleSet.has("GS"), tp, ctGs: roleSet.has("CT_GS"), ct: roleSet.has("CT"), mh: emp.highest_complexity === "M" ? "M" : "H" }];
   }
@@ -5640,6 +5651,37 @@ function buildCMS209Blocks(input: CMS209Input): CMS209Row[][] {
   const isLD = (e: CMS209Input["employees"][number]) => (e.roles || []).some(r => r.role === "LD");
   emps.sort((a, b) => (isLD(a) === isLD(b) ? 0 : isLD(a) ? -1 : 1));
   return emps.map(buildEmployeeRows).filter(b => b.length > 0);
+}
+
+// The designated medical director ALWAYS carries the LD designation on the 209.
+// Priority: (1) an employee who already holds the LD role; else (2) reconcile the
+// lab-designated MD onto the matching roster employee (by name) and give them LD;
+// else (3) synthesize a minimal LD-only row so the director still appears with LD
+// even when they are not on the VeritaStaff roster. Returns the model so the row
+// logic is unit-testable (scripts/verify-cms209-personnel.mjs) without rendering.
+export function cms209Model(input: CMS209Input): { directorName: string; blocks: CMS209Row[][] } {
+  const mdName = (input.medicalDirectorName || "").trim();
+  let employees = input.employees || [];
+  let directorName = "";
+  const rosterLD = employees.find((e) => (e.roles || []).some((r) => r.role === "LD"));
+  if (rosterLD) {
+    directorName = cms209FmtName(rosterLD);
+  } else if (mdName) {
+    const key = cms209NameTokens(mdName);
+    const idx = key ? employees.findIndex((e) => cms209NameTokens(`${e.first_name} ${e.last_name}`) === key) : -1;
+    if (idx >= 0) {
+      employees = employees.map((e, i) => (i === idx ? { ...e, roles: [...(e.roles || []), { role: "LD", specialty_number: null }] } : e));
+      directorName = cms209FmtName(employees[idx]);
+    } else {
+      directorName = mdName;
+    }
+  }
+  const blocks = buildCMS209Blocks({ ...input, employees });
+  if (mdName && !employees.some((e) => (e.roles || []).some((r) => r.role === "LD"))) {
+    // MD is designated but not on the roster: prepend a synthetic LD-only row.
+    blocks.unshift([{ name: mdName, ld: true, cc: false, tc: "", ts: "", gs: false, tp: false, ctGs: false, ct: false, mh: "" }]);
+  }
+  return { directorName, blocks };
 }
 
 // Pack person-blocks into pages of CAP rows WITHOUT splitting a block. A block
@@ -5683,10 +5725,8 @@ export async function generateCMS209PDF(input: CMS209Input, _licenseCtx?: Partia
   const templateBytes = _teaReadFileSync(templatePath);
 
   const { lab } = input;
-  const director = (input.employees || []).find((e) => (e.roles || []).some((r) => r.role === "LD"));
-  const directorName = director ? `${director.last_name}, ${director.first_name}${director.middle_initial ? " " + director.middle_initial : ""}` : "";
-
-  const pages = paginateCMS209Blocks(buildCMS209Blocks(input), 14);
+  const { directorName, blocks } = cms209Model(input);
+  const pages = paginateCMS209Blocks(blocks, 14);
   const total = pages.length;
 
   const out = await PDFDocument.create();
