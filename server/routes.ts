@@ -32,6 +32,7 @@ import { orgSeatCapForOwner } from "./organizationSeats";
 import { orgRoleForUserOnLab, labRoleFromOrgRole, transferBlockedOutOfOrg, isActiveOrgMember, resolveOwnerOrgId } from "./organizationRoles";
 import { planProvisionLabs, accreditationFlagsFor, operatorOverviewGrant } from "./organizationProvision";
 import { validateSystemDocument } from "./systemRepository";
+import { computeDeletionScope, applyDeletion, transferOwnership, orphanScan, manifest, PRESERVE } from "./labReset";
 import { validateCustomItem, isValidCustomStatus } from "./veritascanCustomItems";
 import { normalizeLineItems, computeOrgInvoice, laterExpiry, orgSubscriptionExpiryForLab, buildOrgSubscriptionItems } from "./organizationBilling";
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
@@ -32569,6 +32570,78 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     purge();
     console.log(`[ADMIN] Orphan lab purged: id=${id} name=${lab.lab_name} owner=${lab.owner_user_id} seatsCleared=${seatsForLab} at=${new Date().toISOString()}`);
     res.json({ purged: true, labId: id, labName: lab.lab_name, ownerUserId: lab.owner_user_id, seatsCleared: seatsForLab });
+  });
+
+  // POST /api/admin/labs/reset-and-reassign — ADMIN: wipe all lab-scoped CONTENT for
+  // a set of labs (keeping the lab shell + memberships + seats + billing + org) and
+  // transfer ownership to a new owner. Dry-run by default; confirm:true executes.
+  // Body: { secret, labIds:number[], newOwnerUserId, oldOwnerUserId?, orgId?,
+  //         makeOrgOwner?, confirm?, dryRun?, force? }
+  // Content deletion is a transitive-closure over the live FK graph (see
+  // server/labReset.ts). It correctly handles tables whose lab_id is NOT labs.id
+  // (e.g. staff_employees.lab_id -> staff_labs) and undeclared labs-scoped columns.
+  // Preserves users/lab_members/user_seats/organization*/billing by construction.
+  app.post("/api/admin/labs/reset-and-reassign", (req, res) => {
+    const { secret, labIds, newOwnerUserId, oldOwnerUserId, orgId, makeOrgOwner = true, confirm, dryRun, force } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    if (!Array.isArray(labIds) || labIds.length === 0 || !labIds.every((x: any) => Number.isInteger(x) && x > 0)) {
+      return res.status(400).json({ error: "labIds must be a non-empty array of positive integers" });
+    }
+    const newOwner = Number(newOwnerUserId);
+    if (!Number.isInteger(newOwner) || newOwner <= 0) return res.status(400).json({ error: "newOwnerUserId required" });
+    const sqlite = (db as any).$client;
+    const newOwnerRow = sqlite.prepare("SELECT id, email, name FROM users WHERE id = ?").get(newOwner);
+    if (!newOwnerRow) return res.status(404).json({ error: "newOwnerUserId does not exist" });
+
+    const labRows = sqlite.prepare(
+      `SELECT id, lab_name, owner_user_id, organization_id FROM labs WHERE id IN (${labIds.map(() => "?").join(",")})`
+    ).all(...labIds) as any[];
+    if (labRows.length !== labIds.length) {
+      const found = new Set(labRows.map((l) => l.id));
+      return res.status(404).json({ error: "some labIds not found", missing: labIds.filter((x: number) => !found.has(x)) });
+    }
+    const owners = [...new Set(labRows.map((l) => l.owner_user_id))];
+    if (owners.length !== 1) return res.status(409).json({ error: "target labs have differing current owners", owners });
+    const oldOwner = owners[0] as number;
+    if (oldOwnerUserId != null && Number(oldOwnerUserId) !== oldOwner) {
+      return res.status(409).json({ error: "oldOwnerUserId does not match current owner", expected: oldOwner });
+    }
+    if (newOwner === oldOwner) return res.status(400).json({ error: "newOwnerUserId already owns these labs" });
+    const notMember = labIds.filter((id: number) =>
+      !sqlite.prepare("SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'").get(id, newOwner));
+    if (notMember.length) return res.status(409).json({ error: "newOwnerUserId is not an active member of all target labs; invite first", notMember });
+    const orgs = [...new Set(labRows.map((l) => l.organization_id).filter((x) => x != null))];
+    if (makeOrgOwner && orgs.length > 1 && orgId == null) {
+      return res.status(409).json({ error: "labs span multiple orgs; pass orgId or makeOrgOwner:false", orgs });
+    }
+    const resolvedOrgId: number | null = orgId != null ? Number(orgId) : (orgs.length === 1 ? (orgs[0] as number) : null);
+
+    const { scope, seededUndeclared, warnings, meta } = computeDeletionScope(sqlite, labIds);
+    const man = manifest(scope);
+    const totalRows = man.reduce((s, r) => s + r.rows, 0);
+    const plannedOwnership = {
+      labs: labIds, oldOwner,
+      newOwner: { id: newOwnerRow.id, email: newOwnerRow.email, name: newOwnerRow.name },
+      orgId: resolvedOrgId, makeOrgOwner: !!(makeOrgOwner && resolvedOrgId),
+    };
+
+    if (confirm !== true || dryRun === true) {
+      return res.json({ dryRun: true, manifest: man, totalRows, seededUndeclared, warnings, plannedOwnership, preserve: [...PRESERVE] });
+    }
+    if (warnings.length && force !== true) {
+      return res.status(409).json({ error: "refusing to execute: scope warnings present (pass force:true to override)", warnings });
+    }
+
+    let deleted = 0;
+    let tlog: any = [];
+    const tx = sqlite.transaction(() => {
+      deleted = applyDeletion(sqlite, scope, meta.pk);
+      tlog = transferOwnership(sqlite, { labIds, newOwnerId: newOwner, oldOwnerId: oldOwner, orgId: resolvedOrgId, makeOrgOwner });
+    });
+    tx();
+    const orphansAfter = orphanScan(sqlite, meta.edges);
+    console.log(`[ADMIN] labs/reset-and-reassign labs=${JSON.stringify(labIds)} deleted=${deleted} oldOwner=${oldOwner} newOwner=${newOwner} orgId=${resolvedOrgId} at=${new Date().toISOString()}`);
+    res.json({ ok: true, deleted, transfer: tlog, totalRows, manifest: man, orphansAfter, plannedOwnership });
   });
 
   app.post("/api/admin/veritamap/resync-complexity", (req, res) => {
