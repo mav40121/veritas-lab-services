@@ -112,13 +112,24 @@ const adminId = one(`SELECT lm.user_id FROM lab_members lm JOIN users u ON u.id 
 // membership is correctly 403'd there -- that is NOT the staff door. So pick a
 // staff_portal seat first (the real read-and-sign archetype); fall back to any active
 // seat only so the persona still populates on a lab that predates the portal seat type.
-const portalSeatRow = one(`SELECT seat_user_id FROM user_seats WHERE lab_id=? AND seat_user_id IS NOT NULL AND status='active' AND seat_type='staff_portal' LIMIT 1`, LAB);
-const anySeatRow = portalSeatRow || one(`SELECT seat_user_id FROM user_seats WHERE lab_id=? AND seat_user_id IS NOT NULL AND status='active' LIMIT 1`, LAB);
-const seatId = anySeatRow?.seat_user_id;
-// True only when the picked seat is an actual Staff Portal seat, so the portal door
-// should admit it. When false, the staff login cannot be validated on this lab (the QA
-// org needs a staff_portal seat) and the portal sweep reports that as a setup gap.
-const seatIsPortal = !!portalSeatRow;
+// Pick a seat whose holder is NOT already a lab member (owner/admin/MD) -- otherwise the
+// dedupe below silently drops the staff persona and the staff login goes untested. Among
+// non-member seats, prefer a staff_portal seat (the real Staff Portal door). Progressive
+// fallback so the persona still populates.
+const seatRow = one(`SELECT us.seat_user_id FROM user_seats us
+      WHERE us.lab_id=? AND us.seat_user_id IS NOT NULL AND us.status='active' AND us.seat_type='staff_portal'
+        AND NOT EXISTS (SELECT 1 FROM lab_members m WHERE m.lab_id=us.lab_id AND m.user_id=us.seat_user_id AND m.status='active')
+      LIMIT 1`, LAB)
+  || one(`SELECT us.seat_user_id FROM user_seats us
+      WHERE us.lab_id=? AND us.seat_user_id IS NOT NULL AND us.status='active'
+        AND NOT EXISTS (SELECT 1 FROM lab_members m WHERE m.lab_id=us.lab_id AND m.user_id=us.seat_user_id AND m.status='active')
+      LIMIT 1`, LAB)
+  || one(`SELECT seat_user_id FROM user_seats WHERE lab_id=? AND seat_user_id IS NOT NULL AND status='active' LIMIT 1`, LAB);
+const seatId = seatRow?.seat_user_id;
+// True only when the PICKED seat is an actual Staff Portal seat, so the portal door should
+// admit it. When false, the staff login cannot be validated on this lab (the QA org needs
+// a staff_portal seat) and the portal sweep reports that as a SETUP gap, not a bug.
+const seatIsPortal = seatId ? !!one(`SELECT 1 AS x FROM user_seats WHERE lab_id=? AND seat_user_id=? AND status='active' AND seat_type='staff_portal' LIMIT 1`, LAB, seatId) : false;
 
 // Expected write access is derived from the member's ACTUAL lab role, not the persona
 // label: owner/admin are writers; a plain staff member is not. This matters because the
