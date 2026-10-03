@@ -144,6 +144,7 @@ export function registerVeritaOpsRoutes(
 
   // GET by id — Shape A guard: accept ownership or lab membership.
   app.get("/api/veritaops/studies/:id", authMiddleware, (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasOpsAccess(req.user, req.scope?.lab)) {
       return res.status(403).json({ error: "VeritaOps subscription required" });
     }
