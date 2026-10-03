@@ -42,6 +42,7 @@ import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
 import { isValidIfuUrl } from "@shared/ifu";
 import { incompleteElementCells as compIncompleteCells, incompleteElementCellsByInstrument as compIncompleteCellsByInstrument, aggregateElementStatus as compAggregateElementStatus, competencyCycleWindowDays } from "@shared/competencyStatus";
+import { competencyDueColumns, competencySeedAtCreate } from "./competencySchedule";
 
 // Express already URL-decodes route params before the handler runs, so
 // req.params.analyte for a request to ".../IG%25" arrives as "IG%". Calling
@@ -28507,59 +28508,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const { initialCompletedAt, initialSignedBy, sixMonthCompletedAt, sixMonthSignedBy, firstAnnualCompletedAt, firstAnnualSignedBy, lastAnnualCompletedAt, lastAnnualSignedBy, notes } = req.body;
 
-    const accreditor = lab.accreditation_body;
-    const includesTJCorCAP = ["TJC", "CAP"].includes(accreditor);
-
-    // Recalculate due dates based on completions
-    let sixMonthDue: string | null = null;
-    let firstAnnualDue: string | null = null;
-    let annualDue: string | null = null;
-
-    if (includesTJCorCAP && initialCompletedAt) {
-      // 6-month due = 6 months from initial completion
-      const d = new Date(initialCompletedAt);
-      d.setMonth(d.getMonth() + 6);
-      sixMonthDue = d.toISOString().split('T')[0];
-    } else if (emp.hire_date) {
-      const d = new Date(emp.hire_date);
-      d.setMonth(d.getMonth() + 6);
-      sixMonthDue = d.toISOString().split('T')[0];
-    }
-
+    // Due dates come from the shared regulatory engine (server/competencySchedule.ts),
+    // keyed off the recorded completion dates, the lab's accreditor + NYS regime, and the
+    // employee's highest complexity. Replaces the old inline TJC/CAP math, which skipped
+    // the CLIA 1st-annual milestone and seeded a 6-month for waived-only staff.
+    const due = competencyDueColumns(
+      { accreditor: lab.accreditation_body, nys: lab.includes_nys === 1, highestComplexity: emp.highest_complexity, hireDate: emp.hire_date },
+      { initialCompletedAt, sixMonthCompletedAt, firstAnnualCompletedAt, lastAnnualCompletedAt },
+    );
+    const sixMonthDue = due.six_month_due_at;
+    const firstAnnualDue = due.first_annual_due_at;
+    const annualDue = due.annual_due_at;
+    const nysSixMonthDue = due.nys_six_month_due_at;
     const actualSixMonth = sixMonthCompletedAt;
-    if (actualSixMonth) {
-      if (includesTJCorCAP) {
-        // 1st annual = 6 months after 6-month completion
-        const d = new Date(actualSixMonth);
-        d.setMonth(d.getMonth() + 6);
-        firstAnnualDue = d.toISOString().split('T')[0];
-      } else {
-        // CLIA only: annual = 12 months after 6-month completion
-        const d = new Date(actualSixMonth);
-        d.setMonth(d.getMonth() + 12);
-        annualDue = d.toISOString().split('T')[0];
-      }
-    }
-
-    if (firstAnnualCompletedAt) {
-      const d = new Date(firstAnnualCompletedAt);
-      d.setMonth(d.getMonth() + 12);
-      annualDue = d.toISOString().split('T')[0];
-    }
-
-    if (lastAnnualCompletedAt) {
-      const d = new Date(lastAnnualCompletedAt);
-      d.setMonth(d.getMonth() + 12);
-      annualDue = d.toISOString().split('T')[0];
-    }
-
-    // NYS six-month due
-    let nysSixMonthDue: string | null = null;
-    if (lab.includes_nys === 1 && emp.hire_date) {
-      const d = new Date(emp.hire_date);
-      d.setMonth(d.getMonth() + 6);
-      nysSixMonthDue = d.toISOString().split('T')[0];
-    }
 
     const existing = (db as any).$client.prepare("SELECT id FROM staff_competency_schedules WHERE employee_id = ?").get(req.params.employeeId) as any;
     if (existing) {
@@ -28603,41 +28564,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const dateErr = implausibleCompetencyDate(req.body);
     if (dateErr) return res.status(400).json({ error: dateErr });
     const { initialCompletedAt, initialSignedBy, sixMonthCompletedAt, sixMonthSignedBy, firstAnnualCompletedAt, firstAnnualSignedBy, lastAnnualCompletedAt, lastAnnualSignedBy, notes } = req.body;
-    const accreditor = lab.accreditation_body;
-    const includesTJCorCAP = ["TJC", "CAP"].includes(accreditor);
-    let sixMonthDue: string | null = null;
-    let firstAnnualDue: string | null = null;
-    let annualDue: string | null = null;
-    if (includesTJCorCAP && initialCompletedAt) {
-      const d = new Date(initialCompletedAt); d.setMonth(d.getMonth() + 6);
-      sixMonthDue = d.toISOString().split('T')[0];
-    } else if (emp.hire_date) {
-      const d = new Date(emp.hire_date); d.setMonth(d.getMonth() + 6);
-      sixMonthDue = d.toISOString().split('T')[0];
-    }
+    // Shared regulatory engine (server/competencySchedule.ts) -- same call as the legacy
+    // recording endpoint, so both front doors produce identical regulation-correct dates.
+    const due = competencyDueColumns(
+      { accreditor: lab.accreditation_body, nys: lab.includes_nys === 1, highestComplexity: emp.highest_complexity, hireDate: emp.hire_date },
+      { initialCompletedAt, sixMonthCompletedAt, firstAnnualCompletedAt, lastAnnualCompletedAt },
+    );
+    const sixMonthDue = due.six_month_due_at;
+    const firstAnnualDue = due.first_annual_due_at;
+    const annualDue = due.annual_due_at;
+    const nysSixMonthDue = due.nys_six_month_due_at;
     const actualSixMonth = sixMonthCompletedAt;
-    if (actualSixMonth) {
-      if (includesTJCorCAP) {
-        const d = new Date(actualSixMonth); d.setMonth(d.getMonth() + 6);
-        firstAnnualDue = d.toISOString().split('T')[0];
-      } else {
-        const d = new Date(actualSixMonth); d.setMonth(d.getMonth() + 12);
-        annualDue = d.toISOString().split('T')[0];
-      }
-    }
-    if (firstAnnualCompletedAt) {
-      const d = new Date(firstAnnualCompletedAt); d.setMonth(d.getMonth() + 12);
-      annualDue = d.toISOString().split('T')[0];
-    }
-    if (lastAnnualCompletedAt) {
-      const d = new Date(lastAnnualCompletedAt); d.setMonth(d.getMonth() + 12);
-      annualDue = d.toISOString().split('T')[0];
-    }
-    let nysSixMonthDue: string | null = null;
-    if (lab.includes_nys === 1 && emp.hire_date) {
-      const d = new Date(emp.hire_date); d.setMonth(d.getMonth() + 6);
-      nysSixMonthDue = d.toISOString().split('T')[0];
-    }
     const existing = (db as any).$client.prepare("SELECT id FROM staff_competency_schedules WHERE employee_id = ?").get(req.params.employeeId) as any;
     if (existing) {
       (db as any).$client.prepare(
