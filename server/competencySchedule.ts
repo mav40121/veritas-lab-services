@@ -124,3 +124,101 @@ export function nextCompetencyDue(input: NextDueInput): NextDueResult {
       ? `${accLabel}: ${months} months from the recorded ${m}, plus ${tjcTolDays(months)} days`
       : `${accLabel}: ${months} months from the recorded ${m} (no published day tolerance; target is the due date)` };
 }
+
+// ── DB-column projection ────────────────────────────────────────────────────
+// staff_competency_schedules carries one due column per milestone. Given the
+// recorded completion dates, this maps each present completion to the NEXT
+// milestone's due date via nextCompetencyDue(). The stored value is the TARGET
+// date (the scheduled due); the acceptable tolerance ceiling is a property of
+// the engine result, not a stored column. This is the single source the
+// recording endpoints and the create-time seed both call, so every write path
+// produces the same regulation-correct dates.
+//
+// Milestone -> column:
+//   initial      -> six_month_due_at   (non-waived)  |  annual_due_at (waived)
+//   six_month    -> first_annual_due_at (non-waived only)
+//   first_annual -> annual_due_at      (non-waived only)
+//   annual       -> annual_due_at      (re-rolls annually)
+// Waived testers (TJC WT.03.01.01 EP 5) have NO 6-month and NO 1st-annual, so
+// those columns stay null -- this is what stops the 6-month from being
+// over-applied to waived-only staff.
+
+export interface CompetencyCompletions {
+  initialCompletedAt?: string | null;
+  sixMonthCompletedAt?: string | null;
+  firstAnnualCompletedAt?: string | null;
+  lastAnnualCompletedAt?: string | null;
+}
+export interface CompetencyLabContext {
+  accreditor?: string | null;        // lab.accreditation_body
+  nys?: boolean;                     // lab.includes_nys === 1
+  highestComplexity?: string | null; // staff_employees.highest_complexity
+  hireDate?: string | null;          // staff_employees.hire_date
+}
+export interface CompetencyDueColumns {
+  six_month_due_at: string | null;
+  first_annual_due_at: string | null;
+  annual_due_at: string | null;
+  nys_six_month_due_at: string | null;
+}
+
+export function competencyDueColumns(lab: CompetencyLabContext, comp: CompetencyCompletions): CompetencyDueColumns {
+  const regime = lab.nys ? "NYS-CLEP" : null;
+  const waived = isWaivedComplexity(lab.highestComplexity);
+  const base = {
+    hireDate: lab.hireDate ?? null,
+    highestComplexity: lab.highestComplexity ?? null,
+    accreditor: lab.accreditor ?? null,
+    regime,
+  };
+  const out: CompetencyDueColumns = {
+    six_month_due_at: null, first_annual_due_at: null,
+    annual_due_at: null, nys_six_month_due_at: null,
+  };
+
+  if (comp.initialCompletedAt) {
+    const r = nextCompetencyDue({ recordedMilestone: "initial", recordedDate: comp.initialCompletedAt, ...base });
+    if (r.nextMilestone === "annual") out.annual_due_at = r.targetDate; // waived path
+    else out.six_month_due_at = r.targetDate;                          // non-waived
+  }
+  if (!waived && comp.sixMonthCompletedAt) {
+    const r = nextCompetencyDue({ recordedMilestone: "six_month", recordedDate: comp.sixMonthCompletedAt, ...base });
+    out.first_annual_due_at = r.targetDate;
+  }
+  if (!waived && comp.firstAnnualCompletedAt) {
+    const r = nextCompetencyDue({ recordedMilestone: "first_annual", recordedDate: comp.firstAnnualCompletedAt, ...base });
+    out.annual_due_at = r.targetDate;
+  }
+  if (comp.lastAnnualCompletedAt) {
+    const r = nextCompetencyDue({ recordedMilestone: "annual", recordedDate: comp.lastAnnualCompletedAt, ...base });
+    out.annual_due_at = r.targetDate;
+  }
+
+  // Legacy NYS six-month column (hire-anchored). The worklist reads
+  // six_month_due_at, not this, but it is kept populated for back-compat on
+  // NYS non-waived staff. Hire-anchored, so it does not need a recorded date.
+  if (lab.nys && !waived && lab.hireDate) {
+    const r = nextCompetencyDue({ recordedMilestone: "initial", recordedDate: lab.hireDate, ...base });
+    out.nys_six_month_due_at = r.targetDate;
+  }
+  return out;
+}
+
+// Create-time seed. Nothing is recorded yet, so the only due dates that are
+// knowable at hire are the NYS hire-anchored chain (hire+6, hire+12, hire+24)
+// for NYS NON-waived staff. Every other case (national-only, or waived) waits
+// for the recorded initial competency, so those columns stay null. This
+// replaces the old blanket hire+6/+12/+24 seed that over-applied to everyone.
+export function competencySeedAtCreate(lab: CompetencyLabContext): CompetencyDueColumns {
+  const out: CompetencyDueColumns = {
+    six_month_due_at: null, first_annual_due_at: null,
+    annual_due_at: null, nys_six_month_due_at: null,
+  };
+  if (!lab.nys || isWaivedComplexity(lab.highestComplexity) || !lab.hireDate) return out;
+  const base = { hireDate: lab.hireDate, highestComplexity: lab.highestComplexity ?? null, accreditor: lab.accreditor ?? null, regime: "NYS-CLEP" as const };
+  out.six_month_due_at   = nextCompetencyDue({ recordedMilestone: "initial",      recordedDate: lab.hireDate, ...base }).targetDate; // hire+6
+  out.first_annual_due_at = nextCompetencyDue({ recordedMilestone: "six_month",    recordedDate: lab.hireDate, ...base }).targetDate; // hire+12
+  out.annual_due_at      = nextCompetencyDue({ recordedMilestone: "first_annual", recordedDate: lab.hireDate, ...base }).targetDate; // hire+24
+  out.nys_six_month_due_at = out.six_month_due_at;
+  return out;
+}

@@ -2,7 +2,7 @@
 // every branch, including the NYS+TJC dual (hire-anchored, stricter ceiling binds) and
 // Michael's May(Y1) -> January(Y2) NYS proof. Run:
 //   node_modules/.bin/tsx scripts/verify-competency-cadence.ts
-import { nextCompetencyDue, validMilestonesFor } from "../server/competencySchedule";
+import { nextCompetencyDue, validMilestonesFor, competencyDueColumns, competencySeedAtCreate } from "../server/competencySchedule";
 
 let pass = 0, fail = 0;
 function eq(label: string, got: any, want: any) {
@@ -59,6 +59,45 @@ eq("NYS+TJC 1st annual -> annual: hire+24 (TJC +30d binds)",
 console.log("--- milestone selector set ---");
 eq("waived selector", { nextMilestone: validMilestonesFor("W").join(","), targetDate: null, earliest: null, latest: null }, { nextMilestone: "initial,annual", targetDate: null, earliest: null, latest: null });
 eq("non-waived selector", { nextMilestone: validMilestonesFor("H").join(","), targetDate: null, earliest: null, latest: null }, { nextMilestone: "initial,six_month,first_annual,annual", targetDate: null, earliest: null, latest: null });
+
+console.log("--- competencyDueColumns: DB-column projection used by every write path ---");
+function eqCols(label: string, got: any, want: any) {
+  const g = JSON.stringify(got), w = JSON.stringify(want);
+  if (g === w) { pass++; console.log(`  PASS  ${label}`); }
+  else { fail++; console.log(`  FAIL  ${label}\n        got : ${g}\n        want: ${w}`); }
+}
+// CLIA non-waived full chain. Proves the 1st-annual fix: six_month -> first_annual at +6,
+// first_annual -> annual at +12. The OLD inline code skipped first_annual for CLIA.
+eqCols("CLIA non-waived chain (initial/6mo/1st-annual recorded)",
+  competencyDueColumns({ accreditor: "CLIA", nys: false, highestComplexity: "H", hireDate: "2026-05-15" },
+    { initialCompletedAt: "2026-05-15", sixMonthCompletedAt: "2026-11-20", firstAnnualCompletedAt: "2027-05-25" }),
+  { six_month_due_at: "2026-11-15", first_annual_due_at: "2027-05-20", annual_due_at: "2028-05-25", nys_six_month_due_at: null });
+// Waived: NO 6-month, NO 1st-annual (over-application guard). initial -> annual at +12.
+eqCols("waived: only annual, no 6-month / no 1st-annual column",
+  competencyDueColumns({ accreditor: "CLIA", nys: false, highestComplexity: "W", hireDate: "2026-05-15" },
+    { initialCompletedAt: "2026-05-15", sixMonthCompletedAt: "2026-11-20" }),
+  { six_month_due_at: null, first_annual_due_at: null, annual_due_at: "2027-05-15", nys_six_month_due_at: null });
+// NYS+TJC non-waived, initial recorded: six-month is HIRE-anchored (hire+6), legacy NYS column set too.
+eqCols("NYS+TJC non-waived initial -> six_month hire-anchored (hire+6) + legacy NYS column",
+  competencyDueColumns({ accreditor: "TJC", nys: true, highestComplexity: "H", hireDate: "2026-05-15" },
+    { initialCompletedAt: "2026-06-01" }),
+  { six_month_due_at: "2026-11-15", first_annual_due_at: null, annual_due_at: null, nys_six_month_due_at: "2026-11-15" });
+// annual re-roll (lastAnnual recorded): annual_due_at = +12 from recorded.
+eqCols("CLIA annual re-roll: lastAnnual recorded -> annual +12",
+  competencyDueColumns({ accreditor: "CLIA", nys: false, highestComplexity: "M", hireDate: "2020-01-01" },
+    { lastAnnualCompletedAt: "2026-05-15" }),
+  { six_month_due_at: null, first_annual_due_at: null, annual_due_at: "2027-05-15", nys_six_month_due_at: null });
+
+console.log("--- competencySeedAtCreate: only NYS non-waived is hire-anchored at create ---");
+eqCols("NYS non-waived seed = hire+6 / hire+12 / hire+24",
+  competencySeedAtCreate({ accreditor: "TJC", nys: true, highestComplexity: "H", hireDate: "2026-05-15" }),
+  { six_month_due_at: "2026-11-15", first_annual_due_at: "2027-05-15", annual_due_at: "2028-05-15", nys_six_month_due_at: "2026-11-15" });
+eqCols("non-NYS create seed = all null (waits for recorded initial)",
+  competencySeedAtCreate({ accreditor: "CLIA", nys: false, highestComplexity: "H", hireDate: "2026-05-15" }),
+  { six_month_due_at: null, first_annual_due_at: null, annual_due_at: null, nys_six_month_due_at: null });
+eqCols("NYS waived create seed = all null (waived never hire-anchored)",
+  competencySeedAtCreate({ accreditor: "TJC", nys: true, highestComplexity: "W", hireDate: "2026-05-15" }),
+  { six_month_due_at: null, first_annual_due_at: null, annual_due_at: null, nys_six_month_due_at: null });
 
 console.log(`\nTOTAL: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
