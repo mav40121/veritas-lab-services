@@ -57,6 +57,22 @@ import {
   Users,
 } from "lucide-react";
 
+// Standard reviewer reject phrases (#39 MediaLab parity). Clickable in the
+// reject dialog to append to the comment, so reviewers send consistent,
+// actionable feedback instead of ad-hoc free text.
+const REJECT_PHRASES: string[] = [
+  "Add the CFR citation for this requirement.",
+  "Cite the applicable accreditation standard (CAP / TJC / COLA / AABB).",
+  "Specify the review interval and next review date.",
+  "Name the responsible role (medical director or designee).",
+  "Define the corrective action for out-of-range or unacceptable results.",
+  "Reference the manufacturer IFU / package insert.",
+  "Clarify the acceptance criteria / tolerance.",
+  "Add the effective date and version number.",
+  "Remove the outdated manual or edition reference.",
+  "This section is incomplete; expand the procedure steps.",
+];
+
 // ── Per-document attestation tracker (the roster endpoint's response) ──
 type TrackerStatus = "attested" | "overdue" | "opened" | "assigned";
 interface TrackerRow {
@@ -1037,6 +1053,35 @@ export default function VeritaPolicyMyPoliciesPage() {
 
   // ── View modal ──────────────────────────────────────────────────────────
   const [viewDoc, setViewDoc] = useState<PolicyDocument | null>(null);
+  // ── Cross-policy links (#39): related policies on the viewed document ────
+  const { data: linksData } = useQuery<{
+    references: { link_id: number; document_id: number; title: string; status: string; note: string | null }[];
+    referencedBy: { link_id: number; document_id: number; title: string; status: string }[];
+    candidates: { id: number; title: string; status: string }[];
+  }>({
+    queryKey: [`/api/labs/${activeLabId}/veritapolicy/documents/${viewDoc?.id}/links`],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!activeLabId && !!viewDoc,
+  });
+  const [addLinkTargetId, setAddLinkTargetId] = useState<string>("");
+  const invalidateLinks = () =>
+    queryClient.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/veritapolicy/documents/${viewDoc?.id}/links`] });
+  const addLinkMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/labs/${activeLabId}/veritapolicy/documents/${viewDoc?.id}/links`, { toDocumentId: Number(addLinkTargetId) });
+      return res.json();
+    },
+    onSuccess: () => { setAddLinkTargetId(""); invalidateLinks(); toast({ title: "Linked" }); },
+    onError: (e: any) => toast({ title: "Link failed", description: String(e?.message || e), variant: "destructive" }),
+  });
+  const removeLinkMutation = useMutation({
+    mutationFn: async (linkId: number) => {
+      const res = await apiRequest("DELETE", `/api/labs/${activeLabId}/veritapolicy/documents/${viewDoc?.id}/links/${linkId}`);
+      return res.json();
+    },
+    onSuccess: () => { invalidateLinks(); toast({ title: "Link removed" }); },
+    onError: (e: any) => toast({ title: "Remove failed", description: String(e?.message || e), variant: "destructive" }),
+  });
   const [viewLoading, setViewLoading] = useState(false);
   const [viewHtml, setViewHtml] = useState<string>("");
   const [viewPdfUrl, setViewPdfUrl] = useState<string>("");
@@ -1912,6 +1957,59 @@ export default function VeritaPolicyMyPoliciesPage() {
               </ul>
             </div>
           )}
+          {viewDoc && (
+            <div className="rounded border bg-muted/20 p-2 text-xs space-y-2" data-testid="related-policies">
+              <div className="font-medium flex items-center gap-1">
+                <Link2 size={14} /> Related policies
+              </div>
+              {(linksData?.references?.length ?? 0) === 0 && (linksData?.referencedBy?.length ?? 0) === 0 ? (
+                <div className="text-muted-foreground">No linked policies yet.</div>
+              ) : (
+                <div className="space-y-1">
+                  {(linksData?.references ?? []).map((r) => (
+                    <div key={"ref" + r.link_id} className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        className="text-left text-primary hover:underline"
+                        onClick={() => { const d = documents.find((x) => x.id === r.document_id); if (d) openView(d); }}
+                      >
+                        References: {r.title}
+                      </button>
+                      <Button size="sm" variant="ghost" className="h-6 text-red-600 hover:text-red-700" onClick={() => removeLinkMutation.mutate(r.link_id)} disabled={removeLinkMutation.isPending} title="Remove link">
+                        <Trash2 size={12} />
+                      </Button>
+                    </div>
+                  ))}
+                  {(linksData?.referencedBy ?? []).map((r) => (
+                    <div key={"by" + r.link_id} className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="text-left text-primary hover:underline"
+                        onClick={() => { const d = documents.find((x) => x.id === r.document_id); if (d) openView(d); }}
+                      >
+                        Referenced by: {r.title}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center gap-2 pt-1">
+                <Select value={addLinkTargetId} onValueChange={setAddLinkTargetId}>
+                  <SelectTrigger className="h-7 text-xs" data-testid="link-target-select">
+                    <SelectValue placeholder="Link to a policy..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(linksData?.candidates ?? []).map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.title}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button size="sm" className="h-7" disabled={!addLinkTargetId || addLinkMutation.isPending} onClick={() => addLinkMutation.mutate()}>
+                  Link
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="flex justify-end gap-2">
             {viewDoc && (
               <Button
@@ -2322,6 +2420,21 @@ export default function VeritaPolicyMyPoliciesPage() {
               <Label className="text-xs">
                 Comment{signAction === "rejected" ? " (recommended)" : " (optional)"}
               </Label>
+              {signAction === "rejected" && (
+                <div className="flex flex-wrap gap-1.5 mb-2" data-testid="reject-phrases">
+                  {REJECT_PHRASES.map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      className="text-[11px] rounded border px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      onClick={() => setSignComment((c) => (c.trim() ? c.trim() + " " : "") + p + " ")}
+                      title="Insert this standard phrase"
+                    >
+                      + {p.length > 36 ? p.slice(0, 34) + "..." : p}
+                    </button>
+                  ))}
+                </div>
+              )}
               <Textarea
                 value={signComment}
                 onChange={(e) => setSignComment(e.target.value)}
