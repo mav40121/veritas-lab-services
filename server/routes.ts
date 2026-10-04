@@ -35628,6 +35628,99 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   );
 
+  // ── Per-manual (department) approver mapping (#39 MediaLab parity) ──────
+  // A manual can designate specific approver(s) for a workflow-step role, so
+  // e.g. only the Microbiology lab director approves Microbiology policies.
+  // With a mapping present for (manual, role), approval eligibility narrows to
+  // those users (see manualApproverUserIds in veritapolicyApproval.ts); with no
+  // mapping the workflow step's generic role rule applies unchanged.
+  const MANUAL_APPROVER_ROLES = [
+    "medical_director", "technical_consultant", "technical_supervisor",
+    "general_supervisor", "clinical_consultant", "any_active_seat",
+  ];
+
+  // GET — a manual's approver mappings + pickable active members + role options.
+  app.get(
+    "/api/labs/:labId/veritapolicy/manuals/:manualId/approvers",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const manualId = Number(req.params.manualId);
+      if (!Number.isFinite(manualId)) return res.status(400).json({ error: "Bad manual id" });
+      const sqlite = (db as any).$client;
+      const manual = sqlite.prepare("SELECT lab_id, name FROM policy_manuals WHERE id = ?").get(manualId) as any;
+      if (!manual) return res.status(404).json({ error: "Manual not found" });
+      if (manual.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const approvers = sqlite.prepare(
+        `SELECT a.id, a.required_role, a.user_id, u.name AS user_name, u.email AS user_email
+           FROM policy_manual_approvers a JOIN users u ON u.id = a.user_id
+          WHERE a.lab_id = ? AND a.manual_id = ?
+          ORDER BY a.required_role, u.name`
+      ).all(req.scope.labId, manualId);
+      const members = sqlite.prepare(
+        `SELECT lm.user_id, u.name, u.email, lm.role
+           FROM lab_members lm JOIN users u ON u.id = lm.user_id
+          WHERE lm.lab_id = ? AND lm.status = 'active' ORDER BY u.name`
+      ).all(req.scope.labId);
+      res.json({ manual: { id: manualId, name: manual.name }, approvers, members, roleOptions: MANUAL_APPROVER_ROLES });
+    }
+  );
+
+  // POST — add an approver mapping { requiredRole, userId }.
+  app.post(
+    "/api/labs/:labId/veritapolicy/manuals/:manualId/approvers",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const manualId = Number(req.params.manualId);
+      const { requiredRole, userId } = req.body || {};
+      if (!Number.isFinite(manualId)) return res.status(400).json({ error: "Bad manual id" });
+      if (!MANUAL_APPROVER_ROLES.includes(String(requiredRole))) return res.status(400).json({ error: "Invalid required role" });
+      const uid = Number(userId);
+      if (!Number.isFinite(uid)) return res.status(400).json({ error: "userId required" });
+      const sqlite = (db as any).$client;
+      const manual = sqlite.prepare("SELECT lab_id FROM policy_manuals WHERE id = ?").get(manualId) as any;
+      if (!manual) return res.status(404).json({ error: "Manual not found" });
+      if (manual.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const member = sqlite.prepare("SELECT 1 FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1").get(uid, req.scope.labId);
+      if (!member) return res.status(400).json({ error: "User is not an active member of this lab" });
+      try {
+        const r = sqlite.prepare(
+          `INSERT INTO policy_manual_approvers (lab_id, manual_id, required_role, user_id, created_by)
+           VALUES (?, ?, ?, ?, ?)`
+        ).run(req.scope.labId, manualId, String(requiredRole), uid, req.userId);
+        writeAuditLog(sqlite, { labId: req.scope.labId, documentId: null, userId: req.userId, action: "manual_edited", details: { manual_id: manualId, approver_added: { role: requiredRole, user_id: uid } }, ipAddress: req.ip, userAgent: req.headers["user-agent"] as string | undefined });
+        res.status(201).json({ id: Number(r.lastInsertRowid) });
+      } catch (e: any) {
+        if (String(e?.message || e).includes("UNIQUE")) return res.status(200).json({ ok: true, duplicate: true });
+        throw e;
+      }
+    }
+  );
+
+  // DELETE — remove an approver mapping.
+  app.delete(
+    "/api/labs/:labId/veritapolicy/manuals/:manualId/approvers/:approverId",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const manualId = Number(req.params.manualId);
+      const approverId = Number(req.params.approverId);
+      if (!Number.isFinite(manualId) || !Number.isFinite(approverId)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const row = sqlite.prepare("SELECT lab_id FROM policy_manual_approvers WHERE id = ? AND manual_id = ?").get(approverId, manualId) as any;
+      if (!row) return res.status(404).json({ error: "Mapping not found" });
+      if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      sqlite.prepare("DELETE FROM policy_manual_approvers WHERE id = ?").run(approverId);
+      writeAuditLog(sqlite, { labId: req.scope.labId, documentId: null, userId: req.userId, action: "manual_edited", details: { manual_id: manualId, approver_removed: approverId }, ipAddress: req.ip, userAgent: req.headers["user-agent"] as string | undefined });
+      res.json({ ok: true });
+    }
+  );
+
   // GET /api/labs/:labId/veritapolicy/documents — list policies for this lab.
   // Phase 2.1: in_review rows also include pending_step_name,
   // pending_step_role, pending_step_order, pending_total_steps so the
@@ -36591,7 +36684,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
       const sqlite = (db as any).$client;
       const doc = sqlite
-        .prepare("SELECT lab_id, owner_user_id, current_version_id FROM policy_documents WHERE id = ?")
+        .prepare("SELECT lab_id, owner_user_id, current_version_id, manual_id FROM policy_documents WHERE id = ?")
         .get(id) as any;
       if (!doc) return res.status(404).json({ error: "Not found" });
       if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
@@ -36613,6 +36706,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         documentOwnerId: doc.owner_user_id,
         stepRow: pending.step,
         isMajorRevision,
+        manualId: doc.manual_id ?? null,
       });
       res.json({
         step: pending.step,
@@ -36658,7 +36752,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       const doc = sqlite
         .prepare(
-          "SELECT lab_id, owner_user_id, current_version_id, status FROM policy_documents WHERE id = ?"
+          "SELECT lab_id, owner_user_id, current_version_id, status, manual_id FROM policy_documents WHERE id = ?"
         )
         .get(id) as any;
       if (!doc) return res.status(404).json({ error: "Not found" });
@@ -36676,6 +36770,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         documentOwnerId: doc.owner_user_id,
         stepRow: pending.step,
         isMajorRevision: isVersionMajorRevision(sqlite, doc.current_version_id),
+        manualId: doc.manual_id ?? null,
       });
       if (!check.ok) return res.status(403).json({ error: check.reason });
       // Pull the file hash from the current version for non-repudiation.
@@ -36774,7 +36869,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       const doc = sqlite
         .prepare(
-          "SELECT lab_id, owner_user_id, current_version_id, status FROM policy_documents WHERE id = ?"
+          "SELECT lab_id, owner_user_id, current_version_id, status, manual_id FROM policy_documents WHERE id = ?"
         )
         .get(id) as any;
       if (!doc) return res.status(404).json({ error: "Not found" });
@@ -36792,6 +36887,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         documentOwnerId: doc.owner_user_id,
         stepRow: pending.step,
         isMajorRevision: isVersionMajorRevision(sqlite, doc.current_version_id),
+        manualId: doc.manual_id ?? null,
       });
       if (!check.ok) return res.status(403).json({ error: check.reason });
       const ver = sqlite
@@ -36897,7 +36993,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       const sqlite = (db as any).$client;
       const doc = sqlite
-        .prepare("SELECT lab_id, owner_user_id, current_version_id FROM policy_documents WHERE id = ?")
+        .prepare("SELECT lab_id, owner_user_id, current_version_id, manual_id FROM policy_documents WHERE id = ?")
         .get(id) as any;
       if (!doc) return res.status(404).json({ error: "Not found" });
       if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
@@ -36928,6 +37024,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           documentOwnerId: doc.owner_user_id,
           stepRow: s,
           isMajorRevision,
+          manualId: doc.manual_id ?? null,
         }),
       }));
       const minCount = perStep.length === 0 ? 0 : perStep.reduce((m, p) => Math.min(m, p.eligible_count), Infinity);
@@ -39073,6 +39170,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           documentOwnerId: d.owner_user_id,
           stepRow: p.step,
           isMajorRevision,
+          manualId: d.manual_id ?? null,
         });
         if (!check.ok) continue;
         pending.push({

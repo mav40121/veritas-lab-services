@@ -293,6 +293,26 @@ export function isVersionMajorRevision(
 // Resolve whether a user can approve a given workflow step. Returns
 // { ok: true } or { ok: false, reason } so callers can return a useful
 // 403 message to the client.
+// Per-manual approver override (#39 MediaLab parity). Returns the user_ids a
+// manual designates for a given workflow-step role, or null when the manual has
+// no mapping for that role (callers then fall back to the generic role rule).
+// specific_user steps are already user-scoped and are never overridden.
+export function manualApproverUserIds(
+  sqlite: any,
+  labId: number,
+  manualId: number | null | undefined,
+  requiredRole: string
+): number[] | null {
+  if (manualId == null || requiredRole === "specific_user") return null;
+  const rows = sqlite
+    .prepare(
+      `SELECT user_id FROM policy_manual_approvers
+        WHERE lab_id = ? AND manual_id = ? AND required_role = ?`
+    )
+    .all(labId, manualId, requiredRole) as { user_id: number }[];
+  return rows.length ? rows.map((r) => r.user_id) : null;
+}
+
 export function canUserApproveStep(
   sqlite: any,
   args: {
@@ -307,6 +327,9 @@ export function canUserApproveStep(
     // When true, a medical_director step is restricted to the designated
     // Medical Director only (no owner/admin designee, no permissive fallback).
     isMajorRevision?: boolean;
+    // The document's manual (department). When set and the manual designates
+    // approver(s) for this step's role, eligibility narrows to exactly them.
+    manualId?: number | null;
   }
 ): { ok: true } | { ok: false; reason: string } {
   const { userId, labId, documentOwnerId, stepRow } = args;
@@ -319,6 +342,25 @@ export function canUserApproveStep(
     };
   }
   const role = stepRow.required_role;
+  // Per-manual approver override takes precedence over the generic role rule
+  // (and over the designated-MD routing): if the document's manual names
+  // approver(s) for this role, only they may approve. Self-approval already
+  // guarded above, so an owner who is also a mapped approver is still blocked
+  // from self-approval unless the step opts in.
+  const mappedApprovers = manualApproverUserIds(sqlite, labId, args.manualId, role);
+  if (mappedApprovers && mappedApprovers.length > 0) {
+    if (!mappedApprovers.includes(userId)) {
+      return {
+        ok: false,
+        reason:
+          "This manual routes this step to its designated approver(s); you are not one of them.",
+      };
+    }
+    const stillMember = sqlite
+      .prepare(`SELECT 1 FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1`)
+      .get(userId, labId);
+    return stillMember ? { ok: true } : { ok: false, reason: "Not an active member of this lab" };
+  }
   if (role === "specific_user") {
     if (stepRow.specific_user_id == null)
       return { ok: false, reason: "Step misconfigured: specific user not set" };
@@ -492,6 +534,9 @@ export function countEligibleReviewersForStep(
     // Mirror canUserApproveStep: a major revision's medical_director step only
     // counts the designated Medical Director (no owner/admin designee).
     isMajorRevision?: boolean;
+    // The document's manual (department). When set and mapped, eligibility
+    // narrows to the manual's designated approver(s) for this step's role.
+    manualId?: number | null;
   }
 ): number {
   const { labId, documentOwnerId, stepRow } = args;
@@ -505,6 +550,22 @@ export function countEligibleReviewersForStep(
       )
       .get(stepRow.specific_user_id, labId);
     return exists ? 1 : 0;
+  }
+  // Per-manual approver override (#39): when the manual designates approver(s)
+  // for this role, only those active members count (owner excluded unless the
+  // step opts into self-approval). Mirrors canUserApproveStep so the submit-time
+  // "zero eligible approvers" warning stays accurate under a manual override.
+  const mappedApprovers = manualApproverUserIds(sqlite, labId, args.manualId, stepRow.required_role);
+  if (mappedApprovers && mappedApprovers.length > 0) {
+    let mapped = 0;
+    for (const uid of mappedApprovers) {
+      if (uid === documentOwnerId && !stepRow.allow_self_approval) continue;
+      const active = sqlite
+        .prepare(`SELECT 1 FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1`)
+        .get(uid, labId);
+      if (active) mapped += 1;
+    }
+    return mapped;
   }
   // Pull all active members on the lab with their seat_type, exclude
   // owner unless allow_self_approval=1, then filter by role.
