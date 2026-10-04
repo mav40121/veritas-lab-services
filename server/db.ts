@@ -7039,6 +7039,44 @@ try {
   }
 }
 
+// Item 5 (2026-10-03). Medical Director Letter of Delegation.
+// director_delegations: one signed letter per delegate. The designated Medical
+// Director toggles the delegable responsibilities (server/directorDelegation.ts
+// catalog) and e-signs; the signed letter is the surveyor artifact and, in
+// Phase 2, the record the QC co-sign / finding-closure gates read.
+// NEW DB TABLE RULE: created here via CREATE TABLE IF NOT EXISTS (runs on every
+// boot, fresh and live) with per-column guards for forward-compat.
+// "Boot migrations: no cascading writes" respected - CREATE + ALTER only.
+{
+  sqlite.exec(`CREATE TABLE IF NOT EXISTS director_delegations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    delegate_user_id INTEGER,
+    delegate_staff_employee_id INTEGER,
+    delegate_name TEXT NOT NULL,
+    position TEXT NOT NULL,
+    complexity_scope TEXT NOT NULL DEFAULT 'high',
+    responsibilities_json TEXT NOT NULL DEFAULT '{}',
+    signed_by_user_id INTEGER,
+    signed_name TEXT,
+    signed_at TEXT,
+    status TEXT NOT NULL DEFAULT 'draft',
+    supersedes_id INTEGER,
+    revoked_at TEXT,
+    revoked_by_user_id INTEGER,
+    created_by_user_id INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`);
+  const ddCols = (sqlite.prepare("PRAGMA table_info(director_delegations)").all() as any[]).map((c: any) => c.name);
+  const ddGuard = (name: string, decl: string) => { if (!ddCols.includes(name)) { try { sqlite.exec(`ALTER TABLE director_delegations ADD COLUMN ${decl}`); } catch {} } };
+  ddGuard("delegate_staff_employee_id", "delegate_staff_employee_id INTEGER");
+  ddGuard("complexity_scope", "complexity_scope TEXT NOT NULL DEFAULT 'high'");
+  ddGuard("supersedes_id", "supersedes_id INTEGER");
+  ddGuard("revoked_at", "revoked_at TEXT");
+  ddGuard("revoked_by_user_id", "revoked_by_user_id INTEGER");
+}
+
 // Wave H PR H4 (2026-06-06). NEW DB TABLE RULE sentinel for
 // staff_duty_change_events (CREATE above with the other staff_* tables).
 // Captures one row per added instrument when an employee's assignment

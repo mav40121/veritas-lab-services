@@ -7,6 +7,7 @@
  */
 
 import puppeteer from "puppeteer";
+import { itemsForPosition, positionLabel, complexityLabel, isDelegationPosition, type DelegationPosition, type DelegationComplexity } from "./directorDelegation";
 import { stampPdfAuthor } from "./pdfMeta";
 import { labLocalDate } from "./dateLocal";
 import type { Study } from "@shared/schema";
@@ -3997,6 +3998,135 @@ export async function generateIqcpPDF(
 
   const footer = `<div style="font-family:Helvetica,Arial,sans-serif;font-size:7pt;color:#7A7974;width:100%;padding:0 15mm;display:flex;justify-content:space-between;">
     <span>VeritaAssure&trade; | VeritaDC&trade; | Confidential - For Internal Lab Use Only</span>
+    <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
+  </div>`;
+
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    const stamped = applyLicenseToPuppeteer(html, footer, licenseCtx);
+    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    const pdfBuffer = await page.pdf({
+      format: "Letter",
+      printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: "<span></span>",
+      footerTemplate: stamped.footerTemplate,
+      margin: { top: "14mm", right: "15mm", bottom: "20mm", left: "15mm" },
+    });
+    return stampPdfAuthor(pdfBuffer);
+  } finally {
+    await page.close();
+  }
+}
+
+export async function generateLetterOfDelegationPDF(
+  letter: any,
+  lab: { lab_name?: string | null; clia_number?: string | null },
+  licenseCtx?: Partial<LicenseContext> | null,
+): Promise<Buffer> {
+  const TEAL = "#01696F", DK = "#28251D", GRY = "#7A7974";
+  const labName = escHtml(lab?.lab_name || "Laboratory");
+  const clia = lab?.clia_number ? escHtml(lab.clia_number) : "Not on file - enter in account settings";
+  const fmt = (d: any) => { if (!d) return ""; const dt = new Date(d); return isNaN(dt.getTime()) ? "" : dt.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }); };
+  const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+
+  const position = String(letter?.position || "");
+  const posLabel = isDelegationPosition(position) ? positionLabel(position as DelegationPosition) : escHtml(position);
+  const complexity = String(letter?.complexity_scope || "high") as DelegationComplexity;
+  const compLabel = complexityLabel(complexity === "moderate" ? "moderate" : "high");
+  const delegateName = escHtml(letter?.delegate_name || "");
+
+  let resp: Record<string, boolean> = {};
+  try { const r = JSON.parse(letter?.responsibilities_json || "{}"); if (r && typeof r === "object") resp = r; } catch { /* ignore */ }
+  const items = isDelegationPosition(position) ? itemsForPosition(position as DelegationPosition) : [];
+  const groups: string[] = [];
+  for (const it of items) if (!groups.includes(it.group)) groups.push(it.group);
+  const listHtml = groups.length ? groups.map((g) => {
+    const rows = items.filter((i) => i.group === g).map((i) => {
+      const on = !!resp[i.key];
+      return `<div class="item"><span class="box">${on ? "X" : ""}</span><span class="lbl">${escHtml(i.label)}</span></div>`;
+    }).join("");
+    return `<div class="grp"><div class="grpH">${escHtml(g)}</div>${rows}</div>`;
+  }).join("") : `<div class="note">No delegable responsibilities are defined for this position.</div>`;
+
+  const signed = letter?.status === "active" && !!letter?.signed_at;
+  const signerName = letter?.signed_name ? escHtml(letter.signed_name) : "";
+  const signedDate = fmt(letter?.signed_at);
+  const statusLine = signed ? `Signed ${signedDate}` : "Draft - awaiting medical director signature";
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:9pt; color:${DK}; }
+  @page { size:letter; margin:14mm 15mm 20mm 15mm; }
+  .hdr { border-bottom:3px solid ${TEAL}; padding-bottom:8px; margin-bottom:12px; }
+  .hdr .brand { color:${TEAL}; font-weight:800; letter-spacing:.3px; font-size:11pt; }
+  .hdr .lab { float:right; text-align:right; font-size:8.5pt; color:${DK}; }
+  .title { font-size:15pt; font-weight:800; color:${DK}; margin-top:6px; }
+  .subtitle { font-size:10pt; color:${GRY}; margin-top:2px; }
+  .sec { margin-top:14px; }
+  .sec h2 { font-size:11pt; color:${TEAL}; border-bottom:1px solid #d9e3e3; padding-bottom:3px; margin-bottom:6px; }
+  .kv { font-size:9pt; margin:2px 0; }
+  .kv b { display:inline-block; width:150px; color:${GRY}; font-weight:600; }
+  .att { background:#eaf5f4; border:1px solid #bcdedb; border-radius:5px; padding:8px 10px; margin-top:8px; color:#0A3A3D; font-size:8.6pt; line-height:1.4; }
+  .grp { margin-top:8px; }
+  .grpH { font-size:8.6pt; font-weight:700; color:${TEAL}; margin:6px 0 3px; }
+  .item { display:flex; align-items:flex-start; gap:7px; margin:3px 0; font-size:8.8pt; }
+  .item .box { flex:0 0 auto; width:12px; height:12px; border:1.5px solid ${DK}; text-align:center; line-height:10px; font-size:9pt; font-weight:700; }
+  .item .lbl { flex:1; }
+  .sig { border:1.5px solid ${DK}; border-radius:5px; margin-top:14px; padding:10px 12px; page-break-inside:avoid; }
+  .sig h3 { font-size:9.5pt; letter-spacing:.4px; margin-bottom:6px; }
+  .sig .row { display:flex; gap:26px; margin:9px 0; }
+  .sig .fld { flex:1; border-bottom:1px solid #999; font-size:8pt; color:${GRY}; padding-bottom:1px; }
+  .sig .fld .v { color:${DK}; font-size:9pt; font-weight:600; }
+  .note { font-size:7.8pt; color:${GRY}; margin-top:7px; }
+  </style></head><body>
+  <div class="hdr">
+    <div class="lab">${labName}<br>CLIA: ${clia}</div>
+    <div class="brand">VeritaAssure&trade; &nbsp;|&nbsp; VeritaStaff&trade;</div>
+    <div class="title">Letter of Delegation of Laboratory Director Responsibilities</div>
+    <div class="subtitle">${delegateName} &middot; ${posLabel}</div>
+  </div>
+  <div class="sec">
+    <div class="kv"><b>Delegate</b> ${delegateName}</div>
+    <div class="kv"><b>Position</b> ${posLabel}</div>
+    <div class="kv"><b>Complexity scope</b> ${compLabel}</div>
+    <div class="kv"><b>Prepared</b> ${fmt(letter?.created_at) || today}</div>
+    <div class="kv"><b>Status</b> ${statusLine}</div>
+    <div class="att">As laboratory director, I delegate the responsibilities checked below, in writing, to the individual named above, who serves in the stated position and meets the applicable CLIA personnel qualifications per 42 CFR 493 Subpart M. Responsibilities not checked, and the laboratory director's non-delegable duties (test-system selection appropriateness, physical and environmental conditions, safety, the required onsite visits, and signing and approving policies), are retained by the laboratory director.</div>
+  </div>
+  <div class="sec">
+    <h2>Delegated responsibilities</h2>
+    ${listHtml}
+  </div>
+  <div class="sig">
+    <h3>MEDICAL DIRECTOR DELEGATION</h3>
+    <div class="row">
+      <div class="fld">Medical director signature${signed ? ` <span class="v">${signerName} (electronically signed)</span>` : ""}</div>
+      <div class="fld">Print name${signerName ? ` <span class="v">${signerName}</span>` : ""}</div>
+    </div>
+    <div class="row">
+      <div class="fld">Title: Laboratory / Medical Director</div>
+      <div class="fld">Date${signedDate ? ` <span class="v">${signedDate}</span>` : ""}</div>
+    </div>
+  </div>
+  <div class="sig">
+    <h3>DELEGATE ACCEPTANCE</h3>
+    <div class="att" style="background:#fff;border:none;padding:0;color:${GRY}">I accept the responsibilities delegated to me above and will perform them in accordance with the laboratory's policies and CLIA requirements.</div>
+    <div class="row">
+      <div class="fld">Delegate signature</div>
+      <div class="fld">Print name <span class="v">${delegateName}</span></div>
+    </div>
+    <div class="row">
+      <div class="fld">Date</div>
+      <div class="fld">Position: ${posLabel}</div>
+    </div>
+  </div>
+  <div class="note">This delegation remains in effect until it is revoked or superseded, and should be reviewed at least annually and whenever the delegate or the process changes. A new delegation is required when the laboratory director changes.</div>
+  </body></html>`;
+
+  const footer = `<div style="font-family:Helvetica,Arial,sans-serif;font-size:7pt;color:#7A7974;width:100%;padding:0 15mm;display:flex;justify-content:space-between;">
+    <span>VeritaAssure&trade; | VeritaStaff&trade; | Confidential - For Internal Lab Use Only</span>
     <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
   </div>`;
 

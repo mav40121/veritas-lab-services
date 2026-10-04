@@ -7,6 +7,7 @@ import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
 import { blockNonOperatorSeat } from "./seatAccess";
+import { isDelegationPosition, isDelegationComplexity, sanitizeResponsibilities, DELEGATION_CATALOG, DELEGATION_POSITIONS, DELEGATION_COMPLEXITIES } from "./directorDelegation";
 import { resolveStudyAccess, consumeStudyCredit, isUnlimitedPlan } from "./studyCredits";
 import { defaultReviewIntervalMonthsForState } from "./policyReviewInterval";
 import { resolveSignupPlan } from "./signupPlan";
@@ -13591,6 +13592,128 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.send(buf);
     } catch (err: any) {
       console.error("IQCP pdf error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Medical Director Letter of Delegation (item 5, Phase 1) ──────────────
+  // A signable Letter of Delegation: the designated Medical Director toggles the
+  // delegable responsibilities (server/directorDelegation.ts catalog) and e-signs.
+  // Create / edit-draft / sign / revoke are MD-only; list, catalog and PDF are
+  // viewable by any lab member. No access gates change here; the QC co-sign and
+  // finding-closure gates will read these signed letters in Phase 2.
+  const isDesignatedMd = (labId: number, userId: number): boolean => {
+    const row = (db as any).$client.prepare(
+      `SELECT 1 FROM lab_members lm JOIN users u ON u.id = lm.user_id JOIN labs l ON l.id = lm.lab_id
+       WHERE lm.lab_id = ? AND lm.user_id = ? AND lm.status = 'active'
+         AND l.medical_director_email IS NOT NULL AND TRIM(l.medical_director_email) != ''
+         AND lower(u.email) = lower(l.medical_director_email) LIMIT 1`
+    ).get(labId, userId);
+    return !!row;
+  };
+  const ddSafeParse = (s: any) => { try { const v = JSON.parse(s || "{}"); return v && typeof v === "object" ? v : {}; } catch { return {}; } };
+  const ddAudit = (labId: number, userId: number, action: string, detail: string) => {
+    try {
+      (db as any).$client.prepare(
+        "INSERT INTO lab_audit_log (lab_id, changed_by_user_id, field_name, old_value, new_value, changed_at) VALUES (?, ?, 'director_delegation', ?, ?, ?)"
+      ).run(labId, userId, action, detail, new Date().toISOString());
+    } catch { /* audit best-effort */ }
+  };
+
+  app.get("/api/labs/:labId/director-delegations/catalog", authMiddleware, labScopeMiddleware, (_req: any, res) => {
+    res.json({ positions: DELEGATION_POSITIONS, complexities: DELEGATION_COMPLEXITIES, catalog: DELEGATION_CATALOG });
+  });
+
+  app.get("/api/labs/:labId/director-delegations", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const rows = (db as any).$client.prepare(
+      "SELECT * FROM director_delegations WHERE lab_id = ? ORDER BY (status='active') DESC, id DESC"
+    ).all(req.scope.labId) as any[];
+    res.json(rows.map((r) => ({ ...r, responsibilities: ddSafeParse(r.responsibilities_json) })));
+  });
+
+  app.post("/api/labs/:labId/director-delegations", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!isDesignatedMd(req.scope.labId, req.userId)) return res.status(403).json({ error: "Only the lab's designated medical director can create a letter of delegation." });
+    const b = req.body || {};
+    const position = String(b.position || "");
+    if (!isDelegationPosition(position)) return res.status(400).json({ error: "Valid position required (clinical_consultant, technical_consultant, technical_supervisor, general_supervisor)." });
+    const complexity = isDelegationComplexity(b.complexity_scope) ? b.complexity_scope : "high";
+    const delegateName = String(b.delegate_name || "").trim();
+    if (!delegateName) return res.status(400).json({ error: "delegate_name required." });
+    const resp = sanitizeResponsibilities(position as any, b.responsibilities);
+    const now = new Date().toISOString();
+    const ins = (db as any).$client.prepare(
+      `INSERT INTO director_delegations (lab_id, delegate_user_id, delegate_staff_employee_id, delegate_name, position, complexity_scope, responsibilities_json, status, created_by_user_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`
+    ).run(req.scope.labId, b.delegate_user_id ?? null, b.delegate_staff_employee_id ?? null, delegateName, position, complexity, JSON.stringify(resp), req.userId, now, now);
+    const id = Number(ins.lastInsertRowid);
+    ddAudit(req.scope.labId, req.userId, "create", `draft letter #${id} for ${delegateName} (${position})`);
+    res.status(201).json({ id });
+  });
+
+  app.put("/api/labs/:labId/director-delegations/:id", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!isDesignatedMd(req.scope.labId, req.userId)) return res.status(403).json({ error: "Only the lab's designated medical director can edit a letter of delegation." });
+    const row = (db as any).$client.prepare("SELECT * FROM director_delegations WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId) as any;
+    if (!row) return res.status(404).json({ error: "Letter not found." });
+    if (row.status !== "draft") return res.status(409).json({ error: "Only a draft letter can be edited. Revoke and create a new one to change a signed letter." });
+    const b = req.body || {};
+    const position = b.position != null ? String(b.position) : row.position;
+    if (!isDelegationPosition(position)) return res.status(400).json({ error: "Valid position required." });
+    const complexity = b.complexity_scope != null ? (isDelegationComplexity(b.complexity_scope) ? b.complexity_scope : null) : row.complexity_scope;
+    if (!complexity) return res.status(400).json({ error: "Valid complexity_scope required." });
+    const delegateName = b.delegate_name != null ? String(b.delegate_name).trim() : row.delegate_name;
+    if (!delegateName) return res.status(400).json({ error: "delegate_name required." });
+    const resp = sanitizeResponsibilities(position as any, b.responsibilities != null ? b.responsibilities : ddSafeParse(row.responsibilities_json));
+    (db as any).$client.prepare(
+      "UPDATE director_delegations SET delegate_user_id=?, delegate_staff_employee_id=?, delegate_name=?, position=?, complexity_scope=?, responsibilities_json=?, updated_at=? WHERE id=? AND lab_id=?"
+    ).run(
+      b.delegate_user_id !== undefined ? b.delegate_user_id : row.delegate_user_id,
+      b.delegate_staff_employee_id !== undefined ? b.delegate_staff_employee_id : row.delegate_staff_employee_id,
+      delegateName, position, complexity, JSON.stringify(resp), new Date().toISOString(), row.id, req.scope.labId,
+    );
+    res.json({ ok: true });
+  });
+
+  app.post("/api/labs/:labId/director-delegations/:id/sign", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!isDesignatedMd(req.scope.labId, req.userId)) return res.status(403).json({ error: "Only the lab's designated medical director can sign a letter of delegation." });
+    const row = (db as any).$client.prepare("SELECT * FROM director_delegations WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId) as any;
+    if (!row) return res.status(404).json({ error: "Letter not found." });
+    if (row.status !== "draft") return res.status(409).json({ error: "Letter is not a draft." });
+    const typed = String(req.body?.signed_name || "").trim();
+    let signerName = typed;
+    if (!signerName) { const u = storage.getUserById(req.userId) as any; signerName = (u && (u.name || u.email)) ? String(u.name || u.email) : "Medical Director"; }
+    const now = new Date().toISOString();
+    (db as any).$client.prepare(
+      "UPDATE director_delegations SET status='active', signed_by_user_id=?, signed_name=?, signed_at=?, updated_at=? WHERE id=? AND lab_id=?"
+    ).run(req.userId, signerName, now, now, row.id, req.scope.labId);
+    ddAudit(req.scope.labId, req.userId, "sign", `signed letter #${row.id} for ${row.delegate_name}`);
+    res.json({ ok: true, signed_at: now, signed_name: signerName });
+  });
+
+  app.post("/api/labs/:labId/director-delegations/:id/revoke", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!isDesignatedMd(req.scope.labId, req.userId)) return res.status(403).json({ error: "Only the lab's designated medical director can revoke a letter of delegation." });
+    const row = (db as any).$client.prepare("SELECT * FROM director_delegations WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId) as any;
+    if (!row) return res.status(404).json({ error: "Letter not found." });
+    if (row.status !== "active") return res.status(409).json({ error: "Only an active letter can be revoked." });
+    const now = new Date().toISOString();
+    (db as any).$client.prepare(
+      "UPDATE director_delegations SET status='revoked', revoked_at=?, revoked_by_user_id=?, updated_at=? WHERE id=? AND lab_id=?"
+    ).run(now, req.userId, now, row.id, req.scope.labId);
+    ddAudit(req.scope.labId, req.userId, "revoke", `revoked letter #${row.id} for ${row.delegate_name}`);
+    res.json({ ok: true });
+  });
+
+  app.get("/api/labs/:labId/director-delegations/:id/pdf", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    try {
+      const row = (db as any).$client.prepare("SELECT * FROM director_delegations WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId) as any;
+      if (!row) return res.status(404).json({ error: "Letter not found." });
+      const lab = req.scope.lab || {};
+      const { generateLetterOfDelegationPDF } = await import("./pdfReport");
+      const buf = await generateLetterOfDelegationPDF(row, { lab_name: lab.lab_name, clia_number: lab.clia_number }, licenseCtxFromReq(req));
+      const safe = String(row.delegate_name || "delegate").replace(/[^a-z0-9]+/gi, "-").slice(0, 40);
+      res.set({ "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="Letter-of-Delegation-${safe}.pdf"` });
+      res.send(buf);
+    } catch (err: any) {
+      console.error("director-delegation pdf error:", err);
       res.status(500).json({ error: err.message });
     }
   });
