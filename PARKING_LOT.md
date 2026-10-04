@@ -577,6 +577,12 @@ _(item #52 core closed 2026-09-28; shipped PR #1361 member-picker, prod-verified
 
 ## CLOSED (audit trail)
 
+### C58. VeritaDC per-document attestation tracker + "My Documents" rename (built as #45)
+
+**Effort:** was M / **Importance:** Medium-High
+
+**Closure evidence:** Shipped PRs #1447 (tracker + rename) and #1449 (date-only fmtDate fix), both in origin/main; deployed 2026-10-04 (tracker 740a966e live; fix 95daae84). The Compliance tab already showed per-staff attestation rates and admins could already assign approved documents, but there was no way to open ONE document and see its roster, and "who opened it" was logged but shown nowhere. Added a "Tracker" button on each approved document ("My Documents" tab) that opens a per-document roster: per assignee it shows assigned date, due date, last opened (derived from the existing viewed/version_viewed audit events, surfaced for the first time), attested date + version with a stale-version flag, and a derived status (Attested / Opened-not-signed / Overdue / Not opened), plus summary counts, Staff Portal read-and-sign signatures, and the Excel signature report. No schema change. Status logic extracted to server/policyAttestationStatus.ts, covered by scripts/verify-veritadc-attestation-tracker.ts (10/10). Browser-verified end to end on a local throwaway lab (five assignees across every status), light and dark mode; that exercise caught and fixed a date-only off-by-one in the shared fmtDate helper (PR #1449). Renamed the visible "My Policies" to "My Documents" (tab, page heading, compliance back-links); routing keys unchanged. Playwright evidence: tests/playwright/veritadc-attestation-tracker.spec.ts.
+
 ### C57. Hide sections a lab does not use from a master list (was #47)
 
 **Effort:** was S-M / **Importance:** Medium-High (prospect-requested)
