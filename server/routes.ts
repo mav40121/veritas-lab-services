@@ -9,6 +9,7 @@ import { storage } from "./storage";
 import { blockNonOperatorSeat } from "./seatAccess";
 import { isDelegationPosition, isDelegationComplexity, sanitizeResponsibilities, DELEGATION_CATALOG, DELEGATION_POSITIONS, DELEGATION_COMPLEXITIES } from "./directorDelegation";
 import { mayAttestAsDirectorOrDesignee, complexityForAnalyte, labHighestComplexity, isLabOwnerUser } from "./delegationGate";
+import { deriveAttestationStatus } from "./policyAttestationStatus";
 import { resolveStudyAccess, consumeStudyCredit, isUnlimitedPlan } from "./studyCredits";
 import { defaultReviewIntervalMonthsForState } from "./policyReviewInterval";
 import { resolveSignupPlan } from "./signupPlan";
@@ -38744,13 +38745,44 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             ORDER BY a.assigned_at DESC`
         )
         .all(id) as any[];
-      // Flag stale entries: assigned to an old version, not the current.
-      const enriched = rows.map((r) => ({
-        ...r,
-        is_stale_version: doc.current_version_id != null && r.version_id !== doc.current_version_id,
-      }));
+      // Last time each assignee OPENED this document's content. Both the
+      // current-version render ('viewed') and the specific-version render
+      // ('version_viewed') count as an open; a metadata list view is not
+      // logged against the document, so this means "read the content", keyed
+      // by the viewer's user_id. Lets the roster distinguish "opened but not
+      // yet signed" from "never opened".
+      const opens = sqlite
+        .prepare(
+          `SELECT user_id, MAX(created_at) AS last_opened_at
+             FROM policy_audit_log
+            WHERE document_id = ? AND action IN ('viewed', 'version_viewed')
+            GROUP BY user_id`
+        )
+        .all(id) as { user_id: number; last_opened_at: string }[];
+      const openMap = new Map<number, string>(opens.map((o) => [o.user_id, o.last_opened_at]));
+      // UTC day for the overdue flag. due_date is a plain YYYY-MM-DD from the
+      // assign dialog, so a lexical compare against today's YYYY-MM-DD is exact.
+      const todayStr = new Date().toISOString().slice(0, 10);
+      // Flag stale entries (assigned to an old version), attach last-opened,
+      // and derive the roster status the tracker UI renders.
+      const enriched = rows.map((r) => {
+        const last_opened_at = openMap.get(r.assigned_to_user_id) ?? null;
+        const is_stale_version =
+          doc.current_version_id != null && r.version_id !== doc.current_version_id;
+        const status = deriveAttestationStatus({
+          completedAt: r.completed_at,
+          dueDate: r.due_date,
+          lastOpenedAt: last_opened_at,
+          todayStr,
+        });
+        return { ...r, is_stale_version, last_opened_at, status };
+      });
       const total = enriched.length;
       const completed = enriched.filter((r) => r.completed_at).length;
+      // "opened" = opened the content but has not yet attested.
+      const opened = enriched.filter((r) => !r.completed_at && r.last_opened_at).length;
+      const outstanding = enriched.filter((r) => !r.completed_at).length;
+      const overdue = enriched.filter((r) => r.status === "overdue").length;
       const currentVersion = enriched.filter((r) => r.version_id === doc.current_version_id);
       const currentTotal = currentVersion.length;
       const currentCompleted = currentVersion.filter((r) => r.completed_at).length;
@@ -38761,7 +38793,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json({
         attestations: enriched,
         staffSignatures,
-        summary: { total, completed, currentVersionTotal: currentTotal, currentVersionCompleted: currentCompleted, staffSigned: staffSignatures.length },
+        summary: { total, completed, opened, outstanding, overdue, currentVersionTotal: currentTotal, currentVersionCompleted: currentCompleted, staffSigned: staffSignatures.length },
       });
     }
   );

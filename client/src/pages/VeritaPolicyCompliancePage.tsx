@@ -267,7 +267,7 @@ export default function VeritaPolicyCompliancePage() {
           </Button>
           <Link href={`/labs/${activeLabId}/veritapolicy-app/my-policies`}>
             <Button variant="outline" size="sm">
-              <ArrowLeft size={14} className="mr-1" /> My Policies
+              <ArrowLeft size={14} className="mr-1" /> My Documents
             </Button>
           </Link>
         </div>
@@ -376,7 +376,7 @@ export default function VeritaPolicyCompliancePage() {
                 href={`/labs/${activeLabId}/veritapolicy-app/my-policies`}
                 className="underline"
               >
-                My Policies
+                My Documents
               </Link>{" "}
               to upload your first.
             </div>

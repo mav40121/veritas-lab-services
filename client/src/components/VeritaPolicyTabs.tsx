@@ -21,7 +21,7 @@ type Tab = "master" | "my-policies" | "compliance" | "iqcp";
 
 const TABS: { key: Tab; label: string; sub: string; icon: typeof ListChecks }[] = [
   { key: "master",      label: "Master List", sub: "",            icon: ListChecks },
-  { key: "my-policies", label: "My Policies", sub: "my-policies", icon: FolderOpen },
+  { key: "my-policies", label: "My Documents", sub: "my-policies", icon: FolderOpen },
   { key: "compliance",  label: "Compliance",  sub: "compliance",  icon: ShieldCheck },
   { key: "iqcp",        label: "IQCP",        sub: "iqcp",        icon: ClipboardCheck },
 ];
