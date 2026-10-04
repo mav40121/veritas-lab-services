@@ -50,7 +50,7 @@ and TJC (CAMLAB PDF + text extract).
 **Source:** prior session handoff. Re-confirmed during 2026-05-01 QC
 review.
 
-**Status:** Open. Multi-hour subagent fan-out work.
+**Status:** Open. Multi-hour subagent fan-out work. Work-pass 2026-10-04: BLOCKED on materials. AABB and COLA columns cannot be source-grounded without the gated manuals (item #28); CAP is 11/12 modules verifiable from files on the drive, MOL file missing (item #27); TJC is operator-authoritative. Not startable without fabricating accreditor citations. Awaiting #27 + #28.
 
 **Pre- vs post-COLA:** Pre-COLA. May 6-8 conference; Saturday + Sunday +
 Monday available before the booth.
@@ -98,7 +98,7 @@ discipline.
 **Source:** PR #108 commit 92f9573 (closed via merge 2026-05-11),
 audit findings.
 
-**Status:** Open, blocks on operator obtaining the MOL checklist.
+**Status:** Open, blocks on operator obtaining the MOL checklist. Work-pass 2026-10-04: NEEDS MICHAEL. The MAS_MOL xlsx download requires CAP e-LAB credentials (agent cannot download). Drop MAS_MOL_*.xlsx in the 2026 Cap checklists folder and the agent re-runs the MOL verify (MOL.35855 + MOL.37460).
 
 **Pre- vs post-COLA:** Post-COLA. Two entries; low traffic.
 
@@ -141,7 +141,10 @@ is downgraded.
 
 **Status:** Open, blocks on operator obtaining the gated accreditor
 manuals. Until then, AABB / COLA citations are best-effort against
-the public-source compilations.
+the public-source compilations. Work-pass 2026-10-04: NEEDS MICHAEL.
+AABB Standards 35th ed. + current COLA Accreditation Manual are gated
+behind enrollment; agent cannot obtain them. On arrival the agent
+extracts the exhaustive ID set and re-runs the QA audit.
 
 **Pre- vs post-COLA:** Post-COLA. Operator-side action item, no code
 work pending until the source documents land.
@@ -224,7 +227,7 @@ the team pricing analysis docx at
 instead as the durable customer-feedback channel for VeritaMap;
 barcode scanning waits on revenue commitment.
 
-**Status:** Parked pending first paid commitment.
+**Status:** Parked pending first paid commitment. Work-pass 2026-10-04: HELD BY STRATEGY, build-decision needs Michael. Already fully scoped (12-day plan below), so nothing to add by re-scoping. Trigger remains first paid commitment naming barcode scanning. Building now would override the locked strategy and spend ~12 dev days speculatively. Recommendation: hold. Say the word to build speculatively.
 
 ---
 
@@ -287,6 +290,8 @@ partially reverted. Lessons learned the hard way.
 - The 5 summaries already in `cfrRequirements.ts` are valid as
   CFR-section glossary content. They are inappropriate as
   Master-List-row content.
+
+**Status:** Open. Work-pass 2026-10-04: APPROACH FORK, needs Michael. Verified live that the 5 operator-approved summaries (sections 1235/1252/1253/1281/1289) exist inert in server/cfrRequirements.ts and no UI reads them. Two valid next moves, and the pick + a voice sign-off are Michael's call before any 3rd attempt: (a) a CFR-scoped tooltip/glossary rendering the 5 existing summaries on CFR citations only (bounded surface build, reuses approved copy, matches the redesign rules above), or (b) policy-row paraphrases, one per policy_id in veritapolicyMasterList.ts (~96 rows, multi-day authoring, needs voice approval). Agent did NOT speculatively attempt a 3rd build on this twice-reverted customer-facing feature. OFFER: agent builds (a) as a pilot on his go.
 
 **Effort if redesigned at policy-row scope:** Per-policy writing for
 the 96 Master List rows is a multi-day content project, not a
@@ -384,6 +389,8 @@ part-time community manager.
 
 **Pre- vs post-COLA:** Post-COLA. No customer urgency.
 
+**Status:** Open. Work-pass 2026-10-04: BUSINESS DECISION, needs Michael. SWOT verdict stands (do not build a paid forum; economics kill it). The recommended free invite-only Slack/Discord plus quarterly roundtable is an operational commitment, not a build, gated on the three-question decision rule above. No code to produce. Needs Michael's go/no-go on the free alternative.
+
 ---
 
 _(item #33 closed 2026-05-28; see C27 below)_
@@ -415,7 +422,7 @@ _(item #37 closed 2026-05-28; see C28 below)_
 
 **Source:** 2026-05-12 conversation. Michael selected the screen-cap video as the highest-impact positioning artifact, then asked the agent to record it. Agent does not have screen-recording capability; option parked rather than fudged.
 
-**Status:** Open. Re-parked 2026-05-27 (originally PR #117, abandoned with merge conflicts then closed-and-re-authored at current numbering). Pending operator decision on whether to record this themselves or pivot to one-pager (item #37).
+**Status:** Open. Re-parked 2026-05-27 (originally PR #117, abandoned with merge conflicts then closed-and-re-authored at current numbering). Pending operator decision on whether to record this themselves or pivot to one-pager (item #37). Work-pass 2026-10-04: AGENT HALF DELIVERED. docs/VERITACHECK_DEMO_VIDEO_PREP.md ships the full recording-prep package (storyboard, click-by-click script grounded in real UI labels, demo-lab pre-fill state, on-screen captions + end card, post-production checklist). Remaining is operator-only: the ~1hr recording and a real paired dataset from Michael's own records.
 
 **Pre- vs post-COLA:** Post-COLA, conference-driven.
 
@@ -454,7 +461,9 @@ All five small parity items are now shipped. Items 6+ (SSO/AD, approval delegati
 
 **Source:** 2026-05-29 QA pass after C29 shipped (qa-policy-build.js + qa-policy-ui.js: 54/54 happy path verified). Honest depth assessment surfaced by Michael's "how confident are you" question — see C29 entry for full QA receipts.
 
-**Status:** Small-item sequence COMPLETE (items 1-5 all shipped; verified against the codebase 2026-09-29, print view PR #1367). Remaining depth items (SSO/AD, delegation, in-browser editing, per-department roles, reviewer-phrase library, cross-policy linking, customizable email templates) are larger and stay customer-triggered. Re-open a scoped sub-item only when a prospect asks. **Note (2026-10-04):** the "delegation" listed here is VeritaPolicy APPROVAL-workflow delegation and remains open. A separate capability, CLIA laboratory-director RESPONSIBILITY delegation, shipped this session as the Letter of Delegation feature (VeritaStaff Delegations tab; signed letters gate QC period-review co-sign and finding closure; PRs #1442-1445) and is not this item.
+**Status:** Small-item sequence COMPLETE (items 1-5 all shipped; verified against the codebase 2026-09-29, print view PR #1367). **Note (2026-10-04):** the "delegation" listed here is VeritaPolicy APPROVAL-workflow delegation and remains open. A separate capability, CLIA laboratory-director RESPONSIBILITY delegation, shipped this session as the Letter of Delegation feature (VeritaStaff Delegations tab; signed letters gate QC period-review co-sign and finding closure; PRs #1442-1445) and is not this item.
+
+Work-pass 2026-10-04: STATUS CORRECTED + remaining items scoped. Verified in-code that 4 of the 7 "remaining" depth items actually shipped THIS session: per-department role mapping (policy_manual_approvers + manualId override in canUserApproveStep), reviewer-phrase library (REJECT_PHRASES), cross-policy linking (policy_document_links), and customizable email templates (policy_email_templates). SSO is scoped (docs/SSO_AD_DESIGN.md, PR #1458). Only two depth items remain genuinely unbuilt: **approval delegation** (ready-to-build M, extends this session's eligibility plumbing) and **in-browser DOCX editing** (L, hold). Both specced in docs/VERITADC_PARITY_REMAINING_DESIGN.md. Both are gated to a prospect ask; agent did not speculatively build. NEEDS MICHAEL: build/hold call on delegation (clean next PR on his go).
 
 **Pre- vs post-COLA:** Post-COLA. Defensive against MediaLab in head-to-head sales calls.
 
@@ -514,7 +523,7 @@ All five small parity items are now shipped. Items 6+ (SSO/AD, approval delegati
 
 **Source:** 2026-06-04 session, after weekly LinkedIn invite batch completion (80 sent, cap hit at #84 Victoria Allen).
 
-**Status:** Parked. Plan documented. Implementation deferred until trigger conditions met.
+**Status:** Parked. Plan documented. Implementation deferred until trigger conditions met. Work-pass 2026-10-04: AGENT HALF DELIVERED. Pre-implementation step 5 done: linkedin_search/outbound_messages_v1.md ships the 4 tier message templates with 3-4 varied bodies each (anti-spam), merge fields, hard copy rules, and a reply-handling + pacing reference. NEEDS MICHAEL: steps 1-4 (LinkedIn contact export, engager cross-ref, Tier 1-4 bucket build, customer/COLA dedupe) and the sends, plus confirming the lift-off triggers (LM101 shipped, Tier 1 at 50+, COLA concluded, 2-3 hrs/wk available).
 
 ---
 
