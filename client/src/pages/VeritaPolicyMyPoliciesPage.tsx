@@ -54,7 +54,47 @@ import {
   Link2,
   ExternalLink,
   FileSpreadsheet,
+  Users,
 } from "lucide-react";
+
+// ── Per-document attestation tracker (the roster endpoint's response) ──
+type TrackerStatus = "attested" | "overdue" | "opened" | "assigned";
+interface TrackerRow {
+  id: number;
+  assigned_to_user_id: number;
+  assignee_name: string | null;
+  assignee_email: string | null;
+  assigner_name: string | null;
+  assigned_at: string;
+  due_date: string | null;
+  completed_at: string | null;
+  version_id: number;
+  is_stale_version: boolean;
+  typed_signature: string | null;
+  last_opened_at: string | null;
+  status: TrackerStatus;
+}
+interface TrackerStaffSig {
+  id: number;
+  signer_name: string;
+  signer_title: string | null;
+  signed_at: string | null;
+  version_number: number | null;
+}
+interface TrackerResponse {
+  attestations: TrackerRow[];
+  staffSignatures: TrackerStaffSig[];
+  summary: {
+    total: number;
+    completed: number;
+    opened: number;
+    outstanding: number;
+    overdue: number;
+    currentVersionTotal: number;
+    currentVersionCompleted: number;
+    staffSigned: number;
+  };
+}
 
 interface Manual {
   id: number;
@@ -718,6 +758,18 @@ export default function VeritaPolicyMyPoliciesPage() {
     setAssignDueDate("");
   };
 
+  // ── Per-document attestation tracker: who was assigned, who opened the
+  //    document (from the audit trail), and who attested. Reuses the roster
+  //    endpoint, now enriched server-side with last_opened_at + status.
+  const [trackerDoc, setTrackerDoc] = useState<PolicyDocument | null>(null);
+  const { data: trackerData, isLoading: trackerLoading } = useQuery<TrackerResponse>({
+    queryKey: [
+      `/api/labs/${activeLabId}/veritapolicy/documents/${trackerDoc?.id}/attestations`,
+    ],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!activeLabId && !!trackerDoc,
+  });
+
   const assignMutation = useMutation({
     mutationFn: async () => {
       if (!assignDoc) throw new Error("No document");
@@ -1140,7 +1192,7 @@ export default function VeritaPolicyMyPoliciesPage() {
       <VeritaPolicyTabs active="my-policies" />
       <div className="flex flex-col sm:flex-row items-stretch sm:items-start sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">My Policies</h1>
+          <h1 className="text-2xl font-bold">My Documents</h1>
           <p className="text-sm text-muted-foreground">
             Upload your lab policies and procedures, organize them by manual,
             and route them through review and approval workflows. Phase 1
@@ -1553,6 +1605,15 @@ export default function VeritaPolicyMyPoliciesPage() {
                                 title="Assign staff to read-and-attest"
                               >
                                 <ShieldCheck size={12} className="mr-1" /> Assign
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setTrackerDoc(doc)}
+                                title="See who was assigned, who opened it, and who attested"
+                                data-testid="tracker-button"
+                              >
+                                <Users size={12} className="mr-1" /> Tracker
                               </Button>
                               <Button
                                 size="sm"
@@ -2462,6 +2523,180 @@ export default function VeritaPolicyMyPoliciesPage() {
                 <Loader2 className="animate-spin mr-1" size={14} />
               )}
               Assign ({assignSelected.size})
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Per-document attestation tracker ───────────────────────────── */}
+      <Dialog
+        open={!!trackerDoc}
+        onOpenChange={(open) => {
+          if (!open) setTrackerDoc(null);
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Attestation tracker</DialogTitle>
+          </DialogHeader>
+          {trackerDoc && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Who was assigned{" "}
+                <span className="font-medium">{trackerDoc.title}</span>, who has
+                opened it, and who has attested they read and understood it.
+              </p>
+              {trackerLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="animate-spin" size={14} /> Loading roster...
+                </div>
+              ) : !trackerData || trackerData.attestations.length === 0 ? (
+                <div className="rounded border p-4 text-sm text-muted-foreground">
+                  No one is assigned to this document yet. Use{" "}
+                  <span className="font-medium">Assign</span> to send it to staff
+                  for read-and-attest.
+                </div>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <span className="rounded bg-muted px-2 py-1">
+                      Assigned:{" "}
+                      <span className="font-semibold">{trackerData.summary.total}</span>
+                    </span>
+                    <span className="rounded bg-green-100 text-green-800 px-2 py-1">
+                      Attested:{" "}
+                      <span className="font-semibold">{trackerData.summary.completed}</span>
+                    </span>
+                    <span className="rounded bg-amber-100 text-amber-800 px-2 py-1">
+                      Opened, not signed:{" "}
+                      <span className="font-semibold">{trackerData.summary.opened}</span>
+                    </span>
+                    <span className="rounded bg-muted px-2 py-1">
+                      Outstanding:{" "}
+                      <span className="font-semibold">{trackerData.summary.outstanding}</span>
+                    </span>
+                    {trackerData.summary.overdue > 0 && (
+                      <span className="rounded bg-red-100 text-red-800 px-2 py-1">
+                        Overdue:{" "}
+                        <span className="font-semibold">{trackerData.summary.overdue}</span>
+                      </span>
+                    )}
+                  </div>
+                  <div className="border rounded max-h-80 overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-background border-b text-left text-xs text-muted-foreground">
+                        <tr>
+                          <th className="py-2 px-3">Staff</th>
+                          <th className="py-2 px-3">Assigned</th>
+                          <th className="py-2 px-3">Due</th>
+                          <th className="py-2 px-3">Last opened</th>
+                          <th className="py-2 px-3">Attested</th>
+                          <th className="py-2 px-3">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {trackerData.attestations.map((r) => {
+                          const badge =
+                            r.status === "attested"
+                              ? { t: "Attested", c: "bg-green-100 text-green-800" }
+                              : r.status === "overdue"
+                                ? { t: "Overdue", c: "bg-red-100 text-red-800" }
+                                : r.status === "opened"
+                                  ? { t: "Opened, not signed", c: "bg-amber-100 text-amber-800" }
+                                  : { t: "Not opened", c: "bg-muted text-muted-foreground" };
+                          return (
+                            <tr key={r.id} className="border-b last:border-b-0">
+                              <td className="py-2 px-3">
+                                <div className="font-medium">
+                                  {r.assignee_name || r.assignee_email}
+                                </div>
+                                {r.assignee_name && r.assignee_email && (
+                                  <div className="text-xs text-muted-foreground">
+                                    {r.assignee_email}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-2 px-3 text-muted-foreground">
+                                {fmtDate(r.assigned_at)}
+                              </td>
+                              <td className="py-2 px-3 text-muted-foreground">
+                                {r.due_date ? fmtDate(r.due_date) : "-"}
+                              </td>
+                              <td className="py-2 px-3 text-muted-foreground">
+                                {r.last_opened_at ? fmtDate(r.last_opened_at) : "Not opened"}
+                              </td>
+                              <td className="py-2 px-3 text-muted-foreground">
+                                {r.completed_at ? (
+                                  <span>
+                                    {fmtDate(r.completed_at)}
+                                    {r.is_stale_version && (
+                                      <span className="ml-1 text-amber-700">
+                                        (older version)
+                                      </span>
+                                    )}
+                                  </span>
+                                ) : (
+                                  "-"
+                                )}
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className={`rounded px-2 py-0.5 text-xs ${badge.c}`}>
+                                  {badge.t}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {trackerData.staffSignatures.length > 0 && (
+                    <div>
+                      <div className="text-xs font-medium text-muted-foreground mb-1">
+                        Staff Portal read-and-sign ({trackerData.staffSignatures.length})
+                      </div>
+                      <div className="border rounded divide-y max-h-40 overflow-y-auto">
+                        {trackerData.staffSignatures.map((s) => (
+                          <div
+                            key={s.id}
+                            className="flex items-center justify-between px-3 py-1.5 text-sm"
+                          >
+                            <span className="font-medium">
+                              {s.signer_name}
+                              {s.signer_title && (
+                                <span className="ml-1 text-xs text-muted-foreground">
+                                  {s.signer_title}
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {s.signed_at ? fmtDate(s.signed_at) : ""}
+                              {s.version_number != null ? ` v${s.version_number}` : ""}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            {trackerDoc && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => downloadSignatureReport(trackerDoc)}
+                disabled={downloadingSigReport}
+                title="Download the combined signature report as an Excel workbook."
+              >
+                <FileSpreadsheet size={14} className="mr-1" />
+                {downloadingSigReport ? "Generating..." : "Signature report (Excel)"}
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setTrackerDoc(null)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
