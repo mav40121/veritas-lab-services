@@ -224,6 +224,14 @@ const STATUS_BADGE: Record<string, string> = {
 function fmtDate(s: string | null): string {
   if (!s) return "-";
   try {
+    // A plain YYYY-MM-DD (e.g. an attestation due date) must not be parsed as
+    // UTC midnight and shifted back a day in a timezone behind UTC. Build it as
+    // a local calendar date so the day shown is the day stored. Timestamps
+    // (with a time component) keep formatting normally.
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if (m) {
+      return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString();
+    }
     return new Date(s).toLocaleDateString();
   } catch {
     return s;
