@@ -29,7 +29,17 @@ That moves the honest sales claim close to "we replace MediaLab," not just
 The parking-lot #39 entry should be updated to reflect this (done in the same
 pass as this doc).
 
-## 1. Approval delegation (ready-to-build, effort M)
+## 1. Approval delegation (BUILT 2026-10-04, effort M)
+
+> Status: SHIPPED to a PR on 2026-10-04 (deploy held for operator authorization,
+> Gate 2). Implemented exactly as designed below: `policy_approval_delegations`
+> table + migration, `delegatorsFor` + `canUserApproveStepDelegated` +
+> `countEligibleReviewersForStepDelegated` in server/veritapolicyApproval.ts (both
+> laundering guards), delegate attribution on the signoff comment + audit log,
+> CRUD routes, and a Delegations dialog in VeritaPolicyMyPoliciesPage.tsx. Verified
+> by scripts/verify-veritadc-approval-delegation.ts (19/19) plus a full local
+> browser exercise (create -> ACTIVE -> revoke) and API guard checks.
+
 
 ### Problem
 When a reviewer who must approve a workflow step is out (vacation, leave), the

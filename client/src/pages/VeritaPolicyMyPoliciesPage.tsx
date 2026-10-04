@@ -849,6 +849,67 @@ export default function VeritaPolicyMyPoliciesPage() {
     onError: (e: any) => toast({ title: "Remove failed", description: String(e?.message || e), variant: "destructive" }),
   });
 
+  // Approval delegation (#39): a reviewer names a temporary designate who
+  // inherits their approval eligibility for a date window.
+  const [delegationsOpen, setDelegationsOpen] = useState(false);
+  const [delFrom, setDelFrom] = useState<string>("");
+  const [delTo, setDelTo] = useState<string>("");
+  const [delRole, setDelRole] = useState<string>("__any__");
+  const [delManual, setDelManual] = useState<string>("__any__");
+  const [delStart, setDelStart] = useState<string>("");
+  const [delEnd, setDelEnd] = useState<string>("");
+  const [delNote, setDelNote] = useState<string>("");
+  const { data: delegationsData } = useQuery<{
+    delegations: {
+      id: number; from_user_id: number; to_user_id: number;
+      from_name: string; from_email: string; to_name: string; to_email: string;
+      required_role: string | null; manual_id: number | null; manual_name: string | null;
+      starts_on: string; ends_on: string; note: string | null; status: string;
+    }[];
+    members: { user_id: number; name: string; email: string; role: string }[];
+    manuals: { id: number; name: string }[];
+    roleOptions: string[];
+    callerUserId: number;
+    callerIsAdmin: boolean;
+    today: string;
+  }>({
+    queryKey: [`/api/labs/${activeLabId}/veritapolicy/delegations`],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!activeLabId && delegationsOpen,
+  });
+  const invalidateDelegations = () =>
+    queryClient.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/veritapolicy/delegations`] });
+  const createDelegationMutation = useMutation({
+    mutationFn: async () => {
+      const fromUserId = delegationsData?.callerIsAdmin ? Number(delFrom) : delegationsData?.callerUserId;
+      const res = await apiRequest("POST", `/api/labs/${activeLabId}/veritapolicy/delegations`, {
+        fromUserId,
+        toUserId: Number(delTo),
+        requiredRole: delRole === "__any__" ? null : delRole,
+        manualId: delManual === "__any__" ? null : Number(delManual),
+        startsOn: delStart,
+        endsOn: delEnd,
+        note: delNote || null,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      setDelTo(""); setDelRole("__any__"); setDelManual("__any__");
+      setDelStart(""); setDelEnd(""); setDelNote("");
+      invalidateDelegations();
+      toast({ title: "Delegation created" });
+    },
+    onError: (e: any) => toast({ title: "Create failed", description: String(e?.message || e), variant: "destructive" }),
+  });
+  const revokeDelegationMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("POST", `/api/labs/${activeLabId}/veritapolicy/delegations/${id}/revoke`);
+      return res.json();
+    },
+    onSuccess: () => { invalidateDelegations(); toast({ title: "Delegation revoked" }); },
+    onError: (e: any) => toast({ title: "Revoke failed", description: String(e?.message || e), variant: "destructive" }),
+  });
+
   const assignMutation = useMutation({
     mutationFn: async () => {
       if (!assignDoc) throw new Error("No document");
@@ -1370,6 +1431,13 @@ export default function VeritaPolicyMyPoliciesPage() {
             title="Customize the automated policy review-reminder emails"
           >
             <MessageSquare size={14} className="mr-1.5" /> Reminder emails
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setDelegationsOpen(true)}
+            title="Temporarily delegate approval authority when a reviewer is out"
+          >
+            <Users size={14} className="mr-1.5" /> Delegations
           </Button>
           <Button onClick={() => setUploadOpen(true)}>
             <Upload size={14} className="mr-1.5" /> Upload Policy
@@ -3032,6 +3100,146 @@ export default function VeritaPolicyMyPoliciesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setApproversOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Approval delegation (#39) ──────────────────────────────────── */}
+      <Dialog open={delegationsOpen} onOpenChange={(o) => { if (!o) setDelegationsOpen(false); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Approval delegation</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              When a reviewer is out, delegate their approval authority to a stand-in for
+              a date window. The delegate inherits only what the delegator could already
+              approve, and every signature taken by delegation is recorded with the
+              delegator&#8217;s name. Leave Role or Manual as All to delegate all of them.
+            </p>
+            <div className="border rounded divide-y">
+              {(delegationsData?.delegations ?? []).length === 0 ? (
+                <div className="p-3 text-xs text-muted-foreground">No delegations yet.</div>
+              ) : (
+                (delegationsData?.delegations ?? []).map((d) => {
+                  const chip = d.status === "active" ? "bg-green-100 text-green-800"
+                    : d.status === "upcoming" ? "bg-blue-100 text-blue-800"
+                    : d.status === "revoked" ? "bg-gray-200 text-gray-600"
+                    : "bg-gray-100 text-gray-500";
+                  const canRevoke = (d.status === "active" || d.status === "upcoming")
+                    && (delegationsData?.callerIsAdmin || d.from_user_id === delegationsData?.callerUserId);
+                  return (
+                    <div key={d.id} className="flex items-start justify-between px-3 py-2 text-sm gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${chip}`}>{d.status}</span>
+                          <span className="font-medium">{d.from_name || d.from_email}</span>
+                          <span className="text-muted-foreground">to</span>
+                          <span className="font-medium">{d.to_name || d.to_email}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {d.required_role ? (APPROVER_ROLE_LABELS[d.required_role] || d.required_role) : "All roles"}
+                          {" · "}
+                          {d.manual_name ? d.manual_name : "All manuals"}
+                          {" · "}
+                          {d.starts_on} to {d.ends_on}
+                        </div>
+                        {d.note && <div className="text-xs text-muted-foreground italic mt-0.5">{d.note}</div>}
+                      </div>
+                      {canRevoke && (
+                        <Button size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 shrink-0"
+                          onClick={() => revokeDelegationMutation.mutate(d.id)}
+                          disabled={revokeDelegationMutation.isPending} title="Revoke">
+                          Revoke
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            <div className="border-t pt-3 space-y-3">
+              <div className="text-xs font-medium text-muted-foreground">New delegation</div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">From (delegator)</Label>
+                  {delegationsData?.callerIsAdmin ? (
+                    <Select value={delFrom} onValueChange={setDelFrom}>
+                      <SelectTrigger data-testid="deleg-from"><SelectValue placeholder="Reviewer" /></SelectTrigger>
+                      <SelectContent>
+                        {(delegationsData?.members ?? []).map((m) => (
+                          <SelectItem key={m.user_id} value={String(m.user_id)}>{m.name || m.email}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="text-sm py-2 px-1 text-muted-foreground">You</div>
+                  )}
+                </div>
+                <div>
+                  <Label className="text-xs">To (delegate)</Label>
+                  <Select value={delTo} onValueChange={setDelTo}>
+                    <SelectTrigger data-testid="deleg-to"><SelectValue placeholder="Stand-in" /></SelectTrigger>
+                    <SelectContent>
+                      {(delegationsData?.members ?? []).map((m) => (
+                        <SelectItem key={m.user_id} value={String(m.user_id)}>{m.name || m.email}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Role</Label>
+                  <Select value={delRole} onValueChange={setDelRole}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__any__">All roles</SelectItem>
+                      {(delegationsData?.roleOptions ?? []).map((r) => (
+                        <SelectItem key={r} value={r}>{APPROVER_ROLE_LABELS[r] || r}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Manual</Label>
+                  <Select value={delManual} onValueChange={setDelManual}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__any__">All manuals</SelectItem>
+                      {(delegationsData?.manuals ?? []).map((m) => (
+                        <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Starts</Label>
+                  <Input type="date" value={delStart} onChange={(e) => setDelStart(e.target.value)} data-testid="deleg-start" />
+                </div>
+                <div>
+                  <Label className="text-xs">Ends</Label>
+                  <Input type="date" value={delEnd} onChange={(e) => setDelEnd(e.target.value)} data-testid="deleg-end" />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Note (optional)</Label>
+                <Textarea value={delNote} onChange={(e) => setDelNote(e.target.value)} rows={2} placeholder="e.g. Covering for annual leave" />
+              </div>
+              <Button
+                onClick={() => createDelegationMutation.mutate()}
+                disabled={
+                  createDelegationMutation.isPending ||
+                  !delTo || !delStart || !delEnd ||
+                  (!!delegationsData?.callerIsAdmin && !delFrom)
+                }
+                data-testid="deleg-create"
+              >
+                {createDelegationMutation.isPending && <Loader2 className="animate-spin mr-1" size={14} />}
+                Create delegation
+              </Button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDelegationsOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

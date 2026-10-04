@@ -6786,6 +6786,45 @@ for (const alterSql of [
   try { sqlite.exec(alterSql); } catch {}
 }
 
+// Approval-workflow delegation (#39 MediaLab parity). When a reviewer is out,
+// they (or an owner/admin) name a temporary designate who INHERITS the
+// reviewer's approval eligibility for a date window. The delegate never gains a
+// role the delegator lacks; eligibility is resolved by re-running the delegator
+// through canUserApproveStep (see canUserApproveStepDelegated / delegatorsFor in
+// veritapolicyApproval.ts). required_role NULL = every role the delegator holds;
+// manual_id NULL = every manual. Dates are lab-local YYYY-MM-DD, window
+// inclusive. revoked_at set = delegation no longer in force.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_approval_delegations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    from_user_id INTEGER NOT NULL,
+    to_user_id INTEGER NOT NULL,
+    required_role TEXT,
+    manual_id INTEGER,
+    starts_on TEXT NOT NULL,
+    ends_on TEXT NOT NULL,
+    note TEXT,
+    created_by INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    revoked_at TEXT
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_approval_delegations_to ON policy_approval_delegations(lab_id, to_user_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_approval_delegations_from ON policy_approval_delegations(lab_id, from_user_id)`); } catch {}
+// New DB Table rule: ALTER migrations so a prod DB that predates this block
+// gains the columns (table created above on fresh boots; ALTERs no-op there).
+for (const alterSql of [
+  "ALTER TABLE policy_approval_delegations ADD COLUMN required_role TEXT",
+  "ALTER TABLE policy_approval_delegations ADD COLUMN manual_id INTEGER",
+  "ALTER TABLE policy_approval_delegations ADD COLUMN note TEXT",
+  "ALTER TABLE policy_approval_delegations ADD COLUMN created_by INTEGER",
+  "ALTER TABLE policy_approval_delegations ADD COLUMN created_at TEXT",
+  "ALTER TABLE policy_approval_delegations ADD COLUMN revoked_at TEXT",
+]) {
+  try { sqlite.exec(alterSql); } catch {}
+}
+
 // Phase 8 — surveyor public-link table. Lab owner generates a signed
 // URL a surveyor can use to browse approved policies without an
 // account. Auto-expires; lab admin can revoke at any time.

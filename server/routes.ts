@@ -35487,8 +35487,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     renderDocxToHtml,
     writeAuditLog,
     canUserApproveStep,
+    canUserApproveStepDelegated,
     getCurrentPendingStep,
     countEligibleReviewersForStep,
+    countEligibleReviewersForStepDelegated,
     isVersionMajorRevision,
     isPolicyExpired,
     POLICY_EXPIRED_RESPONSE,
@@ -35718,6 +35720,136 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
       sqlite.prepare("DELETE FROM policy_manual_approvers WHERE id = ?").run(approverId);
       writeAuditLog(sqlite, { labId: req.scope.labId, documentId: null, userId: req.userId, action: "manual_edited", details: { manual_id: manualId, approver_removed: approverId }, ipAddress: req.ip, userAgent: req.headers["user-agent"] as string | undefined });
+      res.json({ ok: true });
+    }
+  );
+
+  // ── Approval delegation (#39 MediaLab parity) ─────────────────────────
+  // A reviewer who will be out names a temporary designate who INHERITS their
+  // approval eligibility for a date window (see canUserApproveStepDelegated /
+  // delegatorsFor in veritapolicyApproval.ts). An owner/admin may create a
+  // delegation for anyone; a non-admin may only delegate FROM themselves.
+  const DELEGATION_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+  // GET — all delegations for the lab, plus pickable members, role + manual opts.
+  app.get(
+    "/api/labs/:labId/veritapolicy/delegations",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const today = labLocalDate(new Date().toISOString());
+      const rows = sqlite.prepare(
+        `SELECT d.id, d.from_user_id, d.to_user_id, d.required_role, d.manual_id,
+                d.starts_on, d.ends_on, d.note, d.revoked_at, d.created_at,
+                uf.name AS from_name, uf.email AS from_email,
+                ut.name AS to_name, ut.email AS to_email,
+                m.name AS manual_name
+           FROM policy_approval_delegations d
+           JOIN users uf ON uf.id = d.from_user_id
+           JOIN users ut ON ut.id = d.to_user_id
+           LEFT JOIN policy_manuals m ON m.id = d.manual_id
+          WHERE d.lab_id = ?
+          ORDER BY (d.revoked_at IS NOT NULL), d.ends_on DESC, d.starts_on DESC`
+      ).all(req.scope.labId) as any[];
+      const delegations = rows.map((r) => ({
+        ...r,
+        status: r.revoked_at
+          ? "revoked"
+          : r.ends_on < today
+          ? "expired"
+          : r.starts_on > today
+          ? "upcoming"
+          : "active",
+      }));
+      const members = sqlite.prepare(
+        `SELECT lm.user_id, u.name, u.email, lm.role
+           FROM lab_members lm JOIN users u ON u.id = lm.user_id
+          WHERE lm.lab_id = ? AND lm.status = 'active' ORDER BY u.name`
+      ).all(req.scope.labId);
+      const manuals = sqlite.prepare(
+        `SELECT id, name FROM policy_manuals WHERE lab_id = ? ORDER BY name`
+      ).all(req.scope.labId);
+      const me = sqlite.prepare(
+        "SELECT role FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1"
+      ).get(req.userId, req.scope.labId) as any;
+      res.json({
+        delegations,
+        members,
+        manuals,
+        roleOptions: MANUAL_APPROVER_ROLES,
+        callerUserId: req.userId,
+        callerIsAdmin: me?.role === "owner" || me?.role === "admin",
+        today,
+      });
+    }
+  );
+
+  // POST — create a delegation.
+  // Body: { fromUserId, toUserId, requiredRole?, manualId?, startsOn, endsOn, note? }
+  app.post(
+    "/api/labs/:labId/veritapolicy/delegations",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const { fromUserId, toUserId, requiredRole, manualId, startsOn, endsOn, note } = req.body || {};
+      const fromId = Number(fromUserId);
+      const toId = Number(toUserId);
+      if (!Number.isFinite(fromId) || !Number.isFinite(toId)) return res.status(400).json({ error: "fromUserId and toUserId required" });
+      if (fromId === toId) return res.status(400).json({ error: "A reviewer cannot delegate to themselves" });
+      if (!DELEGATION_DATE_RE.test(String(startsOn)) || !DELEGATION_DATE_RE.test(String(endsOn)))
+        return res.status(400).json({ error: "startsOn and endsOn must be YYYY-MM-DD" });
+      if (String(startsOn) > String(endsOn)) return res.status(400).json({ error: "startsOn must be on or before endsOn" });
+      const roleVal = requiredRole == null || requiredRole === "" ? null : String(requiredRole);
+      if (roleVal != null && !MANUAL_APPROVER_ROLES.includes(roleVal)) return res.status(400).json({ error: "Invalid required role" });
+      const sqlite = (db as any).$client;
+      const me = sqlite.prepare("SELECT role FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1").get(req.userId, req.scope.labId) as any;
+      if (!me) return res.status(403).json({ error: "Not an active member of this lab" });
+      const isAdmin = me.role === "owner" || me.role === "admin";
+      if (!isAdmin && fromId !== req.userId) return res.status(403).json({ error: "You can only delegate your own approval authority" });
+      for (const [label, uid] of [["delegator", fromId], ["delegate", toId]] as const) {
+        const ok = sqlite.prepare("SELECT 1 FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1").get(uid, req.scope.labId);
+        if (!ok) return res.status(400).json({ error: `The ${label} is not an active member of this lab` });
+      }
+      let manualVal: number | null = null;
+      if (manualId != null && manualId !== "") {
+        manualVal = Number(manualId);
+        if (!Number.isFinite(manualVal)) return res.status(400).json({ error: "Bad manual id" });
+        const man = sqlite.prepare("SELECT lab_id FROM policy_manuals WHERE id = ?").get(manualVal) as any;
+        if (!man || man.lab_id !== req.scope.labId) return res.status(400).json({ error: "Manual not in this lab" });
+      }
+      const r = sqlite.prepare(
+        `INSERT INTO policy_approval_delegations
+           (lab_id, from_user_id, to_user_id, required_role, manual_id, starts_on, ends_on, note, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(req.scope.labId, fromId, toId, roleVal, manualVal, String(startsOn), String(endsOn), note ? String(note) : null, req.userId);
+      writeAuditLog(sqlite, { labId: req.scope.labId, documentId: null, userId: req.userId, action: "delegation_created", details: { delegation_id: Number(r.lastInsertRowid), from_user_id: fromId, to_user_id: toId, required_role: roleVal, manual_id: manualVal, starts_on: startsOn, ends_on: endsOn }, ipAddress: req.ip, userAgent: req.headers["user-agent"] as string | undefined });
+      res.status(201).json({ id: Number(r.lastInsertRowid) });
+    }
+  );
+
+  // POST revoke — end a delegation now. Owner/admin or the delegator.
+  app.post(
+    "/api/labs/:labId/veritapolicy/delegations/:id/revoke",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const row = sqlite.prepare("SELECT lab_id, from_user_id, revoked_at FROM policy_approval_delegations WHERE id = ?").get(id) as any;
+      if (!row) return res.status(404).json({ error: "Delegation not found" });
+      if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const me = sqlite.prepare("SELECT role FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1").get(req.userId, req.scope.labId) as any;
+      const isAdmin = me && (me.role === "owner" || me.role === "admin");
+      if (!isAdmin && row.from_user_id !== req.userId) return res.status(403).json({ error: "Only the delegator or an owner/admin can revoke this" });
+      if (row.revoked_at) return res.json({ ok: true, alreadyRevoked: true });
+      sqlite.prepare("UPDATE policy_approval_delegations SET revoked_at = datetime('now') WHERE id = ?").run(id);
+      writeAuditLog(sqlite, { labId: req.scope.labId, documentId: null, userId: req.userId, action: "delegation_revoked", details: { delegation_id: id }, ipAddress: req.ip, userAgent: req.headers["user-agent"] as string | undefined });
       res.json({ ok: true });
     }
   );
@@ -36854,21 +36986,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           reason: "No pending step",
         });
       }
-      const check = canUserApproveStep(sqlite, {
+      const check = canUserApproveStepDelegated(sqlite, {
         userId: req.userId,
         labId: req.scope.labId,
         documentOwnerId: doc.owner_user_id,
         stepRow: pending.step,
         isMajorRevision,
         manualId: doc.manual_id ?? null,
-      });
+      }, labLocalDate(new Date().toISOString()));
+      let viaDelegation: { delegatorId: number; delegatorName: string } | null = null;
+      if (check.ok && (check as any).viaDelegation) {
+        const dId = (check as any).viaDelegation.delegatorId as number;
+        const u = sqlite.prepare("SELECT name, email FROM users WHERE id = ?").get(dId) as any;
+        viaDelegation = { delegatorId: dId, delegatorName: u?.name || u?.email || `user #${dId}` };
+      }
       res.json({
         step: pending.step,
         totalSteps: pending.totalSteps,
         completedSteps: pending.completedSteps,
         isMajorRevision,
         canCurrentUserApprove: check.ok,
-        reason: check.ok ? null : check.reason,
+        viaDelegation,
+        reason: check.ok ? null : (check as any).reason,
       });
     }
   );
@@ -36918,15 +37057,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!pending.step) {
         return res.status(409).json({ error: "No pending step" });
       }
-      const check = canUserApproveStep(sqlite, {
+      const check = canUserApproveStepDelegated(sqlite, {
         userId: req.userId,
         labId: req.scope.labId,
         documentOwnerId: doc.owner_user_id,
         stepRow: pending.step,
         isMajorRevision: isVersionMajorRevision(sqlite, doc.current_version_id),
         manualId: doc.manual_id ?? null,
-      });
-      if (!check.ok) return res.status(403).json({ error: check.reason });
+      }, labLocalDate(new Date().toISOString()));
+      if (!check.ok) return res.status(403).json({ error: (check as any).reason });
+      // Approval delegation (#39): when the approval is taken by a delegate,
+      // resolve the delegator for a non-repudiable attribution note recorded on
+      // the signoff comment and in the audit log.
+      let delegationNote = "";
+      let delegatorUserId: number | null = null;
+      if ((check as any).viaDelegation) {
+        delegatorUserId = (check as any).viaDelegation.delegatorId as number;
+        const du = sqlite.prepare("SELECT name, email FROM users WHERE id = ?").get(delegatorUserId) as any;
+        const dn = du?.name || du?.email || `user #${delegatorUserId}`;
+        delegationNote = ` [Signed as delegate for ${dn} (user #${delegatorUserId})]`;
+      }
       // Pull the file hash from the current version for non-repudiation.
       const ver = sqlite
         .prepare("SELECT file_hash_sha256 FROM policy_versions WHERE id = ?")
@@ -36944,7 +37094,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           doc.current_version_id,
           pending.step.id,
           req.userId,
-          comment || null,
+          (comment ? comment + delegationNote : delegationNote || null),
           typedSignature.trim(),
           hash,
           req.ip || null,
@@ -36959,6 +37109,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           workflow_step_id: pending.step.id,
           step_order: pending.step.step_order,
           step_name: pending.step.step_name,
+          ...(delegatorUserId != null ? { via_delegation: true, delegator_user_id: delegatorUserId } : {}),
         },
         ipAddress: req.ip,
         userAgent: req.headers["user-agent"] as string | undefined,
@@ -37035,15 +37186,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!pending.step) {
         return res.status(409).json({ error: "No pending step" });
       }
-      const check = canUserApproveStep(sqlite, {
+      const check = canUserApproveStepDelegated(sqlite, {
         userId: req.userId,
         labId: req.scope.labId,
         documentOwnerId: doc.owner_user_id,
         stepRow: pending.step,
         isMajorRevision: isVersionMajorRevision(sqlite, doc.current_version_id),
         manualId: doc.manual_id ?? null,
-      });
-      if (!check.ok) return res.status(403).json({ error: check.reason });
+      }, labLocalDate(new Date().toISOString()));
+      if (!check.ok) return res.status(403).json({ error: (check as any).reason });
+      // Approval delegation (#39): attribute a delegate's rejection to the
+      // delegator too (rejection is a 21 CFR Part 11 electronic signature).
+      let delegationNote = "";
+      let delegatorUserId: number | null = null;
+      if ((check as any).viaDelegation) {
+        delegatorUserId = (check as any).viaDelegation.delegatorId as number;
+        const du = sqlite.prepare("SELECT name, email FROM users WHERE id = ?").get(delegatorUserId) as any;
+        const dn = du?.name || du?.email || `user #${delegatorUserId}`;
+        delegationNote = ` [Signed as delegate for ${dn} (user #${delegatorUserId})]`;
+      }
       const ver = sqlite
         .prepare("SELECT file_hash_sha256 FROM policy_versions WHERE id = ?")
         .get(doc.current_version_id) as { file_hash_sha256: string } | undefined;
@@ -37060,7 +37221,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           doc.current_version_id,
           pending.step.id,
           req.userId,
-          comment || null,
+          (comment ? comment + delegationNote : delegationNote || null),
           typedSignature.trim(),
           hash,
           req.ip || null,
@@ -37078,7 +37239,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         documentId: id,
         userId: req.userId,
         action: "rejected",
-        details: { workflow_step_id: pending.step.id, comment: comment || null },
+        details: {
+          workflow_step_id: pending.step.id,
+          comment: comment || null,
+          ...(delegatorUserId != null ? { via_delegation: true, delegator_user_id: delegatorUserId } : {}),
+        },
         ipAddress: req.ip,
         userAgent: req.headers["user-agent"] as string | undefined,
       });
@@ -37173,13 +37338,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         step_order: s.step_order,
         step_name: s.step_name,
         required_role: s.required_role,
-        eligible_count: countEligibleReviewersForStep(sqlite, {
+        eligible_count: countEligibleReviewersForStepDelegated(sqlite, {
           labId: req.scope.labId,
           documentOwnerId: doc.owner_user_id,
           stepRow: s,
           isMajorRevision,
           manualId: doc.manual_id ?? null,
-        }),
+        }, labLocalDate(new Date().toISOString())),
       }));
       const minCount = perStep.length === 0 ? 0 : perStep.reduce((m, p) => Math.min(m, p.eligible_count), Infinity);
       res.json({ perStep, minCount });
@@ -39318,14 +39483,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const p = getCurrentPendingStep(sqlite, d.id);
         if (!p.step) continue;
         const isMajorRevision = isVersionMajorRevision(sqlite, d.current_version_id);
-        const check = canUserApproveStep(sqlite, {
+        const check = canUserApproveStepDelegated(sqlite, {
           userId: req.userId,
           labId: req.scope.labId,
           documentOwnerId: d.owner_user_id,
           stepRow: p.step,
           isMajorRevision,
           manualId: d.manual_id ?? null,
-        });
+        }, labLocalDate(new Date().toISOString()));
         if (!check.ok) continue;
         pending.push({
           document_id: d.id,
