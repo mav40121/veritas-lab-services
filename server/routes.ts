@@ -13633,8 +13633,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch { /* audit best-effort */ }
   };
 
-  app.get("/api/labs/:labId/director-delegations/catalog", authMiddleware, labScopeMiddleware, (_req: any, res) => {
-    res.json({ positions: DELEGATION_POSITIONS, complexities: DELEGATION_COMPLEXITIES, catalog: DELEGATION_CATALOG });
+  app.get("/api/labs/:labId/director-delegations/catalog", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    res.json({ positions: DELEGATION_POSITIONS, complexities: DELEGATION_COMPLEXITIES, catalog: DELEGATION_CATALOG, isMedicalDirector: isDesignatedMd(req.scope.labId, req.userId) });
   });
 
   app.get("/api/labs/:labId/director-delegations", authMiddleware, labScopeMiddleware, (req: any, res) => {
