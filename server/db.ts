@@ -6705,6 +6705,38 @@ for (const alterSql of [
   try { sqlite.exec(alterSql); } catch {}
 }
 
+// Per-manual (department) approver mapping (#39 MediaLab parity). Lets a lab
+// say "only the Microbiology lab director approves Microbiology policies": when
+// a document in a given manual reaches a workflow step requiring a role, and
+// this table holds any approver(s) for (manual_id, required_role), eligibility
+// NARROWS to exactly those users for that manual. With no mapping, the workflow
+// step's generic role rule applies unchanged. One row per (manual, role, user);
+// several users may share a (manual, role).
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_manual_approvers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    manual_id INTEGER NOT NULL,
+    -- One of the workflow-step role tokens: medical_director,
+    -- technical_consultant, technical_supervisor, general_supervisor,
+    -- clinical_consultant, any_active_seat. (specific_user steps are already
+    -- user-scoped and are not overridden here.)
+    required_role TEXT NOT NULL,
+    user_id INTEGER NOT NULL,
+    created_by INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_policy_manual_approvers ON policy_manual_approvers(lab_id, manual_id, required_role, user_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_manual_approvers_lookup ON policy_manual_approvers(manual_id, required_role)`); } catch {}
+// New DB Table rule: ALTER migrations for a table predating this block.
+for (const alterSql of [
+  "ALTER TABLE policy_manual_approvers ADD COLUMN created_by INTEGER",
+  "ALTER TABLE policy_manual_approvers ADD COLUMN created_at TEXT",
+]) {
+  try { sqlite.exec(alterSql); } catch {}
+}
+
 // Phase 8 — surveyor public-link table. Lab owner generates a signed
 // URL a surveyor can use to browse approved policies without an
 // account. Auto-expires; lab admin can revoke at any time.

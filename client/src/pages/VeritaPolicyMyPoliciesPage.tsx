@@ -778,6 +778,61 @@ export default function VeritaPolicyMyPoliciesPage() {
     enabled: !!activeLabId && !!trackerDoc,
   });
 
+  // ── Per-manual approver mapping (#39 MediaLab parity) ───────────────────
+  const APPROVER_ROLE_LABELS: Record<string, string> = {
+    medical_director: "Medical Director",
+    technical_consultant: "Technical Consultant",
+    technical_supervisor: "Technical Supervisor",
+    general_supervisor: "General Supervisor",
+    clinical_consultant: "Clinical Consultant",
+    any_active_seat: "Any active (writer) seat",
+  };
+  const [approversOpen, setApproversOpen] = useState(false);
+  const [approverManualId, setApproverManualId] = useState<string>("");
+  const [addApproverRole, setAddApproverRole] = useState<string>("");
+  const [addApproverUserId, setAddApproverUserId] = useState<string>("");
+  const { data: approversData } = useQuery<{
+    approvers: { id: number; required_role: string; user_id: number; user_name: string; user_email: string }[];
+    members: { user_id: number; name: string; email: string; role: string }[];
+    roleOptions: string[];
+  }>({
+    queryKey: [`/api/labs/${activeLabId}/veritapolicy/manuals/${approverManualId}/approvers`],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!activeLabId && !!approverManualId && approversOpen,
+  });
+  const invalidateApprovers = () =>
+    queryClient.invalidateQueries({
+      queryKey: [`/api/labs/${activeLabId}/veritapolicy/manuals/${approverManualId}/approvers`],
+    });
+  const addApproverMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest(
+        "POST",
+        `/api/labs/${activeLabId}/veritapolicy/manuals/${approverManualId}/approvers`,
+        { requiredRole: addApproverRole, userId: Number(addApproverUserId) }
+      );
+      return res.json();
+    },
+    onSuccess: () => {
+      setAddApproverRole("");
+      setAddApproverUserId("");
+      invalidateApprovers();
+      toast({ title: "Approver added" });
+    },
+    onError: (e: any) => toast({ title: "Add failed", description: String(e?.message || e), variant: "destructive" }),
+  });
+  const removeApproverMutation = useMutation({
+    mutationFn: async (approverId: number) => {
+      const res = await apiRequest(
+        "DELETE",
+        `/api/labs/${activeLabId}/veritapolicy/manuals/${approverManualId}/approvers/${approverId}`
+      );
+      return res.json();
+    },
+    onSuccess: () => { invalidateApprovers(); toast({ title: "Approver removed" }); },
+    onError: (e: any) => toast({ title: "Remove failed", description: String(e?.message || e), variant: "destructive" }),
+  });
+
   const assignMutation = useMutation({
     mutationFn: async () => {
       if (!assignDoc) throw new Error("No document");
@@ -1212,6 +1267,17 @@ export default function VeritaPolicyMyPoliciesPage() {
         <div className="flex flex-wrap gap-2 sm:shrink-0">
           <Button variant="outline" onClick={() => setNewManualOpen(true)}>
             <FolderPlus size={14} className="mr-1.5" /> New Manual
+          </Button>
+          <Button
+            variant="outline"
+            disabled={manuals.length === 0}
+            onClick={() => {
+              setApproverManualId(manuals[0]?.id ? String(manuals[0].id) : "");
+              setApproversOpen(true);
+            }}
+            title="Designate who approves policies in a specific manual (department)"
+          >
+            <ShieldCheck size={14} className="mr-1.5" /> Manual approvers
           </Button>
           <Button onClick={() => setUploadOpen(true)}>
             <Upload size={14} className="mr-1.5" /> Upload Policy
@@ -2706,6 +2772,106 @@ export default function VeritaPolicyMyPoliciesPage() {
             <Button variant="outline" onClick={() => setTrackerDoc(null)}>
               Close
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Per-manual approver mapping (#39) ──────────────────────────── */}
+      <Dialog open={approversOpen} onOpenChange={(o) => { if (!o) setApproversOpen(false); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Manual approvers</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Designate who approves policies in a specific manual (department). When a
+              manual names an approver for a workflow role, only that person can approve
+              that step for policies in the manual. Manuals with no designation use the
+              workflow&#8217;s normal role rule.
+            </p>
+            <div>
+              <Label className="text-xs">Manual</Label>
+              <Select value={approverManualId} onValueChange={setApproverManualId}>
+                <SelectTrigger data-testid="approver-manual-select">
+                  <SelectValue placeholder="Pick a manual" />
+                </SelectTrigger>
+                <SelectContent>
+                  {manuals.map((m) => (
+                    <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {approverManualId && (
+              <>
+                <div className="border rounded divide-y">
+                  {(approversData?.approvers ?? []).length === 0 ? (
+                    <div className="p-3 text-xs text-muted-foreground">
+                      No designated approvers yet. This manual uses the workflow&#8217;s
+                      normal role rule.
+                    </div>
+                  ) : (
+                    (approversData?.approvers ?? []).map((a) => (
+                      <div key={a.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                        <span>
+                          <span className="font-medium">
+                            {APPROVER_ROLE_LABELS[a.required_role] || a.required_role}
+                          </span>
+                          <span className="mx-1 text-muted-foreground">:</span>
+                          {a.user_name || a.user_email}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-red-600 hover:text-red-700"
+                          onClick={() => removeApproverMutation.mutate(a.id)}
+                          disabled={removeApproverMutation.isPending}
+                          title="Remove"
+                        >
+                          <Trash2 size={13} />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <Label className="text-xs">Role</Label>
+                    <Select value={addApproverRole} onValueChange={setAddApproverRole}>
+                      <SelectTrigger><SelectValue placeholder="Role" /></SelectTrigger>
+                      <SelectContent>
+                        {(approversData?.roleOptions ?? []).map((r) => (
+                          <SelectItem key={r} value={r}>{APPROVER_ROLE_LABELS[r] || r}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex-1">
+                    <Label className="text-xs">Approver</Label>
+                    <Select value={addApproverUserId} onValueChange={setAddApproverUserId}>
+                      <SelectTrigger><SelectValue placeholder="Member" /></SelectTrigger>
+                      <SelectContent>
+                        {(approversData?.members ?? []).map((m) => (
+                          <SelectItem key={m.user_id} value={String(m.user_id)}>
+                            {m.name || m.email}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    onClick={() => addApproverMutation.mutate()}
+                    disabled={!addApproverRole || !addApproverUserId || addApproverMutation.isPending}
+                  >
+                    {addApproverMutation.isPending && <Loader2 className="animate-spin mr-1" size={14} />}
+                    Add
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setApproversOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
