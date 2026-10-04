@@ -8,6 +8,7 @@ import fs from "fs";
 import { storage } from "./storage";
 import { blockNonOperatorSeat } from "./seatAccess";
 import { isDelegationPosition, isDelegationComplexity, sanitizeResponsibilities, DELEGATION_CATALOG, DELEGATION_POSITIONS, DELEGATION_COMPLEXITIES } from "./directorDelegation";
+import { mayAttestAsDirectorOrDesignee, complexityForAnalyte, labHighestComplexity, isLabOwnerUser } from "./delegationGate";
 import { resolveStudyAccess, consumeStudyCredit, isUnlimitedPlan } from "./studyCredits";
 import { defaultReviewIntervalMonthsForState } from "./policyReviewInterval";
 import { resolveSignupPlan } from "./signupPlan";
@@ -4445,14 +4446,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(400).json({ error: "control_lot_id, period_year, period_month required" });
     }
     const sqlite = (db as any).$client;
-    const md = sqlite.prepare("SELECT lm.user_id, u.name FROM lab_members lm JOIN users u ON u.id = lm.user_id JOIN labs l ON l.id = lm.lab_id WHERE lm.lab_id = ? AND lm.status = 'active' AND l.medical_director_email IS NOT NULL AND lower(u.email) = lower(l.medical_director_email) LIMIT 1").get(req.scope.labId) as any;
-    if (!md) return res.status(409).json({ error: "No active Medical Director is designated for this lab. Set one in the lab's medical director settings." });
-    if (md.user_id !== req.userId) return res.status(403).json({ error: "Only the lab's designated Medical Director may co-sign." });
+    // MD-or-designee gate (item 5 Phase 2). The co-sign may be made by the designated
+    // medical director, a delegate holding an active Letter of Delegation with the QC
+    // co-sign responsibility for this test's complexity (TC covers moderate, TS covers
+    // high and moderate), or the account owner as a logged break-glass override.
+    const lot = sqlite.prepare("SELECT analyte FROM qc_control_lots WHERE id = ? AND lab_id = ?").get(Number(control_lot_id), req.scope.labId) as any;
+    const complexity = complexityForAnalyte(req.scope.labId, lot?.analyte);
+    const attest = mayAttestAsDirectorOrDesignee(req.scope.labId, req.userId, "qc_period_cosign", complexity);
+    let via: string | null = attest.via;
+    if (!attest.ok) {
+      if (isLabOwnerUser(req.scope.labId, req.userId)) via = "owner_override";
+      else return res.status(403).json({ error: "Only the medical director, a delegated Technical Consultant or Supervisor for this test's complexity, or the account owner (override) may co-sign." });
+    }
     const review = sqlite.prepare("SELECT id, attestation_acknowledged FROM qc_period_reviews WHERE lab_id = ? AND control_lot_id = ? AND period_year = ? AND period_month = ?").get(req.scope.labId, Number(control_lot_id), Number(period_year), Number(period_month)) as any;
     if (!review || review.attestation_acknowledged !== 1) return res.status(409).json({ error: "The reviewer must file the attestation before the Medical Director can co-sign." });
-    const signedName = (String(typed_name || "").trim()) || md.name || "Medical Director";
+    const signerRow = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
+    let signedName = (String(typed_name || "").trim()) || (signerRow?.name ? String(signerRow.name).trim() : "") || "Medical Director";
+    if (via === "designee") signedName += " (designee)";
+    else if (via === "owner_override") signedName += " (owner override)";
     sqlite.prepare("UPDATE qc_period_reviews SET md_signed_at = datetime('now'), md_signed_by_user_id = ?, md_signed_name = ? WHERE id = ?").run(req.userId, signedName, review.id);
-    res.json({ ok: true });
+    res.json({ ok: true, signed_as: via });
   });
 
   // Assemble the monthly-review payload for one control lot + period. Used by
@@ -22389,19 +22402,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // MD-cosign and VeritaPolicy medical_director routing); owner/admin passes via
   // req.scope.role. Anyone else gets 403. Signing stamps signed_by/signed_at/
   // signoff_role, closes the finding, and writes an audit-trail row.
-  app.post("/api/labs/:labId/findings/:id/signoff", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
+  app.post("/api/labs/:labId/findings/:id/signoff", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
     const sqlite = (db as any).$client;
     const finding = sqlite.prepare("SELECT * FROM findings WHERE id = ? AND lab_id = ?").get(Number(req.params.id), req.scope.labId) as any;
     if (!finding) return res.status(404).json({ error: "Finding not found in this lab" });
-    const mdRow = sqlite.prepare(
-      "SELECT lm.user_id FROM lab_members lm JOIN users u ON u.id = lm.user_id JOIN labs l ON l.id = lm.lab_id WHERE lm.lab_id = ? AND lm.status = 'active' AND l.medical_director_email IS NOT NULL AND lower(u.email) = lower(l.medical_director_email) LIMIT 1"
-    ).get(req.scope.labId) as any;
-    const isMd = !!mdRow && mdRow.user_id === req.userId;
-    const isOwnerAdmin = req.scope.role === "owner" || req.scope.role === "admin";
-    if (!isMd && !isOwnerAdmin) {
-      return res.status(403).json({ error: "Only the designated medical director or a lab owner/admin can sign off this event." });
+    // MD-or-designee gate (item 5 Phase 2). Closing a finding is a director attestation:
+    // the designated medical director, a delegate holding the finding-closure responsibility
+    // for the lab's complexity, or the account owner as a logged break-glass override.
+    // (Was: any owner/admin/editor via requireModuleEdit. Tightened per the delegation model.)
+    const complexity = labHighestComplexity(req.scope.labId);
+    const attest = mayAttestAsDirectorOrDesignee(req.scope.labId, req.userId, "finding_closure", complexity);
+    let signoff_role: string = attest.via || "";
+    if (!attest.ok) {
+      if (isLabOwnerUser(req.scope.labId, req.userId)) signoff_role = "owner_override";
+      else return res.status(403).json({ error: "Only the designated medical director, a delegated designee for finding closure, or the account owner (override) can close this finding." });
     }
-    const signoff_role = isMd ? "medical_director" : "admin";
     const signerRow = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
     const signerName = String(req.body?.signed_by ?? "").trim() || (signerRow?.name ? String(signerRow.name).trim() : "") || "Authorized signer";
     const now = new Date().toISOString();
