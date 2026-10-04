@@ -6764,6 +6764,28 @@ for (const alterSql of [
   try { sqlite.exec(alterSql); } catch {}
 }
 
+// Customizable review-reminder email templates (#39 MediaLab parity). One row
+// per (lab, reminder_type); absent = use the built-in default. reminder_type is
+// one of '30_day_warning' | 'overdue' | 'final'.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_email_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    reminder_type TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    body_html TEXT NOT NULL,
+    updated_by INTEGER,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_policy_email_templates ON policy_email_templates(lab_id, reminder_type)`); } catch {}
+for (const alterSql of [
+  "ALTER TABLE policy_email_templates ADD COLUMN updated_by INTEGER",
+  "ALTER TABLE policy_email_templates ADD COLUMN updated_at TEXT",
+]) {
+  try { sqlite.exec(alterSql); } catch {}
+}
+
 // Phase 8 — surveyor public-link table. Lab owner generates a signed
 // URL a surveyor can use to browse approved policies without an
 // account. Auto-expires; lab admin can revoke at any time.

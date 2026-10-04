@@ -10,6 +10,7 @@ import { blockNonOperatorSeat } from "./seatAccess";
 import { isDelegationPosition, isDelegationComplexity, sanitizeResponsibilities, DELEGATION_CATALOG, DELEGATION_POSITIONS, DELEGATION_COMPLEXITIES } from "./directorDelegation";
 import { mayAttestAsDirectorOrDesignee, complexityForAnalyte, labHighestComplexity, isLabOwnerUser } from "./delegationGate";
 import { deriveAttestationStatus } from "./policyAttestationStatus";
+import { DEFAULT_TEMPLATES, REMINDER_TYPES, REMINDER_MERGE_FIELDS, type ReminderType } from "./policyReminderTemplate";
 import { resolveStudyAccess, consumeStudyCredit, isUnlimitedPlan } from "./studyCredits";
 import { defaultReviewIntervalMonthsForState } from "./policyReviewInterval";
 import { resolveSignupPlan } from "./signupPlan";
@@ -35803,6 +35804,73 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!row) return res.status(404).json({ error: "Link not found" });
       if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
       sqlite.prepare("DELETE FROM policy_document_links WHERE id = ?").run(linkId);
+      res.json({ ok: true });
+    }
+  );
+
+  // ── Customizable review-reminder email templates (#39 MediaLab parity) ──
+  // GET — the lab's three reminder templates (custom where set, else the
+  // built-in default) plus the default copy and the available merge fields.
+  app.get(
+    "/api/labs/:labId/veritapolicy/email-templates",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const sqlite = (db as any).$client;
+      const rows = sqlite.prepare("SELECT reminder_type, subject, body_html FROM policy_email_templates WHERE lab_id = ?").all(req.scope.labId) as any[];
+      const byType = new Map(rows.map((r) => [r.reminder_type, r]));
+      const templates = REMINDER_TYPES.map((t) => {
+        const custom = byType.get(t);
+        return {
+          reminder_type: t,
+          subject: custom?.subject ?? DEFAULT_TEMPLATES[t].subject,
+          body_html: custom?.body_html ?? DEFAULT_TEMPLATES[t].body_html,
+          is_custom: !!custom,
+          default_subject: DEFAULT_TEMPLATES[t].subject,
+          default_body_html: DEFAULT_TEMPLATES[t].body_html,
+        };
+      });
+      res.json({ templates, mergeFields: REMINDER_MERGE_FIELDS });
+    }
+  );
+
+  // PUT — set a custom template for one reminder type.
+  app.put(
+    "/api/labs/:labId/veritapolicy/email-templates/:reminderType",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const rt = String(req.params.reminderType);
+      if (!REMINDER_TYPES.includes(rt as ReminderType)) return res.status(400).json({ error: "Invalid reminder type" });
+      const subject = String(req.body?.subject ?? "").trim();
+      const body_html = String(req.body?.body_html ?? "").trim();
+      if (!subject || !body_html) return res.status(400).json({ error: "subject and body_html required" });
+      if (subject.length > 300 || body_html.length > 20000) return res.status(400).json({ error: "Template too long" });
+      const sqlite = (db as any).$client;
+      sqlite.prepare(
+        `INSERT INTO policy_email_templates (lab_id, reminder_type, subject, body_html, updated_by, updated_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'))
+         ON CONFLICT(lab_id, reminder_type) DO UPDATE SET subject = excluded.subject, body_html = excluded.body_html, updated_by = excluded.updated_by, updated_at = datetime('now')`
+      ).run(req.scope.labId, rt, subject, body_html, req.userId);
+      writeAuditLog(sqlite, { labId: req.scope.labId, documentId: null, userId: req.userId, action: "edited", details: { email_template: rt }, ipAddress: req.ip, userAgent: req.headers["user-agent"] as string | undefined });
+      res.json({ ok: true });
+    }
+  );
+
+  // DELETE — reset one reminder type to the built-in default.
+  app.delete(
+    "/api/labs/:labId/veritapolicy/email-templates/:reminderType",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const rt = String(req.params.reminderType);
+      if (!REMINDER_TYPES.includes(rt as ReminderType)) return res.status(400).json({ error: "Invalid reminder type" });
+      const sqlite = (db as any).$client;
+      sqlite.prepare("DELETE FROM policy_email_templates WHERE lab_id = ? AND reminder_type = ?").run(req.scope.labId, rt);
       res.json({ ok: true });
     }
   );

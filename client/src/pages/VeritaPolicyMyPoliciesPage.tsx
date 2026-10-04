@@ -1082,6 +1082,46 @@ export default function VeritaPolicyMyPoliciesPage() {
     onSuccess: () => { invalidateLinks(); toast({ title: "Link removed" }); },
     onError: (e: any) => toast({ title: "Remove failed", description: String(e?.message || e), variant: "destructive" }),
   });
+
+  // ── Customizable reminder email templates (#39) ─────────────────────────
+  const REMINDER_TYPE_LABELS: Record<string, string> = {
+    "30_day_warning": "30-day warning", overdue: "Overdue", final: "Final notice",
+  };
+  const [emailTemplatesOpen, setEmailTemplatesOpen] = useState(false);
+  const [editTemplates, setEditTemplates] = useState<Record<string, { subject: string; body_html: string }>>({});
+  const { data: emailTemplatesData } = useQuery<{
+    templates: { reminder_type: string; subject: string; body_html: string; is_custom: boolean; default_subject: string; default_body_html: string }[];
+    mergeFields: string[];
+  }>({
+    queryKey: [`/api/labs/${activeLabId}/veritapolicy/email-templates`],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!activeLabId && emailTemplatesOpen,
+  });
+  useEffect(() => {
+    if (emailTemplatesData?.templates) {
+      const m: Record<string, { subject: string; body_html: string }> = {};
+      for (const t of emailTemplatesData.templates) m[t.reminder_type] = { subject: t.subject, body_html: t.body_html };
+      setEditTemplates(m);
+    }
+  }, [emailTemplatesData]);
+  const invalidateTemplates = () => queryClient.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/veritapolicy/email-templates`] });
+  const saveTemplateMutation = useMutation({
+    mutationFn: async (rt: string) => {
+      const t = editTemplates[rt];
+      const res = await apiRequest("PUT", `/api/labs/${activeLabId}/veritapolicy/email-templates/${rt}`, { subject: t.subject, body_html: t.body_html });
+      return res.json();
+    },
+    onSuccess: () => { invalidateTemplates(); toast({ title: "Template saved" }); },
+    onError: (e: any) => toast({ title: "Save failed", description: String(e?.message || e), variant: "destructive" }),
+  });
+  const resetTemplateMutation = useMutation({
+    mutationFn: async (rt: string) => {
+      const res = await apiRequest("DELETE", `/api/labs/${activeLabId}/veritapolicy/email-templates/${rt}`);
+      return res.json();
+    },
+    onSuccess: () => { invalidateTemplates(); toast({ title: "Reset to default" }); },
+    onError: (e: any) => toast({ title: "Reset failed", description: String(e?.message || e), variant: "destructive" }),
+  });
   const [viewLoading, setViewLoading] = useState(false);
   const [viewHtml, setViewHtml] = useState<string>("");
   const [viewPdfUrl, setViewPdfUrl] = useState<string>("");
@@ -1323,6 +1363,13 @@ export default function VeritaPolicyMyPoliciesPage() {
             title="Designate who approves policies in a specific manual (department)"
           >
             <ShieldCheck size={14} className="mr-1.5" /> Manual approvers
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setEmailTemplatesOpen(true)}
+            title="Customize the automated policy review-reminder emails"
+          >
+            <MessageSquare size={14} className="mr-1.5" /> Reminder emails
           </Button>
           <Button onClick={() => setUploadOpen(true)}>
             <Upload size={14} className="mr-1.5" /> Upload Policy
@@ -2985,6 +3032,69 @@ export default function VeritaPolicyMyPoliciesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setApproversOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Customizable reminder email templates (#39) ────────────────── */}
+      <Dialog open={emailTemplatesOpen} onOpenChange={(o) => { if (!o) setEmailTemplatesOpen(false); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Review-reminder emails</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Customize the three automated policy review-reminder emails, or leave them on the
+              default. Available merge fields:{" "}
+              {(emailTemplatesData?.mergeFields ?? []).map((f) => (
+                <code key={f} className="text-[11px] bg-muted rounded px-1 mx-0.5">{`{{${f}}}`}</code>
+              ))}
+            </p>
+            {(emailTemplatesData?.templates ?? []).map((t) => (
+              <div key={t.reminder_type} className="border rounded p-2 space-y-2" data-testid={`email-template-${t.reminder_type}`}>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-sm">{REMINDER_TYPE_LABELS[t.reminder_type] || t.reminder_type}</span>
+                  <span className="text-[11px] text-muted-foreground">{t.is_custom ? "Custom" : "Default"}</span>
+                </div>
+                <div>
+                  <Label className="text-xs">Subject</Label>
+                  <Input
+                    value={editTemplates[t.reminder_type]?.subject ?? ""}
+                    onChange={(e) => setEditTemplates((m) => ({ ...m, [t.reminder_type]: { ...m[t.reminder_type], subject: e.target.value } }))}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Body (HTML)</Label>
+                  <Textarea
+                    rows={5}
+                    className="font-mono text-xs"
+                    value={editTemplates[t.reminder_type]?.body_html ?? ""}
+                    onChange={(e) => setEditTemplates((m) => ({ ...m, [t.reminder_type]: { ...m[t.reminder_type], body_html: e.target.value } }))}
+                  />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => resetTemplateMutation.mutate(t.reminder_type)}
+                    disabled={!t.is_custom || resetTemplateMutation.isPending}
+                  >
+                    Reset to default
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => saveTemplateMutation.mutate(t.reminder_type)}
+                    disabled={saveTemplateMutation.isPending}
+                    data-testid={`save-template-${t.reminder_type}`}
+                  >
+                    Save
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEmailTemplatesOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
