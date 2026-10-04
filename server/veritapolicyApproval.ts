@@ -452,6 +452,65 @@ export function canUserApproveStep(
   return { ok: false, reason: `Unknown required_role: ${role}` };
 }
 
+// Approval delegation (#39). Return the distinct delegator user ids whose
+// eligibility `delegateUserId` currently inherits for a step of `role` on a
+// document in `manualId`: an active, non-revoked delegation row whose window
+// covers `todayStr`, scoped by role (NULL = any role) and manual (NULL = any
+// manual; a manual-scoped row never applies to a doc with no manual, since
+// `manual_id = NULL` is never true in SQL).
+export function delegatorsFor(
+  sqlite: any,
+  labId: number,
+  delegateUserId: number,
+  role: string,
+  manualId: number | null | undefined,
+  todayStr: string
+): number[] {
+  const rows = sqlite
+    .prepare(
+      `SELECT DISTINCT from_user_id
+         FROM policy_approval_delegations
+        WHERE lab_id = ? AND to_user_id = ? AND revoked_at IS NULL
+          AND starts_on <= ? AND ends_on >= ?
+          AND (required_role IS NULL OR required_role = ?)
+          AND (manual_id IS NULL OR manual_id = ?)`
+    )
+    .all(labId, delegateUserId, todayStr, todayStr, role, manualId ?? null) as {
+    from_user_id: number;
+  }[];
+  return rows.map((r) => r.from_user_id);
+}
+
+// canUserApproveStep + delegation. First the direct check; if it passes, done.
+// Otherwise, if the user is standing in for a delegator who WOULD pass, allow it
+// and report the delegator for audit attribution. Two laundering guards:
+//   1) The document owner is never rescued by delegation when self-approval is
+//      off (a delegate who is the owner stays blocked).
+//   2) The delegator is re-run through canUserApproveStep with userId = the
+//      delegator, so if the delegator is the owner under a self-approval block,
+//      their own check fails and the delegate inherits nothing.
+export function canUserApproveStepDelegated(
+  sqlite: any,
+  args: Parameters<typeof canUserApproveStep>[1],
+  todayStr: string
+): { ok: true; viaDelegation?: { delegatorId: number } } | { ok: false; reason: string } {
+  const direct = canUserApproveStep(sqlite, args);
+  if (direct.ok) return { ok: true };
+  // Guard 1: an owner blocked by the self-approval rule cannot be rescued by
+  // being someone's delegate.
+  if (args.userId === args.documentOwnerId && !args.stepRow.allow_self_approval) {
+    return direct;
+  }
+  const role = args.stepRow.required_role;
+  const delegators = delegatorsFor(sqlite, args.labId, args.userId, role, args.manualId ?? null, todayStr);
+  for (const delegatorId of delegators) {
+    // Guard 2: re-run the DELEGATOR through the plain check (userId = delegator).
+    const asDelegator = canUserApproveStep(sqlite, { ...args, userId: delegatorId });
+    if (asDelegator.ok) return { ok: true, viaDelegation: { delegatorId } };
+  }
+  return direct;
+}
+
 // Resolve the current pending step for a document. Returns the step row
 // or null if no step pending (document not in_review, or all steps
 // already approved).
@@ -539,33 +598,55 @@ export function countEligibleReviewersForStep(
     manualId?: number | null;
   }
 ): number {
+  return eligibleReviewerIdsForStep(sqlite, args).size;
+}
+
+// The SET of user ids directly eligible to approve a step (owner excluded unless
+// the step opts into self-approval). Extracted from countEligibleReviewersForStep
+// so delegation can expand it (see countEligibleReviewersForStepDelegated). Pure
+// direct eligibility; no delegation.
+export function eligibleReviewerIdsForStep(
+  sqlite: any,
+  args: {
+    labId: number;
+    documentOwnerId: number;
+    stepRow: {
+      required_role: string;
+      specific_user_id: number | null;
+      allow_self_approval: number;
+    };
+    isMajorRevision?: boolean;
+    manualId?: number | null;
+  }
+): Set<number> {
   const { labId, documentOwnerId, stepRow } = args;
+  const eligible = new Set<number>();
+  const ownerBlocked = (uid: number) => uid === documentOwnerId && !stepRow.allow_self_approval;
+  const isActiveMember = (uid: number) =>
+    !!sqlite
+      .prepare(`SELECT 1 FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1`)
+      .get(uid, labId);
+
   if (stepRow.required_role === "specific_user") {
-    if (stepRow.specific_user_id == null) return 0;
-    if (stepRow.specific_user_id === documentOwnerId && !stepRow.allow_self_approval) return 0;
-    // Confirm the specific user is an active member of this lab.
-    const exists = sqlite
-      .prepare(
-        `SELECT 1 FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1`
-      )
-      .get(stepRow.specific_user_id, labId);
-    return exists ? 1 : 0;
+    if (
+      stepRow.specific_user_id != null &&
+      !ownerBlocked(stepRow.specific_user_id) &&
+      isActiveMember(stepRow.specific_user_id)
+    ) {
+      eligible.add(stepRow.specific_user_id);
+    }
+    return eligible;
   }
   // Per-manual approver override (#39): when the manual designates approver(s)
-  // for this role, only those active members count (owner excluded unless the
-  // step opts into self-approval). Mirrors canUserApproveStep so the submit-time
-  // "zero eligible approvers" warning stays accurate under a manual override.
+  // for this role, only those active members are eligible (owner excluded unless
+  // the step opts into self-approval). Mirrors canUserApproveStep.
   const mappedApprovers = manualApproverUserIds(sqlite, labId, args.manualId, stepRow.required_role);
   if (mappedApprovers && mappedApprovers.length > 0) {
-    let mapped = 0;
     for (const uid of mappedApprovers) {
-      if (uid === documentOwnerId && !stepRow.allow_self_approval) continue;
-      const active = sqlite
-        .prepare(`SELECT 1 FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1`)
-        .get(uid, labId);
-      if (active) mapped += 1;
+      if (ownerBlocked(uid)) continue;
+      if (isActiveMember(uid)) eligible.add(uid);
     }
-    return mapped;
+    return eligible;
   }
   // Pull all active members on the lab with their seat_type, exclude
   // owner unless allow_self_approval=1, then filter by role.
@@ -590,17 +671,16 @@ export function countEligibleReviewersForStep(
     stepRow.required_role === "medical_director"
       ? resolveActiveMedicalDirectorUserId(sqlite, labId)
       : null;
-  let count = 0;
   for (const m of members) {
-    if (m.user_id === documentOwnerId && !stepRow.allow_self_approval) continue;
+    if (ownerBlocked(m.user_id)) continue;
     if (stepRow.required_role === "any_active_seat") {
-      if (m.seat_type === "active" || m.role === "owner" || m.role === "admin") count += 1;
+      if (m.seat_type === "active" || m.role === "owner" || m.role === "admin") eligible.add(m.user_id);
     } else if (stepRow.required_role === "medical_director" && args.isMajorRevision) {
       // Major revision: only the designated Medical Director counts. If none is
-      // designated (mdUserId null), no one is eligible -> count stays 0.
-      if (mdUserId != null && m.user_id === mdUserId) count += 1;
+      // designated (mdUserId null), no one is eligible.
+      if (mdUserId != null && m.user_id === mdUserId) eligible.add(m.user_id);
     } else if (stepRow.required_role === "medical_director" && mdUserId != null) {
-      if (m.user_id === mdUserId || m.role === "owner" || m.role === "admin") count += 1;
+      if (m.user_id === mdUserId || m.role === "owner" || m.role === "admin") eligible.add(m.user_id);
     } else {
       // any_view_only_seat + CLIA role aliases (incl. a medical_director step
       // with no active designated director) accept view_only OR active OR
@@ -611,11 +691,51 @@ export function countEligibleReviewersForStep(
         m.role === "owner" ||
         m.role === "admin"
       ) {
-        count += 1;
+        eligible.add(m.user_id);
       }
     }
   }
-  return count;
+  return eligible;
+}
+
+// Reviewer count that also honors approval delegation (#39): the direct eligible
+// set, plus every active delegate of a directly-eligible reviewer whose
+// delegation window/role/manual scope matches. Deduped. Used at submit time so
+// the "zero eligible approvers" warning matches the approve path, which honors
+// delegation. The owner is still excluded unless the step opts into
+// self-approval (a delegate who is the owner does not count).
+export function countEligibleReviewersForStepDelegated(
+  sqlite: any,
+  args: Parameters<typeof eligibleReviewerIdsForStep>[1],
+  todayStr: string
+): number {
+  const eligible = eligibleReviewerIdsForStep(sqlite, args);
+  if (eligible.size === 0) return 0;
+  const role = args.stepRow.required_role;
+  const ownerBlocked = (uid: number) =>
+    uid === args.documentOwnerId && !args.stepRow.allow_self_approval;
+  for (const fromId of [...eligible]) {
+    const rows = sqlite
+      .prepare(
+        `SELECT DISTINCT to_user_id
+           FROM policy_approval_delegations
+          WHERE lab_id = ? AND from_user_id = ? AND revoked_at IS NULL
+            AND starts_on <= ? AND ends_on >= ?
+            AND (required_role IS NULL OR required_role = ?)
+            AND (manual_id IS NULL OR manual_id = ?)`
+      )
+      .all(args.labId, fromId, todayStr, todayStr, role, args.manualId ?? null) as {
+      to_user_id: number;
+    }[];
+    for (const r of rows) {
+      if (ownerBlocked(r.to_user_id)) continue;
+      const active = sqlite
+        .prepare(`SELECT 1 FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1`)
+        .get(r.to_user_id, args.labId);
+      if (active) eligible.add(r.to_user_id);
+    }
+  }
+  return eligible.size;
 }
 
 // Edit-lock helper for status='expired' policies. Used by every write
