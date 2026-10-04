@@ -4110,18 +4110,6 @@ export async function generateLetterOfDelegationPDF(
       <div class="fld">Date${signedDate ? ` <span class="v">${signedDate}</span>` : ""}</div>
     </div>
   </div>
-  <div class="sig">
-    <h3>DELEGATE ACCEPTANCE</h3>
-    <div class="att" style="background:#fff;border:none;padding:0;color:${GRY}">I accept the responsibilities delegated to me above and will perform them in accordance with the laboratory's policies and CLIA requirements.</div>
-    <div class="row">
-      <div class="fld">Delegate signature</div>
-      <div class="fld">Print name <span class="v">${delegateName}</span></div>
-    </div>
-    <div class="row">
-      <div class="fld">Date</div>
-      <div class="fld">Position: ${posLabel}</div>
-    </div>
-  </div>
   <div class="note">This delegation remains in effect until it is revoked or superseded, and should be reviewed at least annually and whenever the delegate or the process changes. A new delegation is required when the laboratory director changes.</div>
   </body></html>`;
 
