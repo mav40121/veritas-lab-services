@@ -23,10 +23,10 @@ test.describe("VeritaAssure overview - module badges", () => {
     // No module badge still reads "In Progress" after the promotion.
     await expect(page.getByText("In Progress", { exact: true })).toHaveCount(0);
 
-    // At least several "Live" badges render (the suite is now almost all Live).
-    expect(await page.getByText("Live", { exact: true }).count()).toBeGreaterThan(5);
+    // Many "Live" badges render (the suite is now all Live).
+    expect(await page.getByText("Live", { exact: true }).count()).toBeGreaterThan(10);
 
-    // VeritaQC is intentionally held at its preview badge (parking-lot #40).
-    await expect(page.getByText("Phase 1 preview", { exact: true }).first()).toBeVisible();
+    // After #40 cleared, VeritaQC is Live too: no module remains "Phase 1 preview".
+    await expect(page.getByText("Phase 1 preview", { exact: true })).toHaveCount(0);
   });
 });

@@ -460,20 +460,6 @@ All five small parity items are now shipped. Items 6+ (SSO/AD, approval delegati
 
 ---
 
-### 40. VeritaQC Import Phase A: human-in-the-loop Gate 3 click-through (deferred)
-
-**Effort:** XS (~5 minutes of Michael's time on a live URL).
-**Importance:** Low. Backend contract is fully verified via 35/35 passing offline contract checks (`scripts/verify-veritaqc-import.js`) plus three live-API smoke checks against prod (candidates, preview, mappings PUT/GET) on Riverside Regional with seed lot `SEED-1780436709094` (18 Glucose results). The browser-driven click was not run because Claude-in-Chrome's renderer froze repeatedly on the Radix Select inside VeritaCheckPage, not on Phase A code itself. Risk of a UX bug surviving to a customer is small but not zero.
-
-What's deferred: the actual user flow at `https://www.veritaslabservices.com/labs/1/study/new` → pick "Precision Verification" → click the "Start from VeritaQC™…" banner → pick Glucose + the seeded control lot → Preview values → Import → confirm replicates land in the precision grid with the sticky level name "Glucose QC Mid (Gate 3)". Per CLAUDE.md §2 Gate 3 step 8 the human-in-the-loop fallback is the explicit alternative when browser-automated drive is impractical, which it was here for tooling reasons. Michael can pick this up whenever he is on the dashboard for an unrelated reason; no need to make a separate trip.
-
-**Source:** task #77 stalled at Gate 3 step 8 on 2026-06-02. PR #500 squash-merged at commit `17a91ff`, prod /api/health confirmed ACTIVE on that commit at 20:43 UTC.
-
-**Status:** Open, awaiting Michael's 5-minute click test. Will move task #77 to completed only after he reports the user-visible result.
-
----
-
-
 ### 42. Outbound demo-invite messaging campaign to 1st-degree LinkedIn contacts
 
 **Effort:** L (1 week prep + 4-6 weeks of staged sends)
@@ -563,6 +549,12 @@ _(item #52 core closed 2026-09-28; shipped PR #1361 member-picker, prod-verified
 ---
 
 ## CLOSED (audit trail)
+
+### C60. VeritaQC Import Phase A browser click-through (was #40)
+
+**Effort:** was XS / **Importance:** Low
+
+**Closure evidence:** Verified 2026-10-04 by driving the deferred Gate-3 step-8 click-through in Claude's in-app browser (the original attempt stalled only because Claude-in-Chrome's renderer froze on a Radix Select, a tooling bug, not VeritaQC code). On a seeded throwaway lab: opened /labs/1/study/new, set Study Type to Precision Verification via the study-type Radix Select (opened; all 14 options rendered), clicked "Start from VeritaQC", entered analyte Glucose so candidates loaded (instrument ATELLICA Solution and control lot SEED-GLU-1 Level 1 auto-populated in their Radix Selects), Preview values rendered the matching results, and Import landed "Imported 15 replicates from VeritaQC" into the precision study. Every Radix Select rendered and selected without freezing. Backend was already 35/35 offline + 3 live-API smoke. VeritaQC was promoted to Live on the VeritaAssure overview page in the same change.
 
 ### C59. Confirm the finding-closure signer policy (was #43)
 
