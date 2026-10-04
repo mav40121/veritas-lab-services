@@ -279,6 +279,7 @@ export function registerVeritaOpsRoutes(
   // PDF account-scoped. Returns a one-time token the browser GETs at
   // /api/pdf/:token so Adobe Acrobat's extension doesn't hijack a blob URL.
   app.post("/api/veritaops/studies/:id/pdf", authMiddleware, async (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasOpsAccess(req.user, req.scope?.lab)) {
       return res.status(403).json({ error: "VeritaOps subscription required" });
     }

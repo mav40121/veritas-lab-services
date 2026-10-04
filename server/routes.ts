@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
+import { blockNonOperatorSeat } from "./seatAccess";
 import { resolveStudyAccess, consumeStudyCredit, isUnlimitedPlan } from "./studyCredits";
 import { defaultReviewIntervalMonthsForState } from "./policyReviewInterval";
 import { resolveSignupPlan } from "./signupPlan";
@@ -6633,7 +6634,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT id, owner_user_id, accreditation_cap, accreditation_tjc, accreditation_cola, primary_regime FROM labs WHERE id = ?"
     ).get(labId) as any;
     if (!lab) return res.status(404).json({ error: "Lab not found" });
-    const isOwner = Number(lab.owner_user_id) === Number(req.ownerUserId ?? req.userId);
+    // Compare the ACTUAL logged-in user to the lab owner. req.ownerUserId is set to a
+    // seat's OWNER (seatAccess), so using it here let any seat holder under the owner -
+    // including a read-and-sign Staff Portal seat - pass as "the owner." Use req.userId.
+    const isOwner = Number(lab.owner_user_id) === Number(req.userId);
     const adminMember = (db as any).$client.prepare(
       "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' AND role IN ('owner','admin') LIMIT 1"
     ).get(labId, req.userId);
@@ -10024,7 +10028,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   //   server/veritapolicyApproval.ts); until then the permissive fallback
   //   keeps policy approvals unblocked. Send an empty email to clear.
   app.put("/api/labs/:labId/medical-director", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
+    // Designating the medical director is an owner-reserved act (admins manage members and
+    // seats, but naming the lab's CLIA director sits with the account owner).
+    if (!isLabOwner(req.scope)) return res.status(403).json({ error: "Only the account owner can designate the medical director." });
     const sqlite = (db as any).$client;
     const lab = sqlite.prepare("SELECT id, medical_director_email, medical_director_name FROM labs WHERE id = ?").get(req.scope.labId) as any;
     if (!lab) return res.status(404).json({ error: "Lab not found" });
@@ -16228,7 +16234,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.status(500).json({ error: "Excel generation failed" });
     }
   };
-  app.post("/api/veritamap/maps/:id/excel", authMiddleware, veritamapExcelHandler);
+  app.post("/api/veritamap/maps/:id/excel", authMiddleware, (req: any, res: any, next: any) => { if (blockNonOperatorSeat(req, res)) return; next(); }, veritamapExcelHandler);
   app.post("/api/labs/:labId/veritamap/maps/:id/excel", authMiddleware, labScopeMiddleware, requireMapInActiveLab, veritamapExcelHandler);
 
   // ── VERITAMAP ANALYTE VALUES ─────────────────────────────────────────────
@@ -24799,6 +24805,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // CUMSUM PDF export
   app.post("/api/veritacheck/cumsum/trackers/:id/pdf", authMiddleware, async (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Subscription required" });
     const tracker = userCanAccessLabRow('cumsum_trackers', req.params.id, req);
     if (!tracker) return res.status(404).json({ error: "Tracker not found" });
@@ -28991,6 +28998,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Add a seat (invite)
   app.post("/api/account/seats", authMiddleware, async (req: any, res) => {
+    // Legacy account-level seat management is owner-reserved (seats are created under
+    // owner_user_id = req.userId). Block non-owners; admins use /api/labs/:labId/members.
+    if (!(db as any).$client.prepare("SELECT 1 FROM labs WHERE owner_user_id = ? LIMIT 1").get(req.userId)) return res.status(403).json({ error: "Only an account owner can manage seats." });
     const { email, seatType: requestedSeatType } = req.body;
     if (!email || !email.includes("@")) return res.status(400).json({ error: "Valid email required" });
     // parking-lot #33 PR 3: same seat-type split as the lab-scoped endpoint.
@@ -29219,6 +29229,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Update seat permissions
   app.patch("/api/account/seats/:seatId/permissions", authMiddleware, (req: any, res) => {
+    if (!(db as any).$client.prepare("SELECT 1 FROM labs WHERE owner_user_id = ? LIMIT 1").get(req.userId)) return res.status(403).json({ error: "Only an account owner can manage seats." });
     const seatId = parseInt(req.params.seatId);
     const { permissions } = req.body;
 
@@ -29239,6 +29250,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Deactivate a seat
   app.delete("/api/account/seats/:seatId", authMiddleware, (req: any, res) => {
+    if (!(db as any).$client.prepare("SELECT 1 FROM labs WHERE owner_user_id = ? LIMIT 1").get(req.userId)) return res.status(403).json({ error: "Only an account owner can manage seats." });
     const seat = (db as any).$client.prepare(
       "SELECT id FROM user_seats WHERE id = ? AND owner_user_id = ?"
     ).get(req.params.seatId, req.userId);
@@ -29269,6 +29281,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Force logout a specific seat's sessions (for account owner)
   app.post("/api/account/seats/:seatId/force-logout", authMiddleware, (req: any, res) => {
+    if (!(db as any).$client.prepare("SELECT 1 FROM labs WHERE owner_user_id = ? LIMIT 1").get(req.userId)) return res.status(403).json({ error: "Only an account owner can manage seats." });
     const seat = (db as any).$client.prepare(
       "SELECT seat_user_id FROM user_seats WHERE id = ? AND owner_user_id = ?"
     ).get(req.params.seatId, req.userId) as any;
@@ -30034,6 +30047,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // POST /api/veritalab/certificates/excel - export certificates to Excel
   app.post("/api/veritalab/certificates/excel", authMiddleware, async (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasLabCertAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
 
     // Multi-lab: honor the active-lab header exactly as the client's roster
@@ -30774,6 +30788,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // PDF placeholder
   app.post("/api/veritapt/pdf", authMiddleware, async (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     try {
       const userId = req.ownerUserId ?? req.user.userId;
