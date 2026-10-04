@@ -3302,6 +3302,49 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritapolicy_lab_artifacts_lab
     try { sqlite.exec("ROLLBACK"); } catch {}
     console.warn("[migration] Phase 3.3 settings rebuild failed (non-fatal):", err?.message);
   }
+
+  // veritapolicy_requirement_status -> UNIQUE(lab_id, requirement_id)
+  // Phase 3.3 rebuilt master_status + settings but missed this table. The stale
+  // UNIQUE(user_id, requirement_id) gave a multi-lab owner ONE row per requirement across
+  // ALL their labs: the write stamped the HOME lab while reads filter by the ACTIVE lab, so
+  // edits made in one lab vanished there and surfaced (or overwrote) in another.
+  try {
+    if (uniqueIndexOn("veritapolicy_requirement_status", ["user_id", "requirement_id"])) {
+      sqlite.exec("BEGIN");
+      sqlite.exec(`
+        CREATE TABLE veritapolicy_requirement_status_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          lab_id INTEGER REFERENCES labs(id),
+          requirement_id INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'not_started',
+          is_na INTEGER NOT NULL DEFAULT 0,
+          na_reason TEXT,
+          lab_policy_id INTEGER,
+          policy_name TEXT,
+          notes TEXT,
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(lab_id, requirement_id)
+        )
+      `);
+      // Most-recent-wins on any (lab_id, requirement_id) collision; NULL lab_id preserved.
+      sqlite.exec(`
+        INSERT OR IGNORE INTO veritapolicy_requirement_status_new
+          (user_id, lab_id, requirement_id, status, is_na, na_reason, lab_policy_id, policy_name, notes, updated_at)
+        SELECT user_id, lab_id, requirement_id, status, is_na, na_reason, lab_policy_id, policy_name, notes, updated_at
+        FROM veritapolicy_requirement_status ORDER BY updated_at DESC
+      `);
+      sqlite.exec("DROP TABLE veritapolicy_requirement_status");
+      sqlite.exec("ALTER TABLE veritapolicy_requirement_status_new RENAME TO veritapolicy_requirement_status");
+      sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritapolicy_req_lab ON veritapolicy_requirement_status(lab_id)");
+      sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritapolicy_req_user ON veritapolicy_requirement_status(user_id, requirement_id)");
+      sqlite.exec("COMMIT");
+      console.log("[migration] Phase 3.3b: rebuilt veritapolicy_requirement_status with UNIQUE(lab_id, requirement_id)");
+    }
+  } catch (err: any) {
+    try { sqlite.exec("ROLLBACK"); } catch {}
+    console.warn("[migration] Phase 3.3b requirement_status rebuild failed (non-fatal):", err?.message);
+  }
 }
 
 // VeritaTrack -- regulatory compliance calendar

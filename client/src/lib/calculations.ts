@@ -514,7 +514,9 @@ export function calculateMethodComparison(
     })
   );
   const overallPass = passCount === totalCount && totalCount > 0;
-  const cliaPercent = (cliaError * 100).toFixed(1);
+  // Use the shared TEa formatter so absolute-TEa analytes (e.g. Sodium +/-4 mmol/L) read
+  // correctly instead of "+/-400.0%". Mirrors the cal-ver path's formatTeaCriterion use.
+  const teaCriterion = formatTeaCriterion({ isPercentage: teaIsPercentage, value: cliaError, absoluteFloor: cliaAbsoluteFloor });
 
   const regLines = Object.entries(regression)
     .map(([name, reg]) => `${name}: slope=${reg.slope.toFixed(3)}, intercept=${reg.intercept.toFixed(3)}, R²=${reg.r2.toFixed(4)}`)
@@ -524,7 +526,7 @@ export function calculateMethodComparison(
     .join("; ");
   const n = levelResults.length;
   const summary =
-    `Correlation / Method Comparison was performed using ${n} patient samples with adopted acceptance criterion (TEa) of ±${cliaPercent}%. ` +
+    `Correlation / Method Comparison was performed using ${n} patient samples with adopted acceptance criterion (TEa) of ${teaCriterion}. ` +
     `Regression analysis: ${regLines}. ` +
     `Bland-Altman analysis: ${baLines}. ` +
     `${passCount} of ${totalCount} paired results were within TEa. ` +

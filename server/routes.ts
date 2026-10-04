@@ -15703,20 +15703,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         work_performed_date, signoff_date, signoff_by_user_id, signoff_by_name,
         next_due, notes, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(test_a_id, test_b_id) DO UPDATE SET
-        correlation_group_id = excluded.correlation_group_id,
-        correlation_method = excluded.correlation_method,
-        acceptable_criteria = excluded.acceptable_criteria,
-        actual_bias_or_sd = excluded.actual_bias_or_sd,
-        pass_fail = excluded.pass_fail,
-        work_performed_date = excluded.work_performed_date,
-        signoff_date = excluded.signoff_date,
-        signoff_by_user_id = excluded.signoff_by_user_id,
-        signoff_by_name = excluded.signoff_by_name,
-        next_due = excluded.next_due,
-        notes = excluded.notes,
-        updated_at = excluded.updated_at
     `);
+    // NOTE: plain INSERT (no ON CONFLICT). veritamap_test_correlations intentionally has
+    // NO UNIQUE(test_a_id, test_b_id) - that key was removed (db.ts:919) so a pair can
+    // appear in multiple correlation groups. The stale ON CONFLICT(test_a_id,test_b_id)
+    // had no matching unique key, so SQLite threw at prepare and this endpoint 500'd on
+    // EVERY call. Matches the single-pair POST /correlations sibling, which also appends.
     const bulk = (db as any).$client.transaction(() => {
       for (const [lo, hi] of normalized) {
         stmt.run(
@@ -34394,10 +34386,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const userId = req.ownerUserId;
     const reqId = parseInt(req.params.id);
     const { status, is_na, na_reason, lab_policy_id, policy_name, notes } = req.body;
+    // Lab-scoped upsert (Phase 3.3b): key on (lab_id, requirement_id) and stamp the ACTIVE
+    // lab, so a multi-lab owner's requirement edits stay separate per lab instead of
+    // collapsing onto a single home-lab row. Falls back to the user's home lab for legacy
+    // single-lab flows where no active lab resolves.
+    const reqLabId = resolveLegacyLabId(req) ?? (sqlite.prepare("SELECT lab_id FROM users WHERE id = ?").get(userId) as any)?.lab_id ?? null;
     sqlite.prepare(`
-      INSERT INTO veritapolicy_requirement_status (user_id, requirement_id, status, is_na, na_reason, lab_policy_id, policy_name, notes, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-      ON CONFLICT(user_id, requirement_id) DO UPDATE SET
+      INSERT INTO veritapolicy_requirement_status (user_id, lab_id, requirement_id, status, is_na, na_reason, lab_policy_id, policy_name, notes, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(lab_id, requirement_id) DO UPDATE SET
         status = COALESCE(excluded.status, status),
         is_na = COALESCE(excluded.is_na, is_na),
         na_reason = COALESCE(excluded.na_reason, na_reason),
@@ -34405,13 +34402,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         policy_name = excluded.policy_name,
         notes = COALESCE(excluded.notes, notes),
         updated_at = excluded.updated_at
-    `).run(userId, reqId, status || 'not_started', is_na ? 1 : 0, na_reason || null, lab_policy_id || null, policy_name || null, notes || null);
-    // Phase 3.2 dual-write lab_id (see schema block in db.ts).
-    try {
-      sqlite.prepare(
-        "UPDATE veritapolicy_requirement_status SET lab_id = (SELECT lab_id FROM users WHERE id = ?) WHERE user_id = ? AND requirement_id = ? AND lab_id IS NULL"
-      ).run(userId, userId, reqId);
-    } catch {}
+    `).run(userId, reqLabId, reqId, status || 'not_started', is_na ? 1 : 0, na_reason || null, lab_policy_id || null, policy_name || null, notes || null);
     res.json({ ok: true });
   });
 
