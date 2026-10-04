@@ -26,6 +26,7 @@
 // state machine flip, not the permission gate.
 
 import { Resend } from "resend";
+import { DEFAULT_TEMPLATES, renderReminderEmail } from "./policyReminderTemplate";
 import { db } from "./db";
 import { writeAuditLog } from "./veritapolicyApproval";
 
@@ -114,22 +115,20 @@ export async function runPolicyReviewReminders(): Promise<{
       continue;
     }
 
-    const subject =
-      reminderType === "30_day_warning"
-        ? `Policy review due in ${daysUntil} days: ${r.title}`
-        : reminderType === "overdue"
-        ? `Policy review overdue: ${r.title}`
-        : `Final notice: policy review past due: ${r.title}`;
     const link = `${FRONTEND_URL}/labs/${r.lab_id}/veritapolicy-app/my-policies`;
-    const body = `
-<p>Hi ${r.owner_name || "there"},</p>
-<p>The policy <strong>${r.title}</strong> on ${r.lab_name || "your lab"} is due for review on <strong>${r.next_review_date}</strong>.</p>
-<p>
-  Open VeritaPolicy: <a href="${link}">${link}</a><br>
-  Click <strong>Recertify</strong> to confirm the policy is still current, or <strong>Submit</strong> a revised version through the approval workflow.
-</p>
-<p>VeritaAssure&trade; / VeritaPolicy&trade;</p>
-`.trim();
+    // Per-lab custom template for this reminder type, else the built-in default.
+    const custom = sqlite
+      .prepare("SELECT subject, body_html FROM policy_email_templates WHERE lab_id = ? AND reminder_type = ?")
+      .get(r.lab_id, reminderType) as { subject: string; body_html: string } | undefined;
+    const tpl = custom && custom.subject && custom.body_html ? custom : DEFAULT_TEMPLATES[reminderType];
+    const { subject, html: body } = renderReminderEmail(tpl, {
+      policy_title: r.title,
+      lab_name: r.lab_name || "your lab",
+      next_review_date: r.next_review_date,
+      owner_name: r.owner_name || "there",
+      days_until: daysUntil,
+      review_link: link,
+    });
 
     try {
       await resend.emails.send({
