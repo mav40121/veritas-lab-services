@@ -535,20 +535,13 @@ _(item #52 core closed 2026-09-28; shipped PR #1361 member-picker, prod-verified
 
 ---
 
-### 44. Regenerate the 119-function access-inventory Excel with the corrected MD persona
-
-**Effort:** XS (~15 min to re-run the sweep harness and re-deliver).
-**Importance:** Low — the harness and the shipped fixes are correct; only the recorded Excel's "md" column is stale.
-
-**What:** The full-inventory 4-login access sweep (`VeritaAssure_Function_Inventory.xlsx`) was first generated with the medical-director test persona mis-seeded as a seatless member, which over-flagged its column. The harness was then corrected to seat the MD as the active writer it actually is (`scripts/qa-sweep/inventory-sweep.ts`). The delivered Excel still shows the old md results; re-running reclassifies the md-artifact flags down to the real findings, which were already fixed in PR A (#1441). Only worth doing if the sheet gets filed or shared externally.
-
-**Source:** this session, QA sweep (2026-10-03 to 2026-10-04).
-
-**Status:** Open, low priority. Offered to Michael; skippable if the sweep was a one-off working artifact.
-
----
-
 ## CLOSED (audit trail)
+
+### C61. Regenerate the access-inventory Excel with the corrected MD persona (was #44)
+
+**Effort:** was XS / **Importance:** Low
+
+**Closure evidence:** Delivered 2026-10-04. Regenerated VeritaAssure_Function_Inventory.xlsx with the corrected MD persona (active writer seat + designated director, not a seatless member): 73 edit-class rows flipped MD N to Y and 2 director-class rows flipped Owner N to Y (owner break-glass). Each access class gate was probe-verified against a seeded throwaway lab with correct-path probes across owner/admin/staff-portal/MD; the stale per-row HTTP column was replaced with the class-verified result, with a documented caveat that the original per-endpoint sweep had a hand-curated endpoint map that was not preserved (auto-resolution hits the SPA fallback, so per-row HTTP was not re-run). Delivered with the harness (inventory-sweep.mjs + apply-corrected-inventory.py).
 
 ### C60. VeritaQC Import Phase A browser click-through (was #40)
 
