@@ -6737,6 +6737,33 @@ for (const alterSql of [
   try { sqlite.exec(alterSql); } catch {}
 }
 
+// Cross-policy links (#39 MediaLab parity). One policy document references
+// another so a surveyor can click through related SOPs (e.g. a bench SOP that
+// points to the specimen-rejection policy). Directed: from_document_id ->
+// to_document_id; the viewer shows both outgoing ("References") and incoming
+// ("Referenced by"). Both docs live in the same lab.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_document_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    from_document_id INTEGER NOT NULL,
+    to_document_id INTEGER NOT NULL,
+    note TEXT,
+    created_by INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_policy_document_links ON policy_document_links(lab_id, from_document_id, to_document_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_document_links_from ON policy_document_links(from_document_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_document_links_to ON policy_document_links(to_document_id)`); } catch {}
+for (const alterSql of [
+  "ALTER TABLE policy_document_links ADD COLUMN note TEXT",
+  "ALTER TABLE policy_document_links ADD COLUMN created_by INTEGER",
+  "ALTER TABLE policy_document_links ADD COLUMN created_at TEXT",
+]) {
+  try { sqlite.exec(alterSql); } catch {}
+}
+
 // Phase 8 — surveyor public-link table. Lab owner generates a signed
 // URL a surveyor can use to browse approved policies without an
 // account. Auto-expires; lab admin can revoke at any time.

@@ -35721,6 +35721,92 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   );
 
+  // ── Cross-policy links (#39 MediaLab parity) ──────────────────────────
+  // One policy references another so a surveyor can click through related SOPs.
+  // GET — a document's outgoing ("References") + incoming ("Referenced by")
+  // links plus the linkable candidates (other active docs in the lab).
+  app.get(
+    "/api/labs/:labId/veritapolicy/documents/:id/links",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const doc = sqlite.prepare("SELECT lab_id FROM policy_documents WHERE id = ?").get(id) as any;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const references = sqlite.prepare(
+        `SELECT l.id AS link_id, l.note, d.id AS document_id, d.title, d.status
+           FROM policy_document_links l JOIN policy_documents d ON d.id = l.to_document_id
+          WHERE l.from_document_id = ? AND l.lab_id = ? AND d.archived_at IS NULL
+          ORDER BY d.title`
+      ).all(id, req.scope.labId) as any[];
+      const referencedBy = sqlite.prepare(
+        `SELECT l.id AS link_id, l.note, d.id AS document_id, d.title, d.status
+           FROM policy_document_links l JOIN policy_documents d ON d.id = l.from_document_id
+          WHERE l.to_document_id = ? AND l.lab_id = ? AND d.archived_at IS NULL
+          ORDER BY d.title`
+      ).all(id, req.scope.labId) as any[];
+      const linkedIds = new Set(references.map((r) => r.document_id));
+      const candidates = (sqlite.prepare(
+        `SELECT id, title, status FROM policy_documents WHERE lab_id = ? AND id != ? AND archived_at IS NULL ORDER BY title`
+      ).all(req.scope.labId, id) as any[]).filter((c) => !linkedIds.has(c.id));
+      res.json({ references, referencedBy, candidates });
+    }
+  );
+
+  // POST — create an outgoing link { toDocumentId, note? }.
+  app.post(
+    "/api/labs/:labId/veritapolicy/documents/:id/links",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      const toId = Number(req.body?.toDocumentId);
+      const note = req.body?.note ? String(req.body.note).slice(0, 500) : null;
+      if (!Number.isFinite(id) || !Number.isFinite(toId)) return res.status(400).json({ error: "Bad id" });
+      if (id === toId) return res.status(400).json({ error: "A policy cannot link to itself" });
+      const sqlite = (db as any).$client;
+      const docs = sqlite.prepare(`SELECT id, lab_id FROM policy_documents WHERE id IN (?, ?)`).all(id, toId) as any[];
+      if (docs.length !== 2 || docs.some((d) => d.lab_id !== req.scope.labId)) {
+        return res.status(404).json({ error: "Both policies must exist in this lab" });
+      }
+      try {
+        const r = sqlite.prepare(
+          `INSERT INTO policy_document_links (lab_id, from_document_id, to_document_id, note, created_by) VALUES (?, ?, ?, ?, ?)`
+        ).run(req.scope.labId, id, toId, note, req.userId);
+        writeAuditLog(sqlite, { labId: req.scope.labId, documentId: id, userId: req.userId, action: "edited", details: { linked_to_document_id: toId }, ipAddress: req.ip, userAgent: req.headers["user-agent"] as string | undefined });
+        res.status(201).json({ id: Number(r.lastInsertRowid) });
+      } catch (e: any) {
+        if (String(e?.message || e).includes("UNIQUE")) return res.status(200).json({ ok: true, duplicate: true });
+        throw e;
+      }
+    }
+  );
+
+  // DELETE — remove a link (from either endpoint of the document).
+  app.delete(
+    "/api/labs/:labId/veritapolicy/documents/:id/links/:linkId",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      const linkId = Number(req.params.linkId);
+      if (!Number.isFinite(id) || !Number.isFinite(linkId)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const row = sqlite.prepare("SELECT lab_id FROM policy_document_links WHERE id = ? AND (from_document_id = ? OR to_document_id = ?)").get(linkId, id, id) as any;
+      if (!row) return res.status(404).json({ error: "Link not found" });
+      if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      sqlite.prepare("DELETE FROM policy_document_links WHERE id = ?").run(linkId);
+      res.json({ ok: true });
+    }
+  );
+
   // GET /api/labs/:labId/veritapolicy/documents — list policies for this lab.
   // Phase 2.1: in_review rows also include pending_step_name,
   // pending_step_role, pending_step_order, pending_total_steps so the
