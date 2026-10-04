@@ -4,6 +4,7 @@ import { db } from "./db";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
 import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
+import { blockNonOperatorSeat } from "./seatAccess";
 import { preserveMapLink, applyMapSignoffWriteback, deriveMapLink, analyteFromTaskName } from "./veritatrackMapSync";
 import { labLocalDate } from "./dateLocal";
 
@@ -428,6 +429,7 @@ export function registerVeritaTrackRoutes(
   // viewing /veritatrack on a secondary lab were seeing primary-lab
   // tasks bleed in.
   app.get("/api/veritatrack/tasks", authMiddleware, (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const labId = resolveLegacyLabId((db as any).$client, req);
     if (!labId) return res.json([]);
@@ -447,6 +449,7 @@ export function registerVeritaTrackRoutes(
 
   // GET single task with all sign-offs \u2014 Shape A guard via resolveRowForMutation.
   app.get("/api/veritatrack/tasks/:id", authMiddleware, (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const { row: task, status } = resolveRowForMutation<any>((db as any).$client, "veritatrack_tasks", Number(req.params.id), req);
     if (!task) {
@@ -467,6 +470,7 @@ export function registerVeritaTrackRoutes(
   // One config row per lab. GET returns the ★ defaults when unset so the client
   // renders the panel with no create step (enabled defaults OFF).
   app.get("/api/veritatrack/reminder-config", authMiddleware, (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
     const labId = resolveLegacyLabId(sqlite, req);
     if (!labId) return res.status(400).json({ error: "No active lab" });
@@ -642,6 +646,7 @@ export function registerVeritaTrackRoutes(
   // through the same ownership guard the mutations use, then returns the
   // append-only event log newest-first.
   app.get("/api/veritatrack/tasks/:id/audit", authMiddleware, (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
     const { row: task, status } = resolveRowForMutation<any>((db as any).$client, "veritatrack_tasks", Number(req.params.id), req);
     if (!task) {
@@ -749,6 +754,7 @@ export function registerVeritaTrackRoutes(
 
   // GET dashboard summary
   app.get("/api/veritatrack/dashboard", authMiddleware, (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     // #9 multi-lab fix (2026-07-11): scope the legacy dashboard by lab_id via
     // resolveLegacyLabId (the same guard the /tasks list read uses), not by

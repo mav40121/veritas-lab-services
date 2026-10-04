@@ -110,6 +110,19 @@ export const CFR_MAP: Record<string, string> = {
   "Urinalysis": "§493.931",
   "Blood Gas": "§493.931",
   "Microbiology": "§493.945",
+  // Catalog specialty names the instrument menu stamps onto map rows, mapped to the
+  // CLIA Part 493 Subpart I section for that specialty/subspecialty. Without these every
+  // one fell through to the default and was cited under the wrong section.
+  "Chemistry": "§493.931",
+  "Electrolytes": "§493.931",
+  "Cardiac": "§493.931",
+  "Point of Care": "§493.931",
+  "Immunology": "§493.927",
+  "Syphilis Serology": "§493.927",
+  "Blood Bank": "§493.959",
+  "Hemostasis": "§493.941",
+  "Bacteriology": "§493.945",
+  "Virology": "§493.945",
 };
 
 // Compliance status helper

@@ -8,6 +8,7 @@ import { db } from "./db";
 import { storePdfToken } from "./pdfTokens";
 import { generateCprtPdf } from "./veritaopsPdf";
 import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
+import { blockNonOperatorSeat } from "./seatAccess";
 
 // Plain-language tier labels. Used by the client to show what is in the
 // final CPRT number for a given study.
@@ -129,6 +130,7 @@ export function registerVeritaOpsRoutes(
   // Shape A broader sweep (2026-06-09): legacy account_id scope leaked across
   // labs for multi-lab owners.
   app.get("/api/veritaops/studies", authMiddleware, (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasOpsAccess(req.user, req.scope?.lab)) {
       return res.status(403).json({ error: "VeritaOps subscription required" });
     }
@@ -142,6 +144,7 @@ export function registerVeritaOpsRoutes(
 
   // GET by id — Shape A guard: accept ownership or lab membership.
   app.get("/api/veritaops/studies/:id", authMiddleware, (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasOpsAccess(req.user, req.scope?.lab)) {
       return res.status(403).json({ error: "VeritaOps subscription required" });
     }
@@ -276,6 +279,7 @@ export function registerVeritaOpsRoutes(
   // PDF account-scoped. Returns a one-time token the browser GETs at
   // /api/pdf/:token so Adobe Acrobat's extension doesn't hijack a blob URL.
   app.post("/api/veritaops/studies/:id/pdf", authMiddleware, async (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasOpsAccess(req.user, req.scope?.lab)) {
       return res.status(403).json({ error: "VeritaOps subscription required" });
     }

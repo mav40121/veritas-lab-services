@@ -11,6 +11,7 @@ import { useLabRoute } from "@/hooks/useLabRoute";
 import { useMemberships, allowedAccreditorsForMembership } from "@/hooks/useMemberships";
 import { downloadPdfToken } from "@/lib/utils";
 import VeritaCeuAppPage from "@/pages/VeritaCeuAppPage";
+import { LettersOfDelegation } from "@/components/LettersOfDelegation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -175,13 +176,14 @@ function getCompetencyStatus(schedule: CompetencySchedule | null): { label: stri
 // Top-level switcher between the staff roster and the embedded VeritaCEU
 // (Continuing Education) dashboard. CE lives as a tab in VeritaStaff, not a
 // separate module.
-function StaffTabs({ active, onChange }: { active: "roster" | "ce"; onChange: (t: "roster" | "ce") => void }) {
+function StaffTabs({ active, onChange }: { active: "roster" | "ce" | "delegations"; onChange: (t: "roster" | "ce" | "delegations") => void }) {
   const cls = (on: boolean) =>
     `px-3 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${on ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`;
   return (
     <div className="flex gap-1 mb-5 border-b border-border">
       <button onClick={() => onChange("roster")} className={cls(active === "roster")}>Staff</button>
       <button onClick={() => onChange("ce")} className={cls(active === "ce")}>Continuing Education</button>
+      <button onClick={() => onChange("delegations")} className={cls(active === "delegations")}>Delegations</button>
     </div>
   );
 }
@@ -205,7 +207,7 @@ export default function VeritaStaffAppPage() {
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [showInstrumentAssign, setShowInstrumentAssign] = useState(false);
   // VeritaCEU rides in VeritaStaff as a tab (not a separate module).
-  const [staffTab, setStaffTab] = useState<"roster" | "ce">("roster");
+  const [staffTab, setStaffTab] = useState<"roster" | "ce" | "delegations">("roster");
 
   // Auth + plan check
   const hasAccess = isLoggedIn && !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
@@ -350,6 +352,20 @@ export default function VeritaStaffAppPage() {
           />
         )}
       </>
+    );
+  }
+
+  // Delegations tab: the Medical Director Letters of Delegation (same lab scope).
+  if (staffTab === "delegations") {
+    return (
+      <div className="container-default py-8">
+        <h1 className="font-serif text-3xl font-bold flex items-center gap-2 mb-4">
+          <Building2 size={28} className="text-primary" />
+          VeritaStaff{"™"}
+        </h1>
+        <StaffTabs active="delegations" onChange={setStaffTab} />
+        <LettersOfDelegation activeLabId={activeLabId} />
+      </div>
     );
   }
 
