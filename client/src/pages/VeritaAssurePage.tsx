@@ -51,8 +51,8 @@ const COMPLIANCE_MODULES = [
     desc: "Competency Management",
     detail:
       "Technical, waived, and non-technical competency programs using all 6 CLIA assessment elements. Competency timelines (Initial, 6-month, Annual). Quiz engine with addendum PDF.",
-    badge: "In Progress",
-    badgeColor: "amber",
+    badge: "Live",
+    badgeColor: "emerald",
     icon: Award,
     color: "text-amber-600 bg-amber-500/10 border-amber-500/20",
   },
@@ -62,8 +62,8 @@ const COMPLIANCE_MODULES = [
     desc: "Personnel Management",
     detail:
       "Employee roster with CLIA role assignments (LD, TC, TS, GS, TP) and specialty tracking. CMS 209 Laboratory Personnel Report auto-generation. NYS additional requirements supported.",
-    badge: "In Progress",
-    badgeColor: "amber",
+    badge: "Live",
+    badgeColor: "emerald",
     icon: Users,
     color: "text-orange-600 bg-orange-500/10 border-orange-500/20",
   },
@@ -73,7 +73,7 @@ const COMPLIANCE_MODULES = [
     desc: "Certificate and Accreditation Tracking",
     detail:
       "Track CLIA, CAP, TJC, COLA, state licenses, and lab director credentials. Advance email reminders at 9 months, 6 months, 3 months, 30 days, and at expiration. Document archive for certificate PDFs.",
-    badge: "New",
+    badge: "Live",
     badgeColor: "emerald",
     icon: FileText,
     color: "text-green-600 bg-green-500/10 border-green-500/20",
@@ -85,7 +85,7 @@ const COMPLIANCE_MODULES = [
     desc: "Policy and Document Control",
     detail:
       "A document control system for the lab: load policies, procedures, and forms, keep version history, capture director approval, and document periodic reviews. Tracks the policies required under CLIA (42 CFR 493) and crosswalks each one to your accrediting body: CAP, COLA, TJC, or AABB. Service line toggles auto-apply N/A, and one document satisfies multiple requirements. Inspection-ready PDF report with a readiness score.",
-    badge: "New",
+    badge: "Live",
     badgeColor: "emerald",
     icon: Shield,
     color: "text-teal-600 bg-teal-500/10 border-teal-500/20",
@@ -107,7 +107,7 @@ const COMPLIANCE_MODULES = [
     desc: "Regulatory Compliance Calendar",
     detail:
       "Track every timed regulatory task: calibration verification, correlations, competency, equipment calibration, QC review, and more. One-click import of your VeritaMap™ test menu. Sign-off logging with initials and dates. Excel export in a standard regulatory-calendar layout.",
-    badge: "New",
+    badge: "Live",
     badgeColor: "emerald",
     icon: CalendarDays,
     color: "text-indigo-600 bg-indigo-500/10 border-indigo-500/20",
@@ -129,7 +129,7 @@ const COMPLIANCE_MODULES = [
     desc: "Post-Survey Deficiency Response",
     detail:
       "When you get cited, VeritaResponse turns Word documents and email threads into one tracked finding with a due-date clock per accreditor (CAP 30 days, TJC 60 days, CMS-2567 10 days, AABB event-driven). Renders a CMS-2567-compatible Plan of Correction PDF with all 5 POC elements labeled. Surfaces your most recent VeritaCheck study when the finding cites a 42 CFR 493 standard, so you can show the surveyor what you had already done.",
-    badge: "New",
+    badge: "Live",
     badgeColor: "emerald",
     icon: ClipboardList,
     color: "text-rose-600 bg-rose-500/10 border-rose-500/20",
