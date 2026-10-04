@@ -454,7 +454,7 @@ All five small parity items are now shipped. Items 6+ (SSO/AD, approval delegati
 
 **Source:** 2026-05-29 QA pass after C29 shipped (qa-policy-build.js + qa-policy-ui.js: 54/54 happy path verified). Honest depth assessment surfaced by Michael's "how confident are you" question — see C29 entry for full QA receipts.
 
-**Status:** Small-item sequence COMPLETE (items 1-5 all shipped; verified against the codebase 2026-09-29, print view PR #1367). Remaining depth items (SSO/AD, delegation, in-browser editing, per-department roles, reviewer-phrase library, cross-policy linking, customizable email templates) are larger and stay customer-triggered. Re-open a scoped sub-item only when a prospect asks.
+**Status:** Small-item sequence COMPLETE (items 1-5 all shipped; verified against the codebase 2026-09-29, print view PR #1367). Remaining depth items (SSO/AD, delegation, in-browser editing, per-department roles, reviewer-phrase library, cross-policy linking, customizable email templates) are larger and stay customer-triggered. Re-open a scoped sub-item only when a prospect asks. **Note (2026-10-04):** the "delegation" listed here is VeritaPolicy APPROVAL-workflow delegation and remains open. A separate capability, CLIA laboratory-director RESPONSIBILITY delegation, shipped this session as the Letter of Delegation feature (VeritaStaff Delegations tab; signed letters gate QC period-review co-sign and finding closure; PRs #1442-1445) and is not this item.
 
 **Pre- vs post-COLA:** Post-COLA. Defensive against MediaLab in head-to-head sales calls.
 
@@ -546,6 +546,32 @@ _(item #51 closed 2026-09-28; shipped PR #1358, prod-verified, see C50 below)_
 ---
 
 _(item #52 core closed 2026-09-28; shipped PR #1361 member-picker, prod-verified, see C51 below. Residual optional UX tracked there.)_
+
+---
+
+### 43. Confirm the finding-closure signer policy (non-MD admins now blocked)
+
+**Effort:** XS (a yes/no decision; ~15 min to loosen the gate if reversed).
+**Importance:** Medium — changes who can close VeritaResponse findings in production; affects any lab where admins routinely close findings.
+
+**What:** Item 5 Phase 2 tightened VeritaResponse finding closure from "any owner / admin / edit-seat" to "the designated medical director, a delegated designee holding finding-closure for the lab's complexity, or the account owner as a logged break-glass override." This is live on prod (#1443). It follows the agreed MD-or-designee model (QB=1), and the same gate now guards QC period-review co-sign. It has not been confirmed against real customer workflows: if any lab relies on non-MD admins closing findings, they now need a Letter of Delegation, or the gate must be loosened.
+
+**Source:** this session, delegation feature build (2026-10-04). Flagged repeatedly in-session; awaiting explicit operator sign-off.
+
+**Status:** Open, awaiting operator confirmation. Reverting is a one-line change (re-add the owner/admin path in the `findings/:id/signoff` handler) if admins should retain finding closure.
+
+---
+
+### 44. Regenerate the 119-function access-inventory Excel with the corrected MD persona
+
+**Effort:** XS (~15 min to re-run the sweep harness and re-deliver).
+**Importance:** Low — the harness and the shipped fixes are correct; only the recorded Excel's "md" column is stale.
+
+**What:** The full-inventory 4-login access sweep (`VeritaAssure_Function_Inventory.xlsx`) was first generated with the medical-director test persona mis-seeded as a seatless member, which over-flagged its column. The harness was then corrected to seat the MD as the active writer it actually is (`scripts/qa-sweep/inventory-sweep.ts`). The delivered Excel still shows the old md results; re-running reclassifies the md-artifact flags down to the real findings, which were already fixed in PR A (#1441). Only worth doing if the sheet gets filed or shared externally.
+
+**Source:** this session, QA sweep (2026-10-03 to 2026-10-04).
+
+**Status:** Open, low priority. Offered to Michael; skippable if the sweep was a one-off working artifact.
 
 ---
 
