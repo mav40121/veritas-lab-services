@@ -4,6 +4,7 @@ import { db } from "./db";
 import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
 import { resolveStudyAccess, consumeStudyCredit } from "./studyCredits";
 import { seedSlotsForAnalyte } from "./verificationSlots";
+import { blockNonOperatorSeat } from "./seatAccess";
 import { getCanonicalMDLs, getCanonicalMDLProvenance, computeSystematicErrorAtMDL } from "./canonicalMDLs";
 import { teaAllowanceAt } from "./teaAllowance";
 import {
@@ -1659,6 +1660,7 @@ export function registerVeritaCheckVerificationRoutes(
 
   // POST generate PDF package — Shape A guard.
   app.post("/api/veritacheck/verifications/:id/pdf", authMiddleware, async (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasVeritaCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
 

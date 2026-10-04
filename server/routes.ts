@@ -6,6 +6,9 @@ import jwt from "jsonwebtoken";
 import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
+import { blockNonOperatorSeat } from "./seatAccess";
+import { isDelegationPosition, isDelegationComplexity, sanitizeResponsibilities, DELEGATION_CATALOG, DELEGATION_POSITIONS, DELEGATION_COMPLEXITIES } from "./directorDelegation";
+import { mayAttestAsDirectorOrDesignee, complexityForAnalyte, labHighestComplexity, isLabOwnerUser } from "./delegationGate";
 import { resolveStudyAccess, consumeStudyCredit, isUnlimitedPlan } from "./studyCredits";
 import { defaultReviewIntervalMonthsForState } from "./policyReviewInterval";
 import { resolveSignupPlan } from "./signupPlan";
@@ -4443,14 +4446,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(400).json({ error: "control_lot_id, period_year, period_month required" });
     }
     const sqlite = (db as any).$client;
-    const md = sqlite.prepare("SELECT lm.user_id, u.name FROM lab_members lm JOIN users u ON u.id = lm.user_id JOIN labs l ON l.id = lm.lab_id WHERE lm.lab_id = ? AND lm.status = 'active' AND l.medical_director_email IS NOT NULL AND lower(u.email) = lower(l.medical_director_email) LIMIT 1").get(req.scope.labId) as any;
-    if (!md) return res.status(409).json({ error: "No active Medical Director is designated for this lab. Set one in the lab's medical director settings." });
-    if (md.user_id !== req.userId) return res.status(403).json({ error: "Only the lab's designated Medical Director may co-sign." });
+    // MD-or-designee gate (item 5 Phase 2). The co-sign may be made by the designated
+    // medical director, a delegate holding an active Letter of Delegation with the QC
+    // co-sign responsibility for this test's complexity (TC covers moderate, TS covers
+    // high and moderate), or the account owner as a logged break-glass override.
+    const lot = sqlite.prepare("SELECT analyte FROM qc_control_lots WHERE id = ? AND lab_id = ?").get(Number(control_lot_id), req.scope.labId) as any;
+    const complexity = complexityForAnalyte(req.scope.labId, lot?.analyte);
+    const attest = mayAttestAsDirectorOrDesignee(req.scope.labId, req.userId, "qc_period_cosign", complexity);
+    let via: string | null = attest.via;
+    if (!attest.ok) {
+      if (isLabOwnerUser(req.scope.labId, req.userId)) via = "owner_override";
+      else return res.status(403).json({ error: "Only the medical director, a delegated Technical Consultant or Supervisor for this test's complexity, or the account owner (override) may co-sign." });
+    }
     const review = sqlite.prepare("SELECT id, attestation_acknowledged FROM qc_period_reviews WHERE lab_id = ? AND control_lot_id = ? AND period_year = ? AND period_month = ?").get(req.scope.labId, Number(control_lot_id), Number(period_year), Number(period_month)) as any;
     if (!review || review.attestation_acknowledged !== 1) return res.status(409).json({ error: "The reviewer must file the attestation before the Medical Director can co-sign." });
-    const signedName = (String(typed_name || "").trim()) || md.name || "Medical Director";
+    const signerRow = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
+    let signedName = (String(typed_name || "").trim()) || (signerRow?.name ? String(signerRow.name).trim() : "") || "Medical Director";
+    if (via === "designee") signedName += " (designee)";
+    else if (via === "owner_override") signedName += " (owner override)";
     sqlite.prepare("UPDATE qc_period_reviews SET md_signed_at = datetime('now'), md_signed_by_user_id = ?, md_signed_name = ? WHERE id = ?").run(req.userId, signedName, review.id);
-    res.json({ ok: true });
+    res.json({ ok: true, signed_as: via });
   });
 
   // Assemble the monthly-review payload for one control lot + period. Used by
@@ -6633,7 +6648,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT id, owner_user_id, accreditation_cap, accreditation_tjc, accreditation_cola, primary_regime FROM labs WHERE id = ?"
     ).get(labId) as any;
     if (!lab) return res.status(404).json({ error: "Lab not found" });
-    const isOwner = Number(lab.owner_user_id) === Number(req.ownerUserId ?? req.userId);
+    // Compare the ACTUAL logged-in user to the lab owner. req.ownerUserId is set to a
+    // seat's OWNER (seatAccess), so using it here let any seat holder under the owner -
+    // including a read-and-sign Staff Portal seat - pass as "the owner." Use req.userId.
+    const isOwner = Number(lab.owner_user_id) === Number(req.userId);
     const adminMember = (db as any).$client.prepare(
       "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' AND role IN ('owner','admin') LIMIT 1"
     ).get(labId, req.userId);
@@ -10024,7 +10042,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   //   server/veritapolicyApproval.ts); until then the permissive fallback
   //   keeps policy approvals unblocked. Send an empty email to clear.
   app.put("/api/labs/:labId/medical-director", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
+    // Designating the medical director is an owner-reserved act (admins manage members and
+    // seats, but naming the lab's CLIA director sits with the account owner).
+    if (!isLabOwner(req.scope)) return res.status(403).json({ error: "Only the account owner can designate the medical director." });
     const sqlite = (db as any).$client;
     const lab = sqlite.prepare("SELECT id, medical_director_email, medical_director_name FROM labs WHERE id = ?").get(req.scope.labId) as any;
     if (!lab) return res.status(404).json({ error: "Lab not found" });
@@ -13589,6 +13609,128 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Medical Director Letter of Delegation (item 5, Phase 1) ──────────────
+  // A signable Letter of Delegation: the designated Medical Director toggles the
+  // delegable responsibilities (server/directorDelegation.ts catalog) and e-signs.
+  // Create / edit-draft / sign / revoke are MD-only; list, catalog and PDF are
+  // viewable by any lab member. No access gates change here; the QC co-sign and
+  // finding-closure gates will read these signed letters in Phase 2.
+  const isDesignatedMd = (labId: number, userId: number): boolean => {
+    const row = (db as any).$client.prepare(
+      `SELECT 1 FROM lab_members lm JOIN users u ON u.id = lm.user_id JOIN labs l ON l.id = lm.lab_id
+       WHERE lm.lab_id = ? AND lm.user_id = ? AND lm.status = 'active'
+         AND l.medical_director_email IS NOT NULL AND TRIM(l.medical_director_email) != ''
+         AND lower(u.email) = lower(l.medical_director_email) LIMIT 1`
+    ).get(labId, userId);
+    return !!row;
+  };
+  const ddSafeParse = (s: any) => { try { const v = JSON.parse(s || "{}"); return v && typeof v === "object" ? v : {}; } catch { return {}; } };
+  const ddAudit = (labId: number, userId: number, action: string, detail: string) => {
+    try {
+      (db as any).$client.prepare(
+        "INSERT INTO lab_audit_log (lab_id, changed_by_user_id, field_name, old_value, new_value, changed_at) VALUES (?, ?, 'director_delegation', ?, ?, ?)"
+      ).run(labId, userId, action, detail, new Date().toISOString());
+    } catch { /* audit best-effort */ }
+  };
+
+  app.get("/api/labs/:labId/director-delegations/catalog", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    res.json({ positions: DELEGATION_POSITIONS, complexities: DELEGATION_COMPLEXITIES, catalog: DELEGATION_CATALOG, isMedicalDirector: isDesignatedMd(req.scope.labId, req.userId) });
+  });
+
+  app.get("/api/labs/:labId/director-delegations", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const rows = (db as any).$client.prepare(
+      "SELECT * FROM director_delegations WHERE lab_id = ? ORDER BY (status='active') DESC, id DESC"
+    ).all(req.scope.labId) as any[];
+    res.json(rows.map((r) => ({ ...r, responsibilities: ddSafeParse(r.responsibilities_json) })));
+  });
+
+  app.post("/api/labs/:labId/director-delegations", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!isDesignatedMd(req.scope.labId, req.userId)) return res.status(403).json({ error: "Only the lab's designated medical director can create a letter of delegation." });
+    const b = req.body || {};
+    const position = String(b.position || "");
+    if (!isDelegationPosition(position)) return res.status(400).json({ error: "Valid position required (clinical_consultant, technical_consultant, technical_supervisor, general_supervisor)." });
+    const complexity = isDelegationComplexity(b.complexity_scope) ? b.complexity_scope : "high";
+    const delegateName = String(b.delegate_name || "").trim();
+    if (!delegateName) return res.status(400).json({ error: "delegate_name required." });
+    const resp = sanitizeResponsibilities(position as any, b.responsibilities);
+    const now = new Date().toISOString();
+    const ins = (db as any).$client.prepare(
+      `INSERT INTO director_delegations (lab_id, delegate_user_id, delegate_staff_employee_id, delegate_name, position, complexity_scope, responsibilities_json, status, created_by_user_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`
+    ).run(req.scope.labId, b.delegate_user_id ?? null, b.delegate_staff_employee_id ?? null, delegateName, position, complexity, JSON.stringify(resp), req.userId, now, now);
+    const id = Number(ins.lastInsertRowid);
+    ddAudit(req.scope.labId, req.userId, "create", `draft letter #${id} for ${delegateName} (${position})`);
+    res.status(201).json({ id });
+  });
+
+  app.put("/api/labs/:labId/director-delegations/:id", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!isDesignatedMd(req.scope.labId, req.userId)) return res.status(403).json({ error: "Only the lab's designated medical director can edit a letter of delegation." });
+    const row = (db as any).$client.prepare("SELECT * FROM director_delegations WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId) as any;
+    if (!row) return res.status(404).json({ error: "Letter not found." });
+    if (row.status !== "draft") return res.status(409).json({ error: "Only a draft letter can be edited. Revoke and create a new one to change a signed letter." });
+    const b = req.body || {};
+    const position = b.position != null ? String(b.position) : row.position;
+    if (!isDelegationPosition(position)) return res.status(400).json({ error: "Valid position required." });
+    const complexity = b.complexity_scope != null ? (isDelegationComplexity(b.complexity_scope) ? b.complexity_scope : null) : row.complexity_scope;
+    if (!complexity) return res.status(400).json({ error: "Valid complexity_scope required." });
+    const delegateName = b.delegate_name != null ? String(b.delegate_name).trim() : row.delegate_name;
+    if (!delegateName) return res.status(400).json({ error: "delegate_name required." });
+    const resp = sanitizeResponsibilities(position as any, b.responsibilities != null ? b.responsibilities : ddSafeParse(row.responsibilities_json));
+    (db as any).$client.prepare(
+      "UPDATE director_delegations SET delegate_user_id=?, delegate_staff_employee_id=?, delegate_name=?, position=?, complexity_scope=?, responsibilities_json=?, updated_at=? WHERE id=? AND lab_id=?"
+    ).run(
+      b.delegate_user_id !== undefined ? b.delegate_user_id : row.delegate_user_id,
+      b.delegate_staff_employee_id !== undefined ? b.delegate_staff_employee_id : row.delegate_staff_employee_id,
+      delegateName, position, complexity, JSON.stringify(resp), new Date().toISOString(), row.id, req.scope.labId,
+    );
+    res.json({ ok: true });
+  });
+
+  app.post("/api/labs/:labId/director-delegations/:id/sign", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!isDesignatedMd(req.scope.labId, req.userId)) return res.status(403).json({ error: "Only the lab's designated medical director can sign a letter of delegation." });
+    const row = (db as any).$client.prepare("SELECT * FROM director_delegations WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId) as any;
+    if (!row) return res.status(404).json({ error: "Letter not found." });
+    if (row.status !== "draft") return res.status(409).json({ error: "Letter is not a draft." });
+    const typed = String(req.body?.signed_name || "").trim();
+    let signerName = typed;
+    if (!signerName) { const u = storage.getUserById(req.userId) as any; signerName = (u && (u.name || u.email)) ? String(u.name || u.email) : "Medical Director"; }
+    const now = new Date().toISOString();
+    (db as any).$client.prepare(
+      "UPDATE director_delegations SET status='active', signed_by_user_id=?, signed_name=?, signed_at=?, updated_at=? WHERE id=? AND lab_id=?"
+    ).run(req.userId, signerName, now, now, row.id, req.scope.labId);
+    ddAudit(req.scope.labId, req.userId, "sign", `signed letter #${row.id} for ${row.delegate_name}`);
+    res.json({ ok: true, signed_at: now, signed_name: signerName });
+  });
+
+  app.post("/api/labs/:labId/director-delegations/:id/revoke", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!isDesignatedMd(req.scope.labId, req.userId)) return res.status(403).json({ error: "Only the lab's designated medical director can revoke a letter of delegation." });
+    const row = (db as any).$client.prepare("SELECT * FROM director_delegations WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId) as any;
+    if (!row) return res.status(404).json({ error: "Letter not found." });
+    if (row.status !== "active") return res.status(409).json({ error: "Only an active letter can be revoked." });
+    const now = new Date().toISOString();
+    (db as any).$client.prepare(
+      "UPDATE director_delegations SET status='revoked', revoked_at=?, revoked_by_user_id=?, updated_at=? WHERE id=? AND lab_id=?"
+    ).run(now, req.userId, now, row.id, req.scope.labId);
+    ddAudit(req.scope.labId, req.userId, "revoke", `revoked letter #${row.id} for ${row.delegate_name}`);
+    res.json({ ok: true });
+  });
+
+  app.get("/api/labs/:labId/director-delegations/:id/pdf", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    try {
+      const row = (db as any).$client.prepare("SELECT * FROM director_delegations WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId) as any;
+      if (!row) return res.status(404).json({ error: "Letter not found." });
+      const lab = req.scope.lab || {};
+      const { generateLetterOfDelegationPDF } = await import("./pdfReport");
+      const buf = await generateLetterOfDelegationPDF(row, { lab_name: lab.lab_name, clia_number: lab.clia_number }, licenseCtxFromReq(req));
+      const safe = String(row.delegate_name || "delegate").replace(/[^a-z0-9]+/gi, "-").slice(0, 40);
+      res.set({ "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="Letter-of-Delegation-${safe}.pdf"` });
+      res.send(buf);
+    } catch (err: any) {
+      console.error("director-delegation pdf error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // List maps
   app.get("/api/veritamap/maps", authMiddleware, (req: any, res) => {
     // Multi-lab-bleed root-cause fix: lab-scope the legacy list endpoint.
@@ -16220,7 +16362,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.status(500).json({ error: "Excel generation failed" });
     }
   };
-  app.post("/api/veritamap/maps/:id/excel", authMiddleware, veritamapExcelHandler);
+  app.post("/api/veritamap/maps/:id/excel", authMiddleware, (req: any, res: any, next: any) => { if (blockNonOperatorSeat(req, res)) return; next(); }, veritamapExcelHandler);
   app.post("/api/labs/:labId/veritamap/maps/:id/excel", authMiddleware, labScopeMiddleware, requireMapInActiveLab, veritamapExcelHandler);
 
   // ── VERITAMAP ANALYTE VALUES ─────────────────────────────────────────────
@@ -22252,19 +22394,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // MD-cosign and VeritaPolicy medical_director routing); owner/admin passes via
   // req.scope.role. Anyone else gets 403. Signing stamps signed_by/signed_at/
   // signoff_role, closes the finding, and writes an audit-trail row.
-  app.post("/api/labs/:labId/findings/:id/signoff", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
+  app.post("/api/labs/:labId/findings/:id/signoff", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
     const sqlite = (db as any).$client;
     const finding = sqlite.prepare("SELECT * FROM findings WHERE id = ? AND lab_id = ?").get(Number(req.params.id), req.scope.labId) as any;
     if (!finding) return res.status(404).json({ error: "Finding not found in this lab" });
-    const mdRow = sqlite.prepare(
-      "SELECT lm.user_id FROM lab_members lm JOIN users u ON u.id = lm.user_id JOIN labs l ON l.id = lm.lab_id WHERE lm.lab_id = ? AND lm.status = 'active' AND l.medical_director_email IS NOT NULL AND lower(u.email) = lower(l.medical_director_email) LIMIT 1"
-    ).get(req.scope.labId) as any;
-    const isMd = !!mdRow && mdRow.user_id === req.userId;
-    const isOwnerAdmin = req.scope.role === "owner" || req.scope.role === "admin";
-    if (!isMd && !isOwnerAdmin) {
-      return res.status(403).json({ error: "Only the designated medical director or a lab owner/admin can sign off this event." });
+    // MD-or-designee gate (item 5 Phase 2). Closing a finding is a director attestation:
+    // the designated medical director, a delegate holding the finding-closure responsibility
+    // for the lab's complexity, or the account owner as a logged break-glass override.
+    // (Was: any owner/admin/editor via requireModuleEdit. Tightened per the delegation model.)
+    const complexity = labHighestComplexity(req.scope.labId);
+    const attest = mayAttestAsDirectorOrDesignee(req.scope.labId, req.userId, "finding_closure", complexity);
+    let signoff_role: string = attest.via || "";
+    if (!attest.ok) {
+      if (isLabOwnerUser(req.scope.labId, req.userId)) signoff_role = "owner_override";
+      else return res.status(403).json({ error: "Only the designated medical director, a delegated designee for finding closure, or the account owner (override) can close this finding." });
     }
-    const signoff_role = isMd ? "medical_director" : "admin";
     const signerRow = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
     const signerName = String(req.body?.signed_by ?? "").trim() || (signerRow?.name ? String(signerRow.name).trim() : "") || "Authorized signer";
     const now = new Date().toISOString();
@@ -24791,6 +24935,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // CUMSUM PDF export
   app.post("/api/veritacheck/cumsum/trackers/:id/pdf", authMiddleware, async (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Subscription required" });
     const tracker = userCanAccessLabRow('cumsum_trackers', req.params.id, req);
     if (!tracker) return res.status(404).json({ error: "Tracker not found" });
@@ -28983,6 +29128,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Add a seat (invite)
   app.post("/api/account/seats", authMiddleware, async (req: any, res) => {
+    // Legacy account-level seat management is owner-reserved (seats are created under
+    // owner_user_id = req.userId). Block non-owners; admins use /api/labs/:labId/members.
+    if (!(db as any).$client.prepare("SELECT 1 FROM labs WHERE owner_user_id = ? LIMIT 1").get(req.userId)) return res.status(403).json({ error: "Only an account owner can manage seats." });
     const { email, seatType: requestedSeatType } = req.body;
     if (!email || !email.includes("@")) return res.status(400).json({ error: "Valid email required" });
     // parking-lot #33 PR 3: same seat-type split as the lab-scoped endpoint.
@@ -29211,6 +29359,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Update seat permissions
   app.patch("/api/account/seats/:seatId/permissions", authMiddleware, (req: any, res) => {
+    if (!(db as any).$client.prepare("SELECT 1 FROM labs WHERE owner_user_id = ? LIMIT 1").get(req.userId)) return res.status(403).json({ error: "Only an account owner can manage seats." });
     const seatId = parseInt(req.params.seatId);
     const { permissions } = req.body;
 
@@ -29231,6 +29380,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Deactivate a seat
   app.delete("/api/account/seats/:seatId", authMiddleware, (req: any, res) => {
+    if (!(db as any).$client.prepare("SELECT 1 FROM labs WHERE owner_user_id = ? LIMIT 1").get(req.userId)) return res.status(403).json({ error: "Only an account owner can manage seats." });
     const seat = (db as any).$client.prepare(
       "SELECT id FROM user_seats WHERE id = ? AND owner_user_id = ?"
     ).get(req.params.seatId, req.userId);
@@ -29261,6 +29411,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Force logout a specific seat's sessions (for account owner)
   app.post("/api/account/seats/:seatId/force-logout", authMiddleware, (req: any, res) => {
+    if (!(db as any).$client.prepare("SELECT 1 FROM labs WHERE owner_user_id = ? LIMIT 1").get(req.userId)) return res.status(403).json({ error: "Only an account owner can manage seats." });
     const seat = (db as any).$client.prepare(
       "SELECT seat_user_id FROM user_seats WHERE id = ? AND owner_user_id = ?"
     ).get(req.params.seatId, req.userId) as any;
@@ -30026,6 +30177,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // POST /api/veritalab/certificates/excel - export certificates to Excel
   app.post("/api/veritalab/certificates/excel", authMiddleware, async (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasLabCertAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
 
     // Multi-lab: honor the active-lab header exactly as the client's roster
@@ -30766,6 +30918,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // PDF placeholder
   app.post("/api/veritapt/pdf", authMiddleware, async (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
     if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     try {
       const userId = req.ownerUserId ?? req.user.userId;
