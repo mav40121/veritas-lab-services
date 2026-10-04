@@ -549,19 +549,6 @@ _(item #52 core closed 2026-09-28; shipped PR #1361 member-picker, prod-verified
 
 ---
 
-### 43. Confirm the finding-closure signer policy (non-MD admins now blocked)
-
-**Effort:** XS (a yes/no decision; ~15 min to loosen the gate if reversed).
-**Importance:** Medium — changes who can close VeritaResponse findings in production; affects any lab where admins routinely close findings.
-
-**What:** Item 5 Phase 2 tightened VeritaResponse finding closure from "any owner / admin / edit-seat" to "the designated medical director, a delegated designee holding finding-closure for the lab's complexity, or the account owner as a logged break-glass override." This is live on prod (#1443). It follows the agreed MD-or-designee model (QB=1), and the same gate now guards QC period-review co-sign. It has not been confirmed against real customer workflows: if any lab relies on non-MD admins closing findings, they now need a Letter of Delegation, or the gate must be loosened.
-
-**Source:** this session, delegation feature build (2026-10-04). Flagged repeatedly in-session; awaiting explicit operator sign-off.
-
-**Status:** Open, awaiting operator confirmation. Reverting is a one-line change (re-add the owner/admin path in the `findings/:id/signoff` handler) if admins should retain finding closure.
-
----
-
 ### 44. Regenerate the 119-function access-inventory Excel with the corrected MD persona
 
 **Effort:** XS (~15 min to re-run the sweep harness and re-deliver).
@@ -576,6 +563,12 @@ _(item #52 core closed 2026-09-28; shipped PR #1361 member-picker, prod-verified
 ---
 
 ## CLOSED (audit trail)
+
+### C59. Confirm the finding-closure signer policy (was #43)
+
+**Effort:** was XS / **Importance:** Medium
+
+**Closure evidence:** Operator decision 2026-10-04: KEEP VeritaResponse finding closure restricted to the designated medical director, a delegated designee holding finding-closure for the lab's complexity, or the account owner as a logged break-glass override. The Item 5 Phase 2 tightening (shipped PRs #1443/#1444, live on prod) stands as intended; a non-MD admin closes findings only by holding a Letter of Delegation. The same MD-or-designee gate also guards QC period-review co-sign. No code change required.
 
 ### C58. VeritaDC per-document attestation tracker + "My Documents" rename (built as #45)
 
