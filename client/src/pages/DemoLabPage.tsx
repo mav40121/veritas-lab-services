@@ -1298,7 +1298,7 @@ export default function DemoLabPage() {
                   58 CFR-anchored laboratory policies, ready to adopt.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                  VeritaPolicy&#8482; ships generic, CFR-anchored policy templates the lab can adopt directly. Each template opens with the verbatim eCFR text, then the lab's standing rule in plain CFR voice. Service-line toggles auto-apply N/A. Inspection-ready PDF report with readiness score.
+                  VeritaDC&#8482; ships generic, CFR-anchored policy templates the lab can adopt directly. Each template opens with the verbatim eCFR text, then the lab's standing rule in plain CFR voice. Service-line toggles auto-apply N/A. Inspection-ready PDF report with readiness score.
                 </p>
               </div>
               <Card>

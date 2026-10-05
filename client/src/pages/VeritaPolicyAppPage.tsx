@@ -457,7 +457,7 @@ export default function VeritaPolicyAppPage() {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
         <Lock size={40} className="text-muted-foreground mb-4" />
-        <h2 className="text-xl font-semibold text-foreground mb-2">Sign in to access VeritaPolicy&#8482;</h2>
+        <h2 className="text-xl font-semibold text-foreground mb-2">Sign in to access VeritaDC&#8482;</h2>
         <p className="text-muted-foreground text-sm">Your policy compliance tracker requires a VeritaAssure&#8482; account.</p>
       </div>
     );
@@ -467,8 +467,8 @@ export default function VeritaPolicyAppPage() {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
         <Lock size={40} className="text-muted-foreground mb-4" />
-        <h2 className="text-xl font-semibold text-foreground mb-2">Upgrade to access VeritaPolicy&#8482;</h2>
-        <p className="text-muted-foreground text-sm mb-4">VeritaPolicy&#8482; is included with all paid VeritaAssure&#8482; plans.</p>
+        <h2 className="text-xl font-semibold text-foreground mb-2">Upgrade to access VeritaDC&#8482;</h2>
+        <p className="text-muted-foreground text-sm mb-4">VeritaDC&#8482; is included with all paid VeritaAssure&#8482; plans.</p>
         <a href="/pricing"><Button>View Plans</Button></a>
       </div>
     );
@@ -517,7 +517,7 @@ export default function VeritaPolicyAppPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">VeritaPolicy&#8482;</h1>
+          <h1 className="text-2xl font-bold text-foreground">VeritaDC&#8482;</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {headerLabel}
             {summary ? ` - ${summary.total} policies (${aoLabel})` : ""}
@@ -545,7 +545,7 @@ export default function VeritaPolicyAppPage() {
           <label
             className={`flex items-center gap-1.5 text-xs select-none ${activeLabId ? "text-muted-foreground cursor-pointer" : "text-muted-foreground/50 cursor-not-allowed"}`}
             title={activeLabId
-              ? "Stamp a diagonal UNCONTROLLED COPY watermark on the Word starters you download. Use it for printed or hand-out copies; leave it off for the controlled master in VeritaPolicy."
+              ? "Stamp a diagonal UNCONTROLLED COPY watermark on the Word starters you download. Use it for printed or hand-out copies; leave it off for the controlled master in VeritaDC."
               : "Open this lab to download watermarked Word starters"}>
             <input
               type="checkbox"
@@ -565,7 +565,7 @@ export default function VeritaPolicyAppPage() {
       <ModuleHowToCard
         moduleKey="veritapolicy"
         moduleName="VeritaDC™"
-        whatItDoes={`VeritaPolicy is a ${policies.length || 58}-policy master list keyed to the CFR plus the citation set for your accrediting body (TJC, CAP, COLA, or AABB). For each policy, the lab maps its own existing policy manual entry, marks status (Not Started, In Progress, Complete, or N/A), and watches the live readiness score update. Use it as the crosswalk between what your binder already covers and what every regulation expects.`}
+        whatItDoes={`VeritaDC is a ${policies.length || 58}-policy master list keyed to the CFR plus the citation set for your accrediting body (TJC, CAP, COLA, or AABB). For each policy, the lab maps its own existing policy manual entry, marks status (Not Started, In Progress, Complete, or N/A), and watches the live readiness score update. Use it as the crosswalk between what your binder already covers and what every regulation expects.`}
         howToUse={[
           `Browse the ${policies.length || 58}-row master list; expand any row to read the description, citations, and notes.`,
           "In each row, enter the name of the policy in your manual that addresses it under 'Our Policy Name'.",
