@@ -1132,6 +1132,33 @@ function requireModuleEdit(module: string) {
   };
 }
 
+// Boolean twin of requireModuleEdit's core access test (owner / lab-or-org admin
+// / active seat whose permissions resolve to 'edit' for the module), for read
+// paths that need to REFLECT edit access rather than gate on it. Used by the
+// VeritaPolicy approval preview so it does not report "you can approve" to a
+// reviewer (or delegate) who would be 403'd by requireModuleEdit at approve time.
+// The middleware is unchanged; this only mirrors its checks for an explicit lab.
+function hasModuleEditAccess(labId: number, userId: number, module: string): boolean {
+  if (!labId) return false;
+  const sqlite = (db as any).$client;
+  if (sqlite.prepare("SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1").get(labId, userId)) return true;
+  const adminMember = sqlite.prepare(
+    "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' AND role IN ('owner','admin') LIMIT 1"
+  ).get(labId, userId)
+    || sqlite.prepare(
+      `SELECT 1 FROM organization_members om JOIN labs l ON l.organization_id = om.organization_id
+        WHERE l.id = ? AND om.user_id = ? AND om.status = 'active' AND om.org_role IN ('org_owner','org_admin') LIMIT 1`
+    ).get(labId, userId);
+  if (adminMember) return true;
+  const seatRow = sqlite.prepare(
+    "SELECT permissions FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
+  ).get(userId, labId) as any;
+  if (!seatRow) return false;
+  let perms: SeatPermissions = {} as SeatPermissions;
+  try { perms = JSON.parse(seatRow.permissions || '{}') as SeatPermissions; } catch {}
+  return resolveSeatPermission(perms, module) === 'edit';
+}
+
 // ── PDF TOKEN STORE ──────────────────────────────────────────────────────────
 // Moved to server/pdfTokens.ts so other route modules (veritabench, etc.)
 // can hand back tokens that the shared /api/pdf/:token endpoint serves.
@@ -36994,8 +37021,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         isMajorRevision,
         manualId: doc.manual_id ?? null,
       }, labLocalDate(new Date().toISOString()));
+      // Eligibility (incl. delegation) is necessary but not sufficient: the
+      // approve/reject POSTs are gated by requireModuleEdit('veritapolicy'), so a
+      // reviewer or delegate without VeritaPolicy edit access would see "you can
+      // approve" here and then be 403'd at approve time. Reflect edit access so
+      // the UI never offers a control the POST will reject.
+      const hasEdit = hasModuleEditAccess(req.scope.labId, req.userId, "veritapolicy");
+      const canApprove = check.ok && hasEdit;
       let viaDelegation: { delegatorId: number; delegatorName: string } | null = null;
-      if (check.ok && (check as any).viaDelegation) {
+      if (canApprove && (check as any).viaDelegation) {
         const dId = (check as any).viaDelegation.delegatorId as number;
         const u = sqlite.prepare("SELECT name, email FROM users WHERE id = ?").get(dId) as any;
         viaDelegation = { delegatorId: dId, delegatorName: u?.name || u?.email || `user #${dId}` };
@@ -37005,9 +37039,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         totalSteps: pending.totalSteps,
         completedSteps: pending.completedSteps,
         isMajorRevision,
-        canCurrentUserApprove: check.ok,
+        canCurrentUserApprove: canApprove,
         viaDelegation,
-        reason: check.ok ? null : (check as any).reason,
+        editAccess: hasEdit,
+        reason: canApprove
+          ? null
+          : !check.ok
+          ? (check as any).reason
+          : "You have view-only access to VeritaPolicy. Ask the owner or an admin for edit access to approve.",
       });
     }
   );
@@ -39478,8 +39517,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             WHERE lab_id = ? AND status = 'in_review' AND archived_at IS NULL`
         )
         .all(req.scope.labId) as any[];
+      // Only list docs the caller can actually action: eligible AND holds
+      // VeritaPolicy edit access (the approve/reject POSTs require it).
+      const hasEdit = hasModuleEditAccess(req.scope.labId, req.userId, "veritapolicy");
       const pending: any[] = [];
       for (const d of inReviewDocs) {
+        if (!hasEdit) break;
         const p = getCurrentPendingStep(sqlite, d.id);
         if (!p.step) continue;
         const isMajorRevision = isVersionMajorRevision(sqlite, d.current_version_id);
