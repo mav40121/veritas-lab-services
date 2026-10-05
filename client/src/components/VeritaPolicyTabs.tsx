@@ -15,15 +15,16 @@
 
 import { Link } from "wouter";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
-import { ListChecks, FolderOpen, ShieldCheck, ClipboardCheck } from "lucide-react";
+import { ListChecks, FolderOpen, ShieldCheck, ClipboardCheck, BookOpen } from "lucide-react";
 
-type Tab = "master" | "my-policies" | "compliance" | "iqcp";
+type Tab = "master" | "my-policies" | "compliance" | "iqcp" | "cfr-reference";
 
 const TABS: { key: Tab; label: string; sub: string; icon: typeof ListChecks }[] = [
-  { key: "master",      label: "Master List", sub: "",            icon: ListChecks },
-  { key: "my-policies", label: "My Documents", sub: "my-policies", icon: FolderOpen },
-  { key: "compliance",  label: "Compliance",  sub: "compliance",  icon: ShieldCheck },
-  { key: "iqcp",        label: "IQCP",        sub: "iqcp",        icon: ClipboardCheck },
+  { key: "master",        label: "Master List",   sub: "",              icon: ListChecks },
+  { key: "my-policies",   label: "My Documents",  sub: "my-policies",   icon: FolderOpen },
+  { key: "compliance",    label: "Compliance",    sub: "compliance",    icon: ShieldCheck },
+  { key: "iqcp",          label: "IQCP",          sub: "iqcp",          icon: ClipboardCheck },
+  { key: "cfr-reference", label: "CFR Reference", sub: "cfr-reference", icon: BookOpen },
 ];
 
 export function VeritaPolicyTabs({ active }: { active: Tab }) {
