@@ -39,6 +39,31 @@ pass as this doc).
 > CRUD routes, and a Delegations dialog in VeritaPolicyMyPoliciesPage.tsx. Verified
 > by scripts/verify-veritadc-approval-delegation.ts (19/19) plus a full local
 > browser exercise (create -> ACTIVE -> revoke) and API guard checks.
+>
+> **End-to-end approve-by-delegate verified 2026-10-04 (post-deploy).** On a
+> throwaway lab: an in-review policy with a `specific_user` step (user 2), a
+> delegation 2 -> 3, and the delegate (user 3) given an active VeritaPolicy seat.
+> The delegate's `pending-step` preview returned `canApprove:true` with
+> `viaDelegation {delegatorId:2, delegatorName}`; the owner control was correctly
+> blocked by self-approval. `POST .../approve` as the delegate returned
+> `{ok:true, status:"approved"}`; the signoff recorded
+> `comment: "[Signed as delegate for Deleg QA Owner (user #2)]"` and the audit row
+> carried `via_delegation:true, delegator_user_id:2`. Core value prop confirmed
+> through the full HTTP stack.
+>
+> **Known constraint found during that test (candidate follow-up, not a
+> delegation bug):** the approve/reject routes are gated by
+> `requireModuleEdit('veritapolicy')`, so a delegate must have VeritaPolicy EDIT
+> access (owner/admin or an active seat whose permissions resolve to `edit`) to
+> actually approve; a seatless member is view-only and is 403'd at approve time.
+> This is pre-existing and applies to every reviewer, not just delegates. But the
+> `pending-step` preview does NOT run the module-edit check, so it can report
+> `canApprove:true` to a delegate (or any reviewer) who will then be blocked at
+> approve time with a "view-only access" error. Candidate polish: have
+> `pending-step` reflect module-edit access (add an `editAccess` flag or fold it
+> into `canCurrentUserApprove`) so the UI never offers an approve control that the
+> POST will reject. Deferred as a separate small fix since it is pre-existing and
+> orthogonal to delegation; flagged for Michael.
 
 
 ### Problem
