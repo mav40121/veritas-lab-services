@@ -18428,8 +18428,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // excluded, so an unsubscribe is honored across BOTH audiences. RFC-reserved
   // test domains are excluded to protect sender reputation from bounce noise.
   app.post("/api/admin/users/send", async (req: any, res) => {
-    const { secret, subject, bodyHtml, postalAddress, testTo, dryRun } = req.body || {};
+    const { secret, subject, bodyHtml, postalAddress, testTo, dryRun, exclude } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    // One-time per-send exclude list (lowercased, trimmed). Lets a send skip
+    // specific addresses (junk/test/demo accounts, or one pending deletion)
+    // WITHOUT permanently suppressing them from the Lab Director's Briefing.
+    // It does not touch subscription state; it only filters this one send.
+    const excludeSet = new Set(
+      (Array.isArray(exclude) ? exclude : []).map((e: any) => String(e || "").toLowerCase().trim()).filter(Boolean)
+    );
     const activeEmails: string[] = testTo
       ? []
       : ((db as any).$client.prepare(
@@ -18441,10 +18448,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               AND u.email NOT LIKE '%@example.org'
               AND (n.active IS NULL OR n.active = 1)
             ORDER BY email`
-        ).all() as any[]).map((r) => r.email);
+        ).all() as any[]).map((r) => r.email).filter((e: string) => !excludeSet.has(e));
     const recipients = resolveRecipients(activeEmails, testTo);
     if (dryRun) {
-      return res.json({ ok: true, dryRun: true, audience: "users", recipientCount: recipients.length, recipients, test: !!testTo });
+      return res.json({ ok: true, dryRun: true, audience: "users", recipientCount: recipients.length, recipients, excluded: Array.from(excludeSet), test: !!testTo });
     }
     if (!subject || !bodyHtml) return res.status(400).json({ error: "subject and bodyHtml required" });
     if (!postalAddress) return res.status(400).json({ error: "postalAddress required (CAN-SPAM footer)" });
