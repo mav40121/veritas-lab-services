@@ -9,6 +9,17 @@ import { teaData } from "@/lib/cliaTeaData";
 
 const articles = [
   {
+    slug: "getting-started",
+    title: "Getting Started with VeritaAssure™",
+    summary: "A step-by-step setup path plus a getting-started checklist for every one of the eighteen modules. Check items off as you go, or print the guide.",
+    category: "Getting Started",
+    readTime: "Interactive checklist",
+    author: "Veritas Lab Services",
+    date: "October 2026",
+    tags: ["Getting Started", "Onboarding", "VeritaAssure™"],
+    featured: true,
+  },
+  {
     slug: "clia-brochures-every-lab-leader-should-read",
     title: "The CLIA Brochures Every Lab Leader Should Read, and What Each One Is Really Telling You",
     summary: "A former surveyor's guide to the free CMS CLIA brochures every lab leader should read at least once.",
