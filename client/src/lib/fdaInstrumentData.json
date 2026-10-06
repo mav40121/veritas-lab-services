@@ -2984,7 +2984,7 @@
   "Roche cobas c 502": {
     "vendor": "Roche",
     "category": "Chemistry",
-    "testCount": 100,
+    "testCount": 103,
     "tests": {
       "Protein, total": {
         "complexity": "MODERATE",
@@ -3385,6 +3385,18 @@
       "Gabapentin": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
+      },
+      "Sodium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Chloride": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
       }
     }
   },
@@ -3786,7 +3798,7 @@
   "Roche cobas c 702": {
     "vendor": "Roche",
     "category": "Chemistry",
-    "testCount": 58,
+    "testCount": 61,
     "tests": {
       "Alanine aminotransferase (ALT) (SGPT)": {
         "complexity": "MODERATE",
@@ -4019,6 +4031,18 @@
       "Transferrin, urine": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
+      },
+      "Sodium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Chloride": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
       }
     }
   },
@@ -18994,7 +19018,7 @@
   "Roche cobas 8000 (c702 module)": {
     "vendor": "Roche",
     "category": "Chemistry",
-    "testCount": 58,
+    "testCount": 61,
     "tests": {
       "Alanine aminotransferase (ALT) (SGPT)": {
         "complexity": "MODERATE",
@@ -19227,6 +19251,18 @@
       "Transferrin, urine": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
+      },
+      "Sodium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Chloride": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
       }
     }
   },
