@@ -25,11 +25,12 @@
 // production DB to backup_integrity_log. Resend alert fires on any
 // failed check. See checkBackupIntegrity() below.
 
-import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import * as fs from "fs";
 import * as zlib from "zlib";
 import { Resend } from "resend";
 import { db } from "./db";
+import Database from "better-sqlite3";
 
 const S3_ENDPOINT = process.env.BACKUP_S3_ENDPOINT;
 const S3_BUCKET = process.env.BACKUP_S3_BUCKET;
@@ -44,6 +45,9 @@ const FAILURE_NOTIFY_TO = "info@veritaslabservices.com";
 // or "the database lost a meaningful amount of data".
 const MIN_BACKUP_FILE_SIZE_BYTES = 100 * 1024;  // 100 KB compressed; anything smaller is suspect
 const MIN_TABLE_COUNT = 40;                     // floor; the live schema has well over this
+// Internal/test accounts live only on Michael-owned domains, so real-customer
+// counts exclude them. Shared by the integrity check and the restore self-test.
+const REAL_USER_PREDICATE = "email NOT LIKE '%@veritaslabservices.com' AND email NOT LIKE '%@veritaslab.com'";
 
 let s3Client: S3Client | null = null;
 
@@ -158,7 +162,6 @@ function checkBackupIntegrity(gzippedFileBytes: number): { ok: boolean; checks: 
   // are created and torn down constantly, which used to false-trip this check
   // (e.g. 32 -> 28) with no real customer loss. We keep the all-accounts total
   // for continuity but gate the alert on the real-user count.
-  const REAL_USER_PREDICATE = "email NOT LIKE '%@veritaslabservices.com' AND email NOT LIKE '%@veritaslab.com'";
   const userCount = (sqlite.prepare("SELECT COUNT(*) as cnt FROM users").get() as any).cnt as number;
   const realUserCount = (sqlite.prepare(`SELECT COUNT(*) as cnt FROM users WHERE ${REAL_USER_PREDICATE}`).get() as any).cnt as number;
   // Legacy rows have real_user_count = NULL; treat that as "no real-user baseline
@@ -287,5 +290,149 @@ export async function runNightlyBackup() {
     console.error("[backup] FAILED:", err?.message || err);
     if (err?.stack) console.error(err.stack);
     await notifyFailure(err instanceof Error ? err : new Error(String(err)));
+  }
+}
+
+// ─── Restore self-test ──────────────────────────────────────────────────────
+// Proves the off-site backup is actually recoverable, server-side, without
+// exfiltrating client data to anyone's machine. Downloads the latest backup,
+// gunzips it, opens it read-only, and verifies structural integrity plus core
+// row counts. This is the "tested restore" the earlier backup posture lacked.
+
+export interface BackupFileVerification {
+  integrityOk: boolean;
+  integrityResult: string;
+  restoredBytes: number;
+  counts: { userCount: number; realUserCount: number; studyCount: number; tableCount: number };
+}
+
+function countCore(sqlite: Database.Database) {
+  const one = (sql: string): number => {
+    try {
+      return (sqlite.prepare(sql).get() as any).c as number;
+    } catch {
+      return -1; // table absent or unreadable; -1 marks "not counted"
+    }
+  };
+  return {
+    userCount: one("SELECT COUNT(*) c FROM users"),
+    realUserCount: one(`SELECT COUNT(*) c FROM users WHERE ${REAL_USER_PREDICATE}`),
+    studyCount: one("SELECT COUNT(*) c FROM studies"),
+    tableCount: one("SELECT COUNT(*) c FROM sqlite_master WHERE type='table'"),
+  };
+}
+
+// Gunzip a .db.gz backup to a temp file, open it read-only, and verify
+// structural integrity plus core row counts. The temp .db is always removed.
+// Exported so the restore mechanics can be unit-tested without R2.
+export async function verifyBackupGzFile(gzPath: string): Promise<BackupFileVerification> {
+  const tmpDb = `${gzPath}.restore-${Date.now()}.db`;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const source = fs.createReadStream(gzPath);
+      const dest = fs.createWriteStream(tmpDb);
+      const gunzip = zlib.createGunzip();
+      source.on("error", reject);
+      dest.on("error", reject);
+      gunzip.on("error", reject);
+      dest.on("finish", resolve);
+      source.pipe(gunzip).pipe(dest);
+    });
+    const restoredBytes = fs.statSync(tmpDb).size;
+    const rdb = new Database(tmpDb, { readonly: true, fileMustExist: true });
+    let integrityResult: string;
+    try {
+      integrityResult = String(rdb.pragma("integrity_check", { simple: true }) ?? "");
+    } catch (err: any) {
+      integrityResult = `error: ${err?.message ?? err}`;
+    }
+    const counts = countCore(rdb);
+    rdb.close();
+    return { integrityOk: integrityResult === "ok", integrityResult, restoredBytes, counts };
+  } finally {
+    try { fs.unlinkSync(tmpDb); } catch {}
+  }
+}
+
+export interface RestoreSelfTestResult {
+  ran: boolean;
+  verdict: "PASS" | "FAIL" | "SKIP";
+  skippedReason?: string;
+  backupKey?: string;
+  backupLastModified?: string;
+  compressedBytes?: number;
+  restoredBytes?: number;
+  integrityCheck?: string;
+  integrityOk?: boolean;
+  restored?: BackupFileVerification["counts"];
+  live?: BackupFileVerification["counts"];
+  notes?: string[];
+  elapsedMs?: number;
+}
+
+// Download the most recent off-site backup, restore it to a temp DB, and verify
+// it. Compares restored counts to the live DB for context (the backup is last
+// night's snapshot, so a small shortfall is expected; a large one is flagged in
+// notes). Never writes to production; temp files are removed in finally.
+export async function restoreSelfTest(): Promise<RestoreSelfTestResult> {
+  const startedAt = Date.now();
+  const client = getS3Client();
+  if (!client) {
+    return { ran: false, verdict: "SKIP", skippedReason: "backup S3 env not configured" };
+  }
+  const listed = await client.send(new ListObjectsV2Command({ Bucket: S3_BUCKET, MaxKeys: 1000 }));
+  const backups = (listed.Contents || [])
+    .filter((o) => o.Key && o.Key.startsWith("veritas-backup-") && o.Key.endsWith(".db.gz") && o.LastModified)
+    .sort((a, b) => (b.LastModified as Date).getTime() - (a.LastModified as Date).getTime());
+  if (backups.length === 0) {
+    return { ran: false, verdict: "FAIL", skippedReason: "no veritas-backup-*.db.gz objects in bucket" };
+  }
+  const latest = backups[0];
+  const tmpGz = `/tmp/restore-selftest-${Date.now()}.db.gz`;
+  try {
+    const obj = await client.send(new GetObjectCommand({ Bucket: S3_BUCKET, Key: latest.Key! }));
+    await new Promise<void>((resolve, reject) => {
+      const body = obj.Body as unknown as NodeJS.ReadableStream;
+      const dest = fs.createWriteStream(tmpGz);
+      body.on("error", reject);
+      dest.on("error", reject);
+      dest.on("finish", resolve);
+      body.pipe(dest);
+    });
+    const compressedBytes = fs.statSync(tmpGz).size;
+    const v = await verifyBackupGzFile(tmpGz);
+    const live = countCore((db as any).$client);
+
+    const notes: string[] = [];
+    const complete =
+      v.counts.tableCount >= MIN_TABLE_COUNT &&
+      v.counts.userCount > 0 &&
+      v.counts.studyCount >= 0;
+    if (live.studyCount >= 0 && v.counts.studyCount >= 0) {
+      const shortfall = live.studyCount - v.counts.studyCount;
+      const tolerance = Math.max(50, Math.ceil(live.studyCount * 0.1));
+      if (shortfall > tolerance) {
+        notes.push(
+          `restored study_count (${v.counts.studyCount}) is ${shortfall} below live (${live.studyCount}); the latest backup may predate a recent change`,
+        );
+      }
+    }
+    const verdict: "PASS" | "FAIL" = v.integrityOk && complete ? "PASS" : "FAIL";
+    return {
+      ran: true,
+      verdict,
+      backupKey: latest.Key,
+      backupLastModified: (latest.LastModified as Date).toISOString(),
+      compressedBytes,
+      restoredBytes: v.restoredBytes,
+      integrityCheck: v.integrityResult,
+      integrityOk: v.integrityOk,
+      restored: v.counts,
+      live,
+      notes,
+      elapsedMs: Date.now() - startedAt,
+    };
+  } finally {
+    try { fs.unlinkSync(tmpGz); } catch {}
   }
 }

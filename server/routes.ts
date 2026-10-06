@@ -33413,6 +33413,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── ADMIN: restore self-test (read-only w.r.t. production) ───────────────
+  // Proves the off-site backup is recoverable WITHOUT exfiltrating client data:
+  // pulls the latest R2 backup into the container, restores it to a temp DB,
+  // runs PRAGMA integrity_check plus row counts, compares to live, returns a
+  // PASS/FAIL verdict, and deletes the temp files. This is the "tested restore"
+  // evidence for a security review. See restoreSelfTest in server/backup.ts.
+  app.get("/api/admin/restore-self-test", async (req, res) => {
+    const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    try {
+      const { restoreSelfTest } = await import("./backup");
+      const result = await restoreSelfTest();
+      res.json(result);
+    } catch (err: any) {
+      console.error('[restore-self-test] Error:', err?.message);
+      res.status(500).json({ error: err?.message || "self-test failed" });
+    }
+  });
+
   // ── ADMIN: TLS certificate status (read-only) ───────────────────────────
   // On-demand view of the public TLS cert expiry for the monitored hosts, so the
   // operator can confirm the site is not serving an expired or soon-to-expire
