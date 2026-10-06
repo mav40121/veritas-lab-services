@@ -24,6 +24,7 @@ import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateEmployeeCompetencyRecordPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer, generateInternalNcePDF, validateInternalNce, generateCeuTranscriptPDF } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
 import { labLocalDate } from "./dateLocal";
+import { scanPhi } from "./phiScan";
 import { buildWasteReport, generateWasteReportPDF, generateWasteReportExcel, type WasteEventRow, type WasteReportContext } from "./wasteReport";
 import { entireLabFlag, sanitizeSpecialties, expandEntireLabRoles, cms209Gaps } from "./cms209Roles";
 import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution, analyteMatch, stampMapDatesFromStudies } from "./veritacheckCoverage";
@@ -1883,6 +1884,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
     }
     res.json({ ok: true, labId: targetLabId, user: { id: user?.id, email: user?.email, plan: user?.plan, studyCredits: user?.studyCredits } });
+  });
+
+  // ADMIN: scan the live database for anything shaped like a protected health
+  // identifier. VeritaAssure stores no PHI by design, so the expected result is
+  // zero; any hit is a real leak to investigate. Read-only. The report returns
+  // table/column/row id and a REDACTED preview, never cleartext PHI (the scan
+  // cannot itself become a leak). See server/phiScan.ts. Optional ?max=N caps
+  // returned findings (default 500, hard ceiling 5000). secret via ?secret= or
+  // the x-admin-secret header.
+  app.get("/api/admin/phi-scan", (req, res) => {
+    const secret = (req.query.secret as string) || (req.headers["x-admin-secret"] as string);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const maxRaw = Number(req.query.max);
+    const maxFindings = Number.isFinite(maxRaw) && maxRaw > 0 ? Math.min(maxRaw, 5000) : 500;
+    try {
+      const result = scanPhi((db as any).$client, { maxFindings });
+      res.json(result);
+    } catch (err: any) {
+      console.error("[admin/phi-scan] failed:", err?.message);
+      res.status(500).json({ error: err?.message || "scan failed" });
+    }
   });
 
   // Targeted audit_log maintenance (id-based ONLY): delete specific rows and/or
