@@ -69,6 +69,7 @@ const ArticleTJCInspectionPage = lazy(() => import("@/pages/ArticleTJCInspection
 const ArticleMockInspectionPage = lazy(() => import("@/pages/ArticleMockInspectionPage"));
 const ArticleChooseComplianceSoftwarePage = lazy(() => import("@/pages/ArticleChooseComplianceSoftwarePage"));
 const ArticleCompareEPEvaluatorPage = lazy(() => import("@/pages/ArticleCompareEPEvaluatorPage"));
+const GettingStartedGuidePage = lazy(() => import("@/pages/GettingStartedGuidePage"));
 const ArticleValidateVeritaCheckPage = lazy(() => import("@/pages/ArticleValidateVeritaCheckPage"));
 const ArticleManualLogsPage = lazy(() => import("@/pages/ArticleManualLogsPage"));
 const TeaLookupPage = lazy(() => import("@/pages/TeaLookupPage"));
@@ -422,6 +423,7 @@ function AppContent() {
           <Route path="/resources/tjc-laboratory-inspection-what-to-expect" component={ArticleMockInspectionPage} />
           <Route path="/resources/how-to-choose-lab-compliance-software" component={ArticleChooseComplianceSoftwarePage} />
           <Route path="/resources/veritacheck-vs-ep-evaluator" component={ArticleCompareEPEvaluatorPage} />
+          <Route path="/resources/getting-started" component={GettingStartedGuidePage} />
           <Route path="/resources/how-to-validate-veritacheck-clia" component={ArticleValidateVeritaCheckPage} />
           <Route path="/resources/laboratory-inventory-management" component={ArticleInventoryManagementPage} />
           <Route path="/resources/manual-logs-why-most-labs-should-stop" component={ArticleManualLogsPage} />
