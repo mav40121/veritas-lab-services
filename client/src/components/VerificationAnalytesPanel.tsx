@@ -6,24 +6,25 @@
 // edit / sign / delete. Each analyte carries its own TEa, MDLs, AMR,
 // and lifecycle (draft / finalized).
 //
+// 2026-10-06 (Michael): adding analytes one at a time was cumbersome. The
+// "Add analytes" button now opens a multi-select of the instrument's menu,
+// sourced from the FDA instrument library (client/src/lib/fdaInstrumentData.json)
+// by the verification's instrument name, merged with any linked VeritaMap
+// analytes. Pick several (or Select all) and add them in one action. A custom
+// free-text analyte is still available for anything off-menu.
+//
 // Endpoint contract (shipped in PR #697):
 //   GET    /api/veritacheck/verifications/:id/analytes
 //   POST   /api/veritacheck/verifications/:id/analytes
 //   PATCH  /api/veritacheck/verifications/:id/analytes/:analyteId
 //   POST   /api/veritacheck/verifications/:id/analytes/:analyteId/finalize
 //   DELETE /api/veritacheck/verifications/:id/analytes/:analyteId
-//
-// Finalize is per-analyte: director can sign off on analyte A while B
-// remains in draft. The bundle PDF still renders for the whole
-// package, but a per-analyte signature block surfaces when there are
-// multiple analytes.
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -35,7 +36,10 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { authHeaders } from "@/lib/auth";
 import { API_BASE } from "@/lib/queryClient";
-import { Plus, Edit2, Trash2, CheckCircle2, Lock } from "lucide-react";
+import { Plus, Edit2, Trash2, CheckCircle2, Lock, ListChecks } from "lucide-react";
+import fdaData from "@/lib/fdaInstrumentData.json";
+
+const INSTRUMENT_DATA = fdaData as unknown as Record<string, { tests: Record<string, { complexity: string; specialty: string }> }>;
 
 export interface VerificationAnalyte {
   id: number;
@@ -110,7 +114,7 @@ function formToBody(f: AnalyteFormState): any {
   };
 }
 
-export function VerificationAnalytesPanel({ verificationId, onAnalytesChanged }: { verificationId: number; onAnalytesChanged?: () => void }) {
+export function VerificationAnalytesPanel({ verificationId, instrumentName, onAnalytesChanged }: { verificationId: number; instrumentName?: string; onAnalytesChanged?: () => void }) {
   const { toast } = useToast();
   const [analytes, setAnalytes] = useState<VerificationAnalyte[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,9 +125,11 @@ export function VerificationAnalytesPanel({ verificationId, onAnalytesChanged }:
   const [signing, setSigning] = useState<VerificationAnalyte | null>(null);
   const [signature, setSignature] = useState("");
   // FDA-cleared analyte menu for this verification's linked VeritaMap instrument.
-  // Empty when the verification predates the map_instrument_id link -> the Add
-  // dialog falls back to free-text only.
   const [mapAnalytes, setMapAnalytes] = useState<{ analyte: string; specialty: string; complexity: string }[]>([]);
+  // Multi-select add
+  const [multiOpen, setMultiOpen] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   async function reload() {
     setLoading(true);
@@ -150,13 +156,53 @@ export function VerificationAnalytesPanel({ verificationId, onAnalytesChanged }:
         if (!r.ok) return;
         const body = await r.json();
         setMapAnalytes(Array.isArray(body?.analytes) ? body.analytes : []);
-      } catch { /* leave empty -> free-text only */ }
+      } catch { /* leave empty -> FDA library / free-text */ }
     })();
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [verificationId]);
 
+  // Menu = the linked VeritaMap analytes merged with this instrument's FDA menu,
+  // minus analytes already on the package.
+  const takenLc = new Set(analytes.map((a) => a.analyte_name.trim().toLowerCase()));
+  const fdaTests = instrumentName ? Object.keys(INSTRUMENT_DATA[instrumentName]?.tests || {}) : [];
+  const menuUnion = Array.from(new Set<string>([...mapAnalytes.map((m) => m.analyte), ...fdaTests]));
+  const availableMenu = menuUnion.filter((n) => !takenLc.has(n.trim().toLowerCase())).sort((a, b) => a.localeCompare(b));
+
+  function startMulti() {
+    if (availableMenu.length === 0) { startAdd(); return; }
+    setSelected(new Set());
+    setMultiOpen(true);
+  }
+  const toggleSel = (name: string) => setSelected((prev) => {
+    const n = new Set(prev); n.has(name) ? n.delete(name) : n.add(name); return n;
+  });
+
+  async function bulkAdd() {
+    const names = Array.from(selected);
+    if (names.length === 0) return;
+    setBulkBusy(true);
+    let ok = 0;
+    try {
+      for (const name of names) {
+        const r = await fetch(`${API_BASE}/api/veritacheck/verifications/${verificationId}/analytes`, {
+          method: "POST",
+          headers: { ...authHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({ analyte_name: name }),
+        });
+        if (r.ok) ok++;
+      }
+      toast({ title: `Added ${ok} analyte${ok === 1 ? "" : "s"}`, description: ok < names.length ? `${names.length - ok} could not be added.` : undefined });
+      setMultiOpen(false);
+      await reload();
+      onAnalytesChanged?.();
+    } catch (e: any) {
+      toast({ title: "Bulk add failed", description: String(e?.message || e), variant: "destructive" });
+    } finally { setBulkBusy(false); }
+  }
+
   function startAdd() {
     setForm(emptyFormState());
+    setMultiOpen(false);
     setAdding(true);
   }
   function startEdit(a: VerificationAnalyte) {
@@ -192,7 +238,7 @@ export function VerificationAnalytesPanel({ verificationId, onAnalytesChanged }:
       toast({ title: "Analyte added" });
       setAdding(false);
       await reload();
-      onAnalytesChanged?.(); // per-analyte study slots were seeded server-side; refresh the Elements tab
+      onAnalytesChanged?.();
     } catch (e: any) {
       toast({ title: "Could not add analyte", description: e.message, variant: "destructive" });
     } finally { setBusy(false); }
@@ -278,7 +324,7 @@ export function VerificationAnalytesPanel({ verificationId, onAnalytesChanged }:
       }
       toast({ title: "Analyte deleted" });
       await reload();
-      onAnalytesChanged?.(); // its empty study slots were removed server-side; refresh the Elements tab
+      onAnalytesChanged?.();
     } catch (e: any) {
       toast({ title: "Could not delete", description: e.message, variant: "destructive" });
     } finally { setBusy(false); }
@@ -288,19 +334,23 @@ export function VerificationAnalytesPanel({ verificationId, onAnalytesChanged }:
 
   return (
     <div className="space-y-3" data-testid="verification-analytes-panel">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <p className="text-xs text-muted-foreground max-w-2xl">
           Each analyte on this instrument is verified independently with its own TEa, MDLs, AMR, and signature. One carryover study (scope=instrument) covers every analyte on the package; per-analyte studies are linked from the Performance Elements tab.
         </p>
-        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={startAdd} data-testid="add-analyte-button">
-          <Plus size={12} /> Add Analyte
+        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={startMulti} data-testid="add-analyte-button">
+          <Plus size={12} /> Add analytes
         </Button>
       </div>
 
       {analytes.length === 0 && (
         <div className="text-center py-10 border-2 border-dashed border-border rounded-xl">
           <p className="text-sm text-muted-foreground">No analytes yet.</p>
-          <p className="text-xs text-muted-foreground mt-1">Add the first analyte to this verification package to get started.</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {availableMenu.length > 0
+              ? `Add analytes from the ${instrumentName || "instrument"} menu to get started.`
+              : "Add the first analyte to this verification package to get started."}
+          </p>
         </div>
       )}
 
@@ -367,39 +417,57 @@ export function VerificationAnalytesPanel({ verificationId, onAnalytesChanged }:
         </div>
       ))}
 
-      {/* Add/Edit dialog (shared form) */}
+      {/* Multi-select add dialog */}
+      <Dialog open={multiOpen} onOpenChange={(v) => { if (!v) setMultiOpen(false); }}>
+        <DialogContent className="max-w-lg" data-testid="analyte-multi-dialog">
+          <DialogHeader>
+            <DialogTitle>Add analytes{instrumentName ? ` for ${instrumentName}` : ""}</DialogTitle>
+            <DialogDescription>
+              Pick the analytes this package verifies, then add them all at once. You can set TEa, MDLs, and AMR per analyte afterward.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className="text-muted-foreground">{selected.size} selected of {availableMenu.length}</span>
+            <div className="flex gap-2">
+              <button type="button" className="text-primary hover:underline" onClick={() => setSelected(new Set(availableMenu))}>Select all</button>
+              <button type="button" className="text-muted-foreground hover:underline" onClick={() => setSelected(new Set())}>Clear</button>
+            </div>
+          </div>
+          <div className="max-h-72 overflow-auto rounded-md border border-border divide-y divide-border/60">
+            {availableMenu.map((name) => {
+              const on = selected.has(name);
+              return (
+                <label key={name} className="flex items-center gap-2.5 px-3 py-2 text-sm cursor-pointer hover:bg-muted/40">
+                  <input type="checkbox" checked={on} onChange={() => toggleSel(name)} data-testid="analyte-menu-option" />
+                  <span className="text-foreground">{name}</span>
+                </label>
+              );
+            })}
+          </div>
+          <DialogFooter className="flex items-center justify-between sm:justify-between gap-2">
+            <Button variant="ghost" size="sm" className="gap-1" onClick={startAdd}>
+              <ListChecks size={14} /> Type a custom analyte
+            </Button>
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={() => setMultiOpen(false)} disabled={bulkBusy}>Cancel</Button>
+              <Button onClick={bulkAdd} disabled={bulkBusy || selected.size === 0} data-testid="analyte-multi-add">
+                {bulkBusy ? "Adding..." : `Add ${selected.size} analyte${selected.size === 1 ? "" : "s"}`}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add/Edit dialog (single, shared form) */}
       <Dialog open={adding || editing !== null} onOpenChange={(v) => { if (!v) { setAdding(false); setEditing(null); } }}>
         <DialogContent className="max-w-lg" data-testid="analyte-dialog">
           <DialogHeader>
-            <DialogTitle>{editing ? "Edit analyte" : "Add analyte"}</DialogTitle>
+            <DialogTitle>{editing ? "Edit analyte" : "Add a custom analyte"}</DialogTitle>
             <DialogDescription>
               All fields except the name are optional. Director or designee remains the source of truth for any analyte-level claim on the package.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            {adding && (() => {
-              const taken = new Set(analytes.map((a) => a.analyte_name.trim().toLowerCase()));
-              const options = mapAnalytes.filter((m) => !taken.has(m.analyte.trim().toLowerCase()));
-              if (options.length === 0) return null;
-              return (
-                <div>
-                  <Label className="text-xs">Instrument test menu (FDA-cleared)</Label>
-                  <Select value="" onValueChange={(val) => setForm((f) => ({ ...f, analyte_name: val }))}>
-                    <SelectTrigger data-testid="analyte-menu-select">
-                      <SelectValue placeholder="Select an analyte from this instrument..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {options.map((m) => (
-                        <SelectItem key={m.analyte} value={m.analyte}>
-                          {m.analyte}{m.complexity ? ` (${m.complexity})` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[11px] text-muted-foreground mt-1">Or type a custom analyte below.</p>
-                </div>
-              );
-            })()}
             <div>
               <Label htmlFor="ana-name" className="text-xs">Analyte name</Label>
               <Input id="ana-name" value={form.analyte_name} onChange={(e) => setForm({ ...form, analyte_name: e.target.value })} placeholder="e.g. Glucose, ALT, Hemoglobin" data-testid="analyte-name-input" />

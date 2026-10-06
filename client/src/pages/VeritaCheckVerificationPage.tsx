@@ -949,7 +949,7 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
 
       {/* Analytes tab (2026-06-09 PR2 Michael feedback: multi-analyte) */}
       {activeTab === "analytes" && (
-        <VerificationAnalytesPanel verificationId={id} onAnalytesChanged={refreshAfterAnalyteChange} />
+        <VerificationAnalytesPanel verificationId={id} instrumentName={verification.instrument_name} onAnalytesChanged={refreshAfterAnalyteChange} />
       )}
 
       {/* Units tab */}
