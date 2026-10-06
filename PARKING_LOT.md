@@ -563,7 +563,13 @@ or partial menus across vendors — remains. A full pass (vendor/FDA-sourced,
 no fabrication) would make VeritaMap demo-safe across the board.
 
 **Source:** Michael, 2026-10-06 Roche demo.
-**Status:** IN PROGRESS. Michael chose Option 2 (exhaustive) 2026-10-06. Executing vendor-by-vendor, sourced and verified against the manufacturer's own parameter lists. Batch 1 (Roche chemistry c-module) reconciled 2026-10-06 against Roche's March-2024 Serum Work Area parameter list: leveled c702 / cobas 8000 (+43 each), cobas c 703 (stub 6 -> 100), cobas pure (+8), cobas c 502 (+5) up to the verified c501 menu; c311 (Roche subset) and cobas 6000 left as-is. Next: Roche immunoassay (e-module), then Siemens, Abbott, Beckman, Sysmex, then smaller vendors. A separate naming-canonicalization pass (e.g., the "Cystacin C" typo, a mangled degree sign in Grifols Wadiana) is noted for later.
+**Status:** IN PROGRESS. Michael chose Option 2 (exhaustive) 2026-10-06. Executing vendor-by-vendor, sourced and verified against the manufacturer's own parameter lists. Batch 1 (Roche chemistry c-module) reconciled 2026-10-06 against Roche's March-2024 Serum Work Area parameter list: leveled c702 / cobas 8000 (+43 each), cobas c 703 (stub 6 -> 100), cobas pure (+8), cobas c 502 (+5) up to the verified c501 menu; c311 (Roche subset) and cobas 6000 left as-is. Batch 2 (Siemens chemistry: Atellica CH, Dimension EXL/Vista, ADVIA) reconciled 2026-10-06 with the Michael-approved "normalize as you go" rule: every analyte on these moderate-complexity analyzers set to MODERATE (fixed 171 stray HIGH/WAIVED complexity values, e.g. Sodium tagged HIGH on a chem analyzer) and ~630 missing assays added. Next: Abbott (sourced), Beckman (sourcing), Sysmex, Roche immunoassay, smaller vendors.
+
+**Catalog of data-quality issues found during the sweep (keep updated):**
+- Systemic complexity inconsistency: 255 of 1275 distinct analytes carried more than one complexity across the dataset (some legitimate per-device, some error). Being normalized per analyzer class during each vendor batch.
+- Naming variants / typos: "Cystacin C" (should be Cystatin C); "Apolipoprotein A-1" vs "Apolipoprotein A1"; dual-method and parenthetical variants. Needs a naming-canonicalization pass (risky vs lab-map references; do carefully).
+- Encoding: a mangled degree sign in Grifols Wadiana ("Antibody detection at 37?C") and similar mojibake. Needs an encoding cleanup.
+- Specialty inconsistency: same analyte carries different specialty across analyzers (e.g. Sodium as Electrolytes vs Blood Gas vs General Chemistry). Complexity is being fixed now; specialty normalization deferred.
 
 ---
 
