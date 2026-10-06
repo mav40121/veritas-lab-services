@@ -35066,9 +35066,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           ao_citations: aoCols.map(a => ({ label: a.label, value: (p as any)[a.key] || '' })),
           notes: p.notes || '', status, is_na: isNa,
           na_reason: us?.na_reason || null, our_policy_name: us?.our_policy_name || null,
-          user_notes: us?.notes || null, updated_at: us?.updated_at || null,
+          user_notes: us?.notes || null, updated_at: us?.updated_at || null, is_custom: false,
         };
       });
+      // Append this lab's custom policy entries (policies not on the built-in catalog).
+      const customEntries = sqlite.prepare('SELECT * FROM veritapolicy_custom_entries WHERE lab_id = ? ORDER BY id').all(labId) as any[];
+      for (const ce of customEntries) {
+        const pid = `custom-${ce.id}`;
+        const us = sm[pid];
+        const isNa = !!(us?.is_na);
+        rows.push({
+          policy_id: pid, policy_name: ce.policy_name, section: ce.section || 'Custom',
+          subspecialty: '', service_line: ce.service_line || 'all', description: ce.description || '',
+          cfr_citations: ce.cfr_citations || '',
+          ao_citations: aoCols.map(a => ({ label: a.label, value: (ce as any)[a.key] || '' })),
+          notes: ce.notes || '', status: isNa ? 'na' : (us?.status || 'not_started'), is_na: isNa,
+          na_reason: us?.na_reason || null, our_policy_name: us?.our_policy_name || null,
+          user_notes: us?.notes || null, updated_at: us?.updated_at || null, is_custom: true,
+        });
+      }
       const ao_label = aoCols.length === 0 ? 'CLIA only' : aoCols.map(a => a.label).join(', ');
       res.json({ rows, ao_label, ao_columns: aoCols.map(a => a.label) });
     } catch (err: any) {
@@ -35104,6 +35120,43 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // POST /api/labs/:labId/veritapolicy/custom-entries — add a custom policy
+  // entry line (a required policy not on the built-in catalog, e.g. a Chemical
+  // Hygiene Plan). It renders alongside the built-in rows and tracks status the
+  // same way via veritapolicy_master_status keyed by "custom-<id>".
+  app.post('/api/labs/:labId/veritapolicy/custom-entries', authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
+    const sqlite = db.$client;
+    const labId = req.scope.labId;
+    const b = req.body || {};
+    const name = String(b.policy_name || '').trim();
+    if (!name) return res.status(400).json({ error: 'policy_name required' });
+    const info = sqlite.prepare(`
+      INSERT INTO veritapolicy_custom_entries
+        (lab_id, policy_name, section, service_line, description, cfr_citations, tjc_citations, cap_citations, cola_citations, aabb_citations, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      labId, name,
+      (String(b.section || '').trim() || 'Custom'),
+      (String(b.service_line || '').trim() || 'all'),
+      b.description ?? null, b.cfr_citations ?? null, b.tjc_citations ?? null,
+      b.cap_citations ?? null, b.cola_citations ?? null, b.aabb_citations ?? null, b.notes ?? null,
+    );
+    res.json({ ok: true, id: info.lastInsertRowid, policy_id: `custom-${info.lastInsertRowid}` });
+  });
+
+  // DELETE /api/labs/:labId/veritapolicy/custom-entries/:id
+  app.delete('/api/labs/:labId/veritapolicy/custom-entries/:id', authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
+    const sqlite = db.$client;
+    const labId = req.scope.labId;
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'invalid id' });
+    const row = sqlite.prepare('SELECT id FROM veritapolicy_custom_entries WHERE id = ? AND lab_id = ?').get(id, labId);
+    if (!row) return res.status(404).json({ error: 'not found' });
+    sqlite.prepare('DELETE FROM veritapolicy_custom_entries WHERE id = ? AND lab_id = ?').run(id, labId);
+    sqlite.prepare("DELETE FROM veritapolicy_master_status WHERE lab_id = ? AND policy_id = ?").run(labId, `custom-${id}`);
+    res.json({ ok: true });
+  });
+
   // GET /api/labs/:labId/veritapolicy/master-list/summary
   app.get('/api/labs/:labId/veritapolicy/master-list/summary', authMiddleware, labScopeMiddleware, async (req: any, res) => {
     try {
@@ -35115,15 +35168,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const sm: Record<string, any> = {};
       for (const s of statuses) sm[s.policy_id] = s;
       let complete = 0, in_progress = 0, not_started = 0, na = 0;
-      for (const p of VERITAPOLICY_MASTER_LIST) {
-        const us = sm[p.policy_id];
+      const customIds = (sqlite.prepare('SELECT id FROM veritapolicy_custom_entries WHERE lab_id = ?').all(labId) as any[]).map(c => `custom-${c.id}`);
+      const allPolicyIds = [...VERITAPOLICY_MASTER_LIST.map(p => p.policy_id), ...customIds];
+      for (const pid of allPolicyIds) {
+        const us = sm[pid];
         if (us?.is_na) { na += 1; continue; }
         const st = us?.status || 'not_started';
         if (st === 'complete') complete += 1;
         else if (st === 'in_progress') in_progress += 1;
         else not_started += 1;
       }
-      const total = VERITAPOLICY_MASTER_LIST.length;
+      const total = allPolicyIds.length;
       const applicable = total - na;
       const score = applicable > 0 ? Math.round((complete / applicable) * 100) : 0;
       const aoParts: string[] = [];

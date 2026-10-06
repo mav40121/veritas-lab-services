@@ -2821,6 +2821,48 @@ sqlite.exec(`
 `);
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritapolicy_master_user ON veritapolicy_master_status(user_id, policy_id)`); } catch {}
 
+// Per-lab CUSTOM policy entries. The built-in expected-policy catalog
+// (server/veritapolicyMasterList.ts) is static code, so a lab cannot add a
+// required policy that is not on it (e.g. a Chemical Hygiene Plan CAP requires).
+// These rows are appended to the lab's master-list response and reuse
+// veritapolicy_master_status (keyed by policy_id "custom-<id>") for per-lab
+// status / our-policy-name / N/A, exactly like a built-in row.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritapolicy_custom_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    policy_name TEXT NOT NULL,
+    section TEXT NOT NULL DEFAULT 'Custom',
+    service_line TEXT NOT NULL DEFAULT 'all',
+    description TEXT,
+    cfr_citations TEXT,
+    tjc_citations TEXT,
+    cap_citations TEXT,
+    cola_citations TEXT,
+    aabb_citations TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritapolicy_custom_lab ON veritapolicy_custom_entries(lab_id)`); } catch {}
+// Defensive column ensure (new-table migration rule): add any column missing on
+// a pre-existing table so a live DB is never short a column.
+try {
+  const vceCols = (sqlite.prepare("PRAGMA table_info(veritapolicy_custom_entries)").all() as { name: string }[]).map(c => c.name);
+  const vceEnsure: [string, string][] = [
+    ["section", "ALTER TABLE veritapolicy_custom_entries ADD COLUMN section TEXT NOT NULL DEFAULT 'Custom'"],
+    ["service_line", "ALTER TABLE veritapolicy_custom_entries ADD COLUMN service_line TEXT NOT NULL DEFAULT 'all'"],
+    ["description", "ALTER TABLE veritapolicy_custom_entries ADD COLUMN description TEXT"],
+    ["cfr_citations", "ALTER TABLE veritapolicy_custom_entries ADD COLUMN cfr_citations TEXT"],
+    ["tjc_citations", "ALTER TABLE veritapolicy_custom_entries ADD COLUMN tjc_citations TEXT"],
+    ["cap_citations", "ALTER TABLE veritapolicy_custom_entries ADD COLUMN cap_citations TEXT"],
+    ["cola_citations", "ALTER TABLE veritapolicy_custom_entries ADD COLUMN cola_citations TEXT"],
+    ["aabb_citations", "ALTER TABLE veritapolicy_custom_entries ADD COLUMN aabb_citations TEXT"],
+    ["notes", "ALTER TABLE veritapolicy_custom_entries ADD COLUMN notes TEXT"],
+  ];
+  for (const [c, sql] of vceEnsure) if (!vceCols.includes(c)) { try { sqlite.exec(sql); } catch {} }
+} catch {}
+
 // Per-lab artifact storage: when a lab uploads custom-formatted DOCX policy
 // files (e.g. SCAHC's facility template), they're stored here as BLOBs keyed
 // by (lab_id, policy_id). The DOCX download routes check this table first
