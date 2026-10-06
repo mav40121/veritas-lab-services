@@ -2259,6 +2259,67 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, created: true, membership, user: { id: user.id, email: user.email }, lab: { id: lab.id, name: lab.lab_name } });
   });
 
+  // Admin: repair lab admin access. Grants an ACTIVE 'admin' lab_members row to
+  // each provided user email on each provided lab, inserting when missing and
+  // promoting an existing non-admin / inactive row. Idempotent; never demotes an
+  // owner. Built 2026-10-06 after Milford labs 4/5 left both the operator and the
+  // lab director view-only (requireModuleEdit 403 on every VeritaMap save) because
+  // an old boot-backfill cleanup removed their admin rows and the labs were never
+  // re-granted. Unlike add-lab-membership (which no-ops on an existing row and so
+  // cannot fix a stuck role), this UPDATEs a non-admin row up to admin. dryRun
+  // reports current state (numeric owner/org + active member/admin counts + the
+  // per-provided-email role/status) and writes nothing; it returns only the emails
+  // the caller supplied, never a roster, so it exposes no third-party PII. Every
+  // write is audit_log'd.
+  app.post("/api/admin/repair-lab-admins", (req, res) => {
+    const { secret, labIds, emails, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!Array.isArray(labIds) || labIds.length === 0) return res.status(400).json({ error: "labIds must be a non-empty array" });
+    if (!Array.isArray(emails) || emails.length === 0) return res.status(400).json({ error: "emails must be a non-empty array" });
+    const sqlite = (db as any).$client;
+    const ip = (req.headers["x-forwarded-for"] as string) || null;
+    const now = new Date().toISOString();
+    const report: any[] = [];
+    for (const rawLab of labIds) {
+      const labId = Number(rawLab);
+      if (!Number.isFinite(labId) || labId <= 0) { report.push({ labId: rawLab, error: "bad labId" }); continue; }
+      const lab = sqlite.prepare("SELECT id, lab_name, owner_user_id, organization_id FROM labs WHERE id = ?").get(labId) as any;
+      if (!lab) { report.push({ labId, error: "lab not found" }); continue; }
+      const activeMembers = (sqlite.prepare("SELECT COUNT(*) AS c FROM lab_members WHERE lab_id = ? AND status = 'active'").get(labId) as any).c;
+      const activeAdmins = (sqlite.prepare("SELECT COUNT(*) AS c FROM lab_members WHERE lab_id = ? AND status = 'active' AND role IN ('owner','admin')").get(labId) as any).c;
+      const labRep: any = { labId, lab_name: lab.lab_name, owner_user_id: lab.owner_user_id, organization_id: lab.organization_id, active_members: activeMembers, active_admins: activeAdmins, users: [] };
+      for (const rawEmail of emails) {
+        const email = String(rawEmail);
+        const user = sqlite.prepare("SELECT id, email FROM users WHERE lower(email) = lower(?)").get(email) as any;
+        if (!user) { labRep.users.push({ email, result: "user_not_found" }); continue; }
+        const existing = sqlite.prepare("SELECT id, role, status FROM lab_members WHERE lab_id = ? AND user_id = ?").get(labId, user.id) as any;
+        const before = existing ? { role: existing.role, status: existing.status } : null;
+        let result: string;
+        if (existing && existing.role === "owner") {
+          result = "owner_unchanged";
+        } else if (existing && existing.role === "admin" && existing.status === "active") {
+          result = "already_admin";
+        } else if (dryRun) {
+          result = existing ? "would_promote_to_admin" : "would_insert_admin";
+        } else if (existing) {
+          sqlite.prepare("UPDATE lab_members SET role = 'admin', status = 'active', updated_at = ? WHERE id = ?").run(now, existing.id);
+          const after = sqlite.prepare("SELECT * FROM lab_members WHERE id = ?").get(existing.id);
+          auditLabMembership("update_role", after, 0, ip, "admin/repair-lab-admins", existing);
+          result = "promoted_to_admin";
+        } else {
+          sqlite.prepare("INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at) VALUES (?, ?, 'admin', '{}', 'active', 0, ?, ?, ?)").run(labId, user.id, now, now, now);
+          const created = sqlite.prepare("SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?").get(labId, user.id);
+          auditLabMembership("create", created, 0, ip, "admin/repair-lab-admins");
+          result = "inserted_admin";
+        }
+        const nowRow = sqlite.prepare("SELECT role, status FROM lab_members WHERE lab_id = ? AND user_id = ?").get(labId, user.id) as any;
+        labRep.users.push({ email: user.email, user_id: user.id, before, result, after: nowRow ? { role: nowRow.role, status: nowRow.status } : null });
+      }
+      report.push(labRep);
+    }
+    res.json({ ok: true, dryRun: !!dryRun, report });
+  });
+
   // Admin: deactivate (or hard-delete) one or more lab_members rows.
   // Built 2026-05-24 to clean up the 4 spurious Milford rows produced by
   // the now-disabled boot-backfill cascade. Reversible by default
