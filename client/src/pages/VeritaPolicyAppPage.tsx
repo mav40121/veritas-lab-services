@@ -479,19 +479,6 @@ export default function VeritaPolicyAppPage() {
             {summary ? ` - ${summary.total} policies (${aoLabel})` : ""}
           </p>
         </div>
-      <ModuleHowToCard
-        moduleKey="veritapolicy"
-        moduleName="VeritaDC™"
-        whatItDoes={`VeritaPolicy is a ${policies.length || 58}-policy master list keyed to the CFR plus the citation set for your accrediting body (TJC, CAP, COLA, or AABB). For each policy, the lab maps its own existing policy manual entry, marks status (Not Started, In Progress, Complete, or N/A), and watches the live readiness score update. Use it as the crosswalk between what your binder already covers and what every regulation expects.`}
-        howToUse={[
-          `Browse the ${policies.length || 58}-row master list; expand any row to read the description, citations, and notes.`,
-          "In each row, enter the name of the policy in your manual that addresses it under 'Our Policy Name'.",
-          "Click the status badge to cycle Not Started → In Progress → Complete; mark N/A for policies your lab does not need.",
-          "Watch the readiness score update live as you map your binder against the master list.",
-          "Export the Master List (Excel) or the Readiness Report (PDF) from the top-right buttons for board reporting or inspection prep."
-        ]}
-      />
-
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={handleDownloadMasterList} disabled={downloadingMasterList} className="gap-1.5">
             <Download size={14} /> {downloadingMasterList ? "Generating..." : "Master List (Excel)"}
@@ -530,6 +517,19 @@ export default function VeritaPolicyAppPage() {
           </Button>
         </div>
       </div>
+
+      <ModuleHowToCard
+        moduleKey="veritapolicy"
+        moduleName="VeritaDC™"
+        whatItDoes={`VeritaPolicy is a ${policies.length || 58}-policy master list keyed to the CFR plus the citation set for your accrediting body (TJC, CAP, COLA, or AABB). For each policy, the lab maps its own existing policy manual entry, marks status (Not Started, In Progress, Complete, or N/A), and watches the live readiness score update. Use it as the crosswalk between what your binder already covers and what every regulation expects.`}
+        howToUse={[
+          `Browse the ${policies.length || 58}-row master list; expand any row to read the description, citations, and notes.`,
+          "In each row, enter the name of the policy in your manual that addresses it under 'Our Policy Name'.",
+          "Click the status badge to cycle Not Started → In Progress → Complete; mark N/A for policies your lab does not need.",
+          "Watch the readiness score update live as you map your binder against the master list.",
+          "Export the Master List (Excel) or the Readiness Report (PDF) from the top-right buttons for board reporting or inspection prep."
+        ]}
+      />
 
       {/* Settings panel */}
       <div className="border border-border rounded-lg overflow-hidden">

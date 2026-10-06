@@ -403,20 +403,20 @@ export default function VeritaLabAppPage() {
               Track certificates, store documents, and get renewal reminders.
             </p>
           </div>
-      <ModuleHowToCard
-        moduleKey="veritalab"
-        moduleName="VeritaLab™"
-        whatItDoes="VeritaLab tracks every laboratory certificate and accreditation: CLIA, CAP, TJC, COLA, state laboratory licenses, lab director credentials. Automated email reminders fire at 9 months, 6 months, 3 months, 30 days, and at expiration. Document archive holds the certificate PDF for every cert on the roster."
-        howToUse={[
-          "Add each certificate with its issuing body, certificate number, issue date, and expiration date.",
-          "Upload the certificate PDF to the document archive against the cert.",
-          "The system emails you at 9 months, 6 months, 3 months, 30 days, and at expiration; renew before the 30-day warning.",
-          "Upload the renewed certificate; the expiration auto-recalculates and the warning cycle resets.",
-          "Run the certificate-status report before an inspection or board meeting."
-        ]}
-      />
-
         </div>
+
+        <ModuleHowToCard
+          moduleKey="veritalab"
+          moduleName="VeritaLab™"
+          whatItDoes="VeritaLab tracks every laboratory certificate and accreditation: CLIA, CAP, TJC, COLA, state laboratory licenses, lab director credentials. Automated email reminders fire at 9 months, 6 months, 3 months, 30 days, and at expiration. Document archive holds the certificate PDF for every cert on the roster."
+          howToUse={[
+            "Add each certificate with its issuing body, certificate number, issue date, and expiration date.",
+            "Upload the certificate PDF to the document archive against the cert.",
+            "The system emails you at 9 months, 6 months, 3 months, 30 days, and at expiration; renew before the 30-day warning.",
+            "Upload the renewed certificate; the expiration auto-recalculates and the warning cycle resets.",
+            "Run the certificate-status report before an inspection or board meeting."
+          ]}
+        />
 
         {/* ── VeritaLab tabs (parking-lot #22 Phase 1 scaffold) ──
             Certificates: the existing roster.
