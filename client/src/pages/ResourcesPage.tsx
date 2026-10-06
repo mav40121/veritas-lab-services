@@ -31,6 +31,17 @@ const articles = [
     featured: true,
   },
   {
+    slug: "veritacheck-vs-ep-evaluator",
+    title: "VeritaCheck™ vs EP Evaluator: CLIA Verification Compared",
+    summary: "An honest side-by-side of VeritaCheck and EP Evaluator for CLIA performance verification: statistical study coverage, whole-menu coverage, the 42 CFR-cited and director-signed report, delivery, and pricing, including where EP Evaluator is stronger.",
+    category: "Comparison",
+    readTime: "7 min read",
+    author: "Michael Veri",
+    date: "October 2026",
+    tags: ["Comparison", "EP Evaluator", "Method Verification", "CLIA", "VeritaCheck™"],
+    featured: false,
+  },
+  {
     slug: "post-analytical-critical-values-corrected-reports",
     title: "The Last Mile: Why a Correct Result Still Reaches the Patient Wrong",
     summary: "A former Joint Commission surveyor on the post-analytical phase: the critical value list your medical staff must own, the read-back that confirms a call was actually received, the corrected report CLIA requires you to phone in under 42 CFR 493.1291(k), and the autoverification rules quietly releasing results no one reads.",
