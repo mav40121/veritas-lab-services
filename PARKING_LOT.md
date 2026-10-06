@@ -563,7 +563,7 @@ or partial menus across vendors — remains. A full pass (vendor/FDA-sourced,
 no fabrication) would make VeritaMap demo-safe across the board.
 
 **Source:** Michael, 2026-10-06 Roche demo.
-**Status:** Open. First instance fixed 2026-10-06 (Sodium/Potassium/Chloride added to the three Roche photometric-module entries); broad audit not started.
+**Status:** IN PROGRESS. Michael chose Option 2 (exhaustive) 2026-10-06. Executing vendor-by-vendor, sourced and verified against the manufacturer's own parameter lists. Batch 1 (Roche chemistry c-module) reconciled 2026-10-06 against Roche's March-2024 Serum Work Area parameter list: leveled c702 / cobas 8000 (+43 each), cobas c 703 (stub 6 -> 100), cobas pure (+8), cobas c 502 (+5) up to the verified c501 menu; c311 (Roche subset) and cobas 6000 left as-is. Next: Roche immunoassay (e-module), then Siemens, Abbott, Beckman, Sysmex, then smaller vendors. A separate naming-canonicalization pass (e.g., the "Cystacin C" typo, a mangled degree sign in Grifols Wadiana) is noted for later.
 
 ---
 
@@ -654,6 +654,28 @@ VeritaMap instrument search on prod.
 
 **Source:** Michael, 2026-10-06.
 **Status:** Open. PR green; awaiting merge approval.
+
+---
+
+### 63. about:blank on PDF opens (window.open token pattern + Adobe Acrobat)
+
+**Effort:** S (1-3 days)
+**Importance:** Medium — intermittent, customer-facing failure on PDF deliverables (studies, competency) during demos.
+
+**What:** Some PDF opens land on an about:blank tab instead of the document.
+Root cause: the fragile `window.open('/api/pdf/<one-time-token>')` pattern, still
+used on ~6 paths (VeritaOps, VeritaPace, VeritaQA, VeritaResponse x3, the
+Why-VeritaCheck article, CMS-116). With Adobe Acrobat as the PDF handler it opens
+a blank tab while Acrobat grabs the PDF, orphaning about:blank, and worse when
+the one-time token GET races or expires (the PR #286 class). Most downloads were
+migrated to the safe anchor helper `downloadPdfToken` (client/src/lib/utils.ts),
+which is why it is "mostly removed." Fix: route every remaining PDF open through
+the safe download helper, and verify the `/api/pdf` server `Content-Disposition`
+(the competency main path already uses the safe helper, so its blank is likely an
+inline-disposition + Acrobat interaction to confirm when fixing).
+
+**Source:** Michael, 2026-10-06 screenshot (competency PDF opened as about:blank in Acrobat).
+**Status:** Open. Root cause diagnosed; mechanical class fix ready to slot in on request.
 
 ---
 
