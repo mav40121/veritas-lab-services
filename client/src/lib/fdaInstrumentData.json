@@ -35482,5 +35482,1556 @@
         "specialty": "Toxicology"
       }
     }
+  },
+  "Bio-Rad D-100": {
+    "vendor": "Bio-Rad",
+    "category": "Chemistry",
+    "testCount": 1,
+    "tests": {
+      "Glycosylated Hemoglobin (Hgb A1c)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      }
+    }
+  },
+  "Bio-Rad D-10": {
+    "vendor": "Bio-Rad",
+    "category": "Chemistry",
+    "testCount": 3,
+    "tests": {
+      "Glycosylated Hemoglobin (Hgb A1c)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Hemoglobin A2": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin F": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Bio-Rad VARIANT II TURBO": {
+    "vendor": "Bio-Rad",
+    "category": "Chemistry",
+    "testCount": 1,
+    "tests": {
+      "Glycosylated Hemoglobin (Hgb A1c)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      }
+    }
+  },
+  "Bio-Rad VARIANT II": {
+    "vendor": "Bio-Rad",
+    "category": "Hematology",
+    "testCount": 8,
+    "tests": {
+      "Glycosylated Hemoglobin (Hgb A1c)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Hemoglobin A2": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin F": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin S": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin C": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin D": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin E": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin variant identification": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Bio-Rad IH-500": {
+    "vendor": "Bio-Rad",
+    "category": "Blood Bank",
+    "testCount": 8,
+    "tests": {
+      "ABO/Rh typing": {
+        "complexity": "HIGH",
+        "specialty": "Immunohematology"
+      },
+      "Antibody screen": {
+        "complexity": "HIGH",
+        "specialty": "Immunohematology"
+      },
+      "Antibody identification": {
+        "complexity": "HIGH",
+        "specialty": "Immunohematology"
+      },
+      "Direct antiglobulin test (DAT)": {
+        "complexity": "HIGH",
+        "specialty": "Immunohematology"
+      },
+      "Crossmatch (AHG)": {
+        "complexity": "HIGH",
+        "specialty": "Immunohematology"
+      },
+      "Red cell antigen typing": {
+        "complexity": "HIGH",
+        "specialty": "Immunohematology"
+      },
+      "Weak D testing": {
+        "complexity": "HIGH",
+        "specialty": "Immunohematology"
+      },
+      "Antibody titration": {
+        "complexity": "HIGH",
+        "specialty": "Immunohematology"
+      }
+    }
+  },
+  "Tosoh G8": {
+    "vendor": "Tosoh",
+    "category": "Chemistry",
+    "testCount": 3,
+    "tests": {
+      "Glycosylated Hemoglobin (Hgb A1c)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Hemoglobin A2": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin F": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Tosoh G11": {
+    "vendor": "Tosoh",
+    "category": "Chemistry",
+    "testCount": 8,
+    "tests": {
+      "Glycosylated Hemoglobin (Hgb A1c)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Hemoglobin A2": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin F": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin S": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin C": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin D": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin E": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin variant identification": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Tosoh AIA-360": {
+    "vendor": "Tosoh",
+    "category": "Immunoassay",
+    "testCount": 18,
+    "tests": {
+      "Thyroid Stimulating Hormone (TSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Thyroxine (FT4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Triiodothyronine (FT3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Thyroxine (T4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Triiodothyronine (T3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Ferritin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Vitamin B12": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Folate": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Cortisol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Beta-hCG": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Free PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Carcinoembryonic Antigen (CEA)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Alpha-Fetoprotein (AFP)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CK-MB": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "Myoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "NT-proBNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      }
+    }
+  },
+  "Tosoh AIA-2000": {
+    "vendor": "Tosoh",
+    "category": "Immunoassay",
+    "testCount": 31,
+    "tests": {
+      "Thyroid Stimulating Hormone (TSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Thyroxine (FT4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Triiodothyronine (FT3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Thyroxine (T4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Triiodothyronine (T3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Ferritin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Vitamin B12": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Folate": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Vitamin D (25-OH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Cortisol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Insulin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "C-Peptide": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Luteinizing Hormone (LH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Follicle Stimulating Hormone (FSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Estradiol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Progesterone": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Testosterone": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Prolactin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Beta-hCG": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Free PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Carcinoembryonic Antigen (CEA)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Alpha-Fetoprotein (AFP)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 125": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 19-9": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 15-3": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Procalcitonin": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CK-MB": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "Myoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "NT-proBNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      }
+    }
+  },
+  "Tosoh AIA-CL2400": {
+    "vendor": "Tosoh",
+    "category": "Immunoassay",
+    "testCount": 31,
+    "tests": {
+      "Thyroid Stimulating Hormone (TSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Thyroxine (FT4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Triiodothyronine (FT3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Thyroxine (T4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Triiodothyronine (T3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Ferritin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Vitamin B12": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Folate": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Vitamin D (25-OH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Cortisol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Insulin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "C-Peptide": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Luteinizing Hormone (LH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Follicle Stimulating Hormone (FSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Estradiol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Progesterone": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Testosterone": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Prolactin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Beta-hCG": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Free PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Carcinoembryonic Antigen (CEA)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Alpha-Fetoprotein (AFP)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 125": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 19-9": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 15-3": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Procalcitonin": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CK-MB": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "Myoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "NT-proBNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      }
+    }
+  },
+  "Horiba Yumizen H550": {
+    "vendor": "Horiba",
+    "category": "Hematology",
+    "testCount": 8,
+    "tests": {
+      "Complete blood count (CBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "White blood cell differential (6-part)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Nucleated red blood cells (NRBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Body fluid count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Horiba Yumizen H1500": {
+    "vendor": "Horiba",
+    "category": "Hematology",
+    "testCount": 8,
+    "tests": {
+      "Complete blood count (CBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "White blood cell differential (5-part)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Nucleated red blood cells (NRBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Body fluid count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Horiba Yumizen H2500": {
+    "vendor": "Horiba",
+    "category": "Hematology",
+    "testCount": 8,
+    "tests": {
+      "Complete blood count (CBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "White blood cell differential (5-part)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Nucleated red blood cells (NRBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Body fluid count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Horiba Yumizen H500": {
+    "vendor": "Horiba",
+    "category": "Hematology",
+    "testCount": 5,
+    "tests": {
+      "Complete blood count (CBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "White blood cell differential (5-part)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Horiba Pentra DX Nexus": {
+    "vendor": "Horiba",
+    "category": "Hematology",
+    "testCount": 8,
+    "tests": {
+      "Complete blood count (CBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "White blood cell differential (5-part)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Nucleated red blood cells (NRBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Body fluid count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Horiba Pentra C400": {
+    "vendor": "Horiba",
+    "category": "Chemistry",
+    "testCount": 17,
+    "tests": {
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Urea Nitrogen (BUN)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatinine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Uric Acid": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Albumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Bilirubin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alanine Aminotransferase (ALT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Aspartate Aminotransferase (AST)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alkaline Phosphatase (ALP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Triglycerides": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "HDL Cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Sodium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Chloride": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      }
+    }
+  },
+  "Mindray BC-6200": {
+    "vendor": "Mindray",
+    "category": "Hematology",
+    "testCount": 8,
+    "tests": {
+      "Complete blood count (CBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "White blood cell differential (5-part)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Nucleated red blood cells (NRBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Body fluid count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Mindray BC-700": {
+    "vendor": "Mindray",
+    "category": "Hematology",
+    "testCount": 9,
+    "tests": {
+      "Complete blood count (CBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "White blood cell differential (5-part)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Nucleated red blood cells (NRBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Body fluid count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Erythrocyte sedimentation rate (ESR)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Mindray BC-5390": {
+    "vendor": "Mindray",
+    "category": "Hematology",
+    "testCount": 8,
+    "tests": {
+      "Complete blood count (CBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "White blood cell differential (5-part)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Nucleated red blood cells (NRBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Body fluid count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Mindray BS-240": {
+    "vendor": "Mindray",
+    "category": "Chemistry",
+    "testCount": 17,
+    "tests": {
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Urea Nitrogen (BUN)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatinine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Uric Acid": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Albumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Bilirubin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alanine Aminotransferase (ALT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Aspartate Aminotransferase (AST)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alkaline Phosphatase (ALP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Triglycerides": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "HDL Cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Sodium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Chloride": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      }
+    }
+  },
+  "Mindray BS-480": {
+    "vendor": "Mindray",
+    "category": "Chemistry",
+    "testCount": 28,
+    "tests": {
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Urea Nitrogen (BUN)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatinine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Uric Acid": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Albumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Bilirubin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Direct Bilirubin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alanine Aminotransferase (ALT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Aspartate Aminotransferase (AST)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alkaline Phosphatase (ALP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Gamma-Glutamyl Transferase (GGT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lactate Dehydrogenase (LDH)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Amylase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lipase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatine Kinase (CK)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Triglycerides": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "HDL Cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "LDL Cholesterol (direct)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Phosphorus": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Magnesium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Iron": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "C-Reactive Protein (CRP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Sodium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Chloride": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      }
+    }
+  },
+  "Mindray BS-600": {
+    "vendor": "Mindray",
+    "category": "Chemistry",
+    "testCount": 28,
+    "tests": {
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Urea Nitrogen (BUN)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatinine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Uric Acid": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Albumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Bilirubin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Direct Bilirubin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alanine Aminotransferase (ALT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Aspartate Aminotransferase (AST)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alkaline Phosphatase (ALP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Gamma-Glutamyl Transferase (GGT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lactate Dehydrogenase (LDH)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Amylase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lipase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatine Kinase (CK)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Triglycerides": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "HDL Cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "LDL Cholesterol (direct)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Phosphorus": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Magnesium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Iron": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "C-Reactive Protein (CRP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Sodium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Chloride": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      }
+    }
+  },
+  "Mindray CL-900i": {
+    "vendor": "Mindray",
+    "category": "Immunoassay",
+    "testCount": 18,
+    "tests": {
+      "Thyroid Stimulating Hormone (TSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Thyroxine (FT4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Triiodothyronine (FT3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Thyroxine (T4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Triiodothyronine (T3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Ferritin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Vitamin B12": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Folate": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Cortisol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Beta-hCG": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Free PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Carcinoembryonic Antigen (CEA)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Alpha-Fetoprotein (AFP)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CK-MB": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "Myoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "NT-proBNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      }
+    }
+  },
+  "Mindray CL-1200i": {
+    "vendor": "Mindray",
+    "category": "Immunoassay",
+    "testCount": 31,
+    "tests": {
+      "Thyroid Stimulating Hormone (TSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Thyroxine (FT4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Triiodothyronine (FT3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Thyroxine (T4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Triiodothyronine (T3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Ferritin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Vitamin B12": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Folate": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Vitamin D (25-OH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Cortisol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Insulin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "C-Peptide": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Luteinizing Hormone (LH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Follicle Stimulating Hormone (FSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Estradiol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Progesterone": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Testosterone": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Prolactin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Beta-hCG": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Free PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Carcinoembryonic Antigen (CEA)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Alpha-Fetoprotein (AFP)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 125": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 19-9": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 15-3": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Procalcitonin": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CK-MB": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "Myoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "NT-proBNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      }
+    }
+  },
+  "Mindray CL-6000i": {
+    "vendor": "Mindray",
+    "category": "Immunoassay",
+    "testCount": 31,
+    "tests": {
+      "Thyroid Stimulating Hormone (TSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Thyroxine (FT4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Triiodothyronine (FT3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Thyroxine (T4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Triiodothyronine (T3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Ferritin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Vitamin B12": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Folate": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Vitamin D (25-OH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Cortisol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Insulin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "C-Peptide": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Luteinizing Hormone (LH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Follicle Stimulating Hormone (FSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Estradiol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Progesterone": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Testosterone": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Prolactin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Beta-hCG": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Free PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Carcinoembryonic Antigen (CEA)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Alpha-Fetoprotein (AFP)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 125": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 19-9": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 15-3": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Procalcitonin": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CK-MB": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "Myoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "NT-proBNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      }
+    }
   }
 }
