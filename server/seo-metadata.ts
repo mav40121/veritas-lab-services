@@ -490,6 +490,10 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
       ],
     }),
   },
+  "/resources/getting-started": {
+    title: "Getting Started with VeritaAssure™: Setup and Per-Module Checklists",
+    description: "A step-by-step guide to set up a laboratory on VeritaAssure™: the system onboarding path plus a getting-started checklist for all eighteen modules. Printable, with progress you can check off.",
+  },
   "/resources/veritacheck-vs-ep-evaluator": {
     title: "VeritaCheck™ vs EP Evaluator: CLIA Verification Compared",
     description: "How VeritaCheck and EP Evaluator compare for CLIA performance verification: statistical study coverage, 42 CFR citation, whole-menu coverage, reporting, and pricing. An honest side-by-side from a former Joint Commission surveyor.",
