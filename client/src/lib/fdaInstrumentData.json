@@ -57,7 +57,7 @@
         "specialty": "General Chemistry"
       },
       "Tacrolimus": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Everolimus": {
@@ -457,11 +457,11 @@
         "specialty": "Toxicology"
       },
       "Calprotectin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Elastase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Ammonia": {
@@ -844,7 +844,7 @@
         "specialty": "Toxicology"
       },
       "Tacrolimus": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Microalbumin": {
@@ -908,7 +908,7 @@
         "specialty": "Endocrinology"
       },
       "Oxalate": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Methamphetamines": {
@@ -976,7 +976,7 @@
         "specialty": "Toxicology"
       },
       "Calprotectin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Insulin": {
@@ -984,7 +984,7 @@
         "specialty": "Endocrinology"
       },
       "Elastase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Levetiracetam": {
@@ -1187,7 +1187,7 @@
         "specialty": "Toxicology"
       },
       "Calprotectin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Insulin": {
@@ -1195,7 +1195,7 @@
         "specialty": "Endocrinology"
       },
       "Elastase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Methotrexate": {
@@ -1399,7 +1399,7 @@
         "specialty": "Toxicology"
       },
       "Tacrolimus": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Everolimus": {
@@ -18871,7 +18871,7 @@
         "specialty": "Toxicology"
       },
       "Calprotectin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Insulin": {
@@ -18879,7 +18879,7 @@
         "specialty": "Endocrinology"
       },
       "Elastase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Methotrexate": {
@@ -19083,7 +19083,7 @@
         "specialty": "Toxicology"
       },
       "Tacrolimus": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Everolimus": {
@@ -19414,7 +19414,7 @@
         "specialty": "Toxicology"
       },
       "Calprotectin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Insulin": {
@@ -19422,7 +19422,7 @@
         "specialty": "Endocrinology"
       },
       "Elastase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Methotrexate": {
@@ -19626,7 +19626,7 @@
         "specialty": "Toxicology"
       },
       "Tacrolimus": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Everolimus": {
@@ -20145,7 +20145,7 @@
         "specialty": "Toxicology"
       },
       "Tacrolimus": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Microalbumin": {
@@ -20209,7 +20209,7 @@
         "specialty": "Endocrinology"
       },
       "Oxalate": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Methamphetamines": {
@@ -20277,7 +20277,7 @@
         "specialty": "Toxicology"
       },
       "Calprotectin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Insulin": {
@@ -20285,7 +20285,7 @@
         "specialty": "Endocrinology"
       },
       "Elastase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Levetiracetam": {
