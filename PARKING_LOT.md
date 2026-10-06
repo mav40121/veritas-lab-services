@@ -548,6 +548,137 @@ _(item #52 core closed 2026-09-28; shipped PR #1361 member-picker, prod-verified
 
 ---
 
+### 57. VeritaMap test-menu accuracy audit (menus incomplete, not just missing instruments)
+
+**Effort:** L (3-5 weeks)
+**Importance:** High — wrong or partial menus surface live in demos and undercut VeritaMap as the menu-of-record.
+
+**What:** Beyond confirming every instrument exists, the per-instrument analyte
+menus in `client/src/lib/fdaInstrumentData.json` need verification for
+completeness and accuracy. Surfaced when a Roche demo hit a cobas 8000 with no
+Sodium or Potassium: that entry was scoped to the c702 photometric module and
+omitted the ISE-module electrolytes. The cobas 8000 / c702 / c502 electrolyte
+gap was fixed 2026-10-06 (see Status), but the systemic issue — module-scoped
+or partial menus across vendors — remains. A full pass (vendor/FDA-sourced,
+no fabrication) would make VeritaMap demo-safe across the board.
+
+**Source:** Michael, 2026-10-06 Roche demo.
+**Status:** IN PROGRESS. Michael chose Option 2 (exhaustive) 2026-10-06. Executing vendor-by-vendor, sourced and verified against the manufacturer's own parameter lists. Batch 1 (Roche chemistry c-module) reconciled 2026-10-06 against Roche's March-2024 Serum Work Area parameter list: leveled c702 / cobas 8000 (+43 each), cobas c 703 (stub 6 -> 100), cobas pure (+8), cobas c 502 (+5) up to the verified c501 menu; c311 (Roche subset) and cobas 6000 left as-is. Next: Roche immunoassay (e-module), then Siemens, Abbott, Beckman, Sysmex, then smaller vendors. A separate naming-canonicalization pass (e.g., the "Cystacin C" typo, a mangled degree sign in Grifols Wadiana) is noted for later.
+
+---
+
+### 58. VeritaCheck instrument-verification: multi-select analyte menu (stop adding one by one)
+
+**Effort:** S (1-3 days)
+**Importance:** High — core usability of the instrument-verification flow; cumbersome enough to hurt demos and adoption.
+
+**What:** On a new Instrument Verification Package, analytes are added one at a
+time via free text. The existing "FDA-cleared" dropdown only renders when the
+verification is linked to a VeritaMap instrument (`map_instrument_id`), which
+standalone verifications lack, and even then it is single-select. Fix: source
+the menu from `fdaInstrumentData.json` by the verification's instrument name
+(e.g., Sysmex XN-2000 = 40 analytes), show a multi-select checklist with
+Select-all, and bulk-insert in one transaction (new bulk endpoint). Keep
+free-text for custom analytes.
+
+**Source:** Michael, 2026-10-06 screenshot (`/labs/3/dashboard/verifications`).
+**Status:** Open. Design presented and approved in principle; awaiting explicit go to build.
+
+---
+
+### 59. VeritaComp legacy program modal shows no VeritaStaff employees (Option 2)
+
+**Effort:** S (1-3 days)
+**Importance:** Medium — fixes a confusing dead-end next to the employee-centric flow; mostly a demo/UX trap.
+
+**What:** The legacy "New Technical Assessment" program modal reads
+`competency_employees` (empty for most labs) instead of VeritaStaff's
+`staff_employees`, so it says "No active employees" even when staff are
+assigned the program's instruments (observed on lab 5 / Alecia Lillico-Perry
+with the Atellica CH 930). Michael chose Option 2: populate the modal with the
+lab's active VeritaStaff employees who are assigned the program's instruments,
+auto-bridged into `competency_employees` on the fly (reusing the existing
+idempotent bridge). Fixes the roster drift rather than hiding the flow.
+
+**Source:** Michael, 2026-10-06.
+**Status:** Open. Approved ("build it that way"); code paths already traced; ready to build.
+
+---
+
+### 60. VeritaPT: load the CAP vendor program catalog (Program Name dropdown for CAP)
+
+**Effort:** S (1-3 days)
+**Importance:** High — CAP is the dominant PT vendor; free-text entry looks broken in demos.
+
+**What:** The Program Name field becomes a dropdown only when the vendor's
+catalog is loaded in `pt_vendor_programs`. API is loaded; CAP is not, so CAP
+falls back to free text ("No CAP catalog loaded yet"). By design the system
+refuses to invent catalog rows — CAP data must be vendor-sourced and
+operator-verified. Fix: compile the real CAP Survey programs across the 10 PT
+categories, present for Michael's verification, then load via
+`POST /api/admin/veritapt/vendor-programs`. No code change; data load only.
+
+**Source:** Michael, 2026-10-06 screenshot (PT Program Enrollments modal).
+**Status:** Open. Diagnosed; awaiting go to compile the CAP list for verification.
+
+---
+
+### 61. VeritaMap: remove duplicate demo maps (dedupe tool shipped; awaiting selection)
+
+**Effort:** XS (under 1 day)
+**Importance:** Low-Medium — demo-lab hygiene; not customer-facing.
+
+**What:** Michael created many maps while demoing and asked to remove
+duplicates. The read-only-by-default admin `dedupe-maps` endpoint shipped
+2026-10-06 (PR #1475). The audit found only a handful of strict content
+duplicates (plus false matches from empty maps, and items in Lisa's live lab 4
+that must not be touched). Needs Michael to pick what to delete — the strict
+dupes, or a broader clean-out of lab 3's 21 maps. Deletion runs scoped per lab
+with full cascade once he approves the ids.
+
+**Source:** Michael, 2026-10-06.
+**Status:** Open. Tool live; awaiting Michael's deletion selection.
+
+---
+
+### 62. Vendor instrument expansion PR #1474 (25 platforms; awaiting complexity sign-off)
+
+**Effort:** XS (under 1 day)
+**Importance:** Medium — closes demo-reported instrument gaps for Bio-Rad, Tosoh, Horiba, and fuller Mindray.
+
+**What:** PR #1474 adds 25 current platforms to `fdaInstrumentData.json` with
+FDA-anchored CLIA complexity (269 -> 294 instruments). Held for Michael's
+sign-off because complexity is a regulatory property and his call. Green and
+ready; once approved, merge and confirm the new instruments appear in the
+VeritaMap instrument search on prod.
+
+**Source:** Michael, 2026-10-06.
+**Status:** Open. PR green; awaiting merge approval.
+
+---
+
+### 63. about:blank on PDF opens (window.open token pattern + Adobe Acrobat)
+
+**Effort:** S (1-3 days)
+**Importance:** Medium — intermittent, customer-facing failure on PDF deliverables (studies, competency) during demos.
+
+**What:** Some PDF opens land on an about:blank tab instead of the document.
+Root cause: the fragile `window.open('/api/pdf/<one-time-token>')` pattern, still
+used on ~6 paths (VeritaOps, VeritaPace, VeritaQA, VeritaResponse x3, the
+Why-VeritaCheck article, CMS-116). With Adobe Acrobat as the PDF handler it opens
+a blank tab while Acrobat grabs the PDF, orphaning about:blank, and worse when
+the one-time token GET races or expires (the PR #286 class). Most downloads were
+migrated to the safe anchor helper `downloadPdfToken` (client/src/lib/utils.ts),
+which is why it is "mostly removed." Fix: route every remaining PDF open through
+the safe download helper, and verify the `/api/pdf` server `Content-Disposition`
+(the competency main path already uses the safe helper, so its blank is likely an
+inline-disposition + Acrobat interaction to confirm when fixing).
+
+**Source:** Michael, 2026-10-06 screenshot (competency PDF opened as about:blank in Acrobat).
+**Status:** Open. Root cause diagnosed; mechanical class fix ready to slot in on request.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C61. Regenerate the access-inventory Excel with the corrected MD persona (was #44)

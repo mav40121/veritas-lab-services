@@ -32570,6 +32570,131 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, dryRun: !!dryRun, orphanRows, total });
   });
 
+  // POST /api/admin/veritamap/dedupe-maps — find and (on explicit apply) remove
+  // DUPLICATE VeritaMap maps left behind by repeated demo building. Read-only by
+  // default. The write path deletes ONLY the explicit map ids passed in
+  // `deleteIds`, each with a FULL child cascade (correlations, tests,
+  // instrument_tests, analyte_values, amr_values, instruments, then the map row)
+  // in one transaction. It never runs a blanket "delete everything that looks
+  // duplicate" in the write path: dryRun reports candidate groups, the caller
+  // picks the ids. ADMIN_SECRET-gated.
+  //
+  // A map's content fingerprint = its sorted instrument set (name|category) plus
+  // its sorted analyte set. Maps with an identical fingerprint in the SAME lab
+  // are content duplicates. Each group keeps the earliest-created map and marks
+  // the rest removable. Same-name groups are reported SEPARATELY as a heads-up
+  // and are NOT auto-marked removable (same name can hold different content).
+  //
+  // Body: { secret, labId?, dryRun?, deleteIds?: number[] }
+  //   - no deleteIds (or dryRun:true): audit only; writes nothing. Omit labId to
+  //     survey every lab (so client labs are visible but nothing is touched).
+  //   - deleteIds:[ids]: delete exactly those maps. If labId is given, every id
+  //     must belong to it (a cross-lab id is rejected, not silently skipped).
+  app.post("/api/admin/veritamap/dedupe-maps", (req, res) => {
+    const { secret, labId, dryRun, deleteIds } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const sqlite = (db as any).$client;
+    const labFilter = (labId === undefined || labId === null) ? null : Number(labId);
+    if (labFilter !== null && (!Number.isInteger(labFilter) || labFilter <= 0)) {
+      return res.status(400).json({ error: "invalid labId" });
+    }
+
+    // --- APPLY path: delete exactly the ids passed, with full cascade ---
+    if (Array.isArray(deleteIds) && deleteIds.length > 0 && dryRun !== true) {
+      const ids = deleteIds.map((x: any) => Number(x)).filter((n: number) => Number.isInteger(n) && n > 0);
+      if (ids.length !== deleteIds.length) {
+        return res.status(400).json({ error: "deleteIds must be positive integers" });
+      }
+      const found: any[] = [];
+      const missing: number[] = [];
+      for (const id of ids) {
+        const m = sqlite.prepare("SELECT id, name, lab_id, user_id, created_at FROM veritamap_maps WHERE id = ?").get(id);
+        if (!m) { missing.push(id); continue; }
+        if (labFilter !== null && m.lab_id !== labFilter) {
+          return res.status(409).json({ error: "map not in labId", mapId: id, mapLabId: m.lab_id, labId: labFilter });
+        }
+        found.push(m);
+      }
+      if (missing.length) return res.status(404).json({ error: "map(s) not found", missing });
+      const counts: Record<string, number> = { correlations: 0, instrument_tests: 0, tests: 0, analyte_values: 0, amr_values: 0, instruments: 0, maps: 0 };
+      const del = sqlite.transaction(() => {
+        for (const m of found) {
+          const mid = m.id;
+          counts.correlations += sqlite.prepare(`
+            DELETE FROM veritamap_test_correlations
+            WHERE test_a_id IN (SELECT id FROM veritamap_tests WHERE map_id = ?)
+               OR test_b_id IN (SELECT id FROM veritamap_tests WHERE map_id = ?)
+          `).run(mid, mid).changes;
+          counts.instrument_tests += sqlite.prepare("DELETE FROM veritamap_instrument_tests WHERE map_id = ?").run(mid).changes;
+          counts.tests += sqlite.prepare("DELETE FROM veritamap_tests WHERE map_id = ?").run(mid).changes;
+          counts.analyte_values += sqlite.prepare("DELETE FROM veritamap_analyte_values WHERE map_id = ?").run(mid).changes;
+          counts.amr_values += sqlite.prepare("DELETE FROM veritamap_amr_values WHERE map_id = ?").run(mid).changes;
+          counts.instruments += sqlite.prepare("DELETE FROM veritamap_instruments WHERE map_id = ?").run(mid).changes;
+          counts.maps += sqlite.prepare("DELETE FROM veritamap_maps WHERE id = ?").run(mid).changes;
+          logAudit({ userId: m.user_id, ownerUserId: m.user_id, module: "veritamap", action: "delete", entityType: "map", entityId: String(mid), entityLabel: m.name, before: { map: m, via: "admin dedupe-maps" }, ipAddress: req.ip });
+        }
+      });
+      del();
+      return res.json({ ok: true, deleted: found.map((m: any) => ({ id: m.id, name: m.name, lab_id: m.lab_id })), rowCounts: counts });
+    }
+
+    // --- AUDIT path (default): report duplicate groups, write nothing ---
+    const maps = (labFilter !== null
+      ? sqlite.prepare("SELECT id, name, lab_id, user_id, created_at, updated_at FROM veritamap_maps WHERE lab_id = ? ORDER BY lab_id, created_at, id").all(labFilter)
+      : sqlite.prepare("SELECT id, name, lab_id, user_id, created_at, updated_at FROM veritamap_maps ORDER BY lab_id, created_at, id").all()) as any[];
+
+    const enriched = maps.map((m: any) => {
+      const instrs = sqlite.prepare("SELECT instrument_name, category FROM veritamap_instruments WHERE map_id = ? ORDER BY instrument_name, category").all(m.id) as any[];
+      const analytes = sqlite.prepare("SELECT DISTINCT analyte FROM veritamap_tests WHERE map_id = ? ORDER BY analyte").all(m.id) as any[];
+      const instrList = instrs.map((i: any) => `${i.instrument_name}|${i.category}`);
+      const analyteList = analytes.map((a: any) => a.analyte);
+      return {
+        ...m,
+        instrumentCount: instrList.length,
+        analyteCount: analyteList.length,
+        contentKey: JSON.stringify({ lab: m.lab_id, i: instrList, a: analyteList }),
+        nameKey: `${m.lab_id}::${String(m.name).trim().toLowerCase()}`,
+      };
+    });
+
+    const groupBy = (key: string) => {
+      const g: Record<string, any[]> = {};
+      for (const m of enriched) { (g[(m as any)[key]] ||= []).push(m); }
+      return Object.values(g).filter((arr) => arr.length > 1);
+    };
+    const toGroup = (arr: any[], kind: string) => {
+      const sorted = [...arr].sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)) || a.id - b.id);
+      const keep = sorted[0];
+      const remove = sorted.slice(1);
+      const slim = (m: any) => ({ id: m.id, name: m.name, created_at: m.created_at, instrumentCount: m.instrumentCount, analyteCount: m.analyteCount });
+      return { kind, lab_id: keep.lab_id, keep: slim(keep), remove: remove.map(slim), removeIds: remove.map((m: any) => m.id) };
+    };
+
+    const contentDuplicateGroups = groupBy("contentKey").map((a) => toGroup(a, "identical-content"));
+    const sameNameGroups = groupBy("nameKey").map((a) => toGroup(a, "same-name"));
+
+    const perLab: Record<string, any> = {};
+    for (const m of enriched) {
+      const k = String(m.lab_id);
+      perLab[k] ||= { lab_id: m.lab_id, totalMaps: 0, contentDupMapsRemovable: 0 };
+      perLab[k].totalMaps++;
+    }
+    for (const g of contentDuplicateGroups) {
+      const k = String(g.lab_id);
+      if (perLab[k]) perLab[k].contentDupMapsRemovable += g.removeIds.length;
+    }
+
+    res.json({
+      dryRun: true,
+      scope: labFilter !== null ? { labId: labFilter } : "all-labs",
+      totalMaps: maps.length,
+      perLab: Object.values(perLab),
+      contentDuplicateGroups,
+      sameNameGroups,
+      note: "Pass deleteIds:[...] (ids from a group's removeIds) to delete, scoped with labId. identical-content groups collapse safely; same-name groups may hold different content, so review before deleting.",
+    });
+  });
+
   // Purge an EMPTY orphan lab (e.g. a phantom lab left by a botched provisioning
   // path, like the one created when a fresh separate owner is provisioned). Safe
   // by construction: it refuses any lab that has members or ANY lab-scoped data.
