@@ -685,6 +685,62 @@ inline-disposition + Acrobat interaction to confirm when fixing).
 
 ---
 
+### 64. Milford VeritaMap view-only cascade: every value/date save fails for operator + lab director
+
+**Effort:** S (access fix in flight) + S (client UX class bug)
+**Importance:** High. Blocks Michael and Lisa from editing Milford (labs 4/5) VeritaMap at all; surfaced live during setup/demo.
+
+**What:** On Milford labs 4 and 5, loading a VeritaMap test menu and entering any
+value (AMR, reference range) or completion date (Cal Verification, Method
+Comparison, Precision, SOP Review) fails to auto-save, throwing a cascade of
+destructive toasts ("AMR not saved" / "Values not saved" / "Auto-save failed").
+Confirmed on BOTH Michael's and Lisa's accounts, on both labs.
+
+Root cause (two layers):
+  1. ACCESS (server): the save routes are gated by requireModuleEdit('veritamap')
+     (server/routes.ts ~1038), which passes only lab owner / active admin
+     lab_member / org_admin / active edit seat. Reads only need membership, so the
+     map LOADS but every write 403s "view-only access to veritamap." Neither
+     Michael nor Lisa currently clears that bar on labs 4/5 (a boot-backfill
+     cleanup on 2026-05-24 removed admin rows; add-lab-membership no-ops on an
+     existing row so there was no path to re-grant). FIX IN FLIGHT: PR #1483
+     POST /api/admin/repair-lab-admins grants/promotes both to admin on 4/5.
+  2. UX CLASS BUG (client): VeritaMapMapPage gates its inputs on
+     useIsReadOnly('veritamap'), which reflects SUBSCRIPTION read-only, NOT
+     per-user seat/membership view-only. A genuine view-only user (e.g. Lisa's
+     techs) sees enabled inputs, types, and gets one failed-save toast PER FIELD.
+     The detail page should also treat seat-level view-only as read-only (disable
+     inputs + one banner), e.g. by exposing hasModuleEditAccess (server/routes.ts
+     ~1142) to the client the way the VeritaPolicy approval preview already does.
+
+**Source:** Michael, 2026-10-06 screenshots (lab 4 AMR cascade; lab 5 / Lisa SOP Review "Auto-save failed").
+**Status:** Access fix in PR #1483 (dryRun-verify, then apply). Client UX class bug open. Final confirmation needs a click-test on Milford after the access fix (Gate 3 step 8).
+
+---
+
+### 65. VeritaQC LJ chart vs Westgard rule mean-source mismatch (point near chart mean fires 1-3s)
+
+**Effort:** M
+**Importance:** High. Customer-visible correctness and trust issue; the chart and the rule flags disagree.
+
+**What:** A QC point can fire the 1-3s rejection rule while the Levey-Jennings
+chart shows it near the mean. Root cause: the two use DIFFERENT baselines. The
+Westgard engine (evaluateWestgardForLot, server/routes.ts ~3717) computes mean/SD
+FRESH from the lab's accepted QC history and flags |value - historyMean| / historySD
+> 3. The LJ chart draws its center line and SD bands from the lot's MANUFACTURER
+insert values (mfr_mean / mfr_sd, the columns the chart-data query pulls at
+server/routes.ts ~4250). When the lab's own running mean/SD differs from the
+manufacturer insert (common once a lab establishes its own stats), a point near the
+mfr mean on the chart can be >3 lab-SD out. Per CLIA/CLSI C24, QC should be
+evaluated against the lab's established mean/SD; the fix is to make the chart plot
+the SAME established mean/SD the rules use (or a consistent mfr-vs-cumulative mode
+applied to both chart and rules).
+
+**Source:** Mike Hiltunen (MedStar), 2026-10-06 email "LJ Graph Question". Gameday Plymouth PSA Frend B Level 1, 9/28 point fired 1-3s but sits near the mean on the chart.
+**Status:** Root cause confirmed in code. Need his lot's live numbers to quantify the customer reply (blocked on live-data access), then the product fix to unify baselines.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C61. Regenerate the access-inventory Excel with the corrected MD persona (was #44)
