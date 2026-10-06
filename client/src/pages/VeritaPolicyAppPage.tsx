@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Lock, Download, ChevronDown, ChevronUp, Search, Clock, ChevronRight, FileText } from "lucide-react";
+import { Lock, Download, ChevronDown, ChevronUp, Search, Clock, ChevronRight, FileText, Plus, Trash2 } from "lucide-react";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -156,6 +156,9 @@ export default function VeritaPolicyAppPage() {
   const [downloadingDocx, setDownloadingDocx] = useState<Record<string, boolean>>({});
   const [downloadingBundle, setDownloadingBundle] = useState(false);
   const [hasCustomTemplate, setHasCustomTemplate] = useState<{ count: number } | null>(null);
+  const [addCustomOpen, setAddCustomOpen] = useState(false);
+  const [addCustomForm, setAddCustomForm] = useState({ policy_name: "", section: "", cap_citations: "", cfr_citations: "", notes: "" });
+  const [savingCustom, setSavingCustom] = useState(false);
   // Opt-in "UNCONTROLLED COPY" watermark on downloaded Word starters. Off by
   // default: the in-system copy is the controlled master, so a watermark only
   // goes on hand-out / printed copies when the user asks for it.
@@ -204,6 +207,47 @@ export default function VeritaPolicyAppPage() {
       .catch(() => { /* ignore */ });
     return () => { cancelled = true; };
   }, [activeLabId]);
+
+  // Add a custom policy entry (a required policy not on the built-in catalog).
+  async function submitCustomPolicy() {
+    const name = addCustomForm.policy_name.trim();
+    if (!name) { toast({ title: "Policy name required", variant: "destructive" }); return; }
+    setSavingCustom(true);
+    try {
+      const res = await fetch(`${policyApi}/custom-entries`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          policy_name: name,
+          section: addCustomForm.section.trim() || "Custom",
+          cap_citations: addCustomForm.cap_citations.trim() || null,
+          cfr_citations: addCustomForm.cfr_citations.trim() || null,
+          notes: addCustomForm.notes.trim() || null,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || "Failed to add");
+      toast({ title: "Custom policy added" });
+      setAddCustomOpen(false);
+      setAddCustomForm({ policy_name: "", section: "", cap_citations: "", cfr_citations: "", notes: "" });
+      await loadAll();
+    } catch (e: any) {
+      toast({ title: "Could not add policy", description: String(e?.message || e), variant: "destructive" });
+    } finally { setSavingCustom(false); }
+  }
+
+  async function deleteCustomPolicy(policyId: string) {
+    const id = Number(String(policyId).replace("custom-", ""));
+    if (!Number.isInteger(id)) return;
+    if (!confirm("Delete this custom policy entry? Its status and any linked notes will be removed.")) return;
+    try {
+      const res = await fetch(`${policyApi}/custom-entries/${id}`, { method: "DELETE", headers: authHeaders() });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || "Failed to remove");
+      toast({ title: "Custom policy removed" });
+      await loadAll();
+    } catch (e: any) {
+      toast({ title: "Could not remove", description: String(e?.message || e), variant: "destructive" });
+    }
+  }
 
   async function saveSettings(updated: PolicySettings) {
     if (settingsSaveTimer.current) clearTimeout(settingsSaveTimer.current);
@@ -633,6 +677,11 @@ export default function VeritaPolicyAppPage() {
           <input type="checkbox" checked={hideNa} onChange={e => toggleHideNa(e.target.checked)} />
           <span>Show only applicable</span>
         </label>
+        {activeLabId && !isReadOnly && (
+          <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => setAddCustomOpen(true)} data-testid="add-custom-policy">
+            <Plus size={14} /> Add custom policy
+          </Button>
+        )}
       </div>
 
       {/* Master List table */}
@@ -717,6 +766,19 @@ export default function VeritaPolicyAppPage() {
                               {p.subspecialty && <Badge variant="outline" className="text-[10px] px-1 py-0 w-fit">{p.subspecialty}</Badge>}
                               {p.service_line && p.service_line !== "all" && (
                                 <Badge variant="outline" className="text-[10px] px-1 py-0 w-fit">{p.service_line}</Badge>
+                              )}
+                              {(p as any).is_custom && (
+                                <div className="flex items-center gap-1">
+                                  <Badge variant="outline" className="text-[10px] px-1 py-0 w-fit border-primary/40 text-primary">Custom</Badge>
+                                  {!isReadOnly && (
+                                    <button type="button"
+                                      onClick={(e) => { e.stopPropagation(); deleteCustomPolicy(p.policy_id); }}
+                                      title="Remove this custom policy" aria-label="Remove custom policy"
+                                      className="inline-flex items-center justify-center w-5 h-5 rounded text-rose-500/70 hover:text-rose-600 hover:bg-rose-500/10">
+                                      <Trash2 size={12} />
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </div>
                           </td>
@@ -845,6 +907,45 @@ export default function VeritaPolicyAppPage() {
       </div>
 
       {/* Bulk N/A confirmation dialog */}
+      {addCustomOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => !savingCustom && setAddCustomOpen(false)}>
+          <div className="bg-card border border-border rounded-lg p-6 max-w-md w-full mx-4 shadow-lg" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-foreground mb-1">Add a custom policy</h3>
+            <p className="text-xs text-muted-foreground mb-4">For a required policy that is not on the built-in list, for example a Chemical Hygiene Plan. It appears as its own entry line and tracks status like any other policy.</p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-foreground">Policy name</label>
+                <Input value={addCustomForm.policy_name} onChange={e => setAddCustomForm(f => ({ ...f, policy_name: e.target.value }))} placeholder="e.g. Chemical Hygiene Plan" data-testid="custom-policy-name" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-foreground">Section</label>
+                  <Input value={addCustomForm.section} onChange={e => setAddCustomForm(f => ({ ...f, section: e.target.value }))} placeholder="e.g. Safety" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-foreground">CAP citation</label>
+                  <Input value={addCustomForm.cap_citations} onChange={e => setAddCustomForm(f => ({ ...f, cap_citations: e.target.value }))} placeholder="optional" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-foreground">CFR citation</label>
+                <Input value={addCustomForm.cfr_citations} onChange={e => setAddCustomForm(f => ({ ...f, cfr_citations: e.target.value }))} placeholder="e.g. 29 CFR 1910.1450" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-foreground">Notes</label>
+                <Input value={addCustomForm.notes} onChange={e => setAddCustomForm(f => ({ ...f, notes: e.target.value }))} placeholder="optional" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-5">
+              <Button variant="ghost" size="sm" onClick={() => setAddCustomOpen(false)} disabled={savingCustom}>Cancel</Button>
+              <Button size="sm" onClick={submitCustomPolicy} disabled={savingCustom || !addCustomForm.policy_name.trim()} data-testid="save-custom-policy">
+                {savingCustom ? "Adding..." : "Add policy"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {bulkConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => !bulkApplying && setBulkConfirm(null)}>
           <div className="bg-card border border-border rounded-lg p-6 max-w-md mx-4 shadow-lg" onClick={e => e.stopPropagation()}>
