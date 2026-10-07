@@ -83,8 +83,11 @@ async function main() {
   check("B absolute-only, all samples pass: engine keeps pass", status(b) === "pass", `status=${status(b)}`);
   const rc = replica(cPairs, 0.08, true, 6);
   check("C dual-criterion: every sample passes per-sample (replica)", rc.perSample === "pass", JSON.stringify(rc));
-  check("C dual-criterion: aggregate guard overrides to FAIL in the real engine", status(c) === "fail",
-    `status=${status(c)}; mean|bias|=${(rc.meanAbs * 100).toFixed(2)}% vs guard allowance ${(rc.meanAllow * 100).toFixed(2)}%`);
+  // Michael's call 2026-10-07 (option 1): the guard is removed, so the real engine
+  // now keeps the per-sample PASS. The replica still models the OLD guard so the
+  // numbers below show what it would have done (11.22% vs 8.00%).
+  check("C dual-criterion: engine keeps PASS now that the aggregate guard is removed", status(c) === "pass",
+    `status=${status(c)}; old guard would have compared mean|bias| ${(rc.meanAbs * 100).toFixed(2)}% to ${(rc.meanAllow * 100).toFixed(2)}% and overridden`);
   check("D dual-criterion with a real failing sample: fail (per-sample rule)", status(d) === "fail", `status=${status(d)}`);
 
   // Random search: single-criterion cases can never trigger the override.
@@ -117,8 +120,8 @@ async function main() {
     const rr = replica(pts, tea, true, floor); dualTried++;
     if (rr.override) dualHits++;
   }
-  console.log(`info: dual-criterion all-pass datasets overridden to FAIL by the guard: ${dualHits} of ${dualTried} (${(100 * dualHits / dualTried).toFixed(1)}%)`);
-  check("dual-criterion random search finds at least one override (the defect class exists)", dualHits > 0);
+  console.log(`info: dual-criterion all-pass datasets the OLD guard would have flipped to FAIL: ${dualHits} of ${dualTried} (${(100 * dualHits / dualTried).toFixed(1)}%)`);
+  check("replica of the old guard still demonstrates the defect class it had (documentation)", dualHits > 0);
 
   console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILED`);
   process.exit(failures === 0 ? 0 : 1);
