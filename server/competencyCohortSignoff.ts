@@ -19,6 +19,8 @@
 // Cross-program (one employee × N programs) is NOT in v1. That's an
 // orientation-cohort workflow and gets its own dialog if labs ask.
 
+import { isValidYmd } from "./competencyBulkImport";
+
 export const ALLOWED_TYPES = ["initial", "6month", "annual", "reassessment", "orientation", "duty_change"] as const;
 export const ALLOWED_STATUSES = ["pass", "fail", "remediation"] as const;
 
@@ -79,10 +81,6 @@ export interface CohortContext {
   }>;
 }
 
-function isYmd(s: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(s);
-}
-
 export function validateCohort(input: CohortInput, ctx: CohortContext): CohortPreview {
   const sharedIssues: CohortIssue[] = [];
 
@@ -96,8 +94,8 @@ export function validateCohort(input: CohortInput, ctx: CohortContext): CohortPr
   const statusOk = (ALLOWED_STATUSES as readonly string[]).includes(input.status);
   if (!statusOk) sharedIssues.push({ field: "status", severity: "error", message: `Status "${input.status}" not in: ${ALLOWED_STATUSES.join(", ")}` });
 
-  const dateOk = isYmd(input.assessmentDate);
-  if (!dateOk) sharedIssues.push({ field: "assessmentDate", severity: "error", message: `Assessment date "${input.assessmentDate}" must be YYYY-MM-DD.` });
+  const dateOk = isValidYmd(input.assessmentDate);
+  if (!dateOk) sharedIssues.push({ field: "assessmentDate", severity: "error", message: `Assessment date "${input.assessmentDate}" must be a valid YYYY-MM-DD date.` });
 
   const evaluatorOk = typeof input.evaluatorName === "string" && input.evaluatorName.trim().length > 0;
   if (!evaluatorOk) sharedIssues.push({ field: "evaluatorName", severity: "error", message: "Evaluator name required." });
