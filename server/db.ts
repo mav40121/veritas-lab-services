@@ -2882,6 +2882,49 @@ sqlite.exec(`
 `);
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritapolicy_lab_artifacts_lab ON veritapolicy_lab_artifacts(lab_id)`); } catch {}
 
+// In-app Getting Started manual ticks (parking lot #72, 2026-10-07): the only
+// stored state of the checklist. Every other step is derived live from the
+// lab's tables (server/gettingStarted.ts). Keys: the two Phase-5 manual steps
+// and 'card.dismissed'.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS lab_onboarding_checks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    step_key TEXT NOT NULL,
+    checked INTEGER NOT NULL DEFAULT 1,
+    checked_by_user_id INTEGER,
+    checked_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(lab_id, step_key)
+  )
+`);
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(lab_onboarding_checks)").all() as { name: string }[]).map((c) => c.name);
+  // Future columns added via ALTER TABLE go here, gated on !cols.includes("colname").
+  void cols;
+}
+
+// Per-lab house policy numbers for house DOCX formats (parking lot #71,
+// 2026-10-07): the client's own numbering ("Gen 31") and revision tag per
+// catalog policy_id. Entered by us or the lab through the admin endpoint,
+// never generated. Read by the DOCX download routes when the lab's
+// veritapolicy_settings.docx_format is a house format.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritapolicy_house_numbers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    policy_id TEXT NOT NULL,
+    house_number TEXT,
+    revision TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(lab_id, policy_id)
+  )
+`);
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(veritapolicy_house_numbers)").all() as { name: string }[]).map((c) => c.name);
+  // Future columns added via ALTER TABLE go here, gated on !cols.includes("colname").
+  void cols;
+}
+
 // Migration sentinel for veritapolicy_lab_artifacts (no schema changes yet
 // but keeps the pattern in place for future ALTER TABLE additions).
 {
@@ -3343,6 +3386,18 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritapolicy_lab_artifacts_lab
   } catch (err: any) {
     try { sqlite.exec("ROLLBACK"); } catch {}
     console.warn("[migration] Phase 3.3 settings rebuild failed (non-fatal):", err?.message);
+  }
+
+  // House DOCX format per lab (parking lot #71, 2026-10-07). Placed AFTER the
+  // Phase 3.3 rebuild on purpose: that rebuild copies an explicit column list
+  // into a new table, so columns added before it would be dropped on a legacy DB.
+  // 'veritadc' (default) or a client house format we render ('umass_milford').
+  // Set by us via POST /api/admin/veritapolicy/set-house-format; no customer picker.
+  {
+    const cols = (sqlite.prepare("PRAGMA table_info(veritapolicy_settings)").all() as { name: string }[]).map((c) => c.name);
+    if (!cols.includes("docx_format")) sqlite.exec("ALTER TABLE veritapolicy_settings ADD COLUMN docx_format TEXT NOT NULL DEFAULT 'veritadc'");
+    if (!cols.includes("house_facility_path")) sqlite.exec("ALTER TABLE veritapolicy_settings ADD COLUMN house_facility_path TEXT");
+    if (!cols.includes("house_safety_default")) sqlite.exec("ALTER TABLE veritapolicy_settings ADD COLUMN house_safety_default TEXT");
   }
 
   // veritapolicy_requirement_status -> UNIQUE(lab_id, requirement_id)
@@ -6323,6 +6378,13 @@ try {
   const biCols = (sqlite.prepare(`PRAGMA table_info(backup_integrity_log)`).all() as any[]).map((c: any) => c.name);
   if (!biCols.includes("real_user_count")) {
     sqlite.exec(`ALTER TABLE backup_integrity_log ADD COLUMN real_user_count INTEGER`);
+  }
+  // backup_integrity_log.real_user_emails (2026-10-07, #70): JSON array of the
+  // real-user emails at each run, so a decrease can NAME the account(s) that
+  // disappeared and be matched against admin deletions in audit_log. Legacy
+  // rows keep NULL (no names available for the first post-deploy comparison).
+  if (!biCols.includes("real_user_emails")) {
+    sqlite.exec(`ALTER TABLE backup_integrity_log ADD COLUMN real_user_emails TEXT`);
   }
 } catch {}
 try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as any[]); } catch {}

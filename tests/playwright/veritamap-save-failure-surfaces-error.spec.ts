@@ -32,9 +32,15 @@ test.describe("VeritaMap: a failed critical-value save is surfaced, never silent
 
     await page.goto(`${BASE}${MAP_URL}`, { waitUntil: "networkidle" });
 
-    // Expand the first test row and type a critical-low value.
-    await page.getByRole("button", { name: /Details|Expand|values/i }).first().click().catch(() => {});
-    const critLow = page.getByPlaceholder(/critical low/i).first();
+    // Expand the first test row and type a critical-low value. (Locators
+    // corrected 2026-10-07 when this spec first ran live: the expand control
+    // is the chevron titled "Enter reference range, critical values, AMR" and
+    // the Critical Value Low input's placeholder is "e.g. 120".)
+    const expand = page.getByTitle("Enter reference range, critical values, AMR").first();
+    await expect(expand).toBeVisible({ timeout: 30_000 });
+    await expand.click();
+    const critLow = page.getByPlaceholder("e.g. 120").first();
+    await expect(critLow).toBeVisible({ timeout: 15_000 });
     await critLow.fill("3.0");
 
     // Autosave debounce is 1500ms; wait past it, then assert the failure is visible.

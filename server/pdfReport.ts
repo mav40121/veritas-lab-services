@@ -18,7 +18,7 @@ import {
   licenseAugmentedFooterTemplate,
   type LicenseContext,
 } from "./licenseStamp";
-import { hasCanonicalTea } from "./backfillAbsoluteFloor";
+import { hasCanonicalTea, cfrSectionForTestName } from "./backfillAbsoluteFloor";
 import { evaluateManualDiff } from "./rumke";
 
 // HTML-escape user-provided strings before they land in the rendered
@@ -728,7 +728,9 @@ function headerHTML(study: Study, cliaNumber?: string): string {
 // ─── Supporting data page HTML ────────────────────────────────────────────────
 function supportingPageHTML(study: Study, instrumentNames: string[]): string {
   const teaStr = teaDisplayStr(study);
-  const cfr = (study as any).cfr || "42 CFR §493.931";
+  // Same resolution as the narrative: explicit study.cfr override, else the
+  // analyte's CLIA subspecialty section (hematology -> §493.941), else §493.931.
+  const cfr = (study as any).cfr || cfrSectionForTestName(study.testName);
   const cfrUrl = CFR_URLS[cfr] || "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.931";
 
   const isCanonical = hasCanonicalTea(study.testName);
@@ -1216,7 +1218,9 @@ function narrativeHTML(
 ): string {
   const isAbsolute = study ? isAbsoluteTea(study) : false;
   const teaStr = study ? teaDisplayStr(study) : `\u00B1${(cliaError * 100).toFixed(1)}%`;
-  const cfrSection = (study as any)?.cfr || "42 CFR \u00A7493.931";
+  // study.cfr is an explicit override (nothing sets it today); otherwise the
+  // section follows the analyte's CLIA subspecialty (hematology -> \u00A7493.941).
+  const cfrSection = (study as any)?.cfr || cfrSectionForTestName((study as any)?.testName);
   const cliaPct = (cliaError * 100).toFixed(1);
   const adlmPct = (cliaError * 50).toFixed(1); // ADLM = half of CLIA TEa
   let narrative = "";
@@ -3239,7 +3243,7 @@ function buildLotToLotHTML(study: Study, results: any): string {
   const l2lPassCount = `${results.passCount}/${results.totalCount}`;
 
   const l2lTeaStr = teaDisplayStr(study);
-  const l2lCfr = (study as any).cfr || "42 CFR \u00A7493.931";
+  const l2lCfr = (study as any).cfr || cfrSectionForTestName(study.testName);
   const l2lAdj = criterionAdjective(study.testName);
   const l2lLabel = criterionLabel(study.testName);
   const l2lAuthority = criterionAuthorityPhrase(study.testName, l2lCfr);
