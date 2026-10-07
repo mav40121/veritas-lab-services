@@ -6346,7 +6346,7 @@ h2.report-subtitle { font-size: 10pt; font-weight: 400; color: #555; margin-bott
 <!-- PAGE 1: Summary + Signature -->
 <div class="page1">
   <div class="header-block">
-    <h1 class="report-title">VeritaPolicy&#8482; Compliance Report</h1>
+    <h1 class="report-title">VeritaDC&#8482; Compliance Report</h1>
     <h2 class="report-subtitle">Laboratory Policy Tracker - ${subtitleText}</h2>
     <div class="meta-row">
       <span><strong>Laboratory:</strong> ${labName}</span>
@@ -6458,7 +6458,7 @@ h2.report-subtitle { font-size: 10pt; font-weight: 400; color: #555; margin-bott
 <!-- PAGE 2+: Requirements by Chapter -->
 <div class="page-break">
   <div class="header-block">
-    <h1 class="report-title">VeritaPolicy&#8482; - Requirements Detail</h1>
+    <h1 class="report-title">VeritaDC&#8482; - Requirements Detail</h1>
     <div class="meta-row">
       <span><strong>Laboratory:</strong> ${labName}</span>
       <span><strong>CLIA:</strong> ${clia}</span>
@@ -6473,7 +6473,7 @@ h2.report-subtitle { font-size: 10pt; font-weight: 400; color: #555; margin-bott
 <!-- FINAL PAGE: Policy Library -->
 <div class="page-break">
   <div class="header-block">
-    <h1 class="report-title">VeritaPolicy&#8482; - Policy Library Index</h1>
+    <h1 class="report-title">VeritaDC&#8482; - Policy Library Index</h1>
     <div class="meta-row">
       <span><strong>Laboratory:</strong> ${labName}</span>
       <span><strong>CLIA:</strong> ${clia}</span>
@@ -6511,9 +6511,9 @@ h2.report-subtitle { font-size: 10pt; font-weight: 400; color: #555; margin-bott
 const VERITAPOLICY_FOOTER_TEMPLATE = `
 <div style="width:100%;padding:0 15mm;box-sizing:border-box;font-family:Helvetica,Arial,sans-serif">
   <div style="border-top:1px solid #d2d7dc;padding-top:3px">
-    <div style="font-size:6px;color:#a0a0a0;line-height:1.4">VeritaPolicy&trade; organizes accreditation policy requirements. It does not constitute legal or regulatory advice; the laboratory director or designee is responsible for final policy adoption.</div>
+    <div style="font-size:6px;color:#a0a0a0;line-height:1.4">VeritaDC&trade; organizes accreditation policy requirements. It does not constitute legal or regulatory advice; the laboratory director or designee is responsible for final policy adoption.</div>
     <div style="display:flex;justify-content:space-between;font-size:7px;color:#646e78;margin-top:2px">
-      <span>VeritaAssure&trade; | VeritaPolicy&trade; | Confidential - For Internal Lab Use Only</span>
+      <span>VeritaAssure&trade; | VeritaDC&trade; | Confidential - For Internal Lab Use Only</span>
       <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
     </div>
   </div>

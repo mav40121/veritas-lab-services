@@ -971,7 +971,7 @@ function StaffPortalPoliciesView({
             <div className="text-sm text-muted-foreground py-6 text-center">Loading approved policies...</div>
           ) : policies.length === 0 ? (
             <div className="text-sm text-muted-foreground py-6 text-center">
-              No approved policies on this lab's VeritaPolicy&trade; manuals yet. Ask the lab director.
+              No approved policies on this lab's VeritaDC&trade; manuals yet. Ask the lab director.
             </div>
           ) : (
             <div className="divide-y divide-border">
