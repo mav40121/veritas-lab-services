@@ -23,6 +23,7 @@ import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { CoverageSummaryCard } from "@/components/CoverageSummaryCard";
+import { GettingStartedCard } from "@/components/GettingStartedCard";
 
 export default function Dashboard() {
   const labRoute = useLabRoute();
@@ -196,6 +197,10 @@ export default function Dashboard() {
           "The medical director or designee signs; download the PDF and file with your CLIA records.",
         ]}
       />
+
+      {/* Parking lot #72: the lab's own Getting Started checklist, scored live
+          from its tables; hides itself at 100 percent or when dismissed. */}
+      <GettingStartedCard className="mb-6" />
 
       {/* Coverage summary: the single most valuable VeritaCheck view (map
           requires vs. studies on file) promoted from a buried toolbar button

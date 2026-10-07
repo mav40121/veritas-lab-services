@@ -8,6 +8,7 @@ import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useSEO } from "@/hooks/useSEO";
 import { API_BASE } from "@/lib/queryClient";
+import { downloadPdfToken } from "@/lib/utils";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
@@ -736,20 +737,10 @@ export default function VeritaOpsAppPage() {
         return;
       }
       const { token } = await res.json();
-      // Open via the shared token endpoint so the browser does the GET
-      // download directly (avoids Adobe Acrobat blob-URL hijacking).
-      const win = window.open(`${API_BASE}/api/pdf/${token}`, "_blank");
-      if (win) {
-        toast({ title: `PDF generated for ${study.test_name}` });
-      } else {
-        // Popup blocked: the PDF WAS generated, but the browser blocked the
-        // new tab. Do NOT claim success; tell the user how to retrieve it.
-        toast({
-          title: "Popup blocked",
-          description: "Your browser blocked the PDF tab. Allow popups for this site, then click the PDF button again.",
-          variant: "destructive",
-        });
-      }
+      // Anchor download through the shared token endpoint: no popup to block,
+      // no about:blank tab for the Acrobat extension to orphan (parking lot #63).
+      downloadPdfToken(token, `VeritaOps_CPRT_${String(study.test_name || "study").replace(/[^\w.-]+/g, "_")}.pdf`);
+      toast({ title: `PDF generated for ${study.test_name}` });
     } catch {
       toast({ title: "PDF generation failed", description: "Network error", variant: "destructive" });
     } finally {

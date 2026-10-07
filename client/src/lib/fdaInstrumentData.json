@@ -2,7 +2,7 @@
   "Beckman Coulter AU5800": {
     "vendor": "Beckman Coulter",
     "category": "Chemistry",
-    "testCount": 134,
+    "testCount": 133,
     "tests": {
       "Haptoglobin": {
         "complexity": "MODERATE",
@@ -57,7 +57,7 @@
         "specialty": "General Chemistry"
       },
       "Tacrolimus": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Everolimus": {
@@ -444,10 +444,6 @@
         "complexity": "MODERATE",
         "specialty": "Urinalysis"
       },
-      "creatinine": {
-        "complexity": "MODERATE",
-        "specialty": "Urinalysis"
-      },
       "Angiotensin converting enzyme (ACE)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -457,11 +453,11 @@
         "specialty": "Toxicology"
       },
       "Calprotectin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Elastase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Ammonia": {
@@ -545,7 +541,7 @@
   "Beckman Coulter AU680": {
     "vendor": "Beckman Coulter",
     "category": "Chemistry",
-    "testCount": 131,
+    "testCount": 130,
     "tests": {
       "Alanine aminotransferase (ALT) (SGPT)": {
         "complexity": "MODERATE",
@@ -844,7 +840,7 @@
         "specialty": "Toxicology"
       },
       "Tacrolimus": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Microalbumin": {
@@ -908,7 +904,7 @@
         "specialty": "Endocrinology"
       },
       "Oxalate": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Methamphetamines": {
@@ -967,16 +963,12 @@
         "complexity": "MODERATE",
         "specialty": "Urinalysis"
       },
-      "creatinine": {
-        "complexity": "MODERATE",
-        "specialty": "Urinalysis"
-      },
       "Oxcarbazepine Metabolite": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Calprotectin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Insulin": {
@@ -984,7 +976,7 @@
         "specialty": "Endocrinology"
       },
       "Elastase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Levetiracetam": {
@@ -1076,7 +1068,7 @@
   "Beckman Coulter DxC 700 AU": {
     "vendor": "Beckman Coulter",
     "category": "Chemistry",
-    "testCount": 134,
+    "testCount": 132,
     "tests": {
       "Procalcitonin (PCT)": {
         "complexity": "MODERATE",
@@ -1178,16 +1170,12 @@
         "complexity": "MODERATE",
         "specialty": "Urinalysis"
       },
-      "Creatinine": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Oxcarbazepine Metabolite": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Calprotectin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Insulin": {
@@ -1195,7 +1183,7 @@
         "specialty": "Endocrinology"
       },
       "Elastase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Methotrexate": {
@@ -1399,7 +1387,7 @@
         "specialty": "Toxicology"
       },
       "Tacrolimus": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Everolimus": {
@@ -1579,10 +1567,6 @@
         "specialty": "General Chemistry"
       },
       "Gamma glutamyl transferase (GGT)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Ammonia, plasma/serum": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -2984,7 +2968,7 @@
   "Roche cobas c 502": {
     "vendor": "Roche",
     "category": "Chemistry",
-    "testCount": 100,
+    "testCount": 108,
     "tests": {
       "Protein, total": {
         "complexity": "MODERATE",
@@ -3383,6 +3367,38 @@
         "specialty": "Toxicology"
       },
       "Gabapentin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Sodium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Chloride": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Anti-streptolysin O (ASO)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Microalbumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "LDL cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Tramadol": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Voriconazole": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       }
@@ -3786,7 +3802,7 @@
   "Roche cobas c 702": {
     "vendor": "Roche",
     "category": "Chemistry",
-    "testCount": 58,
+    "testCount": 104,
     "tests": {
       "Alanine aminotransferase (ALT) (SGPT)": {
         "complexity": "MODERATE",
@@ -4019,13 +4035,197 @@
       "Transferrin, urine": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
+      },
+      "Sodium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Chloride": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Lysergic acid diethylamide (LSD)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methaqualone": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Glycosylated Hemoglobin (Hgb A1c)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Microalbumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Amphetamines": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Phencyclidine (PCP)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cocaine metabolites": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Opiates": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methamphetamines": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methadone metabolite (EDDP)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Gentamicin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Valproic acid": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cannabinoids (THC)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methadone": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Propoxyphene": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Acetaminophen": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Complement C3": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Complement C4": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "D-dimer": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Creatine kinase MB fraction (CKMB)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Carbamazepine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Quinidine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Theophylline": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Vancomycin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cholinesterase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Phenytoin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Phenobarbital": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Digoxin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Salicylates": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "N-acetylprocainamide (NAPA)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Procainamide": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Oxycodone": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Tramadol": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methotrexate": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Phenytoin, free": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Norfentanyl": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Fentanyl": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Alpha-2-macroglobulin": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Buprenorphine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Voriconazole": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Gabapentin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
       }
     }
   },
   "Abbott Architect c8000": {
     "vendor": "Abbott",
     "category": "Chemistry",
-    "testCount": 101,
+    "testCount": 117,
     "tests": {
       "Alpha-1-acid glycoprotein (orosomucoid)": {
         "complexity": "MODERATE",
@@ -4384,11 +4584,11 @@
         "specialty": "Toxicology"
       },
       "Calprotectin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Elastase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Clozapine": {
@@ -4430,13 +4630,77 @@
       "Buprenorphine": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein, Urine/CSF": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "LDL cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Unsaturated Iron Binding Capacity (UIBC)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Microalbumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Antistreptolysin O": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin A": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin G": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin M": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Digitoxin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methotrexate": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "6-Acetylmorphine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cocaine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Ecstasy": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Methadone metabolite (EDDP)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Tramadol": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
       }
     }
   },
   "Abbott Architect c16000": {
     "vendor": "Abbott",
     "category": "Chemistry",
-    "testCount": 87,
+    "testCount": 106,
     "tests": {
       "Alpha-1-acid glycoprotein (orosomucoid)": {
         "complexity": "MODERATE",
@@ -4747,11 +5011,11 @@
         "specialty": "Toxicology"
       },
       "Calprotectin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Elastase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Clozapine": {
@@ -4785,13 +5049,89 @@
       "Buprenorphine": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein, Urine/CSF": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Unsaturated Iron Binding Capacity (UIBC)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Antistreptolysin O": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin A": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin G": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin M": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Amikacin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Digoxin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Digitoxin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methotrexate": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Tobramycin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Valproic acid": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Vancomycin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "6-Acetylmorphine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cocaine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Ecstasy": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Methadone metabolite (EDDP)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Tramadol": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
       }
     }
   },
   "Abbott Alinity c": {
     "vendor": "Abbott",
     "category": "Chemistry",
-    "testCount": 96,
+    "testCount": 108,
     "tests": {
       "Glucose": {
         "complexity": "MODERATE",
@@ -4834,11 +5174,11 @@
         "specialty": "General Chemistry"
       },
       "Calprotectin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Elastase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Alkaline phosphatase (ALP)": {
@@ -5176,13 +5516,61 @@
       "Chloride": {
         "complexity": "MODERATE",
         "specialty": "Electrolytes"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein, Urine/CSF": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Acid phosphatase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Unsaturated Iron Binding Capacity (UIBC)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Microalbumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin A": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin G": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin M": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Digitoxin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cocaine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Ecstasy": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Methadone metabolite (EDDP)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
       }
     }
   },
   "Siemens Dimension Vista 500": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 133,
+    "testCount": 178,
     "tests": {
       "Progesterone": {
         "complexity": "MODERATE",
@@ -5715,13 +6103,193 @@
       "Creatine kinase isoenzymes (CK isoenzymes)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
+      },
+      "Glucose, Hemolyzed": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein, CSF/Urine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Pancreatic Amylase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Aldolase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Apolipoprotein A-I": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lipoprotein(a) Ultra": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Fructosamine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "BNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CKMB (Activity)": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CardioPhase hsCRP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "NT-proBNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "High-Sensitivity Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "C1 Inhibitor": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Ig Light Chains, Type Kappa": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Ig Light Chains, Type Lambda": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "IgG subclass 1": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "IgG subclass 2": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "IgG subclass 3": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "IgG subclass 4": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin A": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin E": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Immunoglobulin G": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin M": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Soluble Transferrin Receptor (sTfR)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "T uptake (TU)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total T4": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "AFP": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "CA 125II": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 15-3": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "CEA": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Free PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Total PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "FSH": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "hCG (urine, qualitative)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "LH": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total IgE": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "6-Acetylmorphine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Amphetamines": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Ecstasy": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethyl Alcohol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethyl Glucuronide (EtG)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Propoxyphene": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
       }
     }
   },
   "Siemens Dimension EXL 200": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 106,
+    "testCount": 148,
     "tests": {
       "Protein, total, urine": {
         "complexity": "MODERATE",
@@ -6146,13 +6714,181 @@
       "Folate (folic acid)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
+      },
+      "Glucose, Hemolyzed": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein, CSF/Urine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Pancreatic Amylase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Aldolase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Dibucaine Number": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Apolipoprotein A-I": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Apolipoprotein B": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lipoprotein(a) Ultra": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Fructosamine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "BNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CKMB Mass": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CKMB Activity": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CardioPhase hsCRP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "NT-proBNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "High-Sensitivity Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "Vitamin D Total": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Alpha-1-acid glycoprotein (orosomucoid)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Beta-2 Microglobulin Latex": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Antistreptolysin O": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ceruloplasmin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "CRP, Extended Range": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Haptoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ig Light Chains, Type Kappa": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Ig Light Chains, Type Lambda": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Immunoglobulin A": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin G": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin M": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Rheumatoid factor (RF)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Everolimus": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "T uptake (TU)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total T4": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "hCG (urine, qualitative)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Total PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "6-Acetylmorphine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Amphetamines": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Ecstasy": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethyl Alcohol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethyl Glucuronide (EtG)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
       }
     }
   },
   "Siemens Atellica CH": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 106,
+    "testCount": 126,
     "tests": {
       "Methotrexate": {
         "complexity": "MODERATE",
@@ -6199,7 +6935,7 @@
         "specialty": "Toxicology"
       },
       "Calprotectin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Clozapine": {
@@ -6207,7 +6943,7 @@
         "specialty": "Toxicology"
       },
       "Elastase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "C-reactive protein (CRP)": {
@@ -6355,7 +7091,7 @@
         "specialty": "Toxicology"
       },
       "Tacrolimus": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Ammonia, plasma/serum": {
@@ -6577,20 +7313,100 @@
       "Vancomycin": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Apolipoprotein A-1": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Antistreptolysin O": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "CRP, High Sensitivity": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "CRP, Wide Range": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin A": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin G": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin M": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Soluble Transferrin Receptor (sTfR)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Free Light Chain kappa": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Free Light Chain lambda": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Mycophenolic acid": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Ecstasy": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethyl Alcohol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethyl Glucuronide (EtG)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "LSD": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methadone metabolite (EDDP)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Oxycodone": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
       }
     }
   },
   "Siemens ADVIA Chemistry XPT": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 83,
+    "testCount": 107,
     "tests": {
       "Lithium": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Calprotectin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Gabapentin": {
@@ -6916,13 +7732,109 @@
       "Alpha-1-acid glycoprotein (orosomucoid)": {
         "complexity": "MODERATE",
         "specialty": "General Immunology"
+      },
+      "Bilirubin, direct": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Iron Binding Capacity (TIBC)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein, CSF/Urine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Pancreatic Amylase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "HDL cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "LDL cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Fructosamine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "CRP, High Sensitivity": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "CRP, Wide Range": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin A": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin G": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin M": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Rheumatoid factor (RF)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Soluble Transferrin Receptor (sTfR)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "6-Acetylmorphine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Ecstasy": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethyl Alcohol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethyl Glucuronide (EtG)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Fentanyl": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methadone Metabolites": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Tricyclic antidepressants": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
       }
     }
   },
   "Siemens ADVIA 1800": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 84,
+    "testCount": 111,
     "tests": {
       "Alpha-1-acid glycoprotein (orosomucoid)": {
         "complexity": "MODERATE",
@@ -7259,6 +8171,114 @@
       "Fructosamine": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
+      },
+      "Bilirubin, direct": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lactate": {
+        "complexity": "MODERATE",
+        "specialty": "Blood Gas"
+      },
+      "Microalbumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Iron Binding Capacity (TIBC)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein, CSF/Urine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Carbon Dioxide (Enzymatic)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Gamma-Glutamyltransferase (GGT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lipase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lactate dehydrogenase (LDH)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "HDL cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "LDL cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "CRP, High Sensitivity": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "CRP, Wide Range": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin A": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin G": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin M": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Prealbumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Soluble Transferrin Receptor (sTfR)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "6-Acetylmorphine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Ecstasy": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethyl Alcohol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethyl Glucuronide (EtG)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Methadone Metabolites": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
       }
     }
   },
@@ -8914,7 +9934,7 @@
   "Siemens Dimension Vista 3000T": {
     "vendor": "Siemens Healthineers",
     "category": "Immunoassay",
-    "testCount": 126,
+    "testCount": 173,
     "tests": {
       "Progesterone": {
         "complexity": "MODERATE",
@@ -9419,6 +10439,194 @@
       "Testosterone": {
         "complexity": "MODERATE",
         "specialty": "Endocrinology"
+      },
+      "Glucose, Hemolyzed": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein, CSF/Urine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Pancreatic Amylase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatine kinase (CK)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Aldolase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Apolipoprotein A-I": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lipoprotein(a) Ultra": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Fructosamine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "BNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CKMB (Activity)": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CardioPhase hsCRP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "NT-proBNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "High-Sensitivity Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "Alpha-2-macroglobulin": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Antistreptolysin O": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "C1 Inhibitor": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Ig Light Chains, Type Kappa": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Ig Light Chains, Type Lambda": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "IgG subclass 1": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "IgG subclass 2": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "IgG subclass 3": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "IgG subclass 4": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin A": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin E": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Immunoglobulin G": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin M": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Soluble Transferrin Receptor (sTfR)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total T4": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "AFP": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "CA 125II": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 15-3": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "CEA": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Free PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Total PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "FSH": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "hCG (urine, qualitative)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "LH": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total IgE": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "6-Acetylmorphine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Amphetamines": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Ecstasy": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethyl Alcohol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethyl Glucuronide (EtG)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Propoxyphene": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
       }
     }
   },
@@ -13681,7 +14889,7 @@
   "Siemens Atellica CH 930": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 118,
+    "testCount": 138,
     "tests": {
       "Methotrexate": {
         "complexity": "MODERATE",
@@ -13728,7 +14936,7 @@
         "specialty": "Toxicology"
       },
       "Calprotectin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Clozapine": {
@@ -13736,7 +14944,7 @@
         "specialty": "Toxicology"
       },
       "Elastase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "C-reactive protein (CRP)": {
@@ -13884,7 +15092,7 @@
         "specialty": "Toxicology"
       },
       "Tacrolimus": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Ammonia, plasma/serum": {
@@ -14154,6 +15362,86 @@
       "C-reactive protein, high sensitivity (hs-CRP)": {
         "complexity": "MODERATE",
         "specialty": "General Immunology"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Apolipoprotein A-1": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Antistreptolysin O": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "CRP, High Sensitivity": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "CRP, Wide Range": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin A": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin G": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin M": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Soluble Transferrin Receptor (sTfR)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Free Light Chain kappa": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Free Light Chain lambda": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Mycophenolic acid": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Ecstasy": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethyl Alcohol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethyl Glucuronide (EtG)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "LSD": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methadone metabolite (EDDP)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Oxycodone": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
       }
     }
   },
@@ -14707,7 +15995,7 @@
   "Siemens Dimension Vista 1500": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 133,
+    "testCount": 178,
     "tests": {
       "Progesterone": {
         "complexity": "MODERATE",
@@ -15240,13 +16528,193 @@
       "Creatine kinase isoenzymes (CK isoenzymes)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
+      },
+      "Glucose, Hemolyzed": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein, CSF/Urine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Pancreatic Amylase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Aldolase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Apolipoprotein A-I": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lipoprotein(a) Ultra": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Fructosamine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "BNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CKMB (Activity)": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CardioPhase hsCRP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "NT-proBNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "High-Sensitivity Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "C1 Inhibitor": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Ig Light Chains, Type Kappa": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Ig Light Chains, Type Lambda": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "IgG subclass 1": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "IgG subclass 2": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "IgG subclass 3": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "IgG subclass 4": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin A": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin E": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Immunoglobulin G": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin M": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Soluble Transferrin Receptor (sTfR)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "T uptake (TU)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total T4": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "AFP": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "CA 125II": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 15-3": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "CEA": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Free PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Total PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "FSH": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "hCG (urine, qualitative)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "LH": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total IgE": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "6-Acetylmorphine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Amphetamines": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Ecstasy": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethyl Alcohol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethyl Glucuronide (EtG)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Propoxyphene": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
       }
     }
   },
   "Siemens Dimension Vista 3000": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 133,
+    "testCount": 178,
     "tests": {
       "Progesterone": {
         "complexity": "MODERATE",
@@ -15779,13 +17247,193 @@
       "Creatine kinase isoenzymes (CK isoenzymes)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
+      },
+      "Glucose, Hemolyzed": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein, CSF/Urine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Pancreatic Amylase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Aldolase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Apolipoprotein A-I": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lipoprotein(a) Ultra": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Fructosamine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "BNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CKMB (Activity)": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CardioPhase hsCRP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "NT-proBNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "High-Sensitivity Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "C1 Inhibitor": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Ig Light Chains, Type Kappa": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Ig Light Chains, Type Lambda": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "IgG subclass 1": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "IgG subclass 2": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "IgG subclass 3": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "IgG subclass 4": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin A": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin E": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Immunoglobulin G": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin M": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Soluble Transferrin Receptor (sTfR)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "T uptake (TU)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total T4": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "AFP": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "CA 125II": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 15-3": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "CEA": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Free PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Total PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "FSH": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "hCG (urine, qualitative)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "LH": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total IgE": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "6-Acetylmorphine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Amphetamines": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Ecstasy": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethyl Alcohol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethyl Glucuronide (EtG)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Propoxyphene": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
       }
     }
   },
   "Siemens Dimension EXL": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 106,
+    "testCount": 148,
     "tests": {
       "Protein, total, urine": {
         "complexity": "MODERATE",
@@ -16210,13 +17858,181 @@
       "Folate (folic acid)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
+      },
+      "Glucose, Hemolyzed": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein, CSF/Urine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Pancreatic Amylase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Aldolase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Dibucaine Number": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Apolipoprotein A-I": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Apolipoprotein B": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lipoprotein(a) Ultra": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Fructosamine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "BNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CKMB Mass": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CKMB Activity": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CardioPhase hsCRP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "NT-proBNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "High-Sensitivity Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "Vitamin D Total": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Alpha-1-acid glycoprotein (orosomucoid)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Beta-2 Microglobulin Latex": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Antistreptolysin O": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ceruloplasmin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "CRP, Extended Range": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Haptoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ig Light Chains, Type Kappa": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Ig Light Chains, Type Lambda": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Immunoglobulin A": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin G": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin M": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Rheumatoid factor (RF)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Everolimus": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "T uptake (TU)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total T4": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "hCG (urine, qualitative)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Total PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "6-Acetylmorphine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Amphetamines": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Ecstasy": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethyl Alcohol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethyl Glucuronide (EtG)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
       }
     }
   },
   "Beckman Coulter DxC 700AU": {
     "vendor": "Beckman Coulter",
     "category": "Chemistry",
-    "testCount": 134,
+    "testCount": 132,
     "tests": {
       "Procalcitonin (PCT)": {
         "complexity": "MODERATE",
@@ -16318,16 +18134,12 @@
         "complexity": "MODERATE",
         "specialty": "Urinalysis"
       },
-      "Creatinine": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Oxcarbazepine Metabolite": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Calprotectin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Insulin": {
@@ -16335,7 +18147,7 @@
         "specialty": "Endocrinology"
       },
       "Elastase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Methotrexate": {
@@ -16539,7 +18351,7 @@
         "specialty": "Toxicology"
       },
       "Tacrolimus": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Everolimus": {
@@ -16719,10 +18531,6 @@
         "specialty": "General Chemistry"
       },
       "Gamma glutamyl transferase (GGT)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Ammonia, plasma/serum": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -16759,7 +18567,7 @@
   "Beckman Coulter DxC 500AU": {
     "vendor": "Beckman Coulter",
     "category": "Chemistry",
-    "testCount": 134,
+    "testCount": 132,
     "tests": {
       "Procalcitonin (PCT)": {
         "complexity": "MODERATE",
@@ -16861,16 +18669,12 @@
         "complexity": "MODERATE",
         "specialty": "Urinalysis"
       },
-      "Creatinine": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Oxcarbazepine Metabolite": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Calprotectin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Insulin": {
@@ -16878,7 +18682,7 @@
         "specialty": "Endocrinology"
       },
       "Elastase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Methotrexate": {
@@ -17082,7 +18886,7 @@
         "specialty": "Toxicology"
       },
       "Tacrolimus": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Everolimus": {
@@ -17265,10 +19069,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Ammonia, plasma/serum": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Lithium": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
@@ -17302,7 +19102,7 @@
   "Beckman Coulter AU480": {
     "vendor": "Beckman Coulter",
     "category": "Chemistry",
-    "testCount": 131,
+    "testCount": 130,
     "tests": {
       "Alanine aminotransferase (ALT) (SGPT)": {
         "complexity": "MODERATE",
@@ -17601,7 +19401,7 @@
         "specialty": "Toxicology"
       },
       "Tacrolimus": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Microalbumin": {
@@ -17665,7 +19465,7 @@
         "specialty": "Endocrinology"
       },
       "Oxalate": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Methamphetamines": {
@@ -17724,16 +19524,12 @@
         "complexity": "MODERATE",
         "specialty": "Urinalysis"
       },
-      "creatinine": {
-        "complexity": "MODERATE",
-        "specialty": "Urinalysis"
-      },
       "Oxcarbazepine Metabolite": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Calprotectin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Insulin": {
@@ -17741,7 +19537,7 @@
         "specialty": "Endocrinology"
       },
       "Elastase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Levetiracetam": {
@@ -17833,7 +19629,7 @@
   "Abbott ARCHITECT c16000": {
     "vendor": "Abbott",
     "category": "Chemistry",
-    "testCount": 87,
+    "testCount": 106,
     "tests": {
       "Alpha-1-acid glycoprotein (orosomucoid)": {
         "complexity": "MODERATE",
@@ -18144,11 +19940,11 @@
         "specialty": "Toxicology"
       },
       "Calprotectin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Elastase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Clozapine": {
@@ -18182,13 +19978,89 @@
       "Buprenorphine": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein, Urine/CSF": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Unsaturated Iron Binding Capacity (UIBC)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Antistreptolysin O": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin A": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin G": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin M": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Amikacin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Digoxin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Digitoxin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methotrexate": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Tobramycin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Valproic acid": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Vancomycin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "6-Acetylmorphine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cocaine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Ecstasy": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Methadone metabolite (EDDP)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Tramadol": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
       }
     }
   },
   "Abbott ARCHITECT c8000": {
     "vendor": "Abbott",
     "category": "Chemistry",
-    "testCount": 101,
+    "testCount": 117,
     "tests": {
       "Alpha-1-acid glycoprotein (orosomucoid)": {
         "complexity": "MODERATE",
@@ -18547,11 +20419,11 @@
         "specialty": "Toxicology"
       },
       "Calprotectin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Elastase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Clozapine": {
@@ -18591,6 +20463,70 @@
         "specialty": "Toxicology"
       },
       "Buprenorphine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein, Urine/CSF": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "LDL cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Unsaturated Iron Binding Capacity (UIBC)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Microalbumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Antistreptolysin O": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin A": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin G": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin M": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Digitoxin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methotrexate": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "6-Acetylmorphine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cocaine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Ecstasy": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Methadone metabolite (EDDP)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Tramadol": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       }
@@ -18994,7 +20930,7 @@
   "Roche cobas 8000 (c702 module)": {
     "vendor": "Roche",
     "category": "Chemistry",
-    "testCount": 58,
+    "testCount": 104,
     "tests": {
       "Alanine aminotransferase (ALT) (SGPT)": {
         "complexity": "MODERATE",
@@ -19227,13 +21163,197 @@
       "Transferrin, urine": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
+      },
+      "Sodium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Chloride": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Lysergic acid diethylamide (LSD)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methaqualone": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Glycosylated Hemoglobin (Hgb A1c)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Microalbumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Amphetamines": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Phencyclidine (PCP)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cocaine metabolites": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Opiates": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methamphetamines": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methadone metabolite (EDDP)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Gentamicin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Valproic acid": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cannabinoids (THC)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methadone": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Propoxyphene": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Acetaminophen": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Complement C3": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Complement C4": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "D-dimer": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Creatine kinase MB fraction (CKMB)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Carbamazepine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Quinidine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Theophylline": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Vancomycin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cholinesterase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Phenytoin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Phenobarbital": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Digoxin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Salicylates": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "N-acetylprocainamide (NAPA)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Procainamide": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Oxycodone": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Tramadol": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methotrexate": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Phenytoin, free": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Norfentanyl": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Fentanyl": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Alpha-2-macroglobulin": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Buprenorphine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Voriconazole": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Gabapentin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
       }
     }
   },
   "Roche cobas pure": {
     "vendor": "Roche",
     "category": "Chemistry",
-    "testCount": 100,
+    "testCount": 108,
     "tests": {
       "Protein, total": {
         "complexity": "MODERATE",
@@ -19632,6 +21752,38 @@
         "specialty": "Toxicology"
       },
       "Gabapentin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Anti-streptolysin O (ASO)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Microalbumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Sodium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Chloride": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "LDL cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Tramadol": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Voriconazole": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       }
@@ -29448,7 +31600,7 @@
   "Roche cobas c 703": {
     "vendor": "Roche",
     "category": "Chemistry",
-    "testCount": 6,
+    "testCount": 98,
     "tests": {
       "Alanine aminotransferase (ALT)": {
         "complexity": "MODERATE",
@@ -29473,6 +31625,374 @@
       "Urea nitrogen (BUN)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
+      },
+      "Anti-streptolysin O (ASO)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Beta-2 microglobulin": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Lysergic acid diethylamide (LSD)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methaqualone": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Lipoprotein(a) (Lp(a))": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Glycosylated Hemoglobin (Hgb A1c)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Homocysteine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Microalbumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Amphetamines": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Phencyclidine (PCP)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cocaine metabolites": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Opiates": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methamphetamines": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methadone metabolite (EDDP)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cystatin C": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "C-reactive protein (CRP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Ceruloplasmin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Myoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Gentamicin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Valproic acid": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Prealbumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Protein, total": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lactate dehydrogenase (LDH)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ammonia, plasma/serum": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Haptoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Triglyceride": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lactic acid (lactate)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lipase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Cannabinoids (THC)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Ethanol (alcohol)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methadone": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Propoxyphene": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Acetaminophen": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Calcium, total": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Complement C3": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Complement C4": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "D-dimer": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Aspartate aminotransferase (AST) (SGOT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Rheumatoid factor (RF)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "HDL cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Phosphorus": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Apolipoprotein B": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ferritin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Sodium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Bilirubin, direct": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatine kinase (CK)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatine kinase MB fraction (CKMB)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alkaline phosphatase (ALP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Magnesium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Amylase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Bilirubin, total": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Iron": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Iron binding capacity, unsat. (UIBC) no pretreatment": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Chloride": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Carbamazepine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Quinidine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Apolipoprotein A1": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "LDL cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Fructosamine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Carbon dioxide, total (CO2)": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Uric acid": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Theophylline": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Vancomycin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cholinesterase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Phenytoin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Immunoglobulins IgG": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Immunoglobulins IgM": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Transferrin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alpha-1-antitrypsin": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Phenobarbital": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Digoxin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Immunoglobulins IgA": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Salicylates": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "N-acetylprocainamide (NAPA)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Procainamide": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Alpha-1-acid glycoprotein (orosomucoid)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Gamma glutamyl transferase (GGT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Oxycodone": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Transferrin receptor (TFR)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Tramadol": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methotrexate": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Phenytoin, free": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Norfentanyl": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Fentanyl": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Alpha-2-macroglobulin": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Buprenorphine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Voriconazole": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Gabapentin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
       }
     }
   },
@@ -30353,327 +32873,435 @@
   "Siemens ADVIA 2400": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 80,
+    "testCount": 107,
     "tests": {
       "Hemoglobin A1c (Enzymatic)": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "6-Acetylmorphine (6-AM)": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Acetaminophen": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Buprenorphine": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "EDDP": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Ethyl Alcohol": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Ethyl Glucuronide (EtG)": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Fentanyl": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Oxycodone": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Salicylate": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Tramadol": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Alanine Aminotransferase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Alanine Aminotransferase (P5P)": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Albumin (BCG)": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Albumin (BCP)": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Alkaline Phosphatase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Ammonia": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Amylase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Aspartate Aminotransferase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Aspartate Aminotransferase (P5P)": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Bilirubin, Direct": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Bilirubin, Total": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Calcium (Arsenazo)": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Calcium (CPC)": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Carbon Dioxide (Enzymatic)": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Chloride": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Cholesterol": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Cholinesterase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Creatine Kinase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Creatinine": {
-        "complexity": "HIGH",
-        "specialty": "General Chemistry"
-      },
-      "Creatinine (Enzymatic)": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Gamma-Glutamyltransferase (GGT)": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Glucose (Hexokinase)": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Glucose (Oxidase)": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "HDL Cholesterol": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Iron": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Lactate": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Lactate Dehydrogenase (L-P)": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Lactate Dehydrogenase (P-L)": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "LDL Cholesterol": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Lipase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Magnesium": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Microalbumin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Pancreatic Amylase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Phosphorus": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Potassium": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Sodium": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Total Iron Binding Capacity (TIBC)": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Total Protein": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Total Protein, CSF/Urine": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Triglycerides": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Urea Nitrogen (BUN)": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Uric Acid": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Antistreptolysin O": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Apolipoprotein A1": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Apolipoprotein B": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Complement C3": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Complement C4": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "CRP": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "CRP, High Sensitivity": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "CRP, Wide Range": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Cystatin C": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Ferritin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Haptoglobin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Immunoglobulin A": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Immunoglobulin G": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Immunoglobulin M": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Lipoprotein(a)": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Prealbumin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Rheumatoid Factor": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Hemostasis"
       },
       "Soluble Transferrin Receptor (sTfR)": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Transferrin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Lamotrigine": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Levetiracetam": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Lithium": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Methotrexate": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Nitrite": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Urinalysis"
       },
       "Oxidant": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "pH": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Specific Gravity": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Urinalysis"
+      },
+      "Fructosamine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alpha-1-acid glycoprotein (orosomucoid)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Alpha-1-antitrypsin": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Beta-2 microglobulin": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Myoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Carbamazepine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Digoxin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Gentamicin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Phenobarbital": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Phenytoin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Theophylline": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Tobramycin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Valproic acid": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Vancomycin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Amphetamines": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates, Serum": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines, Serum": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cannabinoids (THC)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cocaine Metabolite": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Ecstasy": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Methadone": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methadone Metabolites": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Opiates": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Phencyclidine (PCP)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Propoxyphene": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Tricyclic antidepressants": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
       }
     },
     "menuLastVerifiedAt": "2026-05-07"
@@ -31017,343 +33645,679 @@
   "Siemens Dimension Vista 1000T": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry / Immunoassay",
-    "testCount": 84,
+    "testCount": 168,
     "tests": {
       "Albumin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Alanine aminotransferase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Alpha-1-acid glycoprotein": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Alpha-1-antitrypsin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Alpha-fetoprotein": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Amylase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Anti-streptolysin O": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Apolipoprotein A1": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Apolipoprotein B": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Aspartate aminotransferase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Beta-2 microglobulin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Bilirubin, direct": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Bilirubin, total": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Bile acids": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Blood urea nitrogen": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "C-reactive protein": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "C-reactive protein, high sensitivity": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Calcium": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Carbamazepine": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "CA 125": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "CA 15-3": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "CA 19-9": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Carcinoembryonic antigen": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Ceruloplasmin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Chloride": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Cholesterol": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Cholesterol, HDL": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Complement C3": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Complement C4": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Copper": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Creatine kinase MB isoenzyme, mass": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Creatinine": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Digoxin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Ethanol": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Ferritin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Folate": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Free thyroxine": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Gamma-glutamyl transferase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Glucose": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Glycated hemoglobin": {
-        "complexity": "HIGH",
-        "specialty": "General Chemistry"
-      },
-      "HDL cholesterol": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Hemoglobin A1c": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Homocysteine": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "hCG, quantitative": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
       "IgA": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "IgG": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "IgM": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "IgG subclass 1": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "IgG subclass 2": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "IgG subclass 3": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "IgG subclass 4": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Iron": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Lactate dehydrogenase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Lithium": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Magnesium": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Myoglobin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Cardiac"
       },
       "Osmolality": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Phenytoin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Phenobarbital": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Phosphorus": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Prealbumin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Progesterone": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
       "Prolactin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
       "Prostate-specific antigen, total": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Potassium": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Rheumatoid factor": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Hemostasis"
       },
       "Sodium": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Soluble transferrin receptor": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Testosterone": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
       "Theophylline": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Thyroid stimulating hormone": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Thyroxine uptake": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Total iron-binding capacity": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Transferrin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Triglycerides": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Troponin I, high-sensitivity": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Cardiac"
       },
       "Urea nitrogen": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Uric acid": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Vitamin B12": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Vitamin D, 25-hydroxy": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Zinc": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "V-LYTE sodium": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "V-LYTE potassium": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "V-LYTE chloride": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
+      },
+      "Ammonia": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Glucose, Hemolyzed": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lactate": {
+        "complexity": "MODERATE",
+        "specialty": "Blood Gas"
+      },
+      "Microalbumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein, CSF/Urine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Carbon Dioxide (Enzymatic)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alkaline phosphatase (ALP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Pancreatic Amylase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lipase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatine kinase (CK)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Aldolase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Pseudocholinesterase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "LDL cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Apolipoprotein A-I": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lipoprotein(a) Ultra": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Fructosamine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "BNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CKMB (Activity)": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CardioPhase hsCRP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "NT-proBNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "Alpha-1 microglobulin": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Alpha-2-macroglobulin": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "C1 Inhibitor": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Cystatin C": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Haptoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Hemopexin": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Ig Light Chains, Type Kappa": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Ig Light Chains, Type Lambda": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Immunoglobulin A": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin E": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Immunoglobulin G": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin M": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Retinol binding protein (RBP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Amikacin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Caffeine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Digitoxin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Ethosuximide": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Gentamicin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "lamotrigine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Levetiracetam": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Lidocaine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methotrexate": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "N-acetylprocainamide (NAPA)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Procainamide": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Tobramycin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Valproic acid": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Vancomycin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cyclosporine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Free T3": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "T uptake (TU)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total T4": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "AFP": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "CA 125II": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CEA": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Free PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Estradiol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "FSH": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "hCG (urine, qualitative)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "LH": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total IgE": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Acetaminophen": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "6-Acetylmorphine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Amphetamines": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates, Serum": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines, Urine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines, Serum": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Buprenorphine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cannabinoids (THC)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cocaine Metabolite": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Ecstasy": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "EDDP (methadone metabolite)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Ethyl Alcohol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethyl Glucuronide (EtG)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Fentanyl": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methadone": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methaqualone": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Opiates": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Oxycodone": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Phencyclidine (PCP)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Propoxyphene": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Salicylate": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Tramadol": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Tricyclic antidepressants": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
       }
     },
     "menuLastVerifiedAt": "2026-05-07"
@@ -31388,507 +34352,699 @@
   "Abbott ARCHITECT c4000": {
     "vendor": "Abbott",
     "category": "Chemistry",
-    "testCount": 125,
+    "testCount": 173,
     "tests": {
       "Urine NGAL": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "EBV VCA IgG": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
       "BRAHMS PCT": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "ProGRP": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "EBV VCA IgM": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
       "NSE": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Anti-CCP": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "EBV EBNA-1 IgG": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
       "Anti-HBs": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "HBsAg Qualitative II": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "HIV Ag/Ab Combo": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Ferritin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "HBsAg Qualitative II Confirmatory": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "HbA1c": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "TSH": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
       "Troponin-I": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Cardiac"
       },
       "HBsAg Next Qualitative": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "AFP": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "CK-MB": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Cardiac"
       },
       "CEA": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Myoglobin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Cardiac"
       },
       "Galectin-3": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Total PSA": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Thyroglobulin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
       "Free PSA": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "CA 15-3": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "CMV IgG": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
       "FSH": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
       "Anti-Tg": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "CMV IgM": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
       "Prolactin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
       "Rubella IgG": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Anti-TPO": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Rubella IgM": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Total beta-hCG": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
       "HBeAg Quantitative": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Toxo IgG": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Syphilis TP": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Syphilis Serology"
       },
       "Chagas": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Toxo IgM": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "LH": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
       "Pepsinogen I": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "PIVKA-II": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "SCC": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "HE4": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Intact PTH": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "SHBG": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "BNP": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Cardiac"
       },
       "Insulin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "MPO": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "C-peptide": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Active-B12 (Holotranscobalamin)": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "CMV IgG Avidity": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Microbiology"
       },
       "HBsAg Confirmatory V.1": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "High Sensitive Troponin-I": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Cardiac"
       },
       "HCV Ag": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Pepsinogen II": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "rHTLV-I/II": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Sodium": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Potassium": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Chloride": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Calcium": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "CO2": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Magnesium": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Phosphorus": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Urea": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Creatinine": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Glucose": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Total Bilirubin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Direct Bilirubin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Albumin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Total Protein": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "AST": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "ALT": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "ALP": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "GGT": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "LDH": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Amylase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Lipase": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Uric Acid": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Iron": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Total Iron Binding Capacity": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "HDL Cholesterol": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Triglycerides": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Total Cholesterol": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "LDL Cholesterol": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "CK": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "CRP": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Rheumatoid Factor": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Hemostasis"
       },
       "D-dimer": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Hemostasis"
       },
       "B-type Natriuretic Peptide": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Hematology"
       },
       "NT-proBNP": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Cardiac"
       },
       "Vitamin D": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Homocysteine": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Folate": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Vitamin B12": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
       "Vitamin B6": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Vitamin A": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Vitamin E": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Beta-Carotene": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Zinc": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Copper": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Selenium": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Lithium": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Digoxin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Theophylline": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Valproic Acid": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Carbamazepine": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Phenytoin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "Phenobarbital": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
       "TSH receptor antibody": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
       "Free T4": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
       "Free T3": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
       "Total T4": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Total T3": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Reverse T3": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Cortisol": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
       "DHEA-S": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
       "Testosterone": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
       "Estradiol": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
       "Progesterone": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
       "IGF-1": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "PTH": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Calcitonin": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
       "Calcidiol": {
-        "complexity": "HIGH",
+        "complexity": "MODERATE",
         "specialty": "General Chemistry"
+      },
+      "Ammonia": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lactate": {
+        "complexity": "MODERATE",
+        "specialty": "Blood Gas"
+      },
+      "Total Protein, Urine/CSF": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Acid phosphatase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Unsaturated Iron Binding Capacity (UIBC)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Microalbumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Prealbumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Transferrin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Haptoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ceruloplasmin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Complement C3": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Complement C4": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Alpha-1-antitrypsin": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Alpha-1-acid glycoprotein (orosomucoid)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Apolipoprotein A1": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Apolipoprotein B": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lipoprotein(a) (Lp(a))": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Antistreptolysin O": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin A": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin G": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Immunoglobulin M": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Amikacin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Digitoxin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Gentamicin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methotrexate": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Tobramycin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Vancomycin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "6-Acetylmorphine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Acetaminophen": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Amphetamine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Barbiturates": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Benzodiazepines, Serum": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Buprenorphine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cannabinoids (THC)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Cocaine": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Ecstasy": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Ethanol (alcohol)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Fentanyl": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methadone": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Methadone metabolite (EDDP)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Opiates": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Oxycodone": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Phencyclidine (PCP)": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Propoxyphene": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Salicylate": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Tramadol": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Tricyclic antidepressants": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
       }
     },
     "menuLastVerifiedAt": "2026-05-07"
@@ -34672,6 +37828,1557 @@
       "Fentanyl": {
         "complexity": "WAIVED",
         "specialty": "Toxicology"
+      }
+    }
+  },
+  "Bio-Rad D-100": {
+    "vendor": "Bio-Rad",
+    "category": "Chemistry",
+    "testCount": 1,
+    "tests": {
+      "Glycosylated Hemoglobin (Hgb A1c)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      }
+    }
+  },
+  "Bio-Rad D-10": {
+    "vendor": "Bio-Rad",
+    "category": "Chemistry",
+    "testCount": 3,
+    "tests": {
+      "Glycosylated Hemoglobin (Hgb A1c)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Hemoglobin A2": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin F": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Bio-Rad VARIANT II TURBO": {
+    "vendor": "Bio-Rad",
+    "category": "Chemistry",
+    "testCount": 1,
+    "tests": {
+      "Glycosylated Hemoglobin (Hgb A1c)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      }
+    }
+  },
+  "Bio-Rad VARIANT II": {
+    "vendor": "Bio-Rad",
+    "category": "Hematology",
+    "testCount": 8,
+    "tests": {
+      "Glycosylated Hemoglobin (Hgb A1c)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Hemoglobin A2": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin F": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin S": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin C": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin D": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin E": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin variant identification": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Bio-Rad IH-500": {
+    "vendor": "Bio-Rad",
+    "category": "Blood Bank",
+    "testCount": 8,
+    "tests": {
+      "ABO/Rh typing": {
+        "complexity": "HIGH",
+        "specialty": "Immunohematology"
+      },
+      "Antibody screen": {
+        "complexity": "HIGH",
+        "specialty": "Immunohematology"
+      },
+      "Antibody identification": {
+        "complexity": "HIGH",
+        "specialty": "Immunohematology"
+      },
+      "Direct antiglobulin test (DAT)": {
+        "complexity": "HIGH",
+        "specialty": "Immunohematology"
+      },
+      "Crossmatch (AHG)": {
+        "complexity": "HIGH",
+        "specialty": "Immunohematology"
+      },
+      "Red cell antigen typing": {
+        "complexity": "HIGH",
+        "specialty": "Immunohematology"
+      },
+      "Weak D testing": {
+        "complexity": "HIGH",
+        "specialty": "Immunohematology"
+      },
+      "Antibody titration": {
+        "complexity": "HIGH",
+        "specialty": "Immunohematology"
+      }
+    }
+  },
+  "Tosoh G8": {
+    "vendor": "Tosoh",
+    "category": "Chemistry",
+    "testCount": 3,
+    "tests": {
+      "Glycosylated Hemoglobin (Hgb A1c)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Hemoglobin A2": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin F": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Tosoh G11": {
+    "vendor": "Tosoh",
+    "category": "Chemistry",
+    "testCount": 8,
+    "tests": {
+      "Glycosylated Hemoglobin (Hgb A1c)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Hemoglobin A2": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin F": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin S": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin C": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin D": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin E": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin variant identification": {
+        "complexity": "HIGH",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Tosoh AIA-360": {
+    "vendor": "Tosoh",
+    "category": "Immunoassay",
+    "testCount": 18,
+    "tests": {
+      "Thyroid Stimulating Hormone (TSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Thyroxine (FT4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Triiodothyronine (FT3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Thyroxine (T4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Triiodothyronine (T3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Ferritin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Vitamin B12": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Folate": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Cortisol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Beta-hCG": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Free PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Carcinoembryonic Antigen (CEA)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Alpha-Fetoprotein (AFP)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CK-MB": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "Myoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "NT-proBNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      }
+    }
+  },
+  "Tosoh AIA-2000": {
+    "vendor": "Tosoh",
+    "category": "Immunoassay",
+    "testCount": 31,
+    "tests": {
+      "Thyroid Stimulating Hormone (TSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Thyroxine (FT4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Triiodothyronine (FT3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Thyroxine (T4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Triiodothyronine (T3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Ferritin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Vitamin B12": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Folate": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Vitamin D (25-OH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Cortisol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Insulin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "C-Peptide": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Luteinizing Hormone (LH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Follicle Stimulating Hormone (FSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Estradiol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Progesterone": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Testosterone": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Prolactin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Beta-hCG": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Free PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Carcinoembryonic Antigen (CEA)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Alpha-Fetoprotein (AFP)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 125": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 19-9": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 15-3": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Procalcitonin": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CK-MB": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "Myoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "NT-proBNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      }
+    }
+  },
+  "Tosoh AIA-CL2400": {
+    "vendor": "Tosoh",
+    "category": "Immunoassay",
+    "testCount": 31,
+    "tests": {
+      "Thyroid Stimulating Hormone (TSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Thyroxine (FT4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Triiodothyronine (FT3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Thyroxine (T4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Triiodothyronine (T3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Ferritin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Vitamin B12": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Folate": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Vitamin D (25-OH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Cortisol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Insulin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "C-Peptide": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Luteinizing Hormone (LH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Follicle Stimulating Hormone (FSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Estradiol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Progesterone": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Testosterone": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Prolactin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Beta-hCG": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Free PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Carcinoembryonic Antigen (CEA)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Alpha-Fetoprotein (AFP)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 125": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 19-9": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 15-3": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Procalcitonin": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CK-MB": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "Myoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "NT-proBNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      }
+    }
+  },
+  "Horiba Yumizen H550": {
+    "vendor": "Horiba",
+    "category": "Hematology",
+    "testCount": 8,
+    "tests": {
+      "Complete blood count (CBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "White blood cell differential (6-part)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Nucleated red blood cells (NRBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Body fluid count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Horiba Yumizen H1500": {
+    "vendor": "Horiba",
+    "category": "Hematology",
+    "testCount": 8,
+    "tests": {
+      "Complete blood count (CBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "White blood cell differential (5-part)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Nucleated red blood cells (NRBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Body fluid count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Horiba Yumizen H2500": {
+    "vendor": "Horiba",
+    "category": "Hematology",
+    "testCount": 8,
+    "tests": {
+      "Complete blood count (CBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "White blood cell differential (5-part)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Nucleated red blood cells (NRBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Body fluid count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Horiba Yumizen H500": {
+    "vendor": "Horiba",
+    "category": "Hematology",
+    "testCount": 5,
+    "tests": {
+      "Complete blood count (CBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "White blood cell differential (5-part)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Horiba Pentra DX Nexus": {
+    "vendor": "Horiba",
+    "category": "Hematology",
+    "testCount": 8,
+    "tests": {
+      "Complete blood count (CBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "White blood cell differential (5-part)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Nucleated red blood cells (NRBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Body fluid count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Horiba Pentra C400": {
+    "vendor": "Horiba",
+    "category": "Chemistry",
+    "testCount": 17,
+    "tests": {
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Urea Nitrogen (BUN)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatinine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Uric Acid": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Albumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Bilirubin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alanine Aminotransferase (ALT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Aspartate Aminotransferase (AST)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alkaline Phosphatase (ALP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Triglycerides": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "HDL Cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Sodium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Chloride": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      }
+    }
+  },
+  "Mindray BC-6200": {
+    "vendor": "Mindray",
+    "category": "Hematology",
+    "testCount": 8,
+    "tests": {
+      "Complete blood count (CBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "White blood cell differential (5-part)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Nucleated red blood cells (NRBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Body fluid count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Mindray BC-700": {
+    "vendor": "Mindray",
+    "category": "Hematology",
+    "testCount": 9,
+    "tests": {
+      "Complete blood count (CBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "White blood cell differential (5-part)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Nucleated red blood cells (NRBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Body fluid count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Erythrocyte sedimentation rate (ESR)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Mindray BC-5390": {
+    "vendor": "Mindray",
+    "category": "Hematology",
+    "testCount": 8,
+    "tests": {
+      "Complete blood count (CBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "White blood cell differential (5-part)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Reticulocyte count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Nucleated red blood cells (NRBC)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Body fluid count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hemoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Hematocrit": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "Platelet count": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    }
+  },
+  "Mindray BS-240": {
+    "vendor": "Mindray",
+    "category": "Chemistry",
+    "testCount": 17,
+    "tests": {
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Urea Nitrogen (BUN)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatinine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Uric Acid": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Albumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Bilirubin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alanine Aminotransferase (ALT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Aspartate Aminotransferase (AST)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alkaline Phosphatase (ALP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Triglycerides": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "HDL Cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Sodium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Chloride": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      }
+    }
+  },
+  "Mindray BS-480": {
+    "vendor": "Mindray",
+    "category": "Chemistry",
+    "testCount": 28,
+    "tests": {
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Urea Nitrogen (BUN)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatinine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Uric Acid": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Albumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Bilirubin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Direct Bilirubin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alanine Aminotransferase (ALT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Aspartate Aminotransferase (AST)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alkaline Phosphatase (ALP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Gamma-Glutamyl Transferase (GGT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lactate Dehydrogenase (LDH)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Amylase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lipase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatine Kinase (CK)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Triglycerides": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "HDL Cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "LDL Cholesterol (direct)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Phosphorus": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Magnesium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Iron": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "C-Reactive Protein (CRP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Sodium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Chloride": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      }
+    }
+  },
+  "Mindray BS-600": {
+    "vendor": "Mindray",
+    "category": "Chemistry",
+    "testCount": 28,
+    "tests": {
+      "Glucose": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Urea Nitrogen (BUN)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatinine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Uric Acid": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Protein": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Albumin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Bilirubin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Direct Bilirubin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alanine Aminotransferase (ALT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Aspartate Aminotransferase (AST)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alkaline Phosphatase (ALP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Gamma-Glutamyl Transferase (GGT)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lactate Dehydrogenase (LDH)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Amylase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Lipase": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatine Kinase (CK)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Total Cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Triglycerides": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "HDL Cholesterol": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "LDL Cholesterol (direct)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Calcium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Phosphorus": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Magnesium": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Iron": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "C-Reactive Protein (CRP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Sodium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Potassium": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      },
+      "Chloride": {
+        "complexity": "MODERATE",
+        "specialty": "Electrolytes"
+      }
+    }
+  },
+  "Mindray CL-900i": {
+    "vendor": "Mindray",
+    "category": "Immunoassay",
+    "testCount": 18,
+    "tests": {
+      "Thyroid Stimulating Hormone (TSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Thyroxine (FT4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Triiodothyronine (FT3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Thyroxine (T4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Triiodothyronine (T3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Ferritin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Vitamin B12": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Folate": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Cortisol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Beta-hCG": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Free PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Carcinoembryonic Antigen (CEA)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Alpha-Fetoprotein (AFP)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CK-MB": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "Myoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "NT-proBNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      }
+    }
+  },
+  "Mindray CL-1200i": {
+    "vendor": "Mindray",
+    "category": "Immunoassay",
+    "testCount": 31,
+    "tests": {
+      "Thyroid Stimulating Hormone (TSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Thyroxine (FT4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Triiodothyronine (FT3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Thyroxine (T4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Triiodothyronine (T3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Ferritin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Vitamin B12": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Folate": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Vitamin D (25-OH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Cortisol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Insulin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "C-Peptide": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Luteinizing Hormone (LH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Follicle Stimulating Hormone (FSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Estradiol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Progesterone": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Testosterone": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Prolactin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Beta-hCG": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Free PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Carcinoembryonic Antigen (CEA)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Alpha-Fetoprotein (AFP)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 125": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 19-9": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 15-3": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Procalcitonin": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CK-MB": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "Myoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "NT-proBNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      }
+    }
+  },
+  "Mindray CL-6000i": {
+    "vendor": "Mindray",
+    "category": "Immunoassay",
+    "testCount": 31,
+    "tests": {
+      "Thyroid Stimulating Hormone (TSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Thyroxine (FT4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Free Triiodothyronine (FT3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Thyroxine (T4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total Triiodothyronine (T3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Ferritin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Vitamin B12": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Folate": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Vitamin D (25-OH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Cortisol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Insulin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "C-Peptide": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Luteinizing Hormone (LH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Follicle Stimulating Hormone (FSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Estradiol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Progesterone": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Testosterone": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Prolactin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Beta-hCG": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Total PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Free PSA": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Carcinoembryonic Antigen (CEA)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Alpha-Fetoprotein (AFP)": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 125": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 19-9": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "CA 15-3": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Procalcitonin": {
+        "complexity": "MODERATE",
+        "specialty": "Immunology"
+      },
+      "Troponin I": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "CK-MB": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "Myoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
+      },
+      "NT-proBNP": {
+        "complexity": "MODERATE",
+        "specialty": "Cardiac"
       }
     }
   }

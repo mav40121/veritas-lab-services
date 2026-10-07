@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { cliaAnalytes } from "./cliaAnalytes";
+import { CFR_MAP } from "./veritamapData";
 
 // --- Canonical CLIA TEa data (from cliaTeaData.ts / backfill-absolute-floor.js) ---
 export const teaData: { analyte: string; criteria: string }[] = [
@@ -120,6 +121,20 @@ export function hasCanonicalTea(analyte: string | null | undefined): boolean {
   if (!analyte) return false;
   const needle = String(analyte).trim().toLowerCase();
   if (!needle) return false;
+  // An unregulated analyte never carries a canonical CLIA TEa, even when its
+  // name overlaps a regulated one (MICROALBUMIN vs Albumin): same guard as
+  // resolveFloor / resolveCanonicalAnalyte.
+  if (isUnregulatedAnalyte(String(analyte).trim())) return false;
+  // NAME_MAP is the table the floor and canonical-analyte resolvers consult.
+  // "Hemoglobin" / "HGB" / "Hgb" map there to "CBC - Hemoglobin" (CLIA TEa
+  // +/-4%), but none of those spellings is an alias in teaData, so until
+  // 2026-10-07 this returned false for them and the VeritaCheck PDF labeled a
+  // regulated hematology analyte a "Lab-Set Internal Goal" with "per
+  // laboratory director or designee policy" authority (QA sweep 2026-10-04).
+  // A null mapping is an explicit "no canonical TEa" (e.g. LIPASE).
+  for (const [key, canonical] of Object.entries(NAME_MAP)) {
+    if (key.toLowerCase() === needle) return canonical !== null;
+  }
   if (_canonicalAliasSet.has(needle)) return true;
   // Fall back to substring match for free-text test names that embed a
   // canonical alias inside extra annotation (e.g. "ALT (Pfizer side-by-side)"
@@ -291,6 +306,32 @@ export function resolveCanonicalAnalyte(testName: string): string | null {
     }
   }
   return null;
+}
+
+// The 42 CFR 493 Subpart I section a study's regulatory sentence should cite
+// ("The results ... meet the CLIA criteria per 42 CFR §493.9xx"). Resolved from
+// the analyte's CLIA subspecialty in the server catalog (Hematology ->
+// §493.941, Endocrinology -> §493.933, Coagulation -> §493.941, ...), via the
+// same CFR_MAP VeritaMap uses. Until 2026-10-07 pdfReport.ts read
+// `study.cfr`, which nothing ever set, so every narrative cited §493.931
+// (Routine Chemistry), including hematology studies. §493.931 stays the
+// documented default when the analyte is not in the catalog (CLAUDE.md §5).
+export const DEFAULT_CFR_SECTION = "42 CFR §493.931";
+export function cfrSectionForTestName(testName: string | null | undefined): string {
+  if (!testName) return DEFAULT_CFR_SECTION;
+  const raw = String(testName).trim();
+  if (!raw) return DEFAULT_CFR_SECTION;
+  const norm = (s: string) => s.replace(/^cbc\s*-\s*/i, "").trim().toLowerCase();
+  const candidates = new Set<string>([norm(raw)]);
+  const canonical = resolveCanonicalAnalyte(raw);
+  if (canonical) candidates.add(norm(canonical));
+  for (const a of cliaAnalytes) {
+    const names = [a.name, ...a.aliases].map((n) => n.toLowerCase());
+    if (!names.some((n) => candidates.has(n))) continue;
+    const section = CFR_MAP[a.subspecialty] ?? CFR_MAP[a.specialty];
+    return section ? `42 CFR ${section}` : DEFAULT_CFR_SECTION;
+  }
+  return DEFAULT_CFR_SECTION;
 }
 
 /**

@@ -21,6 +21,7 @@ import {
 import {
   Plus,
   Trash2,
+  Pencil,
   ChevronRight,
   Map,
   Lock,
@@ -410,6 +411,18 @@ export default function VeritaMapAppPage() {
                     >
                       Open Map
                       <ChevronRight size={12} />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs gap-1 hover:bg-primary/10 hover:text-primary hover:border-primary/30"
+                      onClick={() => navigate(activeLabId
+                        ? `/labs/${activeLabId}/veritamap-app/${map.id}/build`
+                        : `/veritamap-app/${map.id}/build`)}
+                      title="Edit this map: add or change instruments and tests"
+                    >
+                      <Pencil size={12} />
+                      Edit
                     </Button>
                     <DeleteConfirmDialog
                       mapId={map.id}
