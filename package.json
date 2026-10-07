@@ -16,6 +16,7 @@
     "test:study-status-boot": "rm -f .tmp-study-status-boot.db && DB_PATH=.tmp-study-status-boot.db JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy tsx tests/integration/study-status-boot-safety.test.ts",
     "test:backup-named-drop": "rm -f .tmp-backup-drop.db && DB_PATH=.tmp-backup-drop.db JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy tsx tests/integration/backup-integrity-named-drop.test.ts",
     "test:veritacomp-eligible-employees": "rm -f .tmp-elig.db && DB_PATH=.tmp-elig.db JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy tsx tests/integration/veritacomp-eligible-employees.test.ts",
+    "test:veritamap-delete-cascade": "rm -f .tmp-mapdel.db && DB_PATH=.tmp-mapdel.db JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy tsx tests/integration/veritamap-delete-cascade.test.ts",
     "test:competency-scheduling": "rm -f .tmp-comp-sched.db && DB_PATH=.tmp-comp-sched.db JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy tsx tests/integration/competency-scheduling.test.ts"
   },
   "dependencies": {
