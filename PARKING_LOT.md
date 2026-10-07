@@ -648,6 +648,33 @@ picker, and an existing enrollment on a retired code still displays.
 **Status:** VERIFICATION STEP 2026-10-07: Lisa supplied the CAP Surveys 2026 and 2027 catalog PDFs; scripts/cap_catalog/extract_cap_catalog.py (pdftotext -layout parse: 756 codes in 2026, 764 in 2027, FH9 and RT4 present, FH2P absent from both) and build_cap_review_workbook.py produced the review workbook at Verita Products/VeritaPT/CAP_Surveys_catalog_review_2026-10-07.xlsx (773 rows: add 696, keep 72, retire FH2P and CMP3, 3 low-confidence rows). Scripts merged (PR 1d9e70e2). Waiting on Lisa's verification; then one admin load with the catalog edition as source, retired codes set inactive (4 existing CAP enrollments keep displaying). API vendor list still to check the same way.
 ---
 
+### 81. Antimicrobial stewardship: the laboratory's share of the hospital program, inside VeritaAssure
+
+**Effort:** M (1-2 weeks) for the lab-side scope; XL if it became a pharmacy-led stewardship system, which is not our lane
+**Importance:** High. Every hospital lab is asked by its stewardship committee for an antibiogram and for evidence of lab participation; CMS makes the program a hospital condition of participation (42 CFR 482.42, infection prevention and control and antibiotic stewardship programs) and the TJC medication-management standard on antimicrobial stewardship surveys it. Nothing in the market packages the lab's piece.
+
+**What:** Scope, not build (Lisa, 2026-10-07: "put that in the parking lot"). The
+likely shape is the laboratory's obligations to the hospital program, not the
+pharmacy's: an antibiogram builder on CLSI M39 conventions (first isolate per
+patient per period, the 30-isolate reporting threshold, an annual table with
+trends), documentation of selective and cascade susceptibility reporting rules,
+turnaround tracking for rapid diagnostics (Gram stain, blood culture
+identification), the committee-participation log (lab representation, minutes,
+actions), and the crosswalk to 482.42, the TJC standard and the CAP
+microbiology checklist. What already exists to build on: VeritaBench PI carries
+the blood culture contamination rate; the VeritaPolicy master list already notes
+antimicrobial stewardship support (antibiogram cadence and reporting cascades)
+on the microbiology policy; 42 CFR 482.42 is in the requirement library; the
+microbiology policy template 040 covers isolation and identification. Open
+questions for the scope doc: which module hosts it (VeritaBench PI, VeritaQA or
+a new module), isolate data intake (LIS export vs manual), and whether the
+antibiogram is a PDF deliverable or a live table.
+
+**Source:** Lisa, 2026-10-07 ~13:40 ("Lets scope an antimicrobial stewardship program in the system"), then parked before scoping.
+**Status:** Open. Scope document on request (docs/ANTIMICROBIAL_STEWARDSHIP_SCOPE.md); no build.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C83. VeritaMap: calibration verification "Not applicable" per test, and the exemption flags honored on the map page (was #77)
