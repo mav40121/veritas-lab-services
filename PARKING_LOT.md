@@ -608,34 +608,8 @@ are unchanged.
 
 ---
 
-### 77. VeritaMap: mark Calibration Verification "Not applicable" per test, with a reason, and honor the existing exemption flags on the map page
+_(item #77 closed 2026-10-07; part A live in PR #1513 (cf624cde) and part B in PR #1517 (31a0742c); see C83 below)_
 
-**Effort:** S (1-3 days)
-**Importance:** High. Readiness and the surveyor-facing map currently show "missing" or "overdue" calibration verification on tests where 42 CFR 493.1255 has nothing to verify, which over-reports gaps and teaches the lab to ignore the column.
-
-**What:** On the map page the Cal Ver column treats only WAIVED complexity as
-exempt (VeritaMapMapPage.tsx ~1335 and ~1457: isWaived ? "Exempt" : DateCell);
-every other test gets a date cell, a 6-month clock and an overdue/missing
-border, and feeds the readiness counts. Qualitative methods (manual
-differential, urine microscopy, Gram stain, rapid kits), devices with no user
-calibration, and tests the lab has already flagged exempt on the instrument
-rows (the four linearity_exempt_* flags on veritamap_instrument_tests, set in
-the build wizard; see memory reference_veritamap_linearity_exemption_recovery)
-still show as needing a date on the map page because that page never reads the
-flags. Fix: (1) a per-test "Not applicable" control on the Cal Ver cell with a
-required reason (qualitative / no user calibration / manufacturer-calibrated
-single-use device / exempt per instrument flags / other with text), stored on
-veritamap_tests (cal_ver_na, cal_ver_na_reason, who and when) and shown as
-"N/A: reason" in the cell, the labwide page, the Excel export and the coverage
-intelligence; (2) the map page derives "Exempt" from the instrument-level flags
-as well as WAIVED, so the two stores agree (fix the class, not the cell).
-Receipts: an integration test that an N/A test drops out of the missing/overdue
-counts and survives a tests-save, and a Playwright exercise of the control.
-
-**Live instance (Lisa, 2026-10-07 ~10:00, screenshot):** Milford CCL (lab 5), map 67 "CCL Hematology", 45 tests on the Sysmex XN-1000. Lisa set the hematology tests to not need calibration verification; the database agrees (45 of the 46 instrument rows on that map carry an exemption flag), but the map page still shows "45 Cal Verifications Required", an empty date cell with the 6-month clock on every row, and a 0 percent compliance score. The first fix below (honor the instrument-level flags on the map page and in its header counts) clears this case on its own and is XS to S; the per-test N/A control is the second half.
-
-**Source:** Michael, 2026-10-07 ~09:40 ("it would be nice to N/A the calibration verification from veritamap").
-**Status:** PART A DEPLOYED 2026-10-07 (carried by PR #1513, squash cf624cde, live): the map page derives Exempt from the instrument-level exemption flags as well as WAIVED, in the cell, the header count and the score; map detail returns cal_ver_exempt per instrument row and per test. Receipts tests/integration/veritamap-cal-ver-exempt.test.ts 12/12 and tests/playwright/veritamap-cal-ver-exempt.spec.ts (in the sandbox receipts list). Lisa's CCL Hematology case is cleared by this. REMAINING (part B, XS-S): the per-test "Not applicable" control with a required reason on tests that carry no flag, shown as "N/A: reason" in the cell, labwide page, Excel export and coverage intelligence.
 ---
 
 _(item #78 closed 2026-10-07; built and live in PR #1514 (squash 44ca3e22); see C81 below)_
@@ -671,11 +645,16 @@ dialog on lab 5 offers FH9 and RT4 under Hematology, FH2P is gone from the
 picker, and an existing enrollment on a retired code still displays.
 
 **Source:** Lisa, 2026-10-07 ~10:20 (screenshot, lab 5 VeritaPT enrollments dialog).
-**Status:** Open. Needs the current CAP Surveys catalog (or the program codes the Milford sites enroll in) as the verified source; build on request.
-
+**Status:** VERIFICATION STEP 2026-10-07: Lisa supplied the CAP Surveys 2026 and 2027 catalog PDFs; scripts/cap_catalog/extract_cap_catalog.py (pdftotext -layout parse: 756 codes in 2026, 764 in 2027, FH9 and RT4 present, FH2P absent from both) and build_cap_review_workbook.py produced the review workbook at Verita Products/VeritaPT/CAP_Surveys_catalog_review_2026-10-07.xlsx (773 rows: add 696, keep 72, retire FH2P and CMP3, 3 low-confidence rows). Scripts merged (PR 1d9e70e2). Waiting on Lisa's verification; then one admin load with the catalog edition as source, retired codes set inactive (4 existing CAP enrollments keep displaying). API vendor list still to check the same way.
 ---
 
 ## CLOSED (audit trail)
+
+### C83. VeritaMap: calibration verification "Not applicable" per test, and the exemption flags honored on the map page (was #77)
+
+**Effort:** was S / **Importance:** High. Lisa's live case on Milford CCL Hematology (45 flagged tests shown as required, 0 percent score).
+
+**Closure evidence:** Part A, PR #1513 (squash cf624cde, live 2026-10-07): the map detail returns cal_ver_exempt per instrument row and per test; the map page derives Exempt from the instrument-level flags as well as WAIVED in the cell, the header count and the score. Part B, PR #1517 (squash 31a0742c, live 2026-10-07): veritamap_tests.cal_ver_na with a required reason and who/when; both single-test update routes accept it (400 without a reason) and clear it on undo; the map page offers an N/A control with a reason list on every required row and shows "N/A: reason" with "Cal ver required again"; the labwide page and the Excel export show it (the export also shows "Exempt (instrument exemption)"); VeritaCheck coverage treats a per-test N/A like the row flags. Receipts: tests/integration/veritamap-cal-ver-exempt.test.ts 12/12, tests/integration/veritamap-cal-ver-na.test.ts 9/9, tests/playwright/veritamap-cal-ver-exempt.spec.ts and veritamap-cal-ver-na.spec.ts 1/1 each (both in the CI sandbox receipts list), light and dark screenshots.
 
 ### C82. VeritaComp assessment dialog: Element 2 (and 3, 4) date picker nearly unclickable (was #75)
 
