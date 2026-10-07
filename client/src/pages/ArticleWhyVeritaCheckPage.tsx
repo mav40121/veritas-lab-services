@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle2, DollarSign, Timer, Layers, ShieldCheck, ChevronRight, FileDown } from "lucide-react";
 import { API_BASE } from "@/lib/queryClient";
+import { downloadPdfToken } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
 function Panel(props: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
@@ -39,7 +40,8 @@ export default function ArticleWhyVeritaCheckPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const { token } = await res.json();
       if (!token) throw new Error("No token returned");
-      window.open(`${API_BASE}/api/pdf/${token}`, "_blank");
+      // Anchor download via the token endpoint (no popup / about:blank tab; parking lot #63).
+      downloadPdfToken(token, "Why_VeritaCheck_vs_Legacy_Verification.pdf");
       toast({ title: "PDF generated" });
     } catch (e: any) {
       toast({ title: "PDF generation failed", description: e?.message || "Unknown error", variant: "destructive" });
