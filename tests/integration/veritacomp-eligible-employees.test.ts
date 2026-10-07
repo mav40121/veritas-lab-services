@@ -68,13 +68,32 @@ async function main() {
   const instY = { id: Number(insInst.run(mapId, "Sysmex XN-1000", now).lastInsertRowid), instrument_name: "Sysmex XN-1000" };
   check("fixture: map with two instruments on lab A", instX.id > 0 && instY.id > 0, `map=${mapId}`);
 
-  // Staff: Alecia (active, assigned X), Bob (active, assigned Y only), Cara (inactive, assigned X)
-  const insStaff = sqlite.prepare("INSERT INTO staff_employees (lab_id, user_id, last_name, first_name, title, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-  const alecia = Number(insStaff.run(A.labId, ownerA, "Lillico-Perry", "Alecia", "MLS", "active", now, now).lastInsertRowid);
-  const bob = Number(insStaff.run(A.labId, ownerA, "Benchman", "Bob", "MLT", "active", now, now).lastInsertRowid);
-  const cara = Number(insStaff.run(A.labId, ownerA, "Former", "Cara", "MLS", "inactive", now, now).lastInsertRowid);
-  const insAssign = sqlite.prepare("INSERT INTO staff_employee_instruments (employee_id, instrument_id, created_at) VALUES (?, ?, ?)");
-  insAssign.run(alecia, instX.id, now); insAssign.run(bob, instY.id, now); insAssign.run(cara, instX.id, now);
+  // Staff: Alecia (active, assigned X), Bob (active, assigned Y only), Cara (inactive, assigned X).
+  // Written through the REAL VeritaStaff routes so staff_employees.lab_id is the
+  // staff_labs.id and tier2_lab_id is the labs.id, exactly as production writes
+  // them. Lab B's staff lab is set up FIRST so lab A's staff_labs.id differs
+  // from its labs.id. The first version of this receipt hand-wrote
+  // staff_employees.lab_id = labs.id, which is how the route's wrong-column
+  // filter (se.lab_id instead of se.tier2_lab_id) passed here and returned no
+  // employees on the CI sandbox lab (2026-10-07, parking lot #74).
+  const setupStaffLab = (L: { labId: number; token: string }, tag: string) =>
+    call("POST", `/api/labs/${L.labId}/staff/lab`, { labName: `Elig Lab ${tag}`, cliaNumber: tag === "A" ? "00D0000001" : "00D0000002", certificateType: "compliance", accreditationBody: "CLIA_ONLY" }, L.token);
+  const sbB = (await setupStaffLab(B, "B")).status; const sbA = (await setupStaffLab(A, "A")).status;
+  check("staff lab set up for B, then A (real route)", sbB === 200 && sbA === 200, `B=${sbB} A=${sbA}`);
+  const staffLabA = sqlite.prepare("SELECT id FROM staff_labs WHERE tier2_lab_id = ?").get(A.labId) as any;
+  check("lab A's staff_labs.id differs from its labs.id (the bug's precondition)", !!staffLabA && staffLabA.id !== A.labId, `staff_labs.id=${staffLabA?.id} labs.id=${A.labId}`);
+  const mkEmp = async (first: string, last: string, title: string) => {
+    const e = await j(await call("POST", `/api/labs/${A.labId}/staff/employees`, { firstName: first, lastName: last, title, hireDate: "2025-01-06" }, A.token));
+    return Number(e.id || 0);
+  };
+  const alecia = await mkEmp("Alecia", "Lillico-Perry", "MLS");
+  const bob = await mkEmp("Bob", "Benchman", "MLT");
+  const cara = await mkEmp("Cara", "Former", "MLS");
+  check("three employees created through the staff route", alecia > 0 && bob > 0 && cara > 0, JSON.stringify({ alecia, bob, cara }));
+  const assign = (empId: number, ids: number[]) => call("PUT", `/api/labs/${A.labId}/staff/employees/${empId}/instruments`, { instrumentIds: ids }, A.token);
+  const as1 = (await assign(alecia, [instX.id])).status; const as2 = (await assign(bob, [instY.id])).status; const as3 = (await assign(cara, [instX.id])).status;
+  check("instrument assignments written through the staff route", as1 === 200 && as2 === 200 && as3 === 200, `${as1}/${as2}/${as3}`);
+  sqlite.prepare("UPDATE staff_employees SET status = 'inactive' WHERE id = ?").run(cara);
 
   // Technical program whose only method group names instrument X.
   const prog = await j(await call("POST", `/api/labs/${A.labId}/competency/programs`, {
