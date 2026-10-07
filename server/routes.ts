@@ -177,6 +177,7 @@ function headerRowHeight(headers: string[], colWidths: number[]): number {
 }
 
 import { logAudit } from "./audit";
+import { deleteMapCascade, mapDeleteBlockers } from "./veritamapDelete";
 import { logConsumption } from "./consumptionLedger";
 import { logCount } from "./countLedger";
 import { reconcileLots } from "./inventoryLots";
@@ -14120,15 +14121,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const delMap = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE id = ?").get(req.params.id) as any;
     const delMapInstrs = (db as any).$client.prepare("SELECT * FROM veritamap_instruments WHERE map_id = ?").all(req.params.id);
     logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritamap", action: "delete", entityType: "map", entityId: req.params.id, entityLabel: delMap?.name, before: { map: delMap, instruments: delMapInstrs }, ipAddress: req.ip });
-    // Cleanup correlation rows referencing any test on this map (cascade)
-    (db as any).$client.prepare(`
-      DELETE FROM veritamap_test_correlations
-      WHERE test_a_id IN (SELECT id FROM veritamap_tests WHERE map_id = ?)
-         OR test_b_id IN (SELECT id FROM veritamap_tests WHERE map_id = ?)
-    `).run(req.params.id, req.params.id);
-    (db as any).$client.prepare("DELETE FROM veritamap_tests WHERE map_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM veritamap_maps WHERE id = ?").run(req.params.id);
-    res.json({ ok: true });
+    // Same transactional cascade as the lab-scoped route (this legacy path used
+    // to delete only correlations, tests and the map row, leaving instruments,
+    // values and AMR behind).
+    try {
+      const counts = deleteMapCascade((db as any).$client, Number(req.params.id));
+      res.json({ ok: true, counts });
+    } catch (e: any) {
+      const blockers = mapDeleteBlockers((db as any).$client, Number(req.params.id));
+      console.error(`[veritamap] delete map ${req.params.id} refused: ${e?.message || e}; blockers=${blockers.join(", ") || "none named"}`);
+      res.status(409).json({ error: blockers.length ? `Map could not be deleted: still referenced by ${blockers.join(", ")}.` : `Map could not be deleted: ${e?.message || "database constraint"}.` });
+    }
   });
 
   // Get map with all tests
@@ -14248,18 +14251,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const delMap = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE id = ?").get(req.params.id) as any;
     const delMapInstrs = (db as any).$client.prepare("SELECT * FROM veritamap_instruments WHERE map_id = ?").all(req.params.id);
     logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritamap", action: "delete", entityType: "map", entityId: req.params.id, entityLabel: delMap?.name, before: { map: delMap, instruments: delMapInstrs }, ipAddress: req.ip });
-    (db as any).$client.prepare(`
-      DELETE FROM veritamap_test_correlations
-      WHERE test_a_id IN (SELECT id FROM veritamap_tests WHERE map_id = ?)
-         OR test_b_id IN (SELECT id FROM veritamap_tests WHERE map_id = ?)
-    `).run(req.params.id, req.params.id);
-    (db as any).$client.prepare("DELETE FROM veritamap_amr_values WHERE map_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM veritamap_analyte_values WHERE map_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE map_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM veritamap_tests WHERE map_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM veritamap_instruments WHERE map_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM veritamap_maps WHERE id = ?").run(req.params.id);
-    res.json({ ok: true });
+    // One transactional cascade (server/veritamapDelete.ts): all or nothing, and
+    // it clears the VeritaStaff rows that point at the map's instruments. A
+    // refused delete answers 409 naming the blocker, never a bare 500 shell.
+    try {
+      const counts = deleteMapCascade((db as any).$client, Number(req.params.id));
+      res.json({ ok: true, counts });
+    } catch (e: any) {
+      const blockers = mapDeleteBlockers((db as any).$client, Number(req.params.id));
+      console.error(`[veritamap] delete map ${req.params.id} refused: ${e?.message || e}; blockers=${blockers.join(", ") || "none named"}`);
+      res.status(409).json({ error: blockers.length ? `Map could not be deleted: still referenced by ${blockers.join(", ")}.` : `Map could not be deleted: ${e?.message || "database constraint"}.` });
+    }
   });
 
   // GET /api/labs/:labId/veritamap/maps/:id — single-map detail. Validates
@@ -32885,17 +32887,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const del = sqlite.transaction(() => {
         for (const m of found) {
           const mid = m.id;
-          counts.correlations += sqlite.prepare(`
-            DELETE FROM veritamap_test_correlations
-            WHERE test_a_id IN (SELECT id FROM veritamap_tests WHERE map_id = ?)
-               OR test_b_id IN (SELECT id FROM veritamap_tests WHERE map_id = ?)
-          `).run(mid, mid).changes;
-          counts.instrument_tests += sqlite.prepare("DELETE FROM veritamap_instrument_tests WHERE map_id = ?").run(mid).changes;
-          counts.tests += sqlite.prepare("DELETE FROM veritamap_tests WHERE map_id = ?").run(mid).changes;
-          counts.analyte_values += sqlite.prepare("DELETE FROM veritamap_analyte_values WHERE map_id = ?").run(mid).changes;
-          counts.amr_values += sqlite.prepare("DELETE FROM veritamap_amr_values WHERE map_id = ?").run(mid).changes;
-          counts.instruments += sqlite.prepare("DELETE FROM veritamap_instruments WHERE map_id = ?").run(mid).changes;
-          counts.maps += sqlite.prepare("DELETE FROM veritamap_maps WHERE id = ?").run(mid).changes;
+          // Shared transactional cascade (nested transaction = savepoint).
+          const c = deleteMapCascade(sqlite, mid);
+          counts.correlations += c.correlations;
+          counts.instrument_tests += c.instrument_tests;
+          counts.tests += c.tests;
+          counts.analyte_values += c.analyte_values;
+          counts.amr_values += c.amr_values;
+          counts.instruments += c.instruments;
+          counts.maps += c.maps;
+          counts.staff_assignments = (counts.staff_assignments || 0) + c.staff_assignments;
+          counts.duty_change_events = (counts.duty_change_events || 0) + c.duty_change_events;
           logAudit({ userId: m.user_id, ownerUserId: m.user_id, module: "veritamap", action: "delete", entityType: "map", entityId: String(mid), entityLabel: m.name, before: { map: m, via: "admin dedupe-maps" }, ipAddress: req.ip });
         }
       });
@@ -34079,10 +34081,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // Delete instruments + maps for the new seeded maps only (scoped by userId + map name).
         const seededMaps = sqlite.prepare("SELECT id FROM veritamap_maps WHERE user_id = ? AND name IN ('Beckman AU480 Chemistry','Siemens DCA Vantage POC')").all(userId) as Array<{ id: number }>;
         out.veritamap_instruments = 0;
+        out.veritamap_maps = 0;
         for (const m of seededMaps) {
-          out.veritamap_instruments += sqlite.prepare("DELETE FROM veritamap_instruments WHERE map_id = ?").run(m.id).changes;
+          // Shared transactional cascade (clears the VeritaStaff FK rows too).
+          const c = deleteMapCascade(sqlite, m.id);
+          out.veritamap_instruments += c.instruments;
+          out.veritamap_maps += c.maps;
         }
-        out.veritamap_maps = sqlite.prepare("DELETE FROM veritamap_maps WHERE user_id = ? AND name IN ('Beckman AU480 Chemistry','Siemens DCA Vantage POC')").run(userId).changes;
         // Reset scan_id=4 items that we filled. Caveat: we can't perfectly
         // reverse this without the pre-seed snapshot, so we reset every
         // assessed item in scan #4 back to Not Assessed. Capture before/after.
