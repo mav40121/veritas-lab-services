@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { DateEntry } from "@/components/ui/date-entry";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -3565,9 +3566,10 @@ function NewAssessmentDialog({
                           <label className="text-[10px] text-muted-foreground">Evidence</label>
                           <Textarea className="text-xs min-h-[32px]" placeholder="Evidence notes..." value={getTechDataForElement(2, mg.id).el2_evidence} onChange={e => setTechField(2, mg.id, "el2_evidence", e.target.value)} rows={2} />
                         </div>
-                        <div className="w-32">
+                        <div className="w-40">
                           <label className="text-[10px] text-muted-foreground">Date</label>
-                          <Input type="date" className="text-xs h-7" value={getTechDataForElement(2, mg.id).el2_date} onChange={e => setTechField(2, mg.id, "el2_date", e.target.value)} />
+                          {/* Parking lot #75 / #78 (2026-10-07): the native date control in a 128 px column clipped its own icon; shared DateEntry, column widened. */}
+                          <DateEntry size="sm" value={getTechDataForElement(2, mg.id).el2_date} onChange={(v) => setTechField(2, mg.id, "el2_date", v)} data-testid="el2-date" />
                         </div>
                         <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0 pb-1">
                           <input type="checkbox" checked={getTechDataForElement(2, mg.id).passed} onChange={e => setTechField(2, mg.id, "passed", e.target.checked)} className="w-3.5 h-3.5" />
@@ -3596,7 +3598,7 @@ function NewAssessmentDialog({
                       <div className="flex gap-2 items-end">
                         <div className="w-40">
                           <label className="text-[10px] text-muted-foreground">Date Tech Ran QC</label>
-                          <Input type="date" className="text-xs h-7" value={getTechDataForElement(3, mg.id).el3_qc_date} onChange={e => setTechField(3, mg.id, "el3_qc_date", e.target.value)} />
+                          <DateEntry size="sm" value={getTechDataForElement(3, mg.id).el3_qc_date} onChange={(v) => setTechField(3, mg.id, "el3_qc_date", v)} data-testid="el3-date" />
                         </div>
                         <label className="flex items-center gap-1 text-[10px] cursor-pointer shrink-0 pb-1">
                           <input type="checkbox" checked={getTechDataForElement(3, mg.id).passed} onChange={e => setTechField(3, mg.id, "passed", e.target.checked)} className="w-3.5 h-3.5" />
@@ -3625,7 +3627,7 @@ function NewAssessmentDialog({
                       <div className="flex gap-2 items-end">
                         <div className="w-40">
                           <label className="text-[10px] text-muted-foreground">Date Observed</label>
-                          <Input type="date" className="text-xs h-7" value={getTechDataForElement(4, mg.id).el4_date_observed} onChange={e => setTechField(4, mg.id, "el4_date_observed", e.target.value)} />
+                          <DateEntry size="sm" value={getTechDataForElement(4, mg.id).el4_date_observed} onChange={(v) => setTechField(4, mg.id, "el4_date_observed", v)} data-testid="el4-date" />
                         </div>
                         <div className="w-56">
                           <label className="text-[10px] text-muted-foreground">Observer (LD / TC / TS)</label>
