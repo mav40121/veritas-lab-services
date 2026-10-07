@@ -174,3 +174,26 @@ export const MODULE_GUIDES: ModuleGuide[] = [
     "Capture reviewer sign-off.",
   ]},
 ];
+
+// ---- Module -> system steps (phase B of the in-app Getting Started, parking lot #79) ----
+// Which system-path steps a module's how-to card reports live progress on, read
+// from the same getting-started endpoint as the dashboard card so the public
+// page, the dashboard card and the module card never disagree. Keys must exist
+// in SYSTEM_PHASES; a module with no derived step shows no progress block.
+export const MODULE_STEP_KEYS: Record<string, string[]> = {
+  veritamap: ["p2.map", "p2.ranges"],
+  veritastaff: ["p2.staff", "p6.staff_portal"],
+  veritacheck: ["p3.study"],
+  veritacomp: ["p3.competency", "p6.cycles"],
+  veritapolicy: ["p3.policy", "p6.cycles"],
+  veritaqc: ["p3.qc"],
+  veritapt: ["p3.pt_track", "p6.cycles"],
+  veritatrack: ["p3.pt_track"],
+  veritastock: ["p4.inventory"],
+  veritashift: ["p4.schedule_ops"],
+  veritaops: ["p4.schedule_ops"],
+};
+
+export function stepKeysForModule(moduleKey: string): string[] {
+  return MODULE_STEP_KEYS[moduleKey] ?? [];
+}

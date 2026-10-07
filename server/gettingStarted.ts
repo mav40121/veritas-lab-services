@@ -103,8 +103,13 @@ export function computeGettingStarted(sqlite: Database.Database, labId: number, 
         return { status: ok ? "done" : "todo", detail: `${Math.max(refs, 0)} analyte(s) with a reference range or critical value, ${Math.max(amr, 0)} AMR entry(ies).` };
       }
       case "p2.staff": {
-        const staff = n("SELECT COUNT(*) AS n FROM staff_employees WHERE lab_id = ? AND status = 'active'", labId);
-        const assigned = n("SELECT COUNT(*) AS n FROM staff_employee_instruments WHERE employee_id IN (SELECT id FROM staff_employees WHERE lab_id = ? AND status = 'active')", labId);
+        // staff_employees.lab_id is the staff_labs.id sequence, not the lab id;
+        // tier2_lab_id is the lab id (older rows may carry only lab_id, resolved
+        // through staff_labs). Same wrong-column class as the #59 roster fix
+        // (2026-10-07); caught by the phase-B module-card receipt.
+        const staffScope = "(tier2_lab_id = ? OR lab_id IN (SELECT id FROM staff_labs WHERE tier2_lab_id = ?))";
+        const staff = n(`SELECT COUNT(*) AS n FROM staff_employees WHERE ${staffScope} AND status = 'active'`, labId, labId);
+        const assigned = n(`SELECT COUNT(*) AS n FROM staff_employee_instruments WHERE employee_id IN (SELECT id FROM staff_employees WHERE ${staffScope} AND status = 'active')`, labId, labId);
         const ok = staff > 0 && assigned > 0;
         return { status: ok ? "done" : "todo", detail: `${Math.max(staff, 0)} active employee(s), ${Math.max(assigned, 0)} instrument assignment(s).` };
       }
@@ -143,7 +148,9 @@ export function computeGettingStarted(sqlite: Database.Database, labId: number, 
       }
       case "p6.cycles": {
         const docs = scoped("policy_documents");
-        const comp = n("SELECT COUNT(*) AS n FROM staff_competency_schedules WHERE lab_id = ?", labId);
+        // staff_competency_schedules.lab_id follows the staff_labs sequence like
+        // staff_employees.lab_id, so scope through the employee's lab instead.
+        const comp = n("SELECT COUNT(*) AS n FROM staff_competency_schedules WHERE employee_id IN (SELECT id FROM staff_employees WHERE tier2_lab_id = ? OR lab_id IN (SELECT id FROM staff_labs WHERE tier2_lab_id = ?))", labId, labId);
         const pt = scoped("pt_enrollments_v2");
         const missing = [docs > 0 ? null : "policy review interval", comp > 0 ? null : "competency cadence", pt > 0 ? null : "PT calendar"].filter(Boolean);
         return { status: missing.length === 0 ? "done" : "todo", detail: missing.length === 0 ? "Policy review, competency cadence and PT calendar all have entries." : `Missing: ${missing.join(", ")}.` };
