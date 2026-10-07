@@ -88,7 +88,7 @@ export const teaData: TeaAnalyte[] = [
 
   // ─── ENDOCRINOLOGY §493.933 ───────────────────────────────────────────────
   { analyte: "Cancer Antigen 125 (CA-125)", criteria: "±20%", specialty: "Endocrinology", cfr: "§493.933" },
-  { analyte: "Carcinoembryonic Antigen (CEA)", criteria: "±15% or ±1 ng/dL (greater)", specialty: "Endocrinology", cfr: "§493.933" },
+  { analyte: "Carcinoembryonic Antigen (CEA)", criteria: "±15% or ±1 ng/mL (greater)", specialty: "Endocrinology", cfr: "§493.933" },
   { analyte: "Cortisol", criteria: "±20%", specialty: "Endocrinology", cfr: "§493.933" },
   { analyte: "Estradiol", criteria: "±30%", specialty: "Endocrinology", cfr: "§493.933" },
   { analyte: "Folate, Serum", criteria: "±30% or ±1 ng/mL (greater)", specialty: "Endocrinology", cfr: "§493.933" },
@@ -120,10 +120,10 @@ export const teaData: TeaAnalyte[] = [
   { analyte: "Theophylline", criteria: "±20%", specialty: "Toxicology", cfr: "§493.937" },
 
   // ─── HEMATOLOGY §493.941 ──────────────────────────────────────────────────
-  { analyte: "CBC - WBC (White Blood Cell Count)", criteria: "±15%", specialty: "Hematology", cfr: "§493.941" },
-  { analyte: "CBC - RBC (Red Blood Cell Count)", criteria: "±6%", specialty: "Hematology", cfr: "§493.941" },
-  { analyte: "CBC - Hemoglobin", criteria: "±7% or ±1.0 g/dL (greater)", specialty: "Hematology", cfr: "§493.941" },
-  { analyte: "CBC - Hematocrit", criteria: "±6%", specialty: "Hematology", cfr: "§493.941" },
+  { analyte: "CBC - WBC (White Blood Cell Count)", criteria: "±10%", specialty: "Hematology", cfr: "§493.941" },
+  { analyte: "CBC - RBC (Red Blood Cell Count)", criteria: "±4%", specialty: "Hematology", cfr: "§493.941" },
+  { analyte: "CBC - Hemoglobin", criteria: "±4%", specialty: "Hematology", cfr: "§493.941" },
+  { analyte: "CBC - Hematocrit", criteria: "±4%", specialty: "Hematology", cfr: "§493.941", notes: "Excluding spun hematocrit (per the §493.941 Table 2 criterion)." },
   { analyte: "CBC - MCV (Mean Corpuscular Volume)", criteria: "±7%", specialty: "Hematology", cfr: "§493.941" },
   { analyte: "CBC - MCHC (Mean Corpuscular Hemoglobin Conc.)", criteria: "±8%", specialty: "Hematology", cfr: "§493.941" },
   { analyte: "CBC - Platelet Count", criteria: "±25%", specialty: "Hematology", cfr: "§493.941" },
