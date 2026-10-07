@@ -14266,7 +14266,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       instruments: instrMap[t.analyte] ?? [],
       correlations: corrByTestId[t.id] ?? []
     }));
-    res.json({ ...map, tests });
+    // editAccess (2026-10-07, parking-lot #64 layer 2): whether THIS user may
+    // write to this lab's VeritaMap (owner / active admin / org admin / edit
+    // seat), so the map page can render a genuine view-only user read-only
+    // instead of enabled inputs that 403 on every save.
+    res.json({ ...map, tests, editAccess: hasModuleEditAccess(req.scope.labId, req.userId, "veritamap") });
   });
 
   // ── MULTI-LAB Tier 2 — VeritaMap sub-resources (URL-hygiene fix 2026-05-20) ─
@@ -14793,6 +14797,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ? "AMR is locked by director attestation per 42 CFR 493.1253. Unlock it (owner or admin) before editing."
       : null;
   }
+  // Idempotent AMR save (2026-10-07): a PUT that changes nothing returns the
+  // stored row WITHOUT writing. The map page used to re-PUT every row's AMR on
+  // every render (see the TestRow autosave fix in VeritaMapMapPage.tsx), and a
+  // tab still running the old bundle keeps doing so until it reloads, so the
+  // server refuses to churn the DB for an unchanged value. Shared by the
+  // lab-scoped AND legacy AMR PUTs. Returns the current row (or a blank shape
+  // when no row exists and the request is blank) for a no-op, else null.
+  function amrUnchangedRow(mapId: number, instrumentId: number, analyte: string, body: any): any | null {
+    const current = (db as any).$client.prepare(
+      "SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ?"
+    ).get(mapId, instrumentId, analyte) as any;
+    const sameLow = (body?.amr_low || null) === (current?.amr_low ?? null);
+    const sameHigh = (body?.amr_high || null) === (current?.amr_high ?? null);
+    if (!sameLow || !sameHigh) return null;
+    // noop:true is ignored by the client but shows in the request log, so a
+    // stale tab's repeated PUTs are visibly non-writes in production.
+    return { ...(current ?? { map_id: mapId, instrument_id: instrumentId, analyte, amr_low: null, amr_high: null }), noop: true };
+  }
 
   app.put("/api/labs/:labId/veritamap/maps/:id/amr-values/:instId/:analyte", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
@@ -14801,6 +14823,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const analyte = safeDecodeParam(req.params.analyte);
     const lockErr = amrLockConflict(mapId, instrumentId, analyte, req.body);
     if (lockErr) return res.status(409).json({ error: lockErr });
+    const unchanged = amrUnchangedRow(mapId, instrumentId, analyte, req.body);
+    if (unchanged) return res.json(unchanged);
     const { amr_low, amr_high } = req.body;
     const now = new Date().toISOString();
     (db as any).$client.prepare(`
@@ -16615,6 +16639,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const map = userCanAccessMap(mapId, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
+    const unchanged = amrUnchangedRow(mapId, instrumentId, analyte, req.body);
+    if (unchanged) return res.json(unchanged);
     const { amr_low, amr_high } = req.body;
     const now = new Date().toISOString();
     (db as any).$client.prepare(`

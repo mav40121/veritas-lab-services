@@ -174,6 +174,9 @@ interface MapDetail {
   name: string;
   updated_at: string;
   tests: TestRecord[];
+  // Server-reported: may THIS user write to this lab's VeritaMap (owner /
+  // active admin / org admin / edit seat). Absent on the legacy unscoped route.
+  editAccess?: boolean;
 }
 
 interface IntelligenceData {
@@ -1163,22 +1166,76 @@ function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAn
   // the LegacyWorkspaceRedirect middleware (last follow-up from PR #182).
   const testRowActiveLabId = useActiveLabId();
 
-  // Hydrate the editor from the ACTIVE band. Re-running when the active band
-  // changes is what makes switching bands swap the values in the inputs. The
-  // autosave hydration ref below keeps this from firing a spurious PUT.
-  React.useEffect(() => { avHydratedRef.current = false; setLocalAv(activeBand || {}); }, [activeBand]);
-  React.useEffect(() => { setLocalAmr(amrValues || {}); }, [amrValues]);
-
   // Autosave for the analyte-values and AMR-values dialogs. Debounced 1.5s
   // after the user stops typing; mirrors the field-edit autosave pattern at
-  // VeritaMapMapPage.tsx:1728. Initial hydration (props arrive after mount,
-  // or the user expands a row) sets localAv/localAmr via the effects above;
-  // a hydration ref keeps that initial write from triggering an autosave.
-  // The explicit "Save values" button still works (forces an immediate save).
+  // VeritaMapMapPage.tsx:1728. The explicit "Save values" button still works
+  // (forces an immediate save).
+  //
+  // Only a USER EDIT may arm an autosave. Hydration from props (first paint,
+  // expanding a row, switching bands, and every echo of a saved value coming
+  // back from the parent) must never PUT. Edits are counted; a save records
+  // the edit count it carried, so an edit typed while a save is in flight
+  // stays dirty and is picked up by the next cycle instead of being dropped.
+  // Before 2026-10-07 this used a "skip the first hydration" ref, and the
+  // parent rebuilds this row's amrValues object on EVERY render, so each
+  // successful save re-hydrated every row and re-armed every row's autosave:
+  // ~1,400 blank AMR PUTs a minute per open map tab (Milford lab 4, map 61,
+  // 2026-10-06). The load-time "AMR not saved" toast cascade was the same bug
+  // while the writes were still failing.
   const avAutosaveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const amrAutosaveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const avHydratedRef = React.useRef(false);
-  const amrHydratedRef = React.useRef(false);
+  const avEditsRef = React.useRef(0);   // edits typed into the band fields
+  const avSavedRef = React.useRef(0);   // edit count carried by the last successful save
+  const amrEditsRef = React.useRef<Map<number, number>>(new Map()); // per instrument id
+  const amrSavedRef = React.useRef<Map<number, number>>(new Map());
+  const avDirty = () => avEditsRef.current > avSavedRef.current;
+  const amrDirtyIds = () => Array.from(amrEditsRef.current.entries())
+    .filter(([id, n]) => n > (amrSavedRef.current.get(id) ?? 0))
+    .map(([id]) => id);
+  const editAv = (patch: Partial<AnalyteValues>) => {
+    avEditsRef.current += 1;
+    setLocalAv(v => ({ ...v, ...patch }));
+  };
+  const editAmr = (instId: number, patch: { amr_low?: string; amr_high?: string }) => {
+    amrEditsRef.current.set(instId, (amrEditsRef.current.get(instId) ?? 0) + 1);
+    setLocalAmr(v => ({ ...v, [instId]: { ...v[instId], ...patch } }));
+  };
+
+  // Hydrate the editor from the ACTIVE band. Re-running when the active band
+  // changes is what makes switching bands swap the values in the inputs. A
+  // band SWITCH always hydrates (and discards an unsaved edit, as before); an
+  // echo of this band's own saved values is skipped while the user is
+  // mid-edit so it cannot overwrite what they are typing.
+  const lastBandKeyRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    const key = activeBand ? bandKey(activeBand) : "";
+    const switched = lastBandKeyRef.current !== key;
+    lastBandKeyRef.current = key;
+    if (!switched && avDirty()) return;
+    avEditsRef.current = 0;
+    avSavedRef.current = 0;
+    setLocalAv(activeBand || {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBand]);
+  // The parent derives amrValues inline from amrValuesMap, so its identity
+  // changes on every parent render; key the sync on the VALUES instead, and
+  // never overwrite an instrument the user is mid-edit on.
+  const amrSig = JSON.stringify(amrValues || {});
+  React.useEffect(() => {
+    const dirty = new Set(amrDirtyIds());
+    if (dirty.size === 0) {
+      amrEditsRef.current.clear();
+      amrSavedRef.current.clear();
+      setLocalAmr(amrValues || {});
+      return;
+    }
+    setLocalAmr(v => {
+      const next: AmrValues = { ...(amrValues || {}) };
+      for (const id of dirty) if (v[id]) next[id] = v[id];
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [amrSig]);
   const [autosaveStatus, setAutosaveStatus] = React.useState<"idle" | "saving" | "saved" | "error">("idle");
   const savedFadeTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1189,39 +1246,56 @@ function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAn
   }, []);
 
   React.useEffect(() => {
-    if (!avHydratedRef.current) { avHydratedRef.current = true; return; }
-    if (!onSaveAnalyteValues) return;
+    if (!avDirty()) return;
+    if (!onSaveAnalyteValues || readOnly) return;
     if (avAutosaveTimer.current) clearTimeout(avAutosaveTimer.current);
+    const carried = avEditsRef.current;
     avAutosaveTimer.current = setTimeout(async () => {
       setAutosaveStatus("saving");
+      // Mark the carried edits saved BEFORE the request so the echo of this
+      // save cannot read as "still dirty"; roll back on failure so the next
+      // change retries.
+      const prevSaved = avSavedRef.current;
+      avSavedRef.current = Math.max(prevSaved, carried);
       try {
         await onSaveAnalyteValues(test.analyte, localAv);
         flashSaved();
       } catch (err) {
+        avSavedRef.current = prevSaved;
         console.warn("[veritamap analyte autosave]", err);
         setAutosaveStatus("error");
       }
     }, 1500);
     return () => { if (avAutosaveTimer.current) clearTimeout(avAutosaveTimer.current); };
-  }, [localAv, onSaveAnalyteValues, test.analyte, flashSaved]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localAv, onSaveAnalyteValues, test.analyte, flashSaved, readOnly]);
 
   // Resolve current instrument id set so autosave only fires PUTs for
   // instruments the user actually has on this map (instruments is computed
   // below; capture via a closure reference to avoid an ordering issue).
   const amrInstrumentsForEffect = test.instruments ?? [];
   React.useEffect(() => {
-    if (!amrHydratedRef.current) { amrHydratedRef.current = true; return; }
-    if (!onSaveAmrValues) return;
+    const ids = amrDirtyIds();
+    if (ids.length === 0) return;
+    if (!onSaveAmrValues || readOnly) return;
     if (amrAutosaveTimer.current) clearTimeout(amrAutosaveTimer.current);
+    const carried = new Map(amrEditsRef.current);
     amrAutosaveTimer.current = setTimeout(async () => {
       setAutosaveStatus("saving");
       try {
+        // Only the instruments the user actually edited; never the whole row.
         for (const inst of amrInstrumentsForEffect) {
-          if (localAmr[inst.id]) {
+          if (!ids.includes(inst.id) || !localAmr[inst.id]) continue;
+          const prevSaved = amrSavedRef.current.get(inst.id) ?? 0;
+          amrSavedRef.current.set(inst.id, Math.max(prevSaved, carried.get(inst.id) ?? 0));
+          try {
             await onSaveAmrValues(test.analyte, inst.id, {
               amr_low: localAmr[inst.id].amr_low || "",
               amr_high: localAmr[inst.id].amr_high || "",
             });
+          } catch (err) {
+            amrSavedRef.current.set(inst.id, prevSaved);
+            throw err;
           }
         }
         flashSaved();
@@ -1231,7 +1305,8 @@ function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAn
       }
     }, 1500);
     return () => { if (amrAutosaveTimer.current) clearTimeout(amrAutosaveTimer.current); };
-  }, [localAmr, onSaveAmrValues, test.analyte, flashSaved]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localAmr, onSaveAmrValues, test.analyte, flashSaved, readOnly]);
 
   React.useEffect(() => () => {
     if (savedFadeTimer.current) clearTimeout(savedFadeTimer.current);
@@ -1595,7 +1670,8 @@ function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAn
                 className="h-7 text-xs"
                 placeholder="e.g. mEq/L"
                 value={localAv.units || ""}
-                onChange={e => setLocalAv(v => ({ ...v, units: e.target.value }))}
+                disabled={readOnly}
+                onChange={e => editAv({ units: e.target.value })}
               />
             </div>
             {/* Ref Range. Locked once director-attested per 42 CFR 493.1253. */}
@@ -1605,8 +1681,8 @@ function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAn
                 className="h-7 text-xs"
                 placeholder="e.g. 136"
                 value={localAv.ref_range_low || ""}
-                disabled={refLocked}
-                onChange={e => setLocalAv(v => ({ ...v, ref_range_low: e.target.value }))}
+                disabled={refLocked || readOnly}
+                onChange={e => editAv({ ref_range_low: e.target.value })}
               />
             </div>
             <div>
@@ -1615,8 +1691,8 @@ function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAn
                 className="h-7 text-xs"
                 placeholder="e.g. 145"
                 value={localAv.ref_range_high || ""}
-                disabled={refLocked}
-                onChange={e => setLocalAv(v => ({ ...v, ref_range_high: e.target.value }))}
+                disabled={refLocked || readOnly}
+                onChange={e => editAv({ ref_range_high: e.target.value })}
               />
             </div>
             {/* Critical Values */}
@@ -1626,7 +1702,8 @@ function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAn
                 className="h-7 text-xs"
                 placeholder="e.g. 120"
                 value={localAv.critical_low || ""}
-                onChange={e => setLocalAv(v => ({ ...v, critical_low: e.target.value }))}
+                disabled={readOnly}
+                onChange={e => editAv({ critical_low: e.target.value })}
               />
             </div>
             <div>
@@ -1635,7 +1712,8 @@ function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAn
                 className="h-7 text-xs"
                 placeholder="e.g. 160"
                 value={localAv.critical_high || ""}
-                onChange={e => setLocalAv(v => ({ ...v, critical_high: e.target.value }))}
+                disabled={readOnly}
+                onChange={e => editAv({ critical_high: e.target.value })}
               />
             </div>
           </div>
@@ -1733,16 +1811,16 @@ function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAn
                       className="h-6 text-xs w-20"
                       placeholder="Low"
                       value={localAmr[inst.id]?.amr_low || ""}
-                      disabled={amrLocked}
-                      onChange={e => setLocalAmr(v => ({ ...v, [inst.id]: { ...v[inst.id], amr_low: e.target.value } }))}
+                      disabled={amrLocked || readOnly}
+                      onChange={e => editAmr(inst.id, { amr_low: e.target.value })}
                     />
                     <span className="text-[10px] text-muted-foreground">to</span>
                     <Input
                       className="h-6 text-xs w-20"
                       placeholder="High"
                       value={localAmr[inst.id]?.amr_high || ""}
-                      disabled={amrLocked}
-                      onChange={e => setLocalAmr(v => ({ ...v, [inst.id]: { ...v[inst.id], amr_high: e.target.value } }))}
+                      disabled={amrLocked || readOnly}
+                      onChange={e => editAmr(inst.id, { amr_high: e.target.value })}
                     />
                     {/* Wave A4: per-instrument AMR attestation per 42 CFR 493.1253 */}
                     {onProvenance && (amrLocked ? (
@@ -1772,17 +1850,19 @@ function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAn
             <Button
               size="sm"
               className="h-7 text-xs"
-              disabled={saving}
+              disabled={saving || readOnly}
               onClick={async () => {
                 setSaving(true);
                 try {
                   if (onSaveAnalyteValues) await onSaveAnalyteValues(test.analyte, localAv);
+                  avSavedRef.current = avEditsRef.current;
                   for (const inst of instruments) {
                     if (onSaveAmrValues && localAmr[inst.id]) {
                       await onSaveAmrValues(test.analyte, inst.id, {
                         amr_low: localAmr[inst.id].amr_low || "",
                         amr_high: localAmr[inst.id].amr_high || "",
                       });
+                      amrSavedRef.current.set(inst.id, amrEditsRef.current.get(inst.id) ?? 0);
                     }
                   }
                 } catch {
@@ -1926,7 +2006,7 @@ export default function VeritaMapMapPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
-  const readOnly = useIsReadOnly('veritamap');
+  const subscriptionReadOnly = useIsReadOnly('veritamap');
 
   const [localTests, setLocalTests] = useState<TestRecord[]>([]);
   const [filterSpecialty, setFilterSpecialty] = useState<string>("all");
@@ -1979,6 +2059,13 @@ export default function VeritaMapMapPage() {
     staleTime: 0,
     refetchOnMount: true,
   });
+  // Seat/membership-level view-only (2026-10-07, parking-lot #64 layer 2):
+  // useIsReadOnly only knows the SUBSCRIPTION state, so a member without edit
+  // rights on this lab used to see enabled inputs and get one failed-save
+  // toast per field. The lab-scoped map route now reports editAccess for the
+  // requesting user; treat false exactly like subscription read-only.
+  const seatViewOnly = mapDetail?.editAccess === false;
+  const readOnly = subscriptionReadOnly || seatViewOnly;
 
   // Lightweight: count of maps owned by this user (drives toggle visibility).
   // Lab-scoped so multi-lab owners see only the maps for the active lab; the
@@ -2683,6 +2770,14 @@ export default function VeritaMapMapPage() {
           <div className="flex items-center justify-between mb-4 lg:hidden">
             <h1 className="font-bold text-lg">{mapDetail.name}</h1>
           </div>
+      {seatViewOnly && (
+        <div
+          role="status"
+          className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200"
+        >
+          You have view-only access to VeritaMap{"™"} for this lab. Values and dates are shown but cannot be changed here; ask the lab owner or an admin for edit access.
+        </div>
+      )}
       <ModuleHowToCard
         moduleKey="veritamap"
         moduleName="VeritaMap™"
