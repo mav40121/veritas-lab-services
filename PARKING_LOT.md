@@ -667,6 +667,8 @@ as well as WAIVED, so the two stores agree (fix the class, not the cell).
 Receipts: an integration test that an N/A test drops out of the missing/overdue
 counts and survives a tests-save, and a Playwright exercise of the control.
 
+**Live instance (Lisa, 2026-10-07 ~10:00, screenshot):** Milford CCL (lab 5), map 67 "CCL Hematology", 45 tests on the Sysmex XN-1000. Lisa set the hematology tests to not need calibration verification; the database agrees (45 of the 46 instrument rows on that map carry an exemption flag), but the map page still shows "45 Cal Verifications Required", an empty date cell with the 6-month clock on every row, and a 0 percent compliance score. The first fix below (honor the instrument-level flags on the map page and in its header counts) clears this case on its own and is XS to S; the per-test N/A control is the second half.
+
 **Source:** Michael, 2026-10-07 ~09:40 ("it would be nice to N/A the calibration verification from veritamap").
 **Status:** Open. Build on request.
 
