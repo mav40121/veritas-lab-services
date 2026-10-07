@@ -147,6 +147,9 @@ class DatabaseStorage implements IStorage {
       sqlite.prepare("DELETE FROM veritamap_amr_values WHERE map_id IN (SELECT id FROM veritamap_maps WHERE user_id = ?)").run(id);
       sqlite.prepare("DELETE FROM veritamap_analyte_values WHERE map_id IN (SELECT id FROM veritamap_maps WHERE user_id = ?)").run(id);
       sqlite.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id IN (SELECT i.id FROM veritamap_instruments i JOIN veritamap_maps m ON i.map_id = m.id WHERE m.user_id = ?)").run(id);
+      // VeritaStaff rows that point at this account's instruments (FK; see server/veritamapDelete.ts)
+      sqlite.prepare("DELETE FROM staff_duty_change_events WHERE instrument_id IN (SELECT i.id FROM veritamap_instruments i JOIN veritamap_maps m ON i.map_id = m.id WHERE m.user_id = ?)").run(id);
+      sqlite.prepare("DELETE FROM staff_employee_instruments WHERE instrument_id IN (SELECT i.id FROM veritamap_instruments i JOIN veritamap_maps m ON i.map_id = m.id WHERE m.user_id = ?)").run(id);
       sqlite.prepare("DELETE FROM veritamap_instruments WHERE map_id IN (SELECT id FROM veritamap_maps WHERE user_id = ?)").run(id);
       sqlite.prepare("DELETE FROM veritamap_tests WHERE map_id IN (SELECT id FROM veritamap_maps WHERE user_id = ?)").run(id);
       sqlite.prepare("DELETE FROM staff_competency_schedules WHERE employee_id IN (SELECT id FROM staff_employees WHERE user_id = ?)").run(id);

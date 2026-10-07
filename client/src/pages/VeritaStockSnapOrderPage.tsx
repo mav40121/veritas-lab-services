@@ -4,6 +4,7 @@ import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useSEO } from "@/hooks/useSEO";
 import { API_BASE } from "@/lib/queryClient";
+import { downloadPdfToken } from "@/lib/utils";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { Button } from "@/components/ui/button";
@@ -206,7 +207,8 @@ export default function VeritaStockSnapOrderPage() {
         return;
       }
       const { token, totalCount } = await res.json();
-      window.open(`${API_BASE}/api/pdf/${token}`, "_blank");
+      // Anchor download via the token endpoint (no popup / about:blank tab; parking lot #63).
+      downloadPdfToken(token, `VeritaStock_Snap_Order_${new Date().toISOString().slice(0, 10)}.pdf`);
       toast({
         title: `Snap order PDF generated for ${totalCount} item${totalCount === 1 ? "" : "s"}`,
         description: "Review and sign the PDF before sending to vendors.",

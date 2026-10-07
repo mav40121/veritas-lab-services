@@ -1,0 +1,226 @@
+entry,keep,remove,remove_added_by_batch,canonical
+Abbott ARCHITECT c16000,"Ammonia, plasma/serum",Ammonia,yes,ammonia
+Abbott ARCHITECT c16000,Amphetamines,Amphetamine,yes,amphetamine
+Abbott ARCHITECT c16000,Benzodiazepines,"Benzodiazepines, Serum",yes,benzodiazepine
+Abbott ARCHITECT c16000,"Bilirubin, direct",Direct Bilirubin,yes,bilirubin direct
+Abbott ARCHITECT c16000,"Bilirubin, total",Total Bilirubin,yes,bilirubin total
+Abbott ARCHITECT c16000,"Carbon dioxide, total (CO2)",Carbon Dioxide (Enzymatic),yes,co2
+Abbott ARCHITECT c16000,Lactic acid (lactate),Lactate,yes,lactate
+Abbott ARCHITECT c16000,"Protein, total",Total Protein,yes,protein total
+Abbott ARCHITECT c16000,Salicylates,Salicylate,yes,salicylate
+Abbott ARCHITECT c4000,ALP,Alkaline phosphatase (ALP),yes,alp
+Abbott ARCHITECT c4000,ALT,Alanine aminotransferase (ALT) (SGPT),yes,alt
+Abbott ARCHITECT c4000,AST,Aspartate aminotransferase (AST) (SGOT),yes,ast
+Abbott ARCHITECT c4000,"Benzodiazepines, Serum",Benzodiazepines,yes,benzodiazepine
+Abbott ARCHITECT c4000,CK,Creatine kinase (CK),yes,ck
+Abbott ARCHITECT c4000,CRP,C-reactive protein (CRP),yes,crp
+Abbott ARCHITECT c4000,GGT,Gamma glutamyl transferase (GGT),yes,ggt
+Abbott ARCHITECT c4000,LDH,Lactate dehydrogenase (LDH),yes,ldh
+Abbott ARCHITECT c4000,Triglycerides,Triglyceride,yes,triglyceride
+Abbott ARCHITECT c8000,"Ammonia, plasma/serum",Ammonia,yes,ammonia
+Abbott ARCHITECT c8000,Amphetamines,Amphetamine,yes,amphetamine
+Abbott ARCHITECT c8000,Benzodiazepines,"Benzodiazepines, Serum",yes,benzodiazepine
+Abbott ARCHITECT c8000,"Bilirubin, direct",Direct Bilirubin,yes,bilirubin direct
+Abbott ARCHITECT c8000,"Bilirubin, total",Total Bilirubin,yes,bilirubin total
+Abbott ARCHITECT c8000,"Carbon dioxide, total (CO2)",Carbon Dioxide (Enzymatic),yes,co2
+Abbott ARCHITECT c8000,Lactic acid (lactate),Lactate,yes,lactate
+Abbott ARCHITECT c8000,"Protein, total",Total Protein,yes,protein total
+Abbott ARCHITECT c8000,Salicylates,Salicylate,yes,salicylate
+Abbott Alinity c,Amphetamines,Amphetamine,yes,amphetamine
+Abbott Alinity c,Anti-streptolysin O (ASO),Antistreptolysin O,yes,aso
+Abbott Alinity c,Benzodiazepines,"Benzodiazepines, Serum",yes,benzodiazepine
+Abbott Alinity c,"Bilirubin, direct",Direct Bilirubin,yes,bilirubin direct
+Abbott Alinity c,"Bilirubin, total",Total Bilirubin,yes,bilirubin total
+Abbott Alinity c,"Carbon dioxide, total (CO2)",Carbon Dioxide (Enzymatic),yes,co2
+Abbott Alinity c,Lactic acid (lactate),Lactate,yes,lactate
+Abbott Alinity c,"Protein, total",Total Protein,yes,protein total
+Abbott Alinity c,Salicylates,Salicylate,yes,salicylate
+Abbott Architect c16000,"Ammonia, plasma/serum",Ammonia,yes,ammonia
+Abbott Architect c16000,Amphetamines,Amphetamine,yes,amphetamine
+Abbott Architect c16000,Benzodiazepines,"Benzodiazepines, Serum",yes,benzodiazepine
+Abbott Architect c16000,"Bilirubin, direct",Direct Bilirubin,yes,bilirubin direct
+Abbott Architect c16000,"Bilirubin, total",Total Bilirubin,yes,bilirubin total
+Abbott Architect c16000,"Carbon dioxide, total (CO2)",Carbon Dioxide (Enzymatic),yes,co2
+Abbott Architect c16000,Lactic acid (lactate),Lactate,yes,lactate
+Abbott Architect c16000,"Protein, total",Total Protein,yes,protein total
+Abbott Architect c16000,Salicylates,Salicylate,yes,salicylate
+Abbott Architect c8000,"Ammonia, plasma/serum",Ammonia,yes,ammonia
+Abbott Architect c8000,Amphetamines,Amphetamine,yes,amphetamine
+Abbott Architect c8000,Benzodiazepines,"Benzodiazepines, Serum",yes,benzodiazepine
+Abbott Architect c8000,"Bilirubin, direct",Direct Bilirubin,yes,bilirubin direct
+Abbott Architect c8000,"Bilirubin, total",Total Bilirubin,yes,bilirubin total
+Abbott Architect c8000,"Carbon dioxide, total (CO2)",Carbon Dioxide (Enzymatic),yes,co2
+Abbott Architect c8000,Lactic acid (lactate),Lactate,yes,lactate
+Abbott Architect c8000,"Protein, total",Total Protein,yes,protein total
+Abbott Architect c8000,Salicylates,Salicylate,yes,salicylate
+Beckman Coulter AU480,Creatinine,creatinine,no,creatinine
+Beckman Coulter AU5800,Creatinine,creatinine,no,creatinine
+Beckman Coulter AU680,Creatinine,creatinine,no,creatinine
+Beckman Coulter DxC 500AU,Ammonia,"Ammonia, plasma/serum",no,ammonia
+Beckman Coulter DxC 500AU,creatinine,Creatinine,no,creatinine
+Beckman Coulter DxC 700 AU,Ammonia,"Ammonia, plasma/serum",no,ammonia
+Beckman Coulter DxC 700 AU,creatinine,Creatinine,no,creatinine
+Beckman Coulter DxC 700AU,Ammonia,"Ammonia, plasma/serum",no,ammonia
+Beckman Coulter DxC 700AU,creatinine,Creatinine,no,creatinine
+Roche cobas c 703,Alanine aminotransferase (ALT),Alanine aminotransferase (ALT) (SGPT),no,alt
+Roche cobas c 703,Urea nitrogen (BUN),Urea (BUN),no,urea
+Siemens ADVIA 1800,"Ammonia, plasma/serum",Ammonia,yes,ammonia
+Siemens ADVIA 1800,"Amylase, pancreatic",Pancreatic Amylase,yes,amylase pancreatic
+Siemens ADVIA 1800,Anti-streptolysin O (ASO),Antistreptolysin O,yes,aso
+Siemens ADVIA 1800,Barbiturates,"Barbiturates, Serum",yes,barbiturate
+Siemens ADVIA 1800,Benzodiazepines,"Benzodiazepines, Serum",yes,benzodiazepine
+Siemens ADVIA 1800,C-reactive protein (CRP),CRP,yes,crp
+Siemens ADVIA 1800,Cocaine metabolites,Cocaine Metabolite,yes,cocaine metabolite
+Siemens ADVIA 1800,Glycosylated Hemoglobin (Hgb A1c),Hemoglobin A1c,yes,hba1c
+Siemens ADVIA 1800,"Protein, total",Total Protein,yes,protein total
+Siemens ADVIA 1800,Salicylates,Salicylate,yes,salicylate
+Siemens ADVIA 1800,Triglyceride,Triglycerides,yes,triglyceride
+Siemens ADVIA 2400,Creatinine,Creatinine (Enzymatic),no,creatinine
+Siemens ADVIA Chemistry XPT,"Ammonia, plasma/serum",Ammonia,yes,ammonia
+Siemens ADVIA Chemistry XPT,Anti-streptolysin O (ASO),Antistreptolysin O,yes,aso
+Siemens ADVIA Chemistry XPT,Barbiturates,"Barbiturates, Serum",yes,barbiturate
+Siemens ADVIA Chemistry XPT,Benzodiazepines,"Benzodiazepines, Serum",yes,benzodiazepine
+Siemens ADVIA Chemistry XPT,C-reactive protein (CRP),CRP,yes,crp
+Siemens ADVIA Chemistry XPT,"Carbon dioxide, total (CO2)",Carbon Dioxide (Enzymatic),yes,co2
+Siemens ADVIA Chemistry XPT,Cocaine metabolites,Cocaine Metabolite,yes,cocaine metabolite
+Siemens ADVIA Chemistry XPT,Gamma glutamyl transferase (GGT),Gamma-Glutamyltransferase (GGT),yes,ggt
+Siemens ADVIA Chemistry XPT,Glycosylated Hemoglobin (Hgb A1c),Hemoglobin A1c,yes,hba1c
+Siemens ADVIA Chemistry XPT,Lactic acid (lactate),Lactate,yes,lactate
+Siemens ADVIA Chemistry XPT,"Protein, total",Total Protein,yes,protein total
+Siemens ADVIA Chemistry XPT,Salicylates,Salicylate,yes,salicylate
+Siemens ADVIA Chemistry XPT,Triglyceride,Triglycerides,yes,triglyceride
+Siemens Atellica CH,"Ammonia, plasma/serum",Ammonia,yes,ammonia
+Siemens Atellica CH,"Amylase, pancreatic",Pancreatic Amylase,yes,amylase pancreatic
+Siemens Atellica CH,Barbiturates,"Barbiturates, Serum",yes,barbiturate
+Siemens Atellica CH,Benzodiazepines,"Benzodiazepines, Serum",yes,benzodiazepine
+Siemens Atellica CH,C-reactive protein (CRP),CRP,yes,crp
+Siemens Atellica CH,"Carbon dioxide, total (CO2)",Carbon Dioxide (Enzymatic),yes,co2
+Siemens Atellica CH,Cocaine metabolites,Cocaine Metabolite,yes,cocaine metabolite
+Siemens Atellica CH,Glycosylated Hemoglobin (Hgb A1c),Hemoglobin A1c,yes,hba1c
+Siemens Atellica CH,"Iron binding capacity, total",Total Iron Binding Capacity (TIBC),yes,tibc
+Siemens Atellica CH,Lactic acid (lactate),Lactate,yes,lactate
+Siemens Atellica CH,"Protein, total",Total Protein,yes,protein total
+Siemens Atellica CH,"Protein, total, urine","Total Protein, Urine",yes,protein total urine
+Siemens Atellica CH,Salicylates,Salicylate,yes,salicylate
+Siemens Atellica CH,Triglyceride,Triglycerides,yes,triglyceride
+Siemens Atellica CH 930,"Ammonia, plasma/serum",Ammonia,yes,ammonia
+Siemens Atellica CH 930,"Amylase, pancreatic",Pancreatic Amylase,yes,amylase pancreatic
+Siemens Atellica CH 930,Barbiturates,"Barbiturates, Serum",yes,barbiturate
+Siemens Atellica CH 930,Benzodiazepines,"Benzodiazepines, Serum",yes,benzodiazepine
+Siemens Atellica CH 930,C-reactive protein (CRP),CRP,yes,crp
+Siemens Atellica CH 930,"Carbon dioxide, total (CO2)",Carbon Dioxide (Enzymatic),yes,co2
+Siemens Atellica CH 930,Cocaine metabolites,Cocaine Metabolite,yes,cocaine metabolite
+Siemens Atellica CH 930,Glycosylated Hemoglobin (Hgb A1c),Hemoglobin A1c,yes,hba1c
+Siemens Atellica CH 930,"Iron binding capacity, total",Total Iron Binding Capacity (TIBC),yes,tibc
+Siemens Atellica CH 930,Lactic acid (lactate),Lactate,yes,lactate
+Siemens Atellica CH 930,"Protein, total",Total Protein,yes,protein total
+Siemens Atellica CH 930,"Protein, total, urine","Total Protein, Urine",yes,protein total urine
+Siemens Atellica CH 930,Salicylates,Salicylate,yes,salicylate
+Siemens Atellica CH 930,Triglyceride,Triglycerides,yes,triglyceride
+Siemens Dimension EXL,"Ammonia, plasma/serum",Ammonia,yes,ammonia
+Siemens Dimension EXL,Barbiturates,"Barbiturates, Serum",yes,barbiturate
+Siemens Dimension EXL,Benzodiazepines,"Benzodiazepines, Serum",yes,benzodiazepine
+Siemens Dimension EXL,C-reactive protein (CRP),CRP,yes,crp
+Siemens Dimension EXL,"Carbon dioxide, total (CO2)",Carbon Dioxide (Enzymatic),yes,co2
+Siemens Dimension EXL,Cocaine metabolites,Cocaine Metabolite,yes,cocaine metabolite
+Siemens Dimension EXL,Gamma glutamyl transferase (GGT),Gamma-Glutamyltransferase (GGT),yes,ggt
+Siemens Dimension EXL,Glycosylated Hemoglobin (Hgb A1c),Hemoglobin A1c,yes,hba1c
+Siemens Dimension EXL,"Iron binding capacity, total",Total Iron Binding Capacity (TIBC),yes,tibc
+Siemens Dimension EXL,Lactic acid (lactate),Lactate,yes,lactate
+Siemens Dimension EXL,"Protein, total",Total Protein,yes,protein total
+Siemens Dimension EXL,Salicylates,Salicylate,yes,salicylate
+Siemens Dimension EXL,Thyroid stimulating hormone (TSH),TSH,yes,tsh
+Siemens Dimension EXL,"Thyroxine, free (FT4)",Free T4,yes,ft4
+Siemens Dimension EXL,Triglyceride,Triglycerides,yes,triglyceride
+Siemens Dimension EXL,"Triiodothyronine, free (FT3)",Free T3,yes,ft3
+Siemens Dimension EXL 200,"Ammonia, plasma/serum",Ammonia,yes,ammonia
+Siemens Dimension EXL 200,Barbiturates,"Barbiturates, Serum",yes,barbiturate
+Siemens Dimension EXL 200,Benzodiazepines,"Benzodiazepines, Serum",yes,benzodiazepine
+Siemens Dimension EXL 200,C-reactive protein (CRP),CRP,yes,crp
+Siemens Dimension EXL 200,"Carbon dioxide, total (CO2)",Carbon Dioxide (Enzymatic),yes,co2
+Siemens Dimension EXL 200,Cocaine metabolites,Cocaine Metabolite,yes,cocaine metabolite
+Siemens Dimension EXL 200,Gamma glutamyl transferase (GGT),Gamma-Glutamyltransferase (GGT),yes,ggt
+Siemens Dimension EXL 200,Glycosylated Hemoglobin (Hgb A1c),Hemoglobin A1c,yes,hba1c
+Siemens Dimension EXL 200,"Iron binding capacity, total",Total Iron Binding Capacity (TIBC),yes,tibc
+Siemens Dimension EXL 200,Lactic acid (lactate),Lactate,yes,lactate
+Siemens Dimension EXL 200,"Protein, total",Total Protein,yes,protein total
+Siemens Dimension EXL 200,Salicylates,Salicylate,yes,salicylate
+Siemens Dimension EXL 200,Thyroid stimulating hormone (TSH),TSH,yes,tsh
+Siemens Dimension EXL 200,"Thyroxine, free (FT4)",Free T4,yes,ft4
+Siemens Dimension EXL 200,Triglyceride,Triglycerides,yes,triglyceride
+Siemens Dimension EXL 200,"Triiodothyronine, free (FT3)",Free T3,yes,ft3
+Siemens Dimension Vista 1000T,Anti-streptolysin O,Antistreptolysin O,yes,aso
+Siemens Dimension Vista 1000T,C-reactive protein,CRP,yes,crp
+Siemens Dimension Vista 1000T,"Cholesterol, HDL",HDL cholesterol,no,cholesterol hdl
+Siemens Dimension Vista 1000T,Free thyroxine,Free T4,yes,ft4
+Siemens Dimension Vista 1000T,Gamma-glutamyl transferase,Gamma-Glutamyltransferase (GGT),yes,ggt
+Siemens Dimension Vista 1000T,"Prostate-specific antigen, total",Total PSA,yes,psa total
+Siemens Dimension Vista 1000T,Thyroid stimulating hormone,TSH,yes,tsh
+Siemens Dimension Vista 1000T,"Troponin I, high-sensitivity",High-Sensitivity Troponin I,yes,high i sensitivity troponin
+Siemens Dimension Vista 1500,"Ammonia, plasma/serum",Ammonia,yes,ammonia
+Siemens Dimension Vista 1500,Anti-streptolysin O (ASO),Antistreptolysin O,yes,aso
+Siemens Dimension Vista 1500,Barbiturates,"Barbiturates, Serum",yes,barbiturate
+Siemens Dimension Vista 1500,Benzodiazepines,"Benzodiazepines, Serum",yes,benzodiazepine
+Siemens Dimension Vista 1500,C-reactive protein (CRP),CRP,yes,crp
+Siemens Dimension Vista 1500,"Carbon dioxide, total (CO2)",Carbon Dioxide (Enzymatic),yes,co2
+Siemens Dimension Vista 1500,Cocaine metabolites,Cocaine Metabolite,yes,cocaine metabolite
+Siemens Dimension Vista 1500,Gamma glutamyl transferase (GGT),Gamma-Glutamyltransferase (GGT),yes,ggt
+Siemens Dimension Vista 1500,Glycosylated Hemoglobin (Hgb A1c),Hemoglobin A1c,yes,hba1c
+Siemens Dimension Vista 1500,"Iron binding capacity, total",Total Iron Binding Capacity (TIBC),yes,tibc
+Siemens Dimension Vista 1500,Lactic acid (lactate),Lactate,yes,lactate
+Siemens Dimension Vista 1500,"Protein, total",Total Protein,yes,protein total
+Siemens Dimension Vista 1500,Salicylates,Salicylate,yes,salicylate
+Siemens Dimension Vista 1500,Thyroid stimulating hormone (TSH),TSH,yes,tsh
+Siemens Dimension Vista 1500,"Thyroxine, free (FT4)",Free T4,yes,ft4
+Siemens Dimension Vista 1500,Triglyceride,Triglycerides,yes,triglyceride
+Siemens Dimension Vista 1500,"Triiodothyronine, free (FT3)",Free T3,yes,ft3
+Siemens Dimension Vista 3000,"Ammonia, plasma/serum",Ammonia,yes,ammonia
+Siemens Dimension Vista 3000,Anti-streptolysin O (ASO),Antistreptolysin O,yes,aso
+Siemens Dimension Vista 3000,Barbiturates,"Barbiturates, Serum",yes,barbiturate
+Siemens Dimension Vista 3000,Benzodiazepines,"Benzodiazepines, Serum",yes,benzodiazepine
+Siemens Dimension Vista 3000,C-reactive protein (CRP),CRP,yes,crp
+Siemens Dimension Vista 3000,"Carbon dioxide, total (CO2)",Carbon Dioxide (Enzymatic),yes,co2
+Siemens Dimension Vista 3000,Cocaine metabolites,Cocaine Metabolite,yes,cocaine metabolite
+Siemens Dimension Vista 3000,Gamma glutamyl transferase (GGT),Gamma-Glutamyltransferase (GGT),yes,ggt
+Siemens Dimension Vista 3000,Glycosylated Hemoglobin (Hgb A1c),Hemoglobin A1c,yes,hba1c
+Siemens Dimension Vista 3000,"Iron binding capacity, total",Total Iron Binding Capacity (TIBC),yes,tibc
+Siemens Dimension Vista 3000,Lactic acid (lactate),Lactate,yes,lactate
+Siemens Dimension Vista 3000,"Protein, total",Total Protein,yes,protein total
+Siemens Dimension Vista 3000,Salicylates,Salicylate,yes,salicylate
+Siemens Dimension Vista 3000,Thyroid stimulating hormone (TSH),TSH,yes,tsh
+Siemens Dimension Vista 3000,"Thyroxine, free (FT4)",Free T4,yes,ft4
+Siemens Dimension Vista 3000,Triglyceride,Triglycerides,yes,triglyceride
+Siemens Dimension Vista 3000,"Triiodothyronine, free (FT3)",Free T3,yes,ft3
+Siemens Dimension Vista 3000T,"Ammonia, plasma/serum",Ammonia,yes,ammonia
+Siemens Dimension Vista 3000T,Barbiturates,"Barbiturates, Serum",yes,barbiturate
+Siemens Dimension Vista 3000T,Benzodiazepines,"Benzodiazepines, Serum",yes,benzodiazepine
+Siemens Dimension Vista 3000T,C-reactive protein (CRP),CRP,yes,crp
+Siemens Dimension Vista 3000T,"Carbon dioxide, total (CO2)",Carbon Dioxide (Enzymatic),yes,co2
+Siemens Dimension Vista 3000T,Cocaine metabolites,Cocaine Metabolite,yes,cocaine metabolite
+Siemens Dimension Vista 3000T,Gamma glutamyl transferase (GGT),Gamma-Glutamyltransferase (GGT),yes,ggt
+Siemens Dimension Vista 3000T,Glycosylated Hemoglobin (Hgb A1c),Hemoglobin A1c,yes,hba1c
+Siemens Dimension Vista 3000T,"Iron binding capacity, total",Total Iron Binding Capacity (TIBC),yes,tibc
+Siemens Dimension Vista 3000T,Lactic acid (lactate),Lactate,yes,lactate
+Siemens Dimension Vista 3000T,"Protein, total",Total Protein,yes,protein total
+Siemens Dimension Vista 3000T,Salicylates,Salicylate,yes,salicylate
+Siemens Dimension Vista 3000T,Thyroid stimulating hormone (TSH),TSH,yes,tsh
+Siemens Dimension Vista 3000T,"Thyroxine, free (FT4)",Free T4,yes,ft4
+Siemens Dimension Vista 3000T,Triglyceride,Triglycerides,yes,triglyceride
+Siemens Dimension Vista 3000T,"Triiodothyronine, free (FT3)",Free T3,yes,ft3
+Siemens Dimension Vista 500,"Ammonia, plasma/serum",Ammonia,yes,ammonia
+Siemens Dimension Vista 500,Anti-streptolysin O (ASO),Antistreptolysin O,yes,aso
+Siemens Dimension Vista 500,Barbiturates,"Barbiturates, Serum",yes,barbiturate
+Siemens Dimension Vista 500,Benzodiazepines,"Benzodiazepines, Serum",yes,benzodiazepine
+Siemens Dimension Vista 500,C-reactive protein (CRP),CRP,yes,crp
+Siemens Dimension Vista 500,"Carbon dioxide, total (CO2)",Carbon Dioxide (Enzymatic),yes,co2
+Siemens Dimension Vista 500,Cocaine metabolites,Cocaine Metabolite,yes,cocaine metabolite
+Siemens Dimension Vista 500,Gamma glutamyl transferase (GGT),Gamma-Glutamyltransferase (GGT),yes,ggt
+Siemens Dimension Vista 500,Glycosylated Hemoglobin (Hgb A1c),Hemoglobin A1c,yes,hba1c
+Siemens Dimension Vista 500,"Iron binding capacity, total",Total Iron Binding Capacity (TIBC),yes,tibc
+Siemens Dimension Vista 500,Lactic acid (lactate),Lactate,yes,lactate
+Siemens Dimension Vista 500,"Protein, total",Total Protein,yes,protein total
+Siemens Dimension Vista 500,Salicylates,Salicylate,yes,salicylate
+Siemens Dimension Vista 500,Thyroid stimulating hormone (TSH),TSH,yes,tsh
+Siemens Dimension Vista 500,"Thyroxine, free (FT4)",Free T4,yes,ft4
+Siemens Dimension Vista 500,Triglyceride,Triglycerides,yes,triglyceride
+Siemens Dimension Vista 500,"Triiodothyronine, free (FT3)",Free T3,yes,ft3
