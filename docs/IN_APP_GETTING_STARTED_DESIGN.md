@@ -1,6 +1,13 @@
 # In-app Getting Started (parking lot #72)
 
-Status: DESIGN for Michael's review, 2026-10-07. Nothing built yet. Follows the public page shipped in PR #1480 (`/resources/getting-started`); Michael: "Love it being built into the system."
+Status: Phase A BUILT 2026-10-07 on Michael's option 1 (dashboard card, derived state, manual Phase-5 ticks, auto-hide at 100 percent, per-lab). Phase B (live checkmarks on the per-module how-to cards) is the follow-up. Follows the public page shipped in PR #1480 (`/resources/getting-started`); Michael: "Love it being built into the system."
+
+## As built (Phase A)
+- Content moved to `shared/gettingStartedContent.ts` (the client file re-exports it); each system step carries a stable `key`, a `kind` (derived or manual) and a lab-scoped `route`.
+- `server/gettingStarted.ts`: `computeGettingStarted(sqlite, labId, userId)` scores the 19 steps from the lab's real tables (table scoping by lab_id, account_id or the owner's user_id, checked against the live schema so nothing throws); `setGettingStartedCheck` writes only the manual keys to `lab_onboarding_checks` (new table, migration sentinel).
+- Routes: `GET /api/labs/:labId/getting-started` (any member), `POST /api/labs/:labId/getting-started/check {key, checked}` (owner/admin; manual keys only, 400 otherwise).
+- `client/src/components/GettingStartedCard.tsx` on the lab dashboard: "Getting started: N of 19 done", progress bar, phases collapsible with the first incomplete phase open, done steps struck through with the detail line, Go links into the module, Phase-5 checkboxes, dismiss (stored per lab) with a one-line "Show getting started" link; hides itself at 100 percent.
+- Receipts: `tests/integration/getting-started.test.ts` (19 checks, real routes) and `tests/playwright/getting-started-card.spec.ts` (card renders, tick changes the count, Go link lands in the lab, dismiss/show).
 
 ## Single source of truth already exists
 
@@ -49,9 +56,9 @@ Status: DESIGN for Michael's review, 2026-10-07. Nothing built yet. Follows the 
 ### 5. Effort
 - M: the derivation table is the bulk (18 queries, each small); UI is one component used twice. About two days with receipts.
 
-## Decisions needed from Michael
+## Decisions (Michael, 2026-10-07, option 1)
 
-1. **Placement**: dashboard card plus module cards (my rec), or a dedicated `/labs/:labId/getting-started` page only.
-2. **Auto-hide at 100 percent** (my rec) or stay visible as a permanent health strip.
-3. **Which steps stay manual**: the two in Phase 5 are the only ones with no honest data signal; confirm, or drop them from the in-app list.
-4. **Multi-lab systems**: show the card per lab (my rec, since the state is per lab) or roll it up on the network overview as well.
+1. **Placement**: dashboard card now (Phase A); live checkmarks on the module how-to cards as Phase B.
+2. **Auto-hide at 100 percent**: yes, with a one-line "Show getting started" link.
+3. **Manual steps**: the two Phase-5 steps stay manual ticks (owner/admin).
+4. **Multi-lab systems**: per lab; a network roll-up is not in scope.
