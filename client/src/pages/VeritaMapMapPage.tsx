@@ -6,6 +6,7 @@ import { authHeaders } from "@/lib/auth";
 import { saveAs } from "file-saver";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DateEntry } from "@/components/ui/date-entry";
@@ -112,6 +113,9 @@ interface TestRecord {
   // True when EVERY active instrument row carrying this analyte has a
   // linearity / cal ver exemption flag (server-derived; parking lot #77).
   cal_ver_exempt?: boolean;
+  // Per-test "cal ver not applicable" with the lab's reason (#77 part B).
+  cal_ver_na?: 0 | 1;
+  cal_ver_na_reason?: string | null;
 }
 
 interface AnalyteValues {
@@ -606,7 +610,65 @@ async function exportExcel(mapId: number, mapName: string, activeLabId?: number 
 // exempt still saw "45 Cal Verifications Required" and a 0 percent score
 // (parking lot #77, Milford CCL).
 function calVerExempt(t: TestRecord): boolean {
-  return t.complexity === "WAIVED" || t.cal_ver_exempt === true;
+  return t.complexity === "WAIVED" || t.cal_ver_exempt === true || t.cal_ver_na === 1;
+}
+
+// Reasons offered when a lab marks a test's calibration verification not
+// applicable (#77 part B). "Other" takes free text. Stored on the test row
+// and shown wherever the cal ver status appears, so a surveyor sees the why.
+const CAL_VER_NA_REASONS = [
+  "Qualitative method; no calibration to verify",
+  "No user calibration on this device",
+  "Manufacturer-calibrated single-use device",
+  "Other",
+] as const;
+
+function CalVerNaControl({ onApply }: { onApply: (reason: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [choice, setChoice] = useState<string>(CAL_VER_NA_REASONS[0]);
+  const [other, setOther] = useState("");
+  const reason = choice === "Other" ? other.trim() : choice;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          data-testid="cal-ver-na-open"
+          className="text-[9px] text-primary hover:underline"
+          title="Mark calibration verification not applicable for this test"
+        >
+          N/A
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72 p-3 text-xs" align="start" data-testid="cal-ver-na-popover">
+        <div className="font-semibold mb-1.5">Calibration verification not applicable</div>
+        <div className="space-y-1">
+          {CAL_VER_NA_REASONS.map((r) => (
+            <label key={r} className="flex items-start gap-2 cursor-pointer">
+              <input type="radio" name="cal-ver-na-reason" className="mt-0.5" checked={choice === r} onChange={() => setChoice(r)} data-testid={`cal-ver-na-reason-${CAL_VER_NA_REASONS.indexOf(r)}`} />
+              <span>{r}</span>
+            </label>
+          ))}
+        </div>
+        {choice === "Other" && (
+          <Input
+            className="mt-2 h-7 text-xs"
+            placeholder="Reason a surveyor will read"
+            value={other}
+            onChange={(e) => setOther(e.target.value)}
+            data-testid="cal-ver-na-other"
+          />
+        )}
+        <div className="flex justify-end gap-2 mt-3">
+          <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button type="button" size="sm" className="h-7 text-xs" disabled={!reason} data-testid="cal-ver-na-save"
+            onClick={() => { onApply(reason); setOpen(false); }}>
+            Mark not applicable
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function calcCompliance(tests: TestRecord[]): {
@@ -683,6 +745,8 @@ function computeIntelligence(tests: TestRecord[]): IntelligenceData {
 interface TestRowProps {
   test: TestRecord;
   onChange: (analyte: string, field: string, value: string) => void;
+  // Saves several fields at once, immediately (no debounce): the N/A control (#77 part B).
+  onChangeMany?: (analyte: string, updates: Partial<TestRecord>) => void;
   onRowMount?: (el: HTMLTableRowElement | null) => void;
   analyteBands?: AnalyteValues[];
   amrValues?: AmrValues;
@@ -1142,7 +1206,7 @@ function CorrelationEditModal({ open, onClose, sourceTest, existing, mapId, onSa
   );
 }
 
-function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAnalyteValues, onDeleteAnalyteBand, onSaveAmrValues, onEditCorrelation, readOnly, colCount, onProvenance, canUnlock }: TestRowProps) {
+function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrValues, onSaveAnalyteValues, onDeleteAnalyteBand, onSaveAmrValues, onEditCorrelation, readOnly, colCount, onProvenance, canUnlock }: TestRowProps) {
   const [expanded, setExpanded] = React.useState(false);
   // An analyte can carry several age/sex bands. The row edits ONE at a time; the
   // band picker below only appears once there is more than one, so an analyte
@@ -1472,7 +1536,23 @@ function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAn
 
       {/* Cal Ver */}
       <td className="px-3 py-2 whitespace-nowrap">
-        {isCalVerExempt ? (
+        {test.cal_ver_na === 1 ? (
+          <div data-testid="cal-ver-na">
+            <span className="text-[10px] text-muted-foreground">N/A: {test.cal_ver_na_reason || "not applicable"}</span>
+            {!readOnly && onChangeMany && (
+              <div className="mt-0.5">
+                <button
+                  type="button"
+                  data-testid="cal-ver-na-undo"
+                  className="text-[9px] text-primary hover:underline"
+                  onClick={() => onChangeMany(test.analyte, { cal_ver_na: 0, cal_ver_na_reason: null })}
+                >
+                  Cal ver required again
+                </button>
+              </div>
+            )}
+          </div>
+        ) : isCalVerExempt ? (
           <div data-testid="cal-ver-exempt">
             <span className="text-[10px] text-muted-foreground">Exempt</span>
             {!isWaived && (
@@ -1489,8 +1569,11 @@ function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAn
               maxMonths={6}
               warningDays={30}
             />
-            <div className="text-[9px] text-muted-foreground/70 mt-0.5 pl-3.5">
-              Every 6 mo · 42 CFR §493.1255
+            <div className="flex items-center gap-2 text-[9px] text-muted-foreground/70 mt-0.5 pl-3.5">
+              <span>Every 6 mo · 42 CFR §493.1255</span>
+              {!readOnly && onChangeMany && (
+                <CalVerNaControl onApply={(reason) => onChangeMany(test.analyte, { cal_ver_na: 1, cal_ver_na_reason: reason })} />
+              )}
             </div>
           </div>
         )}
@@ -2413,6 +2496,15 @@ export default function VeritaMapMapPage() {
     [saveMutation]
   );
 
+  // Several fields at once, saved immediately (the N/A control, #77 part B).
+  const handleFieldsChange = useCallback(
+    (analyte: string, updates: Partial<TestRecord>) => {
+      setLocalTests((prev) => prev.map((t) => (t.analyte === analyte ? { ...t, ...updates } : t)));
+      saveMutation.mutate({ analyte, updates });
+    },
+    [saveMutation]
+  );
+
   // Scroll to analyte row
   function scrollToAnalyte(analyte: string) {
     const el = rowRefs.current.get(analyte);
@@ -2960,6 +3052,7 @@ export default function VeritaMapMapPage() {
                     key={test.analyte}
                     test={test}
                     onChange={handleFieldChange}
+                    onChangeMany={handleFieldsChange}
                     onRowMount={(el) => {
                       if (el) rowRefs.current.set(test.analyte, el);
                       else rowRefs.current.delete(test.analyte);

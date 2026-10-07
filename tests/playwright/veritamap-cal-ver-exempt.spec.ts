@@ -30,11 +30,18 @@ test.describe("VeritaMap: instrument-level cal ver exemption honored on the map 
     await expect(exemptCell).toContainText("Exempt");
     await expect(exemptCell).toContainText("Per instrument exemption");
 
-    // Header count: total tests minus the exempt ones (all other tests are undated).
+    // Header count: total tests minus the exempt ones and any marked N/A (all
+    // other tests are undated). Read all three in one poll so a sibling spec
+    // toggling N/A on the same sandbox map at the same moment cannot skew it.
     const showing = await page.getByText(/Showing \d+ of \d+ tests/).first().textContent();
     const total = Number((showing || "").match(/of (\d+) tests/)?.[1] || 0);
-    const exemptCount = await page.getByTestId("cal-ver-exempt").count();
     expect(total, "test count parsed from the header").toBeGreaterThan(0);
-    await expect(page.getByText(new RegExp(`${total - exemptCount} Cal Verifications? Required`)), "header count excludes exempt tests").toBeVisible();
+    await expect.poll(async () => {
+      const exemptCount = await page.getByTestId("cal-ver-exempt").count();
+      const naCount = await page.getByTestId("cal-ver-na").count();
+      const header = await page.getByText(/\d+ Cal Verifications? Required/).first().textContent();
+      const shown = Number((header || "").match(/(\d+) Cal Verification/)?.[1] || -1);
+      return shown === total - exemptCount - naCount;
+    }, { timeout: 10_000, message: "header count excludes exempt and N/A tests" }).toBe(true);
   });
 });

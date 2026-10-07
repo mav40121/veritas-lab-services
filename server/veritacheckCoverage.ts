@@ -156,7 +156,7 @@ function matchesAnalyte(s: Study, analyte: string): boolean {
   return (!!s.coverage_analyte && s.coverage_analyte === analyte) || analyteMatch(s.test_name, analyte);
 }
 type Instrument = { id: number; instrument_name: string; nickname: string | null; serial_number?: string | null };
-type Combo = { id: number; analyte: string; specialty: string; instrument_id: number; linearity_exempt_multical?: number; linearity_exempt_noncal?: number; linearity_exempt_waived?: number; linearity_exempt_other?: string | null };
+type Combo = { id: number; analyte: string; specialty: string; instrument_id: number; test_cal_ver_na?: number; linearity_exempt_multical?: number; linearity_exempt_noncal?: number; linearity_exempt_waived?: number; linearity_exempt_other?: string | null };
 
 // Display label that distinguishes two units of the same model. A lab can run
 // the same analyzer twice (e.g. two Ortho VITROS 5600 named Bonnie and Clyde);
@@ -184,7 +184,9 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
     const noncal = !!c.linearity_exempt_noncal;
     const waived = !!c.linearity_exempt_waived;
     const other = (c.linearity_exempt_other || "").trim();
-    const exempt = multical || noncal || waived || !!other;
+    // A per-test "cal ver not applicable" on the map (veritamap_tests.cal_ver_na,
+    // parking lot #77 part B) exempts the combo the same way the row flags do.
+    const exempt = multical || noncal || waived || !!other || !!c.test_cal_ver_na;
 
     // Only cal-ver / linearity studies count toward the linearity requirement.
     const linCands = studies.filter((s) => LINEARITY_TYPES.has(s.study_type) && matchesAnalyte(s, c.analyte));
@@ -380,8 +382,10 @@ export function computeCoverageForLab(sqlite: any, labId: number): CoverageResul
   const combos = sqlite.prepare(
     `SELECT it.id, it.analyte, it.specialty, it.instrument_id,
             it.linearity_exempt_multical, it.linearity_exempt_noncal,
-            it.linearity_exempt_waived, it.linearity_exempt_other
+            it.linearity_exempt_waived, it.linearity_exempt_other,
+            t.cal_ver_na AS test_cal_ver_na
      FROM veritamap_instrument_tests it JOIN veritamap_maps m ON m.id = it.map_id
+     LEFT JOIN veritamap_tests t ON t.map_id = it.map_id AND t.analyte = it.analyte
      WHERE m.lab_id = ? AND (it.active = 1 OR it.active IS NULL)`
   ).all(labId) as Combo[];
   const studies = sqlite.prepare(

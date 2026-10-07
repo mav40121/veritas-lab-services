@@ -13904,7 +13904,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       SELECT
         t.id AS test_id, t.map_id, t.analyte, t.specialty, t.complexity, t.active,
         t.instrument_source, t.last_cal_ver, t.last_method_comp, t.last_precision,
-        t.last_sop_review, t.updated_at
+        t.last_sop_review, t.updated_at, t.cal_ver_na, t.cal_ver_na_reason
       FROM veritamap_tests t
       WHERE t.map_id IN (${placeholders}) AND t.active = 1
       ORDER BY t.specialty, t.analyte, t.map_id
@@ -13948,6 +13948,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         department: instr.category, instrument: instr.instrument_name || r.instrument_source || null,
         last_cal_ver: r.last_cal_ver, last_method_comp: r.last_method_comp,
         last_precision: r.last_precision, last_sop_review: r.last_sop_review,
+        cal_ver_na: r.cal_ver_na ? 1 : 0, cal_ver_na_reason: r.cal_ver_na_reason ?? null,
         has_ref_range: refByKey.has(key), has_critical: critByKey.has(key), has_amr: amrByKey.has(key),
         updated_at: r.updated_at,
       };
@@ -14528,6 +14529,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     for (const col of ['last_cal_ver', 'last_method_comp', 'last_precision', 'last_sop_review', 'notes']) {
       if (col in req.body) { sets.push(`${col}=?`); vals.push(req.body[col] ?? null); }
+    }
+    // Parking lot #77 part B (2026-10-07): per-test "cal ver not applicable"
+    // with a required reason; turning it off clears the reason and the stamp.
+    if ('cal_ver_na' in req.body) {
+      const on = req.body.cal_ver_na === true || req.body.cal_ver_na === 1 || req.body.cal_ver_na === "1";
+      const reason = String(req.body.cal_ver_na_reason ?? "").trim().slice(0, 200);
+      if (on && !reason) return res.status(400).json({ error: "A reason is required to mark calibration verification not applicable" });
+      sets.push("cal_ver_na=?", "cal_ver_na_reason=?", "cal_ver_na_set_by=?", "cal_ver_na_set_at=?");
+      vals.push(on ? 1 : 0, on ? reason : null, on ? (req.userId ?? null) : null, on ? now : null);
     }
     if (sets.length > 0) {
       sets.push("updated_at=?"); vals.push(now);
@@ -15612,6 +15622,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     for (const col of ['last_cal_ver', 'last_method_comp', 'last_precision', 'last_sop_review', 'notes']) {
       if (col in req.body) { sets.push(`${col}=?`); vals.push(req.body[col] ?? null); }
     }
+    // Parking lot #77 part B (2026-10-07): per-test "cal ver not applicable"
+    // with a required reason; turning it off clears the reason and the stamp.
+    if ('cal_ver_na' in req.body) {
+      const on = req.body.cal_ver_na === true || req.body.cal_ver_na === 1 || req.body.cal_ver_na === "1";
+      const reason = String(req.body.cal_ver_na_reason ?? "").trim().slice(0, 200);
+      if (on && !reason) return res.status(400).json({ error: "A reason is required to mark calibration verification not applicable" });
+      sets.push("cal_ver_na=?", "cal_ver_na_reason=?", "cal_ver_na_set_by=?", "cal_ver_na_set_at=?");
+      vals.push(on ? 1 : 0, on ? reason : null, on ? (req.userId ?? null) : null, on ? now : null);
+    }
     if (sets.length > 0) {
       sets.push("updated_at=?"); vals.push(now);
       vals.push(req.params.id, safeDecodeParam(req.params.analyte));
@@ -16059,6 +16078,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     // Fetch tests (same as map detail endpoint)
     const rawTests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? AND active = 1 ORDER BY specialty, analyte").all(req.params.id);
+    // Analytes whose EVERY active instrument row carries a linearity / cal ver
+    // exemption flag (parking lot #77): the export shows them as exempt, as the
+    // map page does, instead of a missing calibration verification.
+    const instrumentExemptAnalytes = new Set<string>(
+      ((db as any).$client.prepare(`
+        SELECT analyte FROM veritamap_instrument_tests
+         WHERE map_id = ? AND active = 1
+         GROUP BY analyte
+        HAVING SUM(CASE WHEN COALESCE(linearity_exempt_multical, 0) = 1 OR COALESCE(linearity_exempt_noncal, 0) = 1
+                             OR COALESCE(linearity_exempt_waived, 0) = 1 OR TRIM(COALESCE(linearity_exempt_other, '')) <> ''
+                        THEN 0 ELSE 1 END) = 0
+      `).all(req.params.id) as Array<{ analyte: string }>).map((r) => r.analyte)
+    );
     const instrByAnalyte = (db as any).$client.prepare(`
       SELECT it.analyte, i.id, i.instrument_name, i.role, i.category, i.serial_number
       FROM veritamap_instrument_tests it
@@ -16327,7 +16359,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const isWaived = t.complexity === "WAIVED";
         const correlReq = !isWaived && instrCount >= 2 ? "Yes" : "No";
         const cfr = VERITAMAP_CFR_MAP[t.specialty] ?? "§493.931";
-        const calVerStatus = isWaived ? "N/A (Waived)" : getComplianceStatus(t.last_cal_ver, 6);
+        const calVerStatus = isWaived
+          ? "N/A (Waived)"
+          : t.cal_ver_na
+          ? `N/A (${String(t.cal_ver_na_reason || "not applicable")})`
+          : instrumentExemptAnalytes.has(t.analyte)
+          ? "Exempt (instrument exemption)"
+          : getComplianceStatus(t.last_cal_ver, 6);
         const mcStatus = isWaived ? "N/A (Waived)" : getComplianceStatus(t.last_method_comp, 6);
         const precStatus = isWaived ? "N/A (Waived)" : getComplianceStatus(t.last_precision, 6);
         const sopStatus = getComplianceStatus(t.last_sop_review, 24);
