@@ -176,6 +176,23 @@ function cellToString(v: any): string {
   return String(v).trim();
 }
 
+/**
+ * True only for a well-formed AND real calendar date (YYYY-MM-DD). The plain
+ * `/^\d{4}-\d{2}-\d{2}$/` shape test is not enough: "2024-13-45" / "2024-02-30"
+ * match the shape but are not real dates. parseDate() already rejects these on
+ * the upload path, but it falls back to the raw string, so validateRows (and the
+ * cohort validator) must re-check calendar validity, or an impossible date would
+ * import onto a locked, surveyor-facing competency record as its completion_date.
+ * Mirrors parseDate's round-trip check; shared with competencyCohortSignoff.ts so
+ * both validators agree.
+ */
+export function isValidYmd(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() + 1 === m && dt.getUTCDate() === d;
+}
+
 function parseDate(raw: any): { value: string | null; error?: string } {
   if (raw === null || raw === undefined || raw === "") return { value: null };
   if (raw instanceof Date) {
@@ -301,8 +318,8 @@ export function validateRows(rows: ParsedRow[], ctx: ValidationContext): Validat
     if (!ALLOWED_TYPES.includes(r.parsed.assessmentType as any)) {
       issues.push({ field: "Assessment Type", severity: "error", message: `Assessment Type '${r.parsed.assessmentType}' is not one of ${ALLOWED_TYPES.join(", ")}` });
     }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(r.parsed.assessmentDate)) {
-      issues.push({ field: "Assessment Date", severity: "error", message: `Assessment Date '${r.parsed.assessmentDate}' must be YYYY-MM-DD` });
+    if (!isValidYmd(r.parsed.assessmentDate)) {
+      issues.push({ field: "Assessment Date", severity: "error", message: `Assessment Date '${r.parsed.assessmentDate}' must be a valid YYYY-MM-DD date` });
     }
     if (!ALLOWED_STATUSES.includes(r.parsed.status as any)) {
       issues.push({ field: "Status", severity: "error", message: `Status '${r.parsed.status}' is not one of ${ALLOWED_STATUSES.join(", ")}` });
