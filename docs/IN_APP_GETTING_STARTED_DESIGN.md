@@ -1,6 +1,6 @@
 # In-app Getting Started (parking lot #72)
 
-Status: Phase A BUILT 2026-10-07 on Michael's option 1 (dashboard card, derived state, manual Phase-5 ticks, auto-hide at 100 percent, per-lab). Phase B (live checkmarks on the per-module how-to cards) is the follow-up. Follows the public page shipped in PR #1480 (`/resources/getting-started`); Michael: "Love it being built into the system."
+Status: Phase A BUILT 2026-10-07 on Michael's option 1 (dashboard card, derived state, manual Phase-5 ticks, auto-hide at 100 percent, per-lab). Phase B BUILT 2026-10-07 (parking lot #79): `ModuleHowToCard` reads the same endpoint and shows a "Your progress" block with live done / to-do marks on the system steps mapped to the module in `MODULE_STEP_KEYS` (shared/gettingStartedContent.ts); modules with no derived step show no block. Receipt: `tests/playwright/module-howto-progress.spec.ts` (in the CI sandbox receipts list). Follows the public page shipped in PR #1480 (`/resources/getting-started`); Michael: "Love it being built into the system."
 
 ## As built (Phase A)
 - Content moved to `shared/gettingStartedContent.ts` (the client file re-exports it); each system step carries a stable `key`, a `kind` (derived or manual) and a lab-scoped `route`.

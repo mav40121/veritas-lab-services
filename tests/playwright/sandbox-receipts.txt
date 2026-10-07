@@ -12,3 +12,4 @@ tests/playwright/veritacheck-analyte-multiselect.spec.ts
 tests/playwright/veritacomp-assessment-roster-employees.spec.ts
 tests/playwright/veritamap-amr-autosave-no-loop.spec.ts
 tests/playwright/veritamap-cal-ver-exempt.spec.ts
+tests/playwright/module-howto-progress.spec.ts
