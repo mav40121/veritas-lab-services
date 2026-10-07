@@ -546,8 +546,7 @@ the SAME established mean/SD the rules use (or a consistent mfr-vs-cumulative mo
 applied to both chart and rules).
 
 **Source:** Mike Hiltunen (MedStar), 2026-10-06 email "LJ Graph Question". Gameday Plymouth PSA Frend B Level 1, 9/28 point fired 1-3s but sits near the mean on the chart.
-**Status:** Root cause confirmed in code AND in data (2026-10-07, read-only prod copy): lab 29 Gameday Plymouth, lot 27 "PSA (FREND B)" Level 1 (6361A26001), manufacturer mean 1.29 / SD 0.35; lab history n=30 (6/17-9/21) mean 1.067 / SD 0.100. The 9/28 result 1.39 is +3.23 lab-SD (stored violation #14, 1-3s, result rejected) but only +0.29 manufacturer-SD, which is why the chart shows it near the mean. The fix already exists as PR #1464 (Michael's option 1 of 2026-10-04: chart and rules both on the programmed mean/SD; server/qcWestgard.ts; verify 8/8), rebased 2026-10-07 and mergeable. DECISION FOR MICHAEL: programmed basis (#1464 as built; that 9/28 point becomes a non-event) vs lab-established basis once n>=20 per CLSI C24 (keeps it a 3.2 SD outlier; this lab's SD is 3.5x tighter than the insert). A reply to Mike is drafted in Outlook, not sent, per the MedStar hold.
-
+**Status:** Data pulled 2026-10-07 from a read-only prod copy (Plymouth, lab 29, PSA FREND B Level 1, lot 6361A26001): the 9/28 result 1.39 is +3.2 SD against the lab's 30-point history (mean 1.067, SD 0.100) and the stored 1-3s is legitimate; it reads +0.3 SD on the chart because the lot's programmed mean/SD were changed on 9/30 to 1.29/0.35 (package-insert width, 3.5x the lab's SD). PR #1464 (programmed basis for chart + rules + PDF) is green and undeployed. Q7 to Michael 2026-10-07: recommendation is the CLSI C24 pattern (programmed until 20 accepted points, then a locked lab-established mean/SD, one basis everywhere, director override, logged), reworking #1464 before deploy. MedStar reply (Hiltunen) waits on that call.
 ---
 
 _(item #66 closed 2026-10-07; PR #1489 deployed, see C68 below)_
@@ -570,33 +569,11 @@ _(item #70 closed 2026-10-07; PR #1492 deployed, see C71 below)_
 
 ---
 
-### 71. Milford (labs 4/5) house policy format for VeritaDC drafts
-
-**Effort:** M (multi-day)
-**Importance:** Medium. Lisa's lab.
-
-**What:** "Update the UMASS Milford sites to this policy template." The house
-format (sections I-V, revision table, footer) was extracted from the sample DOCX
-on 2026-10-06 13:21 but was never built into the VeritaDC DOCX generator for labs
-4 and 5.
-
-**Source:** Michael, 2026-10-06 ~13:19 (.eml).
-**Status:** DESIGN written 2026-10-07: docs/VERITADC_HOUSE_FORMAT_DESIGN.md (per-lab docx_format setting, a format registry in veritapolicyDocx.ts rendering I. Purpose / II. Policy / III. Guidelines / IV. Personal Safety Requirements / V. References, Revision History table, house footer with facility path + policy number + rev date + page; receipts; effort M). Four decisions for Michael in the doc (safety-section content, house numbering source, footer provenance, scope to labs 4/5). Build on his go.
+_(item #71 closed 2026-10-07; built and live in PR #1503 (5ec248c1); see C78 below)_
 
 ---
 
-### 72. In-app Getting Started wizard (per-module checklists inside the system)
-
-**Effort:** M (multi-day)
-**Importance:** Medium
-
-**What:** The public /resources/getting-started page shipped (PR #1480).
-Michael: "Love it being built into the system." The in-app per-module checklist
-(progress read from the lab's actual state) was stated as a follow-up and not
-started.
-
-**Source:** Michael, 2026-10-06 13:15.
-**Status:** DESIGN written 2026-10-07: docs/IN_APP_GETTING_STARTED_DESIGN.md (reuses gettingStartedContent.ts as the single source; GET /api/labs/:labId/getting-started derives every step's status from real tables, only two Phase-5 steps are manual ticks; dashboard card + live checkmarks on the module how-to cards; receipts; effort M). Four decisions for Michael in the doc (placement, auto-hide at 100%, which steps stay manual, multi-lab roll-up). Build on his go.
+_(item #72 closed 2026-10-07; phase A built and live in PR #1505 (6f937201); see C77 below; phase B is #79)_
 
 ---
 
@@ -616,8 +593,7 @@ receipts were not. A CI QA lab with a scoped PW_TOKEN secret (own test
 system, never a client lab) would run these on every PR.
 
 **Source:** overnight audit 2026-10-07 (local Playwright pass, see overnight log section 16).
-**Status:** Open. Specs repaired and shipped; the CI token/QA-lab decision is Michael's (cost: one seeded demo lab on prod plus a repo secret).
-
+**Status:** BUILT 2026-10-07 on Michael's option 1 (PR #1507): a BLOCKING "Sandbox receipts" step in playwright-smoke.yml runs tests/playwright/sandbox-receipts.txt (8 specs, 13 tests) with PW_* repo secrets, scripts/ci-sandbox/seed_sandbox.mjs seeds the sandbox lab idempotently and mint_token.mjs mints the one-year owner JWT straight into gh secret set. Dry run on a local server: 13/13, and it caught the #59 roster lab-column bug (fixed in PR #1506 the same morning). Remaining: Michael registers the sandbox owner (ci-sandbox@veritaslabservices.com) on production, then provision, seed, mint, set secrets, add Michael as admin, first workflow run = receipt. veritamap-save-failure-surfaces-error.spec needs its PW_MAP_URL shape aligned before it joins the list.
 ---
 
 ### 75. VeritaComp assessment dialog: the Element 2 (and 3, 4) date picker is nearly unclickable
@@ -667,7 +643,89 @@ are unchanged.
 
 ---
 
+### 77. VeritaMap: mark Calibration Verification "Not applicable" per test, with a reason, and honor the existing exemption flags on the map page
+
+**Effort:** S (1-3 days)
+**Importance:** High. Readiness and the surveyor-facing map currently show "missing" or "overdue" calibration verification on tests where 42 CFR 493.1255 has nothing to verify, which over-reports gaps and teaches the lab to ignore the column.
+
+**What:** On the map page the Cal Ver column treats only WAIVED complexity as
+exempt (VeritaMapMapPage.tsx ~1335 and ~1457: isWaived ? "Exempt" : DateCell);
+every other test gets a date cell, a 6-month clock and an overdue/missing
+border, and feeds the readiness counts. Qualitative methods (manual
+differential, urine microscopy, Gram stain, rapid kits), devices with no user
+calibration, and tests the lab has already flagged exempt on the instrument
+rows (the four linearity_exempt_* flags on veritamap_instrument_tests, set in
+the build wizard; see memory reference_veritamap_linearity_exemption_recovery)
+still show as needing a date on the map page because that page never reads the
+flags. Fix: (1) a per-test "Not applicable" control on the Cal Ver cell with a
+required reason (qualitative / no user calibration / manufacturer-calibrated
+single-use device / exempt per instrument flags / other with text), stored on
+veritamap_tests (cal_ver_na, cal_ver_na_reason, who and when) and shown as
+"N/A: reason" in the cell, the labwide page, the Excel export and the coverage
+intelligence; (2) the map page derives "Exempt" from the instrument-level flags
+as well as WAIVED, so the two stores agree (fix the class, not the cell).
+Receipts: an integration test that an N/A test drops out of the missing/overdue
+counts and survives a tests-save, and a Playwright exercise of the control.
+
+**Source:** Michael, 2026-10-07 ~09:40 ("it would be nice to N/A the calibration verification from veritamap").
+**Status:** Open. Build on request.
+
+---
+
+### 78. VeritaMap: manual date entry is clunky (native date control in a narrow cell; same class as #75)
+
+**Effort:** S (1-3 days)
+**Importance:** Medium. Every map row carries at least two of these dates (Last Cal Ver, Last Method Comp), so this is the slowest part of building or updating a map, and the same control is what makes the VeritaComp element dates (#75) hard to use.
+
+**What:** DateCell on the map page (VeritaMapMapPage.tsx ~374) renders a native
+Input type="date" in a text-xs cell; the browser's segmented control forces
+click-into-segment typing, hides its calendar icon at that width, rejects
+partial input, and offers no "today" or paste-a-date path, so entering a
+cal-ver date for 40 tests is 40 fiddly interactions. VeritaComp's element rows
+use the same native control. Fix the class once: one shared date-entry
+component (typed MM/DD/YYYY with masking and validation, calendar popover,
+"Today" shortcut, paste tolerant, keyboard-friendly, readable at cell size and
+in dark mode) used by the map page's two date columns, the labwide page, and
+the VeritaComp element dates; #75 closes with it. Receipt: Playwright entering
+a date by typing, by "Today" and by the picker on a map row and on a VeritaComp
+element, plus a dark mode screenshot.
+
+**Source:** Michael, 2026-10-07 ~09:40 ("the manual date entry on veritamap is clunky").
+**Status:** Open. Build on request; bundle with #75.
+
+---
+
+### 79. In-app Getting Started phase B: live checkmarks on the module how-to cards
+
+**Effort:** XS (under 1 day)
+**Importance:** Medium. The remaining half of Michael's #72 decision (option 1: dashboard card plus module-card checkmarks); the dashboard card is live, the per-module cards still show static text.
+
+**What:** ModuleHowToCard already renders on every module page; the
+getting-started endpoint already returns the 19 derived statuses. Phase B
+filters the three MODULE_GUIDES steps for the current module and shows them
+under the video with live done/todo marks from the same endpoint, so the
+public page, the dashboard card and the module card never drift. Receipt: the
+existing getting-started integration test plus a Playwright check that a
+module card flips a step to done after the lab adds the matching record.
+
+**Source:** docs/IN_APP_GETTING_STARTED_DESIGN.md, Michael's option 1 (2026-10-07).
+**Status:** Open. Build on request.
+
+---
+
 ## CLOSED (audit trail)
+
+### C78. Milford (labs 4/5) house policy format for VeritaDC drafts (was #71)
+
+**Effort:** was M / **Importance:** Medium. Lisa's lab; first renderer-based instance of the standing house-format courtesy (SCAHC was artifact-based).
+
+**Closure evidence:** Michael's option 1 (2026-10-07). PR #1503 (squash 5ec248c1, live): server/veritapolicyHouseFormats.ts renders the UMass Milford layout (header block, I. Purpose / II. Policy / III. Guidelines / IV. Personal Safety Requirements / V. References, Revision History table, house footer with facility path, policy number, revision and page), generatePolicyDocxBuffer dispatches on the lab's docx_format, both DOCX routes read it, veritapolicy_house_numbers holds Lisa's numbers, and POST /api/admin/veritapolicy/set-house-format switches a lab on (dryRun, audited). Receipt tests/integration/veritadc-house-format.test.ts 20/20; samples scratchpad/milford/VeritaDC_001_umass_milford_sample.docx and the stock sample delivered. Design and as-built in docs/VERITADC_HOUSE_FORMAT_DESIGN.md. NOT yet switched on for labs 4/5: that is one admin call once Lisa confirms the facility path and the first house numbers (Michael's go).
+
+### C77. In-app Getting Started, phase A: dashboard card scored from the lab's own tables (was #72)
+
+**Effort:** was M / **Importance:** Medium
+
+**Closure evidence:** Michael's option 1 (2026-10-07). PR #1505 (squash 6f937201, live): shared/gettingStartedContent.ts (keys, derived/manual kind, lab-scoped routes), server/gettingStarted.ts derives the 19 statuses from real tables, lab_onboarding_checks stores only the two manual Phase-5 ticks and the per-lab dismissal, GET/POST /api/labs/:labId/getting-started[/check], GettingStartedCard on the dashboard (N of 19, first incomplete phase open, Go links, auto-hide at 100 percent with a show-again link). Receipts: tests/integration/getting-started.test.ts 19/19 and tests/playwright/getting-started-card.spec.ts 1/1 (now in the CI sandbox receipts list). Phase B (module-card checkmarks) is #79.
 
 ### C76. VeritaMap "Failed to delete map": half-cascade left shells, VeritaStaff FK blocked the rest (found and fixed 2026-10-07)
 
