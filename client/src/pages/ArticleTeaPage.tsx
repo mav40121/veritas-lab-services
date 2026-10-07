@@ -32,7 +32,7 @@ const teaSampleTable = [
   { analyte: "Glucose", criteria: "±8% or ±6 mg/dL (greater)", cfr: "§493.931" },
   { analyte: "Sodium", criteria: "±4 mmol/L", cfr: "§493.931" },
   { analyte: "Creatinine", criteria: "±10% or ±0.2 mg/dL (greater)", cfr: "§493.931" },
-  { analyte: "Hemoglobin", criteria: "±7% or ±1.0 g/dL (greater)", cfr: "§493.941" },
+  { analyte: "Hemoglobin", criteria: "±4%", cfr: "§493.941" },
   { analyte: "Troponin I", criteria: "±30% or ±0.9 ng/mL (greater)", cfr: "§493.931" },
   { analyte: "TSH", criteria: "±20% or ±0.2 mIU/L (greater)", cfr: "§493.933" },
   { analyte: "INR", criteria: "±15%", cfr: "§493.941" },
