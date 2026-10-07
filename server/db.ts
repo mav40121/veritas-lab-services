@@ -2162,6 +2162,11 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
   const ensure = (col: string, sql: string) => {
     if (!labCols.includes(col)) { try { sqlite.exec(sql); labCols.push(col); } catch {} }
   };
+  // Corrective-action due window override (days from the anchor date). NULL =
+  // the accreditor default in dueDateForFinding (CAP 30, TJC 60, CMS 10, AABB
+  // 45, COLA 30). Set per lab, or per organization (organizations.finding_due_days)
+  // for a network like Lifepoint that runs every site on one clock. 2026-10-07.
+  ensure("finding_due_days",           "ALTER TABLE labs ADD COLUMN finding_due_days INTEGER");
   ensure("plan",                       "ALTER TABLE labs ADD COLUMN plan TEXT");
   ensure("subscription_status",        "ALTER TABLE labs ADD COLUMN subscription_status TEXT");
   ensure("subscription_expires_at",    "ALTER TABLE labs ADD COLUMN subscription_expires_at TEXT");
@@ -2324,6 +2329,7 @@ sqlite.exec(`
   ensureOrg("stripe_subscription_id",  "ALTER TABLE organizations ADD COLUMN stripe_subscription_id TEXT");
   ensureOrg("created_at",              "ALTER TABLE organizations ADD COLUMN created_at TEXT");
   ensureOrg("updated_at",              "ALTER TABLE organizations ADD COLUMN updated_at TEXT");
+  ensureOrg("finding_due_days",        "ALTER TABLE organizations ADD COLUMN finding_due_days INTEGER");
 
   const omCols = (sqlite.prepare("PRAGMA table_info(organization_members)").all() as any[]).map((c: any) => c.name);
   const ensureOm = (col: string, sql: string) => { if (!omCols.includes(col)) { try { sqlite.exec(sql); omCols.push(col); } catch {} } };
