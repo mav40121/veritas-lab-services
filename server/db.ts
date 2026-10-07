@@ -5335,6 +5335,24 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inv_transfers_owner ON invento
 // through the calibration itself, and an analyzer that cannot be operator-
 // calibrated (e.g. the GEM Premier 5000 blood-gas analyzer) has no linearity to
 // verify; either case drops Cal Ver / Linearity from the required set in the
+// 2026-10-07 (parking lot #77 part B): per-test "calibration verification not
+// applicable" on veritamap_tests, with a required reason and who/when, for
+// tests that carry no instrument-level exemption flag (qualitative methods,
+// devices with no user calibration). Read by the map page, the labwide page,
+// the Excel export and the VeritaCheck coverage engine.
+{
+  const vtCols = (sqlite.prepare("PRAGMA table_info(veritamap_tests)").all() as { name: string }[]).map((c) => c.name);
+  if (vtCols.length > 0) {
+    const ensureVt = (col: string, sql: string) => {
+      if (!vtCols.includes(col)) { try { sqlite.exec(sql); vtCols.push(col); } catch {} }
+    };
+    ensureVt("cal_ver_na", "ALTER TABLE veritamap_tests ADD COLUMN cal_ver_na INTEGER NOT NULL DEFAULT 0");
+    ensureVt("cal_ver_na_reason", "ALTER TABLE veritamap_tests ADD COLUMN cal_ver_na_reason TEXT");
+    ensureVt("cal_ver_na_set_by", "ALTER TABLE veritamap_tests ADD COLUMN cal_ver_na_set_by INTEGER");
+    ensureVt("cal_ver_na_set_at", "ALTER TABLE veritamap_tests ADD COLUMN cal_ver_na_set_at TEXT");
+  }
+}
+
 // Coverage view. PRAGMA table_info + guarded ALTER per the NEW DB TABLE RULE.
 {
   const vitCols = (sqlite.prepare("PRAGMA table_info(veritamap_instrument_tests)").all() as { name: string }[]).map((c) => c.name);
