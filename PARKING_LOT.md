@@ -512,22 +512,7 @@ _(item #58 closed 2026-10-07; shipped PR #1481, deployed 2026-10-06, see C63 bel
 
 ---
 
-### 59. VeritaComp legacy program modal shows no VeritaStaff employees (Option 2)
-
-**Effort:** S (1-3 days)
-**Importance:** Medium — fixes a confusing dead-end next to the employee-centric flow; mostly a demo/UX trap.
-
-**What:** The legacy "New Technical Assessment" program modal reads
-`competency_employees` (empty for most labs) instead of VeritaStaff's
-`staff_employees`, so it says "No active employees" even when staff are
-assigned the program's instruments (observed on lab 5 / Alecia Lillico-Perry
-with the Atellica CH 930). Michael chose Option 2: populate the modal with the
-lab's active VeritaStaff employees who are assigned the program's instruments,
-auto-bridged into `competency_employees` on the fly (reusing the existing
-idempotent bridge). Fixes the roster drift rather than hiding the flow.
-
-**Source:** Michael, 2026-10-06.
-**Status:** Open. Approved ("build it that way"); code paths already traced; ready to build.
+_(item #59 closed 2026-10-07; PR #1495 deployed, see C73 below)_
 
 ---
 
@@ -672,6 +657,12 @@ system, never a client lab) would run these on every PR.
 ---
 
 ## CLOSED (audit trail)
+
+### C73. VeritaComp legacy program modal shows no VeritaStaff employees (was #59)
+
+**Effort:** was S / **Importance:** Medium
+
+**Closure evidence:** Michael's Option 2 built 2026-10-07 overnight. PR #1495 (merged 2026-10-07 00:39, squash b1aad70d, deploy confirmed by watcher). GET /api/labs/:labId/competency/programs/:id/eligible-employees returns the lab's active VeritaStaff employees assigned (staff_employee_instruments) to any instrument in the program's method groups, auto-bridged into competency_employees (idempotent, owner user id, same insert shape as the roster sync; a program with no method groups falls back to any assigned active staff). NewAssessmentDialog fetches it on open, merges into the Employee select, defaults the selection, shows "N from the VeritaStaff roster, assigned to this program's instruments"; the dead-end copy now points at Assign by Instrument. Receipts: tests/integration/veritacomp-eligible-employees.test.ts 14/14 through the real routes (returned / excluded by instrument / excluded inactive / one bridge row / idempotent / no-group fallback / other lab 403); Gate 3 step 8 tests/playwright/veritacomp-assessment-roster-employees.spec.ts 1/1 on a local build (dialog defaults to the roster member with her assigned Atellica CH 930, no dead-end notice). tsc clean. Prod click-through on lab 5 is Michael's (Lisa's lab; not touched).
 
 ### C72. Nightly backup studyCount anomaly on every user-deleted study (was #73)
 
