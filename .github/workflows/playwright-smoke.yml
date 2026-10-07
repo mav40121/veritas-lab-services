@@ -64,6 +64,34 @@ jobs:
       - name: Validate all specs compile and collect
         run: npx playwright test --list
 
+      # BLOCKING GATE 2 (parking lot #74, 2026-10-07, Michael option 1): the
+      # authenticated receipts that are aligned to the VLS CI sandbox lab on
+      # production (our own lab, test data only, never a client lab). The list
+      # lives in tests/playwright/sandbox-receipts.txt; a spec joins it once it
+      # passes against the sandbox with the fixtures the seed script creates
+      # (scripts/ci-sandbox/seed_sandbox.mjs). Unlike the report-only full run
+      # below, a failure here FAILS the job and blocks the merge: a receipt that
+      # cannot pass no longer hides behind "skipped". PW_TOKEN is a one-year
+      # JWT for the sandbox owner (scripts/ci-sandbox/mint_token.mjs); when the
+      # secret is absent (forks, local dry runs) the step says so and passes.
+      - name: Sandbox receipts (blocking)
+        timeout-minutes: 10
+        env:
+          CI: 'true'
+          PW_BASE: ${{ secrets.PW_BASE || 'https://www.veritaslabservices.com' }}
+          PW_TOKEN: ${{ secrets.PW_TOKEN }}
+          PW_LAB_ID: ${{ secrets.PW_LAB_ID }}
+          PW_MAP_ID: ${{ secrets.PW_MAP_ID }}
+          PW_MAP_URL: ${{ secrets.PW_MAP_URL }}
+          PW_VERIFICATION_PATH: ${{ secrets.PW_VERIFICATION_PATH }}
+          PW_PROGRAM_ID: ${{ secrets.PW_PROGRAM_ID }}
+          PW_EXPECT_EMPLOYEE: ${{ secrets.PW_EXPECT_EMPLOYEE }}
+        run: |
+          if [ -z "$PW_TOKEN" ]; then echo "PW_TOKEN not configured: sandbox receipts not run (compile-only)"; exit 0; fi
+          SPECS=$(grep -v '^#' tests/playwright/sandbox-receipts.txt | grep -v '^\s*$' | tr '\n' ' ')
+          echo "Running sandbox receipts: $SPECS"
+          npx playwright test $SPECS --retries=1 --workers=2
+
       # REPORTING (non-blocking): the full run executes against prod. 32 specs
       # pass (unauthenticated endpoint guards), 74 skip without PW_TOKEN, and 24
       # PRE-EXISTING legacy specs currently fail — a mix of stale assertions
@@ -90,6 +118,10 @@ jobs:
           PW_TOKEN: ${{ secrets.PW_TOKEN }}
           PW_LAB_ID: ${{ secrets.PW_LAB_ID }}
           PW_MAP_ID: ${{ secrets.PW_MAP_ID }}
+          PW_MAP_URL: ${{ secrets.PW_MAP_URL }}
+          PW_VERIFICATION_PATH: ${{ secrets.PW_VERIFICATION_PATH }}
+          PW_PROGRAM_ID: ${{ secrets.PW_PROGRAM_ID }}
+          PW_EXPECT_EMPLOYEE: ${{ secrets.PW_EXPECT_EMPLOYEE }}
           PW_FINDING_ID: ${{ secrets.PW_FINDING_ID }}
           PW_STUDY_ID: ${{ secrets.PW_STUDY_ID }}
         run: npx playwright test --retries=0 --workers=4

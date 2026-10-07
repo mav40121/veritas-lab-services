@@ -400,19 +400,6 @@ export default function VeritaStaffAppPage() {
             </p>
           )}
         </div>
-      <ModuleHowToCard
-        moduleKey="veritastaff"
-        moduleName="VeritaStaff™"
-        whatItDoes="VeritaStaff is the personnel roster with CLIA role assignments (Laboratory Director, Technical Consultant, Technical Supervisor, General Supervisor, Testing Personnel) and specialty tracking. Auto-generates the CMS 209 Laboratory Personnel Report."
-        howToUse={[
-          "Add each staff member with their CLIA role, qualifications, and assigned specialties.",
-          "Update credentials, license expirations, and training records as they change.",
-          "Generate the CMS 209 Laboratory Personnel Report with one click when CMS asks.",
-          "Cross-link to VeritaComp for the competency side of each staff member.",
-          "Run the roster view weekly to see who is current, who is due, and who is overdue."
-        ]}
-      />
-
         <div className="flex gap-2">
           {lab && (
             <>
@@ -448,6 +435,19 @@ export default function VeritaStaffAppPage() {
           )}
         </div>
       </div>
+
+      <ModuleHowToCard
+        moduleKey="veritastaff"
+        moduleName="VeritaStaff™"
+        whatItDoes="VeritaStaff is the personnel roster with CLIA role assignments (Laboratory Director, Technical Consultant, Technical Supervisor, General Supervisor, Testing Personnel) and specialty tracking. Auto-generates the CMS 209 Laboratory Personnel Report."
+        howToUse={[
+          "Add each staff member with their CLIA role, qualifications, and assigned specialties.",
+          "Update credentials, license expirations, and training records as they change.",
+          "Generate the CMS 209 Laboratory Personnel Report with one click when CMS asks.",
+          "Cross-link to VeritaComp for the competency side of each staff member.",
+          "Run the roster view weekly to see who is current, who is due, and who is overdue."
+        ]}
+      />
 
       {/* CMS-209 Part B: needs-review banner. TC/TS whose specialty is missing
           (or entire-lab with an empty lab list) render blank on the 209, so the

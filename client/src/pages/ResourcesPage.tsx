@@ -9,6 +9,17 @@ import { teaData } from "@/lib/cliaTeaData";
 
 const articles = [
   {
+    slug: "getting-started",
+    title: "Getting Started with VeritaAssure™",
+    summary: "A step-by-step setup path plus a getting-started checklist for every one of the eighteen modules. Check items off as you go, or print the guide.",
+    category: "Getting Started",
+    readTime: "Interactive checklist",
+    author: "Veritas Lab Services",
+    date: "October 2026",
+    tags: ["Getting Started", "Onboarding", "VeritaAssure™"],
+    featured: true,
+  },
+  {
     slug: "clia-brochures-every-lab-leader-should-read",
     title: "The CLIA Brochures Every Lab Leader Should Read, and What Each One Is Really Telling You",
     summary: "A former surveyor's guide to the free CMS CLIA brochures every lab leader should read at least once.",
@@ -29,6 +40,17 @@ const articles = [
     date: "October 2026",
     tags: ["Buyer's Guide", "Lab Compliance Software", "Accreditation", "CLIA", "VeritaAssure™"],
     featured: true,
+  },
+  {
+    slug: "veritacheck-vs-ep-evaluator",
+    title: "VeritaCheck™ vs EP Evaluator: CLIA Verification Compared",
+    summary: "An honest side-by-side of VeritaCheck and EP Evaluator for CLIA performance verification: statistical study coverage, whole-menu coverage, the 42 CFR-cited and director-signed report, delivery, and pricing, including where EP Evaluator is stronger.",
+    category: "Comparison",
+    readTime: "7 min read",
+    author: "Michael Veri",
+    date: "October 2026",
+    tags: ["Comparison", "EP Evaluator", "Method Verification", "CLIA", "VeritaCheck™"],
+    featured: false,
   },
   {
     slug: "post-analytical-critical-values-corrected-reports",

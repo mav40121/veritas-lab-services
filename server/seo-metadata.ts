@@ -10,6 +10,7 @@ import {
   TJC_INSPECTION_FAQ,
   MOCK_INSPECTION_FAQ,
   CHOOSE_SOFTWARE_FAQ,
+  EPEVAL_COMPARE_FAQ,
   CPRT_FAQ,
   MANUAL_LOGS_FAQ,
   REFINT_ARTICLE_FAQ,
@@ -489,6 +490,21 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
       ],
     }),
   },
+  "/resources/getting-started": {
+    title: "Getting Started with VeritaAssure™: Setup and Per-Module Checklists",
+    description: "A step-by-step guide to set up a laboratory on VeritaAssure™: the system onboarding path plus a getting-started checklist for all eighteen modules. Printable, with progress you can check off.",
+  },
+  "/resources/veritacheck-vs-ep-evaluator": {
+    title: "VeritaCheck™ vs EP Evaluator: CLIA Verification Compared",
+    description: "How VeritaCheck and EP Evaluator compare for CLIA performance verification: statistical study coverage, 42 CFR citation, whole-menu coverage, reporting, and pricing. An honest side-by-side from a former Joint Commission surveyor.",
+    jsonLd: articleJsonLd({
+      headline: "VeritaCheck vs EP Evaluator: CLIA Verification Compared",
+      description: "How VeritaCheck and EP Evaluator compare for CLIA performance verification: statistical study coverage, 42 CFR citation, whole-menu coverage, reporting, and pricing. An honest side-by-side from a former Joint Commission surveyor.",
+      articleBody: "EP Evaluator, by Data Innovations, is the long-established statistical engine many laboratories use for performance verification. VeritaCheck is the verification module inside VeritaAssure. Both run the CLSI studies a CLIA laboratory needs, calibration verification and linearity, precision, and method comparison, and both evaluate results against total allowable error and CLIA proficiency testing limits. They differ in what happens around the statistics. EP Evaluator has the broader pure-statistics library, roughly thirty modules, and goes deeper on advanced statistics than VeritaCheck's fourteen study types. VeritaCheck is built around the survey: it sits on the VeritaMap whole-lab menu and reports, per analyte and instrument, what is covered, what needs review, what is missing, and what is exempt, which EP Evaluator has no concept of. Each VeritaCheck study produces a report that states the regulatory determination, cites the exact 42 CFR section inline, shows the ADLM goal next to the CLIA TEa, and carries a laboratory director or designee signature block on the results page. VeritaCheck is included in every VeritaAssure tier at published annual prices; EP Evaluator is a per-user license plus annual maintenance with no published price. Sections: what they share; where EP Evaluator is stronger; where VeritaCheck is different; comparison; which to choose; frequently asked questions.",
+      path: "/resources/veritacheck-vs-ep-evaluator",
+      datePublished: "2026-10-06",
+    }),
+  },
   "/resources/how-to-choose-lab-compliance-software": {
     title: "How to Choose Lab Compliance Software, 2026 Buyer's Guide",
     description: "A former Joint Commission surveyor's six-question guide to evaluating lab compliance software for a clinical laboratory: accreditor fit, lifecycle coverage, surveyor-defensible output, PHI risk, who built it, and pricing.",
@@ -755,6 +771,15 @@ const chooseSoftwareBreadcrumb: Record<string, unknown> = {
     { "@type": "ListItem", position: 3, name: "How to Choose Lab Compliance Software" },
   ],
 };
+const epEvalCompareBreadcrumb: Record<string, unknown> = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    { "@type": "ListItem", position: 1, name: "Home", item: `${BASE_URL}/` },
+    { "@type": "ListItem", position: 2, name: "Resources", item: `${BASE_URL}/resources` },
+    { "@type": "ListItem", position: 3, name: "VeritaCheck vs EP Evaluator" },
+  ],
+};
 const tjcSurveyHowTo: Record<string, unknown> = {
   "@context": "https://schema.org",
   "@type": "HowTo",
@@ -789,6 +814,7 @@ const ROUTE_FAQ: Record<string, FaqQA[]> = {
   "/resources/precision-verification-report-interpretation-guide": PRECISION_FAQ,
   "/resources/tjc-laboratory-inspection-what-to-expect": MOCK_INSPECTION_FAQ,
   "/resources/how-to-choose-lab-compliance-software": CHOOSE_SOFTWARE_FAQ,
+  "/resources/veritacheck-vs-ep-evaluator": EPEVAL_COMPARE_FAQ,
   "/resources/cost-per-reportable-test-four-layer-framework": CPRT_FAQ,
   "/resources/manual-logs-why-most-labs-should-stop": MANUAL_LOGS_FAQ,
 };
@@ -826,6 +852,7 @@ const ROUTE_EXTRA_JSONLD: Record<string, Record<string, unknown>[]> = {
     ),
   ],
   "/resources/how-to-choose-lab-compliance-software": [chooseSoftwareBreadcrumb],
+  "/resources/veritacheck-vs-ep-evaluator": [epEvalCompareBreadcrumb],
   "/resources/cost-per-reportable-test-four-layer-framework": [
     definedTermJsonLd(
       "Cost per reportable test",

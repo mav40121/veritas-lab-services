@@ -1,0 +1,13 @@
+# Authenticated receipts aligned to the VLS CI sandbox lab (parking lot #74).
+# Run by the BLOCKING "Sandbox receipts" step in .github/workflows/playwright-smoke.yml.
+# A spec joins this list only after it passes against the sandbox with the fixtures
+# scripts/ci-sandbox/seed_sandbox.mjs creates. Specs here must leave the sandbox as
+# they found it (restore what they toggle; never delete seed rows).
+tests/playwright/pdf-open-no-blank-tab.spec.ts
+tests/playwright/module-howto-card-layout.spec.ts
+tests/playwright/veritamap-card-edit-button.spec.ts
+tests/playwright/veritapolicy-custom-entry.spec.ts
+tests/playwright/getting-started-card.spec.ts
+tests/playwright/veritacheck-analyte-multiselect.spec.ts
+tests/playwright/veritacomp-assessment-roster-employees.spec.ts
+tests/playwright/veritamap-amr-autosave-no-loop.spec.ts

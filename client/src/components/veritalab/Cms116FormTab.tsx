@@ -41,6 +41,7 @@ import {
   Accordion, AccordionContent, AccordionItem, AccordionTrigger,
 } from "@/components/ui/accordion";
 import { API_BASE } from "@/lib/queryClient";
+import { downloadPdfToken } from "@/lib/utils";
 import { authHeaders } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { FileSignature, Save, CheckCircle2, AlertTriangle } from "lucide-react";
@@ -307,7 +308,8 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
       }
       const { token } = await res.json();
       if (!token) throw new Error("No token returned");
-      window.open(`${API_BASE}/api/pdf/${token}`, "_blank");
+      // Anchor download via the token endpoint (no popup / about:blank tab; parking lot #63).
+      downloadPdfToken(token, "CMS-116_Draft.pdf");
       toast({ title: "CMS-116 PDF generated" });
     } catch (e: any) {
       toast({ title: "PDF generation failed", description: e?.message || "Unknown error", variant: "destructive" });

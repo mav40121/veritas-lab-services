@@ -4,6 +4,7 @@ import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
+import { downloadPdfToken } from "@/lib/utils";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useMemberships } from "@/hooks/useMemberships";
@@ -211,7 +212,8 @@ export default function VeritaPacePage() {
       });
       if (res.ok) {
         const d = await res.json();
-        if (d.token) window.open(`${API_BASE}/api/pdf/${d.token}`, "_blank");
+        // Anchor download via the token endpoint (no popup / about:blank tab; parking lot #63).
+        if (d.token) downloadPdfToken(d.token, "VeritaPace_Leverage_Report.pdf");
       } else {
         const e = await res.json();
         toast({ title: "Report failed", description: e.error, variant: "destructive" });

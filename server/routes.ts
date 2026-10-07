@@ -24,6 +24,7 @@ import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateEmployeeCompetencyRecordPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer, generateInternalNcePDF, validateInternalNce, generateCeuTranscriptPDF } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
 import { labLocalDate } from "./dateLocal";
+import { scanPhi } from "./phiScan";
 import { buildWasteReport, generateWasteReportPDF, generateWasteReportExcel, type WasteEventRow, type WasteReportContext } from "./wasteReport";
 import { entireLabFlag, sanitizeSpecialties, expandEntireLabRoles, cms209Gaps } from "./cms209Roles";
 import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution, analyteMatch, stampMapDatesFromStudies } from "./veritacheckCoverage";
@@ -176,6 +177,9 @@ function headerRowHeight(headers: string[], colWidths: number[]): number {
 }
 
 import { logAudit } from "./audit";
+import { deleteMapCascade, mapDeleteBlockers } from "./veritamapDelete";
+import { computeGettingStarted, setGettingStartedCheck, isManualKey } from "./gettingStarted";
+import { HOUSE_FORMATS } from "./veritapolicyHouseFormats";
 import { logConsumption } from "./consumptionLedger";
 import { logCount } from "./countLedger";
 import { reconcileLots } from "./inventoryLots";
@@ -217,7 +221,13 @@ import { isCensored, censorValueForMath, type CensoringPolicy } from "@shared/ce
 import { computePTCoagStatus } from "./ptCoagVerdict";
 import { blockFinalizeWithoutClia, CLIA_REQUIRED_MESSAGE } from "./cliaGate";
 
+// Set when computeStudyStatus hit an exception (its "fail" return is then a
+// fail-safe, not a verdict). The boot recompute reads this to SKIP such
+// studies instead of writing FAIL over a stored verdict (#69, 2026-10-07).
+let lastComputeStudyStatusError: unknown = null;
+
 function computeStudyStatus(studyType: string, dataPointsJson: string, instrumentsJson: string, cliaAllowableError: number, teaIsPercentage: boolean = true, cliaAbsoluteFloor: number | null = null, censoringPolicy: CensoringPolicy = "exclude"): "pass" | "fail" {
+  lastComputeStudyStatusError = null;
   try {
     let rawData = safeJsonParse(dataPointsJson, null);
     const instrumentNames: string[] = safeJsonParse(instrumentsJson, []);
@@ -283,8 +293,12 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
 
     if (studyType === "cal_ver") {
       // Dual-criterion S493 rule: |observed - assigned| <= max(percent_allowance, absolute_floor)
-      const dataPoints = rawData as { level: number; expectedValue: number | null; instrumentValues: Record<string, number | null> }[];
-      const valid = dataPoints.filter(dp => dp.expectedValue !== null && instrumentNames.some(n => dp.instrumentValues[n] !== null));
+      const dataPoints = (Array.isArray(rawData) ? rawData : []) as { level: number; expectedValue: number | null; instrumentValues: Record<string, number | null> }[];
+      const valid = dataPoints.filter(dp => dp && dp.expectedValue != null && dp.instrumentValues && instrumentNames.some(n => dp.instrumentValues[n] != null));
+      if (valid.length === 0) {
+        lastComputeStudyStatusError = new Error("cal_ver: no evaluable data points");
+        return "fail";
+      }
       const FP_EPS = 1e-9;
       let passCount = 0, totalCount = 0;
       for (const dp of valid) {
@@ -343,24 +357,40 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
         return pctWithinOne >= (passThreshold || 0.80) ? "pass" : "fail";
       }
       // Standard quantitative method comparison
-      const dataPoints = rawData as { level: number; expectedValue: number | null; instrumentValues: Record<string, number | null> }[];
+      // Legacy rows (2026-10-07, #69): a point may lack instrumentValues
+      // entirely (old {x,y} shapes), and `instruments` may not even be a JSON
+      // array. Read through `|| {}` so a malformed point is simply not valid
+      // instead of throwing "Cannot read properties of undefined".
+      const dataPoints = (Array.isArray(rawData) ? rawData : []) as { level: number; expectedValue: number | null; instrumentValues: Record<string, number | null> }[];
+      const iv = (d: any): Record<string, number | null> => (d && d.instrumentValues && typeof d.instrumentValues === "object") ? d.instrumentValues : {};
       const primaryName = instrumentNames[0];
-      const hasAllInValues = dataPoints.length > 0 && instrumentNames.every(n => n in (dataPoints[0].instrumentValues || {}));
+      // Decide the shape from the first point that actually carries
+      // instrumentValues, not blindly from dataPoints[0]: one malformed
+      // leading point must not derail the whole study.
+      const shapePoint = dataPoints.find(d => Object.keys(iv(d)).length > 0);
+      const hasAllInValues = !!shapePoint && instrumentNames.every(n => n in iv(shapePoint));
       let comparisonNames: string[];
       let mappedPoints: typeof dataPoints;
       if (hasAllInValues && instrumentNames.length >= 2) {
         comparisonNames = instrumentNames.slice(1);
         mappedPoints = dataPoints.map(d => ({
           level: d.level,
-          expectedValue: d.instrumentValues[primaryName] ?? null,
-          instrumentValues: Object.fromEntries(comparisonNames.map(n => [n, d.instrumentValues[n] ?? null])),
+          expectedValue: iv(d)[primaryName] ?? null,
+          instrumentValues: Object.fromEntries(comparisonNames.map(n => [n, iv(d)[n] ?? null])),
         }));
       } else {
-        comparisonNames = instrumentNames.filter(n => n in (dataPoints[0]?.instrumentValues || {}));
+        comparisonNames = instrumentNames.filter(n => n in iv(shapePoint));
         if (comparisonNames.length === 0) comparisonNames = instrumentNames;
-        mappedPoints = dataPoints;
+        mappedPoints = dataPoints.map(d => ({ ...d, instrumentValues: iv(d) }));
       }
-      const valid = mappedPoints.filter(dp => dp.expectedValue !== null && comparisonNames.some(n => dp.instrumentValues[n] !== null));
+      const valid = mappedPoints.filter(dp => dp && dp.expectedValue != null && comparisonNames.some(n => dp.instrumentValues[n] != null));
+      if (valid.length === 0) {
+        // Nothing evaluable (legacy {x,y} rows, bare-string instruments): a
+        // save still gets the fail-safe, but the boot recompute must not
+        // overwrite a stored verdict with it.
+        lastComputeStudyStatusError = new Error("method_comparison: no evaluable data points");
+        return "fail";
+      }
       // Floating-point tolerance to absorb binary float noise
       const FP_EPS = 1e-9;
       let passCount = 0, totalCount = 0;
@@ -389,35 +419,20 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
         }
       }
 
-      // Validation guard: verify pass/fail matches computed mean bias
-      // Use the dual-criterion allowance at the mean reference level
-      let computedResult: "pass" | "fail" = (passCount === totalCount && totalCount > 0) ? "pass" : "fail";
-      if (biasVals.length > 0) {
-        const meanAbsBias = biasVals.reduce((a, b) => a + Math.abs(b), 0) / biasVals.length;
-        // For the mean-bias guard, compute allowance in the same units as biasVals
-        let meanAllowance: number;
-        if (teaIsPercentage) {
-          // biasVals are fractional (e.g. 0.09 for 9%), so compare against cliaAllowableError
-          // but also consider the absolute floor converted to fraction at mean reference
-          const refs = valid.flatMap(dp => {
-            const ref = dp.expectedValue!;
-            return comparisonNames.filter(n => dp.instrumentValues[n] !== null && dp.instrumentValues[n] !== undefined).map(() => ref);
-          });
-          const meanRef = refs.length > 0 ? refs.reduce((a, b) => a + Math.abs(b), 0) / refs.length : 0;
-          const absFloorAsFraction = (cliaAbsoluteFloor ?? 0) / (meanRef || 1);
-          meanAllowance = Math.max(cliaAllowableError, absFloorAsFraction);
-        } else {
-          meanAllowance = cliaAllowableError;
-        }
-        if (meanAbsBias > meanAllowance + FP_EPS && computedResult === "pass") {
-          const biasLabel = teaIsPercentage
-            ? `${(meanAbsBias * 100).toFixed(2)}% exceeds TEa ${(meanAllowance * 100).toFixed(1)}%`
-            : `${meanAbsBias.toFixed(3)} exceeds TEa ${meanAllowance}`;
-          console.error(`[VALIDATION] Method comparison computed as pass but mean |bias| ${biasLabel} - overriding to FAIL`);
-          computedResult = "fail";
-        }
+      if (totalCount === 0) {
+        // Points existed but carried no measurable comparison values.
+        lastComputeStudyStatusError = new Error("method_comparison: no measurable comparison values");
+        return "fail";
       }
-      return computedResult;
+      // The verdict is the per-sample dual-criterion rule above, nothing more.
+      // A mean-|bias| "validation guard" used to sit here and override an
+      // all-pass study to FAIL. Removed 2026-10-07 on Michael's call (parking
+      // lot #67): for single-criterion TEa it could never fire (a mean of values
+      // each within T is within T), and for dual-criterion TEa (percent OR
+      // absolute floor) it averaged fractional biases inflated by floor-passed
+      // low samples against the percent TEa, flipping ~7.5% of all-pass studies
+      // to a false FAIL. Receipt: tests/integration/d1-aggregate-override.test.ts.
+      return (passCount === totalCount && totalCount > 0) ? "pass" : "fail";
     }
 
     if (studyType === "precision") {
@@ -652,9 +667,16 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
     // unknown study type
     return "fail";
   } catch (err) {
+    lastComputeStudyStatusError = err;
     console.error("[computeStudyStatus] Error recomputing status:", err);
     return "fail"; // fail-safe: if we cannot verify, mark as fail
   }
+}
+
+// True when the most recent computeStudyStatus call ended in an exception,
+// i.e. its "fail" was the fail-safe rather than an evaluated verdict.
+export function lastStudyStatusWasError(): boolean {
+  return lastComputeStudyStatusError != null;
 }
 
 // True if any data point carries a documented exclusion. Used to keep the boot
@@ -667,9 +689,10 @@ function dataPointsHaveExclusions(dataPointsJson: string): boolean {
 }
 
 // Recompute and fix status for all existing studies
-export function recomputeAllStudyStatuses(): void {
+export function recomputeAllStudyStatuses(): { fixed: number; skipped: number } {
   const allStudies = storage.getAllStudies();
   let fixed = 0;
+  let skipped = 0;
   const sqlite = (db as any).$client;
   for (const study of allStudies) {
     // 2026-06-15 (Phase 2): never auto-mutate an exclusion-affected verdict at
@@ -680,6 +703,15 @@ export function recomputeAllStudyStatuses(): void {
     // through the controlled exclusion endpoint, which captures that decision.
     if (dataPointsHaveExclusions(study.dataPoints)) continue;
     const computed = computeStudyStatus(study.studyType, study.dataPoints, study.instruments, study.cliaAllowableError, (study as any).teaIsPercentage !== 0, (study as any).cliaAbsoluteFloor ?? null, (study as any).censoringPolicy ?? "exclude");
+    // #69 (2026-10-07): an exception inside computeStudyStatus returns the
+    // fail-safe "fail", not a verdict. Writing that over a stored status at
+    // boot would mark a study FAIL because the recompute could not READ it
+    // (legacy rows #43-#46 threw on every boot). Leave such rows alone.
+    if (lastStudyStatusWasError()) {
+      skipped++;
+      console.warn(`[migration] Study #${study.id} "${study.testName}": status left as "${study.status}" (recompute could not evaluate its data)`);
+      continue;
+    }
     if (computed !== study.status) {
       storage.updateStudyStatus(study.id, computed);
       // Also update the result column (not in drizzle schema, added via ALTER TABLE)
@@ -689,10 +721,11 @@ export function recomputeAllStudyStatuses(): void {
     }
   }
   if (fixed > 0) {
-    console.log(`[migration] Fixed ${fixed} study status(es)`);
+    console.log(`[migration] Fixed ${fixed} study status(es)${skipped ? `; ${skipped} left unevaluated` : ""}`);
   } else {
-    console.log("[migration] All study statuses are correct");
+    console.log(`[migration] All study statuses are correct${skipped ? ` (${skipped} left unevaluated)` : ""}`);
   }
+  return { fixed, skipped };
 }
 import { autoCompleteVeritaScanItems } from "./integrations";
 import {
@@ -1885,6 +1918,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, labId: targetLabId, user: { id: user?.id, email: user?.email, plan: user?.plan, studyCredits: user?.studyCredits } });
   });
 
+  // ADMIN: scan the live database for anything shaped like a protected health
+  // identifier. VeritaAssure stores no PHI by design, so the expected result is
+  // zero; any hit is a real leak to investigate. Read-only. The report returns
+  // table/column/row id and a REDACTED preview, never cleartext PHI (the scan
+  // cannot itself become a leak). See server/phiScan.ts. Optional ?max=N caps
+  // returned findings (default 500, hard ceiling 5000). secret via ?secret= or
+  // the x-admin-secret header.
+  app.get("/api/admin/phi-scan", (req, res) => {
+    const secret = (req.query.secret as string) || (req.headers["x-admin-secret"] as string);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const maxRaw = Number(req.query.max);
+    const maxFindings = Number.isFinite(maxRaw) && maxRaw > 0 ? Math.min(maxRaw, 5000) : 500;
+    try {
+      const result = scanPhi((db as any).$client, { maxFindings });
+      res.json(result);
+    } catch (err: any) {
+      console.error("[admin/phi-scan] failed:", err?.message);
+      res.status(500).json({ error: err?.message || "scan failed" });
+    }
+  });
+
   // Targeted audit_log maintenance (id-based ONLY): delete specific rows and/or
   // re-owner specific rows to a target owner_user_id. ADMIN_SECRET-gated. Used to
   // remove test artifacts and to correct rows mis-filed by the pre-2026-07-28
@@ -2235,6 +2289,67 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(Number(labId), Number(userId));
     auditLabMembership("create", membership, 0, (req.headers["x-forwarded-for"] as string) || null, "admin/add-lab-membership");
     res.json({ ok: true, created: true, membership, user: { id: user.id, email: user.email }, lab: { id: lab.id, name: lab.lab_name } });
+  });
+
+  // Admin: repair lab admin access. Grants an ACTIVE 'admin' lab_members row to
+  // each provided user email on each provided lab, inserting when missing and
+  // promoting an existing non-admin / inactive row. Idempotent; never demotes an
+  // owner. Built 2026-10-06 after Milford labs 4/5 left both the operator and the
+  // lab director view-only (requireModuleEdit 403 on every VeritaMap save) because
+  // an old boot-backfill cleanup removed their admin rows and the labs were never
+  // re-granted. Unlike add-lab-membership (which no-ops on an existing row and so
+  // cannot fix a stuck role), this UPDATEs a non-admin row up to admin. dryRun
+  // reports current state (numeric owner/org + active member/admin counts + the
+  // per-provided-email role/status) and writes nothing; it returns only the emails
+  // the caller supplied, never a roster, so it exposes no third-party PII. Every
+  // write is audit_log'd.
+  app.post("/api/admin/repair-lab-admins", (req, res) => {
+    const { secret, labIds, emails, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!Array.isArray(labIds) || labIds.length === 0) return res.status(400).json({ error: "labIds must be a non-empty array" });
+    if (!Array.isArray(emails) || emails.length === 0) return res.status(400).json({ error: "emails must be a non-empty array" });
+    const sqlite = (db as any).$client;
+    const ip = (req.headers["x-forwarded-for"] as string) || null;
+    const now = new Date().toISOString();
+    const report: any[] = [];
+    for (const rawLab of labIds) {
+      const labId = Number(rawLab);
+      if (!Number.isFinite(labId) || labId <= 0) { report.push({ labId: rawLab, error: "bad labId" }); continue; }
+      const lab = sqlite.prepare("SELECT id, lab_name, owner_user_id, organization_id FROM labs WHERE id = ?").get(labId) as any;
+      if (!lab) { report.push({ labId, error: "lab not found" }); continue; }
+      const activeMembers = (sqlite.prepare("SELECT COUNT(*) AS c FROM lab_members WHERE lab_id = ? AND status = 'active'").get(labId) as any).c;
+      const activeAdmins = (sqlite.prepare("SELECT COUNT(*) AS c FROM lab_members WHERE lab_id = ? AND status = 'active' AND role IN ('owner','admin')").get(labId) as any).c;
+      const labRep: any = { labId, lab_name: lab.lab_name, owner_user_id: lab.owner_user_id, organization_id: lab.organization_id, active_members: activeMembers, active_admins: activeAdmins, users: [] };
+      for (const rawEmail of emails) {
+        const email = String(rawEmail);
+        const user = sqlite.prepare("SELECT id, email FROM users WHERE lower(email) = lower(?)").get(email) as any;
+        if (!user) { labRep.users.push({ email, result: "user_not_found" }); continue; }
+        const existing = sqlite.prepare("SELECT id, role, status FROM lab_members WHERE lab_id = ? AND user_id = ?").get(labId, user.id) as any;
+        const before = existing ? { role: existing.role, status: existing.status } : null;
+        let result: string;
+        if (existing && existing.role === "owner") {
+          result = "owner_unchanged";
+        } else if (existing && existing.role === "admin" && existing.status === "active") {
+          result = "already_admin";
+        } else if (dryRun) {
+          result = existing ? "would_promote_to_admin" : "would_insert_admin";
+        } else if (existing) {
+          sqlite.prepare("UPDATE lab_members SET role = 'admin', status = 'active', updated_at = ? WHERE id = ?").run(now, existing.id);
+          const after = sqlite.prepare("SELECT * FROM lab_members WHERE id = ?").get(existing.id);
+          auditLabMembership("update_role", after, 0, ip, "admin/repair-lab-admins", existing);
+          result = "promoted_to_admin";
+        } else {
+          sqlite.prepare("INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at) VALUES (?, ?, 'admin', '{}', 'active', 0, ?, ?, ?)").run(labId, user.id, now, now, now);
+          const created = sqlite.prepare("SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?").get(labId, user.id);
+          auditLabMembership("create", created, 0, ip, "admin/repair-lab-admins");
+          result = "inserted_admin";
+        }
+        const nowRow = sqlite.prepare("SELECT role, status FROM lab_members WHERE lab_id = ? AND user_id = ?").get(labId, user.id) as any;
+        labRep.users.push({ email: user.email, user_id: user.id, before, result, after: nowRow ? { role: nowRow.role, status: nowRow.status } : null });
+      }
+      report.push(labRep);
+    }
+    res.json({ ok: true, dryRun: !!dryRun, report });
   });
 
   // Admin: deactivate (or hard-delete) one or more lab_members rows.
@@ -2697,6 +2812,38 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(Number(labId));
     console.log(`[admin/extend-lab-subscription] lab_id=${labId} (${lab.lab_name}): ${lab.subscription_expires_at} -> ${newExpiry}`);
     res.json({ ok: true, before: { expires_at: lab.subscription_expires_at, status: lab.subscription_status }, lab: updated });
+  });
+
+  // Admin: read-only audit of VeritaMap write access across EVERY lab. Mirrors
+  // hasMapAccess (passes if lab.subscription_status === 'active', falling back to
+  // the owner's user status, OR the owner is grandfathered) so we can find any lab
+  // that silently 403s VeritaMap writes the way Milford lab 4 did (a 'hospital'
+  // plan assigned but subscription_status left 'free'). Returns owner_user_id only,
+  // never emails, so it carries no member PII. Built 2026-10-06. ADMIN_SECRET-gated
+  // (x-admin-secret header or ?secret=).
+  app.get("/api/admin/labs-access-audit", (req: any, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const labs = sqlite.prepare(
+      "SELECT id, lab_name, plan, subscription_status, subscription_expires_at, is_trial, is_demo, is_repository, owner_user_id FROM labs ORDER BY id"
+    ).all() as any[];
+    const rows = labs.map((l: any) => {
+      const owner = sqlite.prepare("SELECT grandfathered, subscription_status FROM users WHERE id = ?").get(l.owner_user_id) as any;
+      const grandfathered = owner?.grandfathered === 1 || owner?.grandfathered === true;
+      const effStatus = (l.subscription_status ?? owner?.subscription_status ?? null) as string | null;
+      const mapWriteBlocked = !(effStatus === 'active' || grandfathered);
+      return {
+        id: l.id, lab_name: l.lab_name, plan: l.plan,
+        subscription_status: l.subscription_status,
+        subscription_expires_at: l.subscription_expires_at,
+        is_trial: l.is_trial, is_demo: l.is_demo, is_repository: l.is_repository,
+        owner_user_id: l.owner_user_id, owner_grandfathered: grandfathered,
+        effective_status: effStatus, mapWriteBlocked,
+      };
+    });
+    const blocked = rows.filter((r: any) => r.mapWriteBlocked);
+    res.json({ total: rows.length, blockedCount: blocked.length, blocked, all: rows });
   });
 
   // Admin: mark/unmark a lab as a card-less TRIAL. A trial lab is fully blocked
@@ -5522,6 +5669,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const user = storage.getUserById(id);
     if (!user) return res.status(404).json({ error: "User not found", id });
 
+    // Audit the deletion (2026-10-07, #70) so the nightly backup integrity
+    // check can tell an intentional admin deletion from an unexplained loss of
+    // a real account. The actor is the ADMIN_SECRET holder, not a signed-in
+    // user, so user_id/owner_user_id are 0 (operator, no account). They must
+    // NOT be the deleted user's id: storage.deleteUser cascades audit_log by
+    // user_id and would erase this very row.
+    logAudit({
+      userId: 0, ownerUserId: 0, module: "admin", action: "delete", entityType: "user", entityId: id,
+      entityLabel: user.email, before: { email: user.email, name: (user as any).name ?? null, plan: (user as any).plan ?? null },
+      ipAddress: req.ip,
+    });
     storage.deleteUser(id);
     console.log(`[ADMIN] User deleted: id=${id} email=${user.email} at=${new Date().toISOString()}`);
     res.json({ deleted: true, id, email: user.email });
@@ -12790,7 +12948,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     const encoded = encodeURIComponent(entry.filename);
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `inline; filename="${entry.filename}"; filename*=UTF-8''${encoded}`);
+    // attachment, not inline (2026-10-07, parking lot #63): every client path
+    // now fetches this endpoint through an anchor download (downloadPdfToken),
+    // and an inline disposition let the Adobe Acrobat extension take over the
+    // navigation and strand the user on an about:blank tab.
+    res.setHeader("Content-Disposition", `attachment; filename="${entry.filename}"; filename*=UTF-8''${encoded}`);
     res.setHeader("Content-Length", entry.buffer.length);
     res.setHeader("Cache-Control", "no-store");
     res.send(entry.buffer);
@@ -13961,15 +14123,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const delMap = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE id = ?").get(req.params.id) as any;
     const delMapInstrs = (db as any).$client.prepare("SELECT * FROM veritamap_instruments WHERE map_id = ?").all(req.params.id);
     logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritamap", action: "delete", entityType: "map", entityId: req.params.id, entityLabel: delMap?.name, before: { map: delMap, instruments: delMapInstrs }, ipAddress: req.ip });
-    // Cleanup correlation rows referencing any test on this map (cascade)
-    (db as any).$client.prepare(`
-      DELETE FROM veritamap_test_correlations
-      WHERE test_a_id IN (SELECT id FROM veritamap_tests WHERE map_id = ?)
-         OR test_b_id IN (SELECT id FROM veritamap_tests WHERE map_id = ?)
-    `).run(req.params.id, req.params.id);
-    (db as any).$client.prepare("DELETE FROM veritamap_tests WHERE map_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM veritamap_maps WHERE id = ?").run(req.params.id);
-    res.json({ ok: true });
+    // Same transactional cascade as the lab-scoped route (this legacy path used
+    // to delete only correlations, tests and the map row, leaving instruments,
+    // values and AMR behind).
+    try {
+      const counts = deleteMapCascade((db as any).$client, Number(req.params.id));
+      res.json({ ok: true, counts });
+    } catch (e: any) {
+      const blockers = mapDeleteBlockers((db as any).$client, Number(req.params.id));
+      console.error(`[veritamap] delete map ${req.params.id} refused: ${e?.message || e}; blockers=${blockers.join(", ") || "none named"}`);
+      res.status(409).json({ error: blockers.length ? `Map could not be deleted: still referenced by ${blockers.join(", ")}.` : `Map could not be deleted: ${e?.message || "database constraint"}.` });
+    }
   });
 
   // Get map with all tests
@@ -14089,18 +14253,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const delMap = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE id = ?").get(req.params.id) as any;
     const delMapInstrs = (db as any).$client.prepare("SELECT * FROM veritamap_instruments WHERE map_id = ?").all(req.params.id);
     logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritamap", action: "delete", entityType: "map", entityId: req.params.id, entityLabel: delMap?.name, before: { map: delMap, instruments: delMapInstrs }, ipAddress: req.ip });
-    (db as any).$client.prepare(`
-      DELETE FROM veritamap_test_correlations
-      WHERE test_a_id IN (SELECT id FROM veritamap_tests WHERE map_id = ?)
-         OR test_b_id IN (SELECT id FROM veritamap_tests WHERE map_id = ?)
-    `).run(req.params.id, req.params.id);
-    (db as any).$client.prepare("DELETE FROM veritamap_amr_values WHERE map_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM veritamap_analyte_values WHERE map_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE map_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM veritamap_tests WHERE map_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM veritamap_instruments WHERE map_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM veritamap_maps WHERE id = ?").run(req.params.id);
-    res.json({ ok: true });
+    // One transactional cascade (server/veritamapDelete.ts): all or nothing, and
+    // it clears the VeritaStaff rows that point at the map's instruments. A
+    // refused delete answers 409 naming the blocker, never a bare 500 shell.
+    try {
+      const counts = deleteMapCascade((db as any).$client, Number(req.params.id));
+      res.json({ ok: true, counts });
+    } catch (e: any) {
+      const blockers = mapDeleteBlockers((db as any).$client, Number(req.params.id));
+      console.error(`[veritamap] delete map ${req.params.id} refused: ${e?.message || e}; blockers=${blockers.join(", ") || "none named"}`);
+      res.status(409).json({ error: blockers.length ? `Map could not be deleted: still referenced by ${blockers.join(", ")}.` : `Map could not be deleted: ${e?.message || "database constraint"}.` });
+    }
   });
 
   // GET /api/labs/:labId/veritamap/maps/:id — single-map detail. Validates
@@ -14151,7 +14314,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       instruments: instrMap[t.analyte] ?? [],
       correlations: corrByTestId[t.id] ?? []
     }));
-    res.json({ ...map, tests });
+    // editAccess (2026-10-07, parking-lot #64 layer 2): whether THIS user may
+    // write to this lab's VeritaMap (owner / active admin / org admin / edit
+    // seat), so the map page can render a genuine view-only user read-only
+    // instead of enabled inputs that 403 on every save.
+    res.json({ ...map, tests, editAccess: hasModuleEditAccess(req.scope.labId, req.userId, "veritamap") });
   });
 
   // ── MULTI-LAB Tier 2 — VeritaMap sub-resources (URL-hygiene fix 2026-05-20) ─
@@ -14381,15 +14548,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // PUT single test (analyte) metadata
   app.put("/api/labs/:labId/veritamap/maps/:id/tests/:analyte", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
-    const { active: rawActive, last_cal_ver, last_method_comp, last_precision, last_sop_review, notes } = req.body;
-    const active = typeof rawActive === 'boolean' ? (rawActive ? 1 : 0) : rawActive;
+    // Partial update: the client autosaves ONE field at a time (e.g. just
+    // last_sop_review; see VeritaMapMapPage.tsx handleFieldChange), so only SET
+    // the columns actually present in the body. The old full-row UPDATE bound
+    // active=NULL whenever the body omitted it, which the NOT NULL constraint on
+    // veritamap_tests.active rejected -> every date-only save 500'd with
+    // "NOT NULL constraint failed: veritamap_tests.active" (confirmed in the
+    // Railway runtime log, 2026-10-07). It also clobbered the unsent date columns
+    // back to NULL. Building the SET list from a fixed allowlist, never user keys.
     const now = new Date().toISOString();
-    (db as any).$client.prepare(`
-      UPDATE veritamap_tests SET active=?, last_cal_ver=?, last_method_comp=?,
-        last_precision=?, last_sop_review=?, notes=?, updated_at=?
-      WHERE map_id=? AND analyte=?
-    `).run(active, last_cal_ver ?? null, last_method_comp ?? null, last_precision ?? null, last_sop_review ?? null, notes ?? null, now, req.params.id, safeDecodeParam(req.params.analyte));
-    (db as any).$client.prepare("UPDATE veritamap_maps SET updated_at = ? WHERE id = ?").run(now, req.params.id);
+    const sqlite = (db as any).$client;
+    const sets: string[] = [];
+    const vals: any[] = [];
+    if ('active' in req.body) {
+      const a = req.body.active;
+      sets.push("active=?");
+      vals.push((typeof a === 'boolean' ? a : !!a) ? 1 : 0);
+    }
+    for (const col of ['last_cal_ver', 'last_method_comp', 'last_precision', 'last_sop_review', 'notes']) {
+      if (col in req.body) { sets.push(`${col}=?`); vals.push(req.body[col] ?? null); }
+    }
+    if (sets.length > 0) {
+      sets.push("updated_at=?"); vals.push(now);
+      vals.push(req.params.id, safeDecodeParam(req.params.analyte));
+      sqlite.prepare(`UPDATE veritamap_tests SET ${sets.join(', ')} WHERE map_id=? AND analyte=?`).run(...vals);
+      sqlite.prepare("UPDATE veritamap_maps SET updated_at = ? WHERE id = ?").run(now, req.params.id);
+    }
     res.json({ ok: true });
   });
 
@@ -14439,6 +14623,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const label = String(body.band_label ?? "").trim() || deriveBandLabel(minD, maxD, sex);
     return { band: { ageMinDays: minD, ageMaxDays: maxD, sex, label } };
   }
+  // Band-keyed row address (#68, 2026-10-07): the provenance actions below
+  // (MEC review, 493.1253 attestation, unlock) used to match on (map_id,
+  // analyte) alone and therefore stamped or unlocked EVERY age/sex band of the
+  // analyte at once. Every read and write of a single band goes through this.
+  const BAND_WHERE = "map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ?";
+  const bandArgs = (mapId: number, analyte: string, band: { ageMinDays: number; ageMaxDays: number; sex: string }) =>
+    [mapId, analyte, band.ageMinDays, band.ageMaxDays, band.sex] as const;
 
   // GET analyte-values. Returns EVERY band; a single-band analyte looks exactly
   // like it did before bands existed. Ordered so the response is stable and the
@@ -14562,22 +14753,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!reviewed_at || !recorded_by?.trim()) {
       return res.status(400).json({ error: "reviewed_at (date) and recorded_by are required" });
     }
+    // Band from the body (All ages when absent, so a pre-band client keeps
+    // addressing the single row it always did). #68.
+    const parsedBand = parseBand(req.body);
+    if ("error" in parsedBand) return res.status(400).json({ error: parsedBand.error });
+    const band = parsedBand.band;
     const row = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?"
-    ).get(mapId, analyte) as any;
+      `SELECT * FROM veritamap_analyte_values WHERE ${BAND_WHERE}`
+    ).get(...bandArgs(mapId, analyte, band)) as any;
     if (!row || (!row.critical_low && !row.critical_high)) {
       return res.status(400).json({ error: "Enter the MEC-adopted critical values first, then record the review" });
     }
     logAudit({
       userId: req.user?.userId, ownerUserId: req.ownerUserId, module: "veritamap",
-      action: "update", entityType: "analyte_mec_review", entityId: `${mapId}:${analyte}`,
-      entityLabel: analyte, before: { mec_reviewed_at: row.mec_reviewed_at }, after: { mec_reviewed_at: reviewed_at, mec_reviewed_by: recorded_by.trim() },
+      action: "update", entityType: "analyte_mec_review", entityId: `${mapId}:${analyte}:${band.label}`,
+      entityLabel: `${analyte} (${band.label})`, before: { mec_reviewed_at: row.mec_reviewed_at }, after: { mec_reviewed_at: reviewed_at, mec_reviewed_by: recorded_by.trim() },
       ipAddress: req.ip,
     });
     (db as any).$client.prepare(
-      "UPDATE veritamap_analyte_values SET mec_reviewed_at = ?, mec_reviewed_by = ?, updated_at = ? WHERE map_id = ? AND analyte = ?"
-    ).run(reviewed_at, recorded_by.trim(), new Date().toISOString(), mapId, analyte);
-    res.json((db as any).$client.prepare("SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?").get(mapId, analyte));
+      `UPDATE veritamap_analyte_values SET mec_reviewed_at = ?, mec_reviewed_by = ?, updated_at = ? WHERE ${BAND_WHERE}`
+    ).run(reviewed_at, recorded_by.trim(), new Date().toISOString(), ...bandArgs(mapId, analyte, band));
+    res.json((db as any).$client.prepare(`SELECT * FROM veritamap_analyte_values WHERE ${BAND_WHERE}`).get(...bandArgs(mapId, analyte, band)));
   });
 
   // POST attest-ref: director-or-designee attestation on the lab-entered
@@ -14590,23 +14786,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!attested_by?.trim() || !attested_title?.trim()) {
       return res.status(400).json({ error: "attested_by and attested_title are required" });
     }
+    // Attestation is per band (#68): the adult range being attested must not
+    // lock, or claim to cover, a pediatric band that was never reviewed.
+    const parsedBand = parseBand(req.body);
+    if ("error" in parsedBand) return res.status(400).json({ error: parsedBand.error });
+    const band = parsedBand.band;
     const row = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?"
-    ).get(mapId, analyte) as any;
+      `SELECT * FROM veritamap_analyte_values WHERE ${BAND_WHERE}`
+    ).get(...bandArgs(mapId, analyte, band)) as any;
     if (!row || !row.ref_range_low || !row.ref_range_high) {
       return res.status(400).json({ error: "Enter the verified reference range first; an empty range cannot be attested" });
     }
     const now = new Date().toISOString();
     logAudit({
       userId: req.user?.userId, ownerUserId: req.ownerUserId, module: "veritamap",
-      action: "update", entityType: "analyte_ref_attestation", entityId: `${mapId}:${analyte}`,
-      entityLabel: analyte, before: { ref_locked: row.ref_locked }, after: { ref_attested_by: attested_by.trim(), ref_attested_title: attested_title.trim(), ref_locked: 1 },
+      action: "update", entityType: "analyte_ref_attestation", entityId: `${mapId}:${analyte}:${band.label}`,
+      entityLabel: `${analyte} (${band.label})`, before: { ref_locked: row.ref_locked }, after: { ref_attested_by: attested_by.trim(), ref_attested_title: attested_title.trim(), ref_locked: 1 },
       ipAddress: req.ip,
     });
     (db as any).$client.prepare(
-      "UPDATE veritamap_analyte_values SET ref_attested_at = ?, ref_attested_by = ?, ref_attested_title = ?, ref_locked = 1, updated_at = ? WHERE map_id = ? AND analyte = ?"
-    ).run(now, attested_by.trim(), attested_title.trim(), now, mapId, analyte);
-    res.json((db as any).$client.prepare("SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?").get(mapId, analyte));
+      `UPDATE veritamap_analyte_values SET ref_attested_at = ?, ref_attested_by = ?, ref_attested_title = ?, ref_locked = 1, updated_at = ? WHERE ${BAND_WHERE}`
+    ).run(now, attested_by.trim(), attested_title.trim(), now, ...bandArgs(mapId, analyte, band));
+    res.json((db as any).$client.prepare(`SELECT * FROM veritamap_analyte_values WHERE ${BAND_WHERE}`).get(...bandArgs(mapId, analyte, band)));
   });
 
   // POST unlock-ref: owner/admin removes the attestation lock (e.g. a method
@@ -14620,20 +14821,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     const mapId = Number(req.params.id);
     const analyte = safeDecodeParam(req.params.analyte);
+    // Unlock exactly the attested band (#68); other bands keep their lock.
+    const parsedBand = parseBand(req.body);
+    if ("error" in parsedBand) return res.status(400).json({ error: parsedBand.error });
+    const band = parsedBand.band;
     const row = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?"
-    ).get(mapId, analyte) as any;
+      `SELECT * FROM veritamap_analyte_values WHERE ${BAND_WHERE}`
+    ).get(...bandArgs(mapId, analyte, band)) as any;
     if (!row?.ref_locked) return res.status(400).json({ error: "Reference range is not locked" });
     logAudit({
       userId: req.user?.userId, ownerUserId: req.ownerUserId, module: "veritamap",
-      action: "update", entityType: "analyte_ref_attestation", entityId: `${mapId}:${analyte}`,
-      entityLabel: analyte, before: { ref_locked: 1, ref_attested_by: row.ref_attested_by, ref_attested_at: row.ref_attested_at }, after: { ref_locked: 0, reason: req.body?.reason || null },
+      action: "update", entityType: "analyte_ref_attestation", entityId: `${mapId}:${analyte}:${band.label}`,
+      entityLabel: `${analyte} (${band.label})`, before: { ref_locked: 1, ref_attested_by: row.ref_attested_by, ref_attested_at: row.ref_attested_at }, after: { ref_locked: 0, reason: req.body?.reason || null },
       ipAddress: req.ip,
     });
     (db as any).$client.prepare(
-      "UPDATE veritamap_analyte_values SET ref_attested_at = NULL, ref_attested_by = NULL, ref_attested_title = NULL, ref_locked = 0, updated_at = ? WHERE map_id = ? AND analyte = ?"
-    ).run(new Date().toISOString(), mapId, analyte);
-    res.json((db as any).$client.prepare("SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?").get(mapId, analyte));
+      `UPDATE veritamap_analyte_values SET ref_attested_at = NULL, ref_attested_by = NULL, ref_attested_title = NULL, ref_locked = 0, updated_at = ? WHERE ${BAND_WHERE}`
+    ).run(new Date().toISOString(), ...bandArgs(mapId, analyte, band));
+    res.json((db as any).$client.prepare(`SELECT * FROM veritamap_analyte_values WHERE ${BAND_WHERE}`).get(...bandArgs(mapId, analyte, band)));
   });
 
   // GET amr-values
@@ -14661,6 +14866,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ? "AMR is locked by director attestation per 42 CFR 493.1253. Unlock it (owner or admin) before editing."
       : null;
   }
+  // Idempotent AMR save (2026-10-07): a PUT that changes nothing returns the
+  // stored row WITHOUT writing. The map page used to re-PUT every row's AMR on
+  // every render (see the TestRow autosave fix in VeritaMapMapPage.tsx), and a
+  // tab still running the old bundle keeps doing so until it reloads, so the
+  // server refuses to churn the DB for an unchanged value. Shared by the
+  // lab-scoped AND legacy AMR PUTs. Returns the current row (or a blank shape
+  // when no row exists and the request is blank) for a no-op, else null.
+  function amrUnchangedRow(mapId: number, instrumentId: number, analyte: string, body: any): any | null {
+    const current = (db as any).$client.prepare(
+      "SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ?"
+    ).get(mapId, instrumentId, analyte) as any;
+    const sameLow = (body?.amr_low || null) === (current?.amr_low ?? null);
+    const sameHigh = (body?.amr_high || null) === (current?.amr_high ?? null);
+    if (!sameLow || !sameHigh) return null;
+    // noop:true is ignored by the client but shows in the request log, so a
+    // stale tab's repeated PUTs are visibly non-writes in production.
+    return { ...(current ?? { map_id: mapId, instrument_id: instrumentId, analyte, amr_low: null, amr_high: null }), noop: true };
+  }
 
   app.put("/api/labs/:labId/veritamap/maps/:id/amr-values/:instId/:analyte", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
@@ -14669,6 +14892,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const analyte = safeDecodeParam(req.params.analyte);
     const lockErr = amrLockConflict(mapId, instrumentId, analyte, req.body);
     if (lockErr) return res.status(409).json({ error: lockErr });
+    const unchanged = amrUnchangedRow(mapId, instrumentId, analyte, req.body);
+    if (unchanged) return res.json(unchanged);
     const { amr_low, amr_high } = req.body;
     const now = new Date().toISOString();
     (db as any).$client.prepare(`
@@ -15411,17 +15636,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const map = userCanAccessMap(req.params.id, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
-    const { active: rawActive, last_cal_ver, last_method_comp, last_precision, last_sop_review, notes } = req.body;
-    const active = typeof rawActive === 'boolean' ? (rawActive ? 1 : 0) : rawActive;
+    // Partial update (same fix as the lab-scoped route above): only SET the
+    // columns actually present in the body, so a date-only autosave never binds
+    // active=NULL and trips the NOT NULL constraint on veritamap_tests.active.
     const now = new Date().toISOString();
-    (db as any).$client.prepare(`
-      UPDATE veritamap_tests SET active=?, last_cal_ver=?, last_method_comp=?,
-        last_precision=?, last_sop_review=?, notes=?, updated_at=?
-      WHERE map_id=? AND analyte=?
-    `).run(active, last_cal_ver ?? null, last_method_comp ?? null,
-      last_precision ?? null, last_sop_review ?? null, notes ?? null, now,
-      req.params.id, safeDecodeParam(req.params.analyte));
-    (db as any).$client.prepare("UPDATE veritamap_maps SET updated_at = ? WHERE id = ?").run(now, req.params.id);
+    const sqlite = (db as any).$client;
+    const sets: string[] = [];
+    const vals: any[] = [];
+    if ('active' in req.body) {
+      const a = req.body.active;
+      sets.push("active=?");
+      vals.push((typeof a === 'boolean' ? a : !!a) ? 1 : 0);
+    }
+    for (const col of ['last_cal_ver', 'last_method_comp', 'last_precision', 'last_sop_review', 'notes']) {
+      if (col in req.body) { sets.push(`${col}=?`); vals.push(req.body[col] ?? null); }
+    }
+    if (sets.length > 0) {
+      sets.push("updated_at=?"); vals.push(now);
+      vals.push(req.params.id, safeDecodeParam(req.params.analyte));
+      sqlite.prepare(`UPDATE veritamap_tests SET ${sets.join(', ')} WHERE map_id=? AND analyte=?`).run(...vals);
+      sqlite.prepare("UPDATE veritamap_maps SET updated_at = ? WHERE id = ?").run(now, req.params.id);
+    }
     res.json({ ok: true });
   });
 
@@ -16473,6 +16708,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const map = userCanAccessMap(mapId, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
+    const unchanged = amrUnchangedRow(mapId, instrumentId, analyte, req.body);
+    if (unchanged) return res.json(unchanged);
     const { amr_low, amr_high } = req.body;
     const now = new Date().toISOString();
     (db as any).$client.prepare(`
@@ -18428,8 +18665,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // excluded, so an unsubscribe is honored across BOTH audiences. RFC-reserved
   // test domains are excluded to protect sender reputation from bounce noise.
   app.post("/api/admin/users/send", async (req: any, res) => {
-    const { secret, subject, bodyHtml, postalAddress, testTo, dryRun } = req.body || {};
+    const { secret, subject, bodyHtml, postalAddress, testTo, dryRun, exclude } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    // One-time per-send exclude list (lowercased, trimmed). Lets a send skip
+    // specific addresses (junk/test/demo accounts, or one pending deletion)
+    // WITHOUT permanently suppressing them from the Lab Director's Briefing.
+    // It does not touch subscription state; it only filters this one send.
+    const excludeSet = new Set(
+      (Array.isArray(exclude) ? exclude : []).map((e: any) => String(e || "").toLowerCase().trim()).filter(Boolean)
+    );
     const activeEmails: string[] = testTo
       ? []
       : ((db as any).$client.prepare(
@@ -18441,10 +18685,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               AND u.email NOT LIKE '%@example.org'
               AND (n.active IS NULL OR n.active = 1)
             ORDER BY email`
-        ).all() as any[]).map((r) => r.email);
+        ).all() as any[]).map((r) => r.email).filter((e: string) => !excludeSet.has(e));
     const recipients = resolveRecipients(activeEmails, testTo);
     if (dryRun) {
-      return res.json({ ok: true, dryRun: true, audience: "users", recipientCount: recipients.length, recipients, test: !!testTo });
+      return res.json({ ok: true, dryRun: true, audience: "users", recipientCount: recipients.length, recipients, excluded: Array.from(excludeSet), test: !!testTo });
     }
     if (!subject || !bodyHtml) return res.status(400).json({ error: "subject and bodyHtml required" });
     if (!postalAddress) return res.status(400).json({ error: "postalAddress required (CAN-SPAM footer)" });
@@ -22663,6 +22907,85 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // lab via WHERE id AND lab_id, and scopes the embedded employees list by
   // lab_id so the response does not leak employees from other labs the
   // owner is a member of (a real leak in the legacy endpoint above).
+  // In-app Getting Started (parking lot #72, 2026-10-07): the shared 6-phase
+  // system path scored against this lab's real tables. GET is any member;
+  // the manual ticks (two Phase-5 steps + card dismissal) are owner/admin.
+  app.get("/api/labs/:labId/getting-started", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    try {
+      res.json(computeGettingStarted((db as any).$client, req.scope.labId, req.userId));
+    } catch (e: any) {
+      console.error("[getting-started] compute failed:", e?.message || e);
+      res.status(500).json({ error: "Could not compute the checklist" });
+    }
+  });
+  app.post("/api/labs/:labId/getting-started/check", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    const role = String(req.scope?.role || "");
+    if (!["owner", "admin", "org_owner", "org_admin"].includes(role)) return res.status(403).json({ error: "Only the lab owner or an admin can tick a step" });
+    const key = String(req.body?.key || "");
+    if (!isManualKey(key)) return res.status(400).json({ error: "Only the manual steps (and the card dismissal) can be ticked; everything else is read from your data" });
+    const checked = req.body?.checked !== false;
+    setGettingStartedCheck((db as any).$client, req.scope.labId, key, checked, req.userId);
+    res.json(computeGettingStarted((db as any).$client, req.scope.labId, req.userId));
+  });
+
+  // Eligible employees for a program's assessment dialog (2026-10-07, parking
+  // lot #59, Michael's Option 2). The legacy "New Technical Assessment" dialog
+  // listed competency_employees only, which is empty for labs that onboard staff
+  // through VeritaStaff, so it said "No active employees" while staff were
+  // assigned the program's instruments (lab 5 / Atellica CH 930). This returns
+  // the lab's ACTIVE VeritaStaff employees assigned (staff_employee_instruments)
+  // to any instrument named in the program's method groups, auto-bridged into
+  // competency_employees (idempotent; same bridge the roster sync uses) so the
+  // assessment's employee_id FK is satisfied. A program with no method groups
+  // falls back to every active staff member with an instrument assignment.
+  app.get("/api/labs/:labId/competency/programs/:id/eligible-employees", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
+    const client = (db as any).$client;
+    const labId = req.scope.labId;
+    const program = client.prepare("SELECT id, type FROM competency_programs WHERE id = ? AND lab_id = ?").get(req.params.id, labId) as any;
+    if (!program) return res.status(404).json({ error: "Program not found" });
+    const wanted = new Set<string>();
+    for (const g of client.prepare("SELECT instruments FROM competency_method_groups WHERE program_id = ?").all(program.id) as any[]) {
+      try { for (const n of JSON.parse(g.instruments || "[]")) if (n) wanted.add(String(n).trim().toLowerCase()); } catch { /* malformed group JSON: ignore */ }
+    }
+    const rows = client.prepare(
+      `SELECT se.id, se.first_name, se.last_name, se.title, se.hire_date, vi.instrument_name
+         FROM staff_employees se
+         JOIN staff_employee_instruments sei ON sei.employee_id = se.id
+         JOIN veritamap_instruments vi ON vi.id = sei.instrument_id
+        WHERE se.tier2_lab_id = ? AND se.status = 'active'
+        ORDER BY se.last_name, se.first_name`
+    ).all(labId) as any[];
+    // tier2_lab_id is the labs.id this route is scoped to. staff_employees.lab_id
+    // is the staff_labs.id (a different sequence), so filtering on it only
+    // matched labs whose two ids happened to coincide (caught 2026-10-07 by the
+    // CI sandbox lab, parking lot #74, the first day after #59 shipped).
+    const byStaff = new Map<number, { id: number; name: string; title: string; hire_date: string | null; instruments: Set<string> }>();
+    for (const r of rows) {
+      const inst = String(r.instrument_name || "").trim();
+      if (wanted.size > 0 && !wanted.has(inst.toLowerCase())) continue;
+      if (!byStaff.has(r.id)) {
+        const name = `${r.first_name || ""} ${r.last_name || ""}`.trim() || `Employee ${r.id}`;
+        byStaff.set(r.id, { id: r.id, name, title: r.title || "", hire_date: r.hire_date || null, instruments: new Set() });
+      }
+      byStaff.get(r.id)!.instruments.add(inst);
+    }
+    const ownerRow = client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+    const ownerUserId = ownerRow?.owner_user_id ?? req.userId;
+    const now = new Date().toISOString();
+    const employees = Array.from(byStaff.values()).map((s) => {
+      let comp = client.prepare("SELECT id, name, status FROM competency_employees WHERE staff_employee_id = ? AND lab_id = ?").get(s.id, labId) as any;
+      if (!comp) {
+        const r = client.prepare(
+          "INSERT INTO competency_employees (user_id, lab_id, name, title, hire_date, lis_initials, status, created_at, staff_employee_id) VALUES (?, ?, ?, ?, ?, NULL, 'active', ?, ?)"
+        ).run(ownerUserId, labId, s.name, s.title, s.hire_date, now, s.id);
+        comp = { id: Number(r.lastInsertRowid), name: s.name, status: "active" };
+      }
+      return { id: comp.id, name: comp.name || s.name, title: s.title, status: comp.status || "active", staff_employee_id: s.id, instruments: Array.from(s.instruments).sort() };
+    }).filter((e) => e.status === "active");
+    res.json({ programId: program.id, matchedBy: wanted.size > 0 ? "program-instruments" : "any-instrument", instruments: Array.from(wanted).sort(), employees });
+  });
+
   app.get("/api/labs/:labId/competency/programs/:id", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const program = (db as any).$client.prepare(
@@ -32541,6 +32864,131 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, dryRun: !!dryRun, orphanRows, total });
   });
 
+  // POST /api/admin/veritamap/dedupe-maps — find and (on explicit apply) remove
+  // DUPLICATE VeritaMap maps left behind by repeated demo building. Read-only by
+  // default. The write path deletes ONLY the explicit map ids passed in
+  // `deleteIds`, each with a FULL child cascade (correlations, tests,
+  // instrument_tests, analyte_values, amr_values, instruments, then the map row)
+  // in one transaction. It never runs a blanket "delete everything that looks
+  // duplicate" in the write path: dryRun reports candidate groups, the caller
+  // picks the ids. ADMIN_SECRET-gated.
+  //
+  // A map's content fingerprint = its sorted instrument set (name|category) plus
+  // its sorted analyte set. Maps with an identical fingerprint in the SAME lab
+  // are content duplicates. Each group keeps the earliest-created map and marks
+  // the rest removable. Same-name groups are reported SEPARATELY as a heads-up
+  // and are NOT auto-marked removable (same name can hold different content).
+  //
+  // Body: { secret, labId?, dryRun?, deleteIds?: number[] }
+  //   - no deleteIds (or dryRun:true): audit only; writes nothing. Omit labId to
+  //     survey every lab (so client labs are visible but nothing is touched).
+  //   - deleteIds:[ids]: delete exactly those maps. If labId is given, every id
+  //     must belong to it (a cross-lab id is rejected, not silently skipped).
+  app.post("/api/admin/veritamap/dedupe-maps", (req, res) => {
+    const { secret, labId, dryRun, deleteIds } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const sqlite = (db as any).$client;
+    const labFilter = (labId === undefined || labId === null) ? null : Number(labId);
+    if (labFilter !== null && (!Number.isInteger(labFilter) || labFilter <= 0)) {
+      return res.status(400).json({ error: "invalid labId" });
+    }
+
+    // --- APPLY path: delete exactly the ids passed, with full cascade ---
+    if (Array.isArray(deleteIds) && deleteIds.length > 0 && dryRun !== true) {
+      const ids = deleteIds.map((x: any) => Number(x)).filter((n: number) => Number.isInteger(n) && n > 0);
+      if (ids.length !== deleteIds.length) {
+        return res.status(400).json({ error: "deleteIds must be positive integers" });
+      }
+      const found: any[] = [];
+      const missing: number[] = [];
+      for (const id of ids) {
+        const m = sqlite.prepare("SELECT id, name, lab_id, user_id, created_at FROM veritamap_maps WHERE id = ?").get(id);
+        if (!m) { missing.push(id); continue; }
+        if (labFilter !== null && m.lab_id !== labFilter) {
+          return res.status(409).json({ error: "map not in labId", mapId: id, mapLabId: m.lab_id, labId: labFilter });
+        }
+        found.push(m);
+      }
+      if (missing.length) return res.status(404).json({ error: "map(s) not found", missing });
+      const counts: Record<string, number> = { correlations: 0, instrument_tests: 0, tests: 0, analyte_values: 0, amr_values: 0, instruments: 0, maps: 0 };
+      const del = sqlite.transaction(() => {
+        for (const m of found) {
+          const mid = m.id;
+          // Shared transactional cascade (nested transaction = savepoint).
+          const c = deleteMapCascade(sqlite, mid);
+          counts.correlations += c.correlations;
+          counts.instrument_tests += c.instrument_tests;
+          counts.tests += c.tests;
+          counts.analyte_values += c.analyte_values;
+          counts.amr_values += c.amr_values;
+          counts.instruments += c.instruments;
+          counts.maps += c.maps;
+          counts.staff_assignments = (counts.staff_assignments || 0) + c.staff_assignments;
+          counts.duty_change_events = (counts.duty_change_events || 0) + c.duty_change_events;
+          logAudit({ userId: m.user_id, ownerUserId: m.user_id, module: "veritamap", action: "delete", entityType: "map", entityId: String(mid), entityLabel: m.name, before: { map: m, via: "admin dedupe-maps" }, ipAddress: req.ip });
+        }
+      });
+      del();
+      return res.json({ ok: true, deleted: found.map((m: any) => ({ id: m.id, name: m.name, lab_id: m.lab_id })), rowCounts: counts });
+    }
+
+    // --- AUDIT path (default): report duplicate groups, write nothing ---
+    const maps = (labFilter !== null
+      ? sqlite.prepare("SELECT id, name, lab_id, user_id, created_at, updated_at FROM veritamap_maps WHERE lab_id = ? ORDER BY lab_id, created_at, id").all(labFilter)
+      : sqlite.prepare("SELECT id, name, lab_id, user_id, created_at, updated_at FROM veritamap_maps ORDER BY lab_id, created_at, id").all()) as any[];
+
+    const enriched = maps.map((m: any) => {
+      const instrs = sqlite.prepare("SELECT instrument_name, category FROM veritamap_instruments WHERE map_id = ? ORDER BY instrument_name, category").all(m.id) as any[];
+      const analytes = sqlite.prepare("SELECT DISTINCT analyte FROM veritamap_tests WHERE map_id = ? ORDER BY analyte").all(m.id) as any[];
+      const instrList = instrs.map((i: any) => `${i.instrument_name}|${i.category}`);
+      const analyteList = analytes.map((a: any) => a.analyte);
+      return {
+        ...m,
+        instrumentCount: instrList.length,
+        analyteCount: analyteList.length,
+        contentKey: JSON.stringify({ lab: m.lab_id, i: instrList, a: analyteList }),
+        nameKey: `${m.lab_id}::${String(m.name).trim().toLowerCase()}`,
+      };
+    });
+
+    const groupBy = (key: string) => {
+      const g: Record<string, any[]> = {};
+      for (const m of enriched) { (g[(m as any)[key]] ||= []).push(m); }
+      return Object.values(g).filter((arr) => arr.length > 1);
+    };
+    const toGroup = (arr: any[], kind: string) => {
+      const sorted = [...arr].sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)) || a.id - b.id);
+      const keep = sorted[0];
+      const remove = sorted.slice(1);
+      const slim = (m: any) => ({ id: m.id, name: m.name, created_at: m.created_at, instrumentCount: m.instrumentCount, analyteCount: m.analyteCount });
+      return { kind, lab_id: keep.lab_id, keep: slim(keep), remove: remove.map(slim), removeIds: remove.map((m: any) => m.id) };
+    };
+
+    const contentDuplicateGroups = groupBy("contentKey").map((a) => toGroup(a, "identical-content"));
+    const sameNameGroups = groupBy("nameKey").map((a) => toGroup(a, "same-name"));
+
+    const perLab: Record<string, any> = {};
+    for (const m of enriched) {
+      const k = String(m.lab_id);
+      perLab[k] ||= { lab_id: m.lab_id, totalMaps: 0, contentDupMapsRemovable: 0 };
+      perLab[k].totalMaps++;
+    }
+    for (const g of contentDuplicateGroups) {
+      const k = String(g.lab_id);
+      if (perLab[k]) perLab[k].contentDupMapsRemovable += g.removeIds.length;
+    }
+
+    res.json({
+      dryRun: true,
+      scope: labFilter !== null ? { labId: labFilter } : "all-labs",
+      totalMaps: maps.length,
+      perLab: Object.values(perLab),
+      contentDuplicateGroups,
+      sameNameGroups,
+      note: "Pass deleteIds:[...] (ids from a group's removeIds) to delete, scoped with labId. identical-content groups collapse safely; same-name groups may hold different content, so review before deleting.",
+    });
+  });
+
   // Purge an EMPTY orphan lab (e.g. a phantom lab left by a botched provisioning
   // path, like the one created when a fresh separate owner is provisioned). Safe
   // by construction: it refuses any lab that has members or ANY lab-scoped data.
@@ -33406,6 +33854,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── ADMIN: restore self-test (read-only w.r.t. production) ───────────────
+  // Proves the off-site backup is recoverable WITHOUT exfiltrating client data:
+  // pulls the latest R2 backup into the container, restores it to a temp DB,
+  // runs PRAGMA integrity_check plus row counts, compares to live, returns a
+  // PASS/FAIL verdict, and deletes the temp files. This is the "tested restore"
+  // evidence for a security review. See restoreSelfTest in server/backup.ts.
+  app.get("/api/admin/restore-self-test", async (req, res) => {
+    const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    try {
+      const { restoreSelfTest } = await import("./backup");
+      const result = await restoreSelfTest();
+      res.json(result);
+    } catch (err: any) {
+      console.error('[restore-self-test] Error:', err?.message);
+      res.status(500).json({ error: err?.message || "self-test failed" });
+    }
+  });
+
   // ── ADMIN: TLS certificate status (read-only) ───────────────────────────
   // On-demand view of the public TLS cert expiry for the monitored hosts, so the
   // operator can confirm the site is not serving an expired or soon-to-expire
@@ -33641,10 +34108,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // Delete instruments + maps for the new seeded maps only (scoped by userId + map name).
         const seededMaps = sqlite.prepare("SELECT id FROM veritamap_maps WHERE user_id = ? AND name IN ('Beckman AU480 Chemistry','Siemens DCA Vantage POC')").all(userId) as Array<{ id: number }>;
         out.veritamap_instruments = 0;
+        out.veritamap_maps = 0;
         for (const m of seededMaps) {
-          out.veritamap_instruments += sqlite.prepare("DELETE FROM veritamap_instruments WHERE map_id = ?").run(m.id).changes;
+          // Shared transactional cascade (clears the VeritaStaff FK rows too).
+          const c = deleteMapCascade(sqlite, m.id);
+          out.veritamap_instruments += c.instruments;
+          out.veritamap_maps += c.maps;
         }
-        out.veritamap_maps = sqlite.prepare("DELETE FROM veritamap_maps WHERE user_id = ? AND name IN ('Beckman AU480 Chemistry','Siemens DCA Vantage POC')").run(userId).changes;
         // Reset scan_id=4 items that we filled. Caveat: we can't perfectly
         // reverse this without the pre-seed snapshot, so we reset every
         // assessed item in scan #4 back to Not Assessed. Capture before/after.
@@ -34893,9 +35363,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           ao_citations: aoCols.map(a => ({ label: a.label, value: (p as any)[a.key] || '' })),
           notes: p.notes || '', status, is_na: isNa,
           na_reason: us?.na_reason || null, our_policy_name: us?.our_policy_name || null,
-          user_notes: us?.notes || null, updated_at: us?.updated_at || null,
+          user_notes: us?.notes || null, updated_at: us?.updated_at || null, is_custom: false,
         };
       });
+      // Append this lab's custom policy entries (policies not on the built-in catalog).
+      const customEntries = sqlite.prepare('SELECT * FROM veritapolicy_custom_entries WHERE lab_id = ? ORDER BY id').all(labId) as any[];
+      for (const ce of customEntries) {
+        const pid = `custom-${ce.id}`;
+        const us = sm[pid];
+        const isNa = !!(us?.is_na);
+        rows.push({
+          policy_id: pid, policy_name: ce.policy_name, section: ce.section || 'Custom',
+          subspecialty: '', service_line: ce.service_line || 'all', description: ce.description || '',
+          cfr_citations: ce.cfr_citations || '',
+          ao_citations: aoCols.map(a => ({ label: a.label, value: (ce as any)[a.key] || '' })),
+          notes: ce.notes || '', status: isNa ? 'na' : (us?.status || 'not_started'), is_na: isNa,
+          na_reason: us?.na_reason || null, our_policy_name: us?.our_policy_name || null,
+          user_notes: us?.notes || null, updated_at: us?.updated_at || null, is_custom: true,
+        });
+      }
       const ao_label = aoCols.length === 0 ? 'CLIA only' : aoCols.map(a => a.label).join(', ');
       res.json({ rows, ao_label, ao_columns: aoCols.map(a => a.label) });
     } catch (err: any) {
@@ -34931,6 +35417,43 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // POST /api/labs/:labId/veritapolicy/custom-entries — add a custom policy
+  // entry line (a required policy not on the built-in catalog, e.g. a Chemical
+  // Hygiene Plan). It renders alongside the built-in rows and tracks status the
+  // same way via veritapolicy_master_status keyed by "custom-<id>".
+  app.post('/api/labs/:labId/veritapolicy/custom-entries', authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
+    const sqlite = db.$client;
+    const labId = req.scope.labId;
+    const b = req.body || {};
+    const name = String(b.policy_name || '').trim();
+    if (!name) return res.status(400).json({ error: 'policy_name required' });
+    const info = sqlite.prepare(`
+      INSERT INTO veritapolicy_custom_entries
+        (lab_id, policy_name, section, service_line, description, cfr_citations, tjc_citations, cap_citations, cola_citations, aabb_citations, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      labId, name,
+      (String(b.section || '').trim() || 'Custom'),
+      (String(b.service_line || '').trim() || 'all'),
+      b.description ?? null, b.cfr_citations ?? null, b.tjc_citations ?? null,
+      b.cap_citations ?? null, b.cola_citations ?? null, b.aabb_citations ?? null, b.notes ?? null,
+    );
+    res.json({ ok: true, id: info.lastInsertRowid, policy_id: `custom-${info.lastInsertRowid}` });
+  });
+
+  // DELETE /api/labs/:labId/veritapolicy/custom-entries/:id
+  app.delete('/api/labs/:labId/veritapolicy/custom-entries/:id', authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritapolicy'), (req: any, res) => {
+    const sqlite = db.$client;
+    const labId = req.scope.labId;
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'invalid id' });
+    const row = sqlite.prepare('SELECT id FROM veritapolicy_custom_entries WHERE id = ? AND lab_id = ?').get(id, labId);
+    if (!row) return res.status(404).json({ error: 'not found' });
+    sqlite.prepare('DELETE FROM veritapolicy_custom_entries WHERE id = ? AND lab_id = ?').run(id, labId);
+    sqlite.prepare("DELETE FROM veritapolicy_master_status WHERE lab_id = ? AND policy_id = ?").run(labId, `custom-${id}`);
+    res.json({ ok: true });
+  });
+
   // GET /api/labs/:labId/veritapolicy/master-list/summary
   app.get('/api/labs/:labId/veritapolicy/master-list/summary', authMiddleware, labScopeMiddleware, async (req: any, res) => {
     try {
@@ -34942,15 +35465,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const sm: Record<string, any> = {};
       for (const s of statuses) sm[s.policy_id] = s;
       let complete = 0, in_progress = 0, not_started = 0, na = 0;
-      for (const p of VERITAPOLICY_MASTER_LIST) {
-        const us = sm[p.policy_id];
+      const customIds = (sqlite.prepare('SELECT id FROM veritapolicy_custom_entries WHERE lab_id = ?').all(labId) as any[]).map(c => `custom-${c.id}`);
+      const allPolicyIds = [...VERITAPOLICY_MASTER_LIST.map(p => p.policy_id), ...customIds];
+      for (const pid of allPolicyIds) {
+        const us = sm[pid];
         if (us?.is_na) { na += 1; continue; }
         const st = us?.status || 'not_started';
         if (st === 'complete') complete += 1;
         else if (st === 'in_progress') in_progress += 1;
         else not_started += 1;
       }
-      const total = VERITAPOLICY_MASTER_LIST.length;
+      const total = allPolicyIds.length;
       const applicable = total - na;
       const score = applicable > 0 ? Math.round((complete / applicable) * 100) : 0;
       const aoParts: string[] = [];
@@ -34971,6 +35496,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   //   server/policyTemplates/data/, substitutes <<LAB_NAME>> with the live
   //   lab name, and returns a branded DOCX for the Laboratory Director or
   //   designee to adopt as their lab's policy.
+  // House DOCX format for a lab (parking lot #71): veritapolicy_settings.docx_format
+  // plus the lab's own number/revision for this catalog policy. null = stock
+  // VeritaDC layout. Artifact-first (pre-uploaded custom DOCX) still wins above.
+  function houseFormatFor(sqlite: any, labId: number, policyId: string): any | null {
+    const s = sqlite.prepare("SELECT docx_format, house_facility_path, house_safety_default FROM veritapolicy_settings WHERE lab_id = ?").get(labId) as any;
+    if (!s || !s.docx_format || s.docx_format === "veritadc") return null;
+    const n = sqlite.prepare("SELECT house_number, revision FROM veritapolicy_house_numbers WHERE lab_id = ? AND policy_id = ?").get(labId, String(policyId)) as any;
+    return {
+      format: s.docx_format,
+      facilityPath: s.house_facility_path || null,
+      safetyDefault: s.house_safety_default || null,
+      houseNumber: n?.house_number || null,
+      revision: n?.revision || null,
+      draftDate: new Date().toISOString().slice(0, 10),
+    };
+  }
+
   app.get('/api/labs/:labId/veritapolicy/templates/:policyId/docx', authMiddleware, labScopeMiddleware, async (req: any, res) => {
     try {
       const sqlite = db.$client;
@@ -35019,10 +35561,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // copies. Off by default so the in-system copy stays the controlled master.
       const uncontrolled = req.query?.uncontrolled === 'true' || req.query?.uncontrolled === '1';
 
+      const house = houseFormatFor(sqlite, labId, policyId);
       const buf = await generatePolicyDocxBuffer(policyId, {
         lab_name: lab.lab_name || 'Your Laboratory',
         clia_number: lab.clia_number || 'CLIA pending',
-      }, crosswalk, { downloadedBy, downloadedAt, uncontrolled });
+      }, crosswalk, { downloadedBy, downloadedAt, uncontrolled }, house);
       if (!buf) return res.status(500).json({ error: 'DOCX generation failed' });
 
       const safeSlug = (tmpl.slug || tmpl.policy_name.toLowerCase().replace(/[^a-z0-9]+/g, '_')).slice(0, 60);
@@ -35030,7 +35573,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.setHeader('Content-Length', String(buf.length));
-      res.setHeader('X-VeritaPolicy-Source', 'default_generator');
+      res.setHeader('X-VeritaPolicy-Source', house ? `house_format:${house.format}` : 'default_generator');
       res.end(buf);
     } catch (err: any) {
       console.error('VeritaPolicy DOCX (lab-scoped) error:', err);
@@ -35192,7 +35735,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         if (lab.accreditation_cola && row.cola_citations) crosswalk.cola = row.cola_citations;
         if (lab.accreditation_aabb && row.aabb_citations) crosswalk.aabb = row.aabb_citations;
 
-        const buf = await generatePolicyDocxBuffer(pid, labCtx, crosswalk, { downloadedBy: bundleDownloadedBy, downloadedAt: bundleDownloadedAt, uncontrolled: bundleUncontrolled });
+        const buf = await generatePolicyDocxBuffer(pid, labCtx, crosswalk, { downloadedBy: bundleDownloadedBy, downloadedAt: bundleDownloadedAt, uncontrolled: bundleUncontrolled }, houseFormatFor(sqlite, labId, pid));
         if (!buf) { skipped += 1; continue; }
         const safeSlug = (tmpl.slug || tmpl.policy_name.toLowerCase().replace(/[^a-z0-9]+/g, '_')).slice(0, 60);
         const filename = `VeritaPolicy_${pid.padStart(3, '0')}_${safeSlug}${bundleUncontrolled ? '_UNCONTROLLED' : ''}.docx`;
@@ -38022,6 +38565,59 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // QA helper: soft-archive policy documents by lab + title prefix. Used
   // by the QA test cleanup script to remove accumulated test docs without
   // hard-deleting the audit trail. Body: { secret, labId, titlePrefix }.
+  // POST /api/admin/veritapolicy/set-house-format (parking lot #71, 2026-10-07)
+  //   {secret, labId, format: 'veritadc' | 'umass_milford', facilityPath?, safetyDefault?,
+  //    numbers?: [{policyId, houseNumber, revision}], dryRun?}
+  //   The standing VLS courtesy (a client sends a draft policy or policy-on-policies and we
+  //   move the stock policies onto their format) is switched on per lab HERE, by us, after
+  //   the client's sample is converted. Omitted fields keep their current value.
+  app.post("/api/admin/veritapolicy/set-house-format", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const { labId, format, facilityPath, safetyDefault, numbers, dryRun } = req.body || {};
+    const labIdNum = Number(labId);
+    if (!Number.isInteger(labIdNum) || labIdNum <= 0) return res.status(400).json({ error: "labId required" });
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id, owner_user_id, lab_name FROM labs WHERE id = ?").get(labIdNum) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found", labId: labIdNum });
+    const fmt = format == null ? null : String(format);
+    if (fmt != null && !(HOUSE_FORMATS as readonly string[]).includes(fmt)) {
+      return res.status(400).json({ error: `format must be one of ${HOUSE_FORMATS.join(", ")}` });
+    }
+    const nums: Array<{ policyId: string; houseNumber: string | null; revision: string | null }> = [];
+    if (numbers !== undefined) {
+      if (!Array.isArray(numbers)) return res.status(400).json({ error: "numbers must be an array of {policyId, houseNumber, revision}" });
+      for (const n of numbers) {
+        if (!n || n.policyId == null) return res.status(400).json({ error: "each numbers[] entry needs a policyId" });
+        nums.push({ policyId: String(n.policyId).padStart(3, "0"), houseNumber: n.houseNumber ? String(n.houseNumber) : null, revision: n.revision ? String(n.revision) : null });
+      }
+    }
+    const current = sqlite.prepare("SELECT id, docx_format, house_facility_path, house_safety_default FROM veritapolicy_settings WHERE lab_id = ?").get(labIdNum) as any;
+    const after = {
+      docx_format: fmt ?? current?.docx_format ?? "veritadc",
+      house_facility_path: facilityPath !== undefined ? (facilityPath ? String(facilityPath) : null) : (current?.house_facility_path ?? null),
+      house_safety_default: safetyDefault !== undefined ? (safetyDefault ? String(safetyDefault) : null) : (current?.house_safety_default ?? null),
+    };
+    const summary = { labId: labIdNum, labName: lab.lab_name, before: current ? { docx_format: current.docx_format, house_facility_path: current.house_facility_path, house_safety_default: current.house_safety_default } : null, after, numbers: nums.length };
+    if (dryRun) return res.json({ dryRun: true, ...summary });
+    const now = new Date().toISOString();
+    const tx = sqlite.transaction(() => {
+      if (current) {
+        sqlite.prepare("UPDATE veritapolicy_settings SET docx_format = ?, house_facility_path = ?, house_safety_default = ?, updated_at = ? WHERE lab_id = ?")
+          .run(after.docx_format, after.house_facility_path, after.house_safety_default, now, labIdNum);
+      } else {
+        sqlite.prepare("INSERT INTO veritapolicy_settings (user_id, lab_id, docx_format, house_facility_path, house_safety_default, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+          .run(lab.owner_user_id, labIdNum, after.docx_format, after.house_facility_path, after.house_safety_default, now, now);
+      }
+      const up = sqlite.prepare(`INSERT INTO veritapolicy_house_numbers (lab_id, policy_id, house_number, revision, updated_at) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(lab_id, policy_id) DO UPDATE SET house_number = excluded.house_number, revision = excluded.revision, updated_at = excluded.updated_at`);
+      for (const n of nums) up.run(labIdNum, n.policyId, n.houseNumber, n.revision, now);
+    });
+    tx();
+    logAudit({ userId: 0, ownerUserId: lab.owner_user_id ?? 0, module: "admin", action: "update", entityType: "veritapolicy_settings", entityId: labIdNum, entityLabel: `house format ${after.docx_format} (${lab.lab_name})`, before: summary.before, after: { ...after, numbers: nums }, ipAddress: req.ip });
+    res.json({ ok: true, ...summary });
+  });
+
   app.post("/api/admin/veritapolicy/qa-archive-by-title", (req, res) => {
     const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });

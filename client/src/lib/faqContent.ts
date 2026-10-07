@@ -21,6 +21,14 @@ export interface FaqCategory {
   items: FaqQA[];
 }
 
+// /resources/veritacheck-vs-ep-evaluator  (visible "Frequently Asked Questions")
+export const EPEVAL_COMPARE_FAQ: FaqQA[] = [
+  { q: "What is EP Evaluator?", a: "EP Evaluator, from Data Innovations, is a long-established statistical software used for clinical laboratory method verification. It runs CLSI-based studies such as precision, linearity, and method comparison, and evaluates results against total allowable error and CLIA proficiency testing limits." },
+  { q: "Is VeritaCheck an alternative to EP Evaluator?", a: "Yes, for CLIA performance verification. VeritaCheck runs the CLSI verification studies most CLIA laboratories use (14 study types) and adds a whole-lab coverage view and a 42 CFR-cited, director-signed report. EP Evaluator offers a broader pure-statistics library; VeritaCheck ties each study to the test menu and the regulation." },
+  { q: "Does VeritaCheck run the same studies as EP Evaluator?", a: "VeritaCheck covers the verification study types most CLIA labs need, including calibration verification and linearity, precision, method comparison, reportable range, reference range, and reagent lot verification. EP Evaluator has a larger overall statistical library and goes deeper on advanced statistics; VeritaCheck does not implement every statistical protocol EP Evaluator offers." },
+  { q: "How is VeritaCheck priced compared with EP Evaluator?", a: "VeritaCheck is included in every VeritaAssure plan at published annual prices with no per-user or per-study upcharge. EP Evaluator is licensed per user with annual maintenance and does not publish pricing." },
+];
+
 // /resources/how-to-choose-lab-compliance-software  (visible "Frequently Asked Questions")
 export const CHOOSE_SOFTWARE_FAQ: FaqQA[] = [
   {
