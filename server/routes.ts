@@ -14496,15 +14496,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // PUT single test (analyte) metadata
   app.put("/api/labs/:labId/veritamap/maps/:id/tests/:analyte", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
-    const { active: rawActive, last_cal_ver, last_method_comp, last_precision, last_sop_review, notes } = req.body;
-    const active = typeof rawActive === 'boolean' ? (rawActive ? 1 : 0) : rawActive;
+    // Partial update: the client autosaves ONE field at a time (e.g. just
+    // last_sop_review; see VeritaMapMapPage.tsx handleFieldChange), so only SET
+    // the columns actually present in the body. The old full-row UPDATE bound
+    // active=NULL whenever the body omitted it, which the NOT NULL constraint on
+    // veritamap_tests.active rejected -> every date-only save 500'd with
+    // "NOT NULL constraint failed: veritamap_tests.active" (confirmed in the
+    // Railway runtime log, 2026-10-07). It also clobbered the unsent date columns
+    // back to NULL. Building the SET list from a fixed allowlist, never user keys.
     const now = new Date().toISOString();
-    (db as any).$client.prepare(`
-      UPDATE veritamap_tests SET active=?, last_cal_ver=?, last_method_comp=?,
-        last_precision=?, last_sop_review=?, notes=?, updated_at=?
-      WHERE map_id=? AND analyte=?
-    `).run(active, last_cal_ver ?? null, last_method_comp ?? null, last_precision ?? null, last_sop_review ?? null, notes ?? null, now, req.params.id, safeDecodeParam(req.params.analyte));
-    (db as any).$client.prepare("UPDATE veritamap_maps SET updated_at = ? WHERE id = ?").run(now, req.params.id);
+    const sqlite = (db as any).$client;
+    const sets: string[] = [];
+    const vals: any[] = [];
+    if ('active' in req.body) {
+      const a = req.body.active;
+      sets.push("active=?");
+      vals.push((typeof a === 'boolean' ? a : !!a) ? 1 : 0);
+    }
+    for (const col of ['last_cal_ver', 'last_method_comp', 'last_precision', 'last_sop_review', 'notes']) {
+      if (col in req.body) { sets.push(`${col}=?`); vals.push(req.body[col] ?? null); }
+    }
+    if (sets.length > 0) {
+      sets.push("updated_at=?"); vals.push(now);
+      vals.push(req.params.id, safeDecodeParam(req.params.analyte));
+      sqlite.prepare(`UPDATE veritamap_tests SET ${sets.join(', ')} WHERE map_id=? AND analyte=?`).run(...vals);
+      sqlite.prepare("UPDATE veritamap_maps SET updated_at = ? WHERE id = ?").run(now, req.params.id);
+    }
     res.json({ ok: true });
   });
 
@@ -15526,17 +15543,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const map = userCanAccessMap(req.params.id, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
-    const { active: rawActive, last_cal_ver, last_method_comp, last_precision, last_sop_review, notes } = req.body;
-    const active = typeof rawActive === 'boolean' ? (rawActive ? 1 : 0) : rawActive;
+    // Partial update (same fix as the lab-scoped route above): only SET the
+    // columns actually present in the body, so a date-only autosave never binds
+    // active=NULL and trips the NOT NULL constraint on veritamap_tests.active.
     const now = new Date().toISOString();
-    (db as any).$client.prepare(`
-      UPDATE veritamap_tests SET active=?, last_cal_ver=?, last_method_comp=?,
-        last_precision=?, last_sop_review=?, notes=?, updated_at=?
-      WHERE map_id=? AND analyte=?
-    `).run(active, last_cal_ver ?? null, last_method_comp ?? null,
-      last_precision ?? null, last_sop_review ?? null, notes ?? null, now,
-      req.params.id, safeDecodeParam(req.params.analyte));
-    (db as any).$client.prepare("UPDATE veritamap_maps SET updated_at = ? WHERE id = ?").run(now, req.params.id);
+    const sqlite = (db as any).$client;
+    const sets: string[] = [];
+    const vals: any[] = [];
+    if ('active' in req.body) {
+      const a = req.body.active;
+      sets.push("active=?");
+      vals.push((typeof a === 'boolean' ? a : !!a) ? 1 : 0);
+    }
+    for (const col of ['last_cal_ver', 'last_method_comp', 'last_precision', 'last_sop_review', 'notes']) {
+      if (col in req.body) { sets.push(`${col}=?`); vals.push(req.body[col] ?? null); }
+    }
+    if (sets.length > 0) {
+      sets.push("updated_at=?"); vals.push(now);
+      vals.push(req.params.id, safeDecodeParam(req.params.analyte));
+      sqlite.prepare(`UPDATE veritamap_tests SET ${sets.join(', ')} WHERE map_id=? AND analyte=?`).run(...vals);
+      sqlite.prepare("UPDATE veritamap_maps SET updated_at = ? WHERE id = ?").run(now, req.params.id);
+    }
     res.json({ ok: true });
   });
 
