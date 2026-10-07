@@ -2771,9 +2771,38 @@ function NewAssessmentDialog({
   const { data: memberships } = useMemberships();
   const isNys = (memberships || []).find(m => m.labId === activeLabId)?.primaryRegime === "NYS-CLEP";
   const elementCount = isNys ? 8 : 6;
-  const activeEmployees = employees.filter(e => e.status === "active");
+  // Parking lot #59 (Michael's Option 2): the program's own employee list is
+  // empty for labs that onboard staff through VeritaStaff, so also offer the
+  // lab's active roster members assigned to this program's instruments. The
+  // server auto-bridges them into competency_employees, so the ids returned
+  // here are valid assessment employee_ids.
+  const eligibleUrl = activeLabId ? `/api/labs/${activeLabId}/competency/programs/${program.id}/eligible-employees` : null;
+  const { data: eligible } = useQuery<{ employees: Employee[]; matchedBy: string; instruments: string[] }>({
+    queryKey: [eligibleUrl || "no-eligible-employees"],
+    queryFn: async () => {
+      const r = await fetch(`${API_BASE}${eligibleUrl}`, { headers: authHeaders() });
+      if (!r.ok) return { employees: [], matchedBy: "none", instruments: [] };
+      return r.json();
+    },
+    enabled: !!eligibleUrl,
+  });
+  const activeEmployees = useMemo(() => {
+    const list = employees.filter(e => e.status === "active");
+    const seen = new Set(list.map(e => e.id));
+    for (const e of eligible?.employees || []) {
+      if (!seen.has(e.id)) { list.push(e); seen.add(e.id); }
+    }
+    return list;
+  }, [employees, eligible]);
+  // Hint count = roster members assigned to this program's instruments (whether
+  // or not they were already bridged on an earlier open), so the hint is stable.
+  const rosterOnlyCount = (eligible?.employees || []).length;
   const selectedEmployee = activeEmployees.length > 0 ? activeEmployees[0] : null;
   const [employeeId, setEmployeeId] = useState<number | null>(editing?.employee_id ?? selectedEmployee?.id ?? null);
+  // The roster list arrives after mount: default the selection once it does.
+  useEffect(() => {
+    if (employeeId == null && activeEmployees.length > 0) setEmployeeId(activeEmployees[0].id);
+  }, [activeEmployees, employeeId]);
   const [assessmentType, setAssessmentType] = useState(editing?.assessment_type || "initial");
   const [assessmentDate, setAssessmentDate] = useState(editing?.assessment_date || new Date().toISOString().split("T")[0]);
   // Customer-blockers wave 2026-06-05: review period (item #5 from VeritaComp
@@ -3287,8 +3316,8 @@ function NewAssessmentDialog({
         <div className="space-y-5">
           {activeEmployees.length === 0 && (
             <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 text-sm text-amber-900 dark:text-amber-200">
-              <p className="font-semibold">No active employees in this lab</p>
-              <p className="text-xs mt-1">Add staff on the <strong>Employees</strong> tab before creating an assessment. You cannot save an assessment without an employee to assess.</p>
+              <p className="font-semibold">No active employees for this program</p>
+              <p className="text-xs mt-1">Add staff on the <strong>Employees</strong> tab, or assign roster members to this program's instruments in VeritaStaff (<strong>Assign by Instrument</strong>); assigned staff appear here automatically. You cannot save an assessment without an employee to assess.</p>
             </div>
           )}
           {program.type === "technical" && (program.methodGroups?.length ?? 0) === 0 && (
@@ -3304,11 +3333,16 @@ function NewAssessmentDialog({
               <div>
                 <label className="text-xs font-medium block mb-1">Employee</label>
                 <Select value={employeeId ? String(employeeId) : ""} onValueChange={v => setEmployeeId(parseInt(v))}>
-                  <SelectTrigger><SelectValue placeholder="Select employee..." /></SelectTrigger>
+                  <SelectTrigger data-testid="assessment-employee-select"><SelectValue placeholder="Select employee..." /></SelectTrigger>
                   <SelectContent>
-                    {activeEmployees.map(e => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}
+                    {activeEmployees.map(e => <SelectItem key={e.id} value={String(e.id)} data-testid={`assessment-employee-option-${e.id}`}>{e.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {rosterOnlyCount > 0 && (
+                  <p className="text-[11px] text-muted-foreground mt-1" data-testid="assessment-roster-hint">
+                    {rosterOnlyCount} from the VeritaStaff roster, assigned to this program's instruments.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-xs font-medium block mb-1">Date of Hire</label>
