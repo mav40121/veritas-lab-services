@@ -139,7 +139,7 @@ export function checkBackupIntegrity(gzippedFileBytes: number): { ok: boolean; c
   // caught independently by the PRAGMA integrity_check below, which has no baseline.
   const prior = sqlite
     .prepare(
-      "SELECT user_count, real_user_count, real_user_emails, study_count, table_count FROM backup_integrity_log ORDER BY id DESC LIMIT 1",
+      "SELECT run_at, user_count, real_user_count, real_user_emails, study_count, table_count FROM backup_integrity_log ORDER BY id DESC LIMIT 1",
     )
     .get() as any;
 
@@ -196,9 +196,22 @@ export function checkBackupIntegrity(gzippedFileBytes: number): { ok: boolean; c
   const decreaseExplained = dropped.length > 0 && unexplained.length === 0;
   const userCountOk = realUserCount > 0 && (priorReal == null || realUserCount >= priorReal || decreaseExplained);
 
-  // 4. Study count: stable or increasing vs the previous run
+  // 4. Study count: stable or increasing vs the previous run, OR every missing
+  // study is covered by an audited user deletion since that run (2026-10-07,
+  // parking lot #73, same class as #70: Michael deleting 7 GC1 CREAT studies on
+  // 10/06 produced an "ANOMALY" email for 803 -> 801). Creations can only raise
+  // the count, so (prior - value) is a lower bound on unexplained loss once the
+  // audited deletes are subtracted. Window = since the prior run (exact), not a
+  // fixed 36 h, so yesterday's deletes cannot mask a real loss tonight.
   const studyCount = (sqlite.prepare("SELECT COUNT(*) as cnt FROM studies").get() as any).cnt as number;
-  const studyCountOk = studyCount >= 0 && (!prior || studyCount >= prior.study_count);
+  const priorStudies: number | null = prior?.study_count ?? null;
+  const studyDrop = priorStudies != null ? Math.max(0, priorStudies - studyCount) : 0;
+  const auditedStudyDeletes = studyDrop > 0
+    ? Number((sqlite
+        .prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'delete' AND entity_type = 'study' AND created_at >= ?")
+        .get(prior?.run_at ?? "1970-01-01 00:00:00") as any)?.n ?? 0)
+    : 0;
+  const studyCountOk = studyCount >= 0 && (priorStudies == null || studyCount >= priorStudies || studyDrop <= auditedStudyDeletes);
 
   // 5. Table count: matches expected schema floor
   const tableCount = (sqlite.prepare("SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table'").get() as any).cnt as number;
@@ -208,7 +221,7 @@ export function checkBackupIntegrity(gzippedFileBytes: number): { ok: boolean; c
     fileSize: { value: gzippedFileBytes, threshold: MIN_BACKUP_FILE_SIZE_BYTES, ok: fileSizeOk },
     sqliteIntegrity: { value: integrityResult, ok: integrityOk },
     userCount: { value: realUserCount, totalAccounts: userCount, prior: priorReal, ok: userCountOk, dropped, explained, unexplained, added },
-    studyCount: { value: studyCount, prior: prior?.study_count ?? null, ok: studyCountOk },
+    studyCount: { value: studyCount, prior: priorStudies, ok: studyCountOk, dropped: studyDrop, auditedDeletesSincePriorRun: auditedStudyDeletes },
     tableCount: { value: tableCount, threshold: MIN_TABLE_COUNT, prior: prior?.table_count ?? null, ok: tableCountOk },
   };
 

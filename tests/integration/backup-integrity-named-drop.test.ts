@@ -33,6 +33,7 @@ async function main() {
   const { storage } = await import("../../server/storage");
   const { checkBackupIntegrity } = await import("../../server/backup");
   const { registerRoutes } = await import("../../server/routes");
+  const { logAudit } = await import("../../server/audit");
   const sqlite = (db as any).$client;
 
   const app = express();
@@ -81,6 +82,34 @@ async function main() {
   // 4. steady state
   const u4 = checkBackupIntegrity(SIZE).checks.userCount;
   check("steady state: ok, nothing dropped or added", u4.ok === true && u4.dropped.length === 0 && u4.added.length === 0, JSON.stringify(u4));
+
+  // 5. studyCount (parking lot #73, same class): a decrease is explained by
+  //    audited study deletions since the prior run, an unaudited loss is not.
+  const now = new Date().toISOString();
+  const insStudy = sqlite.prepare(
+    `INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, tea_is_percentage, tea_unit, data_points, instruments, status, created_at)
+     VALUES (?, 'Sodium', 'X', 'qa', '2026-10-07', 'method_comparison', 0.04, 1, '%', '[]', '[]', 'completed', ?)`
+  );
+  const sIds = [1, 2, 3, 4].map(() => Number(insStudy.run(a.id, now).lastInsertRowid));
+  const s0 = checkBackupIntegrity(SIZE).checks.studyCount;
+  check("studies baseline: ok", s0.ok === true && s0.value >= 4, JSON.stringify(s0));
+  sqlite.prepare("DELETE FROM studies WHERE id = ?").run(sIds[0]); // unaudited loss
+  const s1 = checkBackupIntegrity(SIZE).checks.studyCount;
+  check("unaudited study loss: NOT ok, dropped 1, 0 audited deletes", s1.ok === false && s1.dropped === 1 && s1.auditedDeletesSincePriorRun === 0, JSON.stringify(s1));
+  // audited deletions (what DELETE /api/studies/:id and the lab-scoped twin write), then the rows go
+  logAudit({ userId: a.id, module: "veritacheck", action: "delete", entityType: "study", entityId: sIds[1], entityLabel: "Sodium - method_comparison (2026-10-07)" });
+  logAudit({ userId: a.id, module: "veritacheck", action: "delete", entityType: "study", entityId: sIds[2], entityLabel: "Sodium - method_comparison (2026-10-07)" });
+  sqlite.prepare("DELETE FROM studies WHERE id = ?").run(sIds[1]);
+  sqlite.prepare("DELETE FROM studies WHERE id = ?").run(sIds[2]);
+  insStudy.run(a.id, now); // and one new study, as happened 10/06 (7 deleted, 5 created)
+  const s2 = checkBackupIntegrity(SIZE).checks.studyCount;
+  check("audited deletions + a creation: ok (drop covered by audited deletes)", s2.ok === true && s2.dropped === 1 && s2.auditedDeletesSincePriorRun === 2, JSON.stringify(s2));
+  // yesterday's audited deletes must not mask a NEW unaudited loss tonight (window = since prior run).
+  // Simulate the day gap: those two audit rows predate the prior run (same-second resolution otherwise).
+  sqlite.prepare("UPDATE audit_log SET created_at = datetime('now', '-1 day') WHERE entity_type = 'study' AND action = 'delete'").run();
+  sqlite.prepare("DELETE FROM studies WHERE id = ?").run(sIds[3]);
+  const s3 = checkBackupIntegrity(SIZE).checks.studyCount;
+  check("fresh unaudited loss after audited ones: NOT ok (prior-run window, no masking)", s3.ok === false && s3.dropped === 1 && s3.auditedDeletesSincePriorRun === 0, JSON.stringify(s3));
 
   void a; void d;
   server.close();
