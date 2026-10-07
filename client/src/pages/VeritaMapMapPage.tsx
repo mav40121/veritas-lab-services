@@ -1141,6 +1141,15 @@ function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAn
     () => bands.find(b => bandKey(b) === activeBandKey) ?? bands[0],
     [bands, activeBandKey],
   );
+  // Provenance actions (MEC review, 42 CFR 493.1253 attestation, unlock) are
+  // written against THIS band. Without these fields the server addresses the
+  // All-ages band, and before 2026-10-07 it stamped every band of the analyte
+  // at once (parking-lot #68).
+  const bandFields = React.useMemo(() => ({
+    age_min_days: String(activeBand?.age_min_days ?? ALL_AGES.age_min_days),
+    age_max_days: String(activeBand?.age_max_days ?? ALL_AGES.age_max_days),
+    sex: String(activeBand?.sex ?? ALL_AGES.sex),
+  }), [activeBand]);
   const [addingBand, setAddingBand] = React.useState(false);
   const [newBandMinY, setNewBandMinY] = React.useState("0");
   const [newBandMaxY, setNewBandMaxY] = React.useState("18");
@@ -1739,7 +1748,7 @@ function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAn
                     </span>
                     {canUnlock && (
                       <button type="button" className="text-[10px] underline text-amber-700 hover:text-amber-900" disabled={provBusy}
-                        onClick={async () => { setProvBusy(true); try { await onProvenance("unlock-ref", test.analyte); } finally { setProvBusy(false); } }}>
+                        onClick={async () => { setProvBusy(true); try { await onProvenance("unlock-ref", test.analyte, { ...bandFields }); } finally { setProvBusy(false); } }}>
                         Unlock
                       </button>
                     )}
@@ -1763,7 +1772,7 @@ function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAn
                   <Button size="sm" className="h-7 text-xs" disabled={provBusy || !mecDate || !mecBy.trim()}
                     onClick={async () => {
                       setProvBusy(true);
-                      try { await onProvenance("mec-review", test.analyte, { reviewed_at: mecDate, recorded_by: mecBy.trim() }); setMecOpen(false); }
+                      try { await onProvenance("mec-review", test.analyte, { reviewed_at: mecDate, recorded_by: mecBy.trim(), ...bandFields }); setMecOpen(false); }
                       finally { setProvBusy(false); }
                     }}>
                     Record review
@@ -1785,7 +1794,7 @@ function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAn
                     onClick={async () => {
                       setProvBusy(true);
                       try {
-                        if (attestFor === "ref") await onProvenance("attest-ref", test.analyte, { attested_by: attestBy.trim(), attested_title: attestTitle.trim() });
+                        if (attestFor === "ref") await onProvenance("attest-ref", test.analyte, { attested_by: attestBy.trim(), attested_title: attestTitle.trim(), ...bandFields });
                         else await onProvenance("attest-amr", test.analyte, { attested_by: attestBy.trim(), attested_title: attestTitle.trim() }, attestFor);
                         setAttestFor(null);
                       } finally { setProvBusy(false); }
@@ -2308,7 +2317,15 @@ export default function VeritaMapMapPage() {
     if (action === "attest-amr" || action === "unlock-amr") {
       setAmrValuesMap(prev => ({ ...prev, [`${instrumentId}::${analyte}`]: row }));
     } else {
-      setAnalyteValuesMap(prev => ({ ...prev, [analyte]: row }));
+      // The analyte's entry is an ARRAY of bands; replace only the band the
+      // server returned (it used to overwrite the whole array with one row,
+      // which collapsed a multi-band analyte to "All ages" until reload).
+      setAnalyteValuesMap(prev => {
+        const bands = prev[analyte] || [];
+        const idx = bands.findIndex(b => sameBand(b, row));
+        const next = idx >= 0 ? bands.map((b, i) => (i === idx ? row : b)) : [...bands, row];
+        return { ...prev, [analyte]: next };
+      });
     }
   }, [mapApiBase]);
 
