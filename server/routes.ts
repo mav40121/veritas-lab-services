@@ -22908,6 +22908,60 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // lab via WHERE id AND lab_id, and scopes the embedded employees list by
   // lab_id so the response does not leak employees from other labs the
   // owner is a member of (a real leak in the legacy endpoint above).
+  // Eligible employees for a program's assessment dialog (2026-10-07, parking
+  // lot #59, Michael's Option 2). The legacy "New Technical Assessment" dialog
+  // listed competency_employees only, which is empty for labs that onboard staff
+  // through VeritaStaff, so it said "No active employees" while staff were
+  // assigned the program's instruments (lab 5 / Atellica CH 930). This returns
+  // the lab's ACTIVE VeritaStaff employees assigned (staff_employee_instruments)
+  // to any instrument named in the program's method groups, auto-bridged into
+  // competency_employees (idempotent; same bridge the roster sync uses) so the
+  // assessment's employee_id FK is satisfied. A program with no method groups
+  // falls back to every active staff member with an instrument assignment.
+  app.get("/api/labs/:labId/competency/programs/:id/eligible-employees", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
+    const client = (db as any).$client;
+    const labId = req.scope.labId;
+    const program = client.prepare("SELECT id, type FROM competency_programs WHERE id = ? AND lab_id = ?").get(req.params.id, labId) as any;
+    if (!program) return res.status(404).json({ error: "Program not found" });
+    const wanted = new Set<string>();
+    for (const g of client.prepare("SELECT instruments FROM competency_method_groups WHERE program_id = ?").all(program.id) as any[]) {
+      try { for (const n of JSON.parse(g.instruments || "[]")) if (n) wanted.add(String(n).trim().toLowerCase()); } catch { /* malformed group JSON: ignore */ }
+    }
+    const rows = client.prepare(
+      `SELECT se.id, se.first_name, se.last_name, se.title, se.hire_date, vi.instrument_name
+         FROM staff_employees se
+         JOIN staff_employee_instruments sei ON sei.employee_id = se.id
+         JOIN veritamap_instruments vi ON vi.id = sei.instrument_id
+        WHERE se.lab_id = ? AND se.status = 'active'
+        ORDER BY se.last_name, se.first_name`
+    ).all(labId) as any[];
+    const byStaff = new Map<number, { id: number; name: string; title: string; hire_date: string | null; instruments: Set<string> }>();
+    for (const r of rows) {
+      const inst = String(r.instrument_name || "").trim();
+      if (wanted.size > 0 && !wanted.has(inst.toLowerCase())) continue;
+      if (!byStaff.has(r.id)) {
+        const name = `${r.first_name || ""} ${r.last_name || ""}`.trim() || `Employee ${r.id}`;
+        byStaff.set(r.id, { id: r.id, name, title: r.title || "", hire_date: r.hire_date || null, instruments: new Set() });
+      }
+      byStaff.get(r.id)!.instruments.add(inst);
+    }
+    const ownerRow = client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+    const ownerUserId = ownerRow?.owner_user_id ?? req.userId;
+    const now = new Date().toISOString();
+    const employees = Array.from(byStaff.values()).map((s) => {
+      let comp = client.prepare("SELECT id, name, status FROM competency_employees WHERE staff_employee_id = ? AND lab_id = ?").get(s.id, labId) as any;
+      if (!comp) {
+        const r = client.prepare(
+          "INSERT INTO competency_employees (user_id, lab_id, name, title, hire_date, lis_initials, status, created_at, staff_employee_id) VALUES (?, ?, ?, ?, ?, NULL, 'active', ?, ?)"
+        ).run(ownerUserId, labId, s.name, s.title, s.hire_date, now, s.id);
+        comp = { id: Number(r.lastInsertRowid), name: s.name, status: "active" };
+      }
+      return { id: comp.id, name: comp.name || s.name, title: s.title, status: comp.status || "active", staff_employee_id: s.id, instruments: Array.from(s.instruments).sort() };
+    }).filter((e) => e.status === "active");
+    res.json({ programId: program.id, matchedBy: wanted.size > 0 ? "program-instruments" : "any-instrument", instruments: Array.from(wanted).sort(), employees });
+  });
+
   app.get("/api/labs/:labId/competency/programs/:id", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const program = (db as any).$client.prepare(
