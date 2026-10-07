@@ -421,35 +421,15 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
         lastComputeStudyStatusError = new Error("method_comparison: no measurable comparison values");
         return "fail";
       }
-      // Validation guard: verify pass/fail matches computed mean bias
-      // Use the dual-criterion allowance at the mean reference level
-      let computedResult: "pass" | "fail" = (passCount === totalCount && totalCount > 0) ? "pass" : "fail";
-      if (biasVals.length > 0) {
-        const meanAbsBias = biasVals.reduce((a, b) => a + Math.abs(b), 0) / biasVals.length;
-        // For the mean-bias guard, compute allowance in the same units as biasVals
-        let meanAllowance: number;
-        if (teaIsPercentage) {
-          // biasVals are fractional (e.g. 0.09 for 9%), so compare against cliaAllowableError
-          // but also consider the absolute floor converted to fraction at mean reference
-          const refs = valid.flatMap(dp => {
-            const ref = dp.expectedValue!;
-            return comparisonNames.filter(n => dp.instrumentValues[n] !== null && dp.instrumentValues[n] !== undefined).map(() => ref);
-          });
-          const meanRef = refs.length > 0 ? refs.reduce((a, b) => a + Math.abs(b), 0) / refs.length : 0;
-          const absFloorAsFraction = (cliaAbsoluteFloor ?? 0) / (meanRef || 1);
-          meanAllowance = Math.max(cliaAllowableError, absFloorAsFraction);
-        } else {
-          meanAllowance = cliaAllowableError;
-        }
-        if (meanAbsBias > meanAllowance + FP_EPS && computedResult === "pass") {
-          const biasLabel = teaIsPercentage
-            ? `${(meanAbsBias * 100).toFixed(2)}% exceeds TEa ${(meanAllowance * 100).toFixed(1)}%`
-            : `${meanAbsBias.toFixed(3)} exceeds TEa ${meanAllowance}`;
-          console.error(`[VALIDATION] Method comparison computed as pass but mean |bias| ${biasLabel} - overriding to FAIL`);
-          computedResult = "fail";
-        }
-      }
-      return computedResult;
+      // The verdict is the per-sample dual-criterion rule above, nothing more.
+      // A mean-|bias| "validation guard" used to sit here and override an
+      // all-pass study to FAIL. Removed 2026-10-07 on Michael's call (parking
+      // lot #67): for single-criterion TEa it could never fire (a mean of values
+      // each within T is within T), and for dual-criterion TEa (percent OR
+      // absolute floor) it averaged fractional biases inflated by floor-passed
+      // low samples against the percent TEa, flipping ~7.5% of all-pass studies
+      // to a false FAIL. Receipt: tests/integration/d1-aggregate-override.test.ts.
+      return (passCount === totalCount && totalCount > 0) ? "pass" : "fail";
     }
 
     if (studyType === "precision") {
