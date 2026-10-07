@@ -6324,6 +6324,13 @@ try {
   if (!biCols.includes("real_user_count")) {
     sqlite.exec(`ALTER TABLE backup_integrity_log ADD COLUMN real_user_count INTEGER`);
   }
+  // backup_integrity_log.real_user_emails (2026-10-07, #70): JSON array of the
+  // real-user emails at each run, so a decrease can NAME the account(s) that
+  // disappeared and be matched against admin deletions in audit_log. Legacy
+  // rows keep NULL (no names available for the first post-deploy comparison).
+  if (!biCols.includes("real_user_emails")) {
+    sqlite.exec(`ALTER TABLE backup_integrity_log ADD COLUMN real_user_emails TEXT`);
+  }
 } catch {}
 try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as any[]); } catch {}
 
