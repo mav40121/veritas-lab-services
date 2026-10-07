@@ -2263,6 +2263,42 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // second membership so the NavBar lab switcher renders). Idempotent:
   // returns the existing membership row if one already exists for the
   // (lab_id, user_id) pair.
+  // POST /api/admin/finding-due-days (2026-10-07): set or clear the corrective-
+  // action due window for one lab or a whole organization. Body:
+  //   { secret, labId? | organizationId?, days: 1-365 | null, dryRun? }
+  // null restores the accreditor default. Audited. Lifepoint runs 30 days on
+  // every PT-triggered corrective action network-wide (Michael Johnson, 10/06).
+  app.post("/api/admin/finding-due-days", (req: any, res) => {
+    const { secret, labId, organizationId, days, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if ((!labId && !organizationId) || (labId && organizationId)) return res.status(400).json({ error: "Pass exactly one of labId or organizationId" });
+    const value = days === null || days === undefined || days === "" ? null : Number(days);
+    if (value !== null && (!Number.isInteger(value) || value < 1 || value > 365)) return res.status(400).json({ error: "days must be an integer from 1 to 365, or null to clear" });
+    const sqlite = (db as any).$client;
+    const table = labId ? "labs" : "organizations";
+    const id = Number(labId || organizationId);
+    const row = sqlite.prepare(`SELECT id, ${labId ? "lab_name AS name" : "name"}, finding_due_days FROM ${table} WHERE id = ?`).get(id) as any;
+    if (!row) return res.status(404).json({ error: `${table} ${id} not found` });
+    const affectedLabs = labId
+      ? 1
+      : (sqlite.prepare("SELECT COUNT(*) AS n FROM labs WHERE organization_id = ?").get(id) as any)?.n ?? 0;
+    if (dryRun === true) return res.json({ dryRun: true, table, id, name: row.name, before: row.finding_due_days ?? null, after: value, affectedLabs });
+    sqlite.prepare(`UPDATE ${table} SET finding_due_days = ? WHERE id = ?`).run(value, id);
+    const ownerId = labId
+      ? (sqlite.prepare("SELECT owner_user_id AS o FROM labs WHERE id = ?").get(id) as any)?.o
+      : (sqlite.prepare("SELECT billing_owner_user_id AS o FROM organizations WHERE id = ?").get(id) as any)?.o;
+    logAudit({
+      userId: Number(ownerId || 0),
+      module: "admin",
+      action: "update",
+      entityType: "admin.finding_due_days",
+      entityLabel: `${table} ${id} ${row.name}: ${row.finding_due_days ?? "default"} -> ${value ?? "default"}`,
+      after: { table, id, days: value, affectedLabs },
+      ipAddress: req.ip,
+    });
+    res.json({ ok: true, table, id, name: row.name, before: row.finding_due_days ?? null, after: value, affectedLabs });
+  });
+
   app.post("/api/admin/add-lab-membership", (req, res) => {
     const { secret, userId, labId, role, isPrimaryLab } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
@@ -4778,7 +4814,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       (ctx?.instrument ? `, instrument ${ctx.instrument}` : "") +
       `. Value ${ctx?.result_value ?? "n/a"}.` +
       (viol?.detail ? ` ${viol.detail}` : "");
-    const due_date = dueDateForFinding("CMS", today);
+    const due_date = dueDateForFinding("CMS", today, req.scope.labId);
     const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
     const userIdForRow = ownerRow?.owner_user_id ?? req.userId;
     let findingId: number;
@@ -21286,7 +21322,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       `.` +
       (rec.acceptance_criteria ? ` Acceptance criteria: ${rec.acceptance_criteria}.` : "") +
       (rec.last_result_summary ? ` Result: ${rec.last_result_summary}.` : "");
-    const due_date = dueDateForFinding("CMS", today);
+    const due_date = dueDateForFinding("CMS", today, labId);
     let findingId: number;
     try {
       const ins = sqlite.prepare(
@@ -21694,12 +21730,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   //   COLA  consultative model with no hard deadline. Surface a soft target
   //         of anchor + 30 days as a check-in reminder, not a regulatory cap.
   //   Other anchor + 30 days as a neutral default.
-  function dueDateForFinding(accreditor: string, anchorDate: string | null): string | null {
+  // 2026-10-07: a lab (labs.finding_due_days) or its organization
+  // (organizations.finding_due_days) can override the accreditor default with
+  // one network-wide clock; the lab value wins over the organization value.
+  // Lifepoint asked for 30 days on every PT-triggered corrective action across
+  // its (mostly TJC, so otherwise 60-day) sites. Admin-set via
+  // POST /api/admin/finding-due-days; no customer-facing picker.
+  function findingDueDaysOverride(labId: number | null | undefined): number | null {
+    if (!labId) return null;
+    try {
+      const row = (db as any).$client.prepare(
+        `SELECT l.finding_due_days AS lab_days, o.finding_due_days AS org_days
+           FROM labs l LEFT JOIN organizations o ON o.id = l.organization_id
+          WHERE l.id = ?`
+      ).get(labId) as any;
+      const v = row?.lab_days ?? row?.org_days ?? null;
+      return Number.isInteger(v) && v > 0 ? Number(v) : null;
+    } catch { return null; }
+  }
+  function dueDateForFinding(accreditor: string, anchorDate: string | null, labId?: number | null): string | null {
     if (!anchorDate) return null;
     const offsets: Record<string, number> = {
       'CAP': 30, 'TJC': 60, 'CMS': 10, 'AABB': 45, 'COLA': 30, 'Other': 30,
     };
-    const days = offsets[accreditor];
+    const override = findingDueDaysOverride(labId);
+    const days = override ?? offsets[accreditor];
     if (days === undefined) return null;
     const d = new Date(anchorDate);
     if (isNaN(d.getTime())) return null;
@@ -21785,7 +21840,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         allowed: Array.from(allowed),
       });
     }
-    const due_date = dueDateForFinding(accreditor, anchor_date ?? null);
+    const due_date = dueDateForFinding(accreditor, anchor_date ?? null, labIdForGate);
     const result = (db as any).$client.prepare(
       `INSERT INTO findings (
         user_id, accreditor, inspection_id, finding_number, standard_ref,
@@ -22544,7 +22599,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         allowed: Array.from(allowed),
       });
     }
-    const due_date = isInternalNce ? null : dueDateForFinding(accreditor, anchor_date ?? null);
+    const due_date = isInternalNce ? null : dueDateForFinding(accreditor, anchor_date ?? null, req.scope.labId);
     const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
     const userIdForRow = ownerRow?.owner_user_id ?? req.userId;
     const result = (db as any).$client.prepare(
