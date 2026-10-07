@@ -2782,6 +2782,38 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, before: { expires_at: lab.subscription_expires_at, status: lab.subscription_status }, lab: updated });
   });
 
+  // Admin: read-only audit of VeritaMap write access across EVERY lab. Mirrors
+  // hasMapAccess (passes if lab.subscription_status === 'active', falling back to
+  // the owner's user status, OR the owner is grandfathered) so we can find any lab
+  // that silently 403s VeritaMap writes the way Milford lab 4 did (a 'hospital'
+  // plan assigned but subscription_status left 'free'). Returns owner_user_id only,
+  // never emails, so it carries no member PII. Built 2026-10-06. ADMIN_SECRET-gated
+  // (x-admin-secret header or ?secret=).
+  app.get("/api/admin/labs-access-audit", (req: any, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const labs = sqlite.prepare(
+      "SELECT id, lab_name, plan, subscription_status, subscription_expires_at, is_trial, is_demo, is_repository, owner_user_id FROM labs ORDER BY id"
+    ).all() as any[];
+    const rows = labs.map((l: any) => {
+      const owner = sqlite.prepare("SELECT grandfathered, subscription_status FROM users WHERE id = ?").get(l.owner_user_id) as any;
+      const grandfathered = owner?.grandfathered === 1 || owner?.grandfathered === true;
+      const effStatus = (l.subscription_status ?? owner?.subscription_status ?? null) as string | null;
+      const mapWriteBlocked = !(effStatus === 'active' || grandfathered);
+      return {
+        id: l.id, lab_name: l.lab_name, plan: l.plan,
+        subscription_status: l.subscription_status,
+        subscription_expires_at: l.subscription_expires_at,
+        is_trial: l.is_trial, is_demo: l.is_demo, is_repository: l.is_repository,
+        owner_user_id: l.owner_user_id, owner_grandfathered: grandfathered,
+        effective_status: effStatus, mapWriteBlocked,
+      };
+    });
+    const blocked = rows.filter((r: any) => r.mapWriteBlocked);
+    res.json({ total: rows.length, blockedCount: blocked.length, blocked, all: rows });
+  });
+
   // Admin: mark/unmark a lab as a card-less TRIAL. A trial lab is fully blocked
   // (reads + writes, everyone) once subscription_expires_at passes — see the
   // is_trial hard-lock in labScopeMiddleware. Paid/comped labs must stay
