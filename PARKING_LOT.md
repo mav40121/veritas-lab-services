@@ -231,74 +231,7 @@ barcode scanning waits on revenue commitment.
 
 ---
 
-### 30. Plain-language summary layer for verbatim CFR citations
-
-**Effort:** M (multi-day content authoring across 96 Master List rows if redesigned correctly)
-**Importance:** Medium — director readability win; no customer urgency.
-
-**What:** `server/cfrRequirements.ts` carries verbatim eCFR text in
-the `description` field (PR #301 closed #26). The verbatim text is
-authoritative but written for regulators, not lab directors. A
-plain-language paraphrase next to the verbatim would help the
-director read faster.
-
-**Status (after 2026-05-21 session):** Partially shipped, then
-partially reverted. Lessons learned the hard way.
-
-**What was shipped and kept:**
-
-- PR #309: optional `summary?: string` field added to
-  `CFR_REQUIREMENTS`, populated for 5 high-traffic standards
-  (§493.1235, §493.1252, §493.1253, §493.1281, §493.1289).
-  Operator approved the writing voice on those 5 summaries.
-  Data layer remains on file as inert content. No UI surface
-  currently reads it.
-
-**What was attempted and reverted:**
-
-- PR #310: a new "Lab Requirements Index" Excel route plus button
-  on VeritaPolicyAppPage. One row per citation, columns for
-  Source / Citation / Section Title / **Verbatim Text** /
-  **Plain-Language Summary** / accreditor cross-refs. Reverted
-  2026-05-21 (PR #312) because the "Verbatim Text" column header
-  applied to CAP / TJC / COLA accreditor rows whose descriptions
-  are paraphrases of copyrighted accreditor manuals. Labelling
-  paraphrased copyrighted content as verbatim is the issue, not
-  the column itself. See [[feedback_no_verbatim_label_accreditor_content]].
-- PR #312 second commit: a "Plain-Language CFR Summary" column on
-  the existing Master List Excel that looked up each row's cited
-  CFRs in the summary map and concatenated matches. Reverted
-  2026-05-21 (PR #313) because the same CFR-section summary
-  attached to every Master List row that cited the section --
-  §493.1235 (competency) ended up on PPE Policy, Privacy Policy,
-  Information System Policy rows, etc. CFR-section-scoped
-  summary content does not fit policy-row-scoped Master List
-  rows. See [[feedback_cfr_summary_is_cfr_scoped_not_policy_scoped]].
-
-**Future-redesign requirements (what the next attempt must satisfy):**
-
-- Author summaries at a scope that matches the destination surface.
-  If the destination is the Master List Excel (one row per policy),
-  the summary text must live in `veritapolicyMasterList.ts` and be
-  authored one paraphrase per policy_id. CFR-section-scoped text
-  belongs on a CFR-scoped surface (a glossary, or an inline tooltip
-  on the CFR citation itself), not on a policy-scoped row.
-- Any surface that mixes CFR rows (verbatim safe) with accreditor
-  rows (paraphrase only) must split column headers or only render
-  the verbatim-implying label on CFR rows. Do NOT use one column
-  header that claims verbatim for both.
-- The 5 summaries already in `cfrRequirements.ts` are valid as
-  CFR-section glossary content. They are inappropriate as
-  Master-List-row content.
-
-**Status:** BUILT 2026-10-04 (approach (a)), then EXPANDED 5 -> 35 sections (three tranches: quality systems/PT, pre/analytic/postanalytic + facilities/specimens, and the full CLIA personnel subpart via add_cfr_summaries_v1/v2/v3.py). A read-only "CFR Reference" tab in VeritaDC (VeritaPolicyCfrReferencePage.tsx + VeritaPolicyTabs + route) surfaces plain-language summaries in an "In plain language" callout beside the verbatim text, CFR rows ONLY. The 5 pilot summaries (1235/1252/1253/1281/1289) plus 14 new high-traffic sections drafted in the same voice (801 PT, 1105 retention, 1251 procedure manual, 1254 maintenance, 1255 cal/cal-ver, 1256 QC, 1282 corrective action, 1283 test records, 1290 postanalytic, 1291 test report, 1407/1445 director, 1411 TC, 1463 general supervisor) via scripts/add_cfr_summaries_v1.py. Tranche 2 added 8 more (1101 facilities, 1232 specimen ID, 1236 PT evaluation, 1239 general-systems QA, 1242 specimen submission/referral, 1249 preanalytic QA, 1443 director qualifications, 1451 technical supervisor) via scripts/add_cfr_summaries_v2.py, for 27 sections total. All new drafts are faithful paraphrases of public-domain CFR and ship in the PR for Michael's voice review (source==='cfr'; accreditor paraphrase never rendered), deduped by citation, grouped by chapter, searchable. Client-only: the summary field is already served by GET /api/veritapolicy/requirements, so no server or content change, and the 5 summaries keep their already-approved voice. The twice-reverted approach (b) (policy-row paraphrases on the Master List) was NOT attempted. Verified: build green, full local browser QA (tab renders, 5 callouts, verbatim below, search, dark mode), Playwright spec. PR open; deploy on Michael's go. Expanding summaries beyond the 5 would need his voice sign-off and is a separate content task.
-
-**Effort if redesigned at policy-row scope:** Per-policy writing for
-the 96 Master List rows is a multi-day content project, not a
-quick pilot.
-
-**Pre- vs post-COLA:** Post-COLA. No customer urgency. Operator
-has not yet authorized a redesign attempt as of 2026-05-21.
+_(item #30 closed 2026-10-07; CFR Reference tab shipped PR #1461, deployed 2026-10-04, see C62 below)_
 
 ---
 
@@ -465,7 +398,7 @@ All five small parity items are now shipped. Items 6+ (SSO/AD, approval delegati
 
 Work-pass 2026-10-04: STATUS CORRECTED + remaining items scoped. Verified in-code that 4 of the 7 "remaining" depth items actually shipped THIS session: per-department role mapping (policy_manual_approvers + manualId override in canUserApproveStep), reviewer-phrase library (REJECT_PHRASES), cross-policy linking (policy_document_links), and customizable email templates (policy_email_templates). SSO is scoped (docs/SSO_AD_DESIGN.md, PR #1458). Two depth items remained unbuilt after the status review: approval delegation and in-browser DOCX editing. Both specced in docs/VERITADC_PARITY_REMAINING_DESIGN.md.
 
-**Approval delegation: BUILT 2026-10-04** (on Michael's go). A reviewer (or owner/admin) names a temporary designate who inherits their approval eligibility for a date window; delegation layered onto canUserApproveStepDelegated / countEligibleReviewersForStepDelegated with two self-approval laundering guards; delegate's approvals attributed to the delegator on the signoff + audit. CRUD + a Delegations dialog in My Documents. Verified: scripts/verify-veritadc-approval-delegation.ts (19/19 incl. both guards), API guards (self-delegation/bad-dates 400), and a full local browser exercise (create -> ACTIVE -> revoke). PR open; deploy held for Michael's authorization (Gate 2).
+**Approval delegation: SHIPPED 2026-10-04** (on Michael's go). A reviewer (or owner/admin) names a temporary designate who inherits their approval eligibility for a date window; delegation layered onto canUserApproveStepDelegated / countEligibleReviewersForStepDelegated with two self-approval laundering guards; delegate's approvals attributed to the delegator on the signoff + audit. CRUD + a Delegations dialog in My Documents. Verified: scripts/verify-veritadc-approval-delegation.ts (19/19 incl. both guards), API guards (self-delegation/bad-dates 400), and a full local browser exercise (create -> ACTIVE -> revoke). PR #1460 merged + deployed 2026-10-04 (c6ef093f, health 200, route 401 unauthenticated); approve-by-delegate E2E verified locally (PR #1462 doc). Prod click-through was not performed. Remaining on this item: in-browser DOCX editing only.
 
 **In-browser DOCX editing:** still a multi-week L; hold until a prospect names it (see the design doc's recommendation).
 
@@ -563,7 +496,7 @@ or partial menus across vendors — remains. A full pass (vendor/FDA-sourced,
 no fabrication) would make VeritaMap demo-safe across the board.
 
 **Source:** Michael, 2026-10-06 Roche demo.
-**Status:** IN PROGRESS. Michael chose Option 2 (exhaustive) 2026-10-06. Executing vendor-by-vendor, sourced and verified against the manufacturer's own parameter lists. Batch 1 (Roche chemistry c-module) reconciled 2026-10-06 against Roche's March-2024 Serum Work Area parameter list: leveled c702 / cobas 8000 (+43 each), cobas c 703 (stub 6 -> 100), cobas pure (+8), cobas c 502 (+5) up to the verified c501 menu; c311 (Roche subset) and cobas 6000 left as-is. Batch 2 (Siemens chemistry: Atellica CH, Dimension EXL/Vista, ADVIA) reconciled 2026-10-06 with the Michael-approved "normalize as you go" rule: every analyte on these moderate-complexity analyzers set to MODERATE (fixed 171 stray HIGH/WAIVED complexity values, e.g. Sodium tagged HIGH on a chem analyzer) and ~630 missing assays added. Batch 3 (Abbott ARCHITECT c4000/c8000/c16000 + Alinity c) reconciled 2026-10-06 from Abbott Core Lab menus: ~180 assays added, 135 complexity values fixed, all MODERATE (ARCHITECT c4000 alone had 125 wrong). Batch 4 (Beckman Coulter chemistry: AU5800/680/480/640, DxC 700 AU / 700AU / 500AU / 500i, IMMAGE 800) reconciled 2026-10-06: these entries were ALREADY well-populated (AU5800 = 134 tests) with no Roche-style gaps, and the library names analytes full-name/alt-order while Beckman's published menu is abbreviation-first, so a name-keyed auto-add would have inserted DUPLICATES. The safe, source-verified action was complexity normalization only: 20 stray HIGH values set to MODERATE (Tacrolimus, Calprotectin, Elastase, Oxalate on the AU/DxC-AU entries). Beckman menu verified vs source (Beckman AU chemistry menu PDF + Protein Chemistry Menu by Platform PDF, spot-checked). DEFERRED for an abbreviation-aware completeness pass: UniCel DxC SYNCHRON i-series (660i/680i/860i/880i; menu only partially sourced, and 2 extraction tests legitimately HIGH) and AU640 newest esoterics. Next: Beckman UniCel/AU640 follow-up, Sysmex, Roche immunoassay, smaller vendors. CAP PT catalog loaded 2026-10-06 (74 programs, #60 done).
+**Status:** IN PROGRESS. Michael chose Option 2 (exhaustive) 2026-10-06. Executing vendor-by-vendor, sourced and verified against the manufacturer's own parameter lists. Batch 1 (Roche chemistry c-module) reconciled 2026-10-06 against Roche's March-2024 Serum Work Area parameter list: leveled c702 / cobas 8000 (+43 each), cobas c 703 (stub 6 -> 100), cobas pure (+8), cobas c 502 (+5) up to the verified c501 menu; c311 (Roche subset) and cobas 6000 left as-is. Batch 2 (Siemens chemistry: Atellica CH, Dimension EXL/Vista, ADVIA) reconciled 2026-10-06 with the Michael-approved "normalize as you go" rule: every analyte on these moderate-complexity analyzers set to MODERATE (fixed 171 stray HIGH/WAIVED complexity values, e.g. Sodium tagged HIGH on a chem analyzer) and ~630 missing assays added. Batch 3 (Abbott ARCHITECT c4000/c8000/c16000 + Alinity c) reconciled 2026-10-06 from Abbott Core Lab menus: ~180 assays added, 135 complexity values fixed, all MODERATE (ARCHITECT c4000 alone had 125 wrong). Batch 4 (Beckman Coulter chemistry: AU5800/680/480/640, DxC 700 AU / 700AU / 500AU / 500i, IMMAGE 800) reconciled 2026-10-06: these entries were ALREADY well-populated (AU5800 = 134 tests) with no Roche-style gaps, and the library names analytes full-name/alt-order while Beckman's published menu is abbreviation-first, so a name-keyed auto-add would have inserted DUPLICATES. The safe, source-verified action was complexity normalization only: 20 stray HIGH values set to MODERATE (Tacrolimus, Calprotectin, Elastase, Oxalate on the AU/DxC-AU entries). Beckman menu verified vs source (Beckman AU chemistry menu PDF + Protein Chemistry Menu by Platform PDF, spot-checked). DEFERRED for an abbreviation-aware completeness pass: UniCel DxC SYNCHRON i-series (660i/680i/860i/880i; menu only partially sourced, and 2 extraction tests legitimately HIGH) and AU640 newest esoterics. Next: Beckman UniCel/AU640 follow-up, Sysmex, Roche immunoassay, smaller vendors. CAP PT catalog loaded 2026-10-06 (74 programs, #60 done). 2026-10-07 overnight: no further vendor batches until the duplicate cleanup lands. FLAG CONFIRMED: scripts/dup_scan.py found ~130 near-duplicate analytes created by the Siemens batch (PR #1479), live in prod (e.g. "Total Protein" beside "Protein, total"); the keeper/remove list is the next deliverable and nothing is deleted without Michael's review; the Abbott batch (#1482) gets the same audit.
 
 **Catalog of data-quality issues found during the sweep (keep updated):**
 - Systemic complexity inconsistency: 255 of 1275 distinct analytes carried more than one complexity across the dataset (some legitimate per-device, some error). Being normalized per analyzer class during each vendor batch.
@@ -575,22 +508,7 @@ no fabrication) would make VeritaMap demo-safe across the board.
 
 ---
 
-### 58. VeritaCheck instrument-verification: multi-select analyte menu (stop adding one by one)
-
-**Effort:** S (1-3 days)
-**Importance:** High — core usability of the instrument-verification flow; cumbersome enough to hurt demos and adoption.
-
-**What:** On a new Instrument Verification Package, analytes are added one at a
-time via free text. The existing "FDA-cleared" dropdown only renders when the
-verification is linked to a VeritaMap instrument (`map_instrument_id`), which
-standalone verifications lack, and even then it is single-select. Fix: source
-the menu from `fdaInstrumentData.json` by the verification's instrument name
-(e.g., Sysmex XN-2000 = 40 analytes), show a multi-select checklist with
-Select-all, and bulk-insert in one transaction (new bulk endpoint). Keep
-free-text for custom analytes.
-
-**Source:** Michael, 2026-10-06 screenshot (`/labs/3/dashboard/verifications`).
-**Status:** Open. Design presented and approved in principle; awaiting explicit go to build.
+_(item #58 closed 2026-10-07; shipped PR #1481, deployed 2026-10-06, see C63 below)_
 
 ---
 
@@ -613,21 +531,7 @@ idempotent bridge). Fixes the roster drift rather than hiding the flow.
 
 ---
 
-### 60. VeritaPT: load the CAP vendor program catalog (Program Name dropdown for CAP)
-
-**Effort:** S (1-3 days)
-**Importance:** High — CAP is the dominant PT vendor; free-text entry looks broken in demos.
-
-**What:** The Program Name field becomes a dropdown only when the vendor's
-catalog is loaded in `pt_vendor_programs`. API is loaded; CAP is not, so CAP
-falls back to free text ("No CAP catalog loaded yet"). By design the system
-refuses to invent catalog rows — CAP data must be vendor-sourced and
-operator-verified. Fix: compile the real CAP Survey programs across the 10 PT
-categories, present for Michael's verification, then load via
-`POST /api/admin/veritapt/vendor-programs`. No code change; data load only.
-
-**Source:** Michael, 2026-10-06 screenshot (PT Program Enrollments modal).
-**Status:** Open. Diagnosed; awaiting go to compile the CAP list for verification.
+_(item #60 closed 2026-10-07; 74 CAP programs loaded 2026-10-06, see C64 below)_
 
 ---
 
@@ -649,19 +553,7 @@ with full cascade once he approves the ids.
 
 ---
 
-### 62. Vendor instrument expansion PR #1474 (25 platforms; awaiting complexity sign-off)
-
-**Effort:** XS (under 1 day)
-**Importance:** Medium — closes demo-reported instrument gaps for Bio-Rad, Tosoh, Horiba, and fuller Mindray.
-
-**What:** PR #1474 adds 25 current platforms to `fdaInstrumentData.json` with
-FDA-anchored CLIA complexity (269 -> 294 instruments). Held for Michael's
-sign-off because complexity is a regulatory property and his call. Green and
-ready; once approved, merge and confirm the new instruments appear in the
-VeritaMap instrument search on prod.
-
-**Source:** Michael, 2026-10-06.
-**Status:** Open. PR green; awaiting merge approval.
+_(item #62 closed 2026-10-07; PR #1474 merged + deployed 2026-10-06, see C65 below)_
 
 ---
 
@@ -687,36 +579,7 @@ inline-disposition + Acrobat interaction to confirm when fixing).
 
 ---
 
-### 64. Milford VeritaMap view-only cascade: every value/date save fails for operator + lab director
-
-**Effort:** S (access fix in flight) + S (client UX class bug)
-**Importance:** High. Blocks Michael and Lisa from editing Milford (labs 4/5) VeritaMap at all; surfaced live during setup/demo.
-
-**What:** On Milford labs 4 and 5, loading a VeritaMap test menu and entering any
-value (AMR, reference range) or completion date (Cal Verification, Method
-Comparison, Precision, SOP Review) fails to auto-save, throwing a cascade of
-destructive toasts ("AMR not saved" / "Values not saved" / "Auto-save failed").
-Confirmed on BOTH Michael's and Lisa's accounts, on both labs.
-
-Root cause (two layers):
-  1. ACCESS (server): the save routes are gated by requireModuleEdit('veritamap')
-     (server/routes.ts ~1038), which passes only lab owner / active admin
-     lab_member / org_admin / active edit seat. Reads only need membership, so the
-     map LOADS but every write 403s "view-only access to veritamap." Neither
-     Michael nor Lisa currently clears that bar on labs 4/5 (a boot-backfill
-     cleanup on 2026-05-24 removed admin rows; add-lab-membership no-ops on an
-     existing row so there was no path to re-grant). FIX IN FLIGHT: PR #1483
-     POST /api/admin/repair-lab-admins grants/promotes both to admin on 4/5.
-  2. UX CLASS BUG (client): VeritaMapMapPage gates its inputs on
-     useIsReadOnly('veritamap'), which reflects SUBSCRIPTION read-only, NOT
-     per-user seat/membership view-only. A genuine view-only user (e.g. Lisa's
-     techs) sees enabled inputs, types, and gets one failed-save toast PER FIELD.
-     The detail page should also treat seat-level view-only as read-only (disable
-     inputs + one banner), e.g. by exposing hasModuleEditAccess (server/routes.ts
-     ~1142) to the client the way the VeritaPolicy approval preview already does.
-
-**Source:** Michael, 2026-10-06 screenshots (lab 4 AMR cascade; lab 5 / Lisa SOP Review "Auto-save failed").
-**Status:** Access fix in PR #1483 (dryRun-verify, then apply). Client UX class bug open. Final confirmation needs a click-test on Milford after the access fix (Gate 3 step 8).
+_(item #64 closed 2026-10-07; three real causes fixed, PR #1486 + #1487 deployed, see C66 below)_
 
 ---
 
@@ -739,11 +602,158 @@ the SAME established mean/SD the rules use (or a consistent mfr-vs-cumulative mo
 applied to both chart and rules).
 
 **Source:** Mike Hiltunen (MedStar), 2026-10-06 email "LJ Graph Question". Gameday Plymouth PSA Frend B Level 1, 9/28 point fired 1-3s but sits near the mean on the chart.
-**Status:** Root cause confirmed in code. Need his lot's live numbers to quantify the customer reply (blocked on live-data access), then the product fix to unify baselines.
+**Status:** Root cause confirmed in code AND in data (2026-10-07, read-only prod copy): lab 29 Gameday Plymouth, lot 27 "PSA (FREND B)" Level 1 (6361A26001), manufacturer mean 1.29 / SD 0.35; lab history n=30 (6/17-9/21) mean 1.067 / SD 0.100. The 9/28 result 1.39 is +3.23 lab-SD (stored violation #14, 1-3s, result rejected) but only +0.29 manufacturer-SD, which is why the chart shows it near the mean. The fix already exists as PR #1464 (Michael's option 1 of 2026-10-04: chart and rules both on the programmed mean/SD; server/qcWestgard.ts; verify 8/8), rebased 2026-10-07 and mergeable. DECISION FOR MICHAEL: programmed basis (#1464 as built; that 9/28 point becomes a non-event) vs lab-established basis once n>=20 per CLSI C24 (keeps it a 3.2 SD outlier; this lab's SD is 3.5x tighter than the insert). A reply to Mike is drafted in Outlook, not sent, per the MedStar hold.
+
+---
+
+### 66. VeritaCheck: Hemoglobin studies render as "Lab-Set Internal Goal", and every narrative cites 42 CFR 493.931
+
+**Effort:** S (1-3 days)
+**Importance:** High. Customer-facing PDF regulatory language on hematology studies.
+
+**What:** `hasCanonicalTea()` (server/backfillAbsoluteFloor.ts:119) matches aliases
+built from the TEa table but never consults `NAME_MAP`, so plain "Hemoglobin" /
+"HGB" / "Hgb" (which NAME_MAP maps to "CBC - Hemoglobin" for the floor) renders
+as a laboratory-defined goal ("Lab-Set Internal Goal", "per laboratory director
+or designee policy") instead of the CLIA TEa. Separately, pdfReport.ts:1219 reads
+`study.cfr`, which nothing ever sets, so every narrative cites 42 CFR 493.931
+(Chemistry), including hematology studies that should cite 493.941. PR #1466
+fixed the lookup table and the public article only, not this engine path.
+
+**Source:** QA sweep 2026-10-04 21:07 (memory `project_veritacheck_tea_canonicalization_bug`).
+**Status:** Open. Root-caused. Fix: NAME_MAP-aware `hasCanonicalTea`, CFR section derived from the analyte's specialty, extend `scripts/verify-canonical-tea-matching.js`.
+
+---
+
+### 67. VeritaCheck D1 method-comparison verdict: the mean-|bias| override is disputed
+
+**Effort:** S (1-3 days)
+**Importance:** Medium
+
+**What:** The 2026-10-04 sweep claimed a method-comparison study can FAIL on
+aggregate mean |bias| while every sample passes. Michael: "If every sample has to
+be a pass, it is not possible for the aggregate to be a fail." The assistant
+conceded the claim was sloppy and that it is only possible for dual-criterion
+analytes (percent OR absolute floor), then never resolved whether the override
+(server/routes.ts ~395-420) is a real defect or correct behavior.
+
+**Source:** Michael, 2026-10-04 21:58-22:03.
+**Status:** Open. Needs a verify script over the actual per-sample and aggregate logic with a dual-criterion case, then Michael's regulatory call.
+
+---
+
+### 68. VeritaMap: director attestation, MEC review and unlock stamp EVERY age/sex band of an analyte
+
+**Effort:** S (1-3 days)
+**Importance:** Medium-High. 42 CFR 493.1253 attestation provenance.
+
+**What:** `attest-ref`, `unlock-ref` and `mec-review` (server/routes.ts ~14714 /
+14743 / 14770) run `UPDATE veritamap_analyte_values ... WHERE map_id = ? AND analyte = ?`
+without the band key, so attesting the adult band also attests and locks every
+pediatric band, and unlocking unlocks all of them; the client never sends the
+band. (The CFR default to 493.931 for a specialty missing from CFR_MAP, flagged
+in the same sweep, is BY DESIGN per CLAUDE.md section 5 and is not a defect.)
+
+**Source:** VeritaMap sweep 2026-10-05 10:30.
+**Status:** Open. Fix: client sends the active band; server scopes by (map_id, analyte, age_min_days, age_max_days, sex) with the All-ages default for old clients.
+
+---
+
+### 69. computeStudyStatus throws at every boot for 4 studies and fail-safes them to FAIL
+
+**Effort:** S (1-3 days)
+**Importance:** High. Verdict integrity.
+
+**What:** The Railway log shows, on every boot since at least the 2026-10-06
+19:49Z deploy, four lines of `[computeStudyStatus] Error recomputing status:
+TypeError: Cannot read properties of undefined (reading 'Beckman AU5800 Primary
+vs Beckman AU5800 Backup')`. `computeStudyStatus` returns "fail" on any
+exception, and `recomputeAllStudyStatuses()` writes that verdict back whenever it
+differs from the stored one, so a study whose data shape the recompute cannot read
+is silently marked FAIL at boot.
+
+**Source:** prod log, noticed 2026-10-06 20:46 ET.
+**Status:** Open. Identify the 4 studies, fix the shape read, and make the boot recompute SKIP (not fail) any study it cannot evaluate.
+
+---
+
+### 70. Nightly backup "integrity ANOMALY" email on every real-user decrease, naming nobody
+
+**Effort:** S (1-3 days)
+**Importance:** Medium
+
+**What:** `checkBackupIntegrity` (server/backup.ts:170) alerts whenever
+real_user_count is below the previous run, with zero tolerance and no record of
+WHICH account disappeared; `DELETE /api/admin/users/:id` only console.logs the
+deletion. Intentional deletions (Tywauna 2026-10-05; 54 -> 53 on 2026-10-06)
+therefore produce an ANOMALY email that reads like data loss.
+
+**Source:** VLS Leads 2026-10-06 20:32; bug report written 20:37.
+**Status:** Open. Fix: snapshot the real-user email list in backup_integrity_log, diff and NAME the dropped accounts, audit-log admin deletions, and classify a drop as explained (note) vs unexplained (anomaly).
+
+---
+
+### 71. Milford (labs 4/5) house policy format for VeritaDC drafts
+
+**Effort:** M (multi-day)
+**Importance:** Medium. Lisa's lab.
+
+**What:** "Update the UMASS Milford sites to this policy template." The house
+format (sections I-V, revision table, footer) was extracted from the sample DOCX
+on 2026-10-06 13:21 but was never built into the VeritaDC DOCX generator for labs
+4 and 5.
+
+**Source:** Michael, 2026-10-06 ~13:19 (.eml).
+**Status:** Not started. Needs a per-lab DOCX template option (design, then build).
+
+---
+
+### 72. In-app Getting Started wizard (per-module checklists inside the system)
+
+**Effort:** M (multi-day)
+**Importance:** Medium
+
+**What:** The public /resources/getting-started page shipped (PR #1480).
+Michael: "Love it being built into the system." The in-app per-module checklist
+(progress read from the lab's actual state) was stated as a follow-up and not
+started.
+
+**Source:** Michael, 2026-10-06 13:15.
+**Status:** Not started. Design needed (where it lives, what "done" reads from).
 
 ---
 
 ## CLOSED (audit trail)
+
+### C66. Milford VeritaMap: every value/date save failed, then the AMR autosave loop (was #64)
+
+**Effort:** was S + S / **Importance:** High
+
+**Closure evidence:** Three real causes, none of them the role gap first diagnosed. (1) Subscription gate: `hasMapAccess` requires `subscription_status = 'active'`; lab 4 sat on `free` with plan `hospital` never activated. Activated 2026-10-06 20:19 (`extend-lab-subscription`, expiry 2099); lab 5 was already active. (2) Date-save 500: the per-field autosave PUT bound `active = NULL` into a NOT NULL column; PR #1486 (partial update), deploy f46f003f; production receipt 2026-10-06 21:06: `PUT /api/labs/4/veritamap/maps/61/tests/25-hydroxyvitamin D 200 :: {"ok":true}`. (3) AMR autosave loop, surfaced by the fix: TestRow re-synced its AMR state from a prop the parent rebuilt on every render and re-armed its autosave after every successful save, ~1,400 blank PUTs a minute from the open map tab. PR #1487 (autosave arms only on user edits, value-keyed prop sync, server no-op guard answering `noop:true`, plus layer 2: `editAccess` on the map GET and a view-only banner with disabled inputs for members without edit rights), merged b69446db, deployed 2026-10-07 02:34Z, `/api/health` commit match, homepage 200. Receipts: tests/playwright/veritamap-amr-autosave-no-loop.spec.ts (24 PUTs in 6 s on the pre-fix bundle, 0 on the fix, 1 per edit, passes x2), veritamap-seat-view-only.spec.ts (editAccess=false, direct PUT 403, banner, disabled inputs, 0 writes), scripts/verify-veritamap-amr-noop-save.mjs 6/6. A tab still on the old bundle keeps PUTting until it reloads; the server now answers noop without writing.
+
+### C65. Vendor instrument expansion PR #1474, 25 platforms (was #62)
+
+**Effort:** was XS / **Importance:** Medium
+
+**Closure evidence:** Merged 2026-10-06 13:12 (ac05b37), deploy SUCCESS 13:22. 269 -> 294 instruments with FDA-anchored CLIA complexity. Authorization: Michael's 13:07 "agree with all recommendations. go." The picker render on prod was not browser-checked (prod smoke pending).
+
+### C64. VeritaPT CAP vendor program catalog (was #60)
+
+**Effort:** was S / **Importance:** High
+
+**Closure evidence:** Loaded 2026-10-06 14:20 via `POST /api/admin/veritapt/vendor-programs`: loaded 74, totalActive 299; the Program Name field is a dropdown for CAP. Caveat: the promised review-before-load did not happen; the 74 programs are visible in the dropdown for Michael's review, and a remove list is available on request.
+
+### C63. VeritaCheck instrument-verification multi-select analyte menu (was #58)
+
+**Effort:** was S / **Importance:** High
+
+**Closure evidence:** PR #1481 merged 2026-10-06 15:45, deploy 8fa863a SUCCESS 16:01. Multi-select checklist sourced from the instrument's menu with Select all and a bulk insert; free text kept for custom analytes. Built under the 14:04 "continue in sequence, do not stop" mandate rather than a per-item go; browser check on prod pending (prod smoke).
+
+### C62. Plain-language summary layer: CFR Reference tab (was #30)
+
+**Effort:** was M / **Importance:** Medium
+
+**Closure evidence:** PR #1461 merged 2026-10-04 (approach (a): a read-only "CFR Reference" tab in VeritaDC with plain-language summaries for 35 CFR sections, CFR rows only), deployed 2026-10-04 (f473fb1e, then ba891c3f). The twice-reverted policy-row approach (b) was not attempted. Rendered and browser-verified locally; on prod the API payload (235 CFR rows, 35 summaries, 0 accreditor rows) was verified and the filter logic replayed on it, but the logged-in page itself was not eyeballed.
 
 ### C61. Regenerate the access-inventory Excel with the corrected MD persona (was #44)
 
