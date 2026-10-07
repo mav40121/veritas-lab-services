@@ -144,9 +144,15 @@ function renderLJSVG(results: MonthlyReviewResult[], mean: number, sd: number): 
 
 export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
   const periodLabel = `${MONTH_NAMES[p.periodMonth]} ${p.periodYear}`;
-  const mean = p.baselineMean ?? p.lot.mfr_mean;
-  const sd = p.baselineSD ?? p.lot.mfr_sd;
-  const sdSource = p.baselineSD !== null ? "Lab cumulative" : "Manufacturer (lab baseline not yet established)";
+  // Plot and evaluate against the lot's PROGRAMMED mean/SD, matching the live
+  // Levey-Jennings chart and the Westgard flags (2026-10-04, Michael's option 1).
+  // The lab-observed cumulative mean/SD is still reported alongside for reference.
+  const mean = p.lot.mfr_mean;
+  const sd = p.lot.mfr_sd;
+  const sdSource = "Programmed (lot mean/SD)";
+  const observedNote = (p.baselineMean !== null && p.baselineSD !== null)
+    ? ` Lab-observed cumulative mean ${p.baselineMean.toFixed(3)}, SD ${p.baselineSD.toFixed(3)} over accepted history.`
+    : "";
 
   // Aggregate violation + CA counts for the narrative
   let totalRejections = 0, totalWarnings = 0, missingCA = 0;
@@ -236,7 +242,7 @@ export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
     ? `<div style="font-size:8pt;color:#666;padding:4pt 0">No corrective actions filed for this period.</div>`
     : `<table><thead><tr><th>QC Date</th><th>Value</th><th>CA Filed</th><th>Status</th><th>Action Taken</th></tr></thead><tbody>${caRows.join("")}</tbody></table>`;
 
-  const narrative = `Monthly QC review for <b>${escapeHtml(p.lot.analyte)}</b> (Lot ${escapeHtml(p.lot.lot_number)}, ${escapeHtml(p.lot.level)} level) covering ${periodLabel}. ${p.results.length} run${p.results.length === 1 ? "" : "s"} logged: ${totalRejections} rejection-rule fire${totalRejections === 1 ? "" : "s"}, ${totalWarnings} warning${totalWarnings === 1 ? "" : "s"}, ${missingCA} result${missingCA === 1 ? "" : "s"} with a rejection but no corrective action filed. Baseline mean ${mean.toFixed(3)}, SD ${sd.toFixed(3)} (${sdSource}). Final review and any clinical determination must be made by the laboratory director or designee.`;
+  const narrative = `Monthly QC review for <b>${escapeHtml(p.lot.analyte)}</b> (Lot ${escapeHtml(p.lot.lot_number)}, ${escapeHtml(p.lot.level)} level) covering ${periodLabel}. ${p.results.length} run${p.results.length === 1 ? "" : "s"} logged: ${totalRejections} rejection-rule fire${totalRejections === 1 ? "" : "s"}, ${totalWarnings} warning${totalWarnings === 1 ? "" : "s"}, ${missingCA} result${missingCA === 1 ? "" : "s"} with a rejection but no corrective action filed. Chart and rule evaluation use the programmed mean ${mean.toFixed(3)}, SD ${sd.toFixed(3)} (${sdSource}).${observedNote} Final review and any clinical determination must be made by the laboratory director or designee.`;
 
   const ackBox = `
     <div class="ack">
