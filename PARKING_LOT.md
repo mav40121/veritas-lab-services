@@ -527,26 +527,8 @@ _(item #64 closed 2026-10-07; three real causes fixed, PR #1486 + #1487 deployed
 
 ---
 
-### 65. VeritaQC LJ chart vs Westgard rule mean-source mismatch (point near chart mean fires 1-3s)
+_(item #65 closed 2026-10-07; fix deployed in PR #1464 and the MedStar reply sent; see C79 below)_
 
-**Effort:** M
-**Importance:** High. Customer-visible correctness and trust issue; the chart and the rule flags disagree.
-
-**What:** A QC point can fire the 1-3s rejection rule while the Levey-Jennings
-chart shows it near the mean. Root cause: the two use DIFFERENT baselines. The
-Westgard engine (evaluateWestgardForLot, server/routes.ts ~3717) computes mean/SD
-FRESH from the lab's accepted QC history and flags |value - historyMean| / historySD
-> 3. The LJ chart draws its center line and SD bands from the lot's MANUFACTURER
-insert values (mfr_mean / mfr_sd, the columns the chart-data query pulls at
-server/routes.ts ~4250). When the lab's own running mean/SD differs from the
-manufacturer insert (common once a lab establishes its own stats), a point near the
-mfr mean on the chart can be >3 lab-SD out. Per CLIA/CLSI C24, QC should be
-evaluated against the lab's established mean/SD; the fix is to make the chart plot
-the SAME established mean/SD the rules use (or a consistent mfr-vs-cumulative mode
-applied to both chart and rules).
-
-**Source:** Mike Hiltunen (MedStar), 2026-10-06 email "LJ Graph Question". Gameday Plymouth PSA Frend B Level 1, 9/28 point fired 1-3s but sits near the mean on the chart.
-**Status:** FIX DEPLOYED 2026-10-07 (PR #1464, squash 03db1fe4, live 10:41 ET) on Michael's decision 2 relayed by Lisa: the Westgard rules, the chart and the monthly PDF all use the lot's programmed (manufacturer) mean/SD. Stored violations are not recomputed. Reply to Mike Hiltunen drafted in Outlook (covers both Plymouth PSA Level 1 flags, the bias-rule effect of a programmed mean the lab does not run at, and 42 CFR 493.1256(d)(10)(ii)); closes on send.
 ---
 
 _(item #66 closed 2026-10-07; PR #1489 deployed, see C68 below)_
@@ -745,6 +727,12 @@ picker, and an existing enrollment on a retired code still displays.
 ---
 
 ## CLOSED (audit trail)
+
+### C79. VeritaQC: Levey-Jennings chart and Westgard rules used two different mean/SD bases (was #65)
+
+**Effort:** was S / **Importance:** High. Live on a paying account (MedStar, Gameday Plymouth): a 1-3s rejection drawn near the chart mean.
+
+**Closure evidence:** Decision 2 (Michael, relayed by Lisa, 2026-10-07): the programmed (manufacturer) mean/SD is the single basis, because the MedStar director runs QC against the manufacturer's ranges. PR #1464 (squash 03db1fe4, live 10:41 ET): evaluateWestgardForLot extracted to server/qcWestgard.ts and scored against qc_control_lots.mfr_mean/mfr_sd, the monthly PDF on the same basis; receipt scripts/verify-veritaqc-westgard-mfr.ts 8/8. Stored violations not recomputed. Production numbers behind the call (read-only copy 2026-10-07): Plymouth PSA FREND B Level 1 lot 6361A26001, 9/28 result 1.39 = +3.2 SD on the lab's 30-run history (1.067/0.100) and +0.3 SD on the programmed 1.29/0.35 loaded 9/30 at Mike's request. Reply to Mike Hiltunen sent 2026-10-07 10:37 ET from info@ (Lisa, from Outlook): both Plymouth charts explained, fix stated, the bias-rule consequence of a programmed mean the lab does not run at (10 consecutive below 1.29 fires 10-x on every run), 42 CFR 493.1256(d)(10)(ii) on verifying stated values, and the offer to program the lab's own established mean/SD or re-score existing runs on his say-so. The CLSI C24 locked-established-basis design was recommended and declined; it stays available if a client asks for it.
 
 ### C78. Milford (labs 4/5) house policy format for VeritaDC drafts (was #71)
 
