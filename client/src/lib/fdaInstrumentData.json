@@ -2,7 +2,7 @@
   "Beckman Coulter AU5800": {
     "vendor": "Beckman Coulter",
     "category": "Chemistry",
-    "testCount": 134,
+    "testCount": 133,
     "tests": {
       "Haptoglobin": {
         "complexity": "MODERATE",
@@ -444,10 +444,6 @@
         "complexity": "MODERATE",
         "specialty": "Urinalysis"
       },
-      "creatinine": {
-        "complexity": "MODERATE",
-        "specialty": "Urinalysis"
-      },
       "Angiotensin converting enzyme (ACE)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -545,7 +541,7 @@
   "Beckman Coulter AU680": {
     "vendor": "Beckman Coulter",
     "category": "Chemistry",
-    "testCount": 131,
+    "testCount": 130,
     "tests": {
       "Alanine aminotransferase (ALT) (SGPT)": {
         "complexity": "MODERATE",
@@ -967,10 +963,6 @@
         "complexity": "MODERATE",
         "specialty": "Urinalysis"
       },
-      "creatinine": {
-        "complexity": "MODERATE",
-        "specialty": "Urinalysis"
-      },
       "Oxcarbazepine Metabolite": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
@@ -1076,7 +1068,7 @@
   "Beckman Coulter DxC 700 AU": {
     "vendor": "Beckman Coulter",
     "category": "Chemistry",
-    "testCount": 134,
+    "testCount": 132,
     "tests": {
       "Procalcitonin (PCT)": {
         "complexity": "MODERATE",
@@ -1177,10 +1169,6 @@
       "creatinine": {
         "complexity": "MODERATE",
         "specialty": "Urinalysis"
-      },
-      "Creatinine": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
       },
       "Oxcarbazepine Metabolite": {
         "complexity": "MODERATE",
@@ -1579,10 +1567,6 @@
         "specialty": "General Chemistry"
       },
       "Gamma glutamyl transferase (GGT)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Ammonia, plasma/serum": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -4241,7 +4225,7 @@
   "Abbott Architect c8000": {
     "vendor": "Abbott",
     "category": "Chemistry",
-    "testCount": 126,
+    "testCount": 117,
     "tests": {
       "Alpha-1-acid glycoprotein (orosomucoid)": {
         "complexity": "MODERATE",
@@ -4647,31 +4631,7 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Ammonia": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Carbon Dioxide (Enzymatic)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Lactate": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Gas"
-      },
-      "Total Protein": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Total Bilirubin": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Direct Bilirubin": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -4719,14 +4679,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Amphetamine": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Benzodiazepines, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Cocaine": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
@@ -4739,10 +4691,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Salicylate": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Tramadol": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
@@ -4752,7 +4700,7 @@
   "Abbott Architect c16000": {
     "vendor": "Abbott",
     "category": "Chemistry",
-    "testCount": 115,
+    "testCount": 106,
     "tests": {
       "Alpha-1-acid glycoprotein (orosomucoid)": {
         "complexity": "MODERATE",
@@ -5102,31 +5050,7 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Ammonia": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Carbon Dioxide (Enzymatic)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Lactate": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Gas"
-      },
-      "Total Protein": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Total Bilirubin": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Direct Bilirubin": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -5186,14 +5110,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Amphetamine": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Benzodiazepines, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Cocaine": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
@@ -5206,10 +5122,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Salicylate": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Tramadol": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
@@ -5219,7 +5131,7 @@
   "Abbott Alinity c": {
     "vendor": "Abbott",
     "category": "Chemistry",
-    "testCount": 117,
+    "testCount": 108,
     "tests": {
       "Glucose": {
         "complexity": "MODERATE",
@@ -5609,26 +5521,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Carbon Dioxide (Enzymatic)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Lactate": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Gas"
-      },
-      "Total Protein": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Total Bilirubin": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Direct Bilirubin": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Total Protein, Urine/CSF": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -5642,10 +5534,6 @@
         "specialty": "General Chemistry"
       },
       "Microalbumin": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Antistreptolysin O": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -5665,14 +5553,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Amphetamine": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Benzodiazepines, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Cocaine": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
@@ -5684,17 +5564,13 @@
       "Methadone metabolite (EDDP)": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
-      },
-      "Salicylate": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
       }
     }
   },
   "Siemens Dimension Vista 500": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 195,
+    "testCount": 178,
     "tests": {
       "Progesterone": {
         "complexity": "MODERATE",
@@ -6228,23 +6104,7 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Ammonia": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Glucose, Hemolyzed": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Lactate": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Gas"
-      },
-      "Total Iron Binding Capacity (TIBC)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Total Protein": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -6252,15 +6112,7 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Carbon Dioxide (Enzymatic)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Gamma-Glutamyltransferase (GGT)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -6269,10 +6121,6 @@
         "specialty": "General Chemistry"
       },
       "Aldolase": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Triglycerides": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -6285,10 +6133,6 @@
         "specialty": "General Chemistry"
       },
       "Fructosamine": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Hemoglobin A1c": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -6312,17 +6156,9 @@
         "complexity": "MODERATE",
         "specialty": "Cardiac"
       },
-      "Antistreptolysin O": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "C1 Inhibitor": {
         "complexity": "MODERATE",
         "specialty": "Immunology"
-      },
-      "CRP": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
       },
       "Ig Light Chains, Type Kappa": {
         "complexity": "MODERATE",
@@ -6368,14 +6204,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Free T3": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
-      },
-      "Free T4": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
-      },
       "T uptake (TU)": {
         "complexity": "MODERATE",
         "specialty": "Endocrinology"
@@ -6383,10 +6211,6 @@
       "Total T4": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "TSH": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
       },
       "AFP": {
         "complexity": "MODERATE",
@@ -6440,19 +6264,7 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Barbiturates, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Benzodiazepines, Urine": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Benzodiazepines, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Cocaine Metabolite": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
@@ -6471,17 +6283,13 @@
       "Propoxyphene": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
-      },
-      "Salicylate": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
       }
     }
   },
   "Siemens Dimension EXL 200": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 164,
+    "testCount": 148,
     "tests": {
       "Protein, total, urine": {
         "complexity": "MODERATE",
@@ -6907,23 +6715,7 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Ammonia": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Glucose, Hemolyzed": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Lactate": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Gas"
-      },
-      "Total Iron Binding Capacity (TIBC)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Total Protein": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -6931,15 +6723,7 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Carbon Dioxide (Enzymatic)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Gamma-Glutamyltransferase (GGT)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -6955,10 +6739,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Triglycerides": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Apolipoprotein A-I": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -6972,10 +6752,6 @@
         "specialty": "General Chemistry"
       },
       "Fructosamine": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Hemoglobin A1c": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -7023,10 +6799,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "CRP": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "CRP, Extended Range": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -7063,14 +6835,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Free T3": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
-      },
-      "Free T4": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
-      },
       "T uptake (TU)": {
         "complexity": "MODERATE",
         "specialty": "Endocrinology"
@@ -7078,10 +6842,6 @@
       "Total T4": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "TSH": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
       },
       "hCG (urine, qualitative)": {
         "complexity": "MODERATE",
@@ -7107,19 +6867,7 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Barbiturates, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Benzodiazepines, Urine": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Benzodiazepines, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Cocaine Metabolite": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
@@ -7134,17 +6882,13 @@
       "Ethyl Glucuronide (EtG)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "Salicylate": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
       }
     }
   },
   "Siemens Atellica CH": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 140,
+    "testCount": 126,
     "tests": {
       "Methotrexate": {
         "complexity": "MODERATE",
@@ -7570,39 +7314,7 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Ammonia": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Lactate": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Gas"
-      },
-      "Total Iron Binding Capacity (TIBC)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Total Protein": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Total Protein, Urine": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Carbon Dioxide (Enzymatic)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Pancreatic Amylase": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Triglycerides": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -7610,15 +7322,7 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Hemoglobin A1c": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Antistreptolysin O": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "CRP": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -7662,19 +7366,7 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Barbiturates, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Benzodiazepines, Urine": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Benzodiazepines, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Cocaine Metabolite": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
@@ -7701,17 +7393,13 @@
       "Oxycodone": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
-      },
-      "Salicylate": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
       }
     }
   },
   "Siemens ADVIA Chemistry XPT": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 120,
+    "testCount": 107,
     "tests": {
       "Lithium": {
         "complexity": "MODERATE",
@@ -8045,23 +7733,11 @@
         "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
-      "Ammonia": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Bilirubin, direct": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Lactate": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Gas"
-      },
       "Total Iron Binding Capacity (TIBC)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Total Protein": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -8069,15 +7745,7 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Carbon Dioxide (Enzymatic)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Gamma-Glutamyltransferase (GGT)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -8093,23 +7761,7 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Triglycerides": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Fructosamine": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Hemoglobin A1c": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Antistreptolysin O": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "CRP": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -8149,19 +7801,7 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Barbiturates, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Benzodiazepines, Urine": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Benzodiazepines, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Cocaine Metabolite": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
@@ -8185,10 +7825,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Salicylate": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Tricyclic antidepressants": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
@@ -8198,7 +7834,7 @@
   "Siemens ADVIA 1800": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 122,
+    "testCount": 111,
     "tests": {
       "Alpha-1-acid glycoprotein (orosomucoid)": {
         "complexity": "MODERATE",
@@ -8536,10 +8172,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Ammonia": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Bilirubin, direct": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -8556,10 +8188,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Total Protein": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Total Protein, CSF/Urine": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -8573,10 +8201,6 @@
         "specialty": "General Chemistry"
       },
       "Gamma-Glutamyltransferase (GGT)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Pancreatic Amylase": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -8597,22 +8221,6 @@
         "specialty": "General Chemistry"
       },
       "LDL cholesterol": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Triglycerides": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Hemoglobin A1c": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Antistreptolysin O": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "CRP": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -8652,19 +8260,7 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Barbiturates, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Benzodiazepines, Urine": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Benzodiazepines, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Cocaine Metabolite": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
@@ -8681,10 +8277,6 @@
         "specialty": "General Chemistry"
       },
       "Methadone Metabolites": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Salicylate": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       }
@@ -10342,7 +9934,7 @@
   "Siemens Dimension Vista 3000T": {
     "vendor": "Siemens Healthineers",
     "category": "Immunoassay",
-    "testCount": 189,
+    "testCount": 173,
     "tests": {
       "Progesterone": {
         "complexity": "MODERATE",
@@ -10848,23 +10440,7 @@
         "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
-      "Ammonia": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Glucose, Hemolyzed": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Lactate": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Gas"
-      },
-      "Total Iron Binding Capacity (TIBC)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Total Protein": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -10872,15 +10448,7 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Carbon Dioxide (Enzymatic)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Gamma-Glutamyltransferase (GGT)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -10896,10 +10464,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Triglycerides": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Apolipoprotein A-I": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -10909,10 +10473,6 @@
         "specialty": "General Chemistry"
       },
       "Fructosamine": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Hemoglobin A1c": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -10947,10 +10507,6 @@
       "C1 Inhibitor": {
         "complexity": "MODERATE",
         "specialty": "Immunology"
-      },
-      "CRP": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
       },
       "Ig Light Chains, Type Kappa": {
         "complexity": "MODERATE",
@@ -10996,21 +10552,9 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Free T3": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
-      },
-      "Free T4": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
-      },
       "Total T4": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "TSH": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
       },
       "AFP": {
         "complexity": "MODERATE",
@@ -11064,19 +10608,7 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Barbiturates, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Benzodiazepines, Urine": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Benzodiazepines, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Cocaine Metabolite": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
@@ -11093,10 +10625,6 @@
         "specialty": "General Chemistry"
       },
       "Propoxyphene": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Salicylate": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       }
@@ -15361,7 +14889,7 @@
   "Siemens Atellica CH 930": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 152,
+    "testCount": 138,
     "tests": {
       "Methotrexate": {
         "complexity": "MODERATE",
@@ -15835,39 +15363,7 @@
         "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
-      "Ammonia": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Lactate": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Gas"
-      },
-      "Total Iron Binding Capacity (TIBC)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Total Protein": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Total Protein, Urine": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Carbon Dioxide (Enzymatic)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Pancreatic Amylase": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Triglycerides": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -15875,15 +15371,7 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Hemoglobin A1c": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Antistreptolysin O": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "CRP": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -15927,19 +15415,7 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Barbiturates, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Benzodiazepines, Urine": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Benzodiazepines, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Cocaine Metabolite": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
@@ -15964,10 +15440,6 @@
         "specialty": "Toxicology"
       },
       "Oxycodone": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Salicylate": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       }
@@ -16523,7 +15995,7 @@
   "Siemens Dimension Vista 1500": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 195,
+    "testCount": 178,
     "tests": {
       "Progesterone": {
         "complexity": "MODERATE",
@@ -17057,23 +16529,7 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Ammonia": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Glucose, Hemolyzed": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Lactate": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Gas"
-      },
-      "Total Iron Binding Capacity (TIBC)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Total Protein": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -17081,15 +16537,7 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Carbon Dioxide (Enzymatic)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Gamma-Glutamyltransferase (GGT)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -17098,10 +16546,6 @@
         "specialty": "General Chemistry"
       },
       "Aldolase": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Triglycerides": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -17114,10 +16558,6 @@
         "specialty": "General Chemistry"
       },
       "Fructosamine": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Hemoglobin A1c": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -17141,17 +16581,9 @@
         "complexity": "MODERATE",
         "specialty": "Cardiac"
       },
-      "Antistreptolysin O": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "C1 Inhibitor": {
         "complexity": "MODERATE",
         "specialty": "Immunology"
-      },
-      "CRP": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
       },
       "Ig Light Chains, Type Kappa": {
         "complexity": "MODERATE",
@@ -17197,14 +16629,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Free T3": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
-      },
-      "Free T4": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
-      },
       "T uptake (TU)": {
         "complexity": "MODERATE",
         "specialty": "Endocrinology"
@@ -17212,10 +16636,6 @@
       "Total T4": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "TSH": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
       },
       "AFP": {
         "complexity": "MODERATE",
@@ -17269,19 +16689,7 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Barbiturates, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Benzodiazepines, Urine": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Benzodiazepines, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Cocaine Metabolite": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
@@ -17298,10 +16706,6 @@
         "specialty": "General Chemistry"
       },
       "Propoxyphene": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Salicylate": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       }
@@ -17310,7 +16714,7 @@
   "Siemens Dimension Vista 3000": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 195,
+    "testCount": 178,
     "tests": {
       "Progesterone": {
         "complexity": "MODERATE",
@@ -17844,23 +17248,7 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Ammonia": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Glucose, Hemolyzed": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Lactate": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Gas"
-      },
-      "Total Iron Binding Capacity (TIBC)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Total Protein": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -17868,15 +17256,7 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Carbon Dioxide (Enzymatic)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Gamma-Glutamyltransferase (GGT)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -17885,10 +17265,6 @@
         "specialty": "General Chemistry"
       },
       "Aldolase": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Triglycerides": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -17901,10 +17277,6 @@
         "specialty": "General Chemistry"
       },
       "Fructosamine": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Hemoglobin A1c": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -17928,17 +17300,9 @@
         "complexity": "MODERATE",
         "specialty": "Cardiac"
       },
-      "Antistreptolysin O": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "C1 Inhibitor": {
         "complexity": "MODERATE",
         "specialty": "Immunology"
-      },
-      "CRP": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
       },
       "Ig Light Chains, Type Kappa": {
         "complexity": "MODERATE",
@@ -17984,14 +17348,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Free T3": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
-      },
-      "Free T4": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
-      },
       "T uptake (TU)": {
         "complexity": "MODERATE",
         "specialty": "Endocrinology"
@@ -17999,10 +17355,6 @@
       "Total T4": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "TSH": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
       },
       "AFP": {
         "complexity": "MODERATE",
@@ -18056,19 +17408,7 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Barbiturates, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Benzodiazepines, Urine": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Benzodiazepines, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Cocaine Metabolite": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
@@ -18087,17 +17427,13 @@
       "Propoxyphene": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
-      },
-      "Salicylate": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
       }
     }
   },
   "Siemens Dimension EXL": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 164,
+    "testCount": 148,
     "tests": {
       "Protein, total, urine": {
         "complexity": "MODERATE",
@@ -18523,23 +17859,7 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Ammonia": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Glucose, Hemolyzed": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Lactate": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Gas"
-      },
-      "Total Iron Binding Capacity (TIBC)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Total Protein": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -18547,15 +17867,7 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Carbon Dioxide (Enzymatic)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Gamma-Glutamyltransferase (GGT)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -18571,10 +17883,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Triglycerides": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Apolipoprotein A-I": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -18588,10 +17896,6 @@
         "specialty": "General Chemistry"
       },
       "Fructosamine": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Hemoglobin A1c": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -18639,10 +17943,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "CRP": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "CRP, Extended Range": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -18679,14 +17979,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Free T3": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
-      },
-      "Free T4": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
-      },
       "T uptake (TU)": {
         "complexity": "MODERATE",
         "specialty": "Endocrinology"
@@ -18694,10 +17986,6 @@
       "Total T4": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "TSH": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
       },
       "hCG (urine, qualitative)": {
         "complexity": "MODERATE",
@@ -18723,19 +18011,7 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Barbiturates, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Benzodiazepines, Urine": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Benzodiazepines, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Cocaine Metabolite": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
@@ -18750,17 +18026,13 @@
       "Ethyl Glucuronide (EtG)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "Salicylate": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
       }
     }
   },
   "Beckman Coulter DxC 700AU": {
     "vendor": "Beckman Coulter",
     "category": "Chemistry",
-    "testCount": 134,
+    "testCount": 132,
     "tests": {
       "Procalcitonin (PCT)": {
         "complexity": "MODERATE",
@@ -18861,10 +18133,6 @@
       "creatinine": {
         "complexity": "MODERATE",
         "specialty": "Urinalysis"
-      },
-      "Creatinine": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
       },
       "Oxcarbazepine Metabolite": {
         "complexity": "MODERATE",
@@ -19263,10 +18531,6 @@
         "specialty": "General Chemistry"
       },
       "Gamma glutamyl transferase (GGT)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Ammonia, plasma/serum": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -19303,7 +18567,7 @@
   "Beckman Coulter DxC 500AU": {
     "vendor": "Beckman Coulter",
     "category": "Chemistry",
-    "testCount": 134,
+    "testCount": 132,
     "tests": {
       "Procalcitonin (PCT)": {
         "complexity": "MODERATE",
@@ -19404,10 +18668,6 @@
       "creatinine": {
         "complexity": "MODERATE",
         "specialty": "Urinalysis"
-      },
-      "Creatinine": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
       },
       "Oxcarbazepine Metabolite": {
         "complexity": "MODERATE",
@@ -19809,10 +19069,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Ammonia, plasma/serum": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Lithium": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
@@ -19846,7 +19102,7 @@
   "Beckman Coulter AU480": {
     "vendor": "Beckman Coulter",
     "category": "Chemistry",
-    "testCount": 131,
+    "testCount": 130,
     "tests": {
       "Alanine aminotransferase (ALT) (SGPT)": {
         "complexity": "MODERATE",
@@ -20268,10 +19524,6 @@
         "complexity": "MODERATE",
         "specialty": "Urinalysis"
       },
-      "creatinine": {
-        "complexity": "MODERATE",
-        "specialty": "Urinalysis"
-      },
       "Oxcarbazepine Metabolite": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
@@ -20377,7 +19629,7 @@
   "Abbott ARCHITECT c16000": {
     "vendor": "Abbott",
     "category": "Chemistry",
-    "testCount": 115,
+    "testCount": 106,
     "tests": {
       "Alpha-1-acid glycoprotein (orosomucoid)": {
         "complexity": "MODERATE",
@@ -20727,31 +19979,7 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Ammonia": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Carbon Dioxide (Enzymatic)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Lactate": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Gas"
-      },
-      "Total Protein": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Total Bilirubin": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Direct Bilirubin": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -20811,14 +20039,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Amphetamine": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Benzodiazepines, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Cocaine": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
@@ -20831,10 +20051,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Salicylate": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Tramadol": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
@@ -20844,7 +20060,7 @@
   "Abbott ARCHITECT c8000": {
     "vendor": "Abbott",
     "category": "Chemistry",
-    "testCount": 126,
+    "testCount": 117,
     "tests": {
       "Alpha-1-acid glycoprotein (orosomucoid)": {
         "complexity": "MODERATE",
@@ -21250,31 +20466,7 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Ammonia": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Carbon Dioxide (Enzymatic)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Lactate": {
-        "complexity": "MODERATE",
-        "specialty": "Blood Gas"
-      },
-      "Total Protein": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Total Bilirubin": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Direct Bilirubin": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -21322,14 +20514,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Amphetamine": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Benzodiazepines, Serum": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Cocaine": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
@@ -21339,10 +20523,6 @@
         "specialty": "General Chemistry"
       },
       "Methadone metabolite (EDDP)": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Salicylate": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
@@ -32420,7 +31600,7 @@
   "Roche cobas c 703": {
     "vendor": "Roche",
     "category": "Chemistry",
-    "testCount": 100,
+    "testCount": 98,
     "tests": {
       "Alanine aminotransferase (ALT)": {
         "complexity": "MODERATE",
@@ -32542,10 +31722,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Alanine aminotransferase (ALT) (SGPT)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Haptoglobin": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -32663,10 +31839,6 @@
         "specialty": "Electrolytes"
       },
       "Amylase": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Urea (BUN)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -33701,7 +32873,7 @@
   "Siemens ADVIA 2400": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 108,
+    "testCount": 107,
     "tests": {
       "Hemoglobin A1c (Enzymatic)": {
         "complexity": "MODERATE",
@@ -33820,10 +32992,6 @@
         "specialty": "General Chemistry"
       },
       "Creatinine": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Creatinine (Enzymatic)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -34477,7 +33645,7 @@
   "Siemens Dimension Vista 1000T": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry / Immunoassay",
-    "testCount": 176,
+    "testCount": 168,
     "tests": {
       "Albumin": {
         "complexity": "MODERATE",
@@ -34636,10 +33804,6 @@
         "specialty": "General Chemistry"
       },
       "Glycated hemoglobin": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "HDL cholesterol": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -34847,10 +34011,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Gamma-Glutamyltransferase (GGT)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Pancreatic Amylase": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -34903,10 +34063,6 @@
         "complexity": "MODERATE",
         "specialty": "Cardiac"
       },
-      "High-Sensitivity Troponin I": {
-        "complexity": "MODERATE",
-        "specialty": "Cardiac"
-      },
       "Alpha-1 microglobulin": {
         "complexity": "MODERATE",
         "specialty": "General Immunology"
@@ -34915,17 +34071,9 @@
         "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
-      "Antistreptolysin O": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "C1 Inhibitor": {
         "complexity": "MODERATE",
         "specialty": "Immunology"
-      },
-      "CRP": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
       },
       "Cystatin C": {
         "complexity": "MODERATE",
@@ -35031,10 +34179,6 @@
         "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
-      "Free T4": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
-      },
       "T uptake (TU)": {
         "complexity": "MODERATE",
         "specialty": "Endocrinology"
@@ -35042,10 +34186,6 @@
       "Total T4": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "TSH": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
       },
       "AFP": {
         "complexity": "MODERATE",
@@ -35060,10 +34200,6 @@
         "specialty": "General Immunology"
       },
       "Free PSA": {
-        "complexity": "MODERATE",
-        "specialty": "Immunology"
-      },
-      "Total PSA": {
         "complexity": "MODERATE",
         "specialty": "Immunology"
       },
@@ -35216,7 +34352,7 @@
   "Abbott ARCHITECT c4000": {
     "vendor": "Abbott",
     "category": "Chemistry",
-    "testCount": 182,
+    "testCount": 173,
     "tests": {
       "Urine NGAL": {
         "complexity": "MODERATE",
@@ -35730,10 +34866,6 @@
         "complexity": "MODERATE",
         "specialty": "Blood Gas"
       },
-      "Triglyceride": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Total Protein, Urine/CSF": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -35742,37 +34874,9 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Alkaline phosphatase (ALP)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Alanine aminotransferase (ALT) (SGPT)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Aspartate aminotransferase (AST) (SGOT)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Creatine kinase (CK)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Gamma glutamyl transferase (GGT)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Lactate dehydrogenase (LDH)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Unsaturated Iron Binding Capacity (UIBC)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "C-reactive protein (CRP)": {
-        "complexity": "MODERATE",
-        "specialty": "General Immunology"
       },
       "Microalbumin": {
         "complexity": "MODERATE",
@@ -35875,10 +34979,6 @@
         "specialty": "Toxicology"
       },
       "Barbiturates": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Benzodiazepines": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
