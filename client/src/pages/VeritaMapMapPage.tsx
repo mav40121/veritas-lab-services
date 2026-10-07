@@ -8,6 +8,7 @@ import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { DateEntry } from "@/components/ui/date-entry";
 import {
   Tooltip,
   TooltipContent,
@@ -400,17 +401,18 @@ function DateCell({
       ? "border-muted-foreground/20"
       : "border-input";
 
+  // Shared DateEntry (parking lot #78, 2026-10-07): typed MM/DD/YYYY with the
+  // slashes inserted, paste, calendar popover and Today, in place of the
+  // native date control that was unusable at this cell size.
   return (
     <div className="flex items-center gap-1.5">
       {!disabled && <StatusDot status={status} />}
-      <Input
-        type="date"
+      <DateEntry
+        size="sm"
         value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={onChange}
         disabled={disabled}
-        className={`h-7 text-xs px-1.5 w-[118px] ${borderClass} ${
-          disabled ? "opacity-40 cursor-not-allowed" : ""
-        }`}
+        inputClassName={`${borderClass} ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}
       />
     </div>
   );
