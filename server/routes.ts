@@ -12965,7 +12965,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     const encoded = encodeURIComponent(entry.filename);
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `inline; filename="${entry.filename}"; filename*=UTF-8''${encoded}`);
+    // attachment, not inline (2026-10-07, parking lot #63): every client path
+    // now fetches this endpoint through an anchor download (downloadPdfToken),
+    // and an inline disposition let the Adobe Acrobat extension take over the
+    // navigation and strand the user on an about:blank tab.
+    res.setHeader("Content-Disposition", `attachment; filename="${entry.filename}"; filename*=UTF-8''${encoded}`);
     res.setHeader("Content-Length", entry.buffer.length);
     res.setHeader("Cache-Control", "no-store");
     res.send(entry.buffer);

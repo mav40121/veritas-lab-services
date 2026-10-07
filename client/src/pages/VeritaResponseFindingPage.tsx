@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { useAuth } from "@/components/AuthContext";
 import { API_BASE } from "@/lib/queryClient";
+import { downloadPdfToken } from "@/lib/utils";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useMemberships, allowedAccreditorsForMembership } from "@/hooks/useMemberships";
@@ -618,9 +619,8 @@ export default function VeritaResponseFindingPage() {
         return;
       }
       const data = await res.json();
-      if (data.token) {
-        window.open(`${API_BASE}/api/pdf/${data.token}`, "_blank");
-      }
+      // Anchor download via the token endpoint (no popup / about:blank tab; parking lot #63).
+      if (data.token) downloadPdfToken(data.token, `VeritaResponse_CMS-2567_Finding_${id}.pdf`);
       setRenderState("idle");
     } catch (e: any) {
       setRenderError(e?.message || "Network error");
@@ -646,9 +646,7 @@ export default function VeritaResponseFindingPage() {
         return;
       }
       const data = await res.json();
-      if (data.token) {
-        window.open(`${API_BASE}/api/pdf/${data.token}`, "_blank");
-      }
+      if (data.token) downloadPdfToken(data.token, `VeritaResponse_Internal_NCE_Finding_${id}.pdf`);
       setRenderState("idle");
     } catch (e: any) {
       setRenderError(e?.message || "Network error");
@@ -674,9 +672,7 @@ export default function VeritaResponseFindingPage() {
         return;
       }
       const data = await res.json();
-      if (data.token) {
-        window.open(`${API_BASE}/api/pdf/${data.token}`, "_blank");
-      }
+      if (data.token) downloadPdfToken(data.token, `VeritaResponse_CAP_Finding_${id}.pdf`);
       setRenderState("idle");
     } catch (e: any) {
       setRenderError(e?.message || "Network error");
@@ -702,9 +698,7 @@ export default function VeritaResponseFindingPage() {
         return;
       }
       const data = await res.json();
-      if (data.token) {
-        window.open(`${API_BASE}/api/pdf/${data.token}`, "_blank");
-      }
+      if (data.token) downloadPdfToken(data.token, `VeritaResponse_TJC_Finding_${id}.pdf`);
       setRenderState("idle");
     } catch (e: any) {
       setRenderError(e?.message || "Network error");
@@ -730,9 +724,7 @@ export default function VeritaResponseFindingPage() {
         return;
       }
       const data = await res.json();
-      if (data.token) {
-        window.open(`${API_BASE}/api/pdf/${data.token}`, "_blank");
-      }
+      if (data.token) downloadPdfToken(data.token, `VeritaResponse_COLA_Finding_${id}.pdf`);
       setRenderState("idle");
     } catch (e: any) {
       setRenderError(e?.message || "Network error");
@@ -758,9 +750,7 @@ export default function VeritaResponseFindingPage() {
         return;
       }
       const data = await res.json();
-      if (data.token) {
-        window.open(`${API_BASE}/api/pdf/${data.token}`, "_blank");
-      }
+      if (data.token) downloadPdfToken(data.token, `VeritaResponse_AABB_Finding_${id}.pdf`);
       setRenderState("idle");
     } catch (e: any) {
       setRenderError(e?.message || "Network error");

@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
+import { downloadPdfToken } from "@/lib/utils";
 import { authHeaders } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -787,12 +788,9 @@ export default function VeritaQAPage() {
         return;
       }
       const { token } = await res.json();
-      const win = window.open(`${API_BASE}/api/pdf/${token}`, "_blank");
-      if (win) {
-        toast({ title: `Report generated for ${m.name}` });
-      } else {
-        toast({ title: "Popup blocked", description: "Allow popups for this site, then click the report button again.", variant: "destructive" });
-      }
+      // Anchor download (no popup, no about:blank tab; parking lot #63).
+      downloadPdfToken(token, `VeritaQA_PI_Report_${String(m.name || "metric").replace(/[^\w.-]+/g, "_")}_${year}.pdf`);
+      toast({ title: `Report generated for ${m.name}` });
     } catch {
       toast({ title: "Report failed", description: "Network error", variant: "destructive" });
     } finally {

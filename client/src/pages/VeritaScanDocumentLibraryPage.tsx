@@ -951,9 +951,12 @@ function LinkedPolicySection({ docId }: { docId: number }) {
     onError: (err: Error) => toast({ title: "Could not unlink policy", description: err.message, variant: "destructive" }),
   });
 
-  // Open the linked policy inline (new tab). VeritaPolicy render returns a PDF
-  // blob for PDFs and JSON { html } for DOCX/HTML; handle both. Bearer auth
-  // means we fetch then hand a blob URL to a pre-opened tab (popup-safe).
+  // Open the linked policy. VeritaPolicy render returns a PDF blob for PDFs and
+  // JSON { html } for DOCX/HTML; handle both. Bearer auth means we fetch first.
+  // HTML goes to a pre-opened tab (popup-safe). A PDF blob must NOT be handed to
+  // that tab: with Adobe Acrobat as the PDF handler the tab is left on about:blank
+  // while Acrobat grabs the blob (parking lot #63), so PDFs close the pre-opened
+  // tab and go through an anchor download instead.
   const openPolicy = async (policyId: number) => {
     if (opening) return;
     setOpening(true);
@@ -962,16 +965,24 @@ function LinkedPolicySection({ docId }: { docId: number }) {
       const res = await fetch(`${API_BASE}/api/labs/${labId}/veritapolicy/documents/${policyId}/render`, { headers: authHeaders() });
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Open failed (${res.status})`); }
       const ct = res.headers.get("content-type") || "";
-      let blob: Blob;
       if (ct.includes("application/json")) {
         const body = await res.json();
-        blob = new Blob([body?.html || "<p>This policy has no viewable content.</p>"], { type: "text/html" });
+        const blob = new Blob([body?.html || "<p>This policy has no viewable content.</p>"], { type: "text/html" });
+        const url = URL.createObjectURL(blob);
+        if (win) win.location.href = url; else window.open(url, "_blank");
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
       } else {
-        blob = await res.blob();
+        if (win) win.close();
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Policy_${policyId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
       }
-      const url = URL.createObjectURL(blob);
-      if (win) win.location.href = url; else window.open(url, "_blank");
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (err: any) {
       if (win) win.close();
       toast({ title: "Could not open policy", description: String(err?.message || err), variant: "destructive" });

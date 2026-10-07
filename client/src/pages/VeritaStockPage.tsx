@@ -5,6 +5,7 @@ import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useSEO } from "@/hooks/useSEO";
 import { API_BASE } from "@/lib/queryClient";
+import { downloadPdfToken } from "@/lib/utils";
 import { isStockHost, isSingleSiteDemo } from "@/lib/host";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -1006,8 +1007,8 @@ export default function VeritaStockInventoryPage() {
 
   // ── Order-Now document generation ─────────────────────────────────────────
   // Both handlers POST to the server's reorder-list endpoint. The PDF flow
-  // returns a one-time token the browser GETs at /api/pdf/:token so Adobe
-  // Acrobat's extension doesn't hijack a blob URL. The Excel flow streams
+  // returns a one-time token that downloadPdfToken fetches through an anchor
+  // download at /api/pdf/:token (no blob URL, no popup). The Excel flow streams
   // the xlsx inline because purchasing edits the file before sending and
   // the binary blob is exactly what they need to save.
   const [generatingOrderDoc, setGeneratingOrderDoc] = useState<null | "pdf" | "excel" | "labels" | "count" | "intacct">(null);
@@ -1078,8 +1079,9 @@ export default function VeritaStockInventoryPage() {
         return;
       }
       const { token, totalCount } = await res.json();
-      // Browser-native download via direct GET, bypassing extension blob hijack.
-      window.open(`${API_BASE}/api/pdf/${token}`, "_blank");
+      // Anchor download via the token endpoint: no popup to block and no
+      // about:blank tab for the Acrobat extension to orphan (parking lot #63).
+      downloadPdfToken(token, `VeritaStock_Order_${new Date().toISOString().slice(0, 10)}.pdf`);
       toast({
         title: totalCount === 0 ? "PDF generated (no items due)" : `Order PDF generated for ${totalCount} item${totalCount === 1 ? "" : "s"}`,
         description: "Review and sign the PDF before sending to vendors.",
@@ -1151,7 +1153,7 @@ export default function VeritaStockInventoryPage() {
         return;
       }
       const { token } = await res.json();
-      window.open(`${API_BASE}/api/pdf/${token}`, "_blank");
+      downloadPdfToken(token, `VeritaStock_Count_History_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch {
       toast({ title: "Could not generate workbook", description: "Network error", variant: "destructive" });
     }
@@ -1212,7 +1214,7 @@ export default function VeritaStockInventoryPage() {
         return;
       }
       const { token } = await res.json();
-      window.open(`${API_BASE}/api/pdf/${token}`, "_blank");
+      downloadPdfToken(token, `VeritaStock_Waste_${new Date().toISOString().slice(0, 10)}.${kind}`);
     } catch {
       toast({ title: "Export failed", description: "Network error", variant: "destructive" });
     } finally {
@@ -1421,7 +1423,7 @@ export default function VeritaStockInventoryPage() {
         return;
       }
       const { token } = await res.json();
-      window.open(`${API_BASE}/api/pdf/${token}`, "_blank");
+      downloadPdfToken(token, `VeritaStock_Label_${String(item.item_name || item.id).replace(/[^\w.-]+/g, "_")}.pdf`);
       toast({ title: `Barcode label for ${item.item_name}`, description: "Print on Avery 5160 label stock (30 per sheet)." });
     } catch {
       toast({ title: "Could not generate label", description: "Network error", variant: "destructive" });
@@ -1451,7 +1453,7 @@ export default function VeritaStockInventoryPage() {
         return;
       }
       const { token, totalCount } = await res.json();
-      window.open(`${API_BASE}/api/pdf/${token}`, "_blank");
+      downloadPdfToken(token, `VeritaStock_Labels_${new Date().toISOString().slice(0, 10)}.pdf`);
       toast({
         title: `Label sheet generated for ${totalCount} item${totalCount === 1 ? "" : "s"}`,
         description: "Print on Avery 5160 label stock (30 labels per sheet).",

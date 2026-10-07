@@ -57,6 +57,7 @@ export function ModuleHowToCard({
     <div
       className="mb-4 rounded-lg border bg-card"
       style={{ borderColor: `${accent}33`, backgroundColor: `${accent}08` }}
+      data-testid="module-howto-card"
     >
       <div className="flex items-center justify-between px-4 py-2.5">
         <button
