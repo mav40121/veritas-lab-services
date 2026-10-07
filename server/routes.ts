@@ -218,7 +218,13 @@ import { isCensored, censorValueForMath, type CensoringPolicy } from "@shared/ce
 import { computePTCoagStatus } from "./ptCoagVerdict";
 import { blockFinalizeWithoutClia, CLIA_REQUIRED_MESSAGE } from "./cliaGate";
 
+// Set when computeStudyStatus hit an exception (its "fail" return is then a
+// fail-safe, not a verdict). The boot recompute reads this to SKIP such
+// studies instead of writing FAIL over a stored verdict (#69, 2026-10-07).
+let lastComputeStudyStatusError: unknown = null;
+
 function computeStudyStatus(studyType: string, dataPointsJson: string, instrumentsJson: string, cliaAllowableError: number, teaIsPercentage: boolean = true, cliaAbsoluteFloor: number | null = null, censoringPolicy: CensoringPolicy = "exclude"): "pass" | "fail" {
+  lastComputeStudyStatusError = null;
   try {
     let rawData = safeJsonParse(dataPointsJson, null);
     const instrumentNames: string[] = safeJsonParse(instrumentsJson, []);
@@ -284,8 +290,12 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
 
     if (studyType === "cal_ver") {
       // Dual-criterion S493 rule: |observed - assigned| <= max(percent_allowance, absolute_floor)
-      const dataPoints = rawData as { level: number; expectedValue: number | null; instrumentValues: Record<string, number | null> }[];
-      const valid = dataPoints.filter(dp => dp.expectedValue !== null && instrumentNames.some(n => dp.instrumentValues[n] !== null));
+      const dataPoints = (Array.isArray(rawData) ? rawData : []) as { level: number; expectedValue: number | null; instrumentValues: Record<string, number | null> }[];
+      const valid = dataPoints.filter(dp => dp && dp.expectedValue != null && dp.instrumentValues && instrumentNames.some(n => dp.instrumentValues[n] != null));
+      if (valid.length === 0) {
+        lastComputeStudyStatusError = new Error("cal_ver: no evaluable data points");
+        return "fail";
+      }
       const FP_EPS = 1e-9;
       let passCount = 0, totalCount = 0;
       for (const dp of valid) {
@@ -344,24 +354,40 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
         return pctWithinOne >= (passThreshold || 0.80) ? "pass" : "fail";
       }
       // Standard quantitative method comparison
-      const dataPoints = rawData as { level: number; expectedValue: number | null; instrumentValues: Record<string, number | null> }[];
+      // Legacy rows (2026-10-07, #69): a point may lack instrumentValues
+      // entirely (old {x,y} shapes), and `instruments` may not even be a JSON
+      // array. Read through `|| {}` so a malformed point is simply not valid
+      // instead of throwing "Cannot read properties of undefined".
+      const dataPoints = (Array.isArray(rawData) ? rawData : []) as { level: number; expectedValue: number | null; instrumentValues: Record<string, number | null> }[];
+      const iv = (d: any): Record<string, number | null> => (d && d.instrumentValues && typeof d.instrumentValues === "object") ? d.instrumentValues : {};
       const primaryName = instrumentNames[0];
-      const hasAllInValues = dataPoints.length > 0 && instrumentNames.every(n => n in (dataPoints[0].instrumentValues || {}));
+      // Decide the shape from the first point that actually carries
+      // instrumentValues, not blindly from dataPoints[0]: one malformed
+      // leading point must not derail the whole study.
+      const shapePoint = dataPoints.find(d => Object.keys(iv(d)).length > 0);
+      const hasAllInValues = !!shapePoint && instrumentNames.every(n => n in iv(shapePoint));
       let comparisonNames: string[];
       let mappedPoints: typeof dataPoints;
       if (hasAllInValues && instrumentNames.length >= 2) {
         comparisonNames = instrumentNames.slice(1);
         mappedPoints = dataPoints.map(d => ({
           level: d.level,
-          expectedValue: d.instrumentValues[primaryName] ?? null,
-          instrumentValues: Object.fromEntries(comparisonNames.map(n => [n, d.instrumentValues[n] ?? null])),
+          expectedValue: iv(d)[primaryName] ?? null,
+          instrumentValues: Object.fromEntries(comparisonNames.map(n => [n, iv(d)[n] ?? null])),
         }));
       } else {
-        comparisonNames = instrumentNames.filter(n => n in (dataPoints[0]?.instrumentValues || {}));
+        comparisonNames = instrumentNames.filter(n => n in iv(shapePoint));
         if (comparisonNames.length === 0) comparisonNames = instrumentNames;
-        mappedPoints = dataPoints;
+        mappedPoints = dataPoints.map(d => ({ ...d, instrumentValues: iv(d) }));
       }
-      const valid = mappedPoints.filter(dp => dp.expectedValue !== null && comparisonNames.some(n => dp.instrumentValues[n] !== null));
+      const valid = mappedPoints.filter(dp => dp && dp.expectedValue != null && comparisonNames.some(n => dp.instrumentValues[n] != null));
+      if (valid.length === 0) {
+        // Nothing evaluable (legacy {x,y} rows, bare-string instruments): a
+        // save still gets the fail-safe, but the boot recompute must not
+        // overwrite a stored verdict with it.
+        lastComputeStudyStatusError = new Error("method_comparison: no evaluable data points");
+        return "fail";
+      }
       // Floating-point tolerance to absorb binary float noise
       const FP_EPS = 1e-9;
       let passCount = 0, totalCount = 0;
@@ -390,6 +416,11 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
         }
       }
 
+      if (totalCount === 0) {
+        // Points existed but carried no measurable comparison values.
+        lastComputeStudyStatusError = new Error("method_comparison: no measurable comparison values");
+        return "fail";
+      }
       // Validation guard: verify pass/fail matches computed mean bias
       // Use the dual-criterion allowance at the mean reference level
       let computedResult: "pass" | "fail" = (passCount === totalCount && totalCount > 0) ? "pass" : "fail";
@@ -653,9 +684,16 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
     // unknown study type
     return "fail";
   } catch (err) {
+    lastComputeStudyStatusError = err;
     console.error("[computeStudyStatus] Error recomputing status:", err);
     return "fail"; // fail-safe: if we cannot verify, mark as fail
   }
+}
+
+// True when the most recent computeStudyStatus call ended in an exception,
+// i.e. its "fail" was the fail-safe rather than an evaluated verdict.
+export function lastStudyStatusWasError(): boolean {
+  return lastComputeStudyStatusError != null;
 }
 
 // True if any data point carries a documented exclusion. Used to keep the boot
@@ -668,9 +706,10 @@ function dataPointsHaveExclusions(dataPointsJson: string): boolean {
 }
 
 // Recompute and fix status for all existing studies
-export function recomputeAllStudyStatuses(): void {
+export function recomputeAllStudyStatuses(): { fixed: number; skipped: number } {
   const allStudies = storage.getAllStudies();
   let fixed = 0;
+  let skipped = 0;
   const sqlite = (db as any).$client;
   for (const study of allStudies) {
     // 2026-06-15 (Phase 2): never auto-mutate an exclusion-affected verdict at
@@ -681,6 +720,15 @@ export function recomputeAllStudyStatuses(): void {
     // through the controlled exclusion endpoint, which captures that decision.
     if (dataPointsHaveExclusions(study.dataPoints)) continue;
     const computed = computeStudyStatus(study.studyType, study.dataPoints, study.instruments, study.cliaAllowableError, (study as any).teaIsPercentage !== 0, (study as any).cliaAbsoluteFloor ?? null, (study as any).censoringPolicy ?? "exclude");
+    // #69 (2026-10-07): an exception inside computeStudyStatus returns the
+    // fail-safe "fail", not a verdict. Writing that over a stored status at
+    // boot would mark a study FAIL because the recompute could not READ it
+    // (legacy rows #43-#46 threw on every boot). Leave such rows alone.
+    if (lastStudyStatusWasError()) {
+      skipped++;
+      console.warn(`[migration] Study #${study.id} "${study.testName}": status left as "${study.status}" (recompute could not evaluate its data)`);
+      continue;
+    }
     if (computed !== study.status) {
       storage.updateStudyStatus(study.id, computed);
       // Also update the result column (not in drizzle schema, added via ALTER TABLE)
@@ -690,10 +738,11 @@ export function recomputeAllStudyStatuses(): void {
     }
   }
   if (fixed > 0) {
-    console.log(`[migration] Fixed ${fixed} study status(es)`);
+    console.log(`[migration] Fixed ${fixed} study status(es)${skipped ? `; ${skipped} left unevaluated` : ""}`);
   } else {
-    console.log("[migration] All study statuses are correct");
+    console.log(`[migration] All study statuses are correct${skipped ? ` (${skipped} left unevaluated)` : ""}`);
   }
+  return { fixed, skipped };
 }
 import { autoCompleteVeritaScanItems } from "./integrations";
 import {

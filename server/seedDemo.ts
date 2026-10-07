@@ -37,7 +37,7 @@ export async function seedDemoData() {
   // the demo lab only.
   try {
     const fixed = sqlite.prepare(
-      "UPDATE studies SET clia_allowable_error = 0, tea_is_percentage = 0, tea_unit = 'ng/mL', result = 'pass', status = 'completed' WHERE user_id = ? AND test_name = 'Troponin I' AND study_type = 'sensitivity'"
+      "UPDATE studies SET clia_allowable_error = 0, tea_is_percentage = 0, tea_unit = 'ng/mL', result = 'pass' WHERE user_id = ? AND test_name = 'Troponin I' AND study_type = 'sensitivity'"
     ).run(demoUserId);
     if (fixed.changes > 0) {
       console.log(`[seed] Defensive fix: cleared ${fixed.changes} stale Troponin I sensitivity row(s)`);
@@ -101,10 +101,13 @@ export async function seedDemoData() {
   if (!troponinStudy) {
     seedTroponinStudy(sqlite, demoUserId, now);
   } else {
-    // Backfill UPDATE in case study exists with wrong data
+    // Backfill UPDATE in case study exists with wrong data. The status is NOT
+    // reset here (2026-10-07, #69): the boot recompute owns the verdict, and
+    // re-stamping 'completed' every boot made it flip this (intentionally
+    // failing) study back to FAIL on every deploy and log a bogus migration.
     const troponinDataPoints = generateTroponinData();
     sqlite.prepare(
-      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, clia_allowable_error = ?, tea_is_percentage = ?, tea_unit = ?, data_points = ?, instruments = ?, status = ? WHERE id = ?"
+      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, clia_allowable_error = ?, tea_is_percentage = ?, tea_unit = ?, data_points = ?, instruments = ? WHERE id = ?"
     ).run(
       'Abbott ARCHITECT i2000SR [Primary]',
       'Michael Veri, MS, MBA, MLS(ASCP), CPHQ',
@@ -114,7 +117,6 @@ export async function seedDemoData() {
       '%',
       JSON.stringify(troponinDataPoints),
       JSON.stringify(['Abbott ARCHITECT i2000SR [Primary]', 'Abbott ARCHITECT i2000SR [Backup]']),
-      'completed',
       troponinStudy.id
     );
     console.log(`[seed] Backfilled Troponin I study id=${troponinStudy.id}`);
@@ -228,7 +230,7 @@ export async function seedDemoData() {
   } else {
     // Backfill data in case study exists with stale data
     sqlite.prepare(
-      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, clia_allowable_error = ?, tea_is_percentage = ?, tea_unit = ?, data_points = ?, instruments = ?, result = 'pass', status = 'completed' WHERE id = ?"
+      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, clia_allowable_error = ?, tea_is_percentage = ?, tea_unit = ?, data_points = ?, instruments = ?, result = 'pass' WHERE id = ?"
     ).run(
       "Roche Cobas c503",
       "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
@@ -274,7 +276,7 @@ export async function seedDemoData() {
   } else {
     // Backfill data in case study exists with stale data
     sqlite.prepare(
-      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, clia_allowable_error = ?, tea_is_percentage = ?, tea_unit = ?, data_points = ?, instruments = ?, result = 'pass', status = 'completed' WHERE id = ?"
+      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, clia_allowable_error = ?, tea_is_percentage = ?, tea_unit = ?, data_points = ?, instruments = ?, result = 'pass' WHERE id = ?"
     ).run(
       "Bio-Rad D-100",
       "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
@@ -320,7 +322,7 @@ export async function seedDemoData() {
     console.log("[seed] Inserted Troponin I Sensitivity study");
   } else {
     sqlite.prepare(
-      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, clia_allowable_error = 0, tea_is_percentage = 0, tea_unit = ?, data_points = ?, instruments = ?, result = 'pass', status = 'completed' WHERE id = ?"
+      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, clia_allowable_error = 0, tea_is_percentage = 0, tea_unit = ?, data_points = ?, instruments = ?, result = 'pass' WHERE id = ?"
     ).run(
       "Beckman DxI 9000 Access",
       "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
