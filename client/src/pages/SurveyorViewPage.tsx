@@ -176,7 +176,7 @@ export default function SurveyorViewPage() {
             </>
           )}
           {documents.length} approved {documents.length === 1 ? "policy" : "policies"}.
-          Read-only access scoped to this link. Powered by VeritaAssure&trade; / VeritaPolicy&trade;.
+          Read-only access scoped to this link. Powered by VeritaAssure&trade; / VeritaDC&trade;.
         </p>
       </div>
 
