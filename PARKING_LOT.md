@@ -496,7 +496,7 @@ or partial menus across vendors — remains. A full pass (vendor/FDA-sourced,
 no fabrication) would make VeritaMap demo-safe across the board.
 
 **Source:** Michael, 2026-10-06 Roche demo.
-**Status:** IN PROGRESS. Michael chose Option 2 (exhaustive) 2026-10-06. Executing vendor-by-vendor, sourced and verified against the manufacturer's own parameter lists. Batch 1 (Roche chemistry c-module) reconciled 2026-10-06 against Roche's March-2024 Serum Work Area parameter list: leveled c702 / cobas 8000 (+43 each), cobas c 703 (stub 6 -> 100), cobas pure (+8), cobas c 502 (+5) up to the verified c501 menu; c311 (Roche subset) and cobas 6000 left as-is. Batch 2 (Siemens chemistry: Atellica CH, Dimension EXL/Vista, ADVIA) reconciled 2026-10-06 with the Michael-approved "normalize as you go" rule: every analyte on these moderate-complexity analyzers set to MODERATE (fixed 171 stray HIGH/WAIVED complexity values, e.g. Sodium tagged HIGH on a chem analyzer) and ~630 missing assays added. Batch 3 (Abbott ARCHITECT c4000/c8000/c16000 + Alinity c) reconciled 2026-10-06 from Abbott Core Lab menus: ~180 assays added, 135 complexity values fixed, all MODERATE (ARCHITECT c4000 alone had 125 wrong). Batch 4 (Beckman Coulter chemistry: AU5800/680/480/640, DxC 700 AU / 700AU / 500AU / 500i, IMMAGE 800) reconciled 2026-10-06: these entries were ALREADY well-populated (AU5800 = 134 tests) with no Roche-style gaps, and the library names analytes full-name/alt-order while Beckman's published menu is abbreviation-first, so a name-keyed auto-add would have inserted DUPLICATES. The safe, source-verified action was complexity normalization only: 20 stray HIGH values set to MODERATE (Tacrolimus, Calprotectin, Elastase, Oxalate on the AU/DxC-AU entries). Beckman menu verified vs source (Beckman AU chemistry menu PDF + Protein Chemistry Menu by Platform PDF, spot-checked). DEFERRED for an abbreviation-aware completeness pass: UniCel DxC SYNCHRON i-series (660i/680i/860i/880i; menu only partially sourced, and 2 extraction tests legitimately HIGH) and AU640 newest esoterics. Next: Beckman UniCel/AU640 follow-up, Sysmex, Roche immunoassay, smaller vendors. CAP PT catalog loaded 2026-10-06 (74 programs, #60 done). 2026-10-07 overnight: no further vendor batches until the duplicate cleanup lands. FLAG CONFIRMED: scripts/dup_scan.py found ~130 near-duplicate analytes created by the Siemens batch (PR #1479), live in prod (e.g. "Total Protein" beside "Protein, total"); the keeper/remove list is the next deliverable and nothing is deleted without Michael's review; the Abbott batch (#1482) gets the same audit.
+**Status:** IN PROGRESS. Michael chose Option 2 (exhaustive) 2026-10-06. Executing vendor-by-vendor, sourced and verified against the manufacturer's own parameter lists. Batch 1 (Roche chemistry c-module) reconciled 2026-10-06 against Roche's March-2024 Serum Work Area parameter list: leveled c702 / cobas 8000 (+43 each), cobas c 703 (stub 6 -> 100), cobas pure (+8), cobas c 502 (+5) up to the verified c501 menu; c311 (Roche subset) and cobas 6000 left as-is. Batch 2 (Siemens chemistry: Atellica CH, Dimension EXL/Vista, ADVIA) reconciled 2026-10-06 with the Michael-approved "normalize as you go" rule: every analyte on these moderate-complexity analyzers set to MODERATE (fixed 171 stray HIGH/WAIVED complexity values, e.g. Sodium tagged HIGH on a chem analyzer) and ~630 missing assays added. Batch 3 (Abbott ARCHITECT c4000/c8000/c16000 + Alinity c) reconciled 2026-10-06 from Abbott Core Lab menus: ~180 assays added, 135 complexity values fixed, all MODERATE (ARCHITECT c4000 alone had 125 wrong). Batch 4 (Beckman Coulter chemistry: AU5800/680/480/640, DxC 700 AU / 700AU / 500AU / 500i, IMMAGE 800) reconciled 2026-10-06: these entries were ALREADY well-populated (AU5800 = 134 tests) with no Roche-style gaps, and the library names analytes full-name/alt-order while Beckman's published menu is abbreviation-first, so a name-keyed auto-add would have inserted DUPLICATES. The safe, source-verified action was complexity normalization only: 20 stray HIGH values set to MODERATE (Tacrolimus, Calprotectin, Elastase, Oxalate on the AU/DxC-AU entries). Beckman menu verified vs source (Beckman AU chemistry menu PDF + Protein Chemistry Menu by Platform PDF, spot-checked). DEFERRED for an abbreviation-aware completeness pass: UniCel DxC SYNCHRON i-series (660i/680i/860i/880i; menu only partially sourced, and 2 extraction tests legitimately HIGH) and AU640 newest esoterics. Next: Beckman UniCel/AU640 follow-up, Sysmex, Roche immunoassay, smaller vendors. CAP PT catalog loaded 2026-10-06 (74 programs, #60 done). 2026-10-07 overnight: no further vendor batches until the duplicate cleanup lands. FLAG CONFIRMED: scripts/dup_scan.py found ~130 near-duplicate analytes created by the Siemens batch (PR #1479), live in prod (e.g. "Total Protein" beside "Protein, total"); the keeper/remove list is the next deliverable and nothing is deleted without Michael's review; the Abbott batch (#1482) gets the same audit. DELIVERED 2026-10-07 overnight: siemens_abbott_dedup_plan.md / .csv (+ dedup_plan.py) in the session scratchpad: 225 removal candidates across 25 instrument entries, 212 added by the Siemens/Abbott batches, 13 pre-existing twins (Creatinine/creatinine, Ammonia vs Ammonia plasma/serum, BUN naming, HDL ordering, ALT/SGPT, ADVIA 2400 Creatinine vs Creatinine (Enzymatic) which is Michael's call). Parenthetical qualifiers are treated as discriminators unless they echo the base name: Crossmatch (IS) vs (AHG), Basophils (absolute) vs (%), AST gram-negative vs gram-positive, CK-MB activity vs mass, anti-Xa UFH/LMWH/rivaroxaban, pO2(A)/(A-a)/(a/A) are all listed as DISTINCT (127 names in their own table). Nothing deleted; awaiting Michael's go on the list.
 
 **Catalog of data-quality issues found during the sweep (keep updated):**
 - Systemic complexity inconsistency: 255 of 1275 distinct analytes carried more than one complexity across the dataset (some legitimate per-device, some error). Being normalized per analyzer class during each vendor batch.
@@ -557,25 +557,7 @@ _(item #62 closed 2026-10-07; PR #1474 merged + deployed 2026-10-06, see C65 bel
 
 ---
 
-### 63. about:blank on PDF opens (window.open token pattern + Adobe Acrobat)
-
-**Effort:** S (1-3 days)
-**Importance:** Medium — intermittent, customer-facing failure on PDF deliverables (studies, competency) during demos.
-
-**What:** Some PDF opens land on an about:blank tab instead of the document.
-Root cause: the fragile `window.open('/api/pdf/<one-time-token>')` pattern, still
-used on ~6 paths (VeritaOps, VeritaPace, VeritaQA, VeritaResponse x3, the
-Why-VeritaCheck article, CMS-116). With Adobe Acrobat as the PDF handler it opens
-a blank tab while Acrobat grabs the PDF, orphaning about:blank, and worse when
-the one-time token GET races or expires (the PR #286 class). Most downloads were
-migrated to the safe anchor helper `downloadPdfToken` (client/src/lib/utils.ts),
-which is why it is "mostly removed." Fix: route every remaining PDF open through
-the safe download helper, and verify the `/api/pdf` server `Content-Disposition`
-(the competency main path already uses the safe helper, so its blank is likely an
-inline-disposition + Acrobat interaction to confirm when fixing).
-
-**Source:** Michael, 2026-10-06 screenshot (competency PDF opened as about:blank in Acrobat).
-**Status:** Open. Root cause diagnosed; mechanical class fix ready to slot in on request.
+_(item #63 closed 2026-10-07; PR #1493 deployed, prod receipt 2/2, see C67 below)_
 
 ---
 
@@ -606,22 +588,7 @@ applied to both chart and rules).
 
 ---
 
-### 66. VeritaCheck: Hemoglobin studies render as "Lab-Set Internal Goal", and every narrative cites 42 CFR 493.931
-
-**Effort:** S (1-3 days)
-**Importance:** High. Customer-facing PDF regulatory language on hematology studies.
-
-**What:** `hasCanonicalTea()` (server/backfillAbsoluteFloor.ts:119) matches aliases
-built from the TEa table but never consults `NAME_MAP`, so plain "Hemoglobin" /
-"HGB" / "Hgb" (which NAME_MAP maps to "CBC - Hemoglobin" for the floor) renders
-as a laboratory-defined goal ("Lab-Set Internal Goal", "per laboratory director
-or designee policy") instead of the CLIA TEa. Separately, pdfReport.ts:1219 reads
-`study.cfr`, which nothing ever sets, so every narrative cites 42 CFR 493.931
-(Chemistry), including hematology studies that should cite 493.941. PR #1466
-fixed the lookup table and the public article only, not this engine path.
-
-**Source:** QA sweep 2026-10-04 21:07 (memory `project_veritacheck_tea_canonicalization_bug`).
-**Status:** Open. Root-caused. Fix: NAME_MAP-aware `hasCanonicalTea`, CFR section derived from the analyte's specialty, extend `scripts/verify-canonical-tea-matching.js`.
+_(item #66 closed 2026-10-07; PR #1489 deployed, see C68 below)_
 
 ---
 
@@ -638,58 +605,19 @@ analytes (percent OR absolute floor), then never resolved whether the override
 (server/routes.ts ~395-420) is a real defect or correct behavior.
 
 **Source:** Michael, 2026-10-04 21:58-22:03.
-**Status:** Open. Needs a verify script over the actual per-sample and aggregate logic with a dual-criterion case, then Michael's regulatory call.
+**Status:** Receipt done 2026-10-07 (tests/integration/d1-aggregate-override.test.ts, real engine via recomputeAllStudyStatuses): percent-only and absolute-only TEa with every sample passing stay PASS, and a 20,000-dataset random search finds no single-criterion counter-example, so Michael is right for single-criterion analytes. DUAL-criterion analytes (percent OR absolute floor, e.g. Glucose 8% or 6 mg/dL; 40->46, 50->56, 300->320) pass every sample (low levels by the floor) but the guard logs "mean |bias| 11.22% exceeds TEa 8.0% - overriding to FAIL" and flips the stored pass; 7.5% of random all-pass dual-criterion datasets get flipped. Cause: the guard averages FRACTIONAL biases (inflated by floor-passed low samples) against the percent TEa with the floor converted at the MEAN reference, i.e. it mixes the two criteria. DECISION FOR MICHAEL: remove the aggregate guard (my rec; the per-sample dual-criterion rule is the verdict and the guard is a no-op whenever it is not wrong) or keep it. No code changed.
 
 ---
 
-### 68. VeritaMap: director attestation, MEC review and unlock stamp EVERY age/sex band of an analyte
-
-**Effort:** S (1-3 days)
-**Importance:** Medium-High. 42 CFR 493.1253 attestation provenance.
-
-**What:** `attest-ref`, `unlock-ref` and `mec-review` (server/routes.ts ~14714 /
-14743 / 14770) run `UPDATE veritamap_analyte_values ... WHERE map_id = ? AND analyte = ?`
-without the band key, so attesting the adult band also attests and locks every
-pediatric band, and unlocking unlocks all of them; the client never sends the
-band. (The CFR default to 493.931 for a specialty missing from CFR_MAP, flagged
-in the same sweep, is BY DESIGN per CLAUDE.md section 5 and is not a defect.)
-
-**Source:** VeritaMap sweep 2026-10-05 10:30.
-**Status:** Open. Fix: client sends the active band; server scopes by (map_id, analyte, age_min_days, age_max_days, sex) with the All-ages default for old clients.
+_(item #68 closed 2026-10-07; PR #1491 deployed, see C69 below)_
 
 ---
 
-### 69. computeStudyStatus throws at every boot for 4 studies and fail-safes them to FAIL
-
-**Effort:** S (1-3 days)
-**Importance:** High. Verdict integrity.
-
-**What:** The Railway log shows, on every boot since at least the 2026-10-06
-19:49Z deploy, four lines of `[computeStudyStatus] Error recomputing status:
-TypeError: Cannot read properties of undefined (reading 'Beckman AU5800 Primary
-vs Beckman AU5800 Backup')`. `computeStudyStatus` returns "fail" on any
-exception, and `recomputeAllStudyStatuses()` writes that verdict back whenever it
-differs from the stored one, so a study whose data shape the recompute cannot read
-is silently marked FAIL at boot.
-
-**Source:** prod log, noticed 2026-10-06 20:46 ET.
-**Status:** Open. Identify the 4 studies, fix the shape read, and make the boot recompute SKIP (not fail) any study it cannot evaluate.
+_(item #69 closed 2026-10-07; PR #1490 deployed, see C70 below)_
 
 ---
 
-### 70. Nightly backup "integrity ANOMALY" email on every real-user decrease, naming nobody
-
-**Effort:** S (1-3 days)
-**Importance:** Medium
-
-**What:** `checkBackupIntegrity` (server/backup.ts:170) alerts whenever
-real_user_count is below the previous run, with zero tolerance and no record of
-WHICH account disappeared; `DELETE /api/admin/users/:id` only console.logs the
-deletion. Intentional deletions (Tywauna 2026-10-05; 54 -> 53 on 2026-10-06)
-therefore produce an ANOMALY email that reads like data loss.
-
-**Source:** VLS Leads 2026-10-06 20:32; bug report written 20:37.
-**Status:** Open. Fix: snapshot the real-user email list in backup_integrity_log, diff and NAME the dropped accounts, audit-log admin deletions, and classify a drop as explained (note) vs unexplained (anomaly).
+_(item #70 closed 2026-10-07; PR #1492 deployed, see C71 below)_
 
 ---
 
@@ -704,7 +632,7 @@ on 2026-10-06 13:21 but was never built into the VeritaDC DOCX generator for lab
 4 and 5.
 
 **Source:** Michael, 2026-10-06 ~13:19 (.eml).
-**Status:** Not started. Needs a per-lab DOCX template option (design, then build).
+**Status:** DESIGN written 2026-10-07: docs/VERITADC_HOUSE_FORMAT_DESIGN.md (per-lab docx_format setting, a format registry in veritapolicyDocx.ts rendering I. Purpose / II. Policy / III. Guidelines / IV. Personal Safety Requirements / V. References, Revision History table, house footer with facility path + policy number + rev date + page; receipts; effort M). Four decisions for Michael in the doc (safety-section content, house numbering source, footer provenance, scope to labs 4/5). Build on his go.
 
 ---
 
@@ -719,11 +647,67 @@ Michael: "Love it being built into the system." The in-app per-module checklist
 started.
 
 **Source:** Michael, 2026-10-06 13:15.
-**Status:** Not started. Design needed (where it lives, what "done" reads from).
+**Status:** DESIGN written 2026-10-07: docs/IN_APP_GETTING_STARTED_DESIGN.md (reuses gettingStartedContent.ts as the single source; GET /api/labs/:labId/getting-started derives every step's status from real tables, only two Phase-5 steps are manual ticks; dashboard card + live checkmarks on the module how-to cards; receipts; effort M). Four decisions for Michael in the doc (placement, auto-hide at 100%, which steps stay manual, multi-lab roll-up). Build on his go.
+
+---
+
+### 74. Env-gated Playwright specs never run in CI; two shipped unrunnable
+
+**Effort:** S (1-3 days)
+**Importance:** Medium. The Gate 3 step 8 receipts for authenticated UI are skipped in CI (no PW_TOKEN), so a spec can ship broken and nobody notices.
+
+**What:** playwright-smoke runs 74 specs as "skip without PW_TOKEN". The
+2026-10-07 local pass over merged UI PRs found two that could never pass as
+written: module-howto-card-layout.spec (#1472) used two routes that do not
+exist and measured the width of a text node, and
+veritacheck-analyte-multiselect.spec (#1481) looked for a button that lives on
+a package's Analytes tab, not the list page. Both repaired in PR #1493 and
+proven on a local build (5/5 and 1/1). The fixes themselves were fine; the
+receipts were not. A CI QA lab with a scoped PW_TOKEN secret (own test
+system, never a client lab) would run these on every PR.
+
+**Source:** overnight audit 2026-10-07 (local Playwright pass, see overnight log section 16).
+**Status:** Open. Specs repaired and shipped; the CI token/QA-lab decision is Michael's (cost: one seeded demo lab on prod plus a repo secret).
 
 ---
 
 ## CLOSED (audit trail)
+
+### C72. Nightly backup studyCount anomaly on every user-deleted study (was #73)
+
+**Effort:** was XS / **Importance:** Medium
+
+**Closure evidence:** Found 2026-10-07 00:00 ET: the nightly check emailed ANOMALY for studyCount {value 801, prior 803}; the production audit_log (read-only backup copy, deleted after) shows Michael deleted 7 GC1 CREAT studies on 10/06 and 5 studies were created, 803 - 7 + 5 = 801. PR #1494 (merged 2026-10-07 00:26, squash 9eef515c): a decrease is ok when covered by audited study deletions since the prior run (prior.run_at, exact window so yesterday's deletes cannot mask a fresh loss); the check JSON carries dropped + auditedDeletesSincePriorRun. Receipt tests/integration/backup-integrity-named-drop.test.ts 19/19 through the real routes. Deploy confirmed by watcher (watch_1494.log).
+
+### C71. Nightly backup "integrity ANOMALY" email on every real-user decrease, naming nobody (was #70)
+
+**Effort:** was S / **Importance:** Medium
+
+**Closure evidence:** PR #1492 (merged 2026-10-07 00:00, squash 793f5e5b, deploy SUCCESS 00:01:49, /api/health commit match). backup_integrity_log.real_user_emails snapshots the real-user list each run; each dropped address is looked up in audit_log (admin delete within 36 h) and classified explained vs unexplained, named in the check JSON and the anomaly email; userCount is ok when every drop is explained. DELETE /api/admin/users/:id now writes the audit row (operator id 0, because storage.deleteUser cascades audit_log by user_id and the first draft erased its own row; caught by the receipt). AuditModule gains "admin". Receipt: 15/15 through the real routes (403 wrong secret, 200 delete, audit row survives the cascade, explained vs unexplained, added, steady state). Production schema verified from a read-only backup copy: the column exists. First names land on the 10/08 00:00 ET run; comparisons start 10/09. Tonight's 10/07 run fired 90 s before the deploy and still ran the old check (see C72 for what it flagged).
+
+### C70. computeStudyStatus throws at every boot for 4 studies and fail-safes them to FAIL (was #69)
+
+**Effort:** was S / **Importance:** High
+
+**Closure evidence:** Facts first: the 4 TypeErrors are legacy rows #43-#46 (user 14, no lab, instruments stored as a bare string, {x,y} points) already "fail"; the 4 nightly status flips (#457/#365/#364 -> pass, #318 -> fail) were the demo lab's seeded rows, re-stamped status='completed' by seedDemo at every boot and corrected by the recompute; #318 Troponin I is intended to fail (seed section 4.5). No customer study was affected. PR #1490 (merged 2026-10-06 23:1x, squash 9990ef2c, DEPLOY SUCCESS 23:19): cannot-evaluate flag (exception / no evaluable points / no measurable values) makes the boot recompute SKIP and log instead of writing a fail-safe FAIL; null-safe instrumentValues reads; shape from the first point with values; seeder stops resetting status. Receipt tests/integration/study-status-boot-safety.test.ts 6/6 (two earlier drafts failed it: legacy row still written fail, first-point shape bug). tsc clean.
+
+### C69. VeritaMap: director attestation, MEC review and unlock stamp EVERY age/sex band of an analyte (was #68)
+
+**Effort:** was S / **Importance:** Medium-High
+
+**Closure evidence:** PR #1491 (merged 2026-10-06 23:34, squash 716e4f0a, DEPLOY SUCCESS 23:43, /api/health commit match). mec-review / attest-ref / unlock-ref parse the band and read/write only that row (All ages default for old clients; 400 for a band with no row; audit entityId carries the band label); TestRow sends the active band; handleProvenance replaces only the returned band (it used to collapse the band array to one row). Receipts: tests/integration/veritamap-attest-band-scope.test.ts 15/15 on the fix and 5 FAILED on the pre-fix handlers (the harness bites); tsc clean; browser exercise on a local build: pediatric band attested + locked while All ages stayed unlocked and attestable, API confirms ref_locked 1/0.
+
+### C68. VeritaCheck: Hemoglobin studies render as "Lab-Set Internal Goal", and every narrative cites 42 CFR 493.931 (was #66)
+
+**Effort:** was S / **Importance:** High
+
+**Closure evidence:** PR #1489 (merged 2026-10-06 23:20, squash 80327dc0, DEPLOY SUCCESS 23:28, /api/health commit match). hasCanonicalTea consults the unregulated catalog and NAME_MAP before the alias set; new cfrSectionForTestName (cliaAnalytes subspecialty -> CFR_MAP) used by the narrative, the specs "CFR Reference" row and lot-to-lot; pt_coag and multi-analyte keep their 493.941 default. Receipts: scripts/verify-hgb-canonical-tea-cfr.ts 22/22 against the real module, verify-canonical-tea-matching.js still passes, tsc clean, rendered Hemoglobin PDF on a local build: "criterion (CLIA TEa) of +/-4.0% per 42 CFR 493.941", "CFR Reference (PT TEa, adopted) 42 CFR 493.941", zero "Lab-Set Internal Goal". Receipt also posted as a PR comment.
+
+### C67. about:blank on PDF opens (window.open token pattern + Adobe Acrobat) (was #63)
+
+**Effort:** was S / **Importance:** Medium
+
+**Closure evidence:** PR #1493 (merged 2026-10-07 00:07, squash a070407c, DEPLOY SUCCESS ~00:20). Bug-class sweep found 16 window.open(/api/pdf/token) sites, not ~6: VeritaOps, VeritaQA, VeritaResponse x6, VeritaPace, VeritaStock x5, snap order, CMS-116, the public Why-VeritaCheck article; all now use downloadPdfToken (anchor download, named file). The VeritaScan document-library policy opener pre-opened a blank tab and pointed it at a PDF blob (the exact about:blank orphan with Acrobat): PDFs now close that tab and download, HTML keeps the tab. Server: /api/pdf/:token sends Content-Disposition attachment (was inline) so nothing left can hand a PDF navigation to the Acrobat extension; grep after the sweep: 0 left. Gate 3 step 8 on PRODUCTION: tests/playwright/pdf-open-no-blank-tab.spec.ts 2/2 against www (Download PDF fires a browser download, opens no new page, attachment header). Rode along: ModuleHowToCard data-testid and two env-gated spec repairs (see #74).
 
 ### C66. Milford VeritaMap: every value/date save failed, then the AMR autosave loop (was #64)
 
