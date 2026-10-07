@@ -84,6 +84,20 @@ if (haveTests.length < ANALYTES.length) {
   log("tests written", ANALYTES.length);
 } else log("tests present", haveTests.length);
 
+// 2b. One analyte flagged exempt from calibration verification on the
+//     instrument row (the lab's own flag, via the real Coverage exemption
+//     route) so the map page receipt can assert the "Exempt" cell and the
+//     header count (parking lot #77). Idempotent: the PATCH sends full state.
+{
+  const d = await api("GET", `/api/labs/${LAB_ID}/veritamap/maps/${mapId}`);
+  const calcium = asList(d, "tests").find((t) => t.analyte === "Calcium");
+  const row = (calcium?.instruments || []).find((x) => x.id === inst.id);
+  if (row?.instrument_test_id) {
+    await api("PATCH", `/api/labs/${LAB_ID}/veritacheck/coverage/exemption`, { instrumentTestId: row.instrument_test_id, multical: false, noncal: true, waived: false, otherReason: "" });
+    log("Calcium flagged cal-ver exempt on", INSTRUMENT);
+  } else log("Calcium instrument row not found; exemption skipped");
+}
+
 // 3. VeritaStaff lab setup (staff_labs row; the employee routes answer
 //    "Set up your lab first" without it). The route upserts, so it is safe to
 //    repeat. Synthetic identity: this is the sandbox, not a client lab.
