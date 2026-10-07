@@ -179,6 +179,7 @@ function headerRowHeight(headers: string[], colWidths: number[]): number {
 import { logAudit } from "./audit";
 import { deleteMapCascade, mapDeleteBlockers } from "./veritamapDelete";
 import { computeGettingStarted, setGettingStartedCheck, isManualKey } from "./gettingStarted";
+import { HOUSE_FORMATS } from "./veritapolicyHouseFormats";
 import { logConsumption } from "./consumptionLedger";
 import { logCount } from "./countLedger";
 import { reconcileLots } from "./inventoryLots";
@@ -35491,6 +35492,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   //   server/policyTemplates/data/, substitutes <<LAB_NAME>> with the live
   //   lab name, and returns a branded DOCX for the Laboratory Director or
   //   designee to adopt as their lab's policy.
+  // House DOCX format for a lab (parking lot #71): veritapolicy_settings.docx_format
+  // plus the lab's own number/revision for this catalog policy. null = stock
+  // VeritaDC layout. Artifact-first (pre-uploaded custom DOCX) still wins above.
+  function houseFormatFor(sqlite: any, labId: number, policyId: string): any | null {
+    const s = sqlite.prepare("SELECT docx_format, house_facility_path, house_safety_default FROM veritapolicy_settings WHERE lab_id = ?").get(labId) as any;
+    if (!s || !s.docx_format || s.docx_format === "veritadc") return null;
+    const n = sqlite.prepare("SELECT house_number, revision FROM veritapolicy_house_numbers WHERE lab_id = ? AND policy_id = ?").get(labId, String(policyId)) as any;
+    return {
+      format: s.docx_format,
+      facilityPath: s.house_facility_path || null,
+      safetyDefault: s.house_safety_default || null,
+      houseNumber: n?.house_number || null,
+      revision: n?.revision || null,
+      draftDate: new Date().toISOString().slice(0, 10),
+    };
+  }
+
   app.get('/api/labs/:labId/veritapolicy/templates/:policyId/docx', authMiddleware, labScopeMiddleware, async (req: any, res) => {
     try {
       const sqlite = db.$client;
@@ -35539,10 +35557,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // copies. Off by default so the in-system copy stays the controlled master.
       const uncontrolled = req.query?.uncontrolled === 'true' || req.query?.uncontrolled === '1';
 
+      const house = houseFormatFor(sqlite, labId, policyId);
       const buf = await generatePolicyDocxBuffer(policyId, {
         lab_name: lab.lab_name || 'Your Laboratory',
         clia_number: lab.clia_number || 'CLIA pending',
-      }, crosswalk, { downloadedBy, downloadedAt, uncontrolled });
+      }, crosswalk, { downloadedBy, downloadedAt, uncontrolled }, house);
       if (!buf) return res.status(500).json({ error: 'DOCX generation failed' });
 
       const safeSlug = (tmpl.slug || tmpl.policy_name.toLowerCase().replace(/[^a-z0-9]+/g, '_')).slice(0, 60);
@@ -35550,7 +35569,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.setHeader('Content-Length', String(buf.length));
-      res.setHeader('X-VeritaPolicy-Source', 'default_generator');
+      res.setHeader('X-VeritaPolicy-Source', house ? `house_format:${house.format}` : 'default_generator');
       res.end(buf);
     } catch (err: any) {
       console.error('VeritaPolicy DOCX (lab-scoped) error:', err);
@@ -35712,7 +35731,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         if (lab.accreditation_cola && row.cola_citations) crosswalk.cola = row.cola_citations;
         if (lab.accreditation_aabb && row.aabb_citations) crosswalk.aabb = row.aabb_citations;
 
-        const buf = await generatePolicyDocxBuffer(pid, labCtx, crosswalk, { downloadedBy: bundleDownloadedBy, downloadedAt: bundleDownloadedAt, uncontrolled: bundleUncontrolled });
+        const buf = await generatePolicyDocxBuffer(pid, labCtx, crosswalk, { downloadedBy: bundleDownloadedBy, downloadedAt: bundleDownloadedAt, uncontrolled: bundleUncontrolled }, houseFormatFor(sqlite, labId, pid));
         if (!buf) { skipped += 1; continue; }
         const safeSlug = (tmpl.slug || tmpl.policy_name.toLowerCase().replace(/[^a-z0-9]+/g, '_')).slice(0, 60);
         const filename = `VeritaPolicy_${pid.padStart(3, '0')}_${safeSlug}${bundleUncontrolled ? '_UNCONTROLLED' : ''}.docx`;
@@ -38542,6 +38561,59 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // QA helper: soft-archive policy documents by lab + title prefix. Used
   // by the QA test cleanup script to remove accumulated test docs without
   // hard-deleting the audit trail. Body: { secret, labId, titlePrefix }.
+  // POST /api/admin/veritapolicy/set-house-format (parking lot #71, 2026-10-07)
+  //   {secret, labId, format: 'veritadc' | 'umass_milford', facilityPath?, safetyDefault?,
+  //    numbers?: [{policyId, houseNumber, revision}], dryRun?}
+  //   The standing VLS courtesy (a client sends a draft policy or policy-on-policies and we
+  //   move the stock policies onto their format) is switched on per lab HERE, by us, after
+  //   the client's sample is converted. Omitted fields keep their current value.
+  app.post("/api/admin/veritapolicy/set-house-format", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const { labId, format, facilityPath, safetyDefault, numbers, dryRun } = req.body || {};
+    const labIdNum = Number(labId);
+    if (!Number.isInteger(labIdNum) || labIdNum <= 0) return res.status(400).json({ error: "labId required" });
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id, owner_user_id, lab_name FROM labs WHERE id = ?").get(labIdNum) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found", labId: labIdNum });
+    const fmt = format == null ? null : String(format);
+    if (fmt != null && !(HOUSE_FORMATS as readonly string[]).includes(fmt)) {
+      return res.status(400).json({ error: `format must be one of ${HOUSE_FORMATS.join(", ")}` });
+    }
+    const nums: Array<{ policyId: string; houseNumber: string | null; revision: string | null }> = [];
+    if (numbers !== undefined) {
+      if (!Array.isArray(numbers)) return res.status(400).json({ error: "numbers must be an array of {policyId, houseNumber, revision}" });
+      for (const n of numbers) {
+        if (!n || n.policyId == null) return res.status(400).json({ error: "each numbers[] entry needs a policyId" });
+        nums.push({ policyId: String(n.policyId).padStart(3, "0"), houseNumber: n.houseNumber ? String(n.houseNumber) : null, revision: n.revision ? String(n.revision) : null });
+      }
+    }
+    const current = sqlite.prepare("SELECT id, docx_format, house_facility_path, house_safety_default FROM veritapolicy_settings WHERE lab_id = ?").get(labIdNum) as any;
+    const after = {
+      docx_format: fmt ?? current?.docx_format ?? "veritadc",
+      house_facility_path: facilityPath !== undefined ? (facilityPath ? String(facilityPath) : null) : (current?.house_facility_path ?? null),
+      house_safety_default: safetyDefault !== undefined ? (safetyDefault ? String(safetyDefault) : null) : (current?.house_safety_default ?? null),
+    };
+    const summary = { labId: labIdNum, labName: lab.lab_name, before: current ? { docx_format: current.docx_format, house_facility_path: current.house_facility_path, house_safety_default: current.house_safety_default } : null, after, numbers: nums.length };
+    if (dryRun) return res.json({ dryRun: true, ...summary });
+    const now = new Date().toISOString();
+    const tx = sqlite.transaction(() => {
+      if (current) {
+        sqlite.prepare("UPDATE veritapolicy_settings SET docx_format = ?, house_facility_path = ?, house_safety_default = ?, updated_at = ? WHERE lab_id = ?")
+          .run(after.docx_format, after.house_facility_path, after.house_safety_default, now, labIdNum);
+      } else {
+        sqlite.prepare("INSERT INTO veritapolicy_settings (user_id, lab_id, docx_format, house_facility_path, house_safety_default, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+          .run(lab.owner_user_id, labIdNum, after.docx_format, after.house_facility_path, after.house_safety_default, now, now);
+      }
+      const up = sqlite.prepare(`INSERT INTO veritapolicy_house_numbers (lab_id, policy_id, house_number, revision, updated_at) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(lab_id, policy_id) DO UPDATE SET house_number = excluded.house_number, revision = excluded.revision, updated_at = excluded.updated_at`);
+      for (const n of nums) up.run(labIdNum, n.policyId, n.houseNumber, n.revision, now);
+    });
+    tx();
+    logAudit({ userId: 0, ownerUserId: lab.owner_user_id ?? 0, module: "admin", action: "update", entityType: "veritapolicy_settings", entityId: labIdNum, entityLabel: `house format ${after.docx_format} (${lab.lab_name})`, before: summary.before, after: { ...after, numbers: nums }, ipAddress: req.ip });
+    res.json({ ok: true, ...summary });
+  });
+
   app.post("/api/admin/veritapolicy/qa-archive-by-title", (req, res) => {
     const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });

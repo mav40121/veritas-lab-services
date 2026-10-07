@@ -481,30 +481,7 @@ _(item #52 core closed 2026-09-28; shipped PR #1361 member-picker, prod-verified
 
 ---
 
-### 57. VeritaMap test-menu accuracy audit (menus incomplete, not just missing instruments)
-
-**Effort:** L (3-5 weeks)
-**Importance:** High — wrong or partial menus surface live in demos and undercut VeritaMap as the menu-of-record.
-
-**What:** Beyond confirming every instrument exists, the per-instrument analyte
-menus in `client/src/lib/fdaInstrumentData.json` need verification for
-completeness and accuracy. Surfaced when a Roche demo hit a cobas 8000 with no
-Sodium or Potassium: that entry was scoped to the c702 photometric module and
-omitted the ISE-module electrolytes. The cobas 8000 / c702 / c502 electrolyte
-gap was fixed 2026-10-06 (see Status), but the systemic issue — module-scoped
-or partial menus across vendors — remains. A full pass (vendor/FDA-sourced,
-no fabrication) would make VeritaMap demo-safe across the board.
-
-**Source:** Michael, 2026-10-06 Roche demo.
-**Status:** IN PROGRESS. Michael chose Option 2 (exhaustive) 2026-10-06. Executing vendor-by-vendor, sourced and verified against the manufacturer's own parameter lists. Batch 1 (Roche chemistry c-module) reconciled 2026-10-06 against Roche's March-2024 Serum Work Area parameter list: leveled c702 / cobas 8000 (+43 each), cobas c 703 (stub 6 -> 100), cobas pure (+8), cobas c 502 (+5) up to the verified c501 menu; c311 (Roche subset) and cobas 6000 left as-is. Batch 2 (Siemens chemistry: Atellica CH, Dimension EXL/Vista, ADVIA) reconciled 2026-10-06 with the Michael-approved "normalize as you go" rule: every analyte on these moderate-complexity analyzers set to MODERATE (fixed 171 stray HIGH/WAIVED complexity values, e.g. Sodium tagged HIGH on a chem analyzer) and ~630 missing assays added. Batch 3 (Abbott ARCHITECT c4000/c8000/c16000 + Alinity c) reconciled 2026-10-06 from Abbott Core Lab menus: ~180 assays added, 135 complexity values fixed, all MODERATE (ARCHITECT c4000 alone had 125 wrong). Batch 4 (Beckman Coulter chemistry: AU5800/680/480/640, DxC 700 AU / 700AU / 500AU / 500i, IMMAGE 800) reconciled 2026-10-06: these entries were ALREADY well-populated (AU5800 = 134 tests) with no Roche-style gaps, and the library names analytes full-name/alt-order while Beckman's published menu is abbreviation-first, so a name-keyed auto-add would have inserted DUPLICATES. The safe, source-verified action was complexity normalization only: 20 stray HIGH values set to MODERATE (Tacrolimus, Calprotectin, Elastase, Oxalate on the AU/DxC-AU entries). Beckman menu verified vs source (Beckman AU chemistry menu PDF + Protein Chemistry Menu by Platform PDF, spot-checked). DEFERRED for an abbreviation-aware completeness pass: UniCel DxC SYNCHRON i-series (660i/680i/860i/880i; menu only partially sourced, and 2 extraction tests legitimately HIGH) and AU640 newest esoterics. Next: Beckman UniCel/AU640 follow-up, Sysmex, Roche immunoassay, smaller vendors. CAP PT catalog loaded 2026-10-06 (74 programs, #60 done). 2026-10-07 overnight: no further vendor batches until the duplicate cleanup lands. FLAG CONFIRMED: scripts/dup_scan.py found ~130 near-duplicate analytes created by the Siemens batch (PR #1479), live in prod (e.g. "Total Protein" beside "Protein, total"); the keeper/remove list is the next deliverable and nothing is deleted without Michael's review; the Abbott batch (#1482) gets the same audit. DELIVERED 2026-10-07 overnight: siemens_abbott_dedup_plan.md / .csv (+ dedup_plan.py) in the session scratchpad: 225 removal candidates across 25 instrument entries, 212 added by the Siemens/Abbott batches, 13 pre-existing twins (Creatinine/creatinine, Ammonia vs Ammonia plasma/serum, BUN naming, HDL ordering, ALT/SGPT, ADVIA 2400 Creatinine vs Creatinine (Enzymatic) which is Michael's call). Parenthetical qualifiers are treated as discriminators unless they echo the base name: Crossmatch (IS) vs (AHG), Basophils (absolute) vs (%), AST gram-negative vs gram-positive, CK-MB activity vs mass, anti-Xa UFH/LMWH/rivaroxaban, pO2(A)/(A-a)/(a/A) are all listed as DISTINCT (127 names in their own table). Nothing deleted; awaiting Michael's go on the list.
-
-**Catalog of data-quality issues found during the sweep (keep updated):**
-- Systemic complexity inconsistency: 255 of 1275 distinct analytes carried more than one complexity across the dataset (some legitimate per-device, some error). Being normalized per analyzer class during each vendor batch.
-- Naming variants / typos: "Cystacin C" (should be Cystatin C); "Apolipoprotein A-1" vs "Apolipoprotein A1"; dual-method and parenthetical variants. Needs a naming-canonicalization pass (risky vs lab-map references; do carefully).
-- Encoding: a mangled degree sign in Grifols Wadiana ("Antibody detection at 37?C") and similar mojibake. Needs an encoding cleanup.
-- Specialty inconsistency: same analyte carries different specialty across analyzers (e.g. Sodium as Electrolytes vs Blood Gas vs General Chemistry). Complexity is being fixed now; specialty normalization deferred.
-- Vendor-menu vs library naming divergence blocks naive auto-complete (found in Batch 4 / Beckman): the published menu is abbreviation-first (CK, LDH, GGT, HbA1c, Total protein, Cholesterol total, Carbon dioxide / bicarbonate) while the library uses full-name/alt-order (Creatine kinase (CK), Lactate dehydrogenase (LDH), Protein, total, Cholesterol, Carbon dioxide, total (CO2)). The Abbott/Siemens-style name-keyed add would insert duplicates for assays already present under the library name. Completeness passes on already-populated vendors need an abbreviation/alias-aware matcher, not the name-key approach.
-- FLAG (verify): re-audit the Batch 2 (Siemens) and Batch 3 (Abbott) adds for the same duplicate risk. Those batches added ~630 and ~180 assays via the name-key matcher; if the vendor menu names diverged from library names the way Beckman's do, some of those adds may be near-duplicates of existing analytes. Run a norm/alias-collision check per touched entry on current main and clean up any dups found.
+_(item #57 closed 2026-10-07; duplicate cleanup approved in full by Michael and deployed in PR #1501, see C75 below; vendor batches may resume)_
 
 ---
 
@@ -691,6 +668,18 @@ are unchanged.
 ---
 
 ## CLOSED (audit trail)
+
+### C76. VeritaMap "Failed to delete map": half-cascade left shells, VeritaStaff FK blocked the rest (found and fixed 2026-10-07)
+
+**Effort:** was S / **Importance:** High. Michael could not delete four demo maps on lab 3; the same code path would have gutted any map whose instrument was ever assigned to a staff member.
+
+**Closure evidence:** Production log: `DELETE /api/labs/3/veritamap/maps/107` and `/106` -> 500 `FOREIGN KEY constraint failed`. Read-only DB copy: maps 106/107/108 had 0 tests, 0 instrument_tests, 2 instruments and 6/2/2 `staff_duty_change_events` rows pointing at those instruments; 109 still had its data plus 4 events. Cause: the delete ran seven separate statements with no transaction, died at the instrument delete on the VeritaStaff foreign key, and left the map as a shell (Michael's observation "every undeletable map shows 0 tests" was the scar, not the cause); the cascade was copy-pasted in five places. PR #1500 (merged 07:55, squash 7874a881, live in e51795e8): `server/veritamapDelete.ts` single-transaction cascade that also clears `staff_employee_instruments` and `staff_duty_change_events` for the map's instruments, `mapDeleteBlockers` names any remaining referrer in a 409, used by both routes, admin dedupe-maps, the demo purge and account deletion. Receipt `tests/integration/veritamap-delete-cascade.test.ts` 13/13 with `foreign_keys=1`: duty-tracked map deletes clean, an unanticipated blocker answers 409 and the map stays whole, legacy route same cascade, other lab refused. Michael's click on Sanford / FGH / VP's / Angie is the prod exercise.
+
+### C75. VeritaMap test-menu accuracy audit: Siemens/Abbott duplicate cleanup (was #57)
+
+**Effort:** was M / **Importance:** High
+
+**Closure evidence:** Michael approved the full plan (option 2, 2026-10-07 morning). PR #1501 (merged 07:58, squash d20479f4, live in e51795e8): `scripts/dedup_instrument_library_2026-10-07.py` applied `scripts/data/instrument_library_dedup_2026-10-07.csv` to `client/src/lib/fdaInstrumentData.json`: 225 removals across 25 instrument entries (212 batch-added, 13 pre-existing twins), KEEP names retained, testCount recomputed, byte-identical CRLF round-trip. `--verify` receipt 29/29: 294 entries before and after, 269 untouched entries byte-for-byte identical, exactly the planned names removed, every KEEP present, survivors unchanged. 127 real-qualifier names (Crossmatch IS vs AHG, Basophils absolute vs %, AST gram-neg vs gram-pos, CK-MB activity vs mass, anti-Xa UFH/LMWH/rivaroxaban, pO2 A / A-a / a/A) untouched by construction. Library only: lab maps that already copied a duplicate keep it until that lab edits it. Vendor batches (Beckman UniCel/AU640, Sysmex, Roche immunoassay, smaller vendors) may resume; the batch scripts must key on the library's existing names first so this class does not recur.
 
 ### C74. VeritaCheck D1 method-comparison verdict: the mean-|bias| override is disputed (was #67)
 
