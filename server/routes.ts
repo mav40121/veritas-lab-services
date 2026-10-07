@@ -5686,6 +5686,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const user = storage.getUserById(id);
     if (!user) return res.status(404).json({ error: "User not found", id });
 
+    // Audit the deletion (2026-10-07, #70) so the nightly backup integrity
+    // check can tell an intentional admin deletion from an unexplained loss of
+    // a real account. The actor is the ADMIN_SECRET holder, not a signed-in
+    // user, so user_id/owner_user_id are 0 (operator, no account). They must
+    // NOT be the deleted user's id: storage.deleteUser cascades audit_log by
+    // user_id and would erase this very row.
+    logAudit({
+      userId: 0, ownerUserId: 0, module: "admin", action: "delete", entityType: "user", entityId: id,
+      entityLabel: user.email, before: { email: user.email, name: (user as any).name ?? null, plan: (user as any).plan ?? null },
+      ipAddress: req.ip,
+    });
     storage.deleteUser(id);
     console.log(`[ADMIN] User deleted: id=${id} email=${user.email} at=${new Date().toISOString()}`);
     res.json({ deleted: true, id, email: user.email });
