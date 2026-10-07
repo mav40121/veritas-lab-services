@@ -126,7 +126,7 @@ async function notifyIntegrityIssue(checks: Record<string, any>, filename: strin
 // records the result in backup_integrity_log, and returns the per-check
 // breakdown. Does NOT throw on failure (backup upload continues regardless;
 // integrity issues alert separately via notifyIntegrityIssue).
-function checkBackupIntegrity(gzippedFileBytes: number): { ok: boolean; checks: Record<string, any> } {
+export function checkBackupIntegrity(gzippedFileBytes: number): { ok: boolean; checks: Record<string, any> } {
   const sqlite = (db as any).$client;
   // Baseline = the PREVIOUS run (most recent row), NOT the last all-green run.
   // Using the last all-green run wedges the count checks permanently after any
@@ -139,7 +139,7 @@ function checkBackupIntegrity(gzippedFileBytes: number): { ok: boolean; checks: 
   // caught independently by the PRAGMA integrity_check below, which has no baseline.
   const prior = sqlite
     .prepare(
-      "SELECT user_count, real_user_count, study_count, table_count FROM backup_integrity_log ORDER BY id DESC LIMIT 1",
+      "SELECT user_count, real_user_count, real_user_emails, study_count, table_count FROM backup_integrity_log ORDER BY id DESC LIMIT 1",
     )
     .get() as any;
 
@@ -167,7 +167,34 @@ function checkBackupIntegrity(gzippedFileBytes: number): { ok: boolean; checks: 
   // Legacy rows have real_user_count = NULL; treat that as "no real-user baseline
   // yet" so the first post-deploy run does not false-alarm on the population change.
   const priorReal = prior?.real_user_count ?? null;
-  const userCountOk = realUserCount > 0 && (priorReal == null || realUserCount >= priorReal);
+  // 3b. WHICH accounts changed (2026-10-07, #70). The count alone produced an
+  // "ANOMALY" email on every intentional deletion (Tywauna 10/05, 54 -> 53 on
+  // 10/06) and could not say who disappeared. Snapshot the real-user email
+  // list each run, diff it against the previous run, and look each dropped
+  // address up in audit_log: an admin deletion (DELETE /api/admin/users/:id)
+  // within the last 36 h makes the drop EXPLAINED (recorded, no alert); any
+  // other disappearance stays an anomaly, now with the account named.
+  const realEmails: string[] = (sqlite
+    .prepare(`SELECT LOWER(email) AS email FROM users WHERE ${REAL_USER_PREDICATE} ORDER BY LOWER(email)`)
+    .all() as any[]).map((r: any) => String(r.email));
+  let priorEmails: string[] | null = null;
+  try { priorEmails = prior?.real_user_emails ? JSON.parse(prior.real_user_emails) : null; } catch { priorEmails = null; }
+  const currentSet = new Set(realEmails);
+  const priorSet = new Set(priorEmails ?? []);
+  const dropped = priorEmails ? priorEmails.filter((e) => !currentSet.has(e)) : [];
+  const added = priorEmails ? realEmails.filter((e) => !priorSet.has(e)) : [];
+  const explained: string[] = [];
+  const unexplained: string[] = [];
+  for (const e of dropped) {
+    const hit = sqlite
+      .prepare(
+        "SELECT 1 FROM audit_log WHERE module = 'admin' AND action = 'delete' AND entity_type = 'user' AND LOWER(entity_label) = ? AND created_at >= datetime('now', '-36 hours') LIMIT 1",
+      )
+      .get(e);
+    (hit ? explained : unexplained).push(e);
+  }
+  const decreaseExplained = dropped.length > 0 && unexplained.length === 0;
+  const userCountOk = realUserCount > 0 && (priorReal == null || realUserCount >= priorReal || decreaseExplained);
 
   // 4. Study count: stable or increasing vs the previous run
   const studyCount = (sqlite.prepare("SELECT COUNT(*) as cnt FROM studies").get() as any).cnt as number;
@@ -180,7 +207,7 @@ function checkBackupIntegrity(gzippedFileBytes: number): { ok: boolean; checks: 
   const checks: Record<string, any> = {
     fileSize: { value: gzippedFileBytes, threshold: MIN_BACKUP_FILE_SIZE_BYTES, ok: fileSizeOk },
     sqliteIntegrity: { value: integrityResult, ok: integrityOk },
-    userCount: { value: realUserCount, totalAccounts: userCount, prior: priorReal, ok: userCountOk },
+    userCount: { value: realUserCount, totalAccounts: userCount, prior: priorReal, ok: userCountOk, dropped, explained, unexplained, added },
     studyCount: { value: studyCount, prior: prior?.study_count ?? null, ok: studyCountOk },
     tableCount: { value: tableCount, threshold: MIN_TABLE_COUNT, prior: prior?.table_count ?? null, ok: tableCountOk },
   };
@@ -189,10 +216,10 @@ function checkBackupIntegrity(gzippedFileBytes: number): { ok: boolean; checks: 
 
   sqlite
     .prepare(
-      `INSERT INTO backup_integrity_log (file_size_bytes, sqlite_integrity_check, user_count, real_user_count, study_count, table_count, all_ok, details_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO backup_integrity_log (file_size_bytes, sqlite_integrity_check, user_count, real_user_count, real_user_emails, study_count, table_count, all_ok, details_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(gzippedFileBytes, integrityResult, userCount, realUserCount, studyCount, tableCount, allOk ? 1 : 0, JSON.stringify(checks));
+    .run(gzippedFileBytes, integrityResult, userCount, realUserCount, JSON.stringify(realEmails), studyCount, tableCount, allOk ? 1 : 0, JSON.stringify(checks));
 
   return { ok: allOk, checks };
 }
