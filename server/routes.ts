@@ -22953,9 +22953,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
          FROM staff_employees se
          JOIN staff_employee_instruments sei ON sei.employee_id = se.id
          JOIN veritamap_instruments vi ON vi.id = sei.instrument_id
-        WHERE se.lab_id = ? AND se.status = 'active'
+        WHERE se.tier2_lab_id = ? AND se.status = 'active'
         ORDER BY se.last_name, se.first_name`
     ).all(labId) as any[];
+    // tier2_lab_id is the labs.id this route is scoped to. staff_employees.lab_id
+    // is the staff_labs.id (a different sequence), so filtering on it only
+    // matched labs whose two ids happened to coincide (caught 2026-10-07 by the
+    // CI sandbox lab, parking lot #74, the first day after #59 shipped).
     const byStaff = new Map<number, { id: number; name: string; title: string; hire_date: string | null; instruments: Set<string> }>();
     for (const r of rows) {
       const inst = String(r.instrument_name || "").trim();
