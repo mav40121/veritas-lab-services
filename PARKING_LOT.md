@@ -546,7 +546,7 @@ the SAME established mean/SD the rules use (or a consistent mfr-vs-cumulative mo
 applied to both chart and rules).
 
 **Source:** Mike Hiltunen (MedStar), 2026-10-06 email "LJ Graph Question". Gameday Plymouth PSA Frend B Level 1, 9/28 point fired 1-3s but sits near the mean on the chart.
-**Status:** Data pulled 2026-10-07 from a read-only prod copy (Plymouth, lab 29, PSA FREND B Level 1, lot 6361A26001): the 9/28 result 1.39 is +3.2 SD against the lab's 30-point history (mean 1.067, SD 0.100) and the stored 1-3s is legitimate; it reads +0.3 SD on the chart because the lot's programmed mean/SD were changed on 9/30 to 1.29/0.35 (package-insert width, 3.5x the lab's SD). PR #1464 (programmed basis for chart + rules + PDF) is green and undeployed. Q7 to Michael 2026-10-07: recommendation is the CLSI C24 pattern (programmed until 20 accepted points, then a locked lab-established mean/SD, one basis everywhere, director override, logged), reworking #1464 before deploy. MedStar reply (Hiltunen) waits on that call.
+**Status:** FIX DEPLOYED 2026-10-07 (PR #1464, squash 03db1fe4, live 10:41 ET) on Michael's decision 2 relayed by Lisa: the Westgard rules, the chart and the monthly PDF all use the lot's programmed (manufacturer) mean/SD. Stored violations are not recomputed. Reply to Mike Hiltunen drafted in Outlook (covers both Plymouth PSA Level 1 flags, the bias-rule effect of a programmed mean the lab does not run at, and 42 CFR 493.1256(d)(10)(ii)); closes on send.
 ---
 
 _(item #66 closed 2026-10-07; PR #1489 deployed, see C68 below)_
@@ -712,6 +712,35 @@ module card flips a step to done after the lab adds the matching record.
 
 **Source:** docs/IN_APP_GETTING_STARTED_DESIGN.md, Michael's option 1 (2026-10-07).
 **Status:** Open. Build on request.
+
+---
+
+### 80. VeritaPT: the CAP program catalog behind the enrollment picker is incomplete and partly stale (FH9 and RT4 missing, FH2P obsolete)
+
+**Effort:** S (1-3 days)
+**Importance:** High. The enrollment picker is how a lab records its PT coverage for 42 CFR 493.801; a catalog that lacks the program a lab actually buys forces a wrong pick or "Other", and the coverage and readiness views are only as good as the catalog. Lisa hit it on her own lab the first time she used the dialog.
+
+**What:** The "Manage PT Program Enrollments" dialog lists CAP programs from the
+pt_vendor_programs table (GET /api/veritapt/programs), loaded through the admin
+vendor-programs endpoint from operator-verified data with provenance in the
+source column. Production holds 74 CAP programs, source "CAP Surveys catalog
+(estore.cap.org), compiled 2026-10-06", and only six of them are Hematology:
+FH2, FH2P, BCP, BP, BMD, ESR. Lisa (2026-10-07): FH9 is missing, RT4 is
+missing, FH2P is an obsolete event, "I'm sure there are more." The CAP Surveys
+catalog runs to several hundred programs, so a 74-row compile is a thin first
+pass, not a catalog. (The API vendor list, 225 programs loaded 2026-10-05, has
+not been checked the same way.) Fix: rebuild the CAP list from the current CAP
+Surveys catalog as the source document, code, name, category and analytes per
+program, verified by a CAP-enrolled director before load (Lisa is the natural
+verifier; the loader's never-fabricated rule stands); reload with replaceVendor
+CAP and the catalog edition recorded in source; mark retired programs such as
+FH2P inactive rather than deleting them so existing enrollments stay valid;
+then spot-check the API list against its own current catalog. Receipt: the
+dialog on lab 5 offers FH9 and RT4 under Hematology, FH2P is gone from the
+picker, and an existing enrollment on a retired code still displays.
+
+**Source:** Lisa, 2026-10-07 ~10:20 (screenshot, lab 5 VeritaPT enrollments dialog).
+**Status:** Open. Needs the current CAP Surveys catalog (or the program codes the Milford sites enroll in) as the verified source; build on request.
 
 ---
 
