@@ -14624,6 +14624,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const label = String(body.band_label ?? "").trim() || deriveBandLabel(minD, maxD, sex);
     return { band: { ageMinDays: minD, ageMaxDays: maxD, sex, label } };
   }
+  // Band-keyed row address (#68, 2026-10-07): the provenance actions below
+  // (MEC review, 493.1253 attestation, unlock) used to match on (map_id,
+  // analyte) alone and therefore stamped or unlocked EVERY age/sex band of the
+  // analyte at once. Every read and write of a single band goes through this.
+  const BAND_WHERE = "map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ?";
+  const bandArgs = (mapId: number, analyte: string, band: { ageMinDays: number; ageMaxDays: number; sex: string }) =>
+    [mapId, analyte, band.ageMinDays, band.ageMaxDays, band.sex] as const;
 
   // GET analyte-values. Returns EVERY band; a single-band analyte looks exactly
   // like it did before bands existed. Ordered so the response is stable and the
@@ -14747,22 +14754,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!reviewed_at || !recorded_by?.trim()) {
       return res.status(400).json({ error: "reviewed_at (date) and recorded_by are required" });
     }
+    // Band from the body (All ages when absent, so a pre-band client keeps
+    // addressing the single row it always did). #68.
+    const parsedBand = parseBand(req.body);
+    if ("error" in parsedBand) return res.status(400).json({ error: parsedBand.error });
+    const band = parsedBand.band;
     const row = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?"
-    ).get(mapId, analyte) as any;
+      `SELECT * FROM veritamap_analyte_values WHERE ${BAND_WHERE}`
+    ).get(...bandArgs(mapId, analyte, band)) as any;
     if (!row || (!row.critical_low && !row.critical_high)) {
       return res.status(400).json({ error: "Enter the MEC-adopted critical values first, then record the review" });
     }
     logAudit({
       userId: req.user?.userId, ownerUserId: req.ownerUserId, module: "veritamap",
-      action: "update", entityType: "analyte_mec_review", entityId: `${mapId}:${analyte}`,
-      entityLabel: analyte, before: { mec_reviewed_at: row.mec_reviewed_at }, after: { mec_reviewed_at: reviewed_at, mec_reviewed_by: recorded_by.trim() },
+      action: "update", entityType: "analyte_mec_review", entityId: `${mapId}:${analyte}:${band.label}`,
+      entityLabel: `${analyte} (${band.label})`, before: { mec_reviewed_at: row.mec_reviewed_at }, after: { mec_reviewed_at: reviewed_at, mec_reviewed_by: recorded_by.trim() },
       ipAddress: req.ip,
     });
     (db as any).$client.prepare(
-      "UPDATE veritamap_analyte_values SET mec_reviewed_at = ?, mec_reviewed_by = ?, updated_at = ? WHERE map_id = ? AND analyte = ?"
-    ).run(reviewed_at, recorded_by.trim(), new Date().toISOString(), mapId, analyte);
-    res.json((db as any).$client.prepare("SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?").get(mapId, analyte));
+      `UPDATE veritamap_analyte_values SET mec_reviewed_at = ?, mec_reviewed_by = ?, updated_at = ? WHERE ${BAND_WHERE}`
+    ).run(reviewed_at, recorded_by.trim(), new Date().toISOString(), ...bandArgs(mapId, analyte, band));
+    res.json((db as any).$client.prepare(`SELECT * FROM veritamap_analyte_values WHERE ${BAND_WHERE}`).get(...bandArgs(mapId, analyte, band)));
   });
 
   // POST attest-ref: director-or-designee attestation on the lab-entered
@@ -14775,23 +14787,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!attested_by?.trim() || !attested_title?.trim()) {
       return res.status(400).json({ error: "attested_by and attested_title are required" });
     }
+    // Attestation is per band (#68): the adult range being attested must not
+    // lock, or claim to cover, a pediatric band that was never reviewed.
+    const parsedBand = parseBand(req.body);
+    if ("error" in parsedBand) return res.status(400).json({ error: parsedBand.error });
+    const band = parsedBand.band;
     const row = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?"
-    ).get(mapId, analyte) as any;
+      `SELECT * FROM veritamap_analyte_values WHERE ${BAND_WHERE}`
+    ).get(...bandArgs(mapId, analyte, band)) as any;
     if (!row || !row.ref_range_low || !row.ref_range_high) {
       return res.status(400).json({ error: "Enter the verified reference range first; an empty range cannot be attested" });
     }
     const now = new Date().toISOString();
     logAudit({
       userId: req.user?.userId, ownerUserId: req.ownerUserId, module: "veritamap",
-      action: "update", entityType: "analyte_ref_attestation", entityId: `${mapId}:${analyte}`,
-      entityLabel: analyte, before: { ref_locked: row.ref_locked }, after: { ref_attested_by: attested_by.trim(), ref_attested_title: attested_title.trim(), ref_locked: 1 },
+      action: "update", entityType: "analyte_ref_attestation", entityId: `${mapId}:${analyte}:${band.label}`,
+      entityLabel: `${analyte} (${band.label})`, before: { ref_locked: row.ref_locked }, after: { ref_attested_by: attested_by.trim(), ref_attested_title: attested_title.trim(), ref_locked: 1 },
       ipAddress: req.ip,
     });
     (db as any).$client.prepare(
-      "UPDATE veritamap_analyte_values SET ref_attested_at = ?, ref_attested_by = ?, ref_attested_title = ?, ref_locked = 1, updated_at = ? WHERE map_id = ? AND analyte = ?"
-    ).run(now, attested_by.trim(), attested_title.trim(), now, mapId, analyte);
-    res.json((db as any).$client.prepare("SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?").get(mapId, analyte));
+      `UPDATE veritamap_analyte_values SET ref_attested_at = ?, ref_attested_by = ?, ref_attested_title = ?, ref_locked = 1, updated_at = ? WHERE ${BAND_WHERE}`
+    ).run(now, attested_by.trim(), attested_title.trim(), now, ...bandArgs(mapId, analyte, band));
+    res.json((db as any).$client.prepare(`SELECT * FROM veritamap_analyte_values WHERE ${BAND_WHERE}`).get(...bandArgs(mapId, analyte, band)));
   });
 
   // POST unlock-ref: owner/admin removes the attestation lock (e.g. a method
@@ -14805,20 +14822,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     const mapId = Number(req.params.id);
     const analyte = safeDecodeParam(req.params.analyte);
+    // Unlock exactly the attested band (#68); other bands keep their lock.
+    const parsedBand = parseBand(req.body);
+    if ("error" in parsedBand) return res.status(400).json({ error: parsedBand.error });
+    const band = parsedBand.band;
     const row = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?"
-    ).get(mapId, analyte) as any;
+      `SELECT * FROM veritamap_analyte_values WHERE ${BAND_WHERE}`
+    ).get(...bandArgs(mapId, analyte, band)) as any;
     if (!row?.ref_locked) return res.status(400).json({ error: "Reference range is not locked" });
     logAudit({
       userId: req.user?.userId, ownerUserId: req.ownerUserId, module: "veritamap",
-      action: "update", entityType: "analyte_ref_attestation", entityId: `${mapId}:${analyte}`,
-      entityLabel: analyte, before: { ref_locked: 1, ref_attested_by: row.ref_attested_by, ref_attested_at: row.ref_attested_at }, after: { ref_locked: 0, reason: req.body?.reason || null },
+      action: "update", entityType: "analyte_ref_attestation", entityId: `${mapId}:${analyte}:${band.label}`,
+      entityLabel: `${analyte} (${band.label})`, before: { ref_locked: 1, ref_attested_by: row.ref_attested_by, ref_attested_at: row.ref_attested_at }, after: { ref_locked: 0, reason: req.body?.reason || null },
       ipAddress: req.ip,
     });
     (db as any).$client.prepare(
-      "UPDATE veritamap_analyte_values SET ref_attested_at = NULL, ref_attested_by = NULL, ref_attested_title = NULL, ref_locked = 0, updated_at = ? WHERE map_id = ? AND analyte = ?"
-    ).run(new Date().toISOString(), mapId, analyte);
-    res.json((db as any).$client.prepare("SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?").get(mapId, analyte));
+      `UPDATE veritamap_analyte_values SET ref_attested_at = NULL, ref_attested_by = NULL, ref_attested_title = NULL, ref_locked = 0, updated_at = ? WHERE ${BAND_WHERE}`
+    ).run(new Date().toISOString(), ...bandArgs(mapId, analyte, band));
+    res.json((db as any).$client.prepare(`SELECT * FROM veritamap_analyte_values WHERE ${BAND_WHERE}`).get(...bandArgs(mapId, analyte, band)));
   });
 
   // GET amr-values
