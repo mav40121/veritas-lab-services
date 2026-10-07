@@ -2882,6 +2882,28 @@ sqlite.exec(`
 `);
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritapolicy_lab_artifacts_lab ON veritapolicy_lab_artifacts(lab_id)`); } catch {}
 
+// Per-lab house policy numbers for house DOCX formats (parking lot #71,
+// 2026-10-07): the client's own numbering ("Gen 31") and revision tag per
+// catalog policy_id. Entered by us or the lab through the admin endpoint,
+// never generated. Read by the DOCX download routes when the lab's
+// veritapolicy_settings.docx_format is a house format.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritapolicy_house_numbers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    policy_id TEXT NOT NULL,
+    house_number TEXT,
+    revision TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(lab_id, policy_id)
+  )
+`);
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(veritapolicy_house_numbers)").all() as { name: string }[]).map((c) => c.name);
+  // Future columns added via ALTER TABLE go here, gated on !cols.includes("colname").
+  void cols;
+}
+
 // Migration sentinel for veritapolicy_lab_artifacts (no schema changes yet
 // but keeps the pattern in place for future ALTER TABLE additions).
 {
@@ -3343,6 +3365,18 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritapolicy_lab_artifacts_lab
   } catch (err: any) {
     try { sqlite.exec("ROLLBACK"); } catch {}
     console.warn("[migration] Phase 3.3 settings rebuild failed (non-fatal):", err?.message);
+  }
+
+  // House DOCX format per lab (parking lot #71, 2026-10-07). Placed AFTER the
+  // Phase 3.3 rebuild on purpose: that rebuild copies an explicit column list
+  // into a new table, so columns added before it would be dropped on a legacy DB.
+  // 'veritadc' (default) or a client house format we render ('umass_milford').
+  // Set by us via POST /api/admin/veritapolicy/set-house-format; no customer picker.
+  {
+    const cols = (sqlite.prepare("PRAGMA table_info(veritapolicy_settings)").all() as { name: string }[]).map((c) => c.name);
+    if (!cols.includes("docx_format")) sqlite.exec("ALTER TABLE veritapolicy_settings ADD COLUMN docx_format TEXT NOT NULL DEFAULT 'veritadc'");
+    if (!cols.includes("house_facility_path")) sqlite.exec("ALTER TABLE veritapolicy_settings ADD COLUMN house_facility_path TEXT");
+    if (!cols.includes("house_safety_default")) sqlite.exec("ALTER TABLE veritapolicy_settings ADD COLUMN house_safety_default TEXT");
   }
 
   // veritapolicy_requirement_status -> UNIQUE(lab_id, requirement_id)
