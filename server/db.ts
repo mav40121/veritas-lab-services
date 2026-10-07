@@ -2882,6 +2882,27 @@ sqlite.exec(`
 `);
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_veritapolicy_lab_artifacts_lab ON veritapolicy_lab_artifacts(lab_id)`); } catch {}
 
+// In-app Getting Started manual ticks (parking lot #72, 2026-10-07): the only
+// stored state of the checklist. Every other step is derived live from the
+// lab's tables (server/gettingStarted.ts). Keys: the two Phase-5 manual steps
+// and 'card.dismissed'.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS lab_onboarding_checks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    step_key TEXT NOT NULL,
+    checked INTEGER NOT NULL DEFAULT 1,
+    checked_by_user_id INTEGER,
+    checked_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(lab_id, step_key)
+  )
+`);
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(lab_onboarding_checks)").all() as { name: string }[]).map((c) => c.name);
+  // Future columns added via ALTER TABLE go here, gated on !cols.includes("colname").
+  void cols;
+}
+
 // Per-lab house policy numbers for house DOCX formats (parking lot #71,
 // 2026-10-07): the client's own numbering ("Gen 31") and revision tag per
 // catalog policy_id. Entered by us or the lab through the admin endpoint,

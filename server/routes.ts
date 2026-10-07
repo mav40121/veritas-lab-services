@@ -178,6 +178,7 @@ function headerRowHeight(headers: string[], colWidths: number[]): number {
 
 import { logAudit } from "./audit";
 import { deleteMapCascade, mapDeleteBlockers } from "./veritamapDelete";
+import { computeGettingStarted, setGettingStartedCheck, isManualKey } from "./gettingStarted";
 import { HOUSE_FORMATS } from "./veritapolicyHouseFormats";
 import { logConsumption } from "./consumptionLedger";
 import { logCount } from "./countLedger";
@@ -22906,6 +22907,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // lab via WHERE id AND lab_id, and scopes the embedded employees list by
   // lab_id so the response does not leak employees from other labs the
   // owner is a member of (a real leak in the legacy endpoint above).
+  // In-app Getting Started (parking lot #72, 2026-10-07): the shared 6-phase
+  // system path scored against this lab's real tables. GET is any member;
+  // the manual ticks (two Phase-5 steps + card dismissal) are owner/admin.
+  app.get("/api/labs/:labId/getting-started", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    try {
+      res.json(computeGettingStarted((db as any).$client, req.scope.labId, req.userId));
+    } catch (e: any) {
+      console.error("[getting-started] compute failed:", e?.message || e);
+      res.status(500).json({ error: "Could not compute the checklist" });
+    }
+  });
+  app.post("/api/labs/:labId/getting-started/check", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    const role = String(req.scope?.role || "");
+    if (!["owner", "admin", "org_owner", "org_admin"].includes(role)) return res.status(403).json({ error: "Only the lab owner or an admin can tick a step" });
+    const key = String(req.body?.key || "");
+    if (!isManualKey(key)) return res.status(400).json({ error: "Only the manual steps (and the card dismissal) can be ticked; everything else is read from your data" });
+    const checked = req.body?.checked !== false;
+    setGettingStartedCheck((db as any).$client, req.scope.labId, key, checked, req.userId);
+    res.json(computeGettingStarted((db as any).$client, req.scope.labId, req.userId));
+  });
+
   // Eligible employees for a program's assessment dialog (2026-10-07, parking
   // lot #59, Michael's Option 2). The legacy "New Technical Assessment" dialog
   // listed competency_employees only, which is empty for labs that onboard staff
