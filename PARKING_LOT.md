@@ -664,6 +664,32 @@ the dialog's max-w-3xl width and in dark mode.
 
 ---
 
+### 76. VeritaMap: Manual Diff cell lines never pair with the analyzer differential, so no correlation is triggered
+
+**Effort:** S (1-3 days)
+**Importance:** High. 42 CFR 493.1281 comparability: the same analyte on two methods (manual differential vs the hematology analyzer) must be correlated twice a year; when the map cannot see they are the same test, the requirement never appears and readiness over-reports.
+
+**What:** Correlation grouping in the map intelligence matches instruments on
+the exact analyte string. The library's "Manual Differential" entry names the
+cell lines "Lymphocytes / Neutrophils / Monocytes / Eosinophils / Basophils";
+the hematology analyzers (Sysmex XN-1000/XN-2000 and the rest) name them
+"LYMPH% / NEUT% / MONO% / EO% / BASO%" (plus the absolute "#" rows). Same
+measurand (the percentage differential), different strings, so Lymph on the
+manual diff and LYMPH% on the analyzer show as two unrelated tests and the
+Pri/Backup correlation requirement is never raised. Same for every cell line.
+Fix: a canonical-analyte layer for correlation grouping (manual "Lymphocytes"
+<-> analyzer "LYMPH%" / "Lymphocytes (%)" and the same for NEUT/MONO/EO/BASO;
+the "%" row is the comparable one, not "#"), plus harmonizing the library's
+Manual Differential names toward the analyzer convention so new maps do not
+inherit the split. Receipt: a map with Sysmex XN + Manual Differential shows
+one correlation requirement per cell line, and the existing name-based matches
+are unchanged.
+
+**Source:** Michael, 2026-10-07 morning ("Manual diff Lymph is the same as lymph% on the hematology analyzers, but they are showing as different tests and not triggering correlations. Same for the other cell lines").
+**Status:** Open. Names on both sides confirmed in the library; build on request.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C74. VeritaCheck D1 method-comparison verdict: the mean-|bias| override is disputed (was #67)
