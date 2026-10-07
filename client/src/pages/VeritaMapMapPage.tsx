@@ -68,6 +68,7 @@ interface InstrumentOnTest {
   nickname?: string | null;
   ifu_url?: string | null;
   instrument_test_id?: number;
+  cal_ver_exempt?: 0 | 1;
 }
 
 interface CorrelationRecord {
@@ -107,6 +108,9 @@ interface TestRecord {
   last_precision?: string | null;
   last_sop_review?: string | null;
   notes?: string;
+  // True when EVERY active instrument row carrying this analyte has a
+  // linearity / cal ver exemption flag (server-derived; parking lot #77).
+  cal_ver_exempt?: boolean;
 }
 
 interface AnalyteValues {
@@ -593,6 +597,16 @@ async function exportExcel(mapId: number, mapName: string, activeLabId?: number 
 
 // ── Compliance score ──────────────────────────────────────────────────────────
 
+// Calibration verification is not owed on a WAIVED test, nor on a test whose
+// every active instrument row carries a linearity / cal ver exemption flag
+// (the flags the lab sets on the instrument rows). Before 2026-10-07 the map
+// page only honored WAIVED, so a lab that had marked its hematology tests
+// exempt still saw "45 Cal Verifications Required" and a 0 percent score
+// (parking lot #77, Milford CCL).
+function calVerExempt(t: TestRecord): boolean {
+  return t.complexity === "WAIVED" || t.cal_ver_exempt === true;
+}
+
 function calcCompliance(tests: TestRecord[]): {
   score: number;
   calVerOverdue: number;
@@ -608,7 +622,7 @@ function calcCompliance(tests: TestRecord[]): {
   let sopOverdue = 0;
 
   for (const t of nonWaived) {
-    const cvStatus = getDateStatus(t.last_cal_ver, 6);
+    const cvStatus = calVerExempt(t) ? ("ok" as DateStatus) : getDateStatus(t.last_cal_ver, 6);
     const mcStatus = getDateStatus(t.last_method_comp, 6);
     const sopStatus = getDateStatus(t.last_sop_review, 24);
     if (cvStatus === "overdue" || cvStatus === "missing") calVerOverdue++;
@@ -618,7 +632,7 @@ function calcCompliance(tests: TestRecord[]): {
 
   const bothOk = nonWaived.filter(
     (t) =>
-      getDateStatus(t.last_cal_ver, 6) === "ok" &&
+      (calVerExempt(t) || getDateStatus(t.last_cal_ver, 6) === "ok") &&
       getDateStatus(t.last_method_comp, 6) === "ok"
   ).length;
 
@@ -650,12 +664,12 @@ function computeIntelligence(tests: TestRecord[]): IntelligenceData {
 
   // Cal verifications outstanding: non-waived tests whose cal ver is not current.
   const calVerRequired = nonWaived.filter(
-    (t) => getDateStatus(t.last_cal_ver, 6) !== "ok"
+    (t) => !calVerExempt(t) && getDateStatus(t.last_cal_ver, 6) !== "ok"
   ).length;
 
   const compliantTests = nonWaived.filter(
     (t) =>
-      getDateStatus(t.last_cal_ver, 6) === "ok" &&
+      (calVerExempt(t) || getDateStatus(t.last_cal_ver, 6) === "ok") &&
       getDateStatus(t.last_method_comp, 6) === "ok"
   ).length;
 
@@ -1330,7 +1344,8 @@ function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAn
   const correlationRequired =
     !isWaived && instruments.length >= 2;
 
-  const calVerStatus = isWaived
+  const isCalVerExempt = calVerExempt(test);
+  const calVerStatus = isCalVerExempt
     ? ("ok" as DateStatus)
     : getDateStatus(test.last_cal_ver, 6);
   const mcStatus = isWaived
@@ -1342,7 +1357,7 @@ function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAn
     correlationRequired &&
     (mcStatus === "missing" || mcStatus === "overdue");
   const calVerOverdue =
-    !isWaived &&
+    !isCalVerExempt &&
     (calVerStatus === "overdue" || calVerStatus === "missing");
 
   const borderClass = isWaived
@@ -1455,8 +1470,15 @@ function TestRow({ test, onChange, onRowMount, analyteBands, amrValues, onSaveAn
 
       {/* Cal Ver */}
       <td className="px-3 py-2 whitespace-nowrap">
-        {isWaived ? (
-          <span className="text-[10px] text-muted-foreground">Exempt</span>
+        {isCalVerExempt ? (
+          <div data-testid="cal-ver-exempt">
+            <span className="text-[10px] text-muted-foreground">Exempt</span>
+            {!isWaived && (
+              <div className="text-[9px] text-muted-foreground/70 mt-0.5">
+                Per instrument exemption
+              </div>
+            )}
+          </div>
         ) : (
           <div>
             <DateCell

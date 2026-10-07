@@ -198,6 +198,16 @@ export default function VeritaMapAppPage() {
             <Link href="/login">Sign In</Link>
           </Button>
         </div>
+      </div>
+    );
+  }
+
+  // ── Main app ──────────────────────────────────────────────────────────────
+  return (
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+      {/* How-to card. Until 2026-10-07 this sat inside the signed-out wall
+          above, so a signed-in user never saw it on the map list (found by the
+          phase-B progress receipt, parking lot #79). */}
       <ModuleHowToCard
         moduleKey="veritamap"
         moduleName="VeritaMap™"
@@ -210,14 +220,6 @@ export default function VeritaMapAppPage() {
           "Other Verita modules read from this menu automatically; update here whenever you add or retire a test."
         ]}
       />
-
-      </div>
-    );
-  }
-
-  // ── Main app ──────────────────────────────────────────────────────────────
-  return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
       {/* Page header */}
       <div className="flex items-start justify-between gap-4 mb-8">
         <div>

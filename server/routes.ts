@@ -14086,7 +14086,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const rawTests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? ORDER BY specialty, analyte").all(req.params.id);
     // For each test, attach the list of instruments running it
     const instrByAnalyte = (db as any).$client.prepare(`
-      SELECT it.analyte, i.id, i.instrument_name, i.role, i.category, i.serial_number
+      SELECT it.analyte, i.id, i.instrument_name, i.role, i.category, i.serial_number,
+        CASE WHEN COALESCE(it.linearity_exempt_multical, 0) = 1 OR COALESCE(it.linearity_exempt_noncal, 0) = 1
+                  OR COALESCE(it.linearity_exempt_waived, 0) = 1 OR TRIM(COALESCE(it.linearity_exempt_other, '')) <> ''
+             THEN 1 ELSE 0 END AS cal_ver_exempt
       FROM veritamap_instrument_tests it
       JOIN veritamap_instruments i ON i.id = it.instrument_id
       WHERE it.map_id = ? AND it.active = 1
@@ -14094,7 +14097,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const instrMap: Record<string, any[]> = {};
     for (const row of instrByAnalyte) {
       if (!instrMap[row.analyte]) instrMap[row.analyte] = [];
-      instrMap[row.analyte].push({ id: row.id, instrument_name: row.instrument_name, role: row.role, category: row.category, serial_number: row.serial_number || null });
+      // cal_ver_exempt mirrors the lab-scoped detail route (parking lot #77).
+      instrMap[row.analyte].push({ id: row.id, instrument_name: row.instrument_name, role: row.role, category: row.category, serial_number: row.serial_number || null, cal_ver_exempt: row.cal_ver_exempt ? 1 : 0 });
     }
     // Fetch correlations involving any test on this map (one query, one round trip)
     const testIds = rawTests.map((t: any) => t.id);
@@ -14136,11 +14140,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         corrByTestId[localTestId].push(corr);
       }
     }
-    const tests = rawTests.map((t: any) => ({
-      ...t,
-      instruments: instrMap[t.analyte] ?? [],
-      correlations: corrByTestId[t.id] ?? []
-    }));
+    const tests = rawTests.map((t: any) => {
+      const instruments = instrMap[t.analyte] ?? [];
+      return {
+        ...t,
+        instruments,
+        correlations: corrByTestId[t.id] ?? [],
+        cal_ver_exempt: instruments.length > 0 && instruments.every((x: any) => x.cal_ver_exempt === 1),
+      };
+    });
     res.json({ ...map, tests });
   });
 
@@ -14214,8 +14222,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const map = (db as any).$client.prepare("SELECT * FROM veritamap_maps WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId);
     if (!map) return res.status(404).json({ error: "Map not found" });
     const rawTests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? ORDER BY specialty, analyte").all(req.params.id);
+    // cal_ver_exempt per instrument row: any of the four linearity / cal ver
+    // exemption flags the lab sets on veritamap_instrument_tests. The map page
+    // derives a per-test "Exempt" from these (every active instrument carrying
+    // the analyte exempt), so the flags the lab already set stop showing up as
+    // "cal ver required" (parking lot #77, Milford CCL 2026-10-07).
     const instrByAnalyte = (db as any).$client.prepare(`
-      SELECT it.id AS instrument_test_id, it.analyte, it.ifu_url, i.id, i.instrument_name, i.role, i.category, i.serial_number
+      SELECT it.id AS instrument_test_id, it.analyte, it.ifu_url, i.id, i.instrument_name, i.role, i.category, i.serial_number,
+        CASE WHEN COALESCE(it.linearity_exempt_multical, 0) = 1 OR COALESCE(it.linearity_exempt_noncal, 0) = 1
+                  OR COALESCE(it.linearity_exempt_waived, 0) = 1 OR TRIM(COALESCE(it.linearity_exempt_other, '')) <> ''
+             THEN 1 ELSE 0 END AS cal_ver_exempt
       FROM veritamap_instrument_tests it
       JOIN veritamap_instruments i ON i.id = it.instrument_id
       WHERE it.map_id = ? AND it.active = 1
@@ -14223,7 +14239,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const instrMap: Record<string, any[]> = {};
     for (const row of instrByAnalyte as any[]) {
       if (!instrMap[row.analyte]) instrMap[row.analyte] = [];
-      instrMap[row.analyte].push({ id: row.id, instrument_name: row.instrument_name, role: row.role, category: row.category, serial_number: row.serial_number || null, instrument_test_id: row.instrument_test_id, ifu_url: row.ifu_url || null });
+      instrMap[row.analyte].push({ id: row.id, instrument_name: row.instrument_name, role: row.role, category: row.category, serial_number: row.serial_number || null, instrument_test_id: row.instrument_test_id, ifu_url: row.ifu_url || null, cal_ver_exempt: row.cal_ver_exempt ? 1 : 0 });
     }
     const testIds = (rawTests as any[]).map((t: any) => t.id);
     const corrByTestId: Record<number, any[]> = {};
@@ -14250,11 +14266,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         corrByTestId[localTestId].push(corr);
       }
     }
-    const tests = (rawTests as any[]).map((t: any) => ({
-      ...t,
-      instruments: instrMap[t.analyte] ?? [],
-      correlations: corrByTestId[t.id] ?? []
-    }));
+    const tests = (rawTests as any[]).map((t: any) => {
+      const instruments = instrMap[t.analyte] ?? [];
+      return {
+        ...t,
+        instruments,
+        correlations: corrByTestId[t.id] ?? [],
+        cal_ver_exempt: instruments.length > 0 && instruments.every((x: any) => x.cal_ver_exempt === 1),
+      };
+    });
     // editAccess (2026-10-07, parking-lot #64 layer 2): whether THIS user may
     // write to this lab's VeritaMap (owner / active admin / org admin / edit
     // seat), so the map page can render a genuine view-only user read-only

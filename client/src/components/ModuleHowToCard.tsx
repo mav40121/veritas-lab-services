@@ -1,5 +1,15 @@
 import { useState, useEffect } from "react";
-import { ChevronDown, ChevronUp, X, Info } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ChevronDown, ChevronUp, X, Info, CheckCircle2, Circle } from "lucide-react";
+import { stepKeysForModule } from "@/lib/gettingStartedContent";
+
+// Phase B of the in-app Getting Started (parking lot #79, 2026-10-07): the
+// module card shows live progress on the system-path steps that belong to the
+// module, read from GET /api/labs/:labId/getting-started (same react-query key
+// as the dashboard card, so one fetch serves both and they cannot disagree).
+interface GettingStartedPayload {
+  phases: Array<{ steps: Array<{ key: string; task: string; status: "done" | "todo" | "manual"; detail?: string }> }>;
+}
 
 // Maps a module key to its getting-started tutorial video stem in
 // /public/tutorials/<stem>.mp4 (same-origin static asset, silent H.264).
@@ -48,6 +58,15 @@ export function ModuleHowToCard({
       setDismissed(true);
     }
   }, [lsKey]);
+
+  // Lab-scoped pages carry the lab id in the path; legacy (unscoped) pages
+  // render the card without a progress block.
+  const labMatch = typeof window !== "undefined" ? window.location.pathname.match(/^\/labs\/(\d+)\//) : null;
+  const labId = labMatch ? labMatch[1] : "";
+  const stepKeys = stepKeysForModule(moduleKey);
+  const gsUrl = labId && stepKeys.length > 0 ? `/api/labs/${labId}/getting-started` : "";
+  const { data: gs } = useQuery<GettingStartedPayload>({ queryKey: [gsUrl], enabled: !!gsUrl });
+  const progress = gs ? gs.phases.flatMap((p) => p.steps).filter((s) => stepKeys.includes(s.key)) : [];
 
   if (dismissed) return null;
 
@@ -124,6 +143,35 @@ export function ModuleHowToCard({
               ))}
             </ol>
           </div>
+          {progress.length > 0 && (
+            <div data-testid="module-howto-progress">
+              <div className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: accent }}>
+                Your progress
+              </div>
+              <ul className="space-y-1.5">
+                {progress.map((s) => (
+                  <li
+                    key={s.key}
+                    data-testid={`module-howto-step-${s.key}`}
+                    data-status={s.status}
+                    className="flex items-start gap-2 leading-relaxed"
+                  >
+                    {s.status === "done" ? (
+                      <CheckCircle2 size={14} className="mt-1 shrink-0 text-green-700 dark:text-green-400" aria-label="Done" />
+                    ) : (
+                      <Circle size={14} className="mt-1 shrink-0 text-muted-foreground" aria-label="To do" />
+                    )}
+                    <div className="min-w-0">
+                      <span className={s.status === "done" ? "text-muted-foreground line-through decoration-muted-foreground/60" : "text-foreground"}>
+                        {s.task}
+                      </span>
+                      {s.detail && <div className="text-xs text-muted-foreground">{s.detail}</div>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </div>

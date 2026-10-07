@@ -72,8 +72,20 @@ async function main() {
     ? sqlite.prepare("INSERT INTO veritamap_maps (user_id, lab_id, name, created_at, updated_at) VALUES (?, ?, 'GS Map', ?, ?)").run(A.owner, A.labId, now, now)
     : sqlite.prepare("INSERT INTO veritamap_maps (user_id, name, created_at, updated_at) VALUES (?, 'GS Map', ?, ?)").run(A.owner, now, now)).lastInsertRowid);
   const inst = Number(sqlite.prepare("INSERT INTO veritamap_instruments (map_id, instrument_name, role, category, created_at) VALUES (?, 'Siemens Atellica CH 930', 'Primary', 'Chemistry', ?)").run(mapId, now).lastInsertRowid);
-  const emp = Number(sqlite.prepare("INSERT INTO staff_employees (lab_id, user_id, last_name, first_name, title, status, created_at, updated_at) VALUES (?, ?, 'Lillico-Perry', 'Alecia', 'MLS', 'active', ?, ?)").run(A.labId, A.owner, now, now).lastInsertRowid);
-  sqlite.prepare("INSERT INTO staff_employee_instruments (employee_id, instrument_id, created_at) VALUES (?, ?, ?)").run(emp, inst, now);
+  // Staff through the REAL VeritaStaff routes, with lab B's staff lab set up
+  // FIRST so lab A's staff_labs.id differs from its labs.id: the first version
+  // hand-wrote staff_employees.lab_id = labs.id, which is how a wrong-column
+  // filter in the p2.staff derivation passed here (found 2026-10-07 by the
+  // phase-B module-card receipt; same class as the #59 roster fix).
+  const setupStaffLab = (L: { labId: number; token: string }, tag: string) =>
+    call("POST", `/api/labs/${L.labId}/staff/lab`, { labName: `GS Lab ${tag}`, cliaNumber: tag === "A" ? "00D0000011" : "00D0000012", certificateType: "compliance", accreditationBody: "CLIA_ONLY" }, L.token);
+  const sbB = (await setupStaffLab(B, "B")).status; const sbA = (await setupStaffLab(A, "A")).status;
+  const staffLabA = sqlite.prepare("SELECT id FROM staff_labs WHERE tier2_lab_id = ?").get(A.labId) as any;
+  check("staff labs set up B then A; lab A's staff_labs.id differs from its labs.id", sbB === 200 && sbA === 200 && !!staffLabA && staffLabA.id !== A.labId, `B=${sbB} A=${sbA} staff_labs.id=${staffLabA?.id} labs.id=${A.labId}`);
+  const empRes = await j(await call("POST", `/api/labs/${A.labId}/staff/employees`, { firstName: "Alecia", lastName: "Lillico-Perry", title: "MLS", hireDate: "2025-01-06" }, A.token));
+  const emp = Number(empRes.id || 0);
+  const asg = await call("PUT", `/api/labs/${A.labId}/staff/employees/${emp}/instruments`, { instrumentIds: [inst] }, A.token);
+  check("employee created and assigned through the staff routes", emp > 0 && asg.status === 200, `emp=${emp} assign=${asg.status}`);
   const studyCols = (sqlite.prepare("PRAGMA table_info(studies)").all() as any[]).map((c) => c.name);
   const studyId = Number((studyCols.includes("lab_id")
     ? sqlite.prepare("INSERT INTO studies (user_id, lab_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, tea_is_percentage, tea_unit, data_points, instruments, status, created_at) VALUES (?, ?, 'Sodium', 'X', 'qa', '2026-10-07', 'method_comparison', 0.04, 1, '%', '[]', '[]', 'completed', ?)").run(A.owner, A.labId, now)
