@@ -577,20 +577,7 @@ _(item #66 closed 2026-10-07; PR #1489 deployed, see C68 below)_
 
 ---
 
-### 67. VeritaCheck D1 method-comparison verdict: the mean-|bias| override is disputed
-
-**Effort:** S (1-3 days)
-**Importance:** Medium
-
-**What:** The 2026-10-04 sweep claimed a method-comparison study can FAIL on
-aggregate mean |bias| while every sample passes. Michael: "If every sample has to
-be a pass, it is not possible for the aggregate to be a fail." The assistant
-conceded the claim was sloppy and that it is only possible for dual-criterion
-analytes (percent OR absolute floor), then never resolved whether the override
-(server/routes.ts ~395-420) is a real defect or correct behavior.
-
-**Source:** Michael, 2026-10-04 21:58-22:03.
-**Status:** Receipt done 2026-10-07 (tests/integration/d1-aggregate-override.test.ts, real engine via recomputeAllStudyStatuses): percent-only and absolute-only TEa with every sample passing stay PASS, and a 20,000-dataset random search finds no single-criterion counter-example, so Michael is right for single-criterion analytes. DUAL-criterion analytes (percent OR absolute floor, e.g. Glucose 8% or 6 mg/dL; 40->46, 50->56, 300->320) pass every sample (low levels by the floor) but the guard logs "mean |bias| 11.22% exceeds TEa 8.0% - overriding to FAIL" and flips the stored pass; 7.5% of random all-pass dual-criterion datasets get flipped. Cause: the guard averages FRACTIONAL biases (inflated by floor-passed low samples) against the percent TEa with the floor converted at the MEAN reference, i.e. it mixes the two criteria. DECISION FOR MICHAEL: remove the aggregate guard (my rec; the per-sample dual-criterion rule is the verdict and the guard is a no-op whenever it is not wrong) or keep it. No code changed.
+_(item #67 closed 2026-10-07; guard removed on Michael's option 1, PR #1498 deployed, see C74 below)_
 
 ---
 
@@ -656,7 +643,34 @@ system, never a client lab) would run these on every PR.
 
 ---
 
+### 75. VeritaComp assessment dialog: the Element 2 (and 3, 4) date picker is nearly unclickable
+
+**Effort:** XS (under 1 day)
+**Importance:** Medium. Every technical competency assessment goes through these rows.
+
+**What:** In NewAssessmentDialog the per-element Date field is a native
+`<Input type="date">` in a fixed 128 px column (`w-32`, `text-xs h-7`,
+client/src/pages/VeritaCompAppPage.tsx 3568-3570) beside the Pass checkbox in a
+`flex gap-2 items-end` row. At that width the browser's date control cannot fit
+the formatted value plus its calendar icon, so the icon is clipped at the right
+edge and sits under the "Pass" label (Michael's screenshot: a sliver of the icon
+next to Pass). Elements 3 (3599) and 4 (3628) use the same pattern, so it is a
+class fix: give the date column room (w-40 / min-w) or put Pass on its own line
+under the date, keep the control height readable, and check it in a browser at
+the dialog's max-w-3xl width and in dark mode.
+
+**Source:** Michael, 2026-10-07 morning screenshot (Element 2, Blood Bank Tube method program).
+**Status:** Open. Root cause located; XS fix, build on request or fold into the next VeritaComp PR.
+
+---
+
 ## CLOSED (audit trail)
+
+### C74. VeritaCheck D1 method-comparison verdict: the mean-|bias| override is disputed (was #67)
+
+**Effort:** was S / **Importance:** Medium
+
+**Closure evidence:** Receipt first (tests/integration/d1-aggregate-override.test.ts, real engine): single-criterion TEa can never trigger the override (20,000 random all-pass datasets, zero counter-examples), dual-criterion TEa (percent OR absolute floor) flips all-pass studies to a false FAIL (7.5% of random datasets) because the guard averaged fractional biases inflated by floor-passed low samples against the percent TEa. Michael chose option 1 (2026-10-07 morning): remove the guard; the per-sample dual-criterion rule is the verdict. PR #1498 merged 07:24, deployed 07:33 (squash 9340296c, /api/health match). Mean bias is still computed and reported (pdfReport.ts 1279-1301 statistics, narrative and Bland-Altman bias line; StudyResultsPage.tsx 269-283, 1326, 1499); only the verdict override is gone. A study the old guard had falsely failed returns to PASS at the next boot recompute. study-status-boot-safety.test.ts still ALL PASS; tsc clean.
 
 ### C73. VeritaComp legacy program modal shows no VeritaStaff employees (was #59)
 
