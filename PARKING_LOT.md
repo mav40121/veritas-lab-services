@@ -575,27 +575,10 @@ receipts were not. A CI QA lab with a scoped PW_TOKEN secret (own test
 system, never a client lab) would run these on every PR.
 
 **Source:** overnight audit 2026-10-07 (local Playwright pass, see overnight log section 16).
-**Status:** BUILT 2026-10-07 on Michael's option 1 (PR #1507): a BLOCKING "Sandbox receipts" step in playwright-smoke.yml runs tests/playwright/sandbox-receipts.txt (8 specs, 13 tests) with PW_* repo secrets, scripts/ci-sandbox/seed_sandbox.mjs seeds the sandbox lab idempotently and mint_token.mjs mints the one-year owner JWT straight into gh secret set. Dry run on a local server: 13/13, and it caught the #59 roster lab-column bug (fixed in PR #1506 the same morning). Remaining: Michael registers the sandbox owner (ci-sandbox@veritaslabservices.com) on production, then provision, seed, mint, set secrets, add Michael as admin, first workflow run = receipt. veritamap-save-failure-surfaces-error.spec needs its PW_MAP_URL shape aligned before it joins the list.
+**Status:** BUILT 2026-10-07 (PR #1507) and growing: the blocking "Sandbox receipts" step, seed_sandbox.mjs (now also flags Calcium exempt), mint_token.mjs, and the runbook scripts/ci-sandbox/finish_sandbox.sh (provision, mint, seed, secrets, Michael as admin, first run, one command once the owner exists). sandbox-receipts.txt now lists 12 specs (8 original plus the cal-ver exemption, module progress, VeritaMap date entry and VeritaComp element date specs), all proven on a local server seeded by the script. Still blocked on the sandbox owner signup (Q9: verilabguy+ci-sandbox@gmail.com), then finish_sandbox.sh does the rest.
 ---
 
-### 75. VeritaComp assessment dialog: the Element 2 (and 3, 4) date picker is nearly unclickable
-
-**Effort:** XS (under 1 day)
-**Importance:** Medium. Every technical competency assessment goes through these rows.
-
-**What:** In NewAssessmentDialog the per-element Date field is a native
-`<Input type="date">` in a fixed 128 px column (`w-32`, `text-xs h-7`,
-client/src/pages/VeritaCompAppPage.tsx 3568-3570) beside the Pass checkbox in a
-`flex gap-2 items-end` row. At that width the browser's date control cannot fit
-the formatted value plus its calendar icon, so the icon is clipped at the right
-edge and sits under the "Pass" label (Michael's screenshot: a sliver of the icon
-next to Pass). Elements 3 (3599) and 4 (3628) use the same pattern, so it is a
-class fix: give the date column room (w-40 / min-w) or put Pass on its own line
-under the date, keep the control height readable, and check it in a browser at
-the dialog's max-w-3xl width and in dark mode.
-
-**Source:** Michael, 2026-10-07 morning screenshot (Element 2, Blood Bank Tube method program).
-**Status:** Open. Root cause located; XS fix, build on request or fold into the next VeritaComp PR.
+_(item #75 closed 2026-10-07; fixed in the same change as #78, PR #1514 (44ca3e22); see C82 below)_
 
 ---
 
@@ -652,48 +635,14 @@ counts and survives a tests-save, and a Playwright exercise of the control.
 **Live instance (Lisa, 2026-10-07 ~10:00, screenshot):** Milford CCL (lab 5), map 67 "CCL Hematology", 45 tests on the Sysmex XN-1000. Lisa set the hematology tests to not need calibration verification; the database agrees (45 of the 46 instrument rows on that map carry an exemption flag), but the map page still shows "45 Cal Verifications Required", an empty date cell with the 6-month clock on every row, and a 0 percent compliance score. The first fix below (honor the instrument-level flags on the map page and in its header counts) clears this case on its own and is XS to S; the per-test N/A control is the second half.
 
 **Source:** Michael, 2026-10-07 ~09:40 ("it would be nice to N/A the calibration verification from veritamap").
-**Status:** Open. Build on request.
+**Status:** PART A DEPLOYED 2026-10-07 (carried by PR #1513, squash cf624cde, live): the map page derives Exempt from the instrument-level exemption flags as well as WAIVED, in the cell, the header count and the score; map detail returns cal_ver_exempt per instrument row and per test. Receipts tests/integration/veritamap-cal-ver-exempt.test.ts 12/12 and tests/playwright/veritamap-cal-ver-exempt.spec.ts (in the sandbox receipts list). Lisa's CCL Hematology case is cleared by this. REMAINING (part B, XS-S): the per-test "Not applicable" control with a required reason on tests that carry no flag, shown as "N/A: reason" in the cell, labwide page, Excel export and coverage intelligence.
+---
+
+_(item #78 closed 2026-10-07; built and live in PR #1514 (squash 44ca3e22); see C81 below)_
 
 ---
 
-### 78. VeritaMap: manual date entry is clunky (native date control in a narrow cell; same class as #75)
-
-**Effort:** S (1-3 days)
-**Importance:** Medium. Every map row carries at least two of these dates (Last Cal Ver, Last Method Comp), so this is the slowest part of building or updating a map, and the same control is what makes the VeritaComp element dates (#75) hard to use.
-
-**What:** DateCell on the map page (VeritaMapMapPage.tsx ~374) renders a native
-Input type="date" in a text-xs cell; the browser's segmented control forces
-click-into-segment typing, hides its calendar icon at that width, rejects
-partial input, and offers no "today" or paste-a-date path, so entering a
-cal-ver date for 40 tests is 40 fiddly interactions. VeritaComp's element rows
-use the same native control. Fix the class once: one shared date-entry
-component (typed MM/DD/YYYY with masking and validation, calendar popover,
-"Today" shortcut, paste tolerant, keyboard-friendly, readable at cell size and
-in dark mode) used by the map page's two date columns, the labwide page, and
-the VeritaComp element dates; #75 closes with it. Receipt: Playwright entering
-a date by typing, by "Today" and by the picker on a map row and on a VeritaComp
-element, plus a dark mode screenshot.
-
-**Source:** Michael, 2026-10-07 ~09:40 ("the manual date entry on veritamap is clunky").
-**Status:** Open. Build on request; bundle with #75.
-
----
-
-### 79. In-app Getting Started phase B: live checkmarks on the module how-to cards
-
-**Effort:** XS (under 1 day)
-**Importance:** Medium. The remaining half of Michael's #72 decision (option 1: dashboard card plus module-card checkmarks); the dashboard card is live, the per-module cards still show static text.
-
-**What:** ModuleHowToCard already renders on every module page; the
-getting-started endpoint already returns the 19 derived statuses. Phase B
-filters the three MODULE_GUIDES steps for the current module and shows them
-under the video with live done/todo marks from the same endpoint, so the
-public page, the dashboard card and the module card never drift. Receipt: the
-existing getting-started integration test plus a Playwright check that a
-module card flips a step to done after the lab adds the matching record.
-
-**Source:** docs/IN_APP_GETTING_STARTED_DESIGN.md, Michael's option 1 (2026-10-07).
-**Status:** Open. Build on request.
+_(item #79 closed 2026-10-07; built and live in PR #1513 (squash cf624cde); see C80 below)_
 
 ---
 
@@ -727,6 +676,24 @@ picker, and an existing enrollment on a retired code still displays.
 ---
 
 ## CLOSED (audit trail)
+
+### C82. VeritaComp assessment dialog: Element 2 (and 3, 4) date picker nearly unclickable (was #75)
+
+**Effort:** was XS / **Importance:** Medium
+
+**Closure evidence:** Fixed in PR #1514 (squash 44ca3e22, live 2026-10-07) together with #78: the Element 2 / 3 / 4 dates use the shared DateEntry control and the Element 2 column was widened from 128 px so the calendar control is fully visible. Receipt tests/playwright/veritacomp-element-date-entry.spec.ts 1/1 (typeable in the dialog, calendar control inside the dialog bounds, popover opens).
+
+### C81. VeritaMap: manual date entry is clunky (was #78)
+
+**Effort:** was S / **Importance:** Medium
+
+**Closure evidence:** PR #1514 (squash 44ca3e22, live 2026-10-07). client/src/lib/dateEntry.ts (masking, loose parsing with exact round-trip and a 1900-2100 guard, display helpers; receipt scripts/verify-date-entry-parse.ts 25/25) and client/src/components/ui/date-entry.tsx (typed MM/DD/YYYY with the slashes inserted, paste, Enter/Escape, calendar popover on the existing Calendar and Popover primitives, Today, Clear; ISO in and out exactly like the native control so save paths are unchanged; invalid text flagged and never saved). Used by VeritaMapMapPage DateCell (Cal Ver, Method Comparison, Precision, SOP Review) and the VeritaComp element dates. Receipts: tests/playwright/veritamap-date-entry.spec.ts 1/1 (typed saves ISO, nonsense refused with no PUT, Today saves today, Clear restores empty) plus the AMR autosave regression 1/1; light and dark screenshots. The other ~60 native date inputs across the app adopt the control per page as they come up.
+
+### C80. In-app Getting Started phase B: live checkmarks on the module how-to cards (was #79)
+
+**Effort:** was XS / **Importance:** Medium
+
+**Closure evidence:** PR #1513 (squash cf624cde, live 2026-10-07). shared MODULE_STEP_KEYS maps each module to its system-path steps; ModuleHowToCard reads the lab's getting-started payload under the same react-query key as the dashboard card and renders a "Your progress" block with done / to-do marks and the step detail; modules with no derived step are unchanged. The receipt found and the PR fixed two more defects: server/gettingStarted.ts scored the roster step (and the competency-cadence count) by staff_employees.lab_id, the staff_labs sequence, instead of tier2_lab_id (same class as the #59 roster fix; integration receipt now builds staff through the real routes with diverging ids); and VeritaMapAppPage rendered its how-to card only inside the signed-out wall, so signed-in users never saw it on the map list. Receipts: tests/integration/getting-started.test.ts ALL PASS; tests/playwright/module-howto-progress.spec.ts 3/3 (in the sandbox receipts list).
 
 ### C79. VeritaQC: Levey-Jennings chart and Westgard rules used two different mean/SD bases (was #65)
 
