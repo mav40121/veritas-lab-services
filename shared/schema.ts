@@ -186,6 +186,8 @@ export const SEAT_MODULE_KEYS = [
                 // so it MUST be grantable here or custom-permission seats are locked out of all VeritaOps edits.
   'veritamaintain',  // VeritaMaintain equipment maintenance (route /equipment-app): write routes gated by
                      // requireModuleEdit('veritamaintain') so view-only seats cannot edit equipment.
+  'veritaqc',  // VeritaQC: QC entry stays open to every lab member; supervisor actions (void a run,
+               // exclude from baseline, monthly review) are gated by requireModuleEdit('veritaqc') (#84).
 ] as const;
 
 export type SeatModuleKey = typeof SEAT_MODULE_KEYS[number];

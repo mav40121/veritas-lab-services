@@ -164,8 +164,12 @@ export function registerScheduleRoutes(
   authMiddleware: any,
   labScopeMiddleware: any,
   requireWriteAccess: any,
+  requireModuleEdit: (module: string) => any,
 ) {
   const sqlite = (db as any).$client;
+  // #84 (2026-10-08): building and publishing the schedule is a manager action;
+  // a staff login or non-admin member is view-only (VeritaShift = veritabench).
+  const editSchedule = requireModuleEdit("veritabench");
   const ops = (req: any, res: any): boolean => {
     if (!hasOpsAccess(req.user, req.scope?.lab)) {
       res.status(403).json({ error: "VeritaShift™ requires a suite subscription" });
@@ -183,7 +187,7 @@ export function registerScheduleRoutes(
     res.json(rows);
   });
 
-  app.post("/api/labs/:labId/schedule/shifts", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/labs/:labId/schedule/shifts", authMiddleware, labScopeMiddleware, requireWriteAccess, editSchedule, (req: any, res) => {
     if (!ops(req, res)) return;
     const { name, start_time, end_time, min_staff, sort_order } = req.body || {};
     if (!name || typeof name !== "string" || !name.trim()) return res.status(400).json({ error: "name required" });
@@ -197,7 +201,7 @@ export function registerScheduleRoutes(
     res.json({ ok: true, id: info.lastInsertRowid });
   });
 
-  app.patch("/api/labs/:labId/schedule/shifts/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+  app.patch("/api/labs/:labId/schedule/shifts/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, editSchedule, (req: any, res) => {
     if (!ops(req, res)) return;
     const row = sqlite.prepare("SELECT id FROM schedule_shift_defs WHERE id = ? AND lab_id = ?").get(Number(req.params.id), req.scope.labId);
     if (!row) return res.status(404).json({ error: "Shift not found" });
@@ -215,7 +219,7 @@ export function registerScheduleRoutes(
     res.json({ ok: true });
   });
 
-  app.delete("/api/labs/:labId/schedule/shifts/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/labs/:labId/schedule/shifts/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, editSchedule, (req: any, res) => {
     if (!ops(req, res)) return;
     // Soft-delete: deactivate so past assignments still resolve the shift name.
     const info = sqlite.prepare(
@@ -234,7 +238,7 @@ export function registerScheduleRoutes(
     });
   });
 
-  app.put("/api/labs/:labId/schedule/settings", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+  app.put("/api/labs/:labId/schedule/settings", authMiddleware, labScopeMiddleware, requireWriteAccess, editSchedule, (req: any, res) => {
     if (!ops(req, res)) return;
     const b = req.body || {};
     const now = new Date().toISOString();
@@ -262,7 +266,7 @@ export function registerScheduleRoutes(
     res.json(rows);
   });
 
-  app.post("/api/labs/:labId/schedule/shifts/:id/dept-requirements", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/labs/:labId/schedule/shifts/:id/dept-requirements", authMiddleware, labScopeMiddleware, requireWriteAccess, editSchedule, (req: any, res) => {
     if (!ops(req, res)) return;
     const shift = sqlite.prepare("SELECT id FROM schedule_shift_defs WHERE id = ? AND lab_id = ?").get(Number(req.params.id), req.scope.labId);
     if (!shift) return res.status(404).json({ error: "Shift not found" });
@@ -276,7 +280,7 @@ export function registerScheduleRoutes(
     res.json({ ok: true, id: info.lastInsertRowid });
   });
 
-  app.delete("/api/labs/:labId/schedule/dept-requirements/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/labs/:labId/schedule/dept-requirements/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, editSchedule, (req: any, res) => {
     if (!ops(req, res)) return;
     const info = sqlite.prepare(
       "DELETE FROM schedule_shift_dept_requirements WHERE id = ? AND lab_id = ?"
@@ -306,7 +310,7 @@ export function registerScheduleRoutes(
     res.json(rows);
   });
 
-  app.post("/api/labs/:labId/schedule/periods", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/labs/:labId/schedule/periods", authMiddleware, labScopeMiddleware, requireWriteAccess, editSchedule, (req: any, res) => {
     if (!ops(req, res)) return;
     const { start_date, end_date } = req.body || {};
     if (!YMD.test(String(start_date)) || !YMD.test(String(end_date))) return res.status(400).json({ error: "start_date and end_date must be YYYY-MM-DD" });
@@ -318,7 +322,7 @@ export function registerScheduleRoutes(
     res.json({ ok: true, id: info.lastInsertRowid });
   });
 
-  app.post("/api/labs/:labId/schedule/periods/:id/publish", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/labs/:labId/schedule/periods/:id/publish", authMiddleware, labScopeMiddleware, requireWriteAccess, editSchedule, (req: any, res) => {
     if (!ops(req, res)) return;
     const now = new Date().toISOString();
     const info = sqlite.prepare(
@@ -374,7 +378,7 @@ export function registerScheduleRoutes(
   });
 
   // ── Assignments ────────────────────────────────────────────────────────
-  app.post("/api/labs/:labId/schedule/assignments", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/labs/:labId/schedule/assignments", authMiddleware, labScopeMiddleware, requireWriteAccess, editSchedule, (req: any, res) => {
     if (!ops(req, res)) return;
     const { period_id, staff_employee_id, shift_def_id, work_date, department } = req.body || {};
     if (!period_id || !staff_employee_id || !shift_def_id) return res.status(400).json({ error: "period_id, staff_employee_id, shift_def_id required" });
@@ -391,7 +395,7 @@ export function registerScheduleRoutes(
     res.json({ ok: true, id: info.lastInsertRowid });
   });
 
-  app.delete("/api/labs/:labId/schedule/assignments/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/labs/:labId/schedule/assignments/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, editSchedule, (req: any, res) => {
     if (!ops(req, res)) return;
     const info = sqlite.prepare(
       "DELETE FROM schedule_assignments WHERE id = ? AND lab_id = ?"
