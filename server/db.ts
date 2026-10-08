@@ -4046,6 +4046,56 @@ sqlite.exec(`
   } catch {}
 }
 
+// 2026-10-08 Competency reminders and escalation (St. Charles; Michael: weekly
+// supervisor digest, escalate to the director the day a competency goes
+// overdue then weekly, plus a monthly 90/60/30 report). Per-lab settings and a
+// send log (dedupe + history). Engine: server/competencyReminders.ts.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS competency_reminder_config (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL UNIQUE,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    lead_days INTEGER NOT NULL DEFAULT 30,
+    cadence_days INTEGER NOT NULL DEFAULT 7,
+    monthly_report INTEGER NOT NULL DEFAULT 1,
+    supervisor_recipients_json TEXT NOT NULL DEFAULT '[]',
+    escalation_recipients_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS competency_reminder_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    item_key TEXT,
+    period_key TEXT,
+    sent_on TEXT NOT NULL,
+    recipient_emails TEXT,
+    item_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_comp_rem_log_lab ON competency_reminder_log(lab_id, kind, sent_on);
+`);
+// PRAGMA migration block per the New DB Table Rule (CLAUDE.md §8).
+{
+  try {
+    const cols = (t: string) => (sqlite.prepare(`PRAGMA table_info(${t})`).all() as { name: string }[]).map(c => c.name);
+    const cfg = cols("competency_reminder_config");
+    if (!cfg.includes("lead_days")) sqlite.exec("ALTER TABLE competency_reminder_config ADD COLUMN lead_days INTEGER NOT NULL DEFAULT 30");
+    if (!cfg.includes("cadence_days")) sqlite.exec("ALTER TABLE competency_reminder_config ADD COLUMN cadence_days INTEGER NOT NULL DEFAULT 7");
+    if (!cfg.includes("monthly_report")) sqlite.exec("ALTER TABLE competency_reminder_config ADD COLUMN monthly_report INTEGER NOT NULL DEFAULT 1");
+    if (!cfg.includes("supervisor_recipients_json")) sqlite.exec("ALTER TABLE competency_reminder_config ADD COLUMN supervisor_recipients_json TEXT NOT NULL DEFAULT '[]'");
+    if (!cfg.includes("escalation_recipients_json")) sqlite.exec("ALTER TABLE competency_reminder_config ADD COLUMN escalation_recipients_json TEXT NOT NULL DEFAULT '[]'");
+    const log = cols("competency_reminder_log");
+    if (!log.includes("item_key")) sqlite.exec("ALTER TABLE competency_reminder_log ADD COLUMN item_key TEXT");
+    if (!log.includes("period_key")) sqlite.exec("ALTER TABLE competency_reminder_log ADD COLUMN period_key TEXT");
+    if (!log.includes("recipient_emails")) sqlite.exec("ALTER TABLE competency_reminder_log ADD COLUMN recipient_emails TEXT");
+    if (!log.includes("item_count")) sqlite.exec("ALTER TABLE competency_reminder_log ADD COLUMN item_count INTEGER NOT NULL DEFAULT 0");
+  } catch {
+    // fresh DB: CREATE TABLE above handled it
+  }
+}
+
 // MLC-1 Phase 2: equipment maintenance-due reminders. Per-lab config + dedup/
 // audit send-log, mirroring pt_reminder_config / veritatrack_reminder_config.
 sqlite.exec(`

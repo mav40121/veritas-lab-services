@@ -69,6 +69,7 @@ import {
 import { DocumentLinkDialog, COMP_DOC_TYPES } from "@/components/DocumentLinkDialog";
 import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
 import { PriorYearComparisonDialog } from "@/components/PriorYearComparisonDialog";
+import { CompetencyRemindersCard } from "@/components/CompetencyRemindersCard";
 import { PTSamplePickerDialog, type PTSample } from "@/components/PTSamplePickerDialog";
 import { AuditTrailDialog } from "@/components/AuditTrailDialog";
 import { PermissionTooltip, PERMISSION_REASONS } from "@/components/PermissionTooltip";
@@ -909,6 +910,8 @@ function ProgramListView() {
 
       {/* #48: employee-centric competencies owed, derived from VeritaStaff, with gap detection */}
       <CompetenciesOwedSection />
+      {/* 2026-10-08: weekly supervisor digest, director escalation, monthly 90/60/30 report */}
+      <CompetencyRemindersCard />
       {/* #48 Phase 3: required-vs-assessed coverage map, toggle by employee / by instrument */}
       <CompetencyCoverageMap />
       {/* Employee-centric entry point (Phase 1 of the coverage-derived IA). */}

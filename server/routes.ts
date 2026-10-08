@@ -182,6 +182,10 @@ function headerRowHeight(headers: string[], colWidths: number[]): number {
 }
 
 import { logAudit } from "./audit";
+import {
+  initialCompetencyDueDate, deriveCompetencyStatus,
+  readCompetencyReminderConfig, writeCompetencyReminderConfig, planCompetencyReminders, runCompetencyReminders,
+} from "./competencyReminders";
 import { deleteMapCascade, mapDeleteBlockers } from "./veritamapDelete";
 import { computeGettingStarted, setGettingStartedCheck, isManualKey } from "./gettingStarted";
 import { HOUSE_FORMATS } from "./veritapolicyHouseFormats";
@@ -1056,15 +1060,8 @@ function activeLabIdFromContext(req: any): number | null {
 // which leaves a promptly-entered new hire unchanged (hire+90) while giving an
 // imported tenured employee a full 90-day window from entry. Null only when
 // neither date is parseable; callers fall back to today.
-function initialCompetencyDueDate(hireDate: string | null | undefined, createdAt: string | null | undefined): Date | null {
-  const D = 90 * 24 * 60 * 60 * 1000;
-  const cands: number[] = [];
-  const h = hireDate ? Date.parse(hireDate) : NaN;
-  const c = createdAt ? Date.parse(createdAt) : NaN;
-  if (Number.isFinite(h)) cands.push(h + D);
-  if (Number.isFinite(c)) cands.push(c + D);
-  return cands.length ? new Date(Math.max(...cands)) : null;
-}
+// (initialCompetencyDueDate now lives in server/competencyReminders.ts so the
+// competency reminder engine and these routes share one copy; imported above.)
 
 
 // ── Per-module write gate for seat users ─────────────────────────────────────
@@ -27396,6 +27393,52 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Read-only; reuses the shipped staff_employee_instruments bridge, the VeritaMap
   // menu, and the same match rules as suggested-method-groups. No new tables.
   // Roster of record = VeritaStaff testing personnel (Option 1: one roster).
+  // ── Competency reminders and escalation (2026-10-08) ─────────────────────
+  // Settings, a no-send preview of today's emails, and an admin run endpoint.
+  // Engine and design notes: server/competencyReminders.ts.
+  app.get("/api/labs/:labId/competency/reminder-config", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const sqlite = (db as any).$client;
+    const cfg = readCompetencyReminderConfig(sqlite, req.scope.labId);
+    const lab = sqlite.prepare("SELECT medical_director_email FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    res.json({ ...cfg, medical_director_email: lab?.medical_director_email || null });
+  });
+  app.put("/api/labs/:labId/competency/reminder-config", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const sqlite = (db as any).$client;
+    const before = readCompetencyReminderConfig(sqlite, req.scope.labId);
+    const after = writeCompetencyReminderConfig(sqlite, req.scope.labId, req.body);
+    try {
+      logAudit({
+        userId: req.userId, ownerUserId: req.scope.lab?.owner_user_id ?? req.userId, module: "veritacomp", action: "update",
+        entityType: "competency_reminder_config", entityId: req.scope.labId, entityLabel: "Competency reminders and escalation",
+        before, after,
+      });
+    } catch {}
+    res.json(after);
+  });
+  // What today's run would send for this lab (nothing is sent or logged).
+  app.get("/api/labs/:labId/competency/reminder-preview", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const sqlite = (db as any).$client;
+    const cfg = readCompetencyReminderConfig(sqlite, req.scope.labId);
+    const today = new Date().toISOString().slice(0, 10);
+    const plans = planCompetencyReminders(sqlite, req.scope.labId, cfg, today);
+    res.json({ today, enabled: cfg.enabled, emails: plans.map(({ html, ...p }) => ({ ...p, html })) });
+  });
+  // Admin: run the engine now (dryRun defaults to TRUE; pass dryRun:false to send).
+  // Optional labId limits it to one lab; optional today (YYYY-MM-DD) for testing.
+  app.post("/api/admin/competency-reminders/run", async (req: any, res) => {
+    const { secret, labId, dryRun, today } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    try {
+      const out = await runCompetencyReminders({ labId: labId ? Number(labId) : undefined, dryRun: dryRun !== false, todayIso: today });
+      res.json(out);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "run failed" });
+    }
+  });
+
   app.get("/api/labs/:labId/competency/owed", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const labId = req.scope.labId;
@@ -27418,41 +27461,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // view and the dashboard tile classify the same person the same way.
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const dayMs = 24 * 60 * 60 * 1000;
-    const plus30 = today.getTime() + 30 * dayMs;
-    const plus90 = today.getTime() + 90 * dayMs;
-    const parseDate = (s: string | null): Date | null => {
-      if (!s) return null;
-      const d = new Date(s);
-      return Number.isNaN(d.getTime()) ? null : d;
-    };
-    const deriveStatus = (e: any): { bucket: string; reason: string; nextDue: string | null; scheduled: boolean } => {
-      const scheduled = !!(e.initial_completed_at || e.six_month_due_at || e.first_annual_due_at || e.annual_due_at);
-      let nextDue: Date | null = null;
-      let reason = "";
-      if (!e.initial_completed_at) {
-        nextDue = initialCompetencyDueDate(e.hire_date, e.created_at) ?? today;
-        reason = "Initial competency not completed";
-      } else if (e.six_month_due_at && !e.six_month_completed_at) {
-        nextDue = parseDate(e.six_month_due_at); reason = "6-month competency due";
-      } else if (e.first_annual_due_at && !e.first_annual_completed_at) {
-        nextDue = parseDate(e.first_annual_due_at); reason = "1st annual competency due";
-      } else if (e.annual_due_at) {
-        const due = parseDate(e.annual_due_at);
-        const lastDone = parseDate(e.last_annual_completed_at);
-        if (due) {
-          if (lastDone && lastDone.getTime() > due.getTime() - 365 * dayMs) {
-            const next = new Date(due.getTime() + 365 * dayMs);
-            nextDue = next; reason = next.getTime() < today.getTime() ? "Annual cycle overdue" : "Annual due";
-          } else { nextDue = due; reason = "Annual competency due"; }
-        }
-      }
-      let bucket = "compliant";
-      if (nextDue === null) bucket = "compliant";
-      else if (nextDue.getTime() < today.getTime()) bucket = "overdue";
-      else if (nextDue.getTime() <= plus30) bucket = "dueSoon30";
-      else if (nextDue.getTime() <= plus90) bucket = "dueSoon90";
-      return { bucket, reason, nextDue: nextDue ? nextDue.toISOString().slice(0, 10) : null, scheduled };
-    };
+    // The milestone walk is shared with the competency reminder engine
+    // (server/competencyReminders.ts) so the emails and this list agree.
+    const deriveStatus = (e: any) => deriveCompetencyStatus(e, today);
 
     // Every method group across the lab's competency programs, for coverage.
     const methodGroups = client.prepare(
