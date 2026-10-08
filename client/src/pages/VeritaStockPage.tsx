@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
-import { useIsReadOnly } from "@/components/SubscriptionBanner";
+import { useIsReadOnly, useCanRecord } from "@/components/SubscriptionBanner";
 import { useSEO } from "@/hooks/useSEO";
 import { API_BASE } from "@/lib/queryClient";
 import { downloadPdfToken } from "@/lib/utils";
@@ -767,6 +767,9 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
 export default function VeritaStockInventoryPage() {
   const { user, isLoggedIn } = useAuth();
   const readOnly = useIsReadOnly("veritastock");
+  // Counting, receiving and writing off stock is recording work, open to every
+  // lab member (#84); readOnly still gates items, vendors and ordering.
+  const canRecord = useCanRecord();
   const { toast } = useToast();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2281,7 +2284,7 @@ export default function VeritaStockInventoryPage() {
             size="sm"
             variant="outline"
             onClick={generateLabelsPdf}
-            disabled={generatingOrderDoc !== null || readOnly}
+            disabled={generatingOrderDoc !== null || !canRecord}
             title="Print one Code 128 barcode label for every item (Avery 5160, 30 per page)"
             data-testid="generate-labels-pdf-button"
           >
@@ -2297,7 +2300,7 @@ export default function VeritaStockInventoryPage() {
             size="sm"
             variant="outline"
             onClick={generateCountSheet}
-            disabled={generatingOrderDoc !== null || readOnly}
+            disabled={generatingOrderDoc !== null || !canRecord}
             title={
               activeFilterLabels.length > 0
                 ? `Generate Inventory Count workbook scoped to: ${activeFilterLabels.join(", ")}`
@@ -2320,7 +2323,7 @@ export default function VeritaStockInventoryPage() {
             size="sm"
             variant="outline"
             onClick={() => setScannerOpen(true)}
-            disabled={readOnly}
+            disabled={!canRecord}
             title="Open the camera scanner to decrement, increment, or look up inventory items"
             data-testid="open-scanner-button"
           >
@@ -2330,7 +2333,7 @@ export default function VeritaStockInventoryPage() {
           <Button
             size="sm"
             onClick={() => setCountWorkflowOpen(true)}
-            disabled={readOnly}
+            disabled={!canRecord}
             title="Scan a barcode (or type it) and set the new on-hand count for that item"
             data-testid="open-count-workflow-button"
             style={{ backgroundColor: "#01696F" }}
@@ -2687,7 +2690,7 @@ export default function VeritaStockInventoryPage() {
                           style={{ color: "#01696F" }}
                           title={`Receive ${item.on_order_qty} ${item.usage_unit}s on order`}
                           onClick={() => { setReceiveTarget(item); setReceiveQty(item.on_order_qty || 0); }}
-                          disabled={readOnly}
+                          disabled={!canRecord}
                           data-testid={`button-receive-${item.id}`}
                         >
                           <PackageCheck size={14} />
@@ -2700,7 +2703,7 @@ export default function VeritaStockInventoryPage() {
                           className="h-7 w-7 text-red-600 dark:text-red-500"
                           title="Write off expired lot: remove the whole remaining lot from the shelf in one step"
                           onClick={() => setExpiredLotTarget(item)}
-                          disabled={readOnly}
+                          disabled={!canRecord}
                           data-testid={`button-writeoff-expired-lot-${item.id}`}
                         >
                           <CalendarClock size={14} />
@@ -2713,7 +2716,7 @@ export default function VeritaStockInventoryPage() {
                           className="h-7 w-7 text-amber-600 dark:text-amber-500"
                           title="Write off expired or damaged stock"
                           onClick={() => { setWriteOffTarget(item); setWriteOffQty(item.quantity_on_hand || 0); setWriteOffReason("expired"); }}
-                          disabled={readOnly}
+                          disabled={!canRecord}
                           data-testid={`button-writeoff-${item.id}`}
                         >
                           <PackageX size={14} />
