@@ -17,6 +17,7 @@
 // items" section that Phase B fills in.
 
 import { useEffect, useMemo, useState } from "react";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -109,6 +110,8 @@ function reviewStatus(due: string | null): { tone: "ok" | "amber" | "red" | "non
 }
 
 export default function VeritaScanDocumentLibraryPage() {
+  // #84 Phase 3: the document library and its links are VeritaScan setup.
+  const isReadOnly = useIsReadOnly("veritascan");
   const labId = useActiveLabId();
   const labRoute = useLabRoute();
   const { toast } = useToast();
@@ -284,7 +287,7 @@ export default function VeritaScanDocumentLibraryPage() {
           >
             <FileSpreadsheet size={14} className="mr-1.5" />Export
           </Button>
-          <Button onClick={() => setAddOpen(true)} data-testid="button-add-document">
+          <Button hidden={isReadOnly} onClick={() => setAddOpen(true)} data-testid="button-add-document">
             <Plus size={14} className="mr-1.5" />Add Document
           </Button>
         </div>
@@ -397,7 +400,7 @@ export default function VeritaScanDocumentLibraryPage() {
                             </a>
                           </td>
                           <td className="py-2 pr-3 text-right">
-                            <Button variant="ghost" size="sm" onClick={() => setEditDoc(doc)} data-testid={`button-edit-${doc.id}`}>
+                            <Button hidden={isReadOnly} variant="ghost" size="sm" onClick={() => setEditDoc(doc)} data-testid={`button-edit-${doc.id}`}>
                               <Pencil size={13} />
                             </Button>
                           </td>
@@ -465,6 +468,8 @@ function DefaultRow({ typeValue, typeLabel, initialDays, onSave }: {
   initialDays: number | null;
   onSave: (days: number | null) => void;
 }) {
+  // #84 Phase 3: the document library and its links are VeritaScan setup.
+  const isReadOnly = useIsReadOnly("veritascan");
   const [val, setVal] = useState<string>(initialDays !== null ? String(initialDays) : "");
   useEffect(() => { setVal(initialDays !== null ? String(initialDays) : ""); }, [initialDays]);
   const dirty = (initialDays ?? null) !== (val.trim() === "" ? null : Number(val));
@@ -482,7 +487,7 @@ function DefaultRow({ typeValue, typeLabel, initialDays, onSave }: {
         data-testid={`input-default-${typeValue}`}
       />
       <span className="text-xs text-muted-foreground">days</span>
-      <Button
+      <Button hidden={isReadOnly}
         variant="outline"
         size="sm"
         disabled={!dirty}
@@ -794,6 +799,8 @@ function EditDocumentDialog({ doc, labId, onClose, onSubmit, onArchive, pending 
 
 // ─── Phase B: linked checklist items section in the edit drawer ─────────────
 function LinkedItemsSection({ docId }: { docId: number }) {
+  // #84 Phase 3: the document library and its links are VeritaScan setup.
+  const isReadOnly = useIsReadOnly("veritascan");
   const labId = useActiveLabId();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -849,7 +856,7 @@ function LinkedItemsSection({ docId }: { docId: number }) {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <Label className="text-sm">Linked Checklist Items <span className="text-muted-foreground text-xs">({links.length})</span></Label>
-        <Button variant="outline" size="sm" onClick={() => setPickerOpen(true)} data-testid="button-open-link-picker">
+        <Button hidden={isReadOnly} variant="outline" size="sm" onClick={() => setPickerOpen(true)} data-testid="button-open-link-picker">
           <Link2 size={13} className="mr-1.5" />Link Items
         </Button>
       </div>
@@ -868,7 +875,7 @@ function LinkedItemsSection({ docId }: { docId: number }) {
                   {item ? `TJC: ${item.tjc} | CAP: ${item.cap} | CFR: ${item.cfr} | AABB: ${item.aabb} | COLA: ${item.cola}` : ""}
                 </div>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => unlinkMutation.mutate(link.id)} disabled={unlinkMutation.isPending} data-testid={`button-unlink-${link.id}`}>
+              <Button hidden={isReadOnly} variant="ghost" size="sm" onClick={() => unlinkMutation.mutate(link.id)} disabled={unlinkMutation.isPending} data-testid={`button-unlink-${link.id}`}>
                 <X size={13} />
               </Button>
             </div>
@@ -897,6 +904,8 @@ type PolicyDoc = { id: number; title: string; status?: string; current_file_form
 type PolicyXLink = { id: number; document_id: number; target_module: string; target_entity_id: number; target_entity_label: string | null; linked_at: string };
 
 function LinkedPolicySection({ docId }: { docId: number }) {
+  // #84 Phase 3: the document library and its links are VeritaScan setup.
+  const isReadOnly = useIsReadOnly("veritascan");
   const labId = useActiveLabId();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -995,7 +1004,7 @@ function LinkedPolicySection({ docId }: { docId: number }) {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <Label className="text-sm">Linked Policy <span className="text-muted-foreground text-xs">({policyLinks.length})</span></Label>
-        <Button variant="outline" size="sm" onClick={() => setPickerOpen(true)} data-testid="button-open-policy-picker">
+        <Button hidden={isReadOnly} variant="outline" size="sm" onClick={() => setPickerOpen(true)} data-testid="button-open-policy-picker">
           <Link2 size={13} className="mr-1.5" />Link Policy
         </Button>
       </div>
@@ -1012,7 +1021,7 @@ function LinkedPolicySection({ docId }: { docId: number }) {
             <Button variant="ghost" size="sm" className="h-7" onClick={() => openPolicy(link.target_entity_id)} disabled={opening} data-testid={`button-open-policy-${link.target_entity_id}`}>
               <ExternalLink size={13} className="mr-1" />Open
             </Button>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => unlinkMutation.mutate(link.id)} disabled={unlinkMutation.isPending} data-testid={`button-unlink-policy-${link.id}`}>
+            <Button hidden={isReadOnly} variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => unlinkMutation.mutate(link.id)} disabled={unlinkMutation.isPending} data-testid={`button-unlink-policy-${link.id}`}>
               <X size={13} />
             </Button>
           </div>

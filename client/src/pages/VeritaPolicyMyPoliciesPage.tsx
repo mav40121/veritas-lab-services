@@ -7,6 +7,7 @@
 //            password re-auth and tamper-detection on download).
 
 import { useState, useMemo, useEffect } from "react";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -318,6 +319,10 @@ function PolicyEvidenceLinks({ labId, policyId }: { labId: number | null; policy
 }
 
 export default function VeritaPolicyMyPoliciesPage() {
+  // #84 Phase 3: manuals, uploads, versions, archive/move/rename, approval
+  // routing, assignments, recertify and links are VeritaPolicy setup. Attest
+  // (read-and-sign) and approve/reject (designated approvers) stay.
+  const isReadOnly = useIsReadOnly("veritapolicy");
   const { user } = useAuth();
   const activeLabId = useActiveLabId();
   const { data: memberships } = useMemberships();
@@ -1411,10 +1416,10 @@ export default function VeritaPolicyMyPoliciesPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2 sm:shrink-0">
-          <Button variant="outline" onClick={() => setNewManualOpen(true)}>
+          <Button hidden={isReadOnly} variant="outline" onClick={() => setNewManualOpen(true)}>
             <FolderPlus size={14} className="mr-1.5" /> New Manual
           </Button>
-          <Button
+          <Button hidden={isReadOnly}
             variant="outline"
             disabled={manuals.length === 0}
             onClick={() => {
@@ -1425,21 +1430,21 @@ export default function VeritaPolicyMyPoliciesPage() {
           >
             <ShieldCheck size={14} className="mr-1.5" /> Manual approvers
           </Button>
-          <Button
+          <Button hidden={isReadOnly}
             variant="outline"
             onClick={() => setEmailTemplatesOpen(true)}
             title="Customize the automated policy review-reminder emails"
           >
             <MessageSquare size={14} className="mr-1.5" /> Reminder emails
           </Button>
-          <Button
+          <Button hidden={isReadOnly}
             variant="outline"
             onClick={() => setDelegationsOpen(true)}
             title="Temporarily delegate approval authority when a reviewer is out"
           >
             <Users size={14} className="mr-1.5" /> Delegations
           </Button>
-          <Button onClick={() => setUploadOpen(true)}>
+          <Button hidden={isReadOnly} onClick={() => setUploadOpen(true)}>
             <Upload size={14} className="mr-1.5" /> Upload Policy
           </Button>
         </div>
@@ -1487,7 +1492,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                       <Button size="sm" variant="outline" onClick={() => openView(d)}>
                         <Eye size={12} className="mr-1" /> View
                       </Button>
-                      <Button size="sm" onClick={() => openRecertify(d)}>
+                      <Button hidden={isReadOnly} size="sm" onClick={() => openRecertify(d)}>
                         <ShieldCheck size={12} className="mr-1" /> Confirm Still Current
                       </Button>
                     </div>
@@ -1625,7 +1630,7 @@ export default function VeritaPolicyMyPoliciesPage() {
               <div className="text-sm text-muted-foreground">
                 Drag a DOCX or PDF in, or click Upload Policy to start.
               </div>
-              <Button onClick={() => setUploadOpen(true)}>
+              <Button hidden={isReadOnly} onClick={() => setUploadOpen(true)}>
                 <Upload size={14} className="mr-1.5" /> Upload Policy
               </Button>
             </div>
@@ -1720,7 +1725,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                           >
                             <Download size={12} className="mr-1" /> Download
                           </Button>
-                          <Button
+                          <Button hidden={isReadOnly}
                             size="sm"
                             variant="ghost"
                             className="text-amber-700 hover:text-amber-800"
@@ -1737,7 +1742,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                           >
                             <Archive size={12} />
                           </Button>
-                          <Button
+                          <Button hidden={isReadOnly}
                             size="sm"
                             variant="ghost"
                             onClick={() => openMove(doc)}
@@ -1757,7 +1762,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                           </Button>
                           {doc.status === "draft" && (
                             <>
-                              <Button
+                              <Button hidden={isReadOnly}
                                 size="sm"
                                 variant="outline"
                                 onClick={() => {
@@ -1770,7 +1775,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                               >
                                 <Send size={12} className="mr-1" /> Submit
                               </Button>
-                              <Button
+                              <Button hidden={isReadOnly}
                                 size="sm"
                                 variant="ghost"
                                 onClick={() => openRename(doc)}
@@ -1781,7 +1786,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                             </>
                           )}
                           {doc.owner_user_id === user?.id && (
-                            <Button
+                            <Button hidden={isReadOnly}
                               size="sm"
                               variant="ghost"
                               onClick={() => openNewVersion(doc)}
@@ -1812,7 +1817,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                             )}
                           {doc.status === "in_review" &&
                             doc.owner_user_id === user?.id && (
-                              <Button
+                              <Button hidden={isReadOnly}
                                 size="sm"
                                 variant="outline"
                                 onClick={() => {
@@ -1832,7 +1837,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                             )}
                           {doc.status === "approved" && (
                             <>
-                              <Button
+                              <Button hidden={isReadOnly}
                                 size="sm"
                                 variant="outline"
                                 onClick={() => openAssign(doc)}
@@ -1849,7 +1854,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                               >
                                 <Users size={12} className="mr-1" /> Tracker
                               </Button>
-                              <Button
+                              <Button hidden={isReadOnly}
                                 size="sm"
                                 variant="outline"
                                 onClick={() => openRecertify(doc)}
@@ -2090,7 +2095,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                       >
                         References: {r.title}
                       </button>
-                      <Button size="sm" variant="ghost" className="h-6 text-red-600 hover:text-red-700" onClick={() => removeLinkMutation.mutate(r.link_id)} disabled={removeLinkMutation.isPending} title="Remove link">
+                      <Button hidden={isReadOnly} size="sm" variant="ghost" className="h-6 text-red-600 hover:text-red-700" onClick={() => removeLinkMutation.mutate(r.link_id)} disabled={removeLinkMutation.isPending} title="Remove link">
                         <Trash2 size={12} />
                       </Button>
                     </div>
@@ -2119,7 +2124,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button size="sm" className="h-7" disabled={!addLinkTargetId || addLinkMutation.isPending} onClick={() => addLinkMutation.mutate()}>
+                <Button hidden={isReadOnly} size="sm" className="h-7" disabled={!addLinkTargetId || addLinkMutation.isPending} onClick={() => addLinkMutation.mutate()}>
                   Link
                 </Button>
               </div>

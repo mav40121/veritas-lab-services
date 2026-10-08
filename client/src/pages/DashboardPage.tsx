@@ -361,12 +361,13 @@ export default function Dashboard() {
 
                 {/* Actions: drafts get an Edit (continue) button; completed studies get View (results) + Edit. */}
                 <div className="flex items-center gap-2 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
-                  <Button asChild variant={isDraft ? "default" : "outline"} size="sm" className={isDraft ? "bg-primary hover:bg-primary/90 text-primary-foreground" : ""} data-testid={`button-${isDraft ? "edit" : "view"}-${study.id}`}>
+                  {!(isDraft && readOnly) && <Button asChild variant={isDraft ? "default" : "outline"} size="sm" className={isDraft ? "bg-primary hover:bg-primary/90 text-primary-foreground" : ""} data-testid={`button-${isDraft ? "edit" : "view"}-${study.id}`}>
                     <Link href={isDraft ? editPath : viewPath}>
                       {isDraft ? <><Edit2 size={13} className="mr-1" />Continue</> : <><FileText size={13} className="mr-1" />View</>}
                     </Link>
-                  </Button>
-                  {labId && !isDraft && (study as any).lifecycle_state !== "finalized" && !(study as any).archived_at && (
+                  </Button>}
+                  {/* #84 Phase 3: sign-off grouping, edit and delete are VeritaCheck setup. */}
+                  {!readOnly && labId && !isDraft && (study as any).lifecycle_state !== "finalized" && !(study as any).archived_at && (
                     <AddToSignoffGroup
                       studyId={study.id}
                       labId={labId}
@@ -374,14 +375,14 @@ export default function Dashboard() {
                       listUrl={listUrl}
                     />
                   )}
-                  {!isDraft && (
+                  {!readOnly && !isDraft && (
                     <Button asChild variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-edit-${study.id}`} title="Edit study">
                       <Link href={editPath}>
                         <Edit2 size={13} />
                       </Link>
                     </Button>
                   )}
-                  <ConfirmDialog
+                  {!readOnly && <ConfirmDialog
                     title="Delete Study?"
                     message={`Delete the "${study.testName}" study? All results will be permanently removed.`}
                     confirmLabel="Delete"
@@ -395,7 +396,7 @@ export default function Dashboard() {
                     >
                       <Trash2 size={13} />
                     </Button>
-                  </ConfirmDialog>
+                  </ConfirmDialog>}
                 </div>
               </CardContent>
             </Card>

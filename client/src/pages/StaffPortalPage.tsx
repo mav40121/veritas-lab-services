@@ -24,6 +24,7 @@ import DOMPurify from "dompurify";
 import InventoryCountWorkflow, { type CountItem } from "@/components/InventoryCountWorkflow";
 import { clearAuth } from "@/lib/auth";
 import { useAuth } from "@/components/AuthContext";
+import { useLabRoute } from "@/hooks/useLabRoute";
 
 // 2026-06-09 PR2: shared DOMPurify config (mirrors VeritaCompAppPage).
 // Lets quiz prompts marked question_format='html' render inline tables,
@@ -78,6 +79,7 @@ export default function StaffPortalPage() {
   const [activeModule, setActiveModule] = useState<"policies" | "inventory" | "audit" | "competency" | "quizzes" | "qc" | null>(null);
   const [bootstrapState, setBootstrapState] = useState<"loading" | "no-roster" | "no-auth" | "ready">("loading");
   const { user: signedInUser } = useAuth();
+  const labRoute = useLabRoute();
 
   useEffect(() => {
     // 2026-06-09 followup fix: the real localStorage key set by the
@@ -171,7 +173,7 @@ export default function StaffPortalPage() {
             This page is for staff logins.{who ? ` You are signed in as ${who}, which is not a staff login.` : ""} If you are a staff member, sign out and sign in with the account from your invitation email.
           </p>
           <a
-            href="/dashboard"
+            href={labRoute("/dashboard")}
             className="block w-full text-white font-semibold py-2 rounded-md mb-2"
             style={{ backgroundColor: "#01696F" }}
             data-testid="staff-portal-go-dashboard"
