@@ -3245,8 +3245,8 @@ return (
                         </Select>
                       </div>
                       <div className="space-y-1.5"><Label>Number of Specimens</Label>
-                        <Input type="text" inputMode="decimal" min={3} max={100} value={lotNumSpecimens} onChange={e => {
-                          const n = Math.max(3, Math.min(100, parseInt(e.target.value) || 20));
+                        <DecimalInput integer commitOnBlur min={3} max={100} value={lotNumSpecimens} fallback={lotNumSpecimens} data-testid="lot-num-specimens-input" onChangeNumber={raw => {
+                          const n = Math.max(3, Math.min(100, raw));
                           setLotNumSpecimens(n);
                           setLotData(prev => {
                             if (n > prev.length) return [...prev, ...Array.from({ length: n - prev.length }, (_, i) => ({ specimenId: `S${String(prev.length + i + 1).padStart(3, "0")}`, currentLot: null, newLot: null, cohort: "Normal" as const }))];
@@ -3523,7 +3523,7 @@ return (
                       <div className="grid sm:grid-cols-3 gap-4">
                         <div className="space-y-1.5"><Label>Date Range Start</Label><Input type="date" value={qcDateStart} onChange={e => setQcDateStart(e.target.value)} /></div>
                         <div className="space-y-1.5"><Label>Date Range End</Label><Input type="date" value={qcDateEnd} onChange={e => setQcDateEnd(e.target.value)} /></div>
-                        <div className="space-y-1.5"><Label>Runs per Level</Label><Input type="text" inputMode="decimal" min={5} max={30} value={qcNumRuns} onChange={e => setQcNumRuns(Math.max(5, Math.min(30, parseInt(e.target.value) || 15)))} /></div>
+                        <div className="space-y-1.5"><Label>Runs per Level</Label><DecimalInput integer min={5} max={30} value={qcNumRuns} fallback={15} onChangeNumber={n => setQcNumRuns(Math.max(5, Math.min(30, n)))} /></div>
                       </div>
                       {/* Opt-in sections per the lot-change family redesign:
                           crossover bias check (CLSI C24-Ed4 accelerated path)
@@ -3786,8 +3786,8 @@ return (
                       <div className="space-y-1.5"><Label>Reference Range Low *</Label><DecimalInput step="any" placeholder="e.g. 135" value={typeof refLow === "number" ? refLow : NaN} fallback={NaN} onChangeNumber={n => setRefLow(Number.isNaN(n) ? "" : n)} /></div>
                       <div className="space-y-1.5"><Label>Reference Range High *</Label><DecimalInput step="any" placeholder="e.g. 145" value={typeof refHigh === "number" ? refHigh : NaN} fallback={NaN} onChangeNumber={n => setRefHigh(Number.isNaN(n) ? "" : n)} /></div>
                       <div className="space-y-1.5"><Label>Number of Specimens</Label>
-                        <Input type="text" inputMode="decimal" min={20} max={200} value={refNumSpecimens} onChange={e => {
-                          const n = Math.max(20, Math.min(200, parseInt(e.target.value) || 20));
+                        <DecimalInput integer commitOnBlur min={20} max={200} value={refNumSpecimens} fallback={refNumSpecimens} data-testid="ref-num-specimens-input" onChangeNumber={raw => {
+                          const n = Math.max(20, Math.min(200, raw));
                           setRefNumSpecimens(n);
                           setRefData(prev => {
                             if (n > prev.length) return [...prev, ...Array.from({ length: n - prev.length }, (_, i) => ({ specimenId: `S${String(prev.length + i + 1).padStart(3, "0")}`, value: null }))];
@@ -4483,13 +4483,13 @@ return (
                         <p className="text-xs text-muted-foreground">For structured multi-day precision studies per CLSI EP15. Specify days, runs per day, and replicates per run.</p>
                         <div className="grid grid-cols-3 gap-3">
                           <div className="space-y-1"><Label className="text-xs">Days</Label>
-                            <Input type="text" inputMode="decimal" min={1} max={20} value={precisionDays} onChange={e => setPrecisionDays(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))} className="h-8 text-sm" />
+                            <DecimalInput integer min={1} max={20} value={precisionDays} fallback={1} onChangeNumber={n => setPrecisionDays(Math.max(1, Math.min(20, n)))} className="h-8 text-sm" />
                           </div>
                           <div className="space-y-1"><Label className="text-xs">Runs / Day</Label>
-                            <Input type="text" inputMode="decimal" min={1} max={3} value={precisionRunsPerDay} onChange={e => setPrecisionRunsPerDay(Math.max(1, Math.min(3, parseInt(e.target.value) || 1)))} className="h-8 text-sm" />
+                            <DecimalInput integer min={1} max={3} value={precisionRunsPerDay} fallback={1} onChangeNumber={n => setPrecisionRunsPerDay(Math.max(1, Math.min(3, n)))} className="h-8 text-sm" />
                           </div>
                           <div className="space-y-1"><Label className="text-xs">Replicates / Run</Label>
-                            <Input type="text" inputMode="decimal" min={1} max={5} value={precisionReplicatesPerRun} onChange={e => setPrecisionReplicatesPerRun(Math.max(1, Math.min(5, parseInt(e.target.value) || 1)))} className="h-8 text-sm" />
+                            <DecimalInput integer min={1} max={5} value={precisionReplicatesPerRun} fallback={1} onChangeNumber={n => setPrecisionReplicatesPerRun(Math.max(1, Math.min(5, n)))} className="h-8 text-sm" />
                           </div>
                         </div>
                       </div>
