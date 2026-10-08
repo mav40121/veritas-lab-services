@@ -497,23 +497,8 @@ _(item #60 closed 2026-10-07; 74 CAP programs loaded 2026-10-06, see C64 below)_
 
 ---
 
-### 74. Env-gated Playwright specs never run in CI; two shipped unrunnable
+_(item #74 closed 2026-10-08; CI sandbox lab 35 runs the signed-in receipts on every PR, see C88 below)_
 
-**Effort:** S (1-3 days)
-**Importance:** Medium. The Gate 3 step 8 receipts for authenticated UI are skipped in CI (no PW_TOKEN), so a spec can ship broken and nobody notices.
-
-**What:** playwright-smoke runs 74 specs as "skip without PW_TOKEN". The
-2026-10-07 local pass over merged UI PRs found two that could never pass as
-written: module-howto-card-layout.spec (#1472) used two routes that do not
-exist and measured the width of a text node, and
-veritacheck-analyte-multiselect.spec (#1481) looked for a button that lives on
-a package's Analytes tab, not the list page. Both repaired in PR #1493 and
-proven on a local build (5/5 and 1/1). The fixes themselves were fine; the
-receipts were not. A CI QA lab with a scoped PW_TOKEN secret (own test
-system, never a client lab) would run these on every PR.
-
-**Source:** overnight audit 2026-10-07 (local Playwright pass, see overnight log section 16).
-**Status:** BUILT 2026-10-07 (PR #1507) and growing: the blocking "Sandbox receipts" step, seed_sandbox.mjs (now also flags Calcium exempt), mint_token.mjs, and the runbook scripts/ci-sandbox/finish_sandbox.sh (provision, mint, seed, secrets, Michael as admin, first run, one command once the owner exists). sandbox-receipts.txt now lists 12 specs (8 original plus the cal-ver exemption, module progress, VeritaMap date entry and VeritaComp element date specs), all proven on a local server seeded by the script. Still blocked on the sandbox owner signup (Q9: verilabguy+ci-sandbox@gmail.com), then finish_sandbox.sh does the rest.
 ---
 
 _(item #75 closed 2026-10-07; fixed in the same change as #78, PR #1514 (44ca3e22); see C82 below)_
@@ -576,6 +561,12 @@ antibiogram is a PDF deliverable or a live table.
 ---
 
 ## CLOSED (audit trail)
+
+### C88. Env-gated Playwright specs never ran in CI; two shipped unrunnable (was #74)
+
+**Effort:** was S / **Importance:** Medium. The Gate 3 step 8 receipts for signed-in screens were skipped in CI, so a spec could ship broken and nobody noticed.
+
+**Closure evidence:** PR #1507 built the blocking "Sandbox receipts" step, the seed script, the token minter and scripts/ci-sandbox/finish_sandbox.sh. Michael created the sandbox owner (verilabguy+ci-sandbox@gmail.com) on 2026-10-08 and the runbook provisioned lab 35 (map 126, instrument 509, employee 164, program 53, verification 31), set the PW_* repo secrets and added Michael as admin. First main run 37772121746 passed 20/20 signed-in specs. Two specs then left state behind and failed the next run (an AMR value left on the map marked a Getting Started step done; "Show getting started" only re-showed the card for one page view). PR #1528 (squash 5c8f4681, live 2026-10-08 08:38 ET) made both specs restore the sandbox, and fixed the real bug the second one exposed: Show getting started now clears the saved dismissal for an owner or admin. Main run 37776469435 on 5c8f4681: Sandbox receipts 20 passed. Rule kept in sandbox-receipts.txt: every spec leaves lab 35 as it found it. Known risk left as is: runs on different branches can overlap on the one sandbox (concurrency is per ref).
 
 ### C86. VeritaMap: Manual Diff cell lines never paired with the analyzer differential, so no correlation was triggered (was #76)
 
