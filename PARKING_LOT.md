@@ -497,126 +497,11 @@ _(item #60 closed 2026-10-07; 74 CAP programs loaded 2026-10-06, see C64 below)_
 
 ---
 
-### 61. VeritaMap: remove duplicate demo maps (dedupe tool shipped; awaiting selection)
+_(item #74 closed 2026-10-08; CI sandbox lab 35 runs the signed-in receipts on every PR, see C88 below)_
 
-**Effort:** XS (under 1 day)
-**Importance:** Low-Medium — demo-lab hygiene; not customer-facing.
-
-**What:** Michael created many maps while demoing and asked to remove
-duplicates. The read-only-by-default admin `dedupe-maps` endpoint shipped
-2026-10-06 (PR #1475). The audit found only a handful of strict content
-duplicates (plus false matches from empty maps, and items in Lisa's live lab 4
-that must not be touched). Needs Michael to pick what to delete — the strict
-dupes, or a broader clean-out of lab 3's 21 maps. Deletion runs scoped per lab
-with full cascade once he approves the ids.
-
-**Source:** Michael, 2026-10-06.
-**Status:** Open. Tool live; awaiting Michael's deletion selection.
-
----
-
-_(item #62 closed 2026-10-07; PR #1474 merged + deployed 2026-10-06, see C65 below)_
-
----
-
-_(item #63 closed 2026-10-07; PR #1493 deployed, prod receipt 2/2, see C67 below)_
-
----
-
-_(item #64 closed 2026-10-07; three real causes fixed, PR #1486 + #1487 deployed, see C66 below)_
-
----
-
-_(item #65 closed 2026-10-07; fix deployed in PR #1464 and the MedStar reply sent; see C79 below)_
-
----
-
-_(item #66 closed 2026-10-07; PR #1489 deployed, see C68 below)_
-
----
-
-_(item #67 closed 2026-10-07; guard removed on Michael's option 1, PR #1498 deployed, see C74 below)_
-
----
-
-_(item #68 closed 2026-10-07; PR #1491 deployed, see C69 below)_
-
----
-
-_(item #69 closed 2026-10-07; PR #1490 deployed, see C70 below)_
-
----
-
-_(item #70 closed 2026-10-07; PR #1492 deployed, see C71 below)_
-
----
-
-_(item #71 closed 2026-10-07; built and live in PR #1503 (5ec248c1); see C78 below)_
-
----
-
-_(item #72 closed 2026-10-07; phase A built and live in PR #1505 (6f937201); see C77 below; phase B is #79)_
-
----
-
-### 74. Env-gated Playwright specs never run in CI; two shipped unrunnable
-
-**Effort:** S (1-3 days)
-**Importance:** Medium. The Gate 3 step 8 receipts for authenticated UI are skipped in CI (no PW_TOKEN), so a spec can ship broken and nobody notices.
-
-**What:** playwright-smoke runs 74 specs as "skip without PW_TOKEN". The
-2026-10-07 local pass over merged UI PRs found two that could never pass as
-written: module-howto-card-layout.spec (#1472) used two routes that do not
-exist and measured the width of a text node, and
-veritacheck-analyte-multiselect.spec (#1481) looked for a button that lives on
-a package's Analytes tab, not the list page. Both repaired in PR #1493 and
-proven on a local build (5/5 and 1/1). The fixes themselves were fine; the
-receipts were not. A CI QA lab with a scoped PW_TOKEN secret (own test
-system, never a client lab) would run these on every PR.
-
-**Source:** overnight audit 2026-10-07 (local Playwright pass, see overnight log section 16).
-**Status:** BUILT 2026-10-07 (PR #1507) and growing: the blocking "Sandbox receipts" step, seed_sandbox.mjs (now also flags Calcium exempt), mint_token.mjs, and the runbook scripts/ci-sandbox/finish_sandbox.sh (provision, mint, seed, secrets, Michael as admin, first run, one command once the owner exists). sandbox-receipts.txt now lists 12 specs (8 original plus the cal-ver exemption, module progress, VeritaMap date entry and VeritaComp element date specs), all proven on a local server seeded by the script. Still blocked on the sandbox owner signup (Q9: verilabguy+ci-sandbox@gmail.com), then finish_sandbox.sh does the rest.
 ---
 
 _(item #75 closed 2026-10-07; fixed in the same change as #78, PR #1514 (44ca3e22); see C82 below)_
-
----
-
-### 76. VeritaMap: Manual Diff cell lines never pair with the analyzer differential, so no correlation is triggered
-
-**Effort:** S (1-3 days)
-**Importance:** High. 42 CFR 493.1281 comparability: the same analyte on two methods (manual differential vs the hematology analyzer) must be correlated twice a year; when the map cannot see they are the same test, the requirement never appears and readiness over-reports.
-
-**What:** Correlation grouping in the map intelligence matches instruments on
-the exact analyte string. The library's "Manual Differential" entry names the
-cell lines "Lymphocytes / Neutrophils / Monocytes / Eosinophils / Basophils";
-the hematology analyzers (Sysmex XN-1000/XN-2000 and the rest) name them
-"LYMPH% / NEUT% / MONO% / EO% / BASO%" (plus the absolute "#" rows). Same
-measurand (the percentage differential), different strings, so Lymph on the
-manual diff and LYMPH% on the analyzer show as two unrelated tests and the
-Pri/Backup correlation requirement is never raised. Same for every cell line.
-Fix: a canonical-analyte layer for correlation grouping (manual "Lymphocytes"
-<-> analyzer "LYMPH%" / "Lymphocytes (%)" and the same for NEUT/MONO/EO/BASO;
-the "%" row is the comparable one, not "#"), plus harmonizing the library's
-Manual Differential names toward the analyzer convention so new maps do not
-inherit the split. Receipt: a map with Sysmex XN + Manual Differential shows
-one correlation requirement per cell line, and the existing name-based matches
-are unchanged.
-
-**Source:** Michael, 2026-10-07 morning ("Manual diff Lymph is the same as lymph% on the hematology analyzers, but they are showing as different tests and not triggering correlations. Same for the other cell lines").
-**Status:** Open. Names on both sides confirmed in the library; build on request.
-
----
-
-_(item #77 closed 2026-10-07; part A live in PR #1513 (cf624cde) and part B in PR #1517 (31a0742c); see C83 below)_
-
----
-
-_(item #78 closed 2026-10-07; built and live in PR #1514 (squash 44ca3e22); see C81 below)_
-
----
-
-_(item #79 closed 2026-10-07; built and live in PR #1513 (squash cf624cde); see C80 below)_
 
 ---
 
@@ -675,7 +560,104 @@ antibiogram is a PDF deliverable or a live table.
 
 ---
 
+### 84. Staff logins see a different site than editors; move them into the main app with recording rights and setup locked
+
+**Effort:** M (1-2 weeks)
+**Importance:** High. A paying client's lead tech could not find QC after signing in, and every staff member at every client sees screens that do not match the training, the quick reference, or what their manager sees.
+
+**What:** Gameday Plymouth's lead tech (Elizabeth Bensinger, staff seat on lab
+29) signed in on 2026-10-07 and landed on Account Settings with the owner
+"Complete your lab setup" banner and Run a Study, and no path to QC; Mike
+Hiltunen: "looks nothing like mine." Root cause: the Staff Portal was built for
+the retired CLIA+PIN kiosk (no accounts, so a separate stripped screen); since
+2026-09-30 staff have real logins but stay behind that separate door. Today
+JoinPage sends every accepted seat to the lab dashboard, the NavBar has no
+Staff Portal link, /api/auth/me does not report the seat type, and a
+staff_portal seat gets no lab_members row, so the main lab API turns it away.
+Michael's decision (2026-10-08): one app for every login; the login type
+changes what you can do, never what you see. A staff login sees the same
+module screens as the editors in its lab (Levey-Jennings charts included),
+does the recording work (QC results, notes, corrective actions, task
+sign-offs, maintenance events, inventory counts, read-and-sign), and setup and
+authoring stay locked. Most of the plumbing exists: the 2026-10-03 access
+model (record = requireWriteAccess, author = requireModuleEdit) and the
+per-module useIsReadOnly UI (32 call sites). Work: a staff seat also creates a
+lab membership; every module separates recording buttons from setup buttons
+(audit each useIsReadOnly site so recording stays enabled); the /staff-access
+page becomes a "My sign-offs" list inside the app; backfill existing staff
+seats (MedStar has 9); keep blockNonOperatorSeat on account-wide endpoints;
+update the /qa-sweep two-way matrix (staff admitted to lab reads, blocked from
+authoring). Pricing unchanged: the Staff band covers record and read.
+
+**Source:** Michael, 2026-10-08 ("why can't she see what an editor can see and just not have some of the functionality?"; "When different staff [see] settings different ways, errors happen"), from Mike Hiltunen's 2026-10-07 screenshot.
+**Status:** Open. Decided; build right after the VeritaQC basis rebuild (PR #1529) ships. Mike told 2026-10-08 that the same screens are coming and given www.veritaslabservices.com/staff-access for today.
+
+---
+
+_(item #85 closed 2026-10-08; see C89 below)_
+
+---
+
+_(item #86 closed 2026-10-08; see C90 below)_
+
+---
+
+### 87. VeritaCheck page: handleBuy is defined and never called
+
+**Effort:** XS
+**Importance:** Low. Either a purchase path lost its button or it is dead code.
+
+**What:** client/src/pages/VeritaCheckPage.tsx defines handleBuy (~line 373, Stripe
+checkout with the CLIA prompt for Clinic-and-up plans) and nothing calls it. Decide
+whether a per-study or plan purchase button on this page is supposed to use it; if
+not, remove it (dead-code rule).
+
+**Source:** #84 client audit, 2026-10-08 (read-only sub-agent pass over every useIsReadOnly site; confirmed by reading the code).
+**Status:** Open.
+
+---
+
+_(item #88 closed 2026-10-08; see C91 below)_
+
+---
+
 ## CLOSED (audit trail)
+
+### C91. Plan gates written as blocklists, and an audit that could not see them (was #88)
+
+**Effort:** was XS / **Importance:** Medium.
+
+**Closure evidence:** PR #1536 (squash 28a1fb4e, live 2026-10-08 11:13 ET). Seven pages (not three) gated with plan !== "free" && plan !== "per_study": VeritaComp, VeritaMap, VeritaPT, VeritaResponse and its finding page, VeritaScan, VeritaStaff. All now use the VeritaLabAppPage allowlist. Live plan values on prod (read-only) were enterprise, hospital, clinic, community, lab, free, so no paying plan lost access. Browser receipt scripts/verify-88-plan-allowlist-ui.mjs 7/7: every live paid plan opens all five pages, free and an unknown plan string hit the plan wall (the blocklist let an unknown plan in). script/audit.py: a new rule flags inequality blocklists (7 errors on the old pages, 0 on the fixed), and rel is normalized to forward slashes, because on Windows every startswith("client/") / ("server/") test was False, so client, server and shared rules had never run in the pre-commit hook; normalizing surfaced no other hidden errors. Prod check after deploy: VeritaPT opens with no plan wall on the sandbox's paid lab.
+
+### C90. VeritaMap build: "Request we add your instrument" did nothing on step 1 (was #86)
+
+**Effort:** was XS / **Importance:** Medium.
+
+**Closure evidence:** PR #1535 (squash 68434ca6, live with 28a1fb4e 2026-10-08 11:13 ET). The dialog was only rendered in the step-2 return; it now renders on step 1 too. Browser receipt scripts/verify-85-86-ui.mjs: opens on step 1 in light and dark; fails on the old page. Prod check after deploy (sandbox lab 35, map 126): the request link opens the "Request an instrument" dialog.
+
+### C89. VeritaCheck verification: "Remove unit" did nothing (was #85)
+
+**Effort:** was XS / **Importance:** Medium.
+
+**Closure evidence:** PR #1535. UnitCard's confirm called refetch, never deleteUnit; it now deletes. Browser receipt scripts/verify-85-86-ui.mjs: the unit is gone from the screen and the API, the other unit stays; fails on the old wiring. Prod check after deploy (sandbox lab 35, throwaway package, deleted after): Remove left only SN-KEEP.
+
+### C88. Env-gated Playwright specs never ran in CI; two shipped unrunnable (was #74)
+
+**Effort:** was S / **Importance:** Medium. The Gate 3 step 8 receipts for signed-in screens were skipped in CI, so a spec could ship broken and nobody noticed.
+
+**Closure evidence:** PR #1507 built the blocking "Sandbox receipts" step, the seed script, the token minter and scripts/ci-sandbox/finish_sandbox.sh. Michael created the sandbox owner (verilabguy+ci-sandbox@gmail.com) on 2026-10-08 and the runbook provisioned lab 35 (map 126, instrument 509, employee 164, program 53, verification 31), set the PW_* repo secrets and added Michael as admin. First main run 37772121746 passed 20/20 signed-in specs. Two specs then left state behind and failed the next run (an AMR value left on the map marked a Getting Started step done; "Show getting started" only re-showed the card for one page view). PR #1528 (squash 5c8f4681, live 2026-10-08 08:38 ET) made both specs restore the sandbox, and fixed the real bug the second one exposed: Show getting started now clears the saved dismissal for an owner or admin. Main run 37776469435 on 5c8f4681: Sandbox receipts 20 passed. Rule kept in sandbox-receipts.txt: every spec leaves lab 35 as it found it. Known risk left as is: runs on different branches can overlap on the one sandbox (concurrency is per ref).
+
+### C86. VeritaMap: Manual Diff cell lines never paired with the analyzer differential, so no correlation was triggered (was #76)
+
+**Effort:** was S / **Importance:** High. 42 CFR 493.1281 comparability for the manual vs automated differential never appeared on the map.
+
+**Closure evidence:** PR #1526 (squash 76f28078, live 2026-10-08 07:45 ET). VeritaMap decided "correlation required" per exact analyte string. It now groups with `correlationGroupsFor` (shared/presetAnalytes.ts), built on the differential key VeritaCheck coverage already used: manual "Lymphocytes" pairs with "LYMPH%", absolute "#" lines stay apart, and every other test keeps exact-name grouping. Applied in both map-detail routes, both intelligence routes, the demo builder, both Excel exports, and the map page badge, panel, sort and tooltip ("Sysmex XN-1000 [Primary] as LYMPH%"). The library's Manual Differential names were deliberately NOT renamed: renaming would orphan dates and values existing maps hold under the old strings, and the grouping key makes it unnecessary. Receipt tests/integration/veritamap-diff-correlation.test.ts 6/6; on the old code only Glucose required correlation and every differential line exported "No". Four VeritaMap suites pass. Browser receipt scripts/verify-76-diff-correlation-ui.mjs with light and dark screenshots in docs/receipts. Production check after deploy (read-only): Lisa's Milford Hematology map (lab 4, map 60) now pairs all five manual lines with the analyzer lines (Lymphocytes/LYMPH%, Neutrophils/NEUT%, Monocytes/MONO%, Eosinophils/EO%, Basophils/BASO%).
+
+### C87. VeritaMap: remove duplicate demo maps (was #61)
+
+**Effort:** was XS / **Importance:** Low-Medium.
+
+**Closure evidence:** 2026-10-08 the read-only dedupe-maps audit on lab 3 showed 14 maps. Michael had already removed 7 himself on 2026-10-07. Maps 106 "Angie Test", 107 "VP's Test menu", 108 "FGH Map" and 109 "Sanford Test" survived his repeated 10-07 deletes: 2 to 5 attempts each, made before the C76 delete-cascade fix went live that afternoon. All four were empty shells with 2 instruments and 0 tests. On Michael's approval ("agree", 2026-10-08) POST /api/admin/veritamap/dedupe-maps {labId 3, deleteIds [106,107,108,109]} deleted them with full cascade: 4 maps, 8 instruments, 14 linked duty-change events, no tests or values. Re-audit: lab 3 has 10 maps and 0 content-duplicate groups. Kept: the 8 demo maps (40-47) and the 10-07 conference maps 123 "Abbott" and 124 "Northern Light".
 
 ### C85. An owner who also held a seat on another owner's lab was treated as that seat everywhere (was #82)
 

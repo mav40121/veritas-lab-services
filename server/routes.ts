@@ -4061,7 +4061,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // at the top of this file.
 
   // VeritaShift Scheduler (Phase 1) routes.
-  registerScheduleRoutes(app, authMiddleware, labScopeMiddleware, requireWriteAccess);
+  registerScheduleRoutes(app, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit);
 
   app.post("/api/labs/:labId/qc/results", authMiddleware, labScopeMiddleware, (req: any, res) => {
     const { control_lot_id, result_value, result_date, instrument, run_time, comment } = req.body || {};
@@ -4668,7 +4668,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // required reason (wrong lot, wrong level, mis-keyed run). The row stays with
   // who/when/why for the audit trail, but drops out of the chart, calculated
   // stats, Westgard history, and the monthly review.
-  app.post("/api/labs/:labId/qc/results/:id/void", authMiddleware, labScopeMiddleware, (req: any, res) => {
+  app.post("/api/labs/:labId/qc/results/:id/void", authMiddleware, labScopeMiddleware, requireModuleEdit("veritaqc"), (req: any, res) => {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
     const reason = String(req.body?.reason ?? "").trim();
@@ -4790,7 +4790,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ reviews: rows, mdCosignRequired: cosignRequired, isMedicalDirector: !!md && md.user_id === req.userId });
   });
 
-  app.post("/api/labs/:labId/qc/period-reviews", authMiddleware, labScopeMiddleware, (req: any, res) => {
+  app.post("/api/labs/:labId/qc/period-reviews", authMiddleware, labScopeMiddleware, requireModuleEdit("veritaqc"), (req: any, res) => {
     const { control_lot_id, period_year, period_month, attestation_acknowledged, review_notes } = req.body || {};
     if (!control_lot_id || !period_year || !period_month) {
       return res.status(400).json({ error: "control_lot_id, period_year, period_month required" });
@@ -4994,6 +4994,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!qc_result_id || !action_taken || !String(action_taken).trim()) {
       return res.status(400).json({ error: "qc_result_id and action_taken required" });
     }
+    // #84 (2026-10-08): anyone in the lab may file a corrective action, but
+    // excluding the run from the QC baseline changes the lab's statistics, so it
+    // needs QC edit rights (owner, admin, or a seat with VeritaQC edit). The
+    // console's checkbox defaults to "exclude", so a member without QC edit is
+    // NOT refused (that would lose the corrective action): the action is filed,
+    // the run stays in the baseline, and the response says so.
+    const excludeAllowed = !exclude_from_baseline || hasModuleEditAccess(req.scope.labId, req.userId, "veritaqc");
+    const doExclude = !!exclude_from_baseline && excludeAllowed;
     const sqlite = (db as any).$client;
     // Verify the qc_result belongs to this lab before recording any action
     // against it. Stops a caller from using a known result id from another
@@ -5040,12 +5048,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // accepted for reporting, which excludes it from the Westgard baseline
     // on future evaluations. Toggling this is an explicit user choice
     // captured in the same request to keep the audit trail intact.
-    if (exclude_from_baseline) {
+    if (doExclude) {
       sqlite.prepare(
         "UPDATE qc_results SET accepted_for_reporting = 0, updated_at = ? WHERE id = ? AND lab_id = ?"
       ).run(now, Number(qc_result_id), req.scope.labId);
     }
-    res.json({ ok: true, corrective_action_id: newId, excluded_from_baseline: !!exclude_from_baseline });
+    res.json({
+      ok: true, corrective_action_id: newId, excluded_from_baseline: doExclude,
+      ...(exclude_from_baseline && !excludeAllowed
+        ? { exclude_not_applied: "The corrective action was filed. Excluding the run from the QC baseline needs a supervisor with VeritaQC edit access, so the run stays in the baseline." }
+        : {}),
+    });
   });
 
   // Wave A7 (2026-06-12): escalate a QC corrective action into a VeritaResponse
@@ -5417,7 +5430,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // mappings. Body: { mappings: [{ qc_level, study_level_name }, ...] }
   // Each row is upserted by (lab_id, analyte, qc_level). Sending an empty
   // array does nothing (no destructive clear).
-  app.put("/api/labs/:labId/qc/import-mappings/:analyte", authMiddleware, labScopeMiddleware, (req: any, res) => {
+  app.put("/api/labs/:labId/qc/import-mappings/:analyte", authMiddleware, labScopeMiddleware, requireModuleEdit("veritacheck"), (req: any, res) => {
     if (!hasQcImportAccess(req.user, req.scope?.lab)) {
       return res.status(403).json({ error: "VeritaCheck™ + VeritaQC™ subscription required" });
     }
@@ -9069,6 +9082,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     authMiddleware,
     labScopeMiddleware,
     requireWriteAccess,
+    requireModuleEdit("veritastock"),
     (req: any, res) => {
       const sqlite = (db as any).$client;
       const labId = req.scope.labId;
@@ -9105,6 +9119,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     authMiddleware,
     labScopeMiddleware,
     requireWriteAccess,
+    requireModuleEdit("veritastock"),
     (req: any, res) => {
       const sqlite = (db as any).$client;
       const labId = req.scope.labId;
@@ -9141,6 +9156,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     authMiddleware,
     labScopeMiddleware,
     requireWriteAccess,
+    requireModuleEdit("veritastock"),
     (req: any, res) => {
       const sqlite = (db as any).$client;
       const labId = req.scope.labId;
@@ -9178,6 +9194,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     authMiddleware,
     labScopeMiddleware,
     requireWriteAccess,
+    requireModuleEdit("veritastock"),
     (req: any, res) => {
       const sqlite = (db as any).$client;
       const labId = req.scope.labId;
@@ -9208,6 +9225,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     authMiddleware,
     labScopeMiddleware,
     requireWriteAccess,
+    requireModuleEdit("veritastock"),
     (req: any, res) => {
       const sqlite = (db as any).$client;
       const labId = req.scope.labId;
@@ -9238,6 +9256,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     authMiddleware,
     labScopeMiddleware,
     requireWriteAccess,
+    requireModuleEdit("veritastock"),
     (req: any, res) => {
       const sqlite = (db as any).$client;
       const labId = req.scope.labId;
@@ -9264,6 +9283,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     authMiddleware,
     labScopeMiddleware,
     requireWriteAccess,
+    requireModuleEdit("veritastock"),
     (() => {
       const m = require("multer");
       return m({ storage: m.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } }).single("file");
@@ -9307,6 +9327,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     authMiddleware,
     labScopeMiddleware,
     requireWriteAccess,
+    requireModuleEdit("veritastock"),
     (() => {
       const m = require("multer");
       return m({ storage: m.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } }).single("file");
@@ -17607,6 +17628,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // POST /api/labs/:labId/repository/documents — add a shared document pointer.
   app.post("/api/labs/:labId/repository/documents", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    // #84 (2026-10-08): adding or removing an org-wide shared document is an
+    // owner/admin action; a staff login or any non-admin member gets a 403.
+    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Only a lab owner or admin can manage shared documents." });
     const sqlite = (db as any).$client;
     const orgRow = sqlite.prepare("SELECT organization_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
     const orgId = orgRow?.organization_id ?? null;
@@ -17633,6 +17657,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // BLOB in the DB, so it is shared org-wide and included in the DB backup). Each
   // upload REQUIRES a HIPAA acknowledgment; without it the file is rejected.
   app.post("/api/labs/:labId/repository/documents/upload", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    // #84 (2026-10-08): adding or removing an org-wide shared document is an
+    // owner/admin action; a staff login or any non-admin member gets a 403.
+    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Only a lab owner or admin can manage shared documents." });
     const m = require("multer");
     const upload = m({ storage: m.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } }).single("file");
     upload(req, res, (err: any) => {
@@ -17688,6 +17715,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // (soft delete -> status 'archived'). Scoped to the caller's own org so one system
   // cannot touch another's rows.
   app.delete("/api/labs/:labId/repository/documents/:docId", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    // #84 (2026-10-08): adding or removing an org-wide shared document is an
+    // owner/admin action; a staff login or any non-admin member gets a 403.
+    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Only a lab owner or admin can manage shared documents." });
     const sqlite = (db as any).$client;
     const orgRow = sqlite.prepare("SELECT organization_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
     const orgId = orgRow?.organization_id ?? null;
@@ -19532,7 +19562,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Lab-scoped POST for new cumsum trackers. Sets lab_id directly from the
   // URL-validated active lab rather than the stale users.lab_id, matching
   // the fix pattern from PR #244 (legacy studies POST).
-  app.post("/api/labs/:labId/veritacheck/cumsum/trackers", authMiddleware, cumsumLabScopeMW, requireWriteAccess, (req: any, res) => {
+  app.post("/api/labs/:labId/veritacheck/cumsum/trackers", authMiddleware, cumsumLabScopeMW, requireWriteAccess, requireModuleEdit("veritacheck"), (req: any, res) => {
     if (!hasCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Subscription required" });
     const { instrumentName, analyte } = req.body;
     if (!instrumentName?.trim()) return res.status(400).json({ error: "Instrument name required" });
@@ -19543,7 +19573,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ id: Number(result.lastInsertRowid), user_id: req.user.userId, lab_id: req.scope.labId, instrument_name: instrumentName.trim(), analyte: analyte || "PTT", created_at: now });
   });
 
-  app.post("/api/veritacheck/cumsum/trackers", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/veritacheck/cumsum/trackers", authMiddleware, requireWriteAccess, requireModuleEdit("veritacheck"), (req: any, res) => {
     if (!hasCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Subscription required" });
     const { instrumentName, analyte } = req.body;
     if (!instrumentName?.trim()) return res.status(400).json({ error: "Instrument name required" });
@@ -19565,7 +19595,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Delete tracker
-  app.delete("/api/veritacheck/cumsum/trackers/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/veritacheck/cumsum/trackers/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritacheck"), (req: any, res) => {
     const tracker = userCanAccessLabRow('cumsum_trackers', req.params.id, req);
     if (!tracker) return res.status(404).json({ error: "Tracker not found" });
     (db as any).$client.prepare("DELETE FROM cumsum_entries WHERE tracker_id = ?").run(req.params.id);
@@ -19584,7 +19614,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Add entry to tracker
-  app.post("/api/veritacheck/cumsum/trackers/:id/entries", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/veritacheck/cumsum/trackers/:id/entries", authMiddleware, requireWriteAccess, requireModuleEdit("veritacheck"), (req: any, res) => {
     if (!hasCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Subscription required" });
     const tracker = userCanAccessLabRow('cumsum_trackers', req.params.id, req);
     if (!tracker) return res.status(404).json({ error: "Tracker not found" });
@@ -19598,7 +19628,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Delete entry
-  app.delete("/api/veritacheck/cumsum/entries/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/veritacheck/cumsum/entries/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritacheck"), (req: any, res) => {
     const entry = (db as any).$client.prepare(
       "SELECT e.id, t.user_id FROM cumsum_entries e JOIN cumsum_trackers t ON e.tracker_id = t.id WHERE e.id = ?"
     ).get(req.params.id);
@@ -39698,6 +39728,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     authMiddleware,
     labScopeMiddleware,
     requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
     (req: any, res) => {
       const sqlite = (db as any).$client;
       const docId = Number(req.params.id);
@@ -39745,6 +39776,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     authMiddleware,
     labScopeMiddleware,
     requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
     (req: any, res) => {
       const sqlite = (db as any).$client;
       const docId = Number(req.params.id);
@@ -39792,6 +39824,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     authMiddleware,
     labScopeMiddleware,
     requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
     (req: any, res) => {
       const sqlite = (db as any).$client;
       const docId = Number(req.params.id);
@@ -39879,6 +39912,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     authMiddleware,
     labScopeMiddleware,
     requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
     (req: any, res) => {
       const sqlite = (db as any).$client;
       const docId = Number(req.params.id);
@@ -40477,7 +40511,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   registerVeritaTrackRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit, resolveActiveLabForRequest);
 
   const { registerVeritaCheckVerificationRoutes } = await import('./veritacheck_verification');
-  registerVeritaCheckVerificationRoutes(app, authMiddleware, requireWriteAccess);
+  registerVeritaCheckVerificationRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
 
   // VeritaBench routes (Productivity Tracker + Staffing Analyzer)
   const { registerVeritaBenchRoutes } = await import('./veritabench');

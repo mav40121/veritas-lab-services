@@ -116,7 +116,7 @@ export default function VeritaMapAppPage() {
 
   // Access check – only free and per_study plans see the freemium banner
   const hasPlanAccess =
-    !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
+    !!user?.plan && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
   // Multi-Lab Tier 2 Phase 3.3b: lab-scope reads/writes through the lab in
   // the URL. Inner map endpoints (called from VeritaMapMapPage) stay on

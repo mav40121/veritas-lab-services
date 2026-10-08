@@ -331,7 +331,7 @@ export default function VeritaCompAppPage() {
   const params = useParams<{ programId?: string }>();
   const programId = params?.programId ? parseInt(params.programId) : null;
 
-  const hasPlanAccess = !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
+  const hasPlanAccess = !!user?.plan && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
   if (!isLoggedIn) {
     return (

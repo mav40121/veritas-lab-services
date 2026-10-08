@@ -210,7 +210,7 @@ export default function VeritaStaffAppPage() {
   const [staffTab, setStaffTab] = useState<"roster" | "ce" | "delegations">("roster");
 
   // Auth + plan check
-  const hasAccess = isLoggedIn && !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
+  const hasAccess = isLoggedIn && !!user?.plan && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
   // Multi-Lab Tier 2 Phase 3.9b: entry-surface lab-scope. staff_labs uses
   // tier2_lab_id (FK to labs) since the legacy lab_id column on

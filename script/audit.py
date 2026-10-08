@@ -43,6 +43,10 @@ def check_file(rel, fpath):
         return
 
     lines = content.splitlines()
+    # #88 (2026-10-08): on Windows rel arrives as "client\\src\\...", so every
+    # startswith("client/") / ("server/") test was False and the client, server
+    # and shared rules were silently skipped in the pre-commit hook.
+    rel = rel.replace("\\", "/")
     is_client = rel.startswith("client/")
     is_server = rel.startswith("server/")
     is_source = is_client or is_server or rel.startswith("shared/")
@@ -165,6 +169,15 @@ def check_file(rel, fpath):
     if is_checkable and is_client and "hasPlanAccess" in content:
         if re.search(r'hasPlanAccess[^=]*=.*!\[', content):
             ERRORS.append(f"[{rel}] Plan gate uses blocklist pattern -- use explicit allowlist (see VeritaLabAppPage.tsx for reference)")
+    # #88 (2026-10-08): the rule above only caught the !["free","per_study"]
+    # spelling inside hasPlanAccess; seven pages gated with
+    # plan !== "free" && plan !== "per_study" (any variable name) and slipped
+    # through. Any client gate that excludes free and per_study by inequality is
+    # a blocklist: an unknown or mistyped plan string gets in.
+    if is_checkable and is_client:
+        for m in re.finditer(r'''plan\s*!==?\s*["']free["'][^;\n]*plan\s*!==?\s*["']per_study["']''', content):
+            ln = content.count("\n", 0, m.start()) + 1
+            ERRORS.append(f"[{rel}:{ln}] Plan gate excludes free/per_study by inequality (blocklist) -- use an explicit allowlist (see VeritaLabAppPage.tsx)")
 
     # Every plan allowlist containing 'large_hospital' must also contain 'enterprise'
     for m in re.finditer(r'\[([^\]]*large_hospital[^\]]*)\]\.includes', content):
