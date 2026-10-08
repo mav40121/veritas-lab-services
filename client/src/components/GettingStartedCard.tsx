@@ -38,7 +38,23 @@ export function GettingStartedCard({ className = "" }: { className?: string }) {
     return (
       <div className={`text-xs text-muted-foreground ${className}`} data-testid="getting-started-hidden">
         {complete ? "Setup checklist complete." : "Getting started checklist hidden."}{" "}
-        <button type="button" className="underline hover:text-foreground" onClick={() => setShowHidden(true)} data-testid="getting-started-show">Show getting started</button>
+        <button
+          type="button"
+          className="underline hover:text-foreground"
+          onClick={() => {
+            setShowHidden(true);
+            // "An owner or admin can show it again" (the Hide tooltip): for them
+            // this clears the saved dismissal, so the card stays back on the next
+            // visit instead of hiding again. Anyone else (the server answers 403)
+            // still sees it for this view, with no error toast.
+            if (data.dismissed) {
+              apiRequest("POST", `/api/labs/${labId}/getting-started/check`, { key: "card.dismissed", checked: false })
+                .then(() => qc.invalidateQueries({ queryKey: [url] }))
+                .catch(() => {});
+            }
+          }}
+          data-testid="getting-started-show"
+        >Show getting started</button>
       </div>
     );
   }

@@ -16,11 +16,21 @@ test.describe("Dashboard: Getting Started card", () => {
     test.skip(!TOKEN || !LAB_ID, "PW_TOKEN / PW_LAB_ID not set, skipping authed exercise");
     test.setTimeout(120000);
     await injectAuth(page, BASE, TOKEN);
+    // Clear any saved dismissal through the API first (owner/admin token), so the
+    // test starts from the seeded state whatever an earlier run or an older build
+    // left behind. "Show getting started" used to re-show the card for one page
+    // view only, so a run left the lab dismissed and the next run failed.
+    const undismiss = () => page.evaluate(async ([b, l]) => {
+      const t = localStorage.getItem("veritas_token") || "";
+      await fetch(`${b}/api/labs/${l}/getting-started/check`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "card.dismissed", checked: false }),
+      });
+    }, [BASE, LAB_ID]);
     await page.goto(`${BASE}/labs/${LAB_ID}/dashboard`, { waitUntil: "networkidle" });
-
-    // If a previous run dismissed it, bring it back.
-    const hiddenLink = page.getByTestId("getting-started-show");
-    if (await hiddenLink.isVisible().catch(() => false)) await hiddenLink.click();
+    await undismiss();
+    await page.reload({ waitUntil: "networkidle" });
 
     const card = page.getByTestId("getting-started-card");
     await expect(card, "card renders").toBeVisible();
@@ -57,5 +67,9 @@ test.describe("Dashboard: Getting Started card", () => {
     await expect(page.getByTestId("getting-started-hidden"), "dismissed state renders the one-line link").toBeVisible();
     await page.getByTestId("getting-started-show").click();
     await expect(page.getByTestId("getting-started-card"), "card shows again").toBeVisible();
+    // Showing it again clears the saved dismissal, so a fresh load keeps the card.
+    await undismiss(); // no-op once the show button clears it itself; keeps the sandbox clean on older builds
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(page.getByTestId("getting-started-card"), "card stays shown after a reload").toBeVisible();
   });
 });
