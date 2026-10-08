@@ -33334,6 +33334,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       sqlite.prepare("DELETE FROM veritaqc_import_mappings WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM stock_vendor_contacts WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM stock_vendors WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM stock_recall_events WHERE recall_id IN (SELECT id FROM stock_recalls WHERE lab_id = ?)").run(id);
+      sqlite.prepare("DELETE FROM stock_recall_documents WHERE recall_id IN (SELECT id FROM stock_recalls WHERE lab_id = ?)").run(id);
+      sqlite.prepare("DELETE FROM stock_recalls WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM stock_recall_recipients WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM staff_duty_change_events WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM staff_position_descriptions WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM policy_quiz_questions WHERE lab_id = ?").run(id);
@@ -40437,6 +40441,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // VeritaBench routes (Productivity Tracker + Staffing Analyzer)
   const { registerVeritaBenchRoutes } = await import('./veritabench');
   registerVeritaBenchRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
+
+  // VeritaStock recall tracker (/api/labs/:labId/veritastock/recalls/*)
+  const { registerStockRecallRoutes } = await import('./stockRecalls');
+  registerStockRecallRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
 
   // VeritaOps routes (Cost-Per-Reportable-Test studies, PARKING_LOT #10)
   const { registerVeritaOpsRoutes } = await import('./veritaops');

@@ -29,7 +29,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Lock, Plus, Edit2, Trash2, AlertTriangle, Package, Clock, AlertCircle, RefreshCw,
-  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users, Building2, DollarSign, PackageCheck, PackageX, BarChart3, ScrollText, Layers, Barcode, Smartphone, Monitor,
+  ChevronRight, CalendarClock, BellRing, FileSpreadsheet, FileText, Zap, Tag, ClipboardCheck, QrCode, Users, Building2, DollarSign, PackageCheck, PackageX, BarChart3, ScrollText, Layers, Barcode, Smartphone, Monitor, ShieldAlert,
 } from "lucide-react";
 import BarcodeScannerModal from "@/components/BarcodeScannerModal";
 import InventoryCountWorkflow, { type CountItem } from "@/components/InventoryCountWorkflow";
@@ -2076,6 +2076,22 @@ export default function VeritaStockInventoryPage() {
               Vendor Directory
             </Button>
           </Link>
+          {/* Recall tracker: vendor recalls, product notifications and device
+              corrections, matched to on-hand lots at every location, with a
+              closeout checklist and sign-off (server/stockRecalls.ts). */}
+          {activeLabId && (
+          <Link href={`/labs/${activeLabId}/veritastock/recalls`}>
+            <Button
+              size="sm"
+              variant="outline"
+              title="Log a vendor recall, find the affected lots at every location, and close it out with sign-off"
+              data-testid="recalls-button"
+            >
+              <ShieldAlert size={14} className="mr-1.5" />
+              Recalls
+            </Button>
+          </Link>
+          )}
           {/* Receiving: one screen to receive all open POs, scan-to-receive, and
               a receipt history that documents placed vs received dates so the
               facility can verify its programmed lead times. */}
