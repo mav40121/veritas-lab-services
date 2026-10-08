@@ -6605,7 +6605,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const responseSubExpiry = statusRow?.subscription_expires_at || null;
     const responseSubStatus = statusRow?.subscription_status || 'free';
     const responseAccessLevel = getAccessLevel({ subscription_expires_at: responseSubExpiry });
-    res.json({ token, session_token: sessionToken, user: { id: user.id, email: user.email, name: user.name, plan: responsePlan, studyCredits: user.studyCredits, hasCompletedOnboarding: isSeatUser ? true : false, isSeatUser, subscriptionExpiresAt: responseSubExpiry, subscriptionStatus: responseSubStatus, accessLevel: responseAccessLevel, cliaNumber: null, cliaLabName: null, cliaTier: null, seatCount: isSeatUser ? 0 : selectedSeatCount } });
+    // #84 (2026-10-08): carry the seat's module permissions like login does, so
+    // a just-accepted Staff login is read-only for setup from its first screen
+    // (without them the client treated the seat as editable until the next login).
+    let registerSeatPermissions: Record<string, any> | null = null;
+    if (isSeatUser) {
+      const sp = legacySeatForUser((db as any).$client, user.id, "permissions") as any;
+      try { registerSeatPermissions = JSON.parse(sp?.permissions || "{}"); } catch { registerSeatPermissions = {}; }
+    }
+    res.json({ token, session_token: sessionToken, user: { id: user.id, email: user.email, name: user.name, plan: responsePlan, studyCredits: user.studyCredits, hasCompletedOnboarding: isSeatUser ? true : false, isSeatUser, seatPermissions: registerSeatPermissions, subscriptionExpiresAt: responseSubExpiry, subscriptionStatus: responseSubStatus, accessLevel: responseAccessLevel, cliaNumber: null, cliaLabName: null, cliaTier: null, seatCount: isSeatUser ? 0 : selectedSeatCount } });
 
     // Send welcome email via Resend
     if (resend) {
@@ -6969,6 +6977,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         l.nys_permit_type,
         l.organization_id,
         (SELECT o.name FROM organizations o WHERE o.id = l.organization_id) AS organization_name,
+        (SELECT us.seat_type FROM user_seats us
+          WHERE us.seat_user_id = ? AND us.lab_id = l.id AND us.status = 'active'
+          ORDER BY us.id ASC LIMIT 1) AS seat_type,
         (SELECT sl.lab_address_state FROM staff_labs sl
           WHERE sl.user_id = l.owner_user_id ORDER BY sl.id DESC LIMIT 1) AS owner_state,
         (SELECT lc.expiration_date
@@ -6990,7 +7001,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         )
       )
       ORDER BY COALESCE(lm.is_primary_lab, 0) DESC, l.id ASC
-    `).all(req.userId, req.userId) as any[];
+    `).all(req.userId, req.userId, req.userId) as any[];
 
     // 2026-06-12 (account-seats guard fix): is_primary_lab FOLLOWS the NavBar
     // switcher (POST /api/labs/me/default flips it), so it cannot identify the
@@ -7008,6 +7019,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       cliaNumber: m.clia_number,
       labName: m.lab_name,
       role: m.role,
+      // #84 (2026-10-08): the seat this user holds IN THIS LAB ('active',
+      // 'view_only', 'staff_portal', 'medical_director'...), null when none.
+      // role 'staff' alone cannot tell a writer seat from a Staff login.
+      seatType: m.seat_type ?? null,
       permissions: (() => { try { return JSON.parse(m.permissions_json || '{}'); } catch { return {}; } })(),
       isPrimaryLab: !!m.is_primary_lab,
       isAccountHomeLab: homeLabId != null && Number(m.lab_id) === homeLabId,
@@ -19088,7 +19103,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const user = storage.getUserById(row.user_id);
     if (!user) return res.status(404).json({ error: "User not found" });
     const newToken = signToken(user.id);
-    res.json({ ok: true, token: newToken, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits } });
+    // #84 (2026-10-08): include the seat flags login returns, so a Staff login
+    // that resets its password is not shown edit controls until the next login.
+    const resetSeat = legacySeatForUser((db as any).$client, user.id, "permissions, owner_user_id") as any;
+    let resetSeatPermissions: Record<string, any> | null = null;
+    if (resetSeat) { try { resetSeatPermissions = JSON.parse(resetSeat.permissions || "{}"); } catch { resetSeatPermissions = {}; } }
+    res.json({ ok: true, token: newToken, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits, isSeatUser: !!resetSeat, seatPermissions: resetSeatPermissions, ownerUserId: resetSeat?.owner_user_id ?? null } });
   });
 
   app.post("/api/stripe/checkout", authMiddleware, async (req: any, res) => {

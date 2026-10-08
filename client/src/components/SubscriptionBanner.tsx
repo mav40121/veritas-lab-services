@@ -13,6 +13,16 @@ export function useAccessLevel() {
   return useActiveSubscription().accessLevel;
 }
 
+// #84 (2026-10-08): RECORDING work (QC results, notes, corrective actions,
+// maintenance log, inventory count / receive / write-off) is open to every
+// active lab member, Staff logins included; the server gates it on membership
+// and subscription only. So recording controls check the subscription, never
+// the seat's per-module view/edit permission (useIsReadOnly does both).
+export function useCanRecord(): boolean {
+  const level = useAccessLevel();
+  return !(level === 'read_only' || level === 'locked');
+}
+
 export function useIsReadOnly(module?: string): boolean {
   const { user } = useAuth();
   const level = useAccessLevel();

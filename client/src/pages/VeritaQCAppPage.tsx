@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
-import { useIsReadOnly } from "@/components/SubscriptionBanner";
+import { useIsReadOnly, useCanRecord } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -330,6 +330,9 @@ function ContinuousLeveyJenningsChart({ points }: { points: LinePoint[] }) {
 export default function VeritaQCAppPage() {
   const { user, isLoggedIn } = useAuth();
   const isReadOnly = useIsReadOnly("veritaqc");
+  // Recording QC (results, notes, corrective actions) is open to every lab
+  // member; isReadOnly still gates lot setup, void and exclude-from-baseline.
+  const canRecord = useCanRecord();
   const activeLabId = useActiveLabId();
   const { toast } = useToast();
 
@@ -678,7 +681,7 @@ export default function VeritaQCAppPage() {
           qc_rule_violation_id: caForViolation?.id || null,
           action_taken: caActionTaken.trim(),
           follow_up_notes: caFollowUp || null,
-          exclude_from_baseline: caExcludeFromBaseline,
+          exclude_from_baseline: !isReadOnly && caExcludeFromBaseline,
         }),
       });
       if (!res.ok) {
@@ -1216,7 +1219,7 @@ export default function VeritaQCAppPage() {
               ) : (
                 <p className="mb-3 text-xs text-muted-foreground">Select a control lot above to log a result against it.</p>
               )}
-              {isReadOnly && (
+              {!canRecord && (
                 <p className="mb-3 text-xs text-amber-700 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5">
                   Read-only access on this lab. Submit is disabled until the
                   subscription is renewed.
@@ -1243,7 +1246,7 @@ export default function VeritaQCAppPage() {
                     onChange={(e) => setFormValue(e.target.value)}
                     placeholder="e.g. 102.3"
                     required
-                    disabled={isReadOnly}
+                    disabled={!canRecord}
                   />
                 </div>
                 <div>
@@ -1254,7 +1257,7 @@ export default function VeritaQCAppPage() {
                     value={formDate}
                     onChange={(e) => setFormDate(e.target.value)}
                     required
-                    disabled={isReadOnly}
+                    disabled={!canRecord}
                   />
                 </div>
                 <div>
@@ -1265,7 +1268,7 @@ export default function VeritaQCAppPage() {
                     value={formInstrument}
                     onChange={(e) => setFormInstrument(e.target.value)}
                     placeholder="Select or type the analyzer"
-                    disabled={isReadOnly}
+                    disabled={!canRecord}
                   />
                   <datalist id="qc-instruments">
                     {instrumentSuggestions.map(inst => <option key={inst} value={inst} />)}
@@ -1278,7 +1281,7 @@ export default function VeritaQCAppPage() {
                     type="time"
                     value={formRunTime}
                     onChange={(e) => setFormRunTime(e.target.value)}
-                    disabled={isReadOnly}
+                    disabled={!canRecord}
                   />
                 </div>
                 <div className="sm:col-span-2">
@@ -1289,11 +1292,11 @@ export default function VeritaQCAppPage() {
                     onChange={(e) => setFormComment(e.target.value)}
                     placeholder="Optional context (reagent lot, calibrator lot, troubleshooting note)"
                     rows={2}
-                    disabled={isReadOnly}
+                    disabled={!canRecord}
                   />
                 </div>
                 <div className="sm:col-span-2 flex justify-end">
-                  <Button type="submit" disabled={submitting || isReadOnly || (!!selectedLot && selectedLot.status !== "active")}>
+                  <Button type="submit" disabled={submitting || !canRecord || (!!selectedLot && selectedLot.status !== "active")}>
                     {submitting ? "Submitting..." : "Submit result"}
                   </Button>
                 </div>
@@ -1441,7 +1444,7 @@ export default function VeritaQCAppPage() {
                             </Button>
                             {r.voided_at ? (
                               <span className="text-xs text-muted-foreground italic" title={r.void_reason ? `Voided: ${r.void_reason}` : "Voided"}>Voided</span>
-                            ) : (
+                            ) : isReadOnly ? null : (
                               <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive h-7 px-2" onClick={() => voidResult(r)} title="Void this result (wrong lot, wrong level, or mis-keyed run)">Void</Button>
                             )}
                           </td>
@@ -1501,7 +1504,7 @@ export default function VeritaQCAppPage() {
                 rows={2}
               />
             </div>
-            <label className="flex items-start gap-2 text-sm">
+            {!isReadOnly && <label className="flex items-start gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={caExcludeFromBaseline}
@@ -1513,7 +1516,7 @@ export default function VeritaQCAppPage() {
                 was instrument or reagent, not the lot itself; keeps future Westgard
                 evaluations clean).
               </span>
-            </label>
+            </label>}
           </div>
           {caFailCount >= 1 && (
             <p className="text-xs text-amber-700">
@@ -1613,7 +1616,7 @@ export default function VeritaQCAppPage() {
                   ))
                 )}
               </div>
-              {!isReadOnly && (
+              {canRecord && (
                 <div className="space-y-2">
                   <Textarea
                     value={noteText}
