@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useTheme } from "@/components/ThemeProvider";
 import { useAuth } from "@/components/AuthContext";
+import { useIsStaffLogin } from "@/hooks/useStaffLogin";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, TestTube, User, LogOut, LayoutDashboard, Play, ListChecks, ShieldCheck } from "lucide-react";
@@ -92,6 +93,8 @@ const mobileFooterLinks: { href: string; label: string }[] = [
 export function NavBar() {
   const { theme, toggleTheme } = useTheme();
   const { user, logout, isLoggedIn } = useAuth();
+  // #84: a Staff login does not buy plans or run studies; hide those entries.
+  const isStaff = useIsStaffLogin();
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   // Mobile menu collapsible-group state. Resets every time the menu closes
@@ -193,10 +196,12 @@ export function NavBar() {
           </Link>
 
           {/* Plans (route stays /pricing; only the displayed label changes) */}
+          {!isStaff && (
           <Link href="/pricing" className={cn("px-2 py-1.5 rounded-md text-sm font-medium transition-colors",
             isActive("/pricing") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
             Plans
           </Link>
+          )}
 
           {/* VeritaAssure — one flat menu of all eighteen modules. Compliance
               and Operations are unified here (no separate Operations menu); the
@@ -374,7 +379,7 @@ export function NavBar() {
               accessible via the User dropdown above (DropdownMenuItem
               -> /dashboard). */}
 
-          {!onStockHost && (
+          {!onStockHost && !isStaff && (
           <Button asChild size="sm" className="hidden lg:flex bg-primary hover:bg-primary/90 text-primary-foreground font-medium">
             <Link href="/veritacheck">Run a Study</Link>
           </Button>
@@ -397,7 +402,7 @@ export function NavBar() {
         >
           <div className="px-4 py-3 flex flex-col gap-1">
             {/* Top-level marketing links (suppressed on the VeritaStock host) */}
-            {!onStockHost && mobileTopLinks.map(({ href, label }) => (
+            {!onStockHost && mobileTopLinks.filter(({ href }) => !(isStaff && href === "/pricing")).map(({ href, label }) => (
               <Link key={href} href={href} onClick={closeMobile}
                 className="px-3 py-2 rounded-md text-sm font-medium text-foreground hover:bg-secondary transition-colors">
                 {label}
@@ -467,7 +472,7 @@ export function NavBar() {
               ) : (
                 <Button asChild variant="outline" size="sm" className="flex-1"><Link href="/login" onClick={closeMobile}>Sign in</Link></Button>
               )}
-              {!onStockHost && <Button asChild size="sm" className="flex-1 bg-primary text-primary-foreground"><Link href="/veritacheck" onClick={closeMobile}>Run a Study</Link></Button>}
+              {!onStockHost && !isStaff && <Button asChild size="sm" className="flex-1 bg-primary text-primary-foreground"><Link href="/veritacheck" onClick={closeMobile}>Run a Study</Link></Button>}
             </div>
           </div>
         </div>

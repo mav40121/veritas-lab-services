@@ -123,6 +123,7 @@ const VeritaShiftPage = lazy(() => import("@/pages/VeritaShiftPage"));
 const VeritaStockPage = lazy(() => import("@/pages/VeritaStockPage"));
 const VeritaStockTrendsPage = lazy(() => import("@/pages/VeritaStockTrendsPage"));
 const VeritaStockVendorsPage = lazy(() => import("@/pages/VeritaStockVendorsPage"));
+const VeritaStockRecallsPage = lazy(() => import("@/pages/VeritaStockRecallsPage"));
 const VeritaStockSnapOrderPage = lazy(() => import("@/pages/VeritaStockSnapOrderPage"));
 const VeritaShiftSchedulerPage = lazy(() => import("@/pages/VeritaShiftSchedulerPage"));
 const VeritaStockReceivingPage = lazy(() => import("@/pages/VeritaStockReceivingPage"));
@@ -572,6 +573,7 @@ function AppContent() {
           <Route path="/labs/:labId/veritastock/audit" component={VeritaStockAuditTrailPage} />
           <Route path="/labs/:labId/veritastock/enterprise" component={VeritaStockEnterprisePage} />
           <Route path="/labs/:labId/veritastock/vendors" component={VeritaStockVendorsPage} />
+          <Route path="/labs/:labId/veritastock/recalls" component={VeritaStockRecallsPage} />
           <Route path="/labs/:labId/veritaops-app" component={VeritaOpsAppPage} />
           <Route path="/labs/:labId/veritabench/scheduler" component={VeritaShiftSchedulerPage} />
           <Route path="/labs/:labId/veritabench/staffing" component={VeritaShiftPage} />

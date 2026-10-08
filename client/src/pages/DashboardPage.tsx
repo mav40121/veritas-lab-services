@@ -24,9 +24,14 @@ import { useLabRoute } from "@/hooks/useLabRoute";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { CoverageSummaryCard } from "@/components/CoverageSummaryCard";
 import { GettingStartedCard } from "@/components/GettingStartedCard";
+import { StaffMyWorkCard } from "@/components/StaffMyWorkCard";
+import { useIsStaffLogin } from "@/hooks/useStaffLogin";
 
 export default function Dashboard() {
   const labRoute = useLabRoute();
+  // #84: a Staff login gets its own work up front and no owner setup items or
+  // coworker competency/credential tiles.
+  const isStaff = useIsStaffLogin();
   const { toast } = useToast();
   const readOnly = useIsReadOnly('veritacheck');
   // Multi-Lab Tier 2 Phase 3: studies are lab-scoped. labId comes from the
@@ -185,7 +190,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <ModuleHowToCard
+      {isStaff && <StaffMyWorkCard className="mb-6" />}
+
+      {!isStaff && <ModuleHowToCard
         moduleKey="veritacheck"
         moduleName="VeritaCheck™"
         whatItDoes="VeritaCheck runs the analytical performance verification studies CLIA requires before a new method goes into patient testing: Calibration Verification / Linearity, Precision, Correlation / Method Comparison, Reagent Lot Verification (EP26), QC Lot Verification (C24-Ed4), and Coagulation New Lot. Each study calculates the statistics, generates the CFR-cited narrative, and produces a director-signed PDF on page 1."
@@ -196,11 +203,11 @@ export default function Dashboard() {
           "Review the calculated values against the CLIA TEa (or Lab-Set Internal Goal where no canonical TEa exists).",
           "The medical director or designee signs; download the PDF and file with your CLIA records.",
         ]}
-      />
+      />}
 
       {/* Parking lot #72: the lab's own Getting Started checklist, scored live
           from its tables; hides itself at 100 percent or when dismissed. */}
-      <GettingStartedCard className="mb-6" />
+      {!isStaff && <GettingStartedCard className="mb-6" />}
 
       {/* Coverage summary: the single most valuable VeritaCheck view (map
           requires vs. studies on file) promoted from a buried toolbar button
@@ -218,25 +225,25 @@ export default function Dashboard() {
       {/* PR E2: Competency status tile (lab-scoped). Hides itself when the
           lab has zero active testing personnel or the user is on the legacy
           /dashboard URL. */}
-      <CompetencyStatusTile className="mb-6" />
+      {!isStaff && <CompetencyStatusTile className="mb-6" />}
 
       {/* Wave F PR F3: Credential expiration tile. Hides itself when the lab
           has zero credentials with an expiration_date. Pairs visually with
           the competency tile so surveyors see both signals adjacently. */}
-      <CredentialExpirationTile className="mb-6" />
+      {!isStaff && <CredentialExpirationTile className="mb-6" />}
 
       {/* Wave G PR G2: Open-reassessment queue tile. Self-hides when no
           failing assessments are open. Per §493.1235(b)(7) a failing
           assessment triggers a mandatory reassessment cycle; this tile
           surfaces who still owes a follow-up. */}
-      <ReassessmentTrackerTile className="mb-6" />
+      {!isStaff && <ReassessmentTrackerTile className="mb-6" />}
 
       {/* Wave H PR H4: Duty-change reassessment queue tile. Self-hides
           when no employee has an open duty-change event (instrument
           added but no follow-up duty-change competency assessment).
           Per §493.1235(a) and TJC HR.01.06.01, an employee's testing
           duties changing triggers a reassessment. */}
-      <DutyChangeTile className="mb-6" />
+      {!isStaff && <DutyChangeTile className="mb-6" />}
 
       {/* Correlations due soon */}
       <CorrelationsDueSoonWidget className="mb-6" />
@@ -284,12 +291,18 @@ export default function Dashboard() {
         <div className="text-center py-20 border-2 border-dashed border-border rounded-xl">
           <FlaskConical size={32} className="text-muted-foreground mx-auto mb-3" />
           <h3 className="font-semibold mb-1">No studies yet</h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            Run your first study to get started.
-          </p>
-          <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
-            <Link href={labRoute("/study/new")}>Start a Study</Link>
-          </Button>
+          {/* #84: a view-only login (e.g. a Staff login) cannot run studies, so
+              the empty state does not invite one; same gate as New Study. */}
+          {!readOnly && (
+            <>
+              <p className="text-sm text-muted-foreground mb-4">
+                Run your first study to get started.
+              </p>
+              <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                <Link href={labRoute("/study/new")}>Start a Study</Link>
+              </Button>
+            </>
+          )}
         </div>
         )
       ) : (

@@ -57,7 +57,7 @@ export default function CumsumPage() {
   const { isLoggedIn } = useAuth();
   const activeLabId = useActiveLabId();
   const { toast } = useToast();
-  const readOnly = useIsReadOnly();
+  const readOnly = useIsReadOnly("veritacheck");
 
   const [trackers, setTrackers] = useState<Tracker[]>([]);
   const [selectedTracker, setSelectedTracker] = useState<(Tracker & { entries: Entry[] }) | null>(null);

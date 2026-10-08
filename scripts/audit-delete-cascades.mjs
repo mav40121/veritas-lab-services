@@ -22,6 +22,7 @@ const SCHEMA = "server/db.ts";
 const ROUTE_FILES = [
   "server/routes.ts",
   "server/veritacheck_verification.ts",
+  "server/stockRecalls.ts",
 ];
 
 // 1. Build child -> parent and parent -> [children] from FOREIGN KEY decls.

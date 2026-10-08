@@ -25,7 +25,8 @@ import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCo
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
 import { labLocalDate } from "./dateLocal";
 import { scanPhi } from "./phiScan";
-import { evaluateWestgardForLot } from "./qcWestgard";
+import { evaluateQcRun, rulesForRun } from "./qcWestgard";
+import { resolveBasis, computeBasis, basisConfig, lockEstablishedIfDue, sampleStats, type QcBasis } from "./qcBasis";
 import { buildWasteReport, generateWasteReportPDF, generateWasteReportExcel, type WasteEventRow, type WasteReportContext } from "./wasteReport";
 import { entireLabFlag, sanitizeSpecialties, expandEntireLabRoles, cms209Gaps } from "./cms209Roles";
 import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution, analyteMatch, stampMapDatesFromStudies } from "./veritacheckCoverage";
@@ -815,56 +816,49 @@ function requireWriteAccess(req: any, res: any, next: any) {
 }
 
 // 2026-06-08 Staff Portal auth middleware. Verifies a real user JWT and
-// resolves the user's Staff Portal identity (a staff_portal seat, or a linked
-// staff_employees row). Stashes req.staffPortalLabId for downstream handlers.
+// resolves the user's Staff Portal identity. Stashes req.staffPortalLabId and
+// req.staffPortalStaffEmployeeId for downstream handlers.
+//
+// 2026-10-08 identity fix: the ONLY qualifying path is an active
+// user_seats row with seat_type='staff_portal' that is linked to a roster row
+// (staff_employee_id). The former "director-on-roster" fallback matched
+// staff_employees.user_id = the caller, but that column holds the lab OWNER's
+// id on every roster row (NOT NULL, see db.ts), so an owner opening
+// /staff-access was silently bound to the first employee on the roster
+// (reported by MedStar: an owner saw "Justin Grinnell, Traverse City" while
+// working in Brighton). That fallback is removed.
+//
+// Self-only: every staff-portal request acts as the seat's own roster row.
+// Any employee_id in the query or body that is not that row is refused here,
+// once, for every route (policy sign, quiz attempt, inventory adjust,
+// competency sign/edit and their reads), instead of trusting the client.
 export function staffPortalAuthMiddleware(req: any, res: any, next: any) {
   const auth = req.headers.authorization;
   if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
+  let payload: any;
   try {
-    const payload = jwt.verify(auth.slice(7), JWT_SECRET) as any;
-    // 2026-06-09 PR Option 1: synthetic-JWT (kind='staff_portal') path is
-    // retired. Only real user JWTs reach here now. A user qualifies for
-    // Staff Portal access via either:
-    //   1. an active user_seats row with seat_type='staff_portal' (the
-    //      invited-tech path), OR
-    //   2. a staff_employees row linked via user_id to req.userId
-    //      (the lab-director-on-roster path).
-    // Both paths resolve a single labs.id which gets stashed as
-    // req.staffPortalLabId for downstream handlers.
-    if (payload && typeof payload.userId === "number") {
-      const sqlite = (db as any).$client;
-      const seat = sqlite.prepare(
-        "SELECT lab_id, staff_employee_id FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' AND status = 'active' LIMIT 1"
-      ).get(payload.userId) as any;
-      if (seat && seat.lab_id) {
-        req.staffPortalLabId = seat.lab_id;
-        req.staffPortalStaffEmployeeId = seat.staff_employee_id;
-        req.staffPortalUserId = payload.userId;
-        return next();
-      }
-      // Director-on-roster fallback. Pick the lab from the ?lab_id
-      // query param when supplied (so the bell can scope to the
-      // active lab), else any lab where the user has a staff_employees
-      // row linked.
-      const queryLabId = parseInt(String((req.query || {}).lab_id || ""), 10);
-      const empRow = Number.isFinite(queryLabId) && queryLabId > 0
-        ? sqlite.prepare(
-            "SELECT id, tier2_lab_id FROM staff_employees WHERE user_id = ? AND tier2_lab_id = ? AND status = 'active' LIMIT 1"
-          ).get(payload.userId, queryLabId) as any
-        : sqlite.prepare(
-            "SELECT id, tier2_lab_id FROM staff_employees WHERE user_id = ? AND status = 'active' LIMIT 1"
-          ).get(payload.userId) as any;
-      if (empRow && empRow.tier2_lab_id) {
-        req.staffPortalLabId = empRow.tier2_lab_id;
-        req.staffPortalStaffEmployeeId = empRow.id;
-        req.staffPortalUserId = payload.userId;
-        return next();
-      }
-    }
-    return res.status(401).json({ error: "Not a staff portal session" });
+    payload = jwt.verify(auth.slice(7), JWT_SECRET) as any;
   } catch {
     return res.status(401).json({ error: "Invalid or expired token" });
   }
+  if (!payload || typeof payload.userId !== "number") return res.status(401).json({ error: "Not a staff portal session" });
+  const sqlite = (db as any).$client;
+  const seat = sqlite.prepare(
+    "SELECT lab_id, staff_employee_id FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' AND status = 'active' AND staff_employee_id IS NOT NULL LIMIT 1"
+  ).get(payload.userId) as any;
+  if (!seat || !seat.lab_id || !seat.staff_employee_id) {
+    return res.status(401).json({ error: "Not a staff portal session", code: "NOT_STAFF_PORTAL" });
+  }
+  const claimed = (req.body && req.body.employee_id != null && req.body.employee_id !== "")
+    ? req.body.employee_id
+    : (req.query && req.query.employee_id != null && req.query.employee_id !== "" ? req.query.employee_id : null);
+  if (claimed != null && Number(claimed) !== Number(seat.staff_employee_id)) {
+    return res.status(403).json({ error: "The Staff Portal only acts as the signed-in staff member.", code: "STAFF_PORTAL_NOT_SELF" });
+  }
+  req.staffPortalLabId = seat.lab_id;
+  req.staffPortalStaffEmployeeId = seat.staff_employee_id;
+  req.staffPortalUserId = payload.userId;
+  return next();
 }
 
 function authMiddleware(req: any, res: any, next: any) {
@@ -3899,6 +3893,150 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, matched: before.length, before, after });
   });
 
+  // POST /api/admin/qc/rule-settings {secret, labId, establishingRules?, establishN?, dryRun?}
+  // Lab-wide QC policy (qc_rule_settings row with analyte NULL): how a lot is
+  // judged while it is on the manufacturer's values ('westgard' full rules, or
+  // 'range' pass/fail on the manufacturer's published range) and how many
+  // accepted runs establish the lab's own mean/SD. Set on the lab's say-so
+  // (MedStar, 2026-10-08). dryRun returns before/after without writing.
+  app.post("/api/admin/qc/rule-settings", (req: any, res) => {
+    const { secret, labId, establishingRules, establishN, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const lab = Number(labId);
+    if (!Number.isFinite(lab) || lab <= 0) return res.status(400).json({ error: "labId required" });
+    if (establishingRules !== undefined && establishingRules !== "westgard" && establishingRules !== "range") {
+      return res.status(400).json({ error: "establishingRules must be 'westgard' or 'range'" });
+    }
+    if (establishN !== undefined && (!Number.isInteger(Number(establishN)) || Number(establishN) < 2 || Number(establishN) > 200)) {
+      return res.status(400).json({ error: "establishN must be an integer from 2 to 200" });
+    }
+    const sqlite = (db as any).$client;
+    if (!sqlite.prepare("SELECT 1 FROM labs WHERE id = ?").get(lab)) return res.status(404).json({ error: "Lab not found" });
+    const read = () => sqlite.prepare("SELECT establishing_rules, establish_n, bias_consecutive_count, trend_consecutive_count FROM qc_rule_settings WHERE lab_id = ? AND analyte IS NULL").get(lab) || null;
+    const before = read();
+    const after = {
+      establishing_rules: establishingRules ?? before?.establishing_rules ?? "westgard",
+      establish_n: establishN !== undefined ? Number(establishN) : (before?.establish_n ?? 20),
+    };
+    if (dryRun === true) return res.json({ ok: true, dryRun: true, labId: lab, before, after });
+    const now = new Date().toISOString();
+    if (before) {
+      sqlite.prepare("UPDATE qc_rule_settings SET establishing_rules = ?, establish_n = ?, updated_at = ? WHERE lab_id = ? AND analyte IS NULL")
+        .run(after.establishing_rules, after.establish_n, now, lab);
+    } else {
+      sqlite.prepare(
+        "INSERT INTO qc_rule_settings (lab_id, analyte, bias_consecutive_count, trend_consecutive_count, enabled_rules_json, establishing_rules, establish_n, created_at, updated_at) VALUES (?, NULL, 10, 7, '[\"1-2s\",\"1-3s\",\"2-2s\",\"R-4s\",\"4-1s\",\"N-x\",\"N-T\"]', ?, ?, ?, ?)"
+      ).run(lab, after.establishing_rules, after.establish_n, now, now);
+    }
+    logAudit({ userId: 0, module: "admin", action: "update", entityType: "admin.qc_rule_settings", entityLabel: `lab ${lab}: establishing_rules=${after.establishing_rules}, establish_n=${after.establish_n}`, before, after, ipAddress: req.ip });
+    res.json({ ok: true, dryRun: false, labId: lab, before, after: read() });
+  });
+
+  // POST /api/admin/qc/rescore {secret, labIds, since, dryRun = true}
+  // Re-judge accepted runs dated on or after `since` against the evaluation
+  // basis in server/qcBasis.ts (2026-10-08, MedStar: the lab's own numbers once
+  // a lot has enough runs, the manufacturer's until then). Each run is judged the way
+  // it would have been on entry: against the runs that precede it on its lot.
+  // dryRun (the default) returns the before and after per run and writes
+  // nothing. A commit marks the old flags superseded (never deleted; a
+  // corrective action may point at one), inserts the new flags, stamps the
+  // basis on every re-scored run, locks each lot's established mean/SD where it
+  // has enough runs, and writes one audit row per lab. Excluded (not accepted)
+  // runs keep their flags; the tech already acted on them.
+  app.post("/api/admin/qc/rescore", (req: any, res) => {
+    const { secret, labIds, since, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const labs = (Array.isArray(labIds) ? labIds : []).map(Number).filter((n: number) => Number.isFinite(n) && n > 0);
+    if (labs.length === 0) return res.status(400).json({ error: "labIds (non-empty array) required" });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(since || ""))) return res.status(400).json({ error: "since must be YYYY-MM-DD" });
+    const commit = dryRun === false;
+    const sqlite = (db as any).$client;
+    const now = new Date().toISOString();
+    const reason = `rescore ${now.slice(0, 10)}: lab-established basis (server/qcBasis.ts)`;
+    const report: any[] = [];
+    const work: { resultId: number; after: any[]; basis: QcBasis | null; changed: boolean }[] = [];
+    const lotsTouched: { labId: number; lotId: number }[] = [];
+    for (const labId of labs) {
+      const lots = sqlite.prepare(
+        "SELECT id, lab_id, analyte, level, lot_number, mfr_mean, mfr_sd, mfr_range_low, mfr_range_high, lab_mean, lab_sd, lab_basis_n, lab_basis_locked_at, lab_basis_source, prior_lot_id FROM qc_control_lots WHERE lab_id = ? ORDER BY analyte, level, id"
+      ).all(labId) as any[];
+      const labOut: any = { labId, lots: [], changed: 0, unchanged: 0 };
+      for (const lot of lots) {
+        const hist = sqlite.prepare(
+          "SELECT id, result_value, result_date FROM qc_results WHERE lab_id = ? AND control_lot_id = ? AND accepted_for_reporting = 1 AND voided_at IS NULL ORDER BY result_date ASC, id ASC"
+        ).all(labId, lot.id) as any[];
+        if (!hist.some((h: any) => h.result_date >= since)) continue;
+        lotsTouched.push({ labId, lotId: lot.id });
+        const cfg = basisConfig(sqlite, labId, lot.analyte);
+        const st = sqlite.prepare(
+          "SELECT bias_consecutive_count, trend_consecutive_count FROM qc_rule_settings WHERE lab_id = ? AND (analyte = ? OR analyte IS NULL) ORDER BY (analyte IS NULL) ASC LIMIT 1"
+        ).get(labId, lot.analyte) as any;
+        const biasN = st?.bias_consecutive_count ?? 10;
+        const trendN = st?.trend_consecutive_count ?? 7;
+        // A basis an owner/admin set by hand stands; an automatic lock is
+        // recomputed so every run is judged as it would have been on entry.
+        const simLot = (lot.lab_basis_source === "manual" || lot.lab_basis_source === "all_runs")
+          ? lot : { ...lot, lab_mean: null, lab_sd: null };
+        const vals = hist.map((h: any) => Number(h.result_value));
+        const ids = hist.map((h: any) => h.id);
+        const lotOut: any = { lotId: lot.id, analyte: lot.analyte, level: lot.level, lot_number: lot.lot_number, runs: hist.length, changes: [] as any[], unchanged: 0 };
+        for (let i = 0; i < hist.length; i++) {
+          if (hist[i].result_date < since) continue;
+          const basis = computeBasis(simLot, vals.slice(0, i), cfg);
+          const after = rulesForRun(vals, ids, i, basis, { low: lot.mfr_range_low ?? null, high: lot.mfr_range_high ?? null }, cfg, biasN, trendN);
+          const before = sqlite.prepare("SELECT rule_code, severity FROM qc_rule_violations WHERE qc_result_id = ? AND superseded_at IS NULL ORDER BY rule_code").all(ids[i]) as any[];
+          const bKey = before.map((v: any) => v.rule_code).sort().join(",");
+          const aKey = after.map((v) => v.rule_code).sort().join(",");
+          const changed = bKey !== aKey;
+          work.push({ resultId: ids[i], after, basis, changed });
+          if (changed) {
+            lotOut.changes.push({
+              result_id: ids[i], result_date: hist[i].result_date, value: vals[i],
+              before: bKey ? bKey.split(",") : [], after: aKey ? aKey.split(",") : [],
+              basis: basis ? { mean: Number(basis.mean.toFixed(4)), sd: Number(basis.sd.toFixed(4)), source: basis.source } : null,
+            });
+          } else lotOut.unchanged++;
+        }
+        labOut.changed += lotOut.changes.length;
+        labOut.unchanged += lotOut.unchanged;
+        const nextBasis = computeBasis(simLot, vals, cfg);
+        lotOut.basis_next_run = nextBasis ? nextBasis.label : null;
+        labOut.lots.push(lotOut);
+      }
+      report.push(labOut);
+    }
+    if (!commit) return res.json({ ok: true, dryRun: true, since, report });
+    const tx = sqlite.transaction(() => {
+      const sup = sqlite.prepare("UPDATE qc_rule_violations SET superseded_at = ?, superseded_reason = ? WHERE qc_result_id = ? AND superseded_at IS NULL");
+      const ins = sqlite.prepare("INSERT INTO qc_rule_violations (qc_result_id, rule_code, severity, detail, related_result_ids, evaluated_at) VALUES (?, ?, ?, ?, ?, ?)");
+      const stamp = sqlite.prepare("UPDATE qc_results SET basis_mean = ?, basis_sd = ?, basis_source = ? WHERE id = ?");
+      for (const w of work) {
+        if (w.basis) stamp.run(w.basis.mean, w.basis.sd, w.basis.source, w.resultId);
+        if (!w.changed) continue;
+        sup.run(now, reason, w.resultId);
+        for (const v of w.after) ins.run(w.resultId, v.rule_code, v.severity, v.detail, JSON.stringify(v.related_result_ids), now);
+      }
+      for (const t of lotsTouched) lockEstablishedIfDue(sqlite, t.labId, t.lotId);
+    });
+    try { tx(); } catch (err: any) {
+      console.error("[qc/rescore] failed:", err.message);
+      return res.status(500).json({ error: err.message || "rescore failed" });
+    }
+    for (const r of report) {
+      logAudit({
+        userId: 0,
+        module: "admin",
+        action: "update",
+        entityType: "admin.qc_rescore",
+        entityLabel: `lab ${r.labId}: ${r.changed} run(s) re-flagged, ${r.unchanged} unchanged since ${since}`,
+        after: { since, lots: r.lots.map((l: any) => ({ lotId: l.lotId, changes: l.changes.length })) },
+        ipAddress: req.ip,
+      });
+    }
+    console.log(`[qc/rescore] committed labs=${labs.join(",")} since=${since}`);
+    res.json({ ok: true, dryRun: false, since, report });
+  });
+
   // ─── VeritaQC Phase 1A: Westgard evaluator + result POST ─────────────────
   // Phase 0 shipped the schema. Phase 1A adds the server-side rule evaluator
   // and the customer endpoint that tech staff use to log a QC result. The
@@ -3962,7 +4100,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const biasN = settings?.bias_consecutive_count ?? 10;
     const trendN = settings?.trend_consecutive_count ?? 7;
 
-    const violations = evaluateWestgardForLot(sqlite, req.scope.labId, Number(control_lot_id), newResultId, biasN, trendN);
+    const { violations, basis } = evaluateQcRun(sqlite, req.scope.labId, Number(control_lot_id), newResultId, biasN, trendN);
+    if (basis) sqlite.prepare("UPDATE qc_results SET basis_mean = ?, basis_sd = ?, basis_source = ? WHERE id = ?").run(basis.mean, basis.sd, basis.source, newResultId);
 
     const insertViol = sqlite.prepare(
       "INSERT INTO qc_rule_violations (qc_result_id, rule_code, severity, detail, related_result_ids, evaluated_at) VALUES (?, ?, ?, ?, ?, ?)"
@@ -3980,6 +4119,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       violations: storedViolations,
       requires_corrective_action,
       settings_used: { bias_consecutive_count: biasN, trend_consecutive_count: trendN },
+      basis,
     });
   });
 
@@ -3994,9 +4134,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/staff-portal-session/qc/lots", staffPortalAuthMiddleware, (req: any, res) => {
     const sqlite = (db as any).$client;
     const lots = sqlite.prepare(
-      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, expiration_date, status FROM qc_control_lots WHERE lab_id = ? AND status = 'active' ORDER BY analyte ASC, lot_number ASC"
-    ).all(req.staffPortalLabId);
-    res.json({ lots });
+      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, status FROM qc_control_lots WHERE lab_id = ? AND status = 'active' ORDER BY analyte ASC, lot_number ASC"
+    ).all(req.staffPortalLabId) as any[];
+    res.json({ lots: lots.map((l) => ({ ...l, basis: resolveBasis(sqlite, req.staffPortalLabId, l.id) })) });
   });
 
   app.get("/api/staff-portal-session/qc/results", staffPortalAuthMiddleware, (req: any, res) => {
@@ -4089,7 +4229,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const biasN = settings?.bias_consecutive_count ?? 10;
     const trendN = settings?.trend_consecutive_count ?? 7;
 
-    const violations = evaluateWestgardForLot(sqlite, req.staffPortalLabId, Number(control_lot_id), newResultId, biasN, trendN);
+    const { violations, basis } = evaluateQcRun(sqlite, req.staffPortalLabId, Number(control_lot_id), newResultId, biasN, trendN);
+    if (basis) sqlite.prepare("UPDATE qc_results SET basis_mean = ?, basis_sd = ?, basis_source = ? WHERE id = ?").run(basis.mean, basis.sd, basis.source, newResultId);
     const insertViol = sqlite.prepare(
       "INSERT INTO qc_rule_violations (qc_result_id, rule_code, severity, detail, related_result_ids, evaluated_at) VALUES (?, ?, ?, ?, ?, ?)"
     );
@@ -4099,7 +4240,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       storedViolations.push({ id: Number(r.lastInsertRowid), ...v });
     }
     const requires_corrective_action = violations.some((v: any) => v.severity === "rejection");
-    res.json({ ok: true, result_id: newResultId, violations: storedViolations, requires_corrective_action });
+    res.json({ ok: true, result_id: newResultId, violations: storedViolations, requires_corrective_action, basis });
   });
 
   // ─── VeritaQC Phase 1B: entry-UI support endpoints ───────────────────────
@@ -4115,8 +4256,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const sqlite = (db as any).$client;
     const lots = sqlite.prepare(
       "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, status, prior_lot_id, created_at, updated_at FROM qc_control_lots WHERE lab_id = ? ORDER BY (status = 'active') DESC, analyte ASC, lot_number ASC"
-    ).all(req.scope.labId);
-    res.json({ lots });
+    ).all(req.scope.labId) as any[];
+    // basis = the mean/SD that judges the lot's next run (server/qcBasis.ts);
+    // the chart draws it so the chart and the Westgard flags always agree.
+    res.json({ lots: lots.map((l) => ({ ...l, basis: resolveBasis(sqlite, req.scope.labId, l.id) })) });
   });
 
   // POST /api/labs/:labId/qc/control-lots — add a new control lot for this lab.
@@ -4256,6 +4399,61 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   //       mfr_range_low?, mfr_range_high?, expiration_date?, opened_date?,
   //       retire_prior? (default true).
   // Returns 409 on the (lab_id, analyte, lot_number) UNIQUE violation.
+  // POST /api/labs/:labId/qc/control-lots/:id/establish
+  // Owner/admin sets the lab's own mean/SD for a lot (server/qcBasis.ts):
+  //   { mode: "all_runs" }            from every accepted run on file
+  //   { mode: "manual", mean, sd }    values the lab established elsewhere
+  //   { mode: "auto" }                clear it; the lot re-locks from its first
+  //                                   establish_n runs on the next entry
+  // Runs already on file keep their flags (a re-score is a separate, approved
+  // step); new runs are judged against the new basis.
+  app.post("/api/labs/:labId/qc/control-lots/:id/establish", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!(req.scope?.role === "owner" || req.scope?.role === "admin")) {
+      return res.status(403).json({ error: "Only the lab owner or an admin can set the lab's established mean and SD." });
+    }
+    const lotId = Number(req.params.id);
+    const sqlite = (db as any).$client;
+    const lot = sqlite.prepare(
+      "SELECT id, analyte, level, lot_number, lab_mean, lab_sd, lab_basis_n, lab_basis_source FROM qc_control_lots WHERE id = ? AND lab_id = ?"
+    ).get(lotId, req.scope.labId) as any;
+    if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
+    const mode = String((req.body || {}).mode || "");
+    const now = new Date().toISOString();
+    let mean: number | null = null, sd: number | null = null, n: number | null = null, source: string | null = null, lockedAt: string | null = null;
+    if (mode === "all_runs") {
+      const vals = (sqlite.prepare(
+        "SELECT result_value FROM qc_results WHERE lab_id = ? AND control_lot_id = ? AND accepted_for_reporting = 1 AND voided_at IS NULL"
+      ).all(req.scope.labId, lotId) as any[]).map((r) => Number(r.result_value));
+      const st = sampleStats(vals);
+      if (vals.length < 2 || !Number.isFinite(st.sd) || st.sd <= 0) {
+        return res.status(400).json({ error: `Need at least 2 accepted runs with some spread to establish a mean and SD (this lot has ${vals.length}).` });
+      }
+      mean = st.mean; sd = st.sd; n = vals.length; source = "all_runs"; lockedAt = now;
+    } else if (mode === "manual") {
+      const m = Number((req.body || {}).mean), d = Number((req.body || {}).sd);
+      if (!Number.isFinite(m)) return res.status(400).json({ error: "mean must be a number" });
+      if (!Number.isFinite(d) || d <= 0) return res.status(400).json({ error: "sd must be a positive number" });
+      mean = m; sd = d; source = "manual"; lockedAt = now;
+    } else if (mode !== "auto") {
+      return res.status(400).json({ error: "mode must be all_runs, manual or auto" });
+    }
+    sqlite.prepare(
+      "UPDATE qc_control_lots SET lab_mean = ?, lab_sd = ?, lab_basis_n = ?, lab_basis_locked_at = ?, lab_basis_source = ?, lab_basis_set_by_user_id = ?, updated_at = ? WHERE id = ? AND lab_id = ?"
+    ).run(mean, sd, n, lockedAt, source, mode === "auto" ? null : req.userId, now, lotId, req.scope.labId);
+    logAudit({
+      userId: req.userId,
+      module: "veritaqc",
+      action: "update",
+      entityType: "qc_control_lot.established_basis",
+      entityId: lotId,
+      entityLabel: `${lot.analyte} ${lot.level} lot ${lot.lot_number}: ${mode}`,
+      before: { lab_mean: lot.lab_mean, lab_sd: lot.lab_sd, lab_basis_n: lot.lab_basis_n, lab_basis_source: lot.lab_basis_source },
+      after: { lab_mean: mean, lab_sd: sd, lab_basis_n: n, lab_basis_source: source },
+      ipAddress: req.ip,
+    });
+    res.json({ ok: true, basis: resolveBasis(sqlite, req.scope.labId, lotId) });
+  });
+
   app.post("/api/labs/:labId/qc/control-lots/:id/changeover", authMiddleware, labScopeMiddleware, (req: any, res) => {
     const priorId = Number(req.params.id);
     if (!Number.isFinite(priorId) || priorId <= 0) {
@@ -4379,25 +4577,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (rows.length > 0) {
       const rph = rows.map(() => "?").join(",");
       const vrows = sqlite.prepare(
-        "SELECT DISTINCT qc_result_id FROM qc_rule_violations WHERE severity = 'rejection' AND qc_result_id IN (" + rph + ")"
+        "SELECT DISTINCT qc_result_id FROM qc_rule_violations WHERE severity = 'rejection' AND superseded_at IS NULL AND qc_result_id IN (" + rph + ")"
       ).all(...rows.map(r => r.id)) as any[];
       for (const v of vrows) rejected.add(v.qc_result_id);
     }
-    const points = rows.map(r => ({
-      id: r.id,
-      control_lot_id: r.control_lot_id,
-      lot_number: r.lot_number,
-      result_value: r.result_value,
-      result_date: r.result_date,
-      run_time: r.run_time,
-      instrument: r.instrument,
-      accepted_for_reporting: r.accepted_for_reporting,
-      mfr_mean: r.mfr_mean,
-      mfr_sd: r.mfr_sd,
-      sdi: r.mfr_sd > 0 ? (r.result_value - r.mfr_mean) / r.mfr_sd : 0,
-      is_rejection: rejected.has(r.id),
-    }));
-    res.json({ analyte, level, lots, points });
+    // Each point is measured against its OWN lot's evaluation basis (the same
+    // mean/SD the Westgard rules and the per-lot chart use), so a lot change
+    // re-centers on the new lot.
+    const basisByLot = new Map<number, QcBasis | null>();
+    for (const l of lots) basisByLot.set(l.id, resolveBasis(sqlite, req.scope.labId, l.id));
+    const points = rows.map(r => {
+      const b = basisByLot.get(r.control_lot_id);
+      return {
+        id: r.id,
+        control_lot_id: r.control_lot_id,
+        lot_number: r.lot_number,
+        result_value: r.result_value,
+        result_date: r.result_date,
+        run_time: r.run_time,
+        instrument: r.instrument,
+        accepted_for_reporting: r.accepted_for_reporting,
+        mfr_mean: r.mfr_mean,
+        mfr_sd: r.mfr_sd,
+        basis_mean: b ? b.mean : null,
+        basis_sd: b ? b.sd : null,
+        sdi: b && b.sd > 0 ? (r.result_value - b.mean) / b.sd : 0,
+        is_rejection: rejected.has(r.id),
+      };
+    });
+    res.json({ analyte, level, lots: lots.map(l => ({ ...l, basis: basisByLot.get(l.id) || null })), points });
   });
 
   app.get("/api/labs/:labId/qc/results", authMiddleware, labScopeMiddleware, (req: any, res) => {
@@ -4420,7 +4628,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // ids are integers from the previous query, not user input.
     const placeholders = ids.map(() => "?").join(",");
     const violations = sqlite.prepare(
-      "SELECT id, qc_result_id, rule_code, severity, detail, related_result_ids, evaluated_at FROM qc_rule_violations WHERE qc_result_id IN (" + placeholders + ") ORDER BY id ASC"
+      "SELECT id, qc_result_id, rule_code, severity, detail, related_result_ids, evaluated_at FROM qc_rule_violations WHERE superseded_at IS NULL AND qc_result_id IN (" + placeholders + ") ORDER BY id ASC"
     ).all(...ids) as any[];
     const correctiveActions = sqlite.prepare(
       "SELECT id, qc_result_id, qc_rule_violation_id, action_taken, taken_by_user_id, taken_at, status, follow_up_notes, nce_reference FROM qc_corrective_actions WHERE qc_result_id IN (" + placeholders + ") ORDER BY id ASC"
@@ -4518,7 +4726,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const ids = results.map(r => r.id);
     const placeholders = ids.map(() => "?").join(",");
     const violations = sqlite.prepare(
-      "SELECT id, qc_result_id, rule_code, severity, detail, evaluated_at FROM qc_rule_violations WHERE qc_result_id IN (" + placeholders + ")"
+      "SELECT id, qc_result_id, rule_code, severity, detail, evaluated_at FROM qc_rule_violations WHERE superseded_at IS NULL AND qc_result_id IN (" + placeholders + ")"
     ).all(...ids) as any[];
     const cas = sqlite.prepare(
       "SELECT id, qc_result_id, qc_rule_violation_id, action_taken, status, taken_at, nce_reference FROM qc_corrective_actions WHERE qc_result_id IN (" + placeholders + ")"
@@ -4660,7 +4868,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const casByR: Record<number, any[]> = {};
     if (resultIds.length > 0) {
       const placeholders = resultIds.map(() => "?").join(",");
-      const vs = sqlite.prepare("SELECT id, qc_result_id, rule_code, severity, detail FROM qc_rule_violations WHERE qc_result_id IN (" + placeholders + ")").all(...resultIds) as any[];
+      const vs = sqlite.prepare("SELECT id, qc_result_id, rule_code, severity, detail FROM qc_rule_violations WHERE superseded_at IS NULL AND qc_result_id IN (" + placeholders + ")").all(...resultIds) as any[];
       for (const v of vs) (violationsByR[v.qc_result_id] = violationsByR[v.qc_result_id] || []).push(v);
       const cs = sqlite.prepare("SELECT id, qc_result_id, action_taken, status, taken_at FROM qc_corrective_actions WHERE qc_result_id IN (" + placeholders + ")").all(...resultIds) as any[];
       for (const c of cs) (casByR[c.qc_result_id] = casByR[c.qc_result_id] || []).push(c);
@@ -4684,7 +4892,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const mdReview = sqlite.prepare("SELECT md_signed_name, md_signed_at FROM qc_period_reviews WHERE lab_id = ? AND control_lot_id = ? AND period_year = ? AND period_month = ?").get(labId, lot.id, year, month) as any;
     return {
       lab: { id: lab.id, lab_name: lab.lab_name, clia_number: lab.clia_number },
-      lot: { id: lot.id, analyte: lot.analyte, level: lot.level, lot_number: lot.lot_number, manufacturer: lot.manufacturer, mfr_mean: lot.mfr_mean, mfr_sd: lot.mfr_sd, mfr_sd_interval: lot.mfr_sd_interval },
+      lot: { id: lot.id, analyte: lot.analyte, level: lot.level, lot_number: lot.lot_number, manufacturer: lot.manufacturer, mfr_mean: lot.mfr_mean, mfr_sd: lot.mfr_sd, mfr_sd_interval: lot.mfr_sd_interval, mfr_range_low: lot.mfr_range_low ?? null, mfr_range_high: lot.mfr_range_high ?? null },
+      // The chart and the narrative use the same basis the Westgard rules judge
+      // the lot's runs against (server/qcBasis.ts).
+      basis: (() => { const b = resolveBasis(sqlite, labId, lot.id); return b ? { mean: b.mean, sd: b.sd, source: b.source, label: b.label } : null; })(),
       periodYear: year, periodMonth: month, results, baselineMean, baselineSD,
       reviewerName: reviewerName || "Pending signature",
       reviewerTitle: "Medical director or designee",
@@ -4705,7 +4916,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     const sqlite = (db as any).$client;
     const lot = sqlite.prepare(
-      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval FROM qc_control_lots WHERE id = ? AND lab_id = ?"
+      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high FROM qc_control_lots WHERE id = ? AND lab_id = ?"
     ).get(controlLotId, req.scope.labId) as any;
     if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
     const lab = sqlite.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
@@ -4741,7 +4952,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const lab = sqlite.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
     if (!lab) return res.status(404).json({ error: "Lab not found" });
     const lots = sqlite.prepare(
-      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval FROM qc_control_lots WHERE lab_id = ? AND status = 'active' ORDER BY analyte, level, lot_number"
+      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high FROM qc_control_lots WHERE lab_id = ? AND status = 'active' ORDER BY analyte, level, lot_number"
     ).all(req.scope.labId) as any[];
     if (lots.length === 0) return res.status(404).json({ error: "No active control lots in this lab" });
     const reviewer = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
@@ -4799,7 +5010,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // metadata (rule_code / severity / detail) into their own finding on escalate.
     if (qc_rule_violation_id) {
       const v = sqlite.prepare(
-        "SELECT 1 FROM qc_rule_violations WHERE id = ? AND qc_result_id = ?"
+        "SELECT 1 FROM qc_rule_violations WHERE id = ? AND qc_result_id = ? AND superseded_at IS NULL"
       ).get(Number(qc_rule_violation_id), Number(qc_result_id));
       if (!v) return res.status(400).json({ error: "Rule violation does not belong to this result" });
     }
@@ -5125,7 +5336,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const rows = sqlite.prepare(
       `SELECT r.id, r.result_value, r.result_date, r.instrument,
               r.accepted_for_reporting,
-              EXISTS(SELECT 1 FROM qc_rule_violations v WHERE v.qc_result_id = r.id) AS was_westgard_flagged
+              EXISTS(SELECT 1 FROM qc_rule_violations v WHERE v.qc_result_id = r.id AND v.superseded_at IS NULL) AS was_westgard_flagged
        FROM qc_results r
        WHERE ${where.join(" AND ")}
        ORDER BY ${orderBy}
@@ -5337,7 +5548,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             `SELECT r.instrument, COUNT(*) AS result_count,
                     MAX(r.result_date) AS latest_result_date,
                     SUM(CASE WHEN EXISTS(
-                      SELECT 1 FROM qc_rule_violations v WHERE v.qc_result_id = r.id
+                      SELECT 1 FROM qc_rule_violations v WHERE v.qc_result_id = r.id AND v.superseded_at IS NULL
                     ) THEN 1 ELSE 0 END) AS was_westgard_flagged_count
                FROM qc_results r
               WHERE ${where}
@@ -5358,7 +5569,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             .prepare(
               `SELECT r.result_value,
                       (CASE WHEN EXISTS(
-                        SELECT 1 FROM qc_rule_violations v WHERE v.qc_result_id = r.id
+                        SELECT 1 FROM qc_rule_violations v WHERE v.qc_result_id = r.id AND v.superseded_at IS NULL
                       ) THEN 1 ELSE 0 END) AS was_flagged
                  FROM qc_results r
                 WHERE ${where} AND r.instrument = ?
@@ -6387,7 +6598,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const responseSubExpiry = statusRow?.subscription_expires_at || null;
     const responseSubStatus = statusRow?.subscription_status || 'free';
     const responseAccessLevel = getAccessLevel({ subscription_expires_at: responseSubExpiry });
-    res.json({ token, session_token: sessionToken, user: { id: user.id, email: user.email, name: user.name, plan: responsePlan, studyCredits: user.studyCredits, hasCompletedOnboarding: isSeatUser ? true : false, isSeatUser, subscriptionExpiresAt: responseSubExpiry, subscriptionStatus: responseSubStatus, accessLevel: responseAccessLevel, cliaNumber: null, cliaLabName: null, cliaTier: null, seatCount: isSeatUser ? 0 : selectedSeatCount } });
+    // #84 (2026-10-08): carry the seat's module permissions like login does, so
+    // a just-accepted Staff login is read-only for setup from its first screen
+    // (without them the client treated the seat as editable until the next login).
+    let registerSeatPermissions: Record<string, any> | null = null;
+    if (isSeatUser) {
+      const sp = legacySeatForUser((db as any).$client, user.id, "permissions") as any;
+      try { registerSeatPermissions = JSON.parse(sp?.permissions || "{}"); } catch { registerSeatPermissions = {}; }
+    }
+    res.json({ token, session_token: sessionToken, user: { id: user.id, email: user.email, name: user.name, plan: responsePlan, studyCredits: user.studyCredits, hasCompletedOnboarding: isSeatUser ? true : false, isSeatUser, seatPermissions: registerSeatPermissions, subscriptionExpiresAt: responseSubExpiry, subscriptionStatus: responseSubStatus, accessLevel: responseAccessLevel, cliaNumber: null, cliaLabName: null, cliaTier: null, seatCount: isSeatUser ? 0 : selectedSeatCount } });
 
     // Send welcome email via Resend
     if (resend) {
@@ -6751,6 +6970,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         l.nys_permit_type,
         l.organization_id,
         (SELECT o.name FROM organizations o WHERE o.id = l.organization_id) AS organization_name,
+        (SELECT us.seat_type FROM user_seats us
+          WHERE us.seat_user_id = ? AND us.lab_id = l.id AND us.status = 'active'
+          ORDER BY us.id ASC LIMIT 1) AS seat_type,
         (SELECT sl.lab_address_state FROM staff_labs sl
           WHERE sl.user_id = l.owner_user_id ORDER BY sl.id DESC LIMIT 1) AS owner_state,
         (SELECT lc.expiration_date
@@ -6772,7 +6994,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         )
       )
       ORDER BY COALESCE(lm.is_primary_lab, 0) DESC, l.id ASC
-    `).all(req.userId, req.userId) as any[];
+    `).all(req.userId, req.userId, req.userId) as any[];
 
     // 2026-06-12 (account-seats guard fix): is_primary_lab FOLLOWS the NavBar
     // switcher (POST /api/labs/me/default flips it), so it cannot identify the
@@ -6790,6 +7012,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       cliaNumber: m.clia_number,
       labName: m.lab_name,
       role: m.role,
+      // #84 (2026-10-08): the seat this user holds IN THIS LAB ('active',
+      // 'view_only', 'staff_portal', 'medical_director'...), null when none.
+      // role 'staff' alone cannot tell a writer seat from a Staff login.
+      seatType: m.seat_type ?? null,
       permissions: (() => { try { return JSON.parse(m.permissions_json || '{}'); } catch { return {}; } })(),
       isPrimaryLab: !!m.is_primary_lab,
       isAccountHomeLab: homeLabId != null && Number(m.lab_id) === homeLabId,
@@ -10536,87 +10762,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, status: newStatus, emailSent, role, inviteToken });
   });
 
-  // GET /api/me/staff-portal-employee?lab_id=N
-  //   2026-06-09 Auth unification helper. Resolves the logged-in user's
-  //   Staff Portal identity: which staff_employees row they're pinned
-  //   to, which lab, and the two per-employee toggles the existing
-  //   tile UI gates on. The /staff-access page calls this on mount;
-  //   a 200 means "render tiles directly for this employee"; a 404
-  //   means "this account has no Staff Portal access path".
+  // GET /api/me/staff-portal-employee
+  //   Resolves the logged-in user's Staff Portal identity: which
+  //   staff_employees row they act as, which lab, and the two per-employee
+  //   toggles the tile UI gates on. The /staff-access page calls this on
+  //   mount; 200 = render tiles for this employee, 404 = this account is not
+  //   a Staff Portal login (the page then shows a neutral "use your staff
+  //   login" screen).
   //
-  //   Two resolution paths (in order):
-  //     1. user_seats with seat_type='staff_portal' (invited-tech path)
-  //     2. staff_employees.user_id = req.userId (director-on-roster
-  //        path; lab director added themselves to VeritaStaff). When
-  //        ?lab_id=N is supplied we scope to that lab.
-  //     3. Opportunistic auto-link: if neither resolves, try matching
-  //        the user's name to a staff_employees row with user_id IS
-  //        NULL on a lab they own. If exactly one match, link it.
+  //   2026-10-08: the ONLY path is an accepted, active staff_portal seat
+  //   linked to a roster row. The old "staff_employees.user_id = me" path
+  //   bound an OWNER to the first employee on the roster (that column holds
+  //   the owner id on every row), and the name-match auto-link could never
+  //   fire (column is NOT NULL). Both removed. Same rule as
+  //   staffPortalAuthMiddleware.
   app.get("/api/me/staff-portal-employee", authMiddleware, (req: any, res) => {
     const sqlite = (db as any).$client;
-    const queryLabId = parseInt(String((req.query || {}).lab_id || ""), 10);
-    const wantLabId = Number.isFinite(queryLabId) && queryLabId > 0 ? queryLabId : null;
-
-    // Path 1: user_seats
     const seat = sqlite.prepare(
-      "SELECT lab_id, staff_employee_id FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' AND status = 'active' LIMIT 1"
+      "SELECT lab_id, staff_employee_id FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' AND status = 'active' AND staff_employee_id IS NOT NULL LIMIT 1"
     ).get(req.userId) as any;
-    let resolvedLabId: number | null = null;
-    let resolvedEmpId: number | null = null;
-    if (seat && seat.lab_id && seat.staff_employee_id) {
-      resolvedLabId = seat.lab_id;
-      resolvedEmpId = seat.staff_employee_id;
-    } else {
-      // Path 2: staff_employees.user_id direct link
-      const empRow = wantLabId
-        ? sqlite.prepare("SELECT id, tier2_lab_id FROM staff_employees WHERE user_id = ? AND tier2_lab_id = ? AND status = 'active' LIMIT 1").get(req.userId, wantLabId) as any
-        : sqlite.prepare("SELECT id, tier2_lab_id FROM staff_employees WHERE user_id = ? AND status = 'active' LIMIT 1").get(req.userId) as any;
-      if (empRow) {
-        resolvedLabId = empRow.tier2_lab_id;
-        resolvedEmpId = empRow.id;
-      } else {
-        // Path 3: opportunistic auto-link by name match on a lab the
-        // user owns or is a member of. Only links when there's exactly
-        // one candidate so we never silently bind the wrong row.
-        const user = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
-        if (user && user.name) {
-          const labs = sqlite.prepare(
-            wantLabId
-              ? "SELECT l.id FROM labs l WHERE l.id = ? AND (l.owner_user_id = ? OR EXISTS (SELECT 1 FROM lab_members lm WHERE lm.lab_id = l.id AND lm.user_id = ? AND lm.status = 'active'))"
-              : "SELECT l.id FROM labs l WHERE l.owner_user_id = ? OR EXISTS (SELECT 1 FROM lab_members lm WHERE lm.lab_id = l.id AND lm.user_id = ? AND lm.status = 'active')"
-          ).all(...(wantLabId ? [wantLabId, req.userId, req.userId] : [req.userId, req.userId])) as any[];
-          // 2026-06-09 robust name match: try three patterns to
-          // cover the realistic shape of users.name vs
-          // staff_employees.first_name/last_name:
-          //   1. "First Last" exact match
-          //   2. just first name (user signed up with first name only)
-          //   3. just last name (rare but possible)
-          // Single-candidate-across-all-three is what we accept; any
-          // tie or multi-candidate situation leaves user_id NULL so we
-          // never silently bind the wrong row.
-          const userName = String(user.name).trim();
-          for (const lab of labs) {
-            const candidates = sqlite.prepare(
-              `SELECT id FROM staff_employees
-               WHERE tier2_lab_id = ? AND status = 'active' AND user_id IS NULL
-                 AND (
-                   lower(trim(first_name || ' ' || last_name)) = lower(?)
-                   OR lower(trim(first_name)) = lower(?)
-                   OR lower(trim(last_name)) = lower(?)
-                 )`
-            ).all(lab.id, userName, userName, userName) as any[];
-            if (candidates.length === 1) {
-              try {
-                sqlite.prepare("UPDATE staff_employees SET user_id = ? WHERE id = ? AND user_id IS NULL").run(req.userId, candidates[0].id);
-                resolvedLabId = lab.id;
-                resolvedEmpId = candidates[0].id;
-                break;
-              } catch { /* unique-constraint race; fall through */ }
-            }
-          }
-        }
-      }
-    }
+    const resolvedLabId: number | null = seat?.lab_id ?? null;
+    const resolvedEmpId: number | null = seat?.staff_employee_id ?? null;
 
     if (!resolvedLabId || !resolvedEmpId) {
       return res.status(404).json({ error: "No Staff Portal access for this account" });
@@ -10653,51 +10819,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const queryLabId = parseInt(String((req.query || {}).lab_id || ""), 10);
     const wantLabId = Number.isFinite(queryLabId) && queryLabId > 0 ? queryLabId : null;
 
-    // Find all staff_employees rows linked to this user.
-    let empRows = wantLabId
+    // 2026-10-08 identity fix: the bell shows a Staff Portal login ITS OWN
+    // pending items, resolved from the accepted staff_portal seat only. The
+    // old "staff_employees.user_id = me" match returned EVERY roster row for
+    // an owner (that column holds the owner id on every row), so an owner's
+    // bell listed all their staff's pending work as their own; the name-match
+    // auto-link could never fire (column is NOT NULL). Both removed.
+    const empRows = (wantLabId
       ? sqlite.prepare(
-          "SELECT id, tier2_lab_id FROM staff_employees WHERE user_id = ? AND tier2_lab_id = ? AND status = 'active'"
-        ).all(req.userId, wantLabId) as any[]
+          "SELECT staff_employee_id AS id, lab_id AS tier2_lab_id FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' AND status = 'active' AND staff_employee_id IS NOT NULL AND lab_id = ?"
+        ).all(req.userId, wantLabId)
       : sqlite.prepare(
-          "SELECT id, tier2_lab_id FROM staff_employees WHERE user_id = ? AND status = 'active'"
-        ).all(req.userId) as any[];
-
-    // 2026-06-09 PR Option 1 follow-up: opportunistic auto-link on
-    // the bell endpoint too. The bell mounts on every authenticated
-    // page in the main app; auto-linking here means a director who
-    // added themselves to VeritaStaff but never visited /staff-access
-    // still gets the bell + count once any page loads. Mirrors the
-    // logic in /api/me/staff-portal-employee.
-    if (!empRows.length) {
-      const user = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
-      if (user && user.name) {
-        const userName = String(user.name).trim();
-        const labs = wantLabId
-          ? sqlite.prepare(
-              "SELECT l.id FROM labs l WHERE l.id = ? AND (l.owner_user_id = ? OR EXISTS (SELECT 1 FROM lab_members lm WHERE lm.lab_id = l.id AND lm.user_id = ? AND lm.status = 'active'))"
-            ).all(wantLabId, req.userId, req.userId) as any[]
-          : sqlite.prepare(
-              "SELECT l.id FROM labs l WHERE l.owner_user_id = ? OR EXISTS (SELECT 1 FROM lab_members lm WHERE lm.lab_id = l.id AND lm.user_id = ? AND lm.status = 'active')"
-            ).all(req.userId, req.userId) as any[];
-        for (const lab of labs) {
-          const candidates = sqlite.prepare(
-            `SELECT id FROM staff_employees
-             WHERE tier2_lab_id = ? AND status = 'active' AND user_id IS NULL
-               AND (
-                 lower(trim(first_name || ' ' || last_name)) = lower(?)
-                 OR lower(trim(first_name)) = lower(?)
-                 OR lower(trim(last_name)) = lower(?)
-               )`
-          ).all(lab.id, userName, userName, userName) as any[];
-          if (candidates.length === 1) {
-            try {
-              sqlite.prepare("UPDATE staff_employees SET user_id = ? WHERE id = ? AND user_id IS NULL").run(req.userId, candidates[0].id);
-              empRows.push({ id: candidates[0].id, tier2_lab_id: lab.id });
-            } catch { /* unique-constraint race; ignore */ }
-          }
-        }
-      }
-    }
+          "SELECT staff_employee_id AS id, lab_id AS tier2_lab_id FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' AND status = 'active' AND staff_employee_id IS NOT NULL"
+        ).all(req.userId)) as any[];
 
     if (!empRows.length) {
       return res.json({ quizzes: [], policies: [], competencies: [] });
@@ -18899,7 +19033,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const user = storage.getUserById(row.user_id);
     if (!user) return res.status(404).json({ error: "User not found" });
     const newToken = signToken(user.id);
-    res.json({ ok: true, token: newToken, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits } });
+    // #84 (2026-10-08): include the seat flags login returns, so a Staff login
+    // that resets its password is not shown edit controls until the next login.
+    const resetSeat = legacySeatForUser((db as any).$client, user.id, "permissions, owner_user_id") as any;
+    let resetSeatPermissions: Record<string, any> | null = null;
+    if (resetSeat) { try { resetSeatPermissions = JSON.parse(resetSeat.permissions || "{}"); } catch { resetSeatPermissions = {}; } }
+    res.json({ ok: true, token: newToken, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits, isSeatUser: !!resetSeat, seatPermissions: resetSeatPermissions, ownerUserId: resetSeat?.owner_user_id ?? null } });
   });
 
   app.post("/api/stripe/checkout", authMiddleware, async (req: any, res) => {
@@ -28049,7 +28188,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch {}
     // QC corrective actions (rejection violations with no CA filed)
     try {
-      const miss = client.prepare("SELECT COUNT(*) AS n FROM qc_rule_violations v WHERE v.severity = 'rejection' AND v.qc_result_id IN (SELECT id FROM qc_results WHERE lab_id = ?) AND NOT EXISTS (SELECT 1 FROM qc_corrective_actions ca WHERE ca.qc_result_id = v.qc_result_id)").get(labId).n as number;
+      const miss = client.prepare("SELECT COUNT(*) AS n FROM qc_rule_violations v WHERE v.severity = 'rejection' AND v.superseded_at IS NULL AND v.qc_result_id IN (SELECT id FROM qc_results WHERE lab_id = ?) AND NOT EXISTS (SELECT 1 FROM qc_corrective_actions ca WHERE ca.qc_result_id = v.qc_result_id)").get(labId).n as number;
       const lots = client.prepare("SELECT COUNT(*) AS n FROM qc_control_lots WHERE lab_id = ? AND status = 'active'").get(labId).n as number;
       push("qc", "QC corrective actions", miss, 0, lots, "active lots");
     } catch {}
@@ -33224,6 +33363,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       sqlite.prepare("DELETE FROM veritaqc_import_mappings WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM stock_vendor_contacts WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM stock_vendors WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM stock_recall_events WHERE recall_id IN (SELECT id FROM stock_recalls WHERE lab_id = ?)").run(id);
+      sqlite.prepare("DELETE FROM stock_recall_documents WHERE recall_id IN (SELECT id FROM stock_recalls WHERE lab_id = ?)").run(id);
+      sqlite.prepare("DELETE FROM stock_recalls WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM stock_recall_recipients WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM staff_duty_change_events WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM staff_position_descriptions WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM policy_quiz_questions WHERE lab_id = ?").run(id);
@@ -40327,6 +40470,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // VeritaBench routes (Productivity Tracker + Staffing Analyzer)
   const { registerVeritaBenchRoutes } = await import('./veritabench');
   registerVeritaBenchRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
+
+  // VeritaStock recall tracker (/api/labs/:labId/veritastock/recalls/*)
+  const { registerStockRecallRoutes } = await import('./stockRecalls');
+  registerStockRecallRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
 
   // VeritaOps routes (Cost-Per-Reportable-Test studies, PARKING_LOT #10)
   const { registerVeritaOpsRoutes } = await import('./veritaops');
