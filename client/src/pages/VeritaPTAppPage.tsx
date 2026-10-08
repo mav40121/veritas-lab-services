@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -122,7 +123,7 @@ function PtRemindersPanel({ ptApi }: { ptApi: string }) {
       <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-medium mb-1">Remind within (days before due)</label>
-          <input type="text" inputMode="numeric" min={1} max={60} value={leadDays} onChange={e => { setLeadDays(Number(e.target.value) || 14); setSaved(false); }} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+          <DecimalInput integer min={1} max={60} value={leadDays} fallback={14} onChangeNumber={n => { setLeadDays(Math.max(1, Math.min(60, n))); setSaved(false); }} />
         </div>
         <div>
           <label className="block text-xs font-medium mb-1">Recipients (comma-separated emails)</label>
