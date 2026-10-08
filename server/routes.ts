@@ -7025,8 +7025,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           SELECT om.organization_id FROM organization_members om
           WHERE om.user_id = ? AND om.status = 'active' AND om.org_role IN ('org_owner', 'org_admin')
         )
-        -- Veritas support (server/vlsSupport.ts): every lab whose owner left access on.
-        OR ((SELECT COALESCE(u.vls_support, 0) FROM users u WHERE u.id = ?) = 1 AND COALESCE(l.vls_support_access, 1) = 1)
+        -- Veritas support (server/vlsSupport.ts): every client lab whose owner left
+        -- access on. Demo labs stay out of the list (Michael 2026-10-08), so the
+        -- Client labs group is real clients only.
+        OR ((SELECT COALESCE(u.vls_support, 0) FROM users u WHERE u.id = ?) = 1 AND COALESCE(l.vls_support_access, 1) = 1 AND COALESCE(l.is_demo, 0) = 0)
       )
       ORDER BY COALESCE(lm.is_primary_lab, 0) DESC, l.id ASC
     `).all(req.userId, req.userId, req.userId, req.userId) as any[];

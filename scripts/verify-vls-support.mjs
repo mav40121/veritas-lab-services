@@ -43,6 +43,17 @@ check("admin flag never creates an account (unknown email -> 404)", (await call(
 const me = await call("GET", "/api/labs/me", undefined, vls.token);
 const row = (me.body || []).find((m) => m.labId === labId);
 check("lab list shows the client lab as Veritas support (admin role, no membership)", !!row && row.viaVlsSupport === true && row.role === "admin" && row.membershipId == null, JSON.stringify(row && { role: row.role, via: row.viaVlsSupport }));
+{
+  // A demo lab never appears in the Client labs list (Michael 2026-10-08).
+  const demoOwner = `vls-demo-owner-${stamp}@example.com`;
+  await call("POST", "/api/auth/register", { email: demoOwner, password: "testpass123", name: "Demo Owner", hipaa_acknowledged: true });
+  const demoLabId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: demoOwner, labName: "Demo Lab", plan: "hospital" })).body.labId;
+  const wdb = new Database(process.env.SCRATCH_DB);
+  wdb.prepare("UPDATE labs SET is_demo = 1 WHERE id = ?").run(demoLabId);
+  wdb.close();
+  const me2 = await call("GET", "/api/labs/me", undefined, vls.token);
+  check("demo labs stay out of the Client labs list", !(me2.body || []).some((m) => m.labId === demoLabId) && (me2.body || []).some((m) => m.labId === labId), `demoLab=${demoLabId}`);
+}
 const lot = await call("POST", `/api/labs/${labId}/qc/control-lots`, { analyte: "PSA (FREND B)", level: "Level 1", lot_number: `VLS-${stamp}`, mfr_mean: 1.29, mfr_sd: 0.35 }, vls.token);
 check("setup allowed: Veritas support adds a QC control lot", lot.status === 200 || lot.status === 201, `status=${lot.status}`);
 check("outsider still refused on the same lab", (await call("GET", `/api/labs/${labId}/qc/lots`, undefined, other.token)).status === 403);
