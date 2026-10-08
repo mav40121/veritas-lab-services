@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { API_BASE } from "@/lib/queryClient";
@@ -68,6 +69,7 @@ type FilterType = "all" | "gaps" | "covered" | "aaa" | "waived";
 // MLC-2b: PT deadline email-reminder settings. Enable, set the lead window and
 // recipients; the nightly engine (server/ptReminders.ts) reads this per lab.
 function PtRemindersPanel({ ptApi }: { ptApi: string }) {
+  const remindersReadOnly = useIsReadOnly("veritapt");
   const [enabled, setEnabled] = useState(false);
   const [leadDays, setLeadDays] = useState(14);
   const [recipients, setRecipients] = useState(""); // comma-separated emails
@@ -128,7 +130,7 @@ function PtRemindersPanel({ ptApi }: { ptApi: string }) {
         </div>
       </div>
       <div className="mt-3 flex items-center gap-3">
-        <Button size="sm" className="bg-[#006064] hover:bg-[#004d50] text-white" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save reminder settings"}</Button>
+        <Button size="sm" className="bg-[#006064] hover:bg-[#004d50] text-white" onClick={save} disabled={saving || remindersReadOnly}>{saving ? "Saving..." : "Save reminder settings"}</Button>
         {saved && <span className="text-xs text-emerald-600">Saved.</span>}
       </div>
     </div>
@@ -136,6 +138,9 @@ function PtRemindersPanel({ ptApi }: { ptApi: string }) {
 }
 
 export default function VeritaPTAppPage() {
+  // #84 Phase 3: enrollments, AAA records and reminders are VeritaPT setup;
+  // recording a PT event stays open.
+  const isReadOnly = useIsReadOnly("veritapt");
   const labRoute = useLabRoute();
   const { user } = useAuth();
   // Multi-Lab Tier 2 Phase 3.6b: route PT reads/writes through the active lab.
@@ -445,6 +450,7 @@ export default function VeritaPTAppPage() {
           <Button
             size="sm"
             variant="outline"
+            hidden={isReadOnly}
             onClick={() => setShowAaaModal(true)}
           >
             <Plus size={14} className="mr-1.5" />
@@ -453,6 +459,7 @@ export default function VeritaPTAppPage() {
           <Button
             size="sm"
             className="bg-[#006064] hover:bg-[#004d50] text-white"
+            hidden={isReadOnly}
             onClick={() => setShowEnrollModal(true)}
           >
             <Plus size={14} className="mr-1.5" />
