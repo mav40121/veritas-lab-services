@@ -594,6 +594,71 @@ authoring). Pricing unchanged: the Staff band covers record and read.
 
 ---
 
+### 85. VeritaCheck verification: "Remove unit" does nothing
+
+**Effort:** XS
+**Importance:** Medium. A director removing a serial number from a verification package sees the confirm dialog, clicks Remove, and the unit stays.
+
+**What:** In client/src/pages/VeritaCheckVerificationPage.tsx the UnitCard is mounted
+with onDeleted={refetch} (line ~971) and the ConfirmDialog calls onDeleted
+(line ~1302), so Remove only re-reads the package. deleteUnit (line ~771, DELETE
+/api/veritacheck/verifications/:id/instruments/:unitId) is never called. Fix: pass
+() => deleteUnit(unit.id) and keep the refetch inside deleteUnit; add a browser
+receipt that the unit is gone after Remove.
+
+**Source:** #84 client audit, 2026-10-08 (read-only sub-agent pass over every useIsReadOnly site; confirmed by reading the code).
+**Status:** Open.
+
+---
+
+### 86. VeritaMap build: "Request we add your instrument" does nothing on step 1
+
+**Effort:** XS
+**Importance:** Medium. It is the escape hatch when a prospect's analyzer is missing from the library (the same gap that produced the 25-instrument library push).
+
+**What:** In client/src/pages/VeritaMapBuildPage.tsx the trigger
+(data-testid request-instrument-trigger, ~line 2037) sits in the step-1 branch
+(if (step === 1), line ~1671), which returns early; RequestInstrumentDialog is only
+rendered in the final step-2 return (~line 2306). On step 1 the click sets
+requestModalOpen and nothing appears. Fix: render the dialog in both branches (or
+hoist it above the branch); browser receipt that it opens on step 1.
+
+**Source:** #84 client audit, 2026-10-08 (read-only sub-agent pass over every useIsReadOnly site; confirmed by reading the code).
+**Status:** Open.
+
+---
+
+### 87. VeritaCheck page: handleBuy is defined and never called
+
+**Effort:** XS
+**Importance:** Low. Either a purchase path lost its button or it is dead code.
+
+**What:** client/src/pages/VeritaCheckPage.tsx defines handleBuy (~line 373, Stripe
+checkout with the CLIA prompt for Clinic-and-up plans) and nothing calls it. Decide
+whether a per-study or plan purchase button on this page is supposed to use it; if
+not, remove it (dead-code rule).
+
+**Source:** #84 client audit, 2026-10-08 (read-only sub-agent pass over every useIsReadOnly site; confirmed by reading the code).
+**Status:** Open.
+
+---
+
+### 88. Three plan gates are blocklists, against CLAUDE.md section 8
+
+**Effort:** XS
+**Importance:** Medium. A blocklist lets any new or mistyped plan string through; section 8 requires an explicit allowlist (VeritaLabAppPage pattern).
+
+**What:** hasPlanAccess = plan !== "free" && plan !== "per_study" in
+client/src/pages/VeritaPTAppPage.tsx (~216), VeritaResponseAppPage.tsx (~128) and
+VeritaResponseFindingPage.tsx (~444). script/audit.py did not flag them, so its
+blocklist check misses this shape; fix the pages and extend the audit rule, and
+prove the rule bites on the old code.
+
+**Source:** #84 client audit, 2026-10-08 (read-only sub-agent pass over every useIsReadOnly site; confirmed by reading the code).
+**Status:** Open.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C88. Env-gated Playwright specs never ran in CI; two shipped unrunnable (was #74)
