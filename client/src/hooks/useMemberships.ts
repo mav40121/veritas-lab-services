@@ -54,6 +54,10 @@ export interface Membership {
   // for deploy skew; a missing value renders the lab ungrouped as before.
   organizationId?: number | null;
   organizationName?: string | null;
+  // Veritas support access only (docs/design/VLS_Support_Access_Design.docx):
+  // a Veritas Lab Services person reaching a client lab with no membership and
+  // no seat. The switcher lists these under "Client labs".
+  viaVlsSupport?: boolean;
   // Default review interval (months) for a NEW policy on this lab: 24 (biennial,
   // the CLIA/CAP floor) or 12 (annual) for a state that requires it (MA). The
   // VeritaPolicy upload dialog seeds its interval picker from this. Optional for
