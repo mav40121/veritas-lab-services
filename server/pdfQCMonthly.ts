@@ -18,6 +18,17 @@ export interface MonthlyReviewLot {
   mfr_mean: number;
   mfr_sd: number;
   mfr_sd_interval: number;
+  mfr_range_low?: number | null;
+  mfr_range_high?: number | null;
+}
+
+// The mean/SD the lot's runs are judged against (server/qcBasis.ts): the lab's
+// established values, or the manufacturer's while a new lot collects runs.
+export interface MonthlyReviewBasis {
+  mean: number;
+  sd: number;
+  source: string;
+  label: string;
 }
 
 export interface MonthlyReviewResult {
@@ -35,6 +46,7 @@ export interface MonthlyReviewResult {
 export interface MonthlyReviewPayload {
   lab: { id: number; lab_name: string; clia_number: string | null };
   lot: MonthlyReviewLot;
+  basis?: MonthlyReviewBasis | null;
   periodYear: number;
   periodMonth: number; // 1-12
   results: MonthlyReviewResult[];
@@ -96,7 +108,7 @@ const MONTH_NAMES = ["", "January", "February", "March", "April", "May", "June",
 // (positional, not date-spaced), Y axis = SDI from -4 to +4 using the
 // baseline mean/SD. Bands shaded per Westgard convention: green within
 // 2SD, amber 2-3SD, red beyond 3SD. Points are colored by their SDI band.
-function renderLJSVG(results: MonthlyReviewResult[], mean: number, sd: number): string {
+function renderLJSVG(results: MonthlyReviewResult[], mean: number, sd: number, mfr?: { mean: number | null; low: number | null; high: number | null }): string {
   if (results.length === 0 || sd <= 0) {
     return `<div style="text-align:center;color:#888;padding:18pt 0;font-size:8pt">No accepted results to plot.</div>`;
   }
@@ -137,21 +149,43 @@ function renderLJSVG(results: MonthlyReviewResult[], mean: number, sd: number): 
     const color = Math.abs(s) > 3 ? "#dc2626" : Math.abs(s) > 2 ? "#d97706" : "#16a34a";
     return `<circle cx="${xFor(i)}" cy="${yFor(s)}" r="2.5" fill="${color}" stroke="#fff" stroke-width="0.5" />`;
   }).join("");
+  // Manufacturer reference: the published mean (dashed) and range (dotted),
+  // drawn in the lab's SD units. A line beyond the plotted +/-4 SD is named at
+  // the chart edge instead of drawn.
+  const mfrLines: string[] = [];
+  const mfrRefs: [number | null | undefined, string, string][] = [
+    [mfr?.mean, "Mfr mean", "6,3"], [mfr?.low, "Mfr low", "1.5,2"], [mfr?.high, "Mfr high", "1.5,2"],
+  ];
+  for (const [v, name, dash] of mfrRefs) {
+    if (v == null || !Number.isFinite(Number(v))) continue;
+    const s = (Number(v) - mean) / sd;
+    if (s >= sdMin && s <= sdMax) {
+      mfrLines.push(`<line x1="${PL}" y1="${yFor(s)}" x2="${PL + innerW}" y2="${yFor(s)}" stroke="#6d28d9" stroke-width="0.9" stroke-dasharray="${dash}" />`);
+      mfrLines.push(`<text x="${PL + innerW - 2}" y="${yFor(s) - 2}" font-size="6.5" fill="#6d28d9" text-anchor="end">${name} ${Number(v)}</text>`);
+    } else {
+      const yEdge = s > sdMax ? PT + 7 : PT + innerH - 3;
+      mfrLines.push(`<text x="${PL + innerW - 2}" y="${yEdge}" font-size="6.5" fill="#6d28d9" text-anchor="end">${name} ${Number(v)} (${s > 0 ? "above" : "below"} chart, ${s > 0 ? "+" : ""}${s.toFixed(1)} SD)</text>`);
+    }
+  }
   const xLabel = `<text x="${PL + innerW / 2}" y="${H - 4}" font-size="7" fill="#555" text-anchor="middle">Run sequence (oldest left to newest right, n=${n})</text>`;
   const yAxisLabel = `<text x="10" y="${PT + innerH / 2}" font-size="7" fill="#555" text-anchor="middle" transform="rotate(-90,10,${PT + innerH / 2})">SDI from baseline mean</text>`;
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">${bandHtml}${refLines}${yLabels}${polyline}${dots}${xLabel}${yAxisLabel}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">${bandHtml}${refLines}${mfrLines.join("")}${yLabels}${polyline}${dots}${xLabel}${yAxisLabel}</svg>`;
 }
 
 export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
   const periodLabel = `${MONTH_NAMES[p.periodMonth]} ${p.periodYear}`;
-  // Plot and evaluate against the lot's PROGRAMMED mean/SD, matching the live
-  // Levey-Jennings chart and the Westgard flags (2026-10-04, Michael's option 1).
-  // The lab-observed cumulative mean/SD is still reported alongside for reference.
-  const mean = p.lot.mfr_mean;
-  const sd = p.lot.mfr_sd;
-  const sdSource = "Programmed (lot mean/SD)";
+  // Plot against the same basis the Westgard rules judge the runs against:
+  // the lab's own established mean/SD, or the manufacturer's while a new lot
+  // is still establishing (server/qcBasis.ts). The manufacturer's published mean and range are drawn
+  // as reference lines and named in the narrative. Older payloads without a
+  // basis fall back to the manufacturer values.
+  const mean = p.basis ? p.basis.mean : p.lot.mfr_mean;
+  const sd = p.basis ? p.basis.sd : p.lot.mfr_sd;
+  const basisLabel = p.basis ? p.basis.label : `Manufacturer mean ${p.lot.mfr_mean}, SD ${p.lot.mfr_sd}`;
+  const lo = p.lot.mfr_range_low, hi = p.lot.mfr_range_high;
+  const mfrNote = ` Manufacturer's published mean ${p.lot.mfr_mean}${lo != null && hi != null ? `, range ${lo} to ${hi}` : ""} (shown on the chart for reference).`;
   const observedNote = (p.baselineMean !== null && p.baselineSD !== null)
-    ? ` Lab-observed cumulative mean ${p.baselineMean.toFixed(3)}, SD ${p.baselineSD.toFixed(3)} over accepted history.`
+    ? ` All accepted runs on the lot to date: mean ${p.baselineMean.toFixed(3)}, SD ${p.baselineSD.toFixed(3)}.`
     : "";
 
   // Aggregate violation + CA counts for the narrative
@@ -173,6 +207,7 @@ export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
   // "A multi-rule Shewhart chart for quality control in clinical chemistry."
   // Clin Chem 27(3):493-501; CLSI EP23-A.
   function ruleDescription(code: string): string {
+    if (code === "MFR-range") return "While the lab establishes its own mean and SD, a control result outside the manufacturer's published range for the lot. Rejection rule.";
     if (code === "1-3s") return "One control result outside +/- 3 SD from the baseline mean. Rejection rule.";
     if (code === "1-2s") return "One control result outside +/- 2 SD from the baseline mean. Warning only; investigate before reporting.";
     if (code === "2-2s") return "Two consecutive results outside the same +2 SD or -2 SD limit. Rejection rule.";
@@ -242,7 +277,7 @@ export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
     ? `<div style="font-size:8pt;color:#666;padding:4pt 0">No corrective actions filed for this period.</div>`
     : `<table><thead><tr><th>QC Date</th><th>Value</th><th>CA Filed</th><th>Status</th><th>Action Taken</th></tr></thead><tbody>${caRows.join("")}</tbody></table>`;
 
-  const narrative = `Monthly QC review for <b>${escapeHtml(p.lot.analyte)}</b> (Lot ${escapeHtml(p.lot.lot_number)}, ${escapeHtml(p.lot.level)} level) covering ${periodLabel}. ${p.results.length} run${p.results.length === 1 ? "" : "s"} logged: ${totalRejections} rejection-rule fire${totalRejections === 1 ? "" : "s"}, ${totalWarnings} warning${totalWarnings === 1 ? "" : "s"}, ${missingCA} result${missingCA === 1 ? "" : "s"} with a rejection but no corrective action filed. Chart and rule evaluation use the programmed mean ${mean.toFixed(3)}, SD ${sd.toFixed(3)} (${sdSource}).${observedNote} Final review and any clinical determination must be made by the laboratory director or designee.`;
+  const narrative = `Monthly QC review for <b>${escapeHtml(p.lot.analyte)}</b> (Lot ${escapeHtml(p.lot.lot_number)}, ${escapeHtml(p.lot.level)} level) covering ${periodLabel}. ${p.results.length} run${p.results.length === 1 ? "" : "s"} logged: ${totalRejections} rejection-rule fire${totalRejections === 1 ? "" : "s"}, ${totalWarnings} warning${totalWarnings === 1 ? "" : "s"}, ${missingCA} result${missingCA === 1 ? "" : "s"} with a rejection but no corrective action filed. Chart and rule evaluation use: ${escapeHtml(basisLabel)}.${escapeHtml(mfrNote)}${observedNote} Final review and any clinical determination must be made by the laboratory director or designee.`;
 
   const ackBox = `
     <div class="ack">
@@ -299,7 +334,7 @@ export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
     ${ackBox}
 
     <h2>Levey-Jennings Chart (SDI from baseline mean)</h2>
-    ${renderLJSVG(p.results, mean, sd)}
+    ${renderLJSVG(p.results, mean, sd, { mean: p.lot.mfr_mean, low: p.lot.mfr_range_low ?? null, high: p.lot.mfr_range_high ?? null })}
 
     <h2>QC Runs (${p.results.length})</h2>
     <table>
