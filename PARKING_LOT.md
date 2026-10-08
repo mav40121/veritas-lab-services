@@ -497,68 +497,6 @@ _(item #60 closed 2026-10-07; 74 CAP programs loaded 2026-10-06, see C64 below)_
 
 ---
 
-### 61. VeritaMap: remove duplicate demo maps (dedupe tool shipped; awaiting selection)
-
-**Effort:** XS (under 1 day)
-**Importance:** Low-Medium — demo-lab hygiene; not customer-facing.
-
-**What:** Michael created many maps while demoing and asked to remove
-duplicates. The read-only-by-default admin `dedupe-maps` endpoint shipped
-2026-10-06 (PR #1475). The audit found only a handful of strict content
-duplicates (plus false matches from empty maps, and items in Lisa's live lab 4
-that must not be touched). Needs Michael to pick what to delete — the strict
-dupes, or a broader clean-out of lab 3's 21 maps. Deletion runs scoped per lab
-with full cascade once he approves the ids.
-
-**Source:** Michael, 2026-10-06.
-**Status:** Open. Tool live; awaiting Michael's deletion selection.
-
----
-
-_(item #62 closed 2026-10-07; PR #1474 merged + deployed 2026-10-06, see C65 below)_
-
----
-
-_(item #63 closed 2026-10-07; PR #1493 deployed, prod receipt 2/2, see C67 below)_
-
----
-
-_(item #64 closed 2026-10-07; three real causes fixed, PR #1486 + #1487 deployed, see C66 below)_
-
----
-
-_(item #65 closed 2026-10-07; fix deployed in PR #1464 and the MedStar reply sent; see C79 below)_
-
----
-
-_(item #66 closed 2026-10-07; PR #1489 deployed, see C68 below)_
-
----
-
-_(item #67 closed 2026-10-07; guard removed on Michael's option 1, PR #1498 deployed, see C74 below)_
-
----
-
-_(item #68 closed 2026-10-07; PR #1491 deployed, see C69 below)_
-
----
-
-_(item #69 closed 2026-10-07; PR #1490 deployed, see C70 below)_
-
----
-
-_(item #70 closed 2026-10-07; PR #1492 deployed, see C71 below)_
-
----
-
-_(item #71 closed 2026-10-07; built and live in PR #1503 (5ec248c1); see C78 below)_
-
----
-
-_(item #72 closed 2026-10-07; phase A built and live in PR #1505 (6f937201); see C77 below; phase B is #79)_
-
----
-
 ### 74. Env-gated Playwright specs never run in CI; two shipped unrunnable
 
 **Effort:** S (1-3 days)
@@ -676,6 +614,12 @@ antibiogram is a PDF deliverable or a live table.
 ---
 
 ## CLOSED (audit trail)
+
+### C87. VeritaMap: remove duplicate demo maps (was #61)
+
+**Effort:** was XS / **Importance:** Low-Medium.
+
+**Closure evidence:** 2026-10-08 the read-only dedupe-maps audit on lab 3 showed 14 maps. Michael had already removed 7 himself on 2026-10-07. Maps 106 "Angie Test", 107 "VP's Test menu", 108 "FGH Map" and 109 "Sanford Test" survived his repeated 10-07 deletes: 2 to 5 attempts each, made before the C76 delete-cascade fix went live that afternoon. All four were empty shells with 2 instruments and 0 tests. On Michael's approval ("agree", 2026-10-08) POST /api/admin/veritamap/dedupe-maps {labId 3, deleteIds [106,107,108,109]} deleted them with full cascade: 4 maps, 8 instruments, 14 linked duty-change events, no tests or values. Re-audit: lab 3 has 10 maps and 0 content-duplicate groups. Kept: the 8 demo maps (40-47) and the 10-07 conference maps 123 "Abbott" and 124 "Northern Light".
 
 ### C85. An owner who also held a seat on another owner's lab was treated as that seat everywhere (was #82)
 
