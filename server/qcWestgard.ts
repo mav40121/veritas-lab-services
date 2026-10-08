@@ -9,7 +9,7 @@
 // mean/SD. The client (MedStar) wants the lab's own numbers once it has enough
 // runs and the manufacturer's only until then (emails 2026-09-30, 2026-10-08).
 
-import { resolveBasis, lockEstablishedIfDue, type QcBasis } from "./qcBasis";
+import { resolveBasis, lockEstablishedIfDue, loadBasisLot, basisConfig, type QcBasis, type QcBasisConfig } from "./qcBasis";
 
 export type WestgardViolation = {
   rule_code: string;
@@ -80,6 +80,34 @@ export function westgardRulesAt(
   return violations;
 }
 
+export const MFR_RANGE_RULE = "MFR-range";
+
+// Which rules judge run i. While the lot is still on the manufacturer's values
+// and the lab's policy is 'range', the run passes or fails on the manufacturer's
+// published range only (the full Westgard rules start once the lab has its own
+// mean and SD); a lot with no published range falls back to the full rules.
+// Otherwise the full Westgard rules run against the basis. Shared by entry and
+// the admin re-score so both judge a run the same way.
+export function rulesForRun(
+  vals: number[], ids: number[], i: number, basis: QcBasis | null,
+  mfrRange: { low: number | null; high: number | null }, cfg: QcBasisConfig,
+  biasN: number, trendN: number,
+): WestgardViolation[] {
+  const low = mfrRange.low == null ? null : Number(mfrRange.low);
+  const high = mfrRange.high == null ? null : Number(mfrRange.high);
+  const hasRange = (low != null && Number.isFinite(low)) || (high != null && Number.isFinite(high));
+  if (basis?.source === "manufacturer" && cfg.establishingRules === "range" && hasRange) {
+    const v = vals[i];
+    if ((low != null && Number.isFinite(low) && v < low) || (high != null && Number.isFinite(high) && v > high)) {
+      return [{ rule_code: MFR_RANGE_RULE, severity: "rejection",
+        detail: `${v} is outside the manufacturer's range ${low ?? "-"} to ${high ?? "-"} (lab still establishing its own mean and SD)`,
+        related_result_ids: [ids[i]] }];
+    }
+    return [];
+  }
+  return westgardRulesAt(vals, ids, i, basis ? basis.mean : NaN, basis ? basis.sd : NaN, biasN, trendN);
+}
+
 // Judge one just-entered run. Returns the violations and the basis that judged
 // it (callers store the basis on the result for the audit trail). When the lot
 // has just reached its establish count, the lab's mean/SD is locked.
@@ -98,7 +126,10 @@ export function evaluateQcRun(
   if (i < 0) return { violations: [], basis: null };
   const basis = resolveBasis(sqlite, labId, controlLotId, { beforeResultId: newResultId });
   const vals = history.map(r => Number(r.result_value));
-  const violations = westgardRulesAt(vals, ids, i, basis ? basis.mean : NaN, basis ? basis.sd : NaN, biasN, trendN);
+  const lot = loadBasisLot(sqlite, labId, controlLotId);
+  const violations = rulesForRun(vals, ids, i, basis,
+    { low: lot?.mfr_range_low ?? null, high: lot?.mfr_range_high ?? null },
+    basisConfig(sqlite, labId, lot?.analyte ?? null), biasN, trendN);
   lockEstablishedIfDue(sqlite, labId, controlLotId, newResultId);
   return { violations, basis };
 }

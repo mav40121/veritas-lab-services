@@ -25,7 +25,7 @@ import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCo
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
 import { labLocalDate } from "./dateLocal";
 import { scanPhi } from "./phiScan";
-import { evaluateQcRun, westgardRulesAt } from "./qcWestgard";
+import { evaluateQcRun, rulesForRun } from "./qcWestgard";
 import { resolveBasis, computeBasis, basisConfig, lockEstablishedIfDue, sampleStats, type QcBasis } from "./qcBasis";
 import { buildWasteReport, generateWasteReportPDF, generateWasteReportExcel, type WasteEventRow, type WasteReportContext } from "./wasteReport";
 import { entireLabFlag, sanitizeSpecialties, expandEntireLabRoles, cms209Gaps } from "./cms209Roles";
@@ -3900,6 +3900,45 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, matched: before.length, before, after });
   });
 
+  // POST /api/admin/qc/rule-settings {secret, labId, establishingRules?, establishN?, dryRun?}
+  // Lab-wide QC policy (qc_rule_settings row with analyte NULL): how a lot is
+  // judged while it is on the manufacturer's values ('westgard' full rules, or
+  // 'range' pass/fail on the manufacturer's published range) and how many
+  // accepted runs establish the lab's own mean/SD. Set on the lab's say-so
+  // (MedStar, 2026-10-08). dryRun returns before/after without writing.
+  app.post("/api/admin/qc/rule-settings", (req: any, res) => {
+    const { secret, labId, establishingRules, establishN, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const lab = Number(labId);
+    if (!Number.isFinite(lab) || lab <= 0) return res.status(400).json({ error: "labId required" });
+    if (establishingRules !== undefined && establishingRules !== "westgard" && establishingRules !== "range") {
+      return res.status(400).json({ error: "establishingRules must be 'westgard' or 'range'" });
+    }
+    if (establishN !== undefined && (!Number.isInteger(Number(establishN)) || Number(establishN) < 2 || Number(establishN) > 200)) {
+      return res.status(400).json({ error: "establishN must be an integer from 2 to 200" });
+    }
+    const sqlite = (db as any).$client;
+    if (!sqlite.prepare("SELECT 1 FROM labs WHERE id = ?").get(lab)) return res.status(404).json({ error: "Lab not found" });
+    const read = () => sqlite.prepare("SELECT establishing_rules, establish_n, bias_consecutive_count, trend_consecutive_count FROM qc_rule_settings WHERE lab_id = ? AND analyte IS NULL").get(lab) || null;
+    const before = read();
+    const after = {
+      establishing_rules: establishingRules ?? before?.establishing_rules ?? "westgard",
+      establish_n: establishN !== undefined ? Number(establishN) : (before?.establish_n ?? 20),
+    };
+    if (dryRun === true) return res.json({ ok: true, dryRun: true, labId: lab, before, after });
+    const now = new Date().toISOString();
+    if (before) {
+      sqlite.prepare("UPDATE qc_rule_settings SET establishing_rules = ?, establish_n = ?, updated_at = ? WHERE lab_id = ? AND analyte IS NULL")
+        .run(after.establishing_rules, after.establish_n, now, lab);
+    } else {
+      sqlite.prepare(
+        "INSERT INTO qc_rule_settings (lab_id, analyte, bias_consecutive_count, trend_consecutive_count, enabled_rules_json, establishing_rules, establish_n, created_at, updated_at) VALUES (?, NULL, 10, 7, '[\"1-2s\",\"1-3s\",\"2-2s\",\"R-4s\",\"4-1s\",\"N-x\",\"N-T\"]', ?, ?, ?, ?)"
+      ).run(lab, after.establishing_rules, after.establish_n, now, now);
+    }
+    logAudit({ userId: 0, module: "admin", action: "update", entityType: "admin.qc_rule_settings", entityLabel: `lab ${lab}: establishing_rules=${after.establishing_rules}, establish_n=${after.establish_n}`, before, after, ipAddress: req.ip });
+    res.json({ ok: true, dryRun: false, labId: lab, before, after: read() });
+  });
+
   // POST /api/admin/qc/rescore {secret, labIds, since, dryRun = true}
   // Re-judge accepted runs dated on or after `since` against the evaluation
   // basis in server/qcBasis.ts (2026-10-08, MedStar: the lab's own numbers once
@@ -3951,7 +3990,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         for (let i = 0; i < hist.length; i++) {
           if (hist[i].result_date < since) continue;
           const basis = computeBasis(simLot, vals.slice(0, i), cfg);
-          const after = westgardRulesAt(vals, ids, i, basis ? basis.mean : NaN, basis ? basis.sd : NaN, biasN, trendN);
+          const after = rulesForRun(vals, ids, i, basis, { low: lot.mfr_range_low ?? null, high: lot.mfr_range_high ?? null }, cfg, biasN, trendN);
           const before = sqlite.prepare("SELECT rule_code, severity FROM qc_rule_violations WHERE qc_result_id = ? AND superseded_at IS NULL ORDER BY rule_code").all(ids[i]) as any[];
           const bKey = before.map((v: any) => v.rule_code).sort().join(",");
           const aKey = after.map((v) => v.rule_code).sort().join(",");

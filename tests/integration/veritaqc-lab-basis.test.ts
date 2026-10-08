@@ -148,6 +148,25 @@ async function main() {
     html.includes(lot.basis.label) && html.includes("shown on the chart for reference") && html.includes("Mfr mean") && !html.includes("programmed mean"),
     "");
 
+  // 7. per-lab establishing policy through the admin endpoint: 'range'
+  const dryPol = await j(await call("POST", "/api/admin/qc/rule-settings", { secret: ADMIN, labId, establishingRules: "range", dryRun: true }));
+  const pol = await j(await call("POST", "/api/admin/qc/rule-settings", { secret: ADMIN, labId, establishingRules: "range" }));
+  const lot2 = await j(await call("POST", `${L}/control-lots`, {
+    analyte: "PSA (FREND A)", level: "Level 1", lot_number: "6361A26001", manufacturer: "NanoEntek",
+    mfr_mean: 1.29, mfr_sd: 0.35, mfr_range_low: 0.59, mfr_range_high: 1.99,
+  }, token));
+  const lot2Id = Number(lot2?.lot?.id ?? lot2?.id);
+  const p2: any[] = [];
+  for (let i = 0; i < 10; i++) {
+    p2.push(await j(await call("POST", `${L}/results`, { control_lot_id: lot2Id, result_value: vals[i], result_date: `2026-07-${String(i + 1).padStart(2, "0")}` }, token)));
+  }
+  const out = await j(await call("POST", `${L}/results`, { control_lot_id: lot2Id, result_value: 2.05, result_date: "2026-07-11" }, token));
+  check("7. 'range' policy: dry run writes nothing; 10 low-running runs pass; a run above the published range is an MFR-range rejection",
+    dryPol?.dryRun === true && pol?.after?.establishing_rules === "range"
+    && p2.every((r) => (r.violations || []).length === 0)
+    && (out.violations || []).length === 1 && out.violations[0].rule_code === "MFR-range",
+    JSON.stringify({ dry: dryPol?.after, set: pol?.after, run10: (p2[9]?.violations || []).map((v: any) => v.rule_code), outside: (out.violations || []).map((v: any) => v.rule_code) }));
+
   server.close();
   console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
   process.exit(failures === 0 ? 0 : 1);

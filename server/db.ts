@@ -6523,6 +6523,10 @@ try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as a
   // Accepted runs a lot needs before the lab's own mean/SD replaces the
   // manufacturer's (per lab, optional per analyte).
   ensure("qc_rule_settings", "establish_n", "ALTER TABLE qc_rule_settings ADD COLUMN establish_n INTEGER NOT NULL DEFAULT 20");
+  // How a lot is judged while it is still on the manufacturer's values:
+  //   'westgard' = full Westgard rules against the manufacturer mean/SD
+  //   'range'    = pass/fail on the manufacturer's published range only
+  ensure("qc_rule_settings", "establishing_rules", "ALTER TABLE qc_rule_settings ADD COLUMN establishing_rules TEXT NOT NULL DEFAULT 'westgard'");
 }
 
 // VeritaQC indexes for the read paths Phase 1 will hit hardest.

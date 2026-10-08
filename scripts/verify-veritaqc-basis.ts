@@ -25,7 +25,7 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const Database = require("better-sqlite3");
 import { computeBasis, resolveBasis, lockEstablishedIfDue, sampleStats } from "../server/qcBasis";
-import { evaluateQcRun, westgardRulesAt } from "../server/qcWestgard";
+import { evaluateQcRun, westgardRulesAt, rulesForRun } from "../server/qcWestgard";
 
 let failures = 0;
 function check(name: string, cond: boolean, detail = "") {
@@ -126,6 +126,24 @@ const nextEval = evaluateQcRun(db, LAB, 1, nextId, 10, 7);
 check("8. the chart's basis is exactly the basis that judges the next run",
   !!nextEval.basis && near(chartBasis.mean, nextEval.basis.mean) && near(chartBasis.sd, nextEval.basis.sd) && chartBasis.source === nextEval.basis.source,
   `${chartBasis.label}`);
+
+// 9-10. per-lab establishing-period policy ('range' = pass/fail on the
+// manufacturer's published range until the lab has its own mean and SD)
+const mfrBasis = computeBasis(MFR, runs.slice(0, 9), cfg)!;
+const RANGE = { low: 0.59, high: 1.99 };
+const ten2 = runs.slice(0, 10), ids2 = ten2.map((_, k) => 200 + k);
+const westgardMode = rulesForRun(ten2, ids2, 9, mfrBasis, RANGE, { establishN: 20, establishingRules: "westgard" }, 10, 7).map(v => v.rule_code);
+const rangeMode = rulesForRun(ten2, ids2, 9, mfrBasis, RANGE, { establishN: 20, establishingRules: "range" }, 10, 7).map(v => v.rule_code);
+const outside = rulesForRun([...ten2.slice(0, 9), 2.05], ids2, 9, mfrBasis, RANGE, { establishN: 20, establishingRules: "range" }, 10, 7).map(v => v.rule_code);
+check("9a. establishing, 'westgard' policy: the low-running lab trips 10-x on the manufacturer mean", westgardMode.includes("10-x"), `[${westgardMode}]`);
+check("9b. establishing, 'range' policy: the same run is inside the published range, no flag", rangeMode.length === 0, `[${rangeMode}]`);
+check("9c. establishing, 'range' policy: 2.05 is outside 0.59-1.99, MFR-range rejection", outside.length === 1 && outside[0] === "MFR-range", `[${outside}]`);
+const estBasis = computeBasis(MFR, runs.slice(0, 20), cfg)!;
+const shifted2 = [...runs.slice(0, 5), first20.mean + 3.2 * first20.sd];
+const afterEst = rulesForRun(shifted2, [1, 2, 3, 4, 5, 6], 5, estBasis, RANGE, { establishN: 20, establishingRules: "range" }, 10, 7).map(v => v.rule_code);
+check("9d. once the lab's own numbers are established, the full rules apply even under 'range'", afterEst.includes("1-3s"), `[${afterEst}]`);
+const noRange = rulesForRun(ten2, ids2, 9, mfrBasis, { low: null, high: null }, { establishN: 20, establishingRules: "range" }, 10, 7).map(v => v.rule_code);
+check("10. 'range' policy on a lot with no published range falls back to the full rules", noRange.includes("10-x"), `[${noRange}]`);
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

@@ -48,6 +48,9 @@ export interface QcBasisLot {
 
 export interface QcBasisConfig {
   establishN: number;
+  // While a lot is on the manufacturer's values: full Westgard rules, or
+  // pass/fail on the manufacturer's published range (per lab policy).
+  establishingRules?: "westgard" | "range";
 }
 
 export function sampleStats(vals: number[]): { mean: number; sd: number } {
@@ -114,11 +117,14 @@ export function basisConfig(sqlite: any, labId: number, analyte: string | null):
   let row: any;
   try {
     row = sqlite.prepare(
-      "SELECT establish_n FROM qc_rule_settings WHERE lab_id = ? AND (analyte = ? OR analyte IS NULL) ORDER BY (analyte IS NULL) ASC LIMIT 1"
+      "SELECT establish_n, establishing_rules FROM qc_rule_settings WHERE lab_id = ? AND (analyte = ? OR analyte IS NULL) ORDER BY (analyte IS NULL) ASC LIMIT 1"
     ).get(labId, analyte);
   } catch { row = undefined; }
   const e = Number(row?.establish_n);
-  return { establishN: Number.isFinite(e) && e >= 2 ? e : DEFAULT_ESTABLISH_N };
+  return {
+    establishN: Number.isFinite(e) && e >= 2 ? e : DEFAULT_ESTABLISH_N,
+    establishingRules: row?.establishing_rules === "range" ? "range" : "westgard",
+  };
 }
 
 // Accepted, non-voided runs on the lot in chart order (result_date, then id).

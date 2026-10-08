@@ -207,6 +207,7 @@ export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
   // "A multi-rule Shewhart chart for quality control in clinical chemistry."
   // Clin Chem 27(3):493-501; CLSI EP23-A.
   function ruleDescription(code: string): string {
+    if (code === "MFR-range") return "While the lab establishes its own mean and SD, a control result outside the manufacturer's published range for the lot. Rejection rule.";
     if (code === "1-3s") return "One control result outside +/- 3 SD from the baseline mean. Rejection rule.";
     if (code === "1-2s") return "One control result outside +/- 2 SD from the baseline mean. Warning only; investigate before reporting.";
     if (code === "2-2s") return "Two consecutive results outside the same +2 SD or -2 SD limit. Rejection rule.";
