@@ -62,6 +62,7 @@ const ALWAYS: Record<string, string> = {
   "POST /api/labs/:labId/qc/period-reviews": "sign the monthly QC review",
   "POST /api/labs/:labId/qc/period-reviews/md-cosign": "co-sign the monthly QC review",
   "POST /api/labs/:labId/qc/md-cosign-setting": "change the QC co-sign requirement",
+  "POST /api/labs/:labId/qc/corrective-actions/:id/resolve": "close out a QC corrective action",
   // VeritaComp
   "POST /api/labs/:labId/competency/assessments": "create a competency assessment",
   "PUT /api/labs/:labId/competency/assessments/:id": "edit a competency assessment",

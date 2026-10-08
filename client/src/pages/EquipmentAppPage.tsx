@@ -5,6 +5,7 @@ import { useIsReadOnly, useCanRecord } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useLabRoute } from "@/hooks/useLabRoute";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +33,16 @@ interface Equipment {
   next_due_date: string | null;
   status: string;
   notes: string | null;
+  map_instrument_id?: number | null;
   maintenance_status: "overdue" | "due_soon" | "ok" | "none";
+}
+
+// An analyzer on the lab's VeritaMap test menu (GET /veritacheck/lab-instruments).
+interface MenuInstrument {
+  id: number;
+  instrument_name: string;
+  nickname: string | null;
+  serial_number: string | null;
 }
 
 interface MaintEvent {
@@ -129,6 +139,7 @@ export default function EquipmentAppPage() {
   // Logging a maintenance event is recording work, open to every lab member.
   const canRecord = useCanRecord();
   const activeLabId = useActiveLabId();
+  const labRoute = useLabRoute();
   const { toast } = useToast();
 
   const hasPlanAccess = !!user && [
@@ -151,6 +162,10 @@ export default function EquipmentAppPage() {
   const [location, setLocation] = useState("");
   const [interval, setInterval_] = useState("");
   const [nextDue, setNextDue] = useState("");
+  // 2026-10-08: which analyzer on the test menu this record is, so its
+  // calibration and maintenance join that analyzer's QC trail. "" = not linked.
+  const [linkId, setLinkId] = useState("");
+  const [menuInstruments, setMenuInstruments] = useState<MenuInstrument[]>([]);
   const [eqSaving, setEqSaving] = useState(false);
 
   // Log maintenance event dialog
@@ -190,14 +205,23 @@ export default function EquipmentAppPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoggedIn, hasPlanAccess, activeLabId]);
 
+  useEffect(() => {
+    if (!isLoggedIn || !activeLabId) return;
+    fetch(`${API_BASE}/api/labs/${activeLabId}/veritacheck/lab-instruments`, { headers: authHeaders() })
+      .then(r => (r.ok ? r.json() : []))
+      .then((rows: MenuInstrument[]) => setMenuInstruments(Array.isArray(rows) ? rows : []))
+      .catch(() => {});
+  }, [isLoggedIn, activeLabId]);
+
   function resetEqForm() {
-    setEditingId(null); setName(""); setMfr(""); setModel(""); setSerial(""); setLocation(""); setInterval_(""); setNextDue("");
+    setEditingId(null); setName(""); setMfr(""); setModel(""); setSerial(""); setLocation(""); setInterval_(""); setNextDue(""); setLinkId("");
   }
   function openAdd() { resetEqForm(); setEqOpen(true); }
   function openEdit(e: Equipment) {
     setEditingId(e.id); setName(e.instrument_name); setMfr(e.manufacturer || ""); setModel(e.model || "");
     setSerial(e.serial_number || ""); setLocation(e.location || "");
     setInterval_(e.pm_interval_days != null ? String(e.pm_interval_days) : ""); setNextDue(e.next_due_date || "");
+    setLinkId(e.map_instrument_id ? String(e.map_instrument_id) : "");
     setEqOpen(true);
   }
 
@@ -208,6 +232,7 @@ export default function EquipmentAppPage() {
       instrument_name: name.trim(), manufacturer: mfr || null, model: model || null,
       serial_number: serial || null, location: location || null,
       pm_interval_days: interval || null, next_due_date: nextDue || null,
+      map_instrument_id: linkId ? Number(linkId) : null,
     };
     try {
       const url = editingId
@@ -349,6 +374,11 @@ export default function EquipmentAppPage() {
                         <div className="flex flex-wrap gap-1.5">
                           <Button size="sm" variant="outline" onClick={() => openLogEvent(e)} disabled={!canRecord}>Log maintenance</Button>
                           <Button size="sm" variant="ghost" onClick={() => openHistory(e)}>History</Button>
+                          {e.map_instrument_id ? (
+                            <Button size="sm" variant="ghost" asChild>
+                              <Link href={labRoute(`/instruments/${e.map_instrument_id}/trail`)} data-testid={`equip-trail-${e.id}`}>QC trail</Link>
+                            </Button>
+                          ) : null}
                           <Button size="sm" variant="ghost" onClick={() => openEdit(e)} disabled={isReadOnly}>Edit</Button>
                           <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => retire(e)} disabled={isReadOnly}>Retire</Button>
                         </div>
@@ -380,6 +410,23 @@ export default function EquipmentAppPage() {
             <div><Label htmlFor="eq-loc">Location</Label><Input id="eq-loc" value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Main lab bench 2" /></div>
             <div><Label htmlFor="eq-int">PM interval (days)</Label><Input id="eq-int" type="text" inputMode="decimal" min={1} value={interval} onChange={e => setInterval_(e.target.value)} placeholder="e.g. 365" /></div>
             <div><Label htmlFor="eq-due">Next due date</Label><Input id="eq-due" type="date" value={nextDue} onChange={e => setNextDue(e.target.value)} /></div>
+            {menuInstruments.length > 0 && (
+              <div className="sm:col-span-2">
+                <Label htmlFor="eq-link">Analyzer on your test menu</Label>
+                <Select value={linkId || "none"} onValueChange={(v) => setLinkId(v === "none" ? "" : v)}>
+                  <SelectTrigger id="eq-link" data-testid="eq-link-select"><SelectValue placeholder="Not linked" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Not linked</SelectItem>
+                    {menuInstruments.map(i => (
+                      <SelectItem key={i.id} value={String(i.id)}>
+                        {i.nickname ? `${i.nickname} (${i.instrument_name})` : i.instrument_name}{i.serial_number ? ` · SN ${i.serial_number}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground mt-1">Linking puts this instrument's calibration and maintenance on the same trail as its QC failures and corrective actions.</p>
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-2 mt-2">
             <Button variant="outline" onClick={() => { resetEqForm(); setEqOpen(false); }} disabled={eqSaving}>Cancel</Button>

@@ -5,6 +5,7 @@ import { useIsReadOnly, useCanRecord } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useLabRoute } from "@/hooks/useLabRoute";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -99,10 +100,23 @@ interface CorrectiveActionRow {
   nce_reference: string | null;
 }
 
+// An analyzer on the lab's VeritaMap test menu (GET /veritacheck/lab-instruments).
+interface LabInstrument {
+  id: number;
+  instrument_name: string;
+  nickname: string | null;
+  serial_number: string | null;
+  map_name: string | null;
+}
+function labInstrumentLabel(i: LabInstrument): string {
+  return i.nickname ? `${i.nickname} (${i.instrument_name})` : i.instrument_name;
+}
+
 interface ResultRow {
   id: number;
   control_lot_id: number;
   instrument: string | null;
+  map_instrument_id?: number | null;
   result_value: number;
   result_date: string;
   run_time: string | null;
@@ -334,6 +348,7 @@ export default function VeritaQCAppPage() {
   // member; isReadOnly still gates lot setup, void and exclude-from-baseline.
   const canRecord = useCanRecord();
   const activeLabId = useActiveLabId();
+  const labRoute = useLabRoute();
   const { toast } = useToast();
 
   // Explicit allowlist per CLAUDE.md §8 / VeritaLabAppPage canonical pattern.
@@ -362,6 +377,11 @@ export default function VeritaQCAppPage() {
   const [formValue, setFormValue] = useState("");
   const [formDate, setFormDate] = useState(todayIsoDate());
   const [formInstrument, setFormInstrument] = useState("");
+  // 2026-10-08: the run's analyzer, picked from the lab's VeritaMap test menu, so
+  // its QC failures and corrective actions build that analyzer's trail. null =
+  // "other" (free text, not on the test menu) or no test menu yet.
+  const [formMapInstrumentId, setFormMapInstrumentId] = useState<number | null>(null);
+  const [labInstruments, setLabInstruments] = useState<LabInstrument[]>([]);
   const [formRunTime, setFormRunTime] = useState("");
   const [formComment, setFormComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -592,9 +612,28 @@ export default function VeritaQCAppPage() {
   useEffect(() => {
     const lot = lots.find(l => l.id === selectedLotId);
     const m = lot?.analyte.match(/\(([^)]+)\)\s*$/);
-    setFormInstrument(m ? m[1].trim() : "");
+    const hint = m ? m[1].trim() : "";
+    // When the lot names its analyzer and that analyzer is on the test menu,
+    // pick it so the run joins the analyzer's trail without the tech choosing.
+    const want = hint.toLowerCase();
+    const match = want
+      ? labInstruments.find(i => (i.nickname || "").trim().toLowerCase() === want || i.instrument_name.trim().toLowerCase() === want)
+      : undefined;
+    setFormMapInstrumentId(match ? match.id : null);
+    setFormInstrument(match ? (match.nickname || match.instrument_name) : hint);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedLotId]);
+  }, [selectedLotId, labInstruments]);
+
+  // The lab's analyzers from its VeritaMap test menu (for the Analyzer picker).
+  useEffect(() => {
+    if (!activeLabId) return;
+    let cancelled = false;
+    fetch(`${API_BASE}/api/labs/${activeLabId}/veritacheck/lab-instruments`, { headers: authHeaders() })
+      .then(r => (r.ok ? r.json() : []))
+      .then((rows: LabInstrument[]) => { if (!cancelled) setLabInstruments(Array.isArray(rows) ? rows : []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [activeLabId]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -621,6 +660,7 @@ export default function VeritaQCAppPage() {
           result_value: valueNum,
           result_date: formDate,
           instrument: formInstrument || null,
+          map_instrument_id: formMapInstrumentId,
           run_time: formRunTime || null,
           comment: formComment || null,
         }),
@@ -1262,17 +1302,44 @@ export default function VeritaQCAppPage() {
                 </div>
                 <div>
                   <Label htmlFor="qc-instrument">Instrument</Label>
-                  <Input
-                    id="qc-instrument"
-                    list="qc-instruments"
-                    value={formInstrument}
-                    onChange={(e) => setFormInstrument(e.target.value)}
-                    placeholder="Select or type the analyzer"
-                    disabled={!canRecord}
-                  />
-                  <datalist id="qc-instruments">
-                    {instrumentSuggestions.map(inst => <option key={inst} value={inst} />)}
-                  </datalist>
+                  {labInstruments.length > 0 && (
+                    <Select
+                      value={formMapInstrumentId != null ? String(formMapInstrumentId) : "other"}
+                      onValueChange={(v) => {
+                        if (v === "other") { setFormMapInstrumentId(null); setFormInstrument(""); return; }
+                        const inst = labInstruments.find(i => String(i.id) === v);
+                        setFormMapInstrumentId(inst ? inst.id : null);
+                        setFormInstrument(inst ? (inst.nickname || inst.instrument_name) : "");
+                      }}
+                      disabled={!canRecord}
+                    >
+                      <SelectTrigger id="qc-analyzer" data-testid="qc-analyzer-select"><SelectValue placeholder="Pick the analyzer" /></SelectTrigger>
+                      <SelectContent>
+                        {labInstruments.map(i => (
+                          <SelectItem key={i.id} value={String(i.id)}>
+                            {labInstrumentLabel(i)}{i.serial_number ? ` · SN ${i.serial_number}` : ""}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="other">Other (not on the test menu)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {(labInstruments.length === 0 || formMapInstrumentId == null) && (
+                    <>
+                      <Input
+                        id="qc-instrument"
+                        list="qc-instruments"
+                        className={labInstruments.length > 0 ? "mt-2" : undefined}
+                        value={formInstrument}
+                        onChange={(e) => setFormInstrument(e.target.value)}
+                        placeholder={labInstruments.length > 0 ? "Type the analyzer" : "Select or type the analyzer"}
+                        disabled={!canRecord}
+                      />
+                      <datalist id="qc-instruments">
+                        {instrumentSuggestions.map(inst => <option key={inst} value={inst} />)}
+                      </datalist>
+                    </>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="qc-runtime">Run time</Label>
@@ -1405,7 +1472,13 @@ export default function VeritaQCAppPage() {
                         <tr key={r.id} className={`border-b last:border-b-0 ${r.voided_at ? "opacity-60" : ""}`}>
                           <td className="py-2 pr-2">{r.result_date}</td>
                           <td className={`py-2 pr-2 font-mono ${r.voided_at ? "line-through" : ""}`}>{r.result_value}</td>
-                          <td className="py-2 pr-2 text-muted-foreground">{r.instrument || "-"}</td>
+                          <td className="py-2 pr-2 text-muted-foreground">
+                            {r.map_instrument_id ? (
+                              <Link href={labRoute(`/instruments/${r.map_instrument_id}/trail`)} className="text-teal-700 hover:underline" title="Open this analyzer's QC trail">
+                                {r.instrument || "Analyzer"}
+                              </Link>
+                            ) : (r.instrument || "-")}
+                          </td>
                           <td className="py-2 pr-2 text-xs text-muted-foreground max-w-[16rem] truncate" title={r.comment || undefined}>{r.comment || "-"}</td>
                           <td className="py-2 pr-2">
                             {r.violations.length === 0 ? (
