@@ -116,6 +116,18 @@ interface TestRecord {
   // Per-test "cal ver not applicable" with the lab's reason (#77 part B).
   cal_ver_na?: 0 | 1;
   cal_ver_na_reason?: string | null;
+  // Distinct instruments across this test's correlation group, and the other
+  // analytes in it: a manual differential's "Lymphocytes" groups with the
+  // analyzer's "LYMPH%" (server-derived; parking lot #76).
+  correlation_instrument_count?: number;
+  correlation_peers?: string[];
+  correlation_peer_instruments?: { analyte: string; instrument_name: string; role: string }[];
+}
+
+// #76: correlation is required when 2+ instruments run the test, counting the
+// other names the same measurand goes by on this map (manual diff vs analyzer).
+function correlationInstrumentCount(t: { instruments?: unknown[]; correlation_instrument_count?: number }): number {
+  return t.correlation_instrument_count ?? (t.instruments ?? []).length;
 }
 
 interface AnalyteValues {
@@ -721,7 +733,7 @@ function computeIntelligence(tests: TestRecord[]): IntelligenceData {
     .filter(
       (t) =>
         t.instruments &&
-        t.instruments.length >= 2 &&
+        correlationInstrumentCount(t) >= 2 &&
         getDateStatus(t.last_method_comp, 6) !== "ok"
     )
     .map((t) => ({ analyte: t.analyte, instruments: t.instruments }));
@@ -1408,7 +1420,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
   const instruments = test.instruments ?? [];
 
   const correlationRequired =
-    !isWaived && instruments.length >= 2;
+    !isWaived && correlationInstrumentCount(test) >= 2;
 
   const isCalVerExempt = calVerExempt(test);
   const calVerStatus = isCalVerExempt
@@ -1513,15 +1525,21 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                   <Info size={10} className="text-red-500/70" />
                 </div>
               </TooltipTrigger>
-              <TooltipContent side="right" className="max-w-[220px] text-xs">
+              <TooltipContent side="right" className="max-w-[280px] whitespace-normal text-xs">
                 <p className="font-semibold mb-1">
-                  {instruments.length} instruments running this test:
+                  {correlationInstrumentCount(test)} instruments running this test:
                 </p>
                 <ul className="space-y-0.5 mb-2">
                   {instruments.map((instr, i) => (
                     <li key={i}>
                       {instr.instrument_name}{" "}
                       <span className="text-muted-foreground">[{instr.role}]</span>
+                    </li>
+                  ))}
+                  {(test.correlation_peer_instruments ?? []).map((p, i) => (
+                    <li key={`peer-${i}`} data-testid="correlation-peers">
+                      {p.instrument_name}{" "}
+                      <span className="text-muted-foreground">[{p.role}] as {p.analyte}</span>
                     </li>
                   ))}
                 </ul>
@@ -2559,7 +2577,7 @@ export default function VeritaMapMapPage() {
         case "specialty":            return (t.specialty ?? "").toLowerCase();
         case "complexity":           return (t.complexity ?? "").toLowerCase();
         case "cfr":                  return getCFR(t.specialty).toLowerCase();
-        case "correlation_required": return ((t.complexity !== "WAIVED") && ((t.instruments ?? []).length >= 2)) ? 0 : 1;
+        case "correlation_required": return ((t.complexity !== "WAIVED") && (correlationInstrumentCount(t) >= 2)) ? 0 : 1;
         case "last_cal_ver":         return t.last_cal_ver ?? "9999-12-31";
         case "last_method_comp":     return t.last_method_comp ?? "9999-12-31";
         case "last_precision":       return t.last_precision ?? "9999-12-31";

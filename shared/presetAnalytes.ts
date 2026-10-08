@@ -183,3 +183,45 @@ export function diffCorrelationKey(raw: string): string | null {
   const kind = isPct ? "pct" : isAbs ? "abs" : "pct";
   return `diff:${cls}:${kind}`;
 }
+
+// Correlation grouping for VeritaMap (parking lot #76, 2026-10-08). The map
+// decided "correlation required" by counting instruments on the EXACT analyte
+// string, so a manual differential's "Lymphocytes" and the analyzer's "LYMPH%"
+// (the same measurand, two methods; 42 CFR 493.1281 comparability) were two
+// unrelated one-instrument tests and the requirement never appeared. The map now
+// groups with the same differential key VeritaCheck coverage already uses:
+// percent with percent, absolute with absolute, everything else by exact name.
+export function correlationGroupKey(analyte: string): string {
+  return diffCorrelationKey(analyte) ?? String(analyte ?? "");
+}
+
+export interface CorrelationGroupInfo {
+  /** Distinct instruments running any analyte in this analyte's correlation group. */
+  instrumentCount: number;
+  /** The OTHER analytes on the map that share the group (e.g. "LYMPH%" for "Lymphocytes"). */
+  peers: string[];
+}
+
+/**
+ * For every analyte, the correlation group's distinct instrument count and peer
+ * analytes. Input: analyte -> instruments running it (each with an id, or
+ * instrument_id, or at least an instrument_name).
+ */
+export function correlationGroupsFor(
+  instrByAnalyte: Record<string, Array<{ id?: number | string; instrument_id?: number | string; instrument_name?: string; name?: string }>>,
+): Record<string, CorrelationGroupInfo> {
+  const byKey = new Map<string, string[]>();
+  for (const analyte of Object.keys(instrByAnalyte)) {
+    const k = correlationGroupKey(analyte);
+    if (!byKey.has(k)) byKey.set(k, []);
+    byKey.get(k)!.push(analyte);
+  }
+  const instrKey = (i: any) => String(i?.id ?? i?.instrument_id ?? i?.instrument_name ?? i?.name ?? "");
+  const out: Record<string, CorrelationGroupInfo> = {};
+  for (const members of byKey.values()) {
+    const ids = new Set<string>();
+    for (const m of members) for (const i of instrByAnalyte[m] ?? []) { const k = instrKey(i); if (k) ids.add(k); }
+    for (const m of members) out[m] = { instrumentCount: ids.size, peers: members.filter((x) => x !== m).sort() };
+  }
+  return out;
+}
