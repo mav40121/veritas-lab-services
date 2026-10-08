@@ -161,5 +161,9 @@ jobs:
           fi
 
           echo "PASS: PR body contains Gate 3 step 8 section ($SECTION_LEN chars)"
-          [ "$HAS_IMAGE" = "1" ] && echo "  - image link found"
-          [ "$HAS_BROWSER_BLOCK" = "1" ] && echo "  - browser-tool fenced block found"
+          # if/fi, not `[ ] && echo`: a false test as the last command made the
+          # step exit 1 after printing PASS (a PR with images but no fenced
+          # browser block failed, 2026-10-08 PR #1529).
+          if [ "$HAS_IMAGE" = "1" ]; then echo "  - image link found"; fi
+          if [ "$HAS_BROWSER_BLOCK" = "1" ]; then echo "  - browser-tool fenced block found"; fi
+          exit 0
