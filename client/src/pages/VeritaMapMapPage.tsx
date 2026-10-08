@@ -398,12 +398,14 @@ function DateCell({
   maxMonths,
   warningDays,
   disabled,
+  locked,
 }: {
   value: string | null | undefined;
   onChange: (v: string) => void;
   maxMonths: number;
   warningDays?: number;
   disabled?: boolean;
+  locked?: boolean;
 }) {
   const status = disabled
     ? ("ok" as DateStatus)
@@ -427,7 +429,7 @@ function DateCell({
         size="sm"
         value={value || ""}
         onChange={onChange}
-        disabled={disabled}
+        disabled={disabled || locked}
         inputClassName={`${borderClass} ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}
       />
     </div>
@@ -1219,6 +1221,8 @@ function CorrelationEditModal({ open, onClose, sourceTest, existing, mapId, onSa
 }
 
 function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrValues, onSaveAnalyteValues, onDeleteAnalyteBand, onSaveAmrValues, onEditCorrelation, readOnly, colCount, onProvenance, canUnlock }: TestRowProps) {
+  // #84 Phase 3: the Run links start a VeritaCheck study, which is setup.
+  const checkReadOnly = useIsReadOnly("veritacheck");
   const [expanded, setExpanded] = React.useState(false);
   // An analyte can carry several age/sex bands. The row edits ONE at a time; the
   // band picker below only appears once there is more than one, so an analyte
@@ -1586,6 +1590,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
               onChange={(v) => onChange(test.analyte, "last_cal_ver", v)}
               maxMonths={6}
               warningDays={30}
+              locked={readOnly}
             />
             <div className="flex items-center gap-2 text-[9px] text-muted-foreground/70 mt-0.5 pl-3.5">
               <span>Every 6 mo · 42 CFR §493.1255</span>
@@ -1605,6 +1610,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
           maxMonths={6}
           warningDays={30}
           disabled={isWaived}
+          locked={readOnly}
         />
       </td>
 
@@ -1616,6 +1622,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
           maxMonths={6}
           warningDays={30}
           disabled={isWaived}
+          locked={readOnly}
         />
       </td>
 
@@ -1626,6 +1633,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
           onChange={(v) => onChange(test.analyte, "last_sop_review", v)}
           maxMonths={24}
           warningDays={60}
+          locked={readOnly}
         />
       </td>
 
@@ -1635,7 +1643,8 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
           type="text"
           value={test.notes || ""}
           onChange={(e) => onChange(test.analyte, "notes", e.target.value)}
-          placeholder="Notes…"
+          disabled={readOnly}
+          placeholder={readOnly ? "" : "Notes…"}
           className="h-7 text-xs px-1.5"
         />
       </td>
@@ -1643,7 +1652,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
       {/* Actions */}
       <td className="px-3 py-2 whitespace-nowrap">
         <div className="flex flex-col gap-0.5">
-          {correlationRequired && (
+          {correlationRequired && !checkReadOnly && (
             <Button
               asChild
               size="sm"
@@ -1656,7 +1665,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
               </Link>
             </Button>
           )}
-          {!isWaived && (
+          {!isWaived && !checkReadOnly && (
             <Button
               asChild
               size="sm"
@@ -1861,11 +1870,11 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
                     Critical values: MEC reviewed/approved {String(localAv.mec_reviewed_at).slice(0, 10)}{localAv.mec_reviewed_by ? `, recorded by ${localAv.mec_reviewed_by}` : ""}
                   </span>
-                ) : (
+                ) : !readOnly ? (
                   <button type="button" className="text-[10px] underline text-blue-600 hover:text-blue-800" onClick={() => { setMecOpen(o => !o); setAttestFor(null); }}>
                     Record MEC review of critical values
                   </button>
-                )}
+                ) : null}
                 {refLocked ? (
                   <>
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
@@ -1878,13 +1887,13 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                       </button>
                     )}
                   </>
-                ) : (localAv.ref_range_low && localAv.ref_range_high) ? (
+                ) : (localAv.ref_range_low && localAv.ref_range_high && !readOnly) ? (
                   <button type="button" className="text-[10px] underline text-blue-600 hover:text-blue-800" onClick={() => { setAttestFor(f => f === "ref" ? null : "ref"); setMecOpen(false); }}>
                     Attest reference range (director or designee)
                   </button>
                 ) : null}
               </div>
-              {mecOpen && !localAv.mec_reviewed_at && (
+              {mecOpen && !readOnly && !localAv.mec_reviewed_at && (
                 <div className="flex flex-wrap items-end gap-2 bg-background border border-border rounded px-2 py-1.5">
                   <div>
                     <label className="text-[10px] text-muted-foreground block">MEC review/approval date</label>
@@ -1905,7 +1914,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                   <span className="text-[10px] text-muted-foreground">Requires the MEC-adopted critical values entered above.</span>
                 </div>
               )}
-              {attestFor !== null && (
+              {attestFor !== null && !readOnly && (
                 <div className="flex flex-wrap items-end gap-2 bg-background border border-border rounded px-2 py-1.5">
                   <div>
                     <label className="text-[10px] text-muted-foreground block">Attested by (print name)</label>
@@ -1969,7 +1978,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                           </button>
                         )}
                       </span>
-                    ) : (localAmr[inst.id]?.amr_low && localAmr[inst.id]?.amr_high) ? (
+                    ) : (localAmr[inst.id]?.amr_low && localAmr[inst.id]?.amr_high && !readOnly) ? (
                       <button type="button" className="text-[10px] underline text-blue-600 hover:text-blue-800" onClick={() => { setAttestFor(f => f === inst.id ? null : inst.id); setMecOpen(false); }}>
                         Attest
                       </button>
@@ -2200,6 +2209,8 @@ export default function VeritaMapMapPage() {
   // requesting user; treat false exactly like subscription read-only.
   const seatViewOnly = mapDetail?.editAccess === false;
   const readOnly = subscriptionReadOnly || seatViewOnly;
+  // #84 Phase 3: the sidebar's Run a Study link is VeritaCheck setup.
+  const checkPageReadOnly = useIsReadOnly('veritacheck');
 
   // Lightweight: count of maps owned by this user (drives toggle visibility).
   // Lab-scoped so multi-lab owners see only the maps for the active lab; the
@@ -2497,6 +2508,7 @@ export default function VeritaMapMapPage() {
   // Field change with 1.5s debounce
   const handleFieldChange = useCallback(
     (analyte: string, field: string, value: string) => {
+      if (readOnly) return;
       setLocalTests((prev) =>
         prev.map((t) =>
           t.analyte === analyte ? { ...t, [field]: value || null } : t
@@ -2511,16 +2523,17 @@ export default function VeritaMapMapPage() {
       }, 1500);
       debounceTimers.current.set(key, timer);
     },
-    [saveMutation]
+    [saveMutation, readOnly]
   );
 
   // Several fields at once, saved immediately (the N/A control, #77 part B).
   const handleFieldsChange = useCallback(
     (analyte: string, updates: Partial<TestRecord>) => {
+      if (readOnly) return;
       setLocalTests((prev) => prev.map((t) => (t.analyte === analyte ? { ...t, ...updates } : t)));
       saveMutation.mutate({ analyte, updates });
     },
-    [saveMutation]
+    [saveMutation, readOnly]
   );
 
   // Scroll to analyte row
@@ -2672,7 +2685,7 @@ export default function VeritaMapMapPage() {
     return (
       <div className="flex items-center justify-center min-h-[40vh] flex-col gap-4">
         {/* Copy-from banner: show when map has no tests but instruments exist */}
-        {instrumentsWithTests.length > 0 && emptyInstruments.length > 0 && (
+        {!readOnly && instrumentsWithTests.length > 0 && emptyInstruments.length > 0 && (
           <div className="w-full max-w-lg">
             {emptyInstruments.length > 1 && (
               <div className="mb-3">
@@ -2701,6 +2714,7 @@ export default function VeritaMapMapPage() {
               This map has no tests yet.
             </p>
             <Button
+              hidden={readOnly}
               onClick={() => navigate(activeLabId
                 ? `/labs/${activeLabId}/veritamap-app/${mapId}/build`
                 : `/veritamap-app/${mapId}/build`)}
@@ -2835,6 +2849,7 @@ export default function VeritaMapMapPage() {
             variant="outline"
             size="sm"
             className="h-8 text-xs justify-start"
+            hidden={readOnly}
             onClick={() => navigate(activeLabId
               ? `/labs/${activeLabId}/veritamap-app/${mapId}/build`
               : `/veritamap-app/${mapId}/build`)}
@@ -2901,7 +2916,7 @@ export default function VeritaMapMapPage() {
           </Button>
 
           {/* VeritaCheck CTA */}
-          <Button
+          {!checkPageReadOnly && <Button
             asChild
             size="sm"
             className="mt-1 bg-primary hover:bg-primary/90 text-primary-foreground h-8 text-xs"
@@ -2910,7 +2925,7 @@ export default function VeritaMapMapPage() {
               <FlaskConical size={11} className="mr-1.5" />
               Run a Study in VeritaCheck{"\u2122"}
             </Link>
-          </Button>
+          </Button>}
         </div>
       </aside>
 
@@ -3002,7 +3017,7 @@ export default function VeritaMapMapPage() {
           </div>
 
           {/* Copy-from banner: show when some instruments have no tests */}
-          {emptyInstruments.length > 0 && instrumentsWithTests.length > 0 && (
+          {!readOnly && emptyInstruments.length > 0 && instrumentsWithTests.length > 0 && (
             <div className="mb-4">
               {emptyInstruments.map(emptyInst => (
                 <CopyFromBannerInline
