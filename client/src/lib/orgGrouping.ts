@@ -15,10 +15,20 @@ export interface OrgGroup {
   labs: Membership[];
 }
 
+// Veritas support (docs/design/VLS_Support_Access_Design.docx): labs a Veritas
+// person reaches only through support access go in their own group, last, so
+// their own labs never get lost among every client lab.
+export const VLS_CLIENT_LABS_GROUP_ID = -1;
+
 export function groupMembershipsByOrg(memberships: Membership[]): OrgGroup[] {
   const byOrg = new Map<number, OrgGroup>();
   const ungrouped: Membership[] = [];
+  const clientLabs: Membership[] = [];
   for (const m of memberships) {
+    if (m.viaVlsSupport) {
+      clientLabs.push(m);
+      continue;
+    }
     const oid = m.organizationId ?? null;
     if (oid == null) {
       ungrouped.push(m);
@@ -36,6 +46,10 @@ export function groupMembershipsByOrg(memberships: Membership[]): OrgGroup[] {
   );
   const result: OrgGroup[] = [...orgGroups];
   if (ungrouped.length > 0) result.push({ orgId: null, orgName: null, labs: ungrouped });
+  if (clientLabs.length > 0) {
+    clientLabs.sort((a, b) => (a.labName || "").localeCompare(b.labName || ""));
+    result.push({ orgId: VLS_CLIENT_LABS_GROUP_ID, orgName: "Client labs (Veritas support)", labs: clientLabs });
+  }
   return result;
 }
 
