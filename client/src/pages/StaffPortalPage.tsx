@@ -284,7 +284,7 @@ export default function StaffPortalPage() {
 // but goes through the staff-portal-session endpoints; the server attributes
 // every run to this staff member (operator_staff_employee_id) and runs the
 // SAME Westgard evaluation as the writer path, so scoring is identical.
-interface StaffQcLot { id: number; analyte: string; level: string; lot_number: string; mfr_mean: number; mfr_sd: number; status: string; }
+interface StaffQcLot { id: number; analyte: string; level: string; lot_number: string; mfr_mean: number; mfr_sd: number; status: string; basis?: { mean: number; sd: number; label: string } | null; }
 interface StaffQcNote { id: number; note: string; author_name: string; source: string; created_at: string; }
 interface StaffQcResult { id: number; result_value: number; result_date: string; instrument: string | null; accepted_for_reporting: number; notes?: StaffQcNote[]; }
 
@@ -432,7 +432,7 @@ function StaffPortalQcView({ token, employee, labName, onBack, onSignOut }: {
               <div className="mb-4 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
                 <span className="text-muted-foreground">Logging for </span>
                 <span className="font-semibold">{selected.analyte}</span>
-                <span className="text-muted-foreground"> &middot; Lot {selected.lot_number} &middot; {selected.level} (mean {selected.mfr_mean}, SD {selected.mfr_sd})</span>
+                <span className="text-muted-foreground"> &middot; Lot {selected.lot_number} &middot; {selected.level} ({selected.basis ? selected.basis.label : `mean ${selected.mfr_mean}, SD ${selected.mfr_sd}`})</span>
               </div>
             )}
 
