@@ -5,6 +5,7 @@
  */
 
 import { db } from "./db";
+import { vlsContext } from "./vlsSupport";
 
 export type AuditModule =
   | "veritamap"
@@ -40,10 +41,13 @@ export interface AuditEntry {
  */
 export function logAudit(entry: AuditEntry): number {
   try {
+    // Veritas support (server/vlsSupport.ts): a row written while a Veritas user
+    // is working in a lab is stamped acting_as='vls_support'.
+    const actingAs = vlsContext.getStore()?.actingAs ?? null;
     const result = (db as any).$client.prepare(`
       INSERT INTO audit_log
-        (user_id, owner_user_id, module, action, entity_type, entity_id, entity_label, before_json, after_json, ip_address, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        (user_id, owner_user_id, module, action, entity_type, entity_id, entity_label, before_json, after_json, ip_address, acting_as, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     `).run(
       entry.userId,
       entry.ownerUserId ?? entry.userId,
@@ -55,6 +59,7 @@ export function logAudit(entry: AuditEntry): number {
       entry.before != null ? JSON.stringify(entry.before) : null,
       entry.after != null ? JSON.stringify(entry.after) : null,
       entry.ipAddress ?? null,
+      actingAs,
     );
     return result.lastInsertRowid as number;
   } catch (err: any) {

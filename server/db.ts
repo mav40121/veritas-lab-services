@@ -7698,3 +7698,35 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
     try { sqlite.exec("ALTER TABLE user_seats ADD COLUMN staff_employee_id INTEGER REFERENCES staff_employees(id)"); } catch {}
   }
 }
+
+// Veritas support access (2026-10-08, docs/design/VLS_Support_Access_Design.docx).
+// users.vls_support marks a Veritas Lab Services person (set only by an
+// admin-secret endpoint); labs.vls_support_access is the lab owner's on/off
+// switch (default on); audit_log.acting_as stamps rows written through that
+// access; vls_support_activity records every change a Veritas user makes in a
+// lab, so the owner's activity list is complete even where a route writes no
+// audit row. CREATE + ALTER blocks together per the NEW DB TABLE RULE.
+{
+  const addCol = (table: string, col: string, ddl: string) => {
+    const cols = (sqlite.prepare(`PRAGMA table_info(${table})`).all() as any[]).map((c: any) => c.name);
+    if (!cols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+  };
+  addCol("users", "vls_support", "ALTER TABLE users ADD COLUMN vls_support INTEGER NOT NULL DEFAULT 0");
+  addCol("labs", "vls_support_access", "ALTER TABLE labs ADD COLUMN vls_support_access INTEGER NOT NULL DEFAULT 1");
+  addCol("audit_log", "acting_as", "ALTER TABLE audit_log ADD COLUMN acting_as TEXT");
+  try {
+    sqlite.exec(`CREATE TABLE IF NOT EXISTS vls_support_activity (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lab_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      method TEXT NOT NULL,
+      path TEXT NOT NULL,
+      status INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`);
+  } catch {}
+  addCol("vls_support_activity", "status", "ALTER TABLE vls_support_activity ADD COLUMN status INTEGER");
+  addCol("vls_support_activity", "note", "ALTER TABLE vls_support_activity ADD COLUMN note TEXT");
+  addCol("vls_support_activity", "created_at", "ALTER TABLE vls_support_activity ADD COLUMN created_at TEXT NOT NULL DEFAULT (datetime('now'))");
+  try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_vls_support_activity_lab ON vls_support_activity(lab_id, created_at DESC)`); } catch {}
+}
