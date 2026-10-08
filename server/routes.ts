@@ -31742,6 +31742,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ).run(normalizedClia || null, clia_lab_name || null, req.userId, now, now);
         const newLabId = Number(result.lastInsertRowid);
         (db as any).$client.prepare("UPDATE users SET lab_id = ? WHERE id = ?").run(newLabId, req.userId);
+        // The owner must be an active member of the lab they just created.
+        // Every /api/labs/:labId route (labScopeMiddleware) admits only an
+        // active lab_members row, so without this row the owner is locked out
+        // of their own lab from the moment it exists. That happened to the
+        // St. Charles owner (lab 31, 2026-09-18) and lab 20: a first-time
+        // accreditation or CLIA save here created the lab and nothing else.
+        // Parking lot #83. Primary because this is the user's first lab
+        // (this branch only runs when they resolve to no lab at all).
+        (db as any).$client.prepare(
+          `INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
+           SELECT ?, ?, 'owner', '{}', 'active', 1, ?, ?, ?
+           WHERE NOT EXISTS (SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ?)`
+        ).run(newLabId, req.userId, now, now, now, newLabId, req.userId);
+        const ownerMembership = (db as any).$client.prepare(
+          "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?"
+        ).get(newLabId, req.userId);
+        auditLabMembership("create", ownerMembership, req.userId, (req.headers["x-forwarded-for"] as string) || null, "account/settings:first-lab");
         // Also link existing seat users to this new lab
         const seatUsers = (db as any).$client.prepare(
           "SELECT seat_user_id FROM user_seats WHERE owner_user_id = ? AND status = 'active' AND seat_user_id IS NOT NULL"
