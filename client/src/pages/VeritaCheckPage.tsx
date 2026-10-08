@@ -1,4 +1,5 @@
 import { useSEO } from "@/hooks/useSEO";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 // .xlsx parsing uses ExcelJS via dynamic import (CLAUDE.md §6: ExcelJS only).
 // ExcelJS handles .xlsx (Office Open XML). The legacy .xls (BIFF binary)
@@ -272,6 +273,9 @@ const plans = [
 ];
 
 export default function VeritaCheckPage() {
+  // #84 Phase 3: running a study is VeritaCheck setup; a view-only login
+  // (e.g. a Staff login) can open the page but not save or run.
+  const studyReadOnly = useIsReadOnly("veritacheck");
   const labRoute = useLabRoute();
   const [, navigate] = useLocation();
   const search = useSearch();
@@ -4927,9 +4931,10 @@ return (
               {filledLevels >= (studyType === "precision" ? 1 : studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : 3) ? <span className="text-green-600 dark:text-green-400">{"✓"} {filledLevels} {studyType === "lot_to_lot" || studyType === "pt_coag" || studyType === "ref_interval" ? "specimen" : studyType === "sensitivity" ? "blank replicate" : studyType === "method_comparison" ? "sample" : "level"}{filledLevels !== 1 ? "s" : ""} ready</span> : <span>{filledLevels} / {studyType === "precision" ? 1 : studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : 3} minimum filled</span>}
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+              {studyReadOnly && <span className="text-xs text-muted-foreground" data-testid="study-view-only-note">View only: running a study needs VeritaCheck edit access.</span>}
               <Button
                 onClick={handleSaveDraft}
-                disabled={saveMutation.isPending || !testName.trim()}
+                disabled={saveMutation.isPending || !testName.trim() || studyReadOnly}
                 size="lg"
                 variant="outline"
                 data-testid="button-save-draft"
@@ -4937,7 +4942,7 @@ return (
               >
                 {saveMutation.isPending ? "Saving…" : isEditing ? "Save Changes (Draft)" : "Save Draft"}
               </Button>
-              <Button onClick={handleSubmit} disabled={saveMutation.isPending || filledLevels < (studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : studyType === "carryover" ? 12 : studyType === "qc_range" ? 2 : studyType === "accuracy_bias" ? 2 : studyType === "linearity" ? 3 : studyType === "reportable_range" ? 2 : 3) || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
+              <Button onClick={handleSubmit} disabled={studyReadOnly || saveMutation.isPending || filledLevels < (studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : studyType === "carryover" ? 12 : studyType === "qc_range" ? 2 : studyType === "accuracy_bias" ? 2 : studyType === "linearity" ? 3 : studyType === "reportable_range" ? 2 : 3) || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
                 {saveMutation.isPending ? "Calculating…" : isEditing ? "Save & Generate Report" : "Run Study & Generate Report"}
               </Button>
             </div>
