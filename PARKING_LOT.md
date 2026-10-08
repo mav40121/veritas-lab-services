@@ -520,44 +520,6 @@ _(item #75 closed 2026-10-07; fixed in the same change as #78, PR #1514 (44ca3e2
 
 ---
 
-### 76. VeritaMap: Manual Diff cell lines never pair with the analyzer differential, so no correlation is triggered
-
-**Effort:** S (1-3 days)
-**Importance:** High. 42 CFR 493.1281 comparability: the same analyte on two methods (manual differential vs the hematology analyzer) must be correlated twice a year; when the map cannot see they are the same test, the requirement never appears and readiness over-reports.
-
-**What:** Correlation grouping in the map intelligence matches instruments on
-the exact analyte string. The library's "Manual Differential" entry names the
-cell lines "Lymphocytes / Neutrophils / Monocytes / Eosinophils / Basophils";
-the hematology analyzers (Sysmex XN-1000/XN-2000 and the rest) name them
-"LYMPH% / NEUT% / MONO% / EO% / BASO%" (plus the absolute "#" rows). Same
-measurand (the percentage differential), different strings, so Lymph on the
-manual diff and LYMPH% on the analyzer show as two unrelated tests and the
-Pri/Backup correlation requirement is never raised. Same for every cell line.
-Fix: a canonical-analyte layer for correlation grouping (manual "Lymphocytes"
-<-> analyzer "LYMPH%" / "Lymphocytes (%)" and the same for NEUT/MONO/EO/BASO;
-the "%" row is the comparable one, not "#"), plus harmonizing the library's
-Manual Differential names toward the analyzer convention so new maps do not
-inherit the split. Receipt: a map with Sysmex XN + Manual Differential shows
-one correlation requirement per cell line, and the existing name-based matches
-are unchanged.
-
-**Source:** Michael, 2026-10-07 morning ("Manual diff Lymph is the same as lymph% on the hematology analyzers, but they are showing as different tests and not triggering correlations. Same for the other cell lines").
-**Status:** Open. Names on both sides confirmed in the library; build on request.
-
----
-
-_(item #77 closed 2026-10-07; part A live in PR #1513 (cf624cde) and part B in PR #1517 (31a0742c); see C83 below)_
-
----
-
-_(item #78 closed 2026-10-07; built and live in PR #1514 (squash 44ca3e22); see C81 below)_
-
----
-
-_(item #79 closed 2026-10-07; built and live in PR #1513 (squash cf624cde); see C80 below)_
-
----
-
 ### 80. VeritaPT: the CAP program catalog behind the enrollment picker is incomplete and partly stale (FH9 and RT4 missing, FH2P obsolete)
 
 **Effort:** S (1-3 days)
@@ -614,6 +576,12 @@ antibiogram is a PDF deliverable or a live table.
 ---
 
 ## CLOSED (audit trail)
+
+### C86. VeritaMap: Manual Diff cell lines never paired with the analyzer differential, so no correlation was triggered (was #76)
+
+**Effort:** was S / **Importance:** High. 42 CFR 493.1281 comparability for the manual vs automated differential never appeared on the map.
+
+**Closure evidence:** PR #1526 (squash 76f28078, live 2026-10-08 07:45 ET). VeritaMap decided "correlation required" per exact analyte string. It now groups with `correlationGroupsFor` (shared/presetAnalytes.ts), built on the differential key VeritaCheck coverage already used: manual "Lymphocytes" pairs with "LYMPH%", absolute "#" lines stay apart, and every other test keeps exact-name grouping. Applied in both map-detail routes, both intelligence routes, the demo builder, both Excel exports, and the map page badge, panel, sort and tooltip ("Sysmex XN-1000 [Primary] as LYMPH%"). The library's Manual Differential names were deliberately NOT renamed: renaming would orphan dates and values existing maps hold under the old strings, and the grouping key makes it unnecessary. Receipt tests/integration/veritamap-diff-correlation.test.ts 6/6; on the old code only Glucose required correlation and every differential line exported "No". Four VeritaMap suites pass. Browser receipt scripts/verify-76-diff-correlation-ui.mjs with light and dark screenshots in docs/receipts. Production check after deploy (read-only): Lisa's Milford Hematology map (lab 4, map 60) now pairs all five manual lines with the analyzer lines (Lymphocytes/LYMPH%, Neutrophils/NEUT%, Monocytes/MONO%, Eosinophils/EO%, Basophils/BASO%).
 
 ### C87. VeritaMap: remove duplicate demo maps (was #61)
 
