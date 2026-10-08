@@ -146,7 +146,7 @@ export default function VeritaScanAppPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   // Access check
-  const hasPlanAccess = !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
+  const hasPlanAccess = !!user?.plan && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
   // Multi-Lab Tier 2 Phase 3.4: route entry-surface reads/writes through
   // the active lab. Inner scan endpoints (items, excel, pdf) stay on
