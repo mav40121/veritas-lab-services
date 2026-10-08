@@ -440,6 +440,31 @@ def check_file(rel, fpath):
             ERRORS.append(f"[{rel_norm}:{i}] user_seats joined to lab_members on user_id with no lab_id in the join -- seats are per-lab, so this fans out and renders multi-lab members twice / double-counts approvers. Add `AND us.lab_id = lm.lab_id`, or mark `seat-scope-ok` if the cross-lab fan-out is intended.")
             ERRORS.append(f"  >> {s[:140]}")
 
+    # ── 15. LAB CREATION must add the owner's lab_members row ─────────────────
+    # labScopeMiddleware admits a user to /api/labs/:labId only through an
+    # active lab_members row; labs.owner_user_id alone is not enough. A path
+    # that INSERTs a labs row without the owner's membership locks the owner out
+    # of their own lab from the first minute. The account-settings first-save
+    # path did exactly that to the St. Charles owner (lab 31, 2026-09-18) and to
+    # lab 20 (parking lot #83). Every `INSERT INTO labs (` in server code must
+    # have an `INTO lab_members` insert within the 45 lines below it, unless
+    # marked `owner-membership-ok` (for a path that deliberately creates a lab
+    # with no human owner). Proven to bite: remove the insert added in the
+    # #83 fix and this fails, exit 1.
+    if rel_norm.startswith("server/"):
+        labins_re = re.compile(r'INSERT INTO labs\s*\(')
+        for i, line in enumerate(lines, 1):
+            s = line.strip()
+            if s.startswith("//") or s.startswith("*"):
+                continue
+            if not labins_re.search(line):
+                continue
+            window = "\n".join(lines[i - 1:i + 45])
+            if "INTO lab_members" in window or "owner-membership-ok" in window:
+                continue
+            ERRORS.append(f"[{rel_norm}:{i}] A labs row is inserted with no lab_members insert in the 45 lines below -- the owner gets 403 'No active membership for this lab' on their own lab. Insert the owner's active 'owner' row in the same block (see PUT /api/account/settings), or mark `owner-membership-ok` if the lab deliberately has no owner member.")
+            ERRORS.append(f"  >> {s[:140]}")
+
 
 # ── 6. DB MIGRATION CHECK (db.ts only) ──────────────────────────────────────
 # Every CREATE TABLE IF NOT EXISTS must have a corresponding ALTER TABLE

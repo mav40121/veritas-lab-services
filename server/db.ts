@@ -2070,6 +2070,20 @@ if (!colNames.includes("lab_id")) {
         "INSERT INTO labs (clia_number, lab_name, accreditation_cap, accreditation_tjc, accreditation_cola, accreditation_aabb, owner_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
       ).run(u.clia_number || null, u.clia_lab_name || null, accCap, accTjc, accCola, accAabb, u.id, now, now);
       labId = Number(result.lastInsertRowid);
+      // The user this lab was just created for is its owner and must be an
+      // active member, or labScopeMiddleware locks them out of it (parking
+      // lot #83). One-shot, not a cascade: it only touches the lab created on
+      // this line, and users.lab_id is set below so the user is never selected
+      // again. Labs matched by an existing CLIA (the branch above) get no row.
+      // lab_members is created further down this file; on an existing database
+      // it is already there, on a fresh one there are no users to backfill.
+      if (sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'lab_members'").get()) {
+        sqlite.prepare(
+          `INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
+           SELECT ?, ?, 'owner', '{}', 'active', 1, ?, ?, ?
+           WHERE NOT EXISTS (SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ?)`
+        ).run(labId, u.id, now, now, now, labId, u.id);
+      }
     }
 
     sqlite.prepare("UPDATE users SET lab_id = ? WHERE id = ?").run(labId, u.id);
