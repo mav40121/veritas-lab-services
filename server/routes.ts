@@ -11220,6 +11220,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, email: newEmail });
   });
 
+  // PATCH /api/labs/:labId/members/:memberId/name — correct a member's
+  // display name in place (owner or admin). Added 2026-10-08: a staff member
+  // typed her own last name wrong at signup ("Timmind" for "Timmins") and
+  // neither she nor the lab owner had any way to fix it. Mirrors the /email
+  // correction: same permission, same owner exclusion. Only users.name
+  // changes; the VeritaStaff roster row is a separate record.
+  app.patch("/api/labs/:labId/members/:memberId/name", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
+    const memberId = Number(req.params.memberId);
+    if (!Number.isFinite(memberId)) return res.status(400).json({ error: "Invalid memberId" });
+    const newName = String(req.body?.name ?? "").replace(/\s+/g, " ").trim();
+    if (!newName) return res.status(400).json({ error: "A name is required" });
+    if (newName.length > 120) return res.status(400).json({ error: "Name is too long (120 characters max)" });
+    const sqlite = (db as any).$client;
+    const member = sqlite.prepare(
+      "SELECT id, lab_id, user_id, role FROM lab_members WHERE id = ? AND lab_id = ?"
+    ).get(memberId, req.scope.labId) as any;
+    if (!member) return res.status(404).json({ error: "Member not found in this lab" });
+    if (member.role === "owner") {
+      return res.status(409).json({ error: "Cannot change the owner's name here" });
+    }
+    const userRow = sqlite.prepare("SELECT id, name FROM users WHERE id = ?").get(member.user_id) as any;
+    if (!userRow) return res.status(404).json({ error: "Member account not found" });
+    if (String(userRow.name || "") === newName) return res.json({ ok: true, name: newName, unchanged: true });
+    sqlite.prepare("UPDATE users SET name = ? WHERE id = ?").run(newName, userRow.id);
+    console.log(`[labs/${req.scope.labId}/members/${memberId}/name PATCH] user_id=${userRow.id} "${userRow.name}" -> "${newName}" (by user_id=${req.userId})`);
+    res.json({ ok: true, name: newName });
+  });
+
   // PATCH /api/labs/:labId/members/:memberId/permissions — update a member's
   // per-module permissions. Owner or admin may call. Updates the user_seats
   // row that links this member to the lab owner's seat pool (where the
