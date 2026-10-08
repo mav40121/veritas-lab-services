@@ -322,6 +322,27 @@ app.use((req, res, next) => {
     console.error("[policy-reminders] Scheduler setup error:", err.message);
   }
 
+  // Schedule daily competency reminders and escalation at midnight UTC
+  // (server/competencyReminders.ts). Per-lab opt-in; deduped by
+  // competency_reminder_log; no-op without RESEND_API_KEY.
+  try {
+    const { runCompetencyReminders } = await import("./competencyReminders");
+    const runComp = () => {
+      console.log("[competency-reminders] Running digest / escalation / monthly report...");
+      runCompetencyReminders()
+        .then((r) => console.log(`[competency-reminders] labs=${r.labs} sent=${r.emailsSent} skipped=${r.skipped} errors=${r.errors}`))
+        .catch((err) => console.error("[competency-reminders] Run failed:", err?.message || err));
+    };
+    const now = new Date();
+    const midnight = new Date(now);
+    midnight.setUTCHours(24, 0, 0, 0);
+    const ms = midnight.getTime() - now.getTime();
+    setTimeout(() => { runComp(); setInterval(runComp, 24 * 60 * 60 * 1000); }, ms);
+    console.log(`[competency-reminders] Scheduled in ${Math.round(ms / 60000)} minutes`);
+  } catch (err: any) {
+    console.error("[competency-reminders] Scheduler setup error:", err.message);
+  }
+
   // Schedule daily VeritaTrack due-date reminder dispatch at midnight UTC.
   // Mirrors the finding/policy reminder schedulers. Per-lab opt-in
   // (veritatrack_reminder_config.enabled); idempotent via
