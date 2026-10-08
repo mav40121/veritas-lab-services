@@ -64,6 +64,8 @@ function statusBadge(s: string) {
 // MLC-1 Phase 2: equipment maintenance-due email-reminder settings. The nightly
 // engine (server/equipmentReminders.ts) reads this per lab.
 function EquipmentRemindersPanel({ apiBase }: { apiBase: string }) {
+  // #84 Phase 3: reminder settings are VeritaMaintain setup.
+  const remindersReadOnly = useIsReadOnly("veritamaintain");
   const [enabled, setEnabled] = useState(false);
   const [leadDays, setLeadDays] = useState(14);
   const [recipients, setRecipients] = useState("");
@@ -113,7 +115,7 @@ function EquipmentRemindersPanel({ apiBase }: { apiBase: string }) {
         <div><Label className="text-xs">Recipients (comma-separated emails)</Label><Input value={recipients} onChange={e => { setRecipients(e.target.value); setSaved(false); }} placeholder="Defaults to the lab owner if blank" /></div>
       </div>
       <div className="mt-3 flex items-center gap-3">
-        <Button size="sm" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save reminder settings"}</Button>
+        <Button size="sm" onClick={save} disabled={saving || remindersReadOnly}>{saving ? "Saving..." : "Save reminder settings"}</Button>
         {saved && <span className="text-xs text-emerald-600">Saved.</span>}
       </div>
     </div>

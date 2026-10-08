@@ -13,6 +13,7 @@ import { Link } from "wouter";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -66,6 +67,8 @@ interface VendorContact {
 }
 
 export default function VeritaStockVendorsPage() {
+  // #84 Phase 3: vendors and contacts are VeritaStock setup.
+  const isReadOnly = useIsReadOnly("veritastock");
   const activeLabId = useActiveLabId();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -128,10 +131,10 @@ export default function VeritaStockVendorsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setImportOpen(true)} disabled={!activeLabId}>
+          <Button variant="outline" onClick={() => setImportOpen(true)} disabled={!activeLabId || isReadOnly}>
             <Upload size={14} className="mr-1.5" /> Import xlsx
           </Button>
-          <Button onClick={onAddClick} disabled={!activeLabId}>
+          <Button onClick={onAddClick} disabled={!activeLabId || isReadOnly}>
             <Plus size={14} className="mr-1.5" /> Add Vendor
           </Button>
         </div>
@@ -367,6 +370,8 @@ function VendorRow({
   onDelete: () => void;
   listUrl: string;
 }) {
+  // #84 Phase 3: vendors and contacts are VeritaStock setup.
+  const isReadOnly = useIsReadOnly("veritastock");
   const activeLabId = useActiveLabId();
   const qc = useQueryClient();
   const detailUrl = activeLabId ? `/api/labs/${activeLabId}/veritastock/vendors/${vendor.id}` : null;
@@ -422,12 +427,12 @@ function VendorRow({
               )}
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={onEdit} className="h-7 px-2">
+          {!isReadOnly && <Button variant="ghost" size="sm" onClick={onEdit} className="h-7 px-2">
             <Pencil size={12} />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onDelete} className="h-7 px-2 text-destructive hover:text-destructive">
+          </Button>}
+          {!isReadOnly && <Button variant="ghost" size="sm" onClick={onDelete} className="h-7 px-2 text-destructive hover:text-destructive">
             <Trash2 size={12} />
-          </Button>
+          </Button>}
         </div>
 
         {expanded && (
@@ -502,6 +507,8 @@ function ContactsEditor({
   contacts: VendorContact[];
   onChanged: () => void;
 }) {
+  // #84 Phase 3: vendors and contacts are VeritaStock setup.
+  const isReadOnly = useIsReadOnly("veritastock");
   const [newOpen, setNewOpen] = useState(false);
   const [editing, setEditing] = useState<VendorContact | null>(null);
 
@@ -535,16 +542,16 @@ function ContactsEditor({
                 {c.region && <span>{c.region}</span>}
               </div>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => setEditing(c)} className="h-6 px-1.5">
+            {!isReadOnly && <Button variant="ghost" size="sm" onClick={() => setEditing(c)} className="h-6 px-1.5">
               <Pencil size={10} />
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => onDelete(c)} className="h-6 px-1.5 text-destructive hover:text-destructive">
+            </Button>}
+            {!isReadOnly && <Button variant="ghost" size="sm" onClick={() => onDelete(c)} className="h-6 px-1.5 text-destructive hover:text-destructive">
               <Trash2 size={10} />
-            </Button>
+            </Button>}
           </div>
         ))
       )}
-      <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setNewOpen(true)} disabled={!labId}>
+      <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setNewOpen(true)} disabled={!labId || isReadOnly}>
         <Plus size={11} /> Add contact
       </Button>
 

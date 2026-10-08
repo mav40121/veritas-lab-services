@@ -817,56 +817,49 @@ function requireWriteAccess(req: any, res: any, next: any) {
 }
 
 // 2026-06-08 Staff Portal auth middleware. Verifies a real user JWT and
-// resolves the user's Staff Portal identity (a staff_portal seat, or a linked
-// staff_employees row). Stashes req.staffPortalLabId for downstream handlers.
+// resolves the user's Staff Portal identity. Stashes req.staffPortalLabId and
+// req.staffPortalStaffEmployeeId for downstream handlers.
+//
+// 2026-10-08 identity fix: the ONLY qualifying path is an active
+// user_seats row with seat_type='staff_portal' that is linked to a roster row
+// (staff_employee_id). The former "director-on-roster" fallback matched
+// staff_employees.user_id = the caller, but that column holds the lab OWNER's
+// id on every roster row (NOT NULL, see db.ts), so an owner opening
+// /staff-access was silently bound to the first employee on the roster
+// (reported by MedStar: an owner saw "Justin Grinnell, Traverse City" while
+// working in Brighton). That fallback is removed.
+//
+// Self-only: every staff-portal request acts as the seat's own roster row.
+// Any employee_id in the query or body that is not that row is refused here,
+// once, for every route (policy sign, quiz attempt, inventory adjust,
+// competency sign/edit and their reads), instead of trusting the client.
 export function staffPortalAuthMiddleware(req: any, res: any, next: any) {
   const auth = req.headers.authorization;
   if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
+  let payload: any;
   try {
-    const payload = jwt.verify(auth.slice(7), JWT_SECRET) as any;
-    // 2026-06-09 PR Option 1: synthetic-JWT (kind='staff_portal') path is
-    // retired. Only real user JWTs reach here now. A user qualifies for
-    // Staff Portal access via either:
-    //   1. an active user_seats row with seat_type='staff_portal' (the
-    //      invited-tech path), OR
-    //   2. a staff_employees row linked via user_id to req.userId
-    //      (the lab-director-on-roster path).
-    // Both paths resolve a single labs.id which gets stashed as
-    // req.staffPortalLabId for downstream handlers.
-    if (payload && typeof payload.userId === "number") {
-      const sqlite = (db as any).$client;
-      const seat = sqlite.prepare(
-        "SELECT lab_id, staff_employee_id FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' AND status = 'active' LIMIT 1"
-      ).get(payload.userId) as any;
-      if (seat && seat.lab_id) {
-        req.staffPortalLabId = seat.lab_id;
-        req.staffPortalStaffEmployeeId = seat.staff_employee_id;
-        req.staffPortalUserId = payload.userId;
-        return next();
-      }
-      // Director-on-roster fallback. Pick the lab from the ?lab_id
-      // query param when supplied (so the bell can scope to the
-      // active lab), else any lab where the user has a staff_employees
-      // row linked.
-      const queryLabId = parseInt(String((req.query || {}).lab_id || ""), 10);
-      const empRow = Number.isFinite(queryLabId) && queryLabId > 0
-        ? sqlite.prepare(
-            "SELECT id, tier2_lab_id FROM staff_employees WHERE user_id = ? AND tier2_lab_id = ? AND status = 'active' LIMIT 1"
-          ).get(payload.userId, queryLabId) as any
-        : sqlite.prepare(
-            "SELECT id, tier2_lab_id FROM staff_employees WHERE user_id = ? AND status = 'active' LIMIT 1"
-          ).get(payload.userId) as any;
-      if (empRow && empRow.tier2_lab_id) {
-        req.staffPortalLabId = empRow.tier2_lab_id;
-        req.staffPortalStaffEmployeeId = empRow.id;
-        req.staffPortalUserId = payload.userId;
-        return next();
-      }
-    }
-    return res.status(401).json({ error: "Not a staff portal session" });
+    payload = jwt.verify(auth.slice(7), JWT_SECRET) as any;
   } catch {
     return res.status(401).json({ error: "Invalid or expired token" });
   }
+  if (!payload || typeof payload.userId !== "number") return res.status(401).json({ error: "Not a staff portal session" });
+  const sqlite = (db as any).$client;
+  const seat = sqlite.prepare(
+    "SELECT lab_id, staff_employee_id FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' AND status = 'active' AND staff_employee_id IS NOT NULL LIMIT 1"
+  ).get(payload.userId) as any;
+  if (!seat || !seat.lab_id || !seat.staff_employee_id) {
+    return res.status(401).json({ error: "Not a staff portal session", code: "NOT_STAFF_PORTAL" });
+  }
+  const claimed = (req.body && req.body.employee_id != null && req.body.employee_id !== "")
+    ? req.body.employee_id
+    : (req.query && req.query.employee_id != null && req.query.employee_id !== "" ? req.query.employee_id : null);
+  if (claimed != null && Number(claimed) !== Number(seat.staff_employee_id)) {
+    return res.status(403).json({ error: "The Staff Portal only acts as the signed-in staff member.", code: "STAFF_PORTAL_NOT_SELF" });
+  }
+  req.staffPortalLabId = seat.lab_id;
+  req.staffPortalStaffEmployeeId = seat.staff_employee_id;
+  req.staffPortalUserId = payload.userId;
+  return next();
 }
 
 function authMiddleware(req: any, res: any, next: any) {
@@ -10880,87 +10873,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, status: newStatus, emailSent, role, inviteToken });
   });
 
-  // GET /api/me/staff-portal-employee?lab_id=N
-  //   2026-06-09 Auth unification helper. Resolves the logged-in user's
-  //   Staff Portal identity: which staff_employees row they're pinned
-  //   to, which lab, and the two per-employee toggles the existing
-  //   tile UI gates on. The /staff-access page calls this on mount;
-  //   a 200 means "render tiles directly for this employee"; a 404
-  //   means "this account has no Staff Portal access path".
+  // GET /api/me/staff-portal-employee
+  //   Resolves the logged-in user's Staff Portal identity: which
+  //   staff_employees row they act as, which lab, and the two per-employee
+  //   toggles the tile UI gates on. The /staff-access page calls this on
+  //   mount; 200 = render tiles for this employee, 404 = this account is not
+  //   a Staff Portal login (the page then shows a neutral "use your staff
+  //   login" screen).
   //
-  //   Two resolution paths (in order):
-  //     1. user_seats with seat_type='staff_portal' (invited-tech path)
-  //     2. staff_employees.user_id = req.userId (director-on-roster
-  //        path; lab director added themselves to VeritaStaff). When
-  //        ?lab_id=N is supplied we scope to that lab.
-  //     3. Opportunistic auto-link: if neither resolves, try matching
-  //        the user's name to a staff_employees row with user_id IS
-  //        NULL on a lab they own. If exactly one match, link it.
+  //   2026-10-08: the ONLY path is an accepted, active staff_portal seat
+  //   linked to a roster row. The old "staff_employees.user_id = me" path
+  //   bound an OWNER to the first employee on the roster (that column holds
+  //   the owner id on every row), and the name-match auto-link could never
+  //   fire (column is NOT NULL). Both removed. Same rule as
+  //   staffPortalAuthMiddleware.
   app.get("/api/me/staff-portal-employee", authMiddleware, (req: any, res) => {
     const sqlite = (db as any).$client;
-    const queryLabId = parseInt(String((req.query || {}).lab_id || ""), 10);
-    const wantLabId = Number.isFinite(queryLabId) && queryLabId > 0 ? queryLabId : null;
-
-    // Path 1: user_seats
     const seat = sqlite.prepare(
-      "SELECT lab_id, staff_employee_id FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' AND status = 'active' LIMIT 1"
+      "SELECT lab_id, staff_employee_id FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' AND status = 'active' AND staff_employee_id IS NOT NULL LIMIT 1"
     ).get(req.userId) as any;
-    let resolvedLabId: number | null = null;
-    let resolvedEmpId: number | null = null;
-    if (seat && seat.lab_id && seat.staff_employee_id) {
-      resolvedLabId = seat.lab_id;
-      resolvedEmpId = seat.staff_employee_id;
-    } else {
-      // Path 2: staff_employees.user_id direct link
-      const empRow = wantLabId
-        ? sqlite.prepare("SELECT id, tier2_lab_id FROM staff_employees WHERE user_id = ? AND tier2_lab_id = ? AND status = 'active' LIMIT 1").get(req.userId, wantLabId) as any
-        : sqlite.prepare("SELECT id, tier2_lab_id FROM staff_employees WHERE user_id = ? AND status = 'active' LIMIT 1").get(req.userId) as any;
-      if (empRow) {
-        resolvedLabId = empRow.tier2_lab_id;
-        resolvedEmpId = empRow.id;
-      } else {
-        // Path 3: opportunistic auto-link by name match on a lab the
-        // user owns or is a member of. Only links when there's exactly
-        // one candidate so we never silently bind the wrong row.
-        const user = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
-        if (user && user.name) {
-          const labs = sqlite.prepare(
-            wantLabId
-              ? "SELECT l.id FROM labs l WHERE l.id = ? AND (l.owner_user_id = ? OR EXISTS (SELECT 1 FROM lab_members lm WHERE lm.lab_id = l.id AND lm.user_id = ? AND lm.status = 'active'))"
-              : "SELECT l.id FROM labs l WHERE l.owner_user_id = ? OR EXISTS (SELECT 1 FROM lab_members lm WHERE lm.lab_id = l.id AND lm.user_id = ? AND lm.status = 'active')"
-          ).all(...(wantLabId ? [wantLabId, req.userId, req.userId] : [req.userId, req.userId])) as any[];
-          // 2026-06-09 robust name match: try three patterns to
-          // cover the realistic shape of users.name vs
-          // staff_employees.first_name/last_name:
-          //   1. "First Last" exact match
-          //   2. just first name (user signed up with first name only)
-          //   3. just last name (rare but possible)
-          // Single-candidate-across-all-three is what we accept; any
-          // tie or multi-candidate situation leaves user_id NULL so we
-          // never silently bind the wrong row.
-          const userName = String(user.name).trim();
-          for (const lab of labs) {
-            const candidates = sqlite.prepare(
-              `SELECT id FROM staff_employees
-               WHERE tier2_lab_id = ? AND status = 'active' AND user_id IS NULL
-                 AND (
-                   lower(trim(first_name || ' ' || last_name)) = lower(?)
-                   OR lower(trim(first_name)) = lower(?)
-                   OR lower(trim(last_name)) = lower(?)
-                 )`
-            ).all(lab.id, userName, userName, userName) as any[];
-            if (candidates.length === 1) {
-              try {
-                sqlite.prepare("UPDATE staff_employees SET user_id = ? WHERE id = ? AND user_id IS NULL").run(req.userId, candidates[0].id);
-                resolvedLabId = lab.id;
-                resolvedEmpId = candidates[0].id;
-                break;
-              } catch { /* unique-constraint race; fall through */ }
-            }
-          }
-        }
-      }
-    }
+    const resolvedLabId: number | null = seat?.lab_id ?? null;
+    const resolvedEmpId: number | null = seat?.staff_employee_id ?? null;
 
     if (!resolvedLabId || !resolvedEmpId) {
       return res.status(404).json({ error: "No Staff Portal access for this account" });
@@ -10997,51 +10930,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const queryLabId = parseInt(String((req.query || {}).lab_id || ""), 10);
     const wantLabId = Number.isFinite(queryLabId) && queryLabId > 0 ? queryLabId : null;
 
-    // Find all staff_employees rows linked to this user.
-    let empRows = wantLabId
+    // 2026-10-08 identity fix: the bell shows a Staff Portal login ITS OWN
+    // pending items, resolved from the accepted staff_portal seat only. The
+    // old "staff_employees.user_id = me" match returned EVERY roster row for
+    // an owner (that column holds the owner id on every row), so an owner's
+    // bell listed all their staff's pending work as their own; the name-match
+    // auto-link could never fire (column is NOT NULL). Both removed.
+    const empRows = (wantLabId
       ? sqlite.prepare(
-          "SELECT id, tier2_lab_id FROM staff_employees WHERE user_id = ? AND tier2_lab_id = ? AND status = 'active'"
-        ).all(req.userId, wantLabId) as any[]
+          "SELECT staff_employee_id AS id, lab_id AS tier2_lab_id FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' AND status = 'active' AND staff_employee_id IS NOT NULL AND lab_id = ?"
+        ).all(req.userId, wantLabId)
       : sqlite.prepare(
-          "SELECT id, tier2_lab_id FROM staff_employees WHERE user_id = ? AND status = 'active'"
-        ).all(req.userId) as any[];
-
-    // 2026-06-09 PR Option 1 follow-up: opportunistic auto-link on
-    // the bell endpoint too. The bell mounts on every authenticated
-    // page in the main app; auto-linking here means a director who
-    // added themselves to VeritaStaff but never visited /staff-access
-    // still gets the bell + count once any page loads. Mirrors the
-    // logic in /api/me/staff-portal-employee.
-    if (!empRows.length) {
-      const user = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
-      if (user && user.name) {
-        const userName = String(user.name).trim();
-        const labs = wantLabId
-          ? sqlite.prepare(
-              "SELECT l.id FROM labs l WHERE l.id = ? AND (l.owner_user_id = ? OR EXISTS (SELECT 1 FROM lab_members lm WHERE lm.lab_id = l.id AND lm.user_id = ? AND lm.status = 'active'))"
-            ).all(wantLabId, req.userId, req.userId) as any[]
-          : sqlite.prepare(
-              "SELECT l.id FROM labs l WHERE l.owner_user_id = ? OR EXISTS (SELECT 1 FROM lab_members lm WHERE lm.lab_id = l.id AND lm.user_id = ? AND lm.status = 'active')"
-            ).all(req.userId, req.userId) as any[];
-        for (const lab of labs) {
-          const candidates = sqlite.prepare(
-            `SELECT id FROM staff_employees
-             WHERE tier2_lab_id = ? AND status = 'active' AND user_id IS NULL
-               AND (
-                 lower(trim(first_name || ' ' || last_name)) = lower(?)
-                 OR lower(trim(first_name)) = lower(?)
-                 OR lower(trim(last_name)) = lower(?)
-               )`
-          ).all(lab.id, userName, userName, userName) as any[];
-          if (candidates.length === 1) {
-            try {
-              sqlite.prepare("UPDATE staff_employees SET user_id = ? WHERE id = ? AND user_id IS NULL").run(req.userId, candidates[0].id);
-              empRows.push({ id: candidates[0].id, tier2_lab_id: lab.id });
-            } catch { /* unique-constraint race; ignore */ }
-          }
-        }
-      }
-    }
+          "SELECT staff_employee_id AS id, lab_id AS tier2_lab_id FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' AND status = 'active' AND staff_employee_id IS NOT NULL"
+        ).all(req.userId)) as any[];
 
     if (!empRows.length) {
       return res.json({ quizzes: [], policies: [], competencies: [] });
@@ -11428,6 +11329,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     console.log(`[labs/${req.scope.labId}/members/${memberId}/email PATCH] user_id=${userRow.id} ${oldEmail} -> ${newEmail} (by user_id=${req.userId})`);
     res.json({ ok: true, email: newEmail });
+  });
+
+  // PATCH /api/labs/:labId/members/:memberId/name — correct a member's
+  // display name in place (owner or admin). Added 2026-10-08: a staff member
+  // typed her own last name wrong at signup ("Timmind" for "Timmins") and
+  // neither she nor the lab owner had any way to fix it. Mirrors the /email
+  // correction: same permission, same owner exclusion. Only users.name
+  // changes; the VeritaStaff roster row is a separate record.
+  app.patch("/api/labs/:labId/members/:memberId/name", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
+    const memberId = Number(req.params.memberId);
+    if (!Number.isFinite(memberId)) return res.status(400).json({ error: "Invalid memberId" });
+    const newName = String(req.body?.name ?? "").replace(/\s+/g, " ").trim();
+    if (!newName) return res.status(400).json({ error: "A name is required" });
+    if (newName.length > 120) return res.status(400).json({ error: "Name is too long (120 characters max)" });
+    const sqlite = (db as any).$client;
+    const member = sqlite.prepare(
+      "SELECT id, lab_id, user_id, role FROM lab_members WHERE id = ? AND lab_id = ?"
+    ).get(memberId, req.scope.labId) as any;
+    if (!member) return res.status(404).json({ error: "Member not found in this lab" });
+    if (member.role === "owner") {
+      return res.status(409).json({ error: "Cannot change the owner's name here" });
+    }
+    const userRow = sqlite.prepare("SELECT id, name FROM users WHERE id = ?").get(member.user_id) as any;
+    if (!userRow) return res.status(404).json({ error: "Member account not found" });
+    if (String(userRow.name || "") === newName) return res.json({ ok: true, name: newName, unchanged: true });
+    sqlite.prepare("UPDATE users SET name = ? WHERE id = ?").run(newName, userRow.id);
+    console.log(`[labs/${req.scope.labId}/members/${memberId}/name PATCH] user_id=${userRow.id} "${userRow.name}" -> "${newName}" (by user_id=${req.userId})`);
+    res.json({ ok: true, name: newName });
   });
 
   // PATCH /api/labs/:labId/members/:memberId/permissions — update a member's
@@ -33544,6 +33474,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       sqlite.prepare("DELETE FROM veritaqc_import_mappings WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM stock_vendor_contacts WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM stock_vendors WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM stock_recall_events WHERE recall_id IN (SELECT id FROM stock_recalls WHERE lab_id = ?)").run(id);
+      sqlite.prepare("DELETE FROM stock_recall_documents WHERE recall_id IN (SELECT id FROM stock_recalls WHERE lab_id = ?)").run(id);
+      sqlite.prepare("DELETE FROM stock_recalls WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM stock_recall_recipients WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM staff_duty_change_events WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM staff_position_descriptions WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM policy_quiz_questions WHERE lab_id = ?").run(id);
@@ -40647,6 +40581,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // VeritaBench routes (Productivity Tracker + Staffing Analyzer)
   const { registerVeritaBenchRoutes } = await import('./veritabench');
   registerVeritaBenchRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
+
+  // VeritaStock recall tracker (/api/labs/:labId/veritastock/recalls/*)
+  const { registerStockRecallRoutes } = await import('./stockRecalls');
+  registerStockRecallRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
 
   // VeritaOps routes (Cost-Per-Reportable-Test studies, PARKING_LOT #10)
   const { registerVeritaOpsRoutes } = await import('./veritaops');

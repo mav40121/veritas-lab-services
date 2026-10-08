@@ -4,7 +4,7 @@ import { Link, useLocation, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
-import { useIsReadOnly } from "@/components/SubscriptionBanner";
+import { useIsReadOnly, useCanRecord } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -767,6 +767,9 @@ function ProgramListView() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const readOnly = useIsReadOnly('veritacomp');
+  // #84: a view-only seat is not a lapsed subscription; say which it is.
+  const canRecord = useCanRecord();
+  const lockReason = canRecord ? PERMISSION_REASONS.writeAccess : PERMISSION_REASONS.resubscribe;
   const [wizardOpen, setWizardOpen] = useState(false);
   // PR A (customer-blockers wave 2026-06-05, item #1): top-level "New
   // Assessment" path. Opens a small picker that lets the lab director go
@@ -844,7 +847,7 @@ function ProgramListView() {
               via xlsx. Lab director uploads a 6-column workbook; server
               validates then commits transactionally with locked = 1 +
               completion_date = assessment_date. */}
-          <PermissionTooltip disabled={readOnly} reason={PERMISSION_REASONS.resubscribe}>
+          <PermissionTooltip disabled={readOnly} reason={lockReason}>
             <Button
               variant="outline"
               onClick={() => setBulkImportOpen(true)}
@@ -859,7 +862,7 @@ function ProgramListView() {
               N employees with shared date / result / evaluator. Each row
               lands locked. For per-tech element notes, the director
               unlocks the individual assessment, edits, re-locks. */}
-          <PermissionTooltip disabled={readOnly} reason={PERMISSION_REASONS.resubscribe}>
+          <PermissionTooltip disabled={readOnly} reason={lockReason}>
             <Button
               variant="outline"
               onClick={() => setCohortSignoffOpen(true)}
@@ -874,7 +877,7 @@ function ProgramListView() {
               PermissionTooltip wrapper renders a branded Radix tooltip
               on hover when the wrapped button is disabled, replacing
               the inconsistent native title-attribute behavior. */}
-          <PermissionTooltip disabled={readOnly} reason={PERMISSION_REASONS.resubscribe}>
+          <PermissionTooltip disabled={readOnly} reason={lockReason}>
             <Button
               variant="outline"
               onClick={() => {
@@ -895,7 +898,7 @@ function ProgramListView() {
               New Assessment
             </Button>
           </PermissionTooltip>
-          <PermissionTooltip disabled={readOnly} reason={PERMISSION_REASONS.resubscribe}>
+          <PermissionTooltip disabled={readOnly} reason={lockReason}>
             <Button onClick={() => setWizardOpen(true)} disabled={readOnly}>
               <Plus className="h-4 w-4 mr-1.5" />
               New Program
@@ -930,7 +933,7 @@ function ProgramListView() {
           <p className="text-sm text-muted-foreground mb-5">
             Create your first competency program to get started.
           </p>
-          <PermissionTooltip disabled={readOnly} reason={PERMISSION_REASONS.resubscribe}>
+          <PermissionTooltip disabled={readOnly} reason={lockReason}>
             <Button onClick={() => setWizardOpen(true)} disabled={readOnly}>
               <Plus className="h-4 w-4 mr-1.5" />
               New Program
@@ -990,10 +993,10 @@ function ProgramListView() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <DeleteConfirmDialog
+                    {!readOnly && <DeleteConfirmDialog
                       name={p.name}
                       onDelete={() => deleteProgram.mutate(p.id)}
-                    />
+                    />}
                     <Button
                       size="sm"
                       variant="outline"
@@ -1508,6 +1511,8 @@ function NewProgramWizard({ onClose, onCreated }: { onClose: () => void; onCreat
 // ── Program Detail View ────────────────────────────────────────────────
 
 function ProgramDetailView({ programId }: { programId: number }) {
+  // #84 Phase 3: VeritaComp writes need VeritaComp edit (server-enforced).
+  const isReadOnly = useIsReadOnly("veritacomp");
   const [, navigate] = useLocation();
   const activeLabId = useActiveLabId();
   const qc = useQueryClient();
@@ -1518,7 +1523,7 @@ function ProgramDetailView({ programId }: { programId: number }) {
   // user doesn't have to click through.
   const initialNewAssessment = typeof window !== "undefined" && window.location.search.includes("newAssessment=1");
   const [activeTab, setActiveTab] = useState<"overview" | "assessments" | "employees" | "settings" | "quizzes">(initialNewAssessment ? "assessments" : "overview");
-  const [newAssessmentOpen, setNewAssessmentOpen] = useState(initialNewAssessment);
+  const [newAssessmentOpen, setNewAssessmentOpen] = useState(initialNewAssessment && !isReadOnly);
   // Edit an existing UNSIGNED assessment: holds the assessment (with items) the
   // dialog opens against. Cleared on close.
   const [editingAssessment, setEditingAssessment] = useState<any | null>(null);
@@ -1606,7 +1611,7 @@ function ProgramDetailView({ programId }: { programId: number }) {
             <FileDown className="h-4 w-4 mr-1.5" />
             Print Blank Template
           </Button>
-          <Button onClick={() => setNewAssessmentOpen(true)}>
+          <Button onClick={() => setNewAssessmentOpen(true)} hidden={isReadOnly}>
             <Plus className="h-4 w-4 mr-1.5" />
             New Assessment
           </Button>
@@ -1638,7 +1643,7 @@ function ProgramDetailView({ programId }: { programId: number }) {
       {activeTab === "quizzes" && <QuizzesTab program={program} />}
       {activeTab === "settings" && <SettingsTab program={program} />}
 
-      {(newAssessmentOpen || editingAssessment) && (
+      {(newAssessmentOpen || editingAssessment) && !isReadOnly && (
         <NewAssessmentDialog
           key={editingAssessment ? `edit-${editingAssessment.id}` : "new"}
           program={program}
@@ -1659,6 +1664,8 @@ function ProgramDetailView({ programId }: { programId: number }) {
 // ── Overview Tab ───────────────────────────────────────────────────────
 
 function OverviewTab({ program }: { program: Program & { employees: Employee[]; assessments: Assessment[] } }) {
+  // #84 Phase 3: VeritaComp writes need VeritaComp edit (server-enforced).
+  const isReadOnly = useIsReadOnly("veritacomp");
   const employees = program.employees || [];
   const assessments = program.assessments || [];
   const activeEmployees = employees.filter(e => e.status === "active");
@@ -1780,7 +1787,7 @@ function OverviewTab({ program }: { program: Program & { employees: Employee[]; 
         <div className="border border-border rounded-lg p-4 bg-card">
           <div className="flex items-center justify-between gap-2 mb-3">
             <div className="text-sm font-semibold">Method Groups</div>
-            {activeLabId && (
+            {activeLabId && !isReadOnly && (
               <Button
                 size="sm"
                 variant="outline"
@@ -1836,6 +1843,8 @@ function localTodayISO(): string {
 }
 
 function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program & { assessments: Assessment[] }; onNewAssessment: () => void; onEdit: (a: any) => void }) {
+  // #84 Phase 3: VeritaComp writes need VeritaComp edit (server-enforced).
+  const isReadOnly = useIsReadOnly("veritacomp");
   const qc = useQueryClient();
   const activeLabId = useActiveLabId();
   const { toast } = useToast();
@@ -1969,8 +1978,8 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
       <div className="text-center py-12 border border-dashed border-border rounded-xl">
         <ClipboardCheck className="h-12 w-12 mx-auto text-muted-foreground/40 mb-3" />
         <p className="font-semibold mb-1">No assessments yet</p>
-        <p className="text-sm text-muted-foreground mb-5">Create your first competency assessment.</p>
-        <Button onClick={onNewAssessment}>
+        <p className="text-sm text-muted-foreground mb-5">{isReadOnly ? "Assessments recorded for this program will appear here." : "Create your first competency assessment."}</p>
+        <Button onClick={onNewAssessment} hidden={isReadOnly}>
           <Plus className="h-4 w-4 mr-1.5" />
           New Assessment
         </Button>
@@ -2038,12 +2047,12 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  {(a as any).locked !== 1 && (
+                  {(a as any).locked !== 1 && !isReadOnly && (
                     <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" title="Add or correct data on this assessment (specimen IDs, observer, QC dates, evaluator)" data-testid="edit-assessment" onClick={() => onEdit(a)}>
                       <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
                     </Button>
                   )}
-                  {(a as any).locked !== 1 && (
+                  {(a as any).locked !== 1 && !isReadOnly && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -2069,7 +2078,7 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
                       Sign &amp; Complete
                     </Button>
                   )}
-                  {(a as any).locked === 1 && (
+                  {(a as any).locked === 1 && !isReadOnly && (
                     <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" title="Unlock (owner / admin only)" onClick={() => unlock(a.id)}>
                       Unlock
                     </Button>
@@ -2110,7 +2119,7 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
                     confirmLabel="Delete"
                     onConfirm={() => deleteAssessment(a.id)}
                   >
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" title="Delete">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" title="Delete" hidden={isReadOnly}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </ConfirmDialog>
@@ -2317,6 +2326,8 @@ const ELEMENT_NAMES: Record<number, string> = {
 };
 
 function AssessmentDocumentsDialog({ assessmentId, onClose }: { assessmentId: number; onClose: () => void }) {
+  // #84 Phase 3: VeritaComp writes need VeritaComp edit (server-enforced).
+  const isReadOnly = useIsReadOnly("veritacomp");
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const activeLabId = useActiveLabId();
@@ -2389,7 +2400,7 @@ function AssessmentDocumentsDialog({ assessmentId, onClose }: { assessmentId: nu
                       <span className="text-xs font-semibold text-muted-foreground shrink-0">Element {n}</span>
                       <span className="text-xs truncate">{ELEMENT_NAMES[n]}</span>
                     </div>
-                    <Button variant="outline" size="sm" className="shrink-0" onClick={() => setLinkElement(n)}>
+                    <Button variant="outline" size="sm" className="shrink-0" onClick={() => setLinkElement(n)} hidden={isReadOnly}>
                       <Plus size={12} className="mr-1" /> Link
                     </Button>
                   </div>
@@ -2410,7 +2421,7 @@ function AssessmentDocumentsDialog({ assessmentId, onClose }: { assessmentId: nu
                             confirmLabel="Unlink"
                             onConfirm={() => deleteDoc(d.id)}
                           >
-                            <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto text-muted-foreground hover:text-destructive shrink-0" title="Unlink">
+                            <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto text-muted-foreground hover:text-destructive shrink-0" title="Unlink" hidden={isReadOnly}>
                               <Trash2 size={11} />
                             </Button>
                           </ConfirmDialog>
@@ -2438,6 +2449,8 @@ function AssessmentDocumentsDialog({ assessmentId, onClose }: { assessmentId: nu
 // ── Employees Tab ──────────────────────────────────────────────────────
 
 function EmployeesTab({ employees, programId }: { employees: Employee[]; programId: number }) {
+  // #84 Phase 3: VeritaComp writes need VeritaComp edit (server-enforced).
+  const isReadOnly = useIsReadOnly("veritacomp");
   const qc = useQueryClient();
   const { toast } = useToast();
   const activeLabId = useActiveLabId();
@@ -2506,7 +2519,7 @@ function EmployeesTab({ employees, programId }: { employees: Employee[]; program
         </p>
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger asChild>
-            <Button size="sm"><UserPlus className="h-4 w-4 mr-1.5" />Add Employee</Button>
+            <Button size="sm" hidden={isReadOnly}><UserPlus className="h-4 w-4 mr-1.5" />Add Employee</Button>
           </DialogTrigger>
           <DialogContent className="max-w-sm">
             <DialogHeader><DialogTitle>Add Employee</DialogTitle></DialogHeader>
@@ -2569,7 +2582,7 @@ function EmployeesTab({ employees, programId }: { employees: Employee[]; program
                     </Badge>
                   </td>
                   <td className="p-3">
-                    {emp.status === "active" && (
+                    {emp.status === "active" && !isReadOnly && (
                       <ConfirmDialog
                         title="Deactivate Employee?"
                         message={`Deactivate ${emp.name}? Their competency records will be retained but they will be marked inactive.`}
@@ -2595,6 +2608,8 @@ function EmployeesTab({ employees, programId }: { employees: Employee[]; program
 // ── Settings Tab ──────────────────────────────────────────────────────
 
 function SettingsTab({ program }: { program: Program }) {
+  // #84 Phase 3: VeritaComp writes need VeritaComp edit (server-enforced).
+  const isReadOnly = useIsReadOnly("veritacomp");
   const qc = useQueryClient();
   const { toast } = useToast();
   const activeLabId = useActiveLabId();
@@ -2636,9 +2651,9 @@ function SettingsTab({ program }: { program: Program }) {
         <div className="space-y-3 max-w-md">
           <div>
             <label className="text-xs text-muted-foreground block mb-1">Program Name</label>
-            <Input value={name} onChange={e => setName(e.target.value)} />
+            <Input value={name} onChange={e => setName(e.target.value)} disabled={isReadOnly} />
           </div>
-          <Button size="sm" onClick={save} disabled={saving || !name.trim()}>
+          <Button size="sm" onClick={save} disabled={saving || !name.trim()} hidden={isReadOnly}>
             {saving ? "Saving..." : "Save Changes"}
           </Button>
         </div>

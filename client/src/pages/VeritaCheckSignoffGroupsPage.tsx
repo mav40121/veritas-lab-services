@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -36,6 +37,8 @@ function isSignedFromCounts(status: string, total: number, finalized: number) {
 }
 
 export default function VeritaCheckSignoffGroupsPage() {
+  // #84 Phase 3: signing groups, exemptions and alignment are VeritaCheck setup.
+  const isReadOnly = useIsReadOnly("veritacheck");
   useSEO({ title: "Sign-off Groups | VeritaCheck", description: "Assign studies to a sign-off group and sign the group in one action." });
   const { toast } = useToast();
   const labRoute = useLabRoute();
@@ -118,7 +121,7 @@ export default function VeritaCheckSignoffGroupsPage() {
               </div>
               {isSignedFromCounts(detail.status, detail.members.length, detail.members.length - draftCount)
                 ? <Badge variant="outline" className="text-emerald-600 border-emerald-500/40"><CheckCircle2 size={12} className="mr-1" />Signed</Badge>
-                : <Button disabled={draftCount === 0} onClick={() => setSignOpen(true)} data-testid="button-sign-group"><Lock size={14} className="mr-2" />Sign and Lock all{draftCount ? ` (${draftCount})` : ""}</Button>}
+                : <Button disabled={draftCount === 0} hidden={isReadOnly} onClick={() => setSignOpen(true)} data-testid="button-sign-group"><Lock size={14} className="mr-2" />Sign and Lock all{draftCount ? ` (${draftCount})` : ""}</Button>}
             </div>
             <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-sm">

@@ -10,6 +10,7 @@
 // Backend: /api/iqcp/* (question bank, prescreen) and /api/labs/:labId/iqcp/*.
 
 import { useState, useEffect, useMemo, useRef, useLayoutEffect } from "react";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { VeritaPolicyTabs } from "@/components/VeritaPolicyTabs";
@@ -128,6 +129,8 @@ function StatusPill({ status }: { status: string }) {
 }
 
 function PlanList({ plans, loading, onNew, onOpen, onDeleted, jsonMut, labId }: any) {
+  // #84 Phase 3: building an IQCP is VeritaPolicy setup.
+  const isReadOnly = useIsReadOnly("veritapolicy");
   const { toast } = useToast();
   const del = async (id: number) => {
     if (!confirm("Delete this IQCP plan and its worksheets?")) return;
@@ -139,7 +142,7 @@ function PlanList({ plans, loading, onNew, onOpen, onDeleted, jsonMut, labId }: 
     <div>
       <div className="flex justify-between items-center mb-3">
         <h2 className="text-lg font-semibold">Your IQCPs</h2>
-        <Button onClick={onNew} className="gap-2"><Plus size={16} /> Start a new IQCP</Button>
+        <Button onClick={onNew} className="gap-2" hidden={isReadOnly}><Plus size={16} /> Start a new IQCP</Button>
       </div>
       {loading ? (
         <div className="flex items-center gap-2 text-muted-foreground py-8"><Loader2 className="animate-spin" size={16} /> Loading</div>
@@ -157,7 +160,7 @@ function PlanList({ plans, loading, onNew, onOpen, onDeleted, jsonMut, labId }: 
                   <div className="text-xs text-muted-foreground">{p.instrument_name}{p.approved_by_name ? ` · Approved by ${p.approved_by_name}` : ""}{p.next_review ? ` · Next review ${new Date(p.next_review).toLocaleDateString()}` : ""}</div>
                 </button>
                 <StatusPill status={p.status} />
-                <Button variant="ghost" size="sm" onClick={() => del(p.id)} className="text-muted-foreground hover:text-destructive"><Trash2 size={15} /></Button>
+                <Button variant="ghost" size="sm" hidden={isReadOnly} onClick={() => del(p.id)} className="text-muted-foreground hover:text-destructive"><Trash2 size={15} /></Button>
               </CardContent>
             </Card>
           ))}
@@ -291,6 +294,9 @@ const STEPS = [
 ] as const;
 
 function PlanBuilder({ planId, bank, labId, jsonMut, onBack }: any) {
+  // #84 Phase 3: a view-only login (e.g. a Staff login) reads the plan; the
+  // worksheets are disabled, so nothing turns dirty and no autosave fires.
+  const isReadOnly = useIsReadOnly("veritapolicy");
   const { toast } = useToast();
   const planUrl = `/api/labs/${labId}/iqcp/plans/${planId}`;
   const { data: plan, isLoading } = useQuery<any>({ queryKey: [planUrl], enabled: !!labId });
@@ -416,6 +422,7 @@ function PlanBuilder({ planId, bank, labId, jsonMut, onBack }: any) {
         })}
       </div>
 
+      <fieldset disabled={isReadOnly} className="contents">
       {step === "risk" && (
         <RiskSection bank={bank} rows={risk} setRows={setRisk} onDirty={() => markDirty("risk")} onSave={() => save("risk")} busy={busy} />
       )}
@@ -425,6 +432,7 @@ function PlanBuilder({ planId, bank, labId, jsonMut, onBack }: any) {
       {step === "qa" && (
         <QaSection rows={qa} setRows={setQa} onDirty={() => markDirty("qa")} onSave={() => save("qa")} busy={busy} />
       )}
+      </fieldset>
       {step === "review" && (
         <Card><CardContent className="p-6">
           <h3 className="font-semibold mb-3">Review and approve</h3>
@@ -436,14 +444,14 @@ function PlanBuilder({ planId, bank, labId, jsonMut, onBack }: any) {
           {unsaved && (
             <div className="border border-amber-500/30 bg-amber-500/10 rounded-lg p-3 mb-4 flex items-center justify-between gap-3">
               <span className="text-sm text-amber-700 dark:text-amber-400">You have worksheet changes that are not saved yet. Marking complete will save them.</span>
-              <Button variant="outline" size="sm" onClick={saveAll} disabled={busy}>Save all worksheets</Button>
+              <Button variant="outline" size="sm" onClick={saveAll} disabled={busy || isReadOnly}>Save all worksheets</Button>
             </div>
           )}
           <p className="text-xs text-muted-foreground mb-4">{bank.qcp.rule}</p>
           <label className="text-sm font-medium">Laboratory director or designee (approval)</label>
-          <Input value={approver} onChange={(e) => setApprover(e.target.value)} placeholder="Name of the approving director or designee" className="mt-1 mb-4 max-w-md" />
+          <Input value={approver} onChange={(e) => setApprover(e.target.value)} placeholder="Name of the approving director or designee" className="mt-1 mb-4 max-w-md" disabled={isReadOnly} />
           <div className="flex flex-wrap gap-2">
-            <Button onClick={complete} disabled={busy} className="gap-2">{busy ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle2 size={16} />} Mark IQCP complete</Button>
+            <Button onClick={complete} disabled={busy || isReadOnly} className="gap-2">{busy ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle2 size={16} />} Mark IQCP complete</Button>
             <Button variant="outline" onClick={downloadPdf} disabled={busy} className="gap-2"><Download size={16} /> Download IQCP PDF</Button>
           </div>
           <p className="text-xs text-muted-foreground mt-3">Final approval and clinical determination must be made by the laboratory director or designee. The PDF reflects the currently saved plan; save your worksheets first.</p>

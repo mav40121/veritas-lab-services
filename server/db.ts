@@ -5498,6 +5498,172 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_stock_vendor_contacts_lab ON s
   }
 }
 
+// VeritaStock recall tracker (2026-10-08). One stock_recalls row per vendor
+// recall / product notification / device correction, lab-scoped. Lot numbers
+// are a JSON array (matched against inventory_lots + inventory_items across the
+// user's locations at read time, never cached). Closeout checklist fields live
+// on the row; server/stockRecallLogic.ts decides when it may close.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS stock_recalls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    notice_type TEXT NOT NULL DEFAULT 'recall',
+    notice_date TEXT,
+    vendor TEXT NOT NULL,
+    product TEXT NOT NULL,
+    recall_number TEXT,
+    lot_numbers_json TEXT NOT NULL DEFAULT '[]',
+    details TEXT,
+    assigned_user_id INTEGER,
+    opened_on TEXT NOT NULL,
+    due_date TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    affected_summary TEXT,
+    corrective_action TEXT,
+    vendor_response_sent_on TEXT,
+    vendor_response_not_required INTEGER NOT NULL DEFAULT 0,
+    intake_notified_at TEXT,
+    closeout_notified_at TEXT,
+    signoff_user_id INTEGER,
+    signoff_name TEXT,
+    signoff_at TEXT,
+    closed_at TEXT,
+    created_by INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (lab_id) REFERENCES labs(id)
+  );
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_stock_recalls_lab ON stock_recalls(lab_id, status)`); } catch {}
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(stock_recalls)").all() as { name: string }[]).map((c) => c.name);
+  if (cols.length > 0) {
+    const required: Array<[string, string]> = [
+      ["notice_type", "TEXT NOT NULL DEFAULT 'recall'"],
+      ["notice_date", "TEXT"],
+      ["recall_number", "TEXT"],
+      ["lot_numbers_json", "TEXT NOT NULL DEFAULT '[]'"],
+      ["details", "TEXT"],
+      ["assigned_user_id", "INTEGER"],
+      ["status", "TEXT NOT NULL DEFAULT 'open'"],
+      ["affected_summary", "TEXT"],
+      ["corrective_action", "TEXT"],
+      ["vendor_response_sent_on", "TEXT"],
+      ["vendor_response_not_required", "INTEGER NOT NULL DEFAULT 0"],
+      ["intake_notified_at", "TEXT"],
+      ["closeout_notified_at", "TEXT"],
+      ["signoff_user_id", "INTEGER"],
+      ["signoff_name", "TEXT"],
+      ["signoff_at", "TEXT"],
+      ["closed_at", "TEXT"],
+      ["created_by", "INTEGER"],
+    ];
+    for (const [c, t] of required) {
+      if (!cols.includes(c)) {
+        try { sqlite.exec(`ALTER TABLE stock_recalls ADD COLUMN ${c} ${t}`); } catch {}
+      }
+    }
+  }
+}
+
+// Files on a recall case: the vendor's notice and the vendor paperwork sent
+// back. Stored as BLOBs like lab_certificate_documents (no PHI: vendor notices).
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS stock_recall_documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recall_id INTEGER NOT NULL,
+    lab_id INTEGER NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'notice',
+    original_filename TEXT NOT NULL,
+    mime_type TEXT,
+    file_size INTEGER,
+    file_data BLOB,
+    uploaded_by INTEGER,
+    uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (recall_id) REFERENCES stock_recalls(id)
+  );
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_stock_recall_documents_recall ON stock_recall_documents(recall_id)`); } catch {}
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(stock_recall_documents)").all() as { name: string }[]).map((c) => c.name);
+  if (cols.length > 0) {
+    const required: Array<[string, string]> = [
+      ["kind", "TEXT NOT NULL DEFAULT 'notice'"],
+      ["mime_type", "TEXT"],
+      ["file_size", "INTEGER"],
+      ["file_data", "BLOB"],
+      ["uploaded_by", "INTEGER"],
+    ];
+    for (const [c, t] of required) {
+      if (!cols.includes(c)) {
+        try { sqlite.exec(`ALTER TABLE stock_recall_documents ADD COLUMN ${c} ${t}`); } catch {}
+      }
+    }
+  }
+}
+
+// Who gets told about recalls, set up per lab (each customer names its own
+// people; nothing role-specific is built in).
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS stock_recall_recipients (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    name TEXT,
+    email TEXT NOT NULL,
+    role TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (lab_id) REFERENCES labs(id)
+  );
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_stock_recall_recipients_lab ON stock_recall_recipients(lab_id)`); } catch {}
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(stock_recall_recipients)").all() as { name: string }[]).map((c) => c.name);
+  if (cols.length > 0) {
+    const required: Array<[string, string]> = [
+      ["name", "TEXT"],
+      ["role", "TEXT"],
+      ["active", "INTEGER NOT NULL DEFAULT 1"],
+    ];
+    for (const [c, t] of required) {
+      if (!cols.includes(c)) {
+        try { sqlite.exec(`ALTER TABLE stock_recall_recipients ADD COLUMN ${c} ${t}`); } catch {}
+      }
+    }
+  }
+}
+
+// Case history: every edit, file, email, stock removal and sign-off, in order.
+// Overdue reminders log here too (action = 'overdue_reminder') for the cadence.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS stock_recall_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recall_id INTEGER NOT NULL,
+    lab_id INTEGER NOT NULL,
+    user_id INTEGER,
+    action TEXT NOT NULL,
+    detail TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (recall_id) REFERENCES stock_recalls(id)
+  );
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_stock_recall_events_recall ON stock_recall_events(recall_id)`); } catch {}
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(stock_recall_events)").all() as { name: string }[]).map((c) => c.name);
+  if (cols.length > 0) {
+    const required: Array<[string, string]> = [
+      ["user_id", "INTEGER"],
+      ["detail", "TEXT"],
+    ];
+    for (const [c, t] of required) {
+      if (!cols.includes(c)) {
+        try { sqlite.exec(`ALTER TABLE stock_recall_events ADD COLUMN ${c} ${t}`); } catch {}
+      }
+    }
+  }
+}
+
 // parking-lot #29 Phase 0: scan_events audit table. Every barcode scan
 // (whether it changes quantity or not) writes one row so the lab has a
 // complete who/what/when timeline. account_id matches inventory_items.

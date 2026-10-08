@@ -422,15 +422,16 @@ export default function VeritaMapAppPage() {
                         ? `/labs/${activeLabId}/veritamap-app/${map.id}/build`
                         : `/veritamap-app/${map.id}/build`)}
                       title="Edit this map: add or change instruments and tests"
+                      hidden={readOnly}
                     >
                       <Pencil size={12} />
                       Edit
                     </Button>
-                    <DeleteConfirmDialog
+                    {!readOnly && <DeleteConfirmDialog
                       mapId={map.id}
                       mapName={map.name}
                       onDelete={(id) => deleteMap.mutate(id)}
-                    />
+                    />}
                   </div>
                 </div>
               </CardContent>
