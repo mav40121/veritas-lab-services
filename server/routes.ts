@@ -9,6 +9,7 @@ import { storage } from "./storage";
 import { blockNonOperatorSeat } from "./seatAccess";
 import { isDelegationPosition, isDelegationComplexity, sanitizeResponsibilities, DELEGATION_CATALOG, DELEGATION_POSITIONS, DELEGATION_COMPLEXITIES } from "./directorDelegation";
 import { mayAttestAsDirectorOrDesignee, complexityForAnalyte, labHighestComplexity, isLabOwnerUser } from "./delegationGate";
+import { vlsContext, isVlsSupportUser, labAllowsVlsSupport, vlsSupportBlocked, recordVlsActivity } from "./vlsSupport";
 import { deriveAttestationStatus } from "./policyAttestationStatus";
 import { DEFAULT_TEMPLATES, REMINDER_TYPES, REMINDER_MERGE_FIELDS, type ReminderType } from "./policyReminderTemplate";
 import { resolveStudyAccess, consumeStudyCredit, isUnlimitedPlan } from "./studyCredits";
@@ -5741,6 +5742,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   //                                hospital_name/state/bed_count = NULL,
   //                                has_completed_onboarding = 1
   // ADMIN_SECRET-gated. Returns the updated rows.
+  // POST /api/admin/vls-support/user {secret, email, enabled, name?, dryRun}
+  // Marks (or unmarks) an EXISTING account as Veritas support
+  // (server/vlsSupport.ts). Never creates an account. Optional `name` renames it
+  // (e.g. the unused info@ account becoming "Veritas Automation", so its
+  // changes are not labeled as Michael). dryRun shows before/after.
+  app.post("/api/admin/vls-support/user", (req, res) => {
+    const { secret, email, enabled, dryRun } = req.body || {};
+    const newName = typeof req.body?.name === "string" ? req.body.name.replace(/\s+/g, " ").trim().slice(0, 120) : "";
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const em = String(email || "").trim().toLowerCase();
+    if (!em) return res.status(400).json({ error: "email required" });
+    if (typeof enabled !== "boolean") return res.status(400).json({ error: "enabled (true or false) required" });
+    const sqlite = (db as any).$client;
+    const u = sqlite.prepare("SELECT id, name, email, COALESCE(vls_support, 0) AS vls FROM users WHERE lower(email) = ?").get(em) as any;
+    if (!u) return res.status(404).json({ error: "No account with that email" });
+    const before = { userId: u.id, name: u.name, vlsSupport: Number(u.vls) === 1 };
+    const after = { ...before, vlsSupport: enabled, ...(newName ? { name: newName } : {}) };
+    if (dryRun === true) return res.json({ ok: true, dryRun: true, before, after });
+    sqlite.prepare("UPDATE users SET vls_support = ? WHERE id = ?").run(enabled ? 1 : 0, u.id);
+    if (newName) sqlite.prepare("UPDATE users SET name = ? WHERE id = ?").run(newName, u.id);
+    logAudit({ userId: 0, module: "admin", action: "update", entityType: "user.vls_support", entityId: u.id,
+      entityLabel: `${u.email}: Veritas support ${enabled ? "on" : "off"}`, before, after, ipAddress: req.ip });
+    res.json({ ok: true, dryRun: false, before, after });
+  });
+
   app.post("/api/admin/attach-seat-user", (req, res) => {
     const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
@@ -6992,9 +7018,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           SELECT om.organization_id FROM organization_members om
           WHERE om.user_id = ? AND om.status = 'active' AND om.org_role IN ('org_owner', 'org_admin')
         )
+        -- Veritas support (server/vlsSupport.ts): every client lab whose owner left
+        -- access on. Demo labs stay out of the list (Michael 2026-10-08), so the
+        -- Client labs group is real clients only.
+        OR ((SELECT COALESCE(u.vls_support, 0) FROM users u WHERE u.id = ?) = 1 AND COALESCE(l.vls_support_access, 1) = 1 AND COALESCE(l.is_demo, 0) = 0)
       )
       ORDER BY COALESCE(lm.is_primary_lab, 0) DESC, l.id ASC
-    `).all(req.userId, req.userId, req.userId) as any[];
+    `).all(req.userId, req.userId, req.userId, req.userId) as any[];
+    // Which of those labs this user reaches only as Veritas support (no
+    // membership, no org admin role): the switcher groups them as Client labs.
+    const adminOrgIds = new Set(((db as any).$client.prepare(
+      "SELECT organization_id FROM organization_members WHERE user_id = ? AND status = 'active' AND org_role IN ('org_owner','org_admin')"
+    ).all(req.userId) as any[]).map((r: any) => r.organization_id));
+    const isVlsOnly = (m: any) => m.membership_id == null && !(m.organization_id != null && adminOrgIds.has(m.organization_id));
 
     // 2026-06-12 (account-seats guard fix): is_primary_lab FOLLOWS the NavBar
     // switcher (POST /api/labs/me/default flips it), so it cannot identify the
@@ -7039,7 +7075,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       organizationName: m.organization_name ?? null,
       // Phase 2d: this lab is visible purely via an org_owner/org_admin role on
       // its organization (no per-lab membership). role is 'admin' in that case.
-      viaOrg: m.membership_id == null,
+      viaOrg: m.membership_id == null && !isVlsOnly(m),
+      // Veritas support access only (not a member, not a seat, never billed).
+      viaVlsSupport: isVlsOnly(m),
       // NYS CLEP Phase-0: jurisdiction regime (default CLIA). nysSuggested is a
       // soft hint (owner's physical state is NY) that never auto-applies.
       primaryRegime: m.primary_regime || 'CLIA',
@@ -7320,8 +7358,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const orgRoleValue = orgRoleForUserOnLab(sqlite, userId, labId);
     const orgLabRole = labRoleFromOrgRole(orgRoleValue); // "admin" | null
 
-    // No per-lab membership AND no org grant -> no access.
-    if (!row && !orgLabRole) return res.status(403).json({ error: "No active membership for this lab" });
+    // Veritas support access (docs/design/VLS_Support_Access_Design.docx): a
+    // Veritas user reaches a lab with no membership and no seat, when the lab
+    // owner has left labs.vls_support_access on. Admin-level setup only; the
+    // signature routes are refused below.
+    const viaVlsSupport = !row && !orgLabRole && isVlsSupportUser(sqlite, userId) && labAllowsVlsSupport(sqlite, labId);
+
+    // No per-lab membership AND no org grant AND no Veritas support -> no access.
+    if (!row && !orgLabRole && !viaVlsSupport) return res.status(403).json({ error: "No active membership for this lab" });
 
     // Source the lab fields. When there is a membership the JOIN already carried
     // them; an org admin reaching a sibling lab with no membership needs a direct
@@ -7370,6 +7414,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const baseRole: string | null = row?.role ?? null;
     let role: string | null = baseRole;
     if (baseRole !== "owner" && orgLabRole === "admin") role = "admin";
+    if (viaVlsSupport) role = "admin";
 
     // Phase 3c (docs/SYSTEM_ENTITY_DESIGN.md): an org-linked lab inherits the
     // organization's subscription coverage (Option 1 bills the system once for
@@ -7388,8 +7433,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Phase 2b diagnostics: whether access came purely from an org role (no
       // per-lab membership) and the raw org_role. Additive; existing readers
       // only consult req.scope.role.
-      viaOrg: !row,
+      viaOrg: !row && !viaVlsSupport,
       orgRole: orgRoleValue,
+      // Veritas support (not a member, not a seat, never billed).
+      viaVlsSupport,
       lab: {
         id: labFields.lab_id,
         plan: labFields.plan,
@@ -7424,7 +7471,33 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (row?.membership_id) {
       sqlite.prepare("UPDATE lab_members SET last_active_at = ? WHERE id = ?").run(nowIso, row.membership_id);
     }
-    sqlite.prepare("UPDATE users SET default_lab_id = ? WHERE id = ?").run(labId, userId);
+    // A Veritas user's default lab never moves to a client lab: older unscoped
+    // routes resolve the lab from users.default_lab_id (resolveLegacyLabId), and
+    // Stripe checkout falls back to it, so visiting a client would otherwise
+    // point those at the client's lab.
+    if (!viaVlsSupport) {
+      sqlite.prepare("UPDATE users SET default_lab_id = ? WHERE id = ?").run(labId, userId);
+    }
+
+    if (viaVlsSupport) {
+      // For the owner's activity list: the path after /api/labs/:labId.
+      const full = String(req.originalUrl || req.url || "").split("?")[0];
+      const marker = `/api/labs/${labId}`;
+      const labPath = full.startsWith(marker) ? full.slice(marker.length) || "/" : full;
+      // Refusal is decided on the route DEFINITION, not the URL (server/vlsSupport.ts).
+      const blocked = vlsSupportBlocked(req.method, req.route?.path, req.body);
+      if (blocked) {
+        recordVlsActivity(sqlite, labId, userId, req.method, labPath, 403, blocked);
+        return res.status(403).json({
+          error: `Veritas support cannot ${blocked}. That belongs to the lab's own staff.`,
+          code: "VLS_SUPPORT_CANNOT_SIGN",
+        });
+      }
+      if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS") {
+        res.on("finish", () => recordVlsActivity(sqlite, labId, userId, req.method, labPath, res.statusCode));
+      }
+      return vlsContext.run({ actingAs: "vls_support", labId, userId }, () => next());
+    }
 
     next();
   }
@@ -7513,6 +7586,44 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   function isLabOwner(scope: any): boolean {
     return scope?.role === "owner";
   }
+
+  // ── VERITAS SUPPORT ACCESS (2026-10-08, docs/design/VLS_Support_Access_Design.docx) ──
+  // GET: any member of the lab sees whether Veritas support can reach it, who
+  // from Veritas holds that access, and what Veritas changed here (newest
+  // first). PATCH: the lab OWNER turns it on or off. A Veritas user can never
+  // flip it (they are never the owner, and the route is in VLS_SUPPORT_BLOCKED).
+  app.get("/api/labs/:labId/vls-support", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT COALESCE(vls_support_access, 1) AS on_ FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    const people = sqlite.prepare("SELECT id, name, email FROM users WHERE vls_support = 1 ORDER BY id").all() as any[];
+    const activity = sqlite.prepare(
+      `SELECT a.created_at, a.method, a.path, a.status, a.note, u.name AS who
+         FROM vls_support_activity a LEFT JOIN users u ON u.id = a.user_id
+        WHERE a.lab_id = ? ORDER BY a.id DESC LIMIT 50`
+    ).all(req.scope.labId) as any[];
+    res.json({
+      enabled: Number(lab?.on_ ?? 1) === 1,
+      people: people.map((p) => ({ name: p.name || p.email })),
+      activity,
+      canToggle: isLabOwner(req.scope),
+      viewerIsVlsSupport: !!req.scope.viaVlsSupport,
+    });
+  });
+
+  app.patch("/api/labs/:labId/vls-support", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!isLabOwner(req.scope)) return res.status(403).json({ error: "Only the lab owner can change Veritas support access" });
+    const enabled = req.body?.enabled;
+    if (typeof enabled !== "boolean") return res.status(400).json({ error: "enabled (true or false) is required" });
+    const sqlite = (db as any).$client;
+    const before = sqlite.prepare("SELECT COALESCE(vls_support_access, 1) AS on_ FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    sqlite.prepare("UPDATE labs SET vls_support_access = ? WHERE id = ?").run(enabled ? 1 : 0, req.scope.labId);
+    logAudit({
+      userId: req.userId, ownerUserId: req.userId, module: "account", action: "update", entityType: "lab.vls_support_access",
+      entityId: req.scope.labId, entityLabel: `Veritas support access ${enabled ? "on" : "off"}`,
+      before: { enabled: Number(before?.on_ ?? 1) === 1 }, after: { enabled }, ipAddress: req.ip,
+    });
+    res.json({ ok: true, enabled });
+  });
 
   // GET /api/staff-portal-session/employees
   //   Authed via staffPortalAuthMiddleware. Returns the lab's active
@@ -11218,6 +11329,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     console.log(`[labs/${req.scope.labId}/members/${memberId}/email PATCH] user_id=${userRow.id} ${oldEmail} -> ${newEmail} (by user_id=${req.userId})`);
     res.json({ ok: true, email: newEmail });
+  });
+
+  // PATCH /api/labs/:labId/members/:memberId/name — correct a member's
+  // display name in place (owner or admin). Added 2026-10-08: a staff member
+  // typed her own last name wrong at signup ("Timmind" for "Timmins") and
+  // neither she nor the lab owner had any way to fix it. Mirrors the /email
+  // correction: same permission, same owner exclusion. Only users.name
+  // changes; the VeritaStaff roster row is a separate record.
+  app.patch("/api/labs/:labId/members/:memberId/name", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
+    const memberId = Number(req.params.memberId);
+    if (!Number.isFinite(memberId)) return res.status(400).json({ error: "Invalid memberId" });
+    const newName = String(req.body?.name ?? "").replace(/\s+/g, " ").trim();
+    if (!newName) return res.status(400).json({ error: "A name is required" });
+    if (newName.length > 120) return res.status(400).json({ error: "Name is too long (120 characters max)" });
+    const sqlite = (db as any).$client;
+    const member = sqlite.prepare(
+      "SELECT id, lab_id, user_id, role FROM lab_members WHERE id = ? AND lab_id = ?"
+    ).get(memberId, req.scope.labId) as any;
+    if (!member) return res.status(404).json({ error: "Member not found in this lab" });
+    if (member.role === "owner") {
+      return res.status(409).json({ error: "Cannot change the owner's name here" });
+    }
+    const userRow = sqlite.prepare("SELECT id, name FROM users WHERE id = ?").get(member.user_id) as any;
+    if (!userRow) return res.status(404).json({ error: "Member account not found" });
+    if (String(userRow.name || "") === newName) return res.json({ ok: true, name: newName, unchanged: true });
+    sqlite.prepare("UPDATE users SET name = ? WHERE id = ?").run(newName, userRow.id);
+    console.log(`[labs/${req.scope.labId}/members/${memberId}/name PATCH] user_id=${userRow.id} "${userRow.name}" -> "${newName}" (by user_id=${req.userId})`);
+    res.json({ ok: true, name: newName });
   });
 
   // PATCH /api/labs/:labId/members/:memberId/permissions — update a member's

@@ -1,4 +1,5 @@
 import { useSEO } from "@/hooks/useSEO";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 // .xlsx parsing uses ExcelJS via dynamic import (CLAUDE.md §6: ExcelJS only).
 // ExcelJS handles .xlsx (Office Open XML). The legacy .xls (BIFF binary)
@@ -19,7 +20,6 @@ import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XC
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { CoverageAttributionDialog } from "@/components/CoverageAttributionDialog";
 import ManualDifferentialForm from "@/components/ManualDifferentialForm";
-import CLIALookupModal from "@/components/CLIALookupModal";
 import { VeritaQcImportModal, type VeritaQcImportPayload } from "@/components/VeritaQcImportModal";
 import { VeritaQcBulkImportModal, type VeritaQcBulkImportPayload } from "@/components/VeritaQcBulkImportModal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -272,6 +272,9 @@ const plans = [
 ];
 
 export default function VeritaCheckPage() {
+  // #84 Phase 3: running a study is VeritaCheck setup; a view-only login
+  // (e.g. a Staff login) can open the page but not save or run.
+  const studyReadOnly = useIsReadOnly("veritacheck");
   const labRoute = useLabRoute();
   const [, navigate] = useLocation();
   const search = useSearch();
@@ -300,13 +303,11 @@ export default function VeritaCheckPage() {
   });
   const { toast } = useToast();
   const { isLoggedIn, user } = useAuth();
-  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<"success" | "cancelled" | null>(null);
   const [discountCode, setDiscountCode] = useState("");
   const [discountApplied, setDiscountApplied] = useState<{ code: string; pct: number; partnerName: string; trialDays?: number } | null>(null);
   const [discountLoading, setDiscountLoading] = useState(false);
   const [discountError, setDiscountError] = useState("");
-  const [cliaModalOpen, setCliaModalOpen] = useState(false);
   const [phiBannerDismissed, setPhiBannerDismissed] = useState(false);
 
   // Phase 2 (2026-06-15): a signed-off study is corrected with an amendment,
@@ -362,58 +363,6 @@ export default function VeritaCheckPage() {
       setPaymentStatus("cancelled");
     }
   }, [search]);
-
-  // Plans that require a CLIA number before checkout. NOTE: the Clinic tier's
-  // canonical plan string is "waived" (server/stripe.ts: waived -> Clinic
-  // $999/yr); "clinic" is a phantom string that is never actually assigned, so
-  // it was kept here for safety but "waived" is the one a real Clinic customer
-  // carries and must be present, or a Clinic purchaser skips the CLIA prompt.
-  const CLIA_REQUIRED_PLANS = new Set(["clinic", "waived", "community", "hospital", "enterprise"]);
-
-  const handleBuy = async (priceType: string) => {
-    if (!isLoggedIn) {
-      toast({ title: "Sign in required", description: "Please create a free account to purchase.", variant: "destructive" });
-      navigate("/login");
-      return;
-    }
-
-    // For CLIA-required plans, check if user already has a CLIA number
-    if (CLIA_REQUIRED_PLANS.has(priceType) && !user?.cliaNumber) {
-      // Show CLIA lookup modal instead of going straight to Stripe
-      setCliaModalOpen(true);
-      return;
-    }
-
-    // For users who already have CLIA set, use their stored tier for CLIA plans
-    const checkoutPriceType = CLIA_REQUIRED_PLANS.has(priceType) && user?.cliaTier
-      ? user.cliaTier
-      : priceType;
-
-    await goToStripeCheckout(checkoutPriceType);
-  };
-
-  const goToStripeCheckout = async (priceType: string) => {
-    setCheckoutLoading(priceType);
-    try {
-      const res = await fetch(`${API_BASE}/api/stripe/checkout`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ priceType, discountCode: discountApplied?.code || undefined }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Checkout failed");
-      // Redirect to Stripe Checkout
-      window.location.href = data.url;
-    } catch (err: any) {
-      toast({ title: "Payment error", description: err.message, variant: "destructive" });
-      setCheckoutLoading(null);
-    }
-  };
-
-  const handleCliaCheckout = (tier: string) => {
-    setCliaModalOpen(false);
-    goToStripeCheckout(tier);
-  };
 
   const applyDiscount = async (priceType: string) => {
     if (!discountCode.trim()) return;
@@ -4927,9 +4876,10 @@ return (
               {filledLevels >= (studyType === "precision" ? 1 : studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : 3) ? <span className="text-green-600 dark:text-green-400">{"✓"} {filledLevels} {studyType === "lot_to_lot" || studyType === "pt_coag" || studyType === "ref_interval" ? "specimen" : studyType === "sensitivity" ? "blank replicate" : studyType === "method_comparison" ? "sample" : "level"}{filledLevels !== 1 ? "s" : ""} ready</span> : <span>{filledLevels} / {studyType === "precision" ? 1 : studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : 3} minimum filled</span>}
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+              {studyReadOnly && <span className="text-xs text-muted-foreground" data-testid="study-view-only-note">View only: running a study needs VeritaCheck edit access.</span>}
               <Button
                 onClick={handleSaveDraft}
-                disabled={saveMutation.isPending || !testName.trim()}
+                disabled={saveMutation.isPending || !testName.trim() || studyReadOnly}
                 size="lg"
                 variant="outline"
                 data-testid="button-save-draft"
@@ -4937,7 +4887,7 @@ return (
               >
                 {saveMutation.isPending ? "Saving…" : isEditing ? "Save Changes (Draft)" : "Save Draft"}
               </Button>
-              <Button onClick={handleSubmit} disabled={saveMutation.isPending || filledLevels < (studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : studyType === "carryover" ? 12 : studyType === "qc_range" ? 2 : studyType === "accuracy_bias" ? 2 : studyType === "linearity" ? 3 : studyType === "reportable_range" ? 2 : 3) || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
+              <Button onClick={handleSubmit} disabled={studyReadOnly || saveMutation.isPending || filledLevels < (studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : studyType === "carryover" ? 12 : studyType === "qc_range" ? 2 : studyType === "accuracy_bias" ? 2 : studyType === "linearity" ? 3 : studyType === "reportable_range" ? 2 : 3) || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
                 {saveMutation.isPending ? "Calculating…" : isEditing ? "Save & Generate Report" : "Run Study & Generate Report"}
               </Button>
             </div>
@@ -5282,12 +5232,6 @@ return (
         </DialogContent>
       </Dialog>
 
-      <CLIALookupModal
-        open={cliaModalOpen}
-        onClose={() => setCliaModalOpen(false)}
-        onCheckout={handleCliaCheckout}
-        discountCode={discountApplied?.code}
-      />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useParams, Link } from "wouter";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { StudyPointExclusionDialog } from "@/components/StudyPointExclusionDialog";
 import { StudyAmrDialog } from "@/components/StudyAmrDialog";
@@ -2309,8 +2310,14 @@ export default function StudyResults() {
   const [, navigate] = useLocation();
   const search = useSearch();
 
+  // #84 Phase 3: exclusions, AMR, censoring, sign/lock, amend, archive and
+  // edit are VeritaCheck setup; a view-only login (e.g. a Staff login) reads.
+  const isReadOnly = useIsReadOnly("veritacheck");
+
   // Auto-link this study back to a verification package if launched from there
+  // (never for a view-only login: the server would refuse the write).
   useEffect(() => {
+    if (isReadOnly) return;
     const p = new URLSearchParams(search);
     const verificationId = p.get("verificationId");
     const slotId = p.get("slotId");
@@ -2322,7 +2329,7 @@ export default function StudyResults() {
         body: JSON.stringify({ study_id: id, passed: passed === "1" ? 1 : 0 }),
       });
     }
-  }, [id, search]);
+  }, [id, search, isReadOnly]);
 
   // Scroll to top whenever study ID changes
   useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [id]);
@@ -3239,7 +3246,7 @@ export default function StudyResults() {
       {(study.studyType === "method_comparison" || study.studyType === "correlation" ||
         study.studyType === "cal_ver" || study.studyType === "precision") && (
         <div className="mt-3 flex items-center gap-3 flex-wrap" data-testid="point-exclusion-panel">
-          <Button
+          <Button hidden={isReadOnly}
             variant="outline"
             size="sm"
             onClick={() => setExclusionOpen(true)}
@@ -3294,7 +3301,7 @@ export default function StudyResults() {
         study.studyType === "method_comparison" || study.studyType === "correlation" ||
         study.studyType === "ref_interval") && (
         <div className="mt-3 flex items-center gap-3 flex-wrap" data-testid="amr-panel">
-          <Button
+          <Button hidden={isReadOnly}
             variant="outline"
             size="sm"
             onClick={() => setAmrOpen(true)}
@@ -3338,7 +3345,7 @@ export default function StudyResults() {
           // Archived studies are off the active dashboard. Only Restore is
           // offered here; restore first, then act on the study if needed.
           <>
-            <Button variant="outline" size="sm" onClick={() => setArchiveOpen(true)} data-testid="open-unarchive-button">
+            <Button hidden={isReadOnly} variant="outline" size="sm" onClick={() => setArchiveOpen(true)} data-testid="open-unarchive-button">
               <ArchiveRestore size={13} className="mr-1" />Restore from archive
             </Button>
             <span className="text-xs text-amber-700 dark:text-amber-400">
@@ -3351,22 +3358,22 @@ export default function StudyResults() {
                 user is not forced back to the dashboard to find the edit control
                 (the results page previously had no path to editing). Signed-off
                 studies show Amend instead; archived show Restore. */}
-            <Button variant="default" size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => navigate(labRoute(`/study/${study.id}/edit`))} data-testid="edit-study-button">
+            <Button hidden={isReadOnly} variant="default" size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => navigate(labRoute(`/study/${study.id}/edit`))} data-testid="edit-study-button">
               <Pencil size={13} className="mr-1" />Edit
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setFinalizeOpen(true)} data-testid="open-finalize-dialog">
+            <Button hidden={isReadOnly} variant="outline" size="sm" onClick={() => setFinalizeOpen(true)} data-testid="open-finalize-dialog">
               Sign and lock
             </Button>
             <span className="text-xs text-muted-foreground">
               Sign off this study with your signature. Edits after this require an amendment.
             </span>
-            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setArchiveOpen(true)} data-testid="open-archive-button">
+            <Button hidden={isReadOnly} variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setArchiveOpen(true)} data-testid="open-archive-button">
               <Archive size={13} className="mr-1" />Archive
             </Button>
           </>
         ) : (
           <>
-            <Button
+            <Button hidden={isReadOnly}
               variant="outline" size="sm" disabled={amendBusy} data-testid="open-amend-button"
               onClick={async () => {
                 if (!confirm("Create a new draft amending this signed-off study? The original stays locked in the audit trail.")) return;
@@ -3393,7 +3400,7 @@ export default function StudyResults() {
             <span className="text-xs text-emerald-700 dark:text-emerald-400">
               <strong>Signed Off</strong> by {(study as any).finalized_signature} on {(study as any).finalized_at ? new Date((study as any).finalized_at).toLocaleDateString() : ""}.
             </span>
-            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setArchiveOpen(true)} data-testid="open-archive-button">
+            <Button hidden={isReadOnly} variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setArchiveOpen(true)} data-testid="open-archive-button">
               <Archive size={13} className="mr-1" />Archive
             </Button>
           </>
@@ -3422,7 +3429,7 @@ export default function StudyResults() {
         study.studyType === "cal_ver" || study.studyType === "precision" ||
         study.studyType === "reportable_range" || study.studyType === "ref_interval") && (
         <div className="mt-3 flex items-center gap-3 flex-wrap" data-testid="censoring-policy-panel">
-          <Button
+          <Button hidden={isReadOnly}
             variant="outline" size="sm"
             onClick={() => setCensoringOpen(true)}
             data-testid="open-censoring-policy"

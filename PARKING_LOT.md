@@ -613,11 +613,23 @@ whether a per-study or plan purchase button on this page is supposed to use it; 
 not, remove it (dead-code rule).
 
 **Source:** #84 client audit, 2026-10-08 (read-only sub-agent pass over every useIsReadOnly site; confirmed by reading the code).
-**Status:** Open.
+**Status:** Fix in review 2026-10-08 (branch veritacheck-dead-buy): handleBuy, goToStripeCheckout, handleCliaCheckout, the CLIA lookup modal and its state removed; nothing on the page called them. Close after deploy.
 
 ---
 
 _(item #88 closed 2026-10-08; see C91 below)_
+
+---
+
+### 89. VeritaCheck page: a discount code shows "applied" and is then dropped
+
+**Effort:** S
+**Importance:** Medium. Printed collateral carries codes (LABREADY10, COLA2026); a prospect who types one on the VeritaCheck page is told it worked and then loses it.
+
+**What:** the "Have a discount code?" box in the free/per-study pricing section of client/src/pages/VeritaCheckPage.tsx validates the code (POST /api/discount/validate) and shows a green "applied" banner, but the only next step is the View Pricing link to /pricing, which neither receives nor reads the code. The code is applied for real only in Account Settings > Discount Code (Activate Subscription). Decide one: (a) carry the code forward (e.g. /pricing?code= and on into Account Settings checkout), or (b) replace the box with a line pointing to Account Settings after sign-in. Found while removing the dead purchase path for #87.
+
+**Source:** #87 cleanup, 2026-10-08 (read the code; Account Settings is the only page that sends a discount code to checkout).
+**Status:** Open. Needs Michael's call on (a) vs (b).
 
 ---
 

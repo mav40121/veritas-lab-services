@@ -295,12 +295,13 @@ export default function VeritaStaffAppPage() {
     ? employees.find((e) => e.id === Number(params.employeeId))
     : null;
 
-  // Auto-show lab setup if no lab exists
+  // Auto-show lab setup if no lab exists. #84 Phase 3: lab setup is
+  // VeritaStaff setup, so never auto-open it for a view-only login.
   useEffect(() => {
-    if (!labLoading && hasAccess && lab === null) {
+    if (!labLoading && hasAccess && lab === null && !readOnly) {
       setShowLabSetup(true);
     }
-  }, [lab, labLoading, hasAccess]);
+  }, [lab, labLoading, hasAccess, readOnly]);
 
   if (!isLoggedIn) {
     return (
@@ -396,7 +397,7 @@ export default function VeritaStaffAppPage() {
           {lab && (
             <p className="text-muted-foreground mt-1">
               {lab.lab_name} &middot; CLIA: {lab.clia_number}
-              <button onClick={() => setShowLabSetup(true)} className="ml-2 text-primary text-xs hover:underline">(Edit Lab)</button>
+              {!readOnly && <button onClick={() => setShowLabSetup(true)} className="ml-2 text-primary text-xs hover:underline">(Edit Lab)</button>}
             </p>
           )}
         </div>

@@ -226,6 +226,19 @@ export default function LabMembersPage() {
     onError: (err: any) => toast({ title: "Email change failed", description: String(err?.message || err), variant: "destructive" }),
   });
 
+  // Inline name correction (2026-10-08): fixes a typo'd display name, e.g. a
+  // last name mistyped at signup. Same owner/admin gate as Edit email.
+  const [editNameFor, setEditNameFor] = useState<number | null>(null);
+  const [editNameValue, setEditNameValue] = useState("");
+  const nameMutation = useMutation({
+    mutationFn: async ({ memberId, name }: { memberId: number; name: string }) => {
+      const res = await apiRequest("PATCH", `/api/labs/${activeLabId}/members/${memberId}/name`, { name });
+      return res.json();
+    },
+    onSuccess: () => { toast({ title: "Name updated" }); setEditNameFor(null); setEditNameValue(""); invalidate(); },
+    onError: (err: any) => toast({ title: "Name change failed", description: String(err?.message || err), variant: "destructive" }),
+  });
+
   // Set (or clear) the lab's Laboratory Medical Director. Identified by email so it
   // can name a current member, the owner, or a pending invite; the MD gets one free
   // seat. Invoked from the per-member row actions below and from an invite with the
@@ -436,7 +449,27 @@ export default function LabMembersPage() {
                     return (
                       <tr key={`m-${m.membership_id}`} className="border-b last:border-b-0">
                         <td className="py-2 pr-3">
-                          {editEmailFor === m.membership_id ? (
+                          {editNameFor === m.membership_id ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Input
+                                value={editNameValue}
+                                onChange={e => setEditNameValue(e.target.value)}
+                                className="h-8 w-56 text-sm"
+                                placeholder="First Last"
+                                autoFocus
+                                aria-label="Corrected name"
+                                data-testid={`edit-name-input-${m.membership_id}`}
+                                onKeyDown={e => {
+                                  if (e.key === "Enter" && editNameValue.trim()) nameMutation.mutate({ memberId: m.membership_id, name: editNameValue.trim() });
+                                  if (e.key === "Escape") { setEditNameFor(null); setEditNameValue(""); }
+                                }}
+                              />
+                              <Button size="sm" data-testid={`edit-name-save-${m.membership_id}`} onClick={() => nameMutation.mutate({ memberId: m.membership_id, name: editNameValue.trim() })} disabled={nameMutation.isPending || !editNameValue.trim()}>
+                                {nameMutation.isPending && <Loader2 className="animate-spin mr-1" size={12} />} Save
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => { setEditNameFor(null); setEditNameValue(""); }}>Cancel</Button>
+                            </div>
+                          ) : editEmailFor === m.membership_id ? (
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <Input
                                 type="email"
@@ -498,8 +531,13 @@ export default function LabMembersPage() {
                               </Button>
                             )
                           )}
+                          {canManage && !isMemberOwner && editNameFor !== m.membership_id && (
+                            <Button size="sm" variant="ghost" data-testid={`edit-name-${m.membership_id}`} onClick={() => { setEditEmailFor(null); setEditNameFor(m.membership_id); setEditNameValue(m.name || ""); }} disabled={nameMutation.isPending} title="Correct this member's name in place">
+                              <Pencil size={12} className="mr-1" /> Edit name
+                            </Button>
+                          )}
                           {canManage && !isMemberOwner && editEmailFor !== m.membership_id && (
-                            <Button size="sm" variant="ghost" onClick={() => { setEditEmailFor(m.membership_id); setEditEmailValue(m.email); }} disabled={emailMutation.isPending} title="Correct this member's login email in place">
+                            <Button size="sm" variant="ghost" onClick={() => { setEditNameFor(null); setEditEmailFor(m.membership_id); setEditEmailValue(m.email); }} disabled={emailMutation.isPending} title="Correct this member's login email in place">
                               <Pencil size={12} className="mr-1" /> Edit email
                             </Button>
                           )}
@@ -586,6 +624,8 @@ export default function LabMembersPage() {
 
       {canManage && activeLabId && <MemberLocationsCard labId={activeLabId} />}
 
+      {activeLabId && <VeritasSupportCard labId={activeLabId} />}
+
       {isOwner && (
         <Card>
           <CardHeader>
@@ -650,6 +690,114 @@ export default function LabMembersPage() {
 // uncheck an existing location), so it can never lock anyone out; to remove a
 // location, use the per-location Remove on that lab's Members page. Owner/admin
 // only, shown on the VeritaStock deployment when the enterprise has >1 location.
+// Veritas support access (docs/design/VLS_Support_Access_Design.docx). Every
+// member sees whether Veritas support can reach this lab, who that is, and what
+// Veritas changed here; only the owner can turn it off or on.
+interface VlsSupportResponse {
+  enabled: boolean;
+  people: Array<{ name: string }>;
+  activity: Array<{ created_at: string; method: string; path: string; status: number | null; note?: string | null; who: string | null }>;
+  canToggle: boolean;
+  viewerIsVlsSupport: boolean;
+}
+const VLS_VERB: Record<string, string> = { POST: "Added", PUT: "Changed", PATCH: "Changed", DELETE: "Removed" };
+// Plain words for what a Veritas change touched. Most specific path first.
+const VLS_THINGS: Array<[RegExp, string]> = [
+  [/^\/qc\/period-reviews\/md-cosign/, "the medical director QC co-sign"],
+  [/^\/qc\/period-reviews/, "the monthly QC review sign-off"],
+  [/^\/qc\/control-lots\/\d+\/establish/, "a QC lot's established mean and SD"],
+  [/^\/qc\/control-lots/, "a QC control lot"],
+  [/^\/qc\/results/, "a QC result"],
+  [/^\/qc\/rule-settings|^\/qc\/settings/, "QC rule settings"],
+  [/^\/qc/, "VeritaQC"],
+  [/^\/medical-director/, "the medical director designation"],
+  [/^\/transfer-ownership/, "lab ownership"],
+  [/^\/vls-support/, "Veritas support access"],
+  [/^\/members\/\d+\/name/, "a member's name"],
+  [/^\/members\/\d+\/email/, "a member's email"],
+  [/^\/members/, "lab members"],
+  [/^\/veritamap/, "VeritaMap"],
+  [/^\/competency|^\/veritacomp/, "VeritaComp"],
+  [/^\/veritascan/, "VeritaScan"],
+  [/^\/staff/, "VeritaStaff"],
+  [/^\/equipment/, "VeritaMaintain"],
+  [/^\/veritatrack/, "VeritaTrack"],
+  [/^\/veritastock/, "VeritaStock"],
+  [/^\/veritapolicy/, "VeritaPolicy"],
+  [/^\/studies|^\/veritacheck/, "VeritaCheck"],
+  [/^\/findings/, "VeritaResponse"],
+  [/^\/iqcp/, "the IQCP"],
+  [/^\/pt\//, "VeritaPT"],
+  [/^\/seat-invites|^\/staff-portal-invites/, "invitations"],
+  [/^\/director-delegations/, "a medical director delegation"],
+];
+function vlsActivityLabel(method: string, path: string, refused: boolean, note?: string | null): string {
+  // A refused attempt carries the exact reason the server recorded.
+  if (refused && note) return `Tried to ${note} (refused)`;
+  const thing = VLS_THINGS.find(([re]) => re.test(path))?.[1] || "lab settings";
+  // Failed for another reason (validation, seat limit): not a Veritas refusal.
+  if (refused) return `Tried to change ${thing} (did not go through)`;
+  return `${VLS_VERB[method] || "Changed"} ${thing}`;
+}
+function VeritasSupportCard({ labId }: { labId: number }) {
+  const { toast } = useToast();
+  const [showActivity, setShowActivity] = useState(false);
+  const key = `/api/labs/${labId}/vls-support`;
+  const { data } = useQuery<VlsSupportResponse>({ queryKey: [key], queryFn: getQueryFn({ on401: "throw" }), enabled: !!labId });
+  const toggle = useMutation({
+    mutationFn: async (enabled: boolean) => (await apiRequest("PATCH", key, { enabled })).json(),
+    onSuccess: (_d, enabled) => { toast({ title: enabled ? "Veritas support access turned on" : "Veritas support access turned off" }); queryClient.invalidateQueries({ queryKey: [key] }); },
+    onError: (err: any) => toast({ title: "Could not change Veritas support access", description: String(err?.message || err), variant: "destructive" }),
+  });
+  if (!data) return null;
+  const names = data.people.map((p) => p.name).join(", ");
+  return (
+    <Card data-testid="vls-support-card">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2"><ShieldCheck size={16} /> Veritas support access</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <p data-testid="vls-support-status">
+          <strong>{data.enabled ? "On" : "Off"}</strong>
+          {data.enabled && names ? ` (${names})` : ""}
+        </p>
+        <p className="text-muted-foreground">
+          Veritas Lab Services staff can help with setup in this lab: building maps, adding control lots, fixing settings. They are not one of your seats, are never billed, and never sign anything for the lab. Every change they make is listed below.
+        </p>
+        {data.viewerIsVlsSupport && (
+          <p className="text-muted-foreground" data-testid="vls-support-viewer-note">You are here as Veritas support. Signatures, attestations, approvals and ownership stay with the lab.</p>
+        )}
+        <div className="flex flex-wrap gap-2">
+          {data.canToggle && (
+            <Button size="sm" variant={data.enabled ? "outline" : "default"} data-testid="vls-support-toggle" disabled={toggle.isPending} onClick={() => toggle.mutate(!data.enabled)}>
+              {toggle.isPending && <Loader2 className="animate-spin mr-1" size={12} />}
+              {data.enabled ? "Turn off Veritas support access" : "Turn on Veritas support access"}
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" data-testid="vls-support-activity-btn" onClick={() => setShowActivity((v) => !v)}>
+            {showActivity ? "Hide" : "Show"} what Veritas changed ({data.activity.length})
+          </Button>
+        </div>
+        {showActivity && (
+          data.activity.length === 0 ? (
+            <p className="text-muted-foreground" data-testid="vls-support-activity-empty">No changes by Veritas support in this lab.</p>
+          ) : (
+            <ul className="space-y-1" data-testid="vls-support-activity">
+              {data.activity.map((a, i) => (
+                <li key={i} className="flex flex-wrap gap-x-3 text-xs">
+                  <span className="text-muted-foreground">{String(a.created_at).replace("T", " ").slice(0, 16)}</span>
+                  <span>{a.who || "Veritas support"}</span>
+                  <span className={a.status != null && a.status >= 400 ? "text-destructive" : undefined}>{vlsActivityLabel(a.method, a.path, a.status != null && a.status >= 400, a.note)}</span>
+                </li>
+              ))}
+            </ul>
+          )
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 interface TeamLocation { labId: number; name: string }
 interface TeamMember {
   userId: number; email: string; name: string | null; role: string;

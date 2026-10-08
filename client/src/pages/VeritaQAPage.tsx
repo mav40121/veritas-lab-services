@@ -1163,6 +1163,19 @@ export default function VeritaQAPage() {
 
   // -- First-time Setup View --------------------------------------------------
 
+  // #84 Phase 3: building the PI program is VeritaBench setup (every /api/pi
+  // write is requireModuleEdit('veritabench')). A view-only login (e.g. a
+  // Staff login) gets a plain note instead of the setup wizard.
+  if (isFirstTime && readOnly) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-16 text-center" data-testid="pi-view-only-empty">
+        <Library size={36} className="mx-auto mb-4" style={{ color: "#01696F" }} />
+        <h1 className="text-lg font-semibold mb-2">No PI program set up yet</h1>
+        <p className="text-sm text-muted-foreground">Your lab's quality indicators will appear here once the lab owner or an admin sets up the PI program.</p>
+      </div>
+    );
+  }
+
   if (isFirstTime) {
     return (
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">

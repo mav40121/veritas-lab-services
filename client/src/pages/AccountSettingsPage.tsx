@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useIsStaffLogin } from "@/hooks/useStaffLogin";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -80,6 +81,7 @@ const PRICE_TYPE_GA4: Record<string, { item_name: string; price: number }> = {
 
 export default function AccountSettingsPage() {
   const { isLoggedIn, user } = useAuth();
+  const isStaffLogin = useIsStaffLogin();
   const { toast } = useToast();
   const activeLabId = useActiveLabId();
   const { data: memberships } = useMemberships();
@@ -679,7 +681,9 @@ export default function AccountSettingsPage() {
       </Card>
       </>)}
 
-      <Card className="mt-6">
+      {/* #84 Phase 3: buying or discounting the lab's subscription is the
+          owner's job; a Staff login never sees it. */}
+      {!isStaffLogin && <Card className="mt-6">
         <CardHeader>
           <CardTitle className="text-base">Discount Code</CardTitle>
         </CardHeader>
@@ -740,7 +744,7 @@ export default function AccountSettingsPage() {
             </Button>
           )}
         </CardContent>
-      </Card>
+      </Card>}
 
       {/* Team Members */}
       {seatCount > 1 && (

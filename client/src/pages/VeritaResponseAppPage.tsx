@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { API_BASE } from "@/lib/queryClient";
@@ -90,6 +91,8 @@ function daysUntil(iso: string | null): number | null {
 }
 
 export default function VeritaResponseAppPage() {
+  // #84 Phase 3: creating and deleting findings is VeritaResponse setup.
+  const isReadOnly = useIsReadOnly("veritaresponse");
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [findings, setFindings] = useState<any[]>([]);
@@ -316,6 +319,7 @@ export default function VeritaResponseAppPage() {
           <Button
             size="sm"
             className="bg-[#006064] hover:bg-[#004d50] text-white"
+            hidden={isReadOnly}
             onClick={() => setShowCreate(true)}
           >
             <Plus size={14} className="mr-1.5" />
@@ -475,6 +479,7 @@ export default function VeritaResponseAppPage() {
                             variant="ghost"
                             size="sm"
                             className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
+                            hidden={isReadOnly}
                           >
                             <Trash2 size={13} />
                           </Button>

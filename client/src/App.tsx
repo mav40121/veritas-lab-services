@@ -1,4 +1,5 @@
 import { Switch, Route, Router, useLocation, Redirect } from "wouter";
+import { staffLoginGate } from "@/components/StaffLoginGate";
 const VeritaCheckVerificationPage = lazy(() => import("@/pages/VeritaCheckVerificationPage"));
 const ArticleInventoryManagementPage = lazy(() => import("@/pages/ArticleInventoryManagementPage"));
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -136,6 +137,12 @@ const LabMembersPage = lazy(() => import("@/pages/LabMembersPage"));
 const FoundingLabApplyPage = lazy(() => import("@/pages/FoundingLabApplyPage"));
 const StaffPortalPage = lazy(() => import("@/pages/StaffPortalPage"));
 const VeritaQAPage = lazy(() => import("@/pages/VeritaQAPage"));
+// #84 Phase 3: Staff logins get a plain note on the Operations management views
+// (the server refuses them for staff; see components/StaffLoginGate.tsx).
+const StaffGatedQA = staffLoginGate(VeritaQAPage, "VeritaQA™");
+const StaffGatedPace = staffLoginGate(VeritaPacePage, "VeritaPace™");
+const StaffGatedShift = staffLoginGate(VeritaShiftPage, "VeritaShift™");
+const StaffGatedOps = staffLoginGate(VeritaOpsAppPage, "VeritaOps™");
 const RequestInvoicePage = lazy(() => import("@/pages/RequestInvoicePage"));
 import { OnboardingBanner } from "@/components/OnboardingBanner";
 
@@ -468,10 +475,10 @@ function AppContent() {
           <Route path="/veritadc">{wrapLegacy(VeritaPolicyPage, "/veritapolicy-app")}</Route>
           <Route path="/veritacheck/cumsum">{wrapLegacy(CumsumPage)}</Route>
           <Route path="/calculator" component={ProductivityCalculatorPage} />
-          <Route path="/veritabench" component={VeritaPacePage} />
-          <Route path="/veritabench/staffing" component={VeritaShiftPage} />
+          <Route path="/veritabench" component={StaffGatedPace} />
+          <Route path="/veritabench/staffing" component={StaffGatedShift} />
           <Route path="/veritabench/scheduler">{wrapLegacy(VeritaShiftSchedulerPage)}</Route>
-          <Route path="/veritabench/pi" component={VeritaQAPage} />
+          <Route path="/veritabench/pi" component={StaffGatedQA} />
           <Route path="/veritastock">{wrapLegacy(VeritaStockPage)}</Route>
           <Route path="/veritastock/trends">{wrapLegacy(VeritaStockTrendsPage)}</Route>
           <Route path="/veritastock/snap-order">{wrapLegacy(VeritaStockSnapOrderPage)}</Route>
@@ -479,7 +486,7 @@ function AppContent() {
           <Route path="/veritastock/audit">{wrapLegacy(VeritaStockAuditTrailPage)}</Route>
           <Route path="/veritastock/enterprise">{wrapLegacy(VeritaStockEnterprisePage)}</Route>
           <Route path="/hospital-inventory" component={HospitalInventoryPage} />
-          <Route path="/veritaops-app">{wrapLegacy(VeritaOpsAppPage)}</Route>
+          <Route path="/veritaops-app">{wrapLegacy(StaffGatedOps)}</Route>
           <Route path="/roadmap" component={RoadmapPage} />
           <Route path="/veritaassure" component={VeritaAssurePage} />
           <Route path="/learn" component={LearnPage} />
@@ -576,11 +583,11 @@ function AppContent() {
           <Route path="/labs/:labId/veritastock/enterprise" component={VeritaStockEnterprisePage} />
           <Route path="/labs/:labId/veritastock/vendors" component={VeritaStockVendorsPage} />
           <Route path="/labs/:labId/veritastock/recalls" component={VeritaStockRecallsPage} />
-          <Route path="/labs/:labId/veritaops-app" component={VeritaOpsAppPage} />
+          <Route path="/labs/:labId/veritaops-app" component={StaffGatedOps} />
           <Route path="/labs/:labId/veritabench/scheduler" component={VeritaShiftSchedulerPage} />
-          <Route path="/labs/:labId/veritabench/staffing" component={VeritaShiftPage} />
-          <Route path="/labs/:labId/veritabench/pi" component={VeritaQAPage} />
-          <Route path="/labs/:labId/veritabench" component={VeritaPacePage} />
+          <Route path="/labs/:labId/veritabench/staffing" component={StaffGatedShift} />
+          <Route path="/labs/:labId/veritabench/pi" component={StaffGatedQA} />
+          <Route path="/labs/:labId/veritabench" component={StaffGatedPace} />
           <Route path="/labs/:labId/account/settings" component={AccountSettingsPage} />
           <Route path="/labs/:labId/members" component={LabMembersPage} />
           {/* Bare /members is a natural guessed URL (it 404'd on Michael
