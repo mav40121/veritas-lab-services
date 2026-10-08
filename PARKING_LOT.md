@@ -675,6 +675,30 @@ antibiogram is a PDF deliverable or a live table.
 
 ---
 
+### 82. Records written by a user who holds seats under several owners get stamped with another owner's user id
+
+**Effort:** S-M (fix the stamping, repair rows, add a guard)
+**Importance:** High. Wrong attribution on real records, and it already produced a false read in the St. Charles deal notes.
+
+**What:** Since 2026-10-01 Michael (user 17) holds active seats under three other owners: user 81 (St. Charles, lab 31), user 85 (lab 32) and user 74 (labs 25-28). His writes since then are being stamped with user 81, Melissa Humphrey's account: 6 VeritaCheck studies in Michaels Lab (lab 3, created 10/05-10/07) and 20 VeritaTrack tasks in Redington-Fairview (lab 34, created 10/07 18:50 UTC while he built the Coag map) carry user_id 81, and the audit_log owner column on his 10/06-10/07 deletes reads 81. Melissa has not signed in since 2026-09-18, so none of these are hers. The rows are lab-scoped by lab_id, so the lab-scoped readers show them in the right lab; the damage is attribution, the audit trail, and any reader or credit path that still keys on user_id. Likely cause: the same seat-owner resolution that made Lisa's reads return Michael's data in August (see the seat-accept / display-scoping memory), here on the write side. Fix direction: stamp writes from the active lab's owner (labs.owner_user_id for the scoped lab) or the actor, never from an arbitrary seat owner; repair the 26 rows from 81 to 17 with a dry run first; add an audit guard so a new write path cannot regress.
+
+**Source:** inbox check 2026-10-07 evening (Coding), found while tracing the backup anomaly and the RFGH lab build.
+**Status:** Open.
+
+---
+
+### 83. A lab created from the account settings page gets no owner membership, so the owner is locked out of it
+
+**Effort:** XS for the code, plus a one-row data repair
+**Importance:** High and time-bound. The St. Charles reply scheduled for Friday 2026-10-09 4:00 PM ET tells Melissa the full suite is open on her lab.
+
+**What:** The settings save path in server/routes.ts (about line 31741, "Owner doesn't have a lab yet -- create one") inserts a labs row and repoints users.lab_id but never inserts the owner's lab_members row; the /api/labs/me/add path does it correctly. labScopeMiddleware requires an active lab_members row, so every /api/labs/:id call returns 403 for that owner. Two labs on production have an owner with no membership: lab 31 St. Charles Health System - Bend (Melissa Humphrey, created 2026-09-18 21:31 UTC, 15 minutes after her signup; she signed in twice that day and never again) and lab 20 "ery" (junk signup). Fix: insert and audit the owner membership in that path, check the db.ts boot backfill for the same gap, add an integration test through the real route, then add the missing owner row on lab 31 (admin add-lab-membership, role owner, primary). The lab 31 write was blocked in the 10/07 session pending Michael's approval; lab 20 is junk and can be left.
+
+**Source:** inbox check 2026-10-07 evening (Coding).
+**Status:** Open. Lab 31 repair awaiting approval; it needs to land before the Friday send.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C83. VeritaMap: calibration verification "Not applicable" per test, and the exemption flags honored on the map page (was #77)
