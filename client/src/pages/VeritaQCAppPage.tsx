@@ -37,6 +37,22 @@ interface ControlLot {
   status: string;
   prior_lot_id: number | null;
   created_at: string;
+  // The mean/SD that judges this lot's runs (server/qcBasis.ts): the lab's own
+  // established values, or the manufacturer's while the lab is establishing.
+  // The chart and the Westgard rules both use it.
+  basis?: QcBasis | null;
+}
+
+interface QcBasis {
+  mean: number;
+  sd: number;
+  source: "established" | "manufacturer";
+  n: number;
+  runsOnLot: number;
+  establishN: number;
+  lockedAt: string | null;
+  persisted: boolean;
+  label: string;
 }
 
 // One point on the continuous cross-lot Levey-Jennings series. SDI is computed
@@ -134,12 +150,17 @@ function todayIsoDate(): string {
 }
 
 // Inline Levey-Jennings chart for the selected control lot. Plots each logged
-// result as its SDI (value minus baseline mean, over SD) against the classic
-// Westgard zones: green within 2 SD, amber 2 to 3 SD, red beyond 3 SD. Points
-// that fired a rejection are drawn red. This is the on-screen companion to the
-// month-end PDF chart, so a tech (or a prospect on a demo) watches the chart
-// populate live instead of only seeing it after a download.
-function LeveyJenningsChart({ mean, sd, results }: { mean: number; sd: number; results: ResultRow[] }) {
+// result as its SDI (value minus the lot's evaluation mean, over its SD) against
+// the classic Westgard zones: green within 2 SD, amber 2 to 3 SD, red beyond
+// 3 SD. Points that fired a rejection are drawn red. mean/sd are the lot's
+// evaluation basis from the server (the same numbers the Westgard rules judge
+// against), so the chart and the flags always agree. The manufacturer's
+// published mean and range are drawn as labeled reference lines. This is the
+// on-screen companion to the month-end PDF chart.
+function LeveyJenningsChart({ mean, sd, results, basisLabel, mfr }: {
+  mean: number; sd: number; results: ResultRow[]; basisLabel?: string;
+  mfr?: { mean: number | null; low: number | null; high: number | null };
+}) {
   if (!(sd > 0) || results.length === 0) {
     return <div className="text-sm text-muted-foreground py-8 text-center">Log a QC result to see the Levey-Jennings chart.</div>;
   }
@@ -163,9 +184,16 @@ function LeveyJenningsChart({ mean, sd, results }: { mean: number; sd: number; r
   const calcMean = vals.reduce((a, b) => a + b, 0) / vals.length;
   const calcSd = vals.length > 1 ? Math.sqrt(vals.reduce((a, b) => a + Math.pow(b - calcMean, 2), 0) / (vals.length - 1)) : 0;
   const fmtStat = (x: number) => !Number.isFinite(x) ? "-" : Math.abs(x) >= 100 ? x.toFixed(0) : Math.abs(x) >= 10 ? x.toFixed(1) : Math.abs(x) >= 1 ? x.toFixed(2) : x.toFixed(3);
+  // Manufacturer reference lines in the lab's SD units; one beyond the plotted
+  // +/-4 SD is named at the chart edge instead of drawn.
+  const mfrRefs = ([
+    [mfr?.mean, "Mfr mean", "6,3"], [mfr?.low, "Mfr low", "1.5,2"], [mfr?.high, "Mfr high", "1.5,2"],
+  ] as [number | null | undefined, string, string][])
+    .filter(([v]) => v != null && Number.isFinite(Number(v)))
+    .map(([v, name, dash]) => ({ v: Number(v), name, dash, s: (Number(v) - mean) / sd }));
   return (
     <>
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Levey-Jennings chart" className="text-muted-foreground">
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Levey-Jennings chart" className="text-muted-foreground" data-testid="qc-lj-chart">
       {bands.map((bd, i) => (
         <rect key={i} x={PL} y={yFor(bd.b)} width={innerW} height={yFor(bd.a) - yFor(bd.b)} fill={bd.fill} />
       ))}
@@ -174,6 +202,16 @@ function LeveyJenningsChart({ mean, sd, results }: { mean: number; sd: number; r
       ))}
       {[-3, -2, -1, 0, 1, 2, 3].map(s => (
         <text key={s} x={PL - 4} y={yFor(s) + 3} fontSize="8" fill="currentColor" textAnchor="end">{s > 0 ? `+${s}` : s}</text>
+      ))}
+      {mfrRefs.map(r => r.s >= sdMin && r.s <= sdMax ? (
+        <g key={r.name} data-testid="qc-mfr-reference">
+          <line x1={PL} y1={yFor(r.s)} x2={PL + innerW} y2={yFor(r.s)} stroke="#6d28d9" strokeWidth={0.9} strokeDasharray={r.dash} />
+          <text x={PL + innerW - 2} y={yFor(r.s) - 2} fontSize="7.5" fill="#6d28d9" textAnchor="end">{r.name} {fmtStat(r.v)}</text>
+        </g>
+      ) : (
+        <text key={r.name} data-testid="qc-mfr-reference" x={PL + innerW - 2} y={r.s > sdMax ? PT + 8 : PT + innerH - 3} fontSize="7.5" fill="#6d28d9" textAnchor="end">
+          {r.name} {fmtStat(r.v)} ({r.s > 0 ? "above" : "below"} chart, {r.s > 0 ? "+" : ""}{r.s.toFixed(1)} SD)
+        </text>
       ))}
       <polyline points={poly} fill="none" stroke="#1a1a1a" strokeWidth={0.8} />
       {sdis.map((s, i) => {
@@ -190,12 +228,17 @@ function LeveyJenningsChart({ mean, sd, results }: { mean: number; sd: number; r
     </svg>
     <div className="flex items-start justify-between gap-4 mt-1 px-1 text-xs">
       <div>
-        <div className="font-medium text-muted-foreground">Programmed (manufacturer)</div>
-        <div className="font-mono text-foreground">Mean {fmtStat(mean)} · SD {fmtStat(sd)}</div>
+        <div className="font-medium text-muted-foreground">Chart and Westgard rules use</div>
+        <div className="text-foreground" data-testid="qc-basis-label">{basisLabel || `Mean ${fmtStat(mean)}, SD ${fmtStat(sd)}`}</div>
       </div>
-      <div className="text-right">
-        <div className="font-medium text-muted-foreground">Calculated (n={n})</div>
+      <div className="text-right shrink-0">
+        <div className="font-medium text-muted-foreground">Runs shown (n={n})</div>
         <div className="font-mono text-foreground">Mean {fmtStat(calcMean)} · SD {fmtStat(calcSd)}</div>
+        {mfr?.mean != null && (
+          <div className="text-muted-foreground mt-0.5">
+            Manufacturer mean {fmtStat(Number(mfr.mean))}{mfr.low != null && mfr.high != null ? `, range ${fmtStat(Number(mfr.low))} to ${fmtStat(Number(mfr.high))}` : ""}
+          </div>
+        )}
       </div>
     </div>
     </>
@@ -1087,6 +1130,11 @@ export default function VeritaQCAppPage() {
               )}
               {selectedLot && (
                 <>
+                  {selectedLot.basis && (
+                    <p className="mt-3 text-xs text-muted-foreground" data-testid="qc-lot-basis">
+                      <span className="font-medium text-foreground">Judged against:</span> {selectedLot.basis.label}
+                    </p>
+                  )}
                   <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-muted-foreground">
                     <div><span className="font-medium text-foreground">Mfr mean:</span> {selectedLot.mfr_mean}</div>
                     <div><span className="font-medium text-foreground">Mfr SD:</span> {selectedLot.mfr_sd}</div>
@@ -1309,7 +1357,12 @@ export default function VeritaQCAppPage() {
                   <div className="text-sm text-muted-foreground py-8 text-center">No results across this control line's lots yet.</div>
                 )
               ) : (
-                <LeveyJenningsChart mean={selectedLot.mfr_mean} sd={selectedLot.mfr_sd} results={results.filter(r => !r.voided_at).slice(0, Math.max(1, Math.min(200, parseInt(chartPoints, 10) || 30)))} />
+                <LeveyJenningsChart
+                  mean={selectedLot.basis?.mean ?? selectedLot.mfr_mean}
+                  sd={selectedLot.basis?.sd ?? selectedLot.mfr_sd}
+                  basisLabel={selectedLot.basis?.label}
+                  mfr={{ mean: selectedLot.mfr_mean, low: selectedLot.mfr_range_low, high: selectedLot.mfr_range_high }}
+                  results={results.filter(r => !r.voided_at).slice(0, Math.max(1, Math.min(200, parseInt(chartPoints, 10) || 30)))} />
               )}
             </CardContent>
           </Card>
