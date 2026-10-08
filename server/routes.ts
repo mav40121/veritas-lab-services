@@ -14147,10 +14147,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ── Medical Director Letter of Delegation (item 5, Phase 1) ──────────────
-  // A signable Letter of Delegation: the designated Medical Director toggles the
-  // delegable responsibilities (server/directorDelegation.ts catalog) and e-signs.
-  // Create / edit-draft / sign / revoke are MD-only; list, catalog and PDF are
-  // viewable by any lab member. No access gates change here; the QC co-sign and
+  // A signable Letter of Delegation: the delegable responsibilities
+  // (server/directorDelegation.ts catalog) are toggled on a draft, then the
+  // designated Medical Director e-signs it. 2026-10-08 (Michael): "Most medical
+  // directors do as little as possible. The admin director does everything, and
+  // usually tells the medical director where to sign." So the lab's owner or an
+  // admin (or the MD) PREPARES: create, edit and discard drafts. SIGN and REVOKE
+  // stay MD-only. List, catalog and PDF are viewable by any lab member. No access gates change here; the QC co-sign and
   // finding-closure gates will read these signed letters in Phase 2.
   const isDesignatedMd = (labId: number, userId: number): boolean => {
     const row = (db as any).$client.prepare(
@@ -14161,6 +14164,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(labId, userId);
     return !!row;
   };
+  const canPrepareDelegation = (req: any): boolean =>
+    isDesignatedMd(req.scope.labId, req.userId) || canManageLabMembers(req.scope);
+  const PREPARE_REFUSAL = "Only the lab's owner, an admin, or the medical director can prepare a letter of delegation.";
   const ddSafeParse = (s: any) => { try { const v = JSON.parse(s || "{}"); return v && typeof v === "object" ? v : {}; } catch { return {}; } };
   const ddAudit = (labId: number, userId: number, action: string, detail: string) => {
     try {
@@ -14171,7 +14177,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   };
 
   app.get("/api/labs/:labId/director-delegations/catalog", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    res.json({ positions: DELEGATION_POSITIONS, complexities: DELEGATION_COMPLEXITIES, catalog: DELEGATION_CATALOG, isMedicalDirector: isDesignatedMd(req.scope.labId, req.userId) });
+    const mdEmail = ((db as any).$client.prepare("SELECT medical_director_email FROM labs WHERE id = ?").get(req.scope.labId) as any)?.medical_director_email || null;
+    const mdMember = mdEmail ? !!(db as any).$client.prepare(
+      "SELECT 1 FROM lab_members lm JOIN users u ON u.id = lm.user_id WHERE lm.lab_id = ? AND lm.status = 'active' AND lower(u.email) = lower(?) LIMIT 1"
+    ).get(req.scope.labId, mdEmail) : false;
+    res.json({
+      positions: DELEGATION_POSITIONS, complexities: DELEGATION_COMPLEXITIES, catalog: DELEGATION_CATALOG,
+      isMedicalDirector: isDesignatedMd(req.scope.labId, req.userId),
+      canPrepare: canPrepareDelegation(req),
+      medicalDirectorEmail: mdEmail,
+      medicalDirectorIsMember: mdMember,
+    });
   });
 
   app.get("/api/labs/:labId/director-delegations", authMiddleware, labScopeMiddleware, (req: any, res) => {
@@ -14182,7 +14198,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post("/api/labs/:labId/director-delegations", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    if (!isDesignatedMd(req.scope.labId, req.userId)) return res.status(403).json({ error: "Only the lab's designated medical director can create a letter of delegation." });
+    if (!canPrepareDelegation(req)) return res.status(403).json({ error: PREPARE_REFUSAL });
     const b = req.body || {};
     const position = String(b.position || "");
     if (!isDelegationPosition(position)) return res.status(400).json({ error: "Valid position required (clinical_consultant, technical_consultant, technical_supervisor, general_supervisor)." });
@@ -14201,7 +14217,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.put("/api/labs/:labId/director-delegations/:id", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    if (!isDesignatedMd(req.scope.labId, req.userId)) return res.status(403).json({ error: "Only the lab's designated medical director can edit a letter of delegation." });
+    if (!canPrepareDelegation(req)) return res.status(403).json({ error: PREPARE_REFUSAL });
     const row = (db as any).$client.prepare("SELECT * FROM director_delegations WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId) as any;
     if (!row) return res.status(404).json({ error: "Letter not found." });
     if (row.status !== "draft") return res.status(409).json({ error: "Only a draft letter can be edited. Revoke and create a new one to change a signed letter." });
@@ -14220,6 +14236,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       b.delegate_staff_employee_id !== undefined ? b.delegate_staff_employee_id : row.delegate_staff_employee_id,
       delegateName, position, complexity, JSON.stringify(resp), new Date().toISOString(), row.id, req.scope.labId,
     );
+    res.json({ ok: true });
+  });
+
+  // Discard a draft prepared by mistake (a signed or revoked letter is a record and stays).
+  app.delete("/api/labs/:labId/director-delegations/:id", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!canPrepareDelegation(req)) return res.status(403).json({ error: PREPARE_REFUSAL });
+    const row = (db as any).$client.prepare("SELECT * FROM director_delegations WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId) as any;
+    if (!row) return res.status(404).json({ error: "Letter not found." });
+    if (row.status !== "draft") return res.status(409).json({ error: "Only a draft can be discarded. Revoke a signed letter instead." });
+    (db as any).$client.prepare("DELETE FROM director_delegations WHERE id = ? AND lab_id = ? AND status = 'draft'").run(row.id, req.scope.labId);
+    ddAudit(req.scope.labId, req.userId, "discard", `discarded draft letter #${row.id} for ${row.delegate_name}`);
     res.json({ ok: true });
   });
 
