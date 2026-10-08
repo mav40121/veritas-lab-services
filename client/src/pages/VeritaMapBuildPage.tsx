@@ -2169,6 +2169,15 @@ export default function VeritaMapBuildPage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Request-an-Instrument dialog on step 1 too (#86): the "request we add
+            your instrument" link lives on this step, and the dialog was only
+            rendered in the step-2 return, so the click did nothing here. */}
+        <RequestInstrumentDialog
+          open={requestModalOpen}
+          onOpenChange={setRequestModalOpen}
+          prefilledName={effectiveInstrumentName}
+        />
       </div>
     );
   }
