@@ -687,19 +687,13 @@ antibiogram is a PDF deliverable or a live table.
 
 ---
 
-### 83. A lab created from the account settings page gets no owner membership, so the owner is locked out of it
-
-**Effort:** XS for the code, plus a one-row data repair
-**Importance:** High and time-bound. The St. Charles reply scheduled for Friday 2026-10-09 4:00 PM ET tells Melissa the full suite is open on her lab.
-
-**What:** The settings save path in server/routes.ts (about line 31741, "Owner doesn't have a lab yet -- create one") inserts a labs row and repoints users.lab_id but never inserts the owner's lab_members row; the /api/labs/me/add path does it correctly. labScopeMiddleware requires an active lab_members row, so every /api/labs/:id call returns 403 for that owner. Two labs on production have an owner with no membership: lab 31 St. Charles Health System - Bend (Melissa Humphrey, created 2026-09-18 21:31 UTC, 15 minutes after her signup; she signed in twice that day and never again) and lab 20 "ery" (junk signup). Fix: insert and audit the owner membership in that path, check the db.ts boot backfill for the same gap, add an integration test through the real route, then add the missing owner row on lab 31 (admin add-lab-membership, role owner, primary). The lab 31 write was blocked in the 10/07 session pending Michael's approval; lab 20 is junk and can be left.
-
-**Source:** inbox check 2026-10-07 evening (Coding).
-**Status:** Open. Lab 31 repair awaiting approval; it needs to land before the Friday send.
-
----
-
 ## CLOSED (audit trail)
+
+### C84. A lab created from the account settings page got no owner membership, so the owner was locked out of it (was #83)
+
+**Effort:** was XS / **Importance:** High. The St. Charles owner (lab 31, evaluation 2026-10-14) had been locked out of her own lab since signup.
+
+**Closure evidence:** Root cause proven on a read-only production copy: on 2026-09-18 21:31:49 UTC the St. Charles owner's first account-settings save (accreditation TJC, lab_audit_log 98) created lab 31 through the PUT /api/account/settings first-lab branch, which never inserted her lab_members row; lab_members is AUTOINCREMENT and ids 95 (9/15) to 96 (9/21) have no gap, so the row never existed. Lab 31 repaired 2026-10-08 00:47 UTC by admin add-lab-membership on Michael's approval (lab_members 123, audit_log 13482). PR #1522 (squash 8c947f6d, live 2026-10-07): the settings first-lab branch and the db.ts boot backfill now insert and audit the owner's active primary row; script/audit.py rule 15 fails any INSERT INTO labs in server code without a lab_members insert within 45 lines (proven to bite). Receipt tests/integration/settings-first-lab-owner-membership.test.ts 7/7; on the old code checks 3-7 fail with 403 "No active membership for this lab". Only lab 20 (junk signup) still has an owner with no membership; left as is. Deploy confirmed by watcher (watch_1522.log).
 
 ### C83. VeritaMap: calibration verification "Not applicable" per test, and the exemption flags honored on the map page (was #77)
 
