@@ -77,5 +77,23 @@ test.describe("VeritaMap: AMR autosave fires once per user edit and never loops"
 
     // The saved indicator shows and no failure is surfaced.
     await expect(page.getByText(/Save failed|not saved/i)).toHaveCount(0);
+
+    // 5. Leave the sandbox as found (sandbox-receipts rule): clear both values
+    //    and confirm the map holds no AMR values. A leftover value marks the
+    //    Getting Started "reference ranges" step done, which broke
+    //    module-howto-progress on every later CI run (2026-10-08).
+    await low.fill("");
+    await high.fill("");
+    const m = MAP_URL.match(/\/labs\/(\d+)\/veritamap-app\/(\d+)/);
+    if (m) {
+      const [, labId, mapId] = m;
+      await expect.poll(async () => page.evaluate(async ([b, l, id]) => {
+        const t = localStorage.getItem("veritas_token") || "";
+        const r = await fetch(`${b}/api/labs/${l}/veritamap/maps/${id}/amr-values`, { headers: { Authorization: `Bearer ${t}` } });
+        const rows = r.ok ? await r.json() : [];
+        const list = Array.isArray(rows) ? rows : (rows.items || rows.values || []);
+        return list.filter((x: any) => (x.amr_low ?? "") !== "" || (x.amr_high ?? "") !== "").length;
+      }, [BASE, labId, mapId]), { timeout: 10_000, message: "AMR values cleared after the test" }).toBe(0);
+    }
   });
 });
