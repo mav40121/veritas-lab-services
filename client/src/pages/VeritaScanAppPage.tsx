@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
-import { useIsReadOnly } from "@/components/SubscriptionBanner";
+import { useIsReadOnly, useCanRecord } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -141,6 +141,8 @@ export default function VeritaScanAppPage() {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
   const readOnly = useIsReadOnly('veritascan');
+  const canRecord = useCanRecord();
+  const lockTitle = readOnly ? (canRecord ? "Requires VeritaScan edit access" : "Resubscribe to add new records") : undefined;
 
   const [newScanName, setNewScanName] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -294,7 +296,7 @@ export default function VeritaScanAppPage() {
         {/* New Scan button + dialog */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="shrink-0" disabled={readOnly} title={readOnly ? "Resubscribe to add new records" : undefined}>
+            <Button className="shrink-0" disabled={readOnly} title={lockTitle}>
               <Plus className="h-4 w-4 mr-1.5" />
               New Scan
             </Button>
@@ -380,7 +382,7 @@ export default function VeritaScanAppPage() {
           <p className="text-sm text-muted-foreground mb-5">
             Create your first inspection readiness scan to get started.
           </p>
-          <Button onClick={() => setDialogOpen(true)} disabled={readOnly} title={readOnly ? "Resubscribe to add new records" : undefined}>
+          <Button onClick={() => setDialogOpen(true)} disabled={readOnly} title={lockTitle}>
             <Plus className="h-4 w-4 mr-1.5" />
             New Scan
           </Button>
@@ -480,11 +482,11 @@ export default function VeritaScanAppPage() {
 
                     {/* Actions */}
                     <div className="flex items-center gap-1 shrink-0">
-                      <DeleteConfirmDialog
+                      {!readOnly && <DeleteConfirmDialog
                         scanId={scan.id}
                         scanName={scan.name}
                         onDelete={(id) => deleteScan.mutate(id)}
-                      />
+                      />}
                       <Button
                         size="sm"
                         variant="outline"
