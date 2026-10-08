@@ -46,6 +46,8 @@
 // inventory mutation endpoints. Same shape sweep landed on veritatrack and
 // veritacheck_verifications in the same PR.
 
+import { legacySeatForUser } from "./seatContext";
+
 // Loose any to avoid coupling to better-sqlite3's exported type shape; the
 // caller passes the live `$client` instance which has `.prepare(...).get/run/all`.
 type SqliteLike = any;
@@ -145,9 +147,7 @@ export function resolveLegacyLabId(
            SELECT 1 AS ok FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'`
         ).get(requested, userId, requested, userId) as any;
         if (mem) return requested;
-        const seatOwner = sqlite.prepare(
-          "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
-        ).get(userId) as any;
+        const seatOwner = legacySeatForUser(sqlite, userId) as any; // #82: owners never borrow another owner's seat
         if (seatOwner) {
           const seatMem = sqlite.prepare(
             `SELECT 1 AS ok FROM labs WHERE id = ? AND owner_user_id = ?

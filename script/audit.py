@@ -465,6 +465,29 @@ def check_file(rel, fpath):
             ERRORS.append(f"[{rel_norm}:{i}] A labs row is inserted with no lab_members insert in the 45 lines below -- the owner gets 403 'No active membership for this lab' on their own lab. Insert the owner's active 'owner' row in the same block (see PUT /api/account/settings), or mark `owner-membership-ok` if the lab deliberately has no owner member.")
             ERRORS.append(f"  >> {s[:140]}")
 
+    # ── 16. SEAT CONTEXT: no first-seat-anywhere lookups ──────────────────────
+    # `user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1` with no
+    # lab_id picks a user's FIRST seat anywhere. For an owner who also holds a
+    # seat on someone else's lab that turned every request into the other
+    # owner's seat: Michael's writes stamped user 81 and /api/auth/me showed
+    # user 81's plan from 2026-10-01 (parking lot #82). Seat lookups go through
+    # server/seatContext.ts (seatForRequest / seatForLab / legacySeatForUser).
+    # A deliberate lab-less lookup elsewhere must carry `seat-scope-ok` on the
+    # line or within the 3 lines above. Proven to bite: re-add the old
+    # authMiddleware query and this fails, exit 1.
+    if rel_norm.startswith("server/") and rel_norm != "server/seatContext.ts":
+        firstseat_re = re.compile(r"user_seats WHERE seat_user_id = \? AND status = 'active' (ORDER BY id )?LIMIT 1")
+        for i, line in enumerate(lines, 1):
+            s = line.strip()
+            if s.startswith("//") or s.startswith("*"):
+                continue
+            if not firstseat_re.search(line):
+                continue
+            if "seat-scope-ok" in "\n".join(lines[max(0, i - 4):i]):
+                continue
+            ERRORS.append(f"[{rel_norm}:{i}] First-seat-anywhere lookup (seat_user_id + status, LIMIT 1, no lab_id) -- an owner who also holds a seat elsewhere becomes that other owner's seat user. Use seatForRequest / seatForLab / legacySeatForUser from server/seatContext.ts, or mark `seat-scope-ok` if lab-less is intended.")
+            ERRORS.append(f"  >> {s[:140]}")
+
 
 # ── 6. DB MIGRATION CHECK (db.ts only) ──────────────────────────────────────
 # Every CREATE TABLE IF NOT EXISTS must have a corresponding ALTER TABLE
