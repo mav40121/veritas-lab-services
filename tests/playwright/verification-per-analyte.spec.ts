@@ -19,11 +19,22 @@ test.describe("VeritaCheck verification: per-analyte study rows", () => {
   test("each element shows a row per analyte; carryover stays instrument-wide", async ({ page, request }) => {
     test.skip(!TOKEN || !LAB_ID, "PW_TOKEN + PW_LAB_ID required");
     const auth = { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" };
+    const TEMP_NAME = "ZZ per-analyte spec (delete me)";
+
+    // Self-heal (2026-10-08): delete any throwaway left by an earlier run whose
+    // cleanup failed. One leftover became the "first package" on the CI sandbox
+    // and broke veritacheck-analyte-multiselect on every PR.
+    const existing = await request.get(`${BASE}/api/labs/${LAB_ID}/veritacheck/verifications`, { headers: auth });
+    if (existing.ok()) {
+      for (const v of (await existing.json()) as any[]) {
+        if (v?.instrument_name === TEMP_NAME) await request.delete(`${BASE}/api/veritacheck/verifications/${v.id}`, { headers: { ...auth, "X-Active-Lab-Id": String(LAB_ID) } });
+      }
+    }
 
     // Throwaway workbook with a per-analyte element (precision) + carryover.
     const created = await request.post(`${BASE}/api/labs/${LAB_ID}/veritacheck/verifications`, {
       headers: auth,
-      data: { instrument_name: "ZZ per-analyte spec (delete me)", trigger_type: "new_instrument", elements: ["precision", "carryover"] },
+      data: { instrument_name: TEMP_NAME, trigger_type: "new_instrument", elements: ["precision", "carryover"] },
     });
     expect(created.ok()).toBeTruthy();
     const vid = (await created.json()).id as number;
@@ -47,7 +58,8 @@ test.describe("VeritaCheck verification: per-analyte study rows", () => {
       // Carryover is instrument-wide: it does NOT get per-analyte rows.
       await expect(page.getByTestId("analyte-slot-carryover-SpecA")).toHaveCount(0);
     } finally {
-      await request.delete(`${BASE}/api/veritacheck/verifications/${vid}`, { headers: auth });
+      const del = await request.delete(`${BASE}/api/veritacheck/verifications/${vid}`, { headers: { ...auth, "X-Active-Lab-Id": String(LAB_ID) } });
+      if (!del.ok()) console.warn(`[verification-per-analyte] cleanup DELETE ${vid} returned ${del.status()}; the next run's self-heal removes it`);
     }
   });
 });
