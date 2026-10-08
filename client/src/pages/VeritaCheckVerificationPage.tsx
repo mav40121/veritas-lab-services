@@ -968,7 +968,7 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
             </div>
           )}
           {verification.instruments?.map(unit => (
-            <UnitCard key={unit.id} unit={unit} verificationId={id} onSaved={refetch} onDeleted={refetch} />
+            <UnitCard key={unit.id} unit={unit} verificationId={id} onSaved={refetch} onDeleted={() => deleteUnit(unit.id)} />
           ))}
         </div>
       )}
@@ -1301,7 +1301,7 @@ function UnitCard({ unit, verificationId, onSaved, onDeleted }: { unit: Instrume
             confirmLabel="Remove"
             onConfirm={onDeleted}
           >
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive">
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" data-testid={`remove-unit-${unit.id}`} aria-label={`Remove unit ${unit.serial_number}`}>
               <Trash2 size={12} />
             </Button>
           </ConfirmDialog>
