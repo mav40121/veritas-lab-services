@@ -675,19 +675,13 @@ antibiogram is a PDF deliverable or a live table.
 
 ---
 
-### 82. Records written by a user who holds seats under several owners get stamped with another owner's user id
-
-**Effort:** S-M (fix the stamping, repair rows, add a guard)
-**Importance:** High. Wrong attribution on real records, and it already produced a false read in the St. Charles deal notes.
-
-**What:** Since 2026-10-01 Michael (user 17) holds active seats under three other owners: user 81 (St. Charles, lab 31), user 85 (lab 32) and user 74 (labs 25-28). His writes since then are being stamped with user 81, Melissa Humphrey's account: 6 VeritaCheck studies in Michaels Lab (lab 3, created 10/05-10/07) and 20 VeritaTrack tasks in Redington-Fairview (lab 34, created 10/07 18:50 UTC while he built the Coag map) carry user_id 81, and the audit_log owner column on his 10/06-10/07 deletes reads 81. Melissa has not signed in since 2026-09-18, so none of these are hers. The rows are lab-scoped by lab_id, so the lab-scoped readers show them in the right lab; the damage is attribution, the audit trail, and any reader or credit path that still keys on user_id. Likely cause: the same seat-owner resolution that made Lisa's reads return Michael's data in August (see the seat-accept / display-scoping memory), here on the write side. Fix direction: stamp writes from the active lab's owner (labs.owner_user_id for the scoped lab) or the actor, never from an arbitrary seat owner; repair the 26 rows from 81 to 17 with a dry run first; add an audit guard so a new write path cannot regress.
-
-**Source:** inbox check 2026-10-07 evening (Coding), found while tracing the backup anomaly and the RFGH lab build.
-**Status:** Open.
-
----
-
 ## CLOSED (audit trail)
+
+### C85. An owner who also held a seat on another owner's lab was treated as that seat everywhere (was #82)
+
+**Effort:** was S-M / **Importance:** High. Michael's records were stamped with the St. Charles owner's id and his account read that owner's free plan.
+
+**Closure evidence:** Root cause: every seat lookup took a user's first active seat anywhere (`seat_user_id + status LIMIT 1`, no lab). From 2026-10-01 Michael (owner of 8 labs) held seats on labs 31, 32 and 25-28, so authMiddleware, login and /api/auth/me resolved him as a seat of user 81. PR #1524 (squash 3c4a2bee, live 2026-10-08): server/seatContext.ts resolves the seat for the lab being worked in. An owner is a seat user only inside a lab where they hold that seat and acts as themselves otherwise. Non-owners keep the legacy first seat, and self-seat owners are unchanged. Auth, login, /me, both lab resolvers, the legacy study fallbacks and register use it. Audit rule 16 blocks new first-seat-anywhere lookups and is proven to bite. Receipt tests/integration/seat-context-owner-with-foreign-seat.test.ts 10/10; on the old code /me showed the other owner's free plan and own-lab tasks were stamped with the other owner. 7 existing suites pass. Production repair via POST /api/admin/reattribute-records (dry run, then commit, audited): 34 rows moved from user 81 to 17 in Michael's labs. Audit-log history rows were left as recorded.
 
 ### C84. A lab created from the account settings page got no owner membership, so the owner was locked out of it (was #83)
 
