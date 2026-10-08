@@ -1217,7 +1217,7 @@ export default function VeritaTrackAppPage() {
       )}
 
       {/* Quick Setup panel */}
-      {setupOpen && (
+      {setupOpen && !isReadOnly && (
         <div className="border border-border rounded-xl overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 bg-muted/40 border-b border-border">
             <div>
@@ -1378,7 +1378,7 @@ export default function VeritaTrackAppPage() {
           <CalendarDays size={36} className="mx-auto text-muted-foreground mb-3" />
           <h3 className="font-semibold text-foreground mb-1">No tasks yet</h3>
           <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
-            Add tasks manually or import your calibration, correlation, and SOP schedule from VeritaMap™.
+            {isReadOnly ? "Tasks the lab sets up will appear here for sign-off." : "Add tasks manually or import your calibration, correlation, and SOP schedule from VeritaMap™."}
           </p>
           {!isReadOnly && <div className="flex items-center justify-center gap-3">
             <Button size="sm" variant="outline" onClick={handleImport} disabled={importLoading}>
