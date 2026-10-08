@@ -4057,8 +4057,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // VeritaShift Scheduler (Phase 1) routes.
   registerScheduleRoutes(app, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit);
 
+  // 2026-10-08 (St. Charles: "trace a QC failure, corrective action, and
+  // resolution for a specific analyzer"): QC runs and equipment records point at
+  // the analyzer through its VeritaMap instrument id, the test-system id IQCP,
+  // competency and verification already use. Returns the instrument when it is on
+  // this lab's test menu, else null.
+  function resolveLabMapInstrument(sqlite: any, labId: number, id: any): any {
+    const n = Number(id);
+    if (!Number.isInteger(n) || n <= 0) return null;
+    return sqlite.prepare(
+      `SELECT i.id, i.instrument_name, i.nickname, i.serial_number, i.role, i.category, i.map_id, m.name AS map_name
+       FROM veritamap_instruments i JOIN veritamap_maps m ON m.id = i.map_id
+       WHERE i.id = ? AND m.lab_id = ?`
+    ).get(n, labId) || null;
+  }
+
   app.post("/api/labs/:labId/qc/results", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    const { control_lot_id, result_value, result_date, instrument, run_time, comment } = req.body || {};
+    const { control_lot_id, result_value, result_date, instrument, run_time, comment, map_instrument_id } = req.body || {};
     if (!control_lot_id || result_value === undefined || result_value === null || !result_date) {
       return res.status(400).json({ error: "control_lot_id, result_value, result_date required" });
     }
@@ -4077,14 +4092,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT id, analyte FROM qc_control_lots WHERE id = ? AND lab_id = ?"
     ).get(Number(control_lot_id), req.scope.labId) as any;
     if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
+    let mapInst: any = null;
+    if (map_instrument_id !== undefined && map_instrument_id !== null && map_instrument_id !== "") {
+      mapInst = resolveLabMapInstrument(sqlite, req.scope.labId, map_instrument_id);
+      if (!mapInst) return res.status(400).json({ error: "Analyzer not found on this lab's test menu" });
+    }
+    const instrumentText = (instrument && String(instrument).trim()) || (mapInst ? (mapInst.nickname || mapInst.instrument_name) : null);
 
     const now = new Date().toISOString();
     let newResultId: number;
     try {
       const ins = sqlite.prepare(
-        "INSERT INTO qc_results (lab_id, control_lot_id, instrument, result_value, result_date, run_time, operator_user_id, comment, accepted_for_reporting, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)"
+        "INSERT INTO qc_results (lab_id, control_lot_id, instrument, map_instrument_id, result_value, result_date, run_time, operator_user_id, comment, accepted_for_reporting, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)"
       ).run(
-        req.scope.labId, Number(control_lot_id), instrument || null, Number(result_value),
+        req.scope.labId, Number(control_lot_id), instrumentText, mapInst ? mapInst.id : null, Number(result_value),
         String(result_date), run_time || null, req.userId, comment || null, now, now,
       );
       newResultId = Number(ins.lastInsertRowid);
@@ -4621,7 +4642,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(controlLotId, req.scope.labId) as any;
     if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
     const results = sqlite.prepare(
-      "SELECT id, lab_id, control_lot_id, instrument, result_value, result_date, run_time, operator_user_id, comment, accepted_for_reporting, created_at, voided_at, voided_by_user_id, void_reason FROM qc_results WHERE lab_id = ? AND control_lot_id = ? ORDER BY result_date DESC, id DESC LIMIT ?"
+      "SELECT id, lab_id, control_lot_id, instrument, map_instrument_id, result_value, result_date, run_time, operator_user_id, comment, accepted_for_reporting, created_at, voided_at, voided_by_user_id, void_reason FROM qc_results WHERE lab_id = ? AND control_lot_id = ? ORDER BY result_date DESC, id DESC LIMIT ?"
     ).all(req.scope.labId, controlLotId, limit) as any[];
     if (results.length === 0) return res.json({ results: [], analyte: lot.analyte });
     const ids = results.map(r => r.id);
@@ -4632,7 +4653,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT id, qc_result_id, rule_code, severity, detail, related_result_ids, evaluated_at FROM qc_rule_violations WHERE superseded_at IS NULL AND qc_result_id IN (" + placeholders + ") ORDER BY id ASC"
     ).all(...ids) as any[];
     const correctiveActions = sqlite.prepare(
-      "SELECT id, qc_result_id, qc_rule_violation_id, action_taken, taken_by_user_id, taken_at, status, follow_up_notes, nce_reference FROM qc_corrective_actions WHERE qc_result_id IN (" + placeholders + ") ORDER BY id ASC"
+      "SELECT id, qc_result_id, qc_rule_violation_id, action_taken, taken_by_user_id, taken_at, status, follow_up_notes, nce_reference, resolution_notes, resolved_by_name, resolved_at FROM qc_corrective_actions WHERE qc_result_id IN (" + placeholders + ") ORDER BY id ASC"
     ).all(...ids) as any[];
     const violByResult: Record<number, any[]> = {};
     for (const v of violations) {
@@ -4717,7 +4738,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const limit = Math.min(Number(req.query.limit) || 100, 500);
     const sqlite = (db as any).$client;
     const params: any[] = [req.scope.labId];
-    let sql = "SELECT r.id, r.lab_id, r.control_lot_id, r.instrument, r.result_value, r.result_date, r.run_time, r.accepted_for_reporting, r.created_at, l.analyte, l.lot_number, l.level, r.operator_staff_employee_id, NULLIF(TRIM(COALESCE(se.first_name,'') || ' ' || COALESCE(se.last_name,'')), '') AS operator_name FROM qc_results r JOIN qc_control_lots l ON r.control_lot_id = l.id LEFT JOIN staff_employees se ON se.id = r.operator_staff_employee_id WHERE r.lab_id = ?";
+    let sql = "SELECT r.id, r.lab_id, r.control_lot_id, r.instrument, r.map_instrument_id, r.result_value, r.result_date, r.run_time, r.accepted_for_reporting, r.created_at, l.analyte, l.lot_number, l.level, r.operator_staff_employee_id, NULLIF(TRIM(COALESCE(se.first_name,'') || ' ' || COALESCE(se.last_name,'')), '') AS operator_name FROM qc_results r JOIN qc_control_lots l ON r.control_lot_id = l.id LEFT JOIN staff_employees se ON se.id = r.operator_staff_employee_id WHERE r.lab_id = ?";
     if (since) { sql += " AND r.result_date >= ?"; params.push(since); }
     if (until) { sql += " AND r.result_date <= ?"; params.push(until); }
     sql += " ORDER BY r.result_date DESC, r.id DESC LIMIT ?";
@@ -4730,7 +4751,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT id, qc_result_id, rule_code, severity, detail, evaluated_at FROM qc_rule_violations WHERE superseded_at IS NULL AND qc_result_id IN (" + placeholders + ")"
     ).all(...ids) as any[];
     const cas = sqlite.prepare(
-      "SELECT id, qc_result_id, qc_rule_violation_id, action_taken, status, taken_at, nce_reference FROM qc_corrective_actions WHERE qc_result_id IN (" + placeholders + ")"
+      "SELECT id, qc_result_id, qc_rule_violation_id, action_taken, status, taken_at, nce_reference, resolution_notes, resolved_by_name, resolved_at FROM qc_corrective_actions WHERE qc_result_id IN (" + placeholders + ")"
     ).all(...ids) as any[];
     const vByR: Record<number, any[]> = {};
     for (const v of violations) (vByR[v.qc_result_id] = vByR[v.qc_result_id] || []).push(v);
@@ -5047,12 +5068,50 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "UPDATE qc_results SET accepted_for_reporting = 0, updated_at = ? WHERE id = ? AND lab_id = ?"
       ).run(now, Number(qc_result_id), req.scope.labId);
     }
+    try {
+      logAudit({
+        userId: req.userId, ownerUserId: req.scope.lab?.owner_user_id ?? req.userId, module: "veritaqc", action: "create",
+        entityType: "qc_corrective_action", entityId: newId, entityLabel: `QC result ${Number(qc_result_id)}`,
+        after: { qc_result_id: Number(qc_result_id), action_taken: String(action_taken).trim(), excluded_from_baseline: doExclude },
+      });
+    } catch {}
     res.json({
       ok: true, corrective_action_id: newId, excluded_from_baseline: doExclude,
       ...(exclude_from_baseline && !excludeAllowed
         ? { exclude_not_applied: "The corrective action was filed. Excluding the run from the QC baseline needs a supervisor with VeritaQC edit access, so the run stays in the baseline." }
         : {}),
     });
+  });
+
+  // Close out a QC corrective action with its resolution: what fixed it and how
+  // that was confirmed (e.g. "recalibrated; repeat QC in range"). Until 2026-10-08
+  // a corrective action could only be filed, so every one stayed 'open' and an
+  // inspector could not see the problem was resolved. Needs VeritaQC edit access
+  // (owner, admin, or a supervisor seat). Recorded once, never edited afterwards.
+  app.post("/api/labs/:labId/qc/corrective-actions/:id/resolve", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const resolution = String(req.body?.resolution_notes ?? "").trim();
+    if (!resolution) return res.status(400).json({ error: "resolution_notes required: what fixed it and how that was confirmed" });
+    if (!hasModuleEditAccess(req.scope.labId, req.userId, "veritaqc")) {
+      return res.status(403).json({ error: "Closing out a corrective action needs VeritaQC edit access (owner, admin, or a supervisor seat)." });
+    }
+    const sqlite = (db as any).$client;
+    const ca = sqlite.prepare("SELECT * FROM qc_corrective_actions WHERE id = ? AND lab_id = ?").get(Number(req.params.id), req.scope.labId) as any;
+    if (!ca) return res.status(404).json({ error: "Corrective action not found in this lab" });
+    if (ca.resolved_at) return res.status(409).json({ error: "This corrective action is already closed out", resolved_at: ca.resolved_at });
+    const who = sqlite.prepare("SELECT name, email FROM users WHERE id = ?").get(req.userId) as any;
+    const name = (who?.name && String(who.name).trim()) || who?.email || `user ${req.userId}`;
+    const now = new Date().toISOString();
+    sqlite.prepare(
+      "UPDATE qc_corrective_actions SET status = 'resolved', resolution_notes = ?, resolved_by_user_id = ?, resolved_by_name = ?, resolved_at = ?, updated_at = ? WHERE id = ?"
+    ).run(resolution, req.userId, name, now, now, ca.id);
+    try {
+      logAudit({
+        userId: req.userId, ownerUserId: req.scope.lab?.owner_user_id ?? req.userId, module: "veritaqc", action: "update",
+        entityType: "qc_corrective_action", entityId: ca.id, entityLabel: `QC result ${ca.qc_result_id}`,
+        before: { status: ca.status }, after: { status: "resolved", resolution_notes: resolution },
+      });
+    } catch {}
+    res.json({ ok: true, corrective_action: sqlite.prepare("SELECT * FROM qc_corrective_actions WHERE id = ?").get(ca.id) });
   });
 
   // Wave A7 (2026-06-12): escalate a QC corrective action into a VeritaResponse
@@ -21841,12 +21900,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
   app.post("/api/labs/:labId/equipment", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamaintain'), (req: any, res) => {
     if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
-    const { instrument_name, manufacturer, model, serial_number, location, pm_interval_days, next_due_date, notes } = req.body || {};
+    const { instrument_name, manufacturer, model, serial_number, location, pm_interval_days, next_due_date, notes, map_instrument_id } = req.body || {};
     if (!instrument_name || !String(instrument_name).trim()) return res.status(400).json({ error: "instrument_name required" });
     const sqlite = (db as any).$client; const now = new Date().toISOString();
-    const ins = sqlite.prepare("INSERT INTO lab_equipment (lab_id, instrument_name, manufacturer, model, serial_number, location, pm_interval_days, next_due_date, status, notes, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,'active',?,?,?)")
+    let linkId: number | null = null;
+    if (map_instrument_id !== undefined && map_instrument_id !== null && map_instrument_id !== "") {
+      const mi = resolveLabMapInstrument(sqlite, req.scope.labId, map_instrument_id);
+      if (!mi) return res.status(400).json({ error: "Analyzer not found on this lab's test menu" });
+      linkId = mi.id;
+    }
+    const ins = sqlite.prepare("INSERT INTO lab_equipment (lab_id, instrument_name, manufacturer, model, serial_number, location, pm_interval_days, next_due_date, status, notes, map_instrument_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,'active',?,?,?,?)")
       .run(req.scope.labId, String(instrument_name).trim(), manufacturer || null, model || null, serial_number || null, location || null,
-           pm_interval_days != null && pm_interval_days !== "" ? Number(pm_interval_days) : null, next_due_date || null, notes || null, now, now);
+           pm_interval_days != null && pm_interval_days !== "" ? Number(pm_interval_days) : null, next_due_date || null, notes || null, linkId, now, now);
     const row = sqlite.prepare("SELECT * FROM lab_equipment WHERE id = ?").get(ins.lastInsertRowid) as any;
     res.json({ ...row, maintenance_status: equipmentStatus(row.next_due_date) });
   });
@@ -21897,6 +21962,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!ex) return res.status(404).json({ error: "Equipment not found in this lab" });
     const b = req.body || {}; const now = new Date().toISOString();
     const keep = (v: any, cur: any) => (v !== undefined ? v : cur);
+    if (b.map_instrument_id !== undefined) {
+      let linkId: number | null = null;
+      if (b.map_instrument_id !== null && b.map_instrument_id !== "") {
+        const mi = resolveLabMapInstrument(sqlite, req.scope.labId, b.map_instrument_id);
+        if (!mi) return res.status(400).json({ error: "Analyzer not found on this lab's test menu" });
+        linkId = mi.id;
+      }
+      sqlite.prepare("UPDATE lab_equipment SET map_instrument_id = ? WHERE id = ?").run(linkId, id);
+    }
     sqlite.prepare("UPDATE lab_equipment SET instrument_name=?, manufacturer=?, model=?, serial_number=?, location=?, pm_interval_days=?, next_due_date=?, status=?, notes=?, updated_at=? WHERE id=?")
       .run(
         b.instrument_name !== undefined ? String(b.instrument_name).trim() : ex.instrument_name,
@@ -21949,6 +22023,118 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (nextDue) sqlite.prepare("UPDATE lab_equipment SET next_due_date = ?, updated_at = ? WHERE id = ?").run(nextDue, now, id);
     const row = sqlite.prepare("SELECT * FROM lab_equipment WHERE id = ?").get(id) as any;
     res.json({ ...row, maintenance_status: equipmentStatus(row.next_due_date) });
+  });
+
+  // GET /api/labs/:labId/instruments/:mapInstrumentId/trail
+  // One analyzer's QC story for an inspector (2026-10-08, St. Charles): every QC
+  // run on it that tripped a Westgard rule, the corrective actions filed on those
+  // runs, how and when each was closed out, any VeritaResponse finding it was
+  // escalated to, and the calibration / maintenance events on the equipment
+  // record linked to the same analyzer. Read-only. Runs recorded before analyzers
+  // were linked (free-text instrument only) are matched by name and say so.
+  app.get("/api/labs/:labId/instruments/:mapInstrumentId/trail", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const labId = req.scope.labId;
+    const inst = resolveLabMapInstrument(sqlite, labId, req.params.mapInstrumentId);
+    if (!inst) return res.status(404).json({ error: "Analyzer not found on this lab's test menu" });
+    const names = Array.from(new Set([inst.instrument_name, inst.nickname]
+      .filter((x: any) => x && String(x).trim())
+      .map((x: any) => String(x).trim().toLowerCase())));
+    const days = Math.min(Math.max(Number(req.query.days) || 365, 1), 3650);
+    const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+    const nameIn = names.length ? names.map(() => "?").join(",") : "''";
+    const onAnalyzer = `(r.map_instrument_id = ? OR (r.map_instrument_id IS NULL AND LOWER(TRIM(COALESCE(r.instrument, ''))) IN (${nameIn})))`;
+
+    const totals = sqlite.prepare(
+      `SELECT COUNT(*) AS runs FROM qc_results r WHERE r.lab_id = ? AND r.result_date >= ? AND r.voided_at IS NULL AND ${onAnalyzer}`
+    ).get(labId, since, inst.id, ...names) as any;
+
+    const runs = sqlite.prepare(
+      `SELECT r.id, r.result_date, r.run_time, r.result_value, r.instrument, r.map_instrument_id, r.accepted_for_reporting,
+              r.voided_at, r.void_reason, r.basis_mean, r.basis_sd, r.basis_source,
+              l.analyte, l.level, l.lot_number,
+              COALESCE(NULLIF(TRIM(COALESCE(se.first_name, '') || ' ' || COALESCE(se.last_name, '')), ''), u.name) AS operator_name
+       FROM qc_results r
+       JOIN qc_control_lots l ON l.id = r.control_lot_id
+       LEFT JOIN staff_employees se ON se.id = r.operator_staff_employee_id
+       LEFT JOIN users u ON u.id = r.operator_user_id
+       WHERE r.lab_id = ? AND r.result_date >= ? AND ${onAnalyzer}
+         AND EXISTS (SELECT 1 FROM qc_rule_violations v WHERE v.qc_result_id = r.id AND v.superseded_at IS NULL)
+       ORDER BY r.result_date DESC, COALESCE(r.run_time, '') DESC, r.id DESC
+       LIMIT 500`
+    ).all(labId, since, inst.id, ...names) as any[];
+
+    const ids = runs.map((r) => r.id);
+    const ph = ids.map(() => "?").join(",");
+    const viol = ids.length ? sqlite.prepare(
+      `SELECT id, qc_result_id, rule_code, severity, detail, evaluated_at FROM qc_rule_violations
+       WHERE superseded_at IS NULL AND qc_result_id IN (${ph}) ORDER BY id`
+    ).all(...ids) as any[] : [];
+    const cas = ids.length ? sqlite.prepare(
+      `SELECT ca.id, ca.qc_result_id, ca.qc_rule_violation_id, ca.action_taken, ca.taken_at, ca.status, ca.follow_up_notes,
+              ca.nce_reference, ca.resolution_notes, ca.resolved_by_name, ca.resolved_at, u.name AS taken_by_name
+       FROM qc_corrective_actions ca LEFT JOIN users u ON u.id = ca.taken_by_user_id
+       WHERE ca.lab_id = ? AND ca.qc_result_id IN (${ph}) ORDER BY ca.id`
+    ).all(labId, ...ids) as any[] : [];
+    const notes = ids.length ? sqlite.prepare(
+      `SELECT id, qc_result_id, note, author_name, created_at FROM qc_result_notes WHERE qc_result_id IN (${ph}) ORDER BY id`
+    ).all(...ids) as any[] : [];
+    const findingIds = cas
+      .map((c) => (c.nce_reference && /^VeritaResponse#(\d+)$/.exec(c.nce_reference)) || null)
+      .filter(Boolean).map((m: any) => Number(m[1]));
+    const findings = findingIds.length ? sqlite.prepare(
+      `SELECT id, status, standard_ref, root_cause, corrective_action, preventive_action, completion_date, signed_by, signed_at
+       FROM findings WHERE lab_id = ? AND id IN (${findingIds.map(() => "?").join(",")})`
+    ).all(labId, ...findingIds) as any[] : [];
+    const findingById = new Map(findings.map((f) => [f.id, f]));
+
+    const failures = runs.map((r) => {
+      const runCas = cas.filter((c) => c.qc_result_id === r.id).map((c) => {
+        const m = c.nce_reference && /^VeritaResponse#(\d+)$/.exec(c.nce_reference);
+        return { ...c, finding: m ? findingById.get(Number(m[1])) || { id: Number(m[1]) } : null };
+      });
+      const v = viol.filter((x) => x.qc_result_id === r.id);
+      return {
+        ...r,
+        matched_by: r.map_instrument_id === inst.id ? "linked" : "name",
+        violations: v,
+        has_rejection: v.some((x) => x.severity === "rejection"),
+        corrective_actions: runCas,
+        notes: notes.filter((n) => n.qc_result_id === r.id),
+      };
+    });
+
+    const equipment = sqlite.prepare(
+      `SELECT id, instrument_name, manufacturer, model, serial_number, location, status, map_instrument_id
+       FROM lab_equipment WHERE lab_id = ? AND (map_instrument_id = ? OR (map_instrument_id IS NULL AND LOWER(TRIM(instrument_name)) IN (${nameIn})))`
+    ).all(labId, inst.id, ...names) as any[];
+    const eqIds = equipment.map((e) => e.id);
+    const maintenance = eqIds.length ? sqlite.prepare(
+      `SELECT ev.id, ev.equipment_id, ev.event_type, ev.event_date, ev.performed_by, ev.next_due_date, ev.notes, e.instrument_name
+       FROM equipment_maintenance_events ev JOIN lab_equipment e ON e.id = ev.equipment_id
+       WHERE ev.lab_id = ? AND ev.equipment_id IN (${eqIds.map(() => "?").join(",")}) AND ev.event_date >= ?
+       ORDER BY ev.event_date DESC, ev.id DESC`
+    ).all(labId, ...eqIds, since) as any[] : [];
+
+    const rejections = failures.filter((f) => f.has_rejection);
+    const allCas = failures.flatMap((f) => f.corrective_actions);
+    res.json({
+      instrument: inst,
+      period: { since, days },
+      summary: {
+        runs: totals?.runs ?? 0,
+        runs_with_flags: failures.length,
+        rejections: rejections.length,
+        rejections_without_action: rejections.filter((f) => f.corrective_actions.length === 0).length,
+        corrective_actions: allCas.length,
+        corrective_actions_open: allCas.filter((c) => !c.resolved_at).length,
+        corrective_actions_closed: allCas.filter((c) => !!c.resolved_at).length,
+        maintenance_events: maintenance.length,
+      },
+      failures,
+      equipment,
+      maintenance,
+    });
   });
 
   // MLC-2b: VeritaPT submission-deadline reminder config (lab-scoped). Drives the

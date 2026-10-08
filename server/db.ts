@@ -4040,7 +4040,9 @@ sqlite.exec(`
 {
   try {
     const eqCols = (sqlite.prepare("PRAGMA table_info(lab_equipment)").all() as { name: string }[]).map(c => c.name);
-    void eqCols; // Future ALTER TABLE lab_equipment ADD COLUMN ... blocks go here.
+    // 2026-10-08: link an equipment record to the analyzer on the VeritaMap test
+    // menu, so its calibration and maintenance join that analyzer's QC trail.
+    if (!eqCols.includes("map_instrument_id")) sqlite.exec("ALTER TABLE lab_equipment ADD COLUMN map_instrument_id INTEGER");
     const evCols = (sqlite.prepare("PRAGMA table_info(equipment_maintenance_events)").all() as { name: string }[]).map(c => c.name);
     void evCols; // Future ALTER TABLE equipment_maintenance_events ADD COLUMN ... blocks go here.
   } catch {}
@@ -6693,11 +6695,24 @@ try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as a
   //   'westgard' = full Westgard rules against the manufacturer mean/SD
   //   'range'    = pass/fail on the manufacturer's published range only
   ensure("qc_rule_settings", "establishing_rules", "ALTER TABLE qc_rule_settings ADD COLUMN establishing_rules TEXT NOT NULL DEFAULT 'westgard'");
+  // Per-analyzer QC trail (2026-10-08, St. Charles: "trace a QC failure,
+  // corrective action, and resolution for a specific analyzer"). A run points at
+  // its analyzer through the VeritaMap instrument id (the test-system id IQCP,
+  // competency and verification already use); qc_results.instrument stays as
+  // the display snapshot and the fallback for runs recorded before this.
+  ensure("qc_results", "map_instrument_id", "ALTER TABLE qc_results ADD COLUMN map_instrument_id INTEGER");
+  // Close-out of a corrective action: what fixed it, who closed it, when.
+  // Recorded once and never edited (it is part of the QC record).
+  ensure("qc_corrective_actions", "resolution_notes",    "ALTER TABLE qc_corrective_actions ADD COLUMN resolution_notes TEXT");
+  ensure("qc_corrective_actions", "resolved_by_user_id", "ALTER TABLE qc_corrective_actions ADD COLUMN resolved_by_user_id INTEGER");
+  ensure("qc_corrective_actions", "resolved_by_name",    "ALTER TABLE qc_corrective_actions ADD COLUMN resolved_by_name TEXT");
+  ensure("qc_corrective_actions", "resolved_at",         "ALTER TABLE qc_corrective_actions ADD COLUMN resolved_at TEXT");
 }
 
 // VeritaQC indexes for the read paths Phase 1 will hit hardest.
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_control_lots_lab ON qc_control_lots(lab_id, status)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_results_lot_date ON qc_results(control_lot_id, result_date)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_results_map_instrument ON qc_results(map_instrument_id, result_date)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_results_lab_date ON qc_results(lab_id, result_date DESC)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_rule_violations_result ON qc_rule_violations(qc_result_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_corrective_actions_result ON qc_corrective_actions(qc_result_id)`); } catch {}
