@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
-import { useIsReadOnly } from "@/components/SubscriptionBanner";
+import { useIsReadOnly, useCanRecord } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -122,7 +122,9 @@ function EquipmentRemindersPanel({ apiBase }: { apiBase: string }) {
 
 export default function EquipmentAppPage() {
   const { user, isLoggedIn } = useAuth();
-  const isReadOnly = useIsReadOnly("veritascan");
+  const isReadOnly = useIsReadOnly("veritamaintain");
+  // Logging a maintenance event is recording work, open to every lab member.
+  const canRecord = useCanRecord();
   const activeLabId = useActiveLabId();
   const { toast } = useToast();
 
@@ -342,7 +344,7 @@ export default function EquipmentAppPage() {
                       <td className="py-2 pr-2">{statusBadge(e.maintenance_status)}</td>
                       <td className="py-2 pr-2">
                         <div className="flex flex-wrap gap-1.5">
-                          <Button size="sm" variant="outline" onClick={() => openLogEvent(e)} disabled={isReadOnly}>Log maintenance</Button>
+                          <Button size="sm" variant="outline" onClick={() => openLogEvent(e)} disabled={!canRecord}>Log maintenance</Button>
                           <Button size="sm" variant="ghost" onClick={() => openHistory(e)}>History</Button>
                           <Button size="sm" variant="ghost" onClick={() => openEdit(e)} disabled={isReadOnly}>Edit</Button>
                           <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => retire(e)} disabled={isReadOnly}>Retire</Button>

@@ -126,6 +126,7 @@ export default function AccountSettingsPage() {
     { key: 'veritastock',  label: 'VeritaStock™' },
     { key: 'veritaops',    label: 'VeritaOps™' },
     { key: 'veritamaintain', label: 'VeritaMaintain™' },
+    { key: 'veritaqc', label: 'VeritaQC™' },
     { key: 'veritapt',     label: 'VeritaPT™' },
     { key: 'veritapolicy', label: 'VeritaDC™' },
     { key: 'veritalab',    label: 'VeritaLab™' },
