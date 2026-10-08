@@ -32,7 +32,9 @@ test.describe("VeritaCheck analyte multi-select", () => {
     // List view: open the first package card. Detail view (deep link): skip.
     const analytesTab = page.getByTestId("tab-analytes");
     if (!(await analytesTab.isVisible().catch(() => false))) {
-      const firstCard = page.locator(".cursor-pointer.group").first();
+      // Skip throwaway packages other specs create (named "... (delete me)"):
+      // a leftover or a concurrent run's temp package has no instrument menu.
+      const firstCard = page.locator(".cursor-pointer.group").filter({ hasNotText: "(delete me)" }).first();
       await expect(firstCard, "at least one verification package on the list").toBeVisible();
       await firstCard.click();
     }
