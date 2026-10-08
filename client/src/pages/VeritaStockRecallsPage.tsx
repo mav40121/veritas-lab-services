@@ -739,6 +739,12 @@ const EVENT_LABEL: Record<string, string> = {
   stock_removed: "Stock removed", intake_notice_sent: "Notification list emailed", closeout_notice_sent: "Action taken emailed",
   signed_off: "Signed off", closed: "Case closed", overdue_reminder: "Overdue reminder sent",
 };
+const FIELD_LABEL: Record<string, string> = {
+  notice_type: "type", notice_date: "notice date", vendor: "vendor", product: "product", recall_number: "recall number",
+  lot_numbers_json: "lot numbers", details: "details", assigned_user_id: "assigned manager", due_date: "due date",
+  affected_summary: "what was affected", corrective_action: "corrective action",
+  vendor_response_sent_on: "vendor response date", vendor_response_not_required: "vendor response not required",
+};
 function eventSummary(e: RecallEvent): string {
   let d: any = null;
   try { d = e.detail ? JSON.parse(e.detail) : null; } catch { return e.detail || ""; }
@@ -747,7 +753,7 @@ function eventSummary(e: RecallEvent): string {
     case "stock_removed": return `${d.item_name}, lot ${d.lot_number}: ${d.qty} ${d.unit || ""}${d.lab_name ? ` at ${d.lab_name}` : ""}`;
     case "file_added": case "file_removed": return d.filename || "";
     case "intake_notice_sent": case "closeout_notice_sent": return `${(d.to || []).length} recipient${(d.to || []).length === 1 ? "" : "s"}${d.attachments ? `, ${d.attachments} attachment${d.attachments === 1 ? "" : "s"}` : ""}`;
-    case "updated": return [(d.fields || []).join(", "), d.signoff_cleared ? "sign-off reset" : "", d.closeout_notice_cleared ? "closeout email reset" : ""].filter(Boolean).join("; ");
+    case "updated": return [(d.fields || []).map((f: string) => FIELD_LABEL[f] || f).join(", "), d.signoff_cleared ? "sign-off reset" : "", d.closeout_notice_cleared ? "closeout email reset" : ""].filter(Boolean).join("; ");
     case "opened": return `due ${fmtDate(d.due_date)}`;
     case "overdue_reminder": return `${d.days_overdue} days overdue, to ${d.to}`;
     default: return "";
