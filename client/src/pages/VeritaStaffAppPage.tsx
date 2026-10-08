@@ -34,6 +34,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DocumentLinkDialog, STAFF_DOC_TYPES, expirationStatus } from "@/components/DocumentLinkDialog";
 import { EmployeeInstrumentsPickerDialog, type LabInstrument, instrumentLabel } from "@/components/EmployeeInstrumentsPickerDialog";
 import { InstrumentStaffAssignDialog } from "@/components/InstrumentStaffAssignDialog";
+import { RosterMembersPrompt, rosterPromptKey, type RosterMember } from "@/components/RosterMembersPrompt";
 import { getStaffTitleLabel, getStaffTitleGroups } from "@shared/staffTitles";
 import { FREE_CEU_CATALOG, FREE_CEU_VERIFIED } from "@shared/freeCeuCatalog";
 
@@ -201,6 +202,8 @@ export default function VeritaStaffAppPage() {
   const [showLabSetup, setShowLabSetup] = useState(false);
   const [showAddEmployee, setShowAddEmployee] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  // Roster prompt: the lab member whose "Add to roster" opened the Add Employee form.
+  const [addFromMember, setAddFromMember] = useState<RosterMember | null>(null);
   const [showCompetency, setShowCompetency] = useState<Employee | null>(null);
   const [generating209, setGenerating209] = useState(false);
   const [generatingPacket, setGeneratingPacket] = useState(false);
@@ -511,6 +514,11 @@ export default function VeritaStaffAppPage() {
         );
       })()}
 
+      {/* Roster prompt (2026-10-08): lab members who are not on the roster yet. */}
+      {lab && activeLabId && !readOnly && (
+        <RosterMembersPrompt labId={activeLabId} onAdd={(m) => { setEditingEmployee(null); setAddFromMember(m); setShowAddEmployee(true); }} />
+      )}
+
       {/* Employee List */}
       {empLoading ? (
         <p className="text-muted-foreground">Loading employees...</p>
@@ -588,9 +596,10 @@ export default function VeritaStaffAppPage() {
       {/* Add/Edit Employee Dialog */}
       <EmployeeDialog
         open={showAddEmployee || !!editingEmployee}
-        onOpenChange={(open) => { if (!open) { setShowAddEmployee(false); setEditingEmployee(null); } }}
+        onOpenChange={(open) => { if (!open) { setShowAddEmployee(false); setEditingEmployee(null); setAddFromMember(null); } }}
         employee={editingEmployee}
         lab={lab ?? null}
+        fromMember={editingEmployee ? null : addFromMember}
       />
 
       {/* Competency Dialog */}
@@ -962,8 +971,10 @@ function EntireLabNote({ labSpecialties }: { labSpecialties: number[] }) {
 
 // ── Add/Edit Employee Dialog ──────────────────────────────────────────
 
-function EmployeeDialog({ open, onOpenChange, employee, lab }: {
+function EmployeeDialog({ open, onOpenChange, employee, lab, fromMember = null }: {
   open: boolean; onOpenChange: (v: boolean) => void; employee: Employee | null; lab: Lab | null;
+  // Roster prompt "Add to roster": pre-fill the name and tie the new entry to this login.
+  fromMember?: RosterMember | null;
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -1039,10 +1050,10 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
       });
       setRoles(employee.roles.map((r) => ({ role: r.role, specialtyNumber: r.specialty_number, allSpecialties: !!r.all_specialties })));
     } else {
-      setForm({ lastName: "", firstName: "", middleInitial: "", title: "", titleCode: "", hireDate: "", qualificationsText: "", qualificationsVerifiedAt: "", qualificationsVerifiedBy: "", highestComplexity: "H", performsTesting: true, canAdjustInventory: false, canViewAudit: false });
+      setForm({ lastName: fromMember?.lastName ?? "", firstName: fromMember?.firstName ?? "", middleInitial: "", title: "", titleCode: "", hireDate: "", qualificationsText: "", qualificationsVerifiedAt: "", qualificationsVerifiedBy: "", highestComplexity: "H", performsTesting: true, canAdjustInventory: false, canViewAudit: false });
       setRoles([]);
     }
-  }, [employee, open]);
+  }, [employee, open, fromMember]);
 
   // CMS-209 Part B: load the lab's specialty list so the "Entire lab" TC/TS
   // option can preview what it expands to on the 209.
@@ -1117,10 +1128,11 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
       const res = await fetch(url, {
         method,
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, roles }),
+        body: JSON.stringify({ ...form, roles, ...(!isEdit && fromMember && activeLabId ? { loginUserId: fromMember.userId } : {}) }),
       });
       if (!res.ok) throw new Error(await res.text());
       await queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).endsWith('/staff/employees') });
+      if (activeLabId) await queryClient.invalidateQueries({ queryKey: [rosterPromptKey(activeLabId)] });
       toast({ title: isEdit ? "Employee updated" : "Employee added" });
       onOpenChange(false);
     } catch (err: any) {
@@ -1182,6 +1194,11 @@ function EmployeeDialog({ open, onOpenChange, employee, lab }: {
           <DialogTitle>{isEdit ? "Edit Employee" : "Add Employee"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          {!isEdit && fromMember && (
+            <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs" data-testid="employee-from-member">
+              Adding <span className="font-medium">{fromMember.email}</span> to the roster. This entry will be linked to their login. Confirm the name, title, roles and whether they perform testing.
+            </div>
+          )}
           <div className="grid grid-cols-5 gap-3">
             <div className="col-span-2">
               <label className="text-sm font-medium">Last Name *</label>
