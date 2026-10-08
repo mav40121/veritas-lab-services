@@ -125,7 +125,7 @@ export default function VeritaResponseAppPage() {
   const isPt = newSourceType === "pt_failure";
   const isNce = newSourceType === "internal_nce";
 
-  const hasPlanAccess = !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
+  const hasPlanAccess = !!user?.plan && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
   // Multi-Lab Tier 2 Phase 3.10b: lab-scope reads/writes.
   const activeLabId = useActiveLabId();

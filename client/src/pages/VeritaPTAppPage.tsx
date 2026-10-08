@@ -213,7 +213,7 @@ export default function VeritaPTAppPage() {
   const [newAaaLastDate, setNewAaaLastDate] = useState("");
   const [newAaaPassFail, setNewAaaPassFail] = useState<"pending" | "pass" | "fail">("pending");
 
-  const hasPlanAccess = !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
+  const hasPlanAccess = !!user?.plan && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
   const fetchData = async () => {
     setLoading(true);

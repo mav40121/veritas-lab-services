@@ -441,7 +441,7 @@ export default function VeritaResponseFindingPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const hasPlanAccess = !!user?.plan && user.plan !== "free" && user.plan !== "per_study";
+  const hasPlanAccess = !!user?.plan && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
   const fetchFinding = async () => {
     if (!id) return;
