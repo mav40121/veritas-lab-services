@@ -16,7 +16,8 @@
 //      OWNER or WRITER
 //   2. recording stays open: STAFF and MEMBER can enter a QC result, add a note
 //      and file a corrective action
-//   3. excluding a run from the baseline is 403 for STAFF, allowed for OWNER
+//   3. a STAFF corrective action with exclude checked is still filed, but the
+//      run stays in the baseline (and the response says why); OWNER excludes it
 //
 // Run (Windows, from bash): DB_PATH=.tmp-ssg.db JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy npx tsx tests/integration/staff-setup-gates.test.ts
 import http from "node:http";
@@ -129,9 +130,11 @@ async function main() {
   const stillAccepted = (sqlite.prepare("SELECT accepted_for_reporting FROM qc_results WHERE id = ?").get(r3) as any)?.accepted_for_reporting;
   const exOwner = await call("POST", `${L}/qc/corrective-actions`, { qc_result_id: r3, action_taken: "Reran", exclude_from_baseline: true }, OWNER.token);
   const nowExcluded = (sqlite.prepare("SELECT accepted_for_reporting FROM qc_results WHERE id = ?").get(r3) as any)?.accepted_for_reporting;
-  check("3. exclude from baseline: STAFF 403 and the run stays in; OWNER allowed and the run is excluded",
-    exStaff.status === 403 && stillAccepted === 1 && exOwner.ok && nowExcluded === 0,
-    JSON.stringify({ staff: exStaff.status, after_staff: stillAccepted, owner: exOwner.status, after_owner: nowExcluded }));
+  const exStaffBody = await exStaff.clone().json().catch(() => ({}));
+  check("3. exclude from baseline: STAFF's corrective action is filed but the run stays in (told why); OWNER's excludes it",
+    exStaff.ok && !!exStaffBody.corrective_action_id && exStaffBody.excluded_from_baseline === false && !!exStaffBody.exclude_not_applied
+    && stillAccepted === 1 && exOwner.ok && nowExcluded === 0,
+    JSON.stringify({ staff: exStaff.status, staff_excluded: exStaffBody.excluded_from_baseline, after_staff: stillAccepted, owner: exOwner.status, after_owner: nowExcluded }));
 
   server.close();
   console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
