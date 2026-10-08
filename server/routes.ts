@@ -45,6 +45,7 @@ import { normalizeLineItems, computeOrgInvoice, laterExpiry, orgSubscriptionExpi
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard";
+import { legacySeatForUser, seatForRequest } from "./seatContext";
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
 import { isValidIfuUrl } from "@shared/ifu";
@@ -892,10 +893,16 @@ function authMiddleware(req: any, res: any, next: any) {
       grandfathered: Number(fullRow?.grandfathered ?? 0) === 1,
     };
 
-    // Check if this user is a seat user
-    const seatRow = (db as any).$client.prepare(
-      "SELECT owner_user_id, permissions, seat_type FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
-    ).get(req.userId) as any;
+    // Check if this user is acting under a seat. Lab-aware since #82
+    // (2026-10-08): an OWNER is only a seat user inside a lab where they hold
+    // that seat; the old first-seat-anywhere lookup made Michael a seat of
+    // St. Charles (user 81) on every request. Non-owners are unchanged.
+    // See server/seatContext.ts.
+    const ctxLabId = (() => {
+      const n = Number(req.params?.labId);
+      return Number.isFinite(n) && n > 0 ? n : activeLabIdFromContext(req);
+    })();
+    const seatRow = seatForRequest((db as any).$client, req.userId, ctxLabId, "owner_user_id, permissions, seat_type") as any;
 
     if (seatRow) {
       req.isSeatUser = true;
@@ -1250,9 +1257,8 @@ function resolveLabForUser(userId: number): any | null {
     return sqlite.prepare("SELECT * FROM labs WHERE id = ?").get(firstMembership.lab_id);
   }
   // Seat user with no direct membership: fall back to the seat owner's home lab.
-  const seatRow = sqlite.prepare(
-    "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
-  ).get(userId) as any;
+  // Owners never resolve to another owner's seat here (#82).
+  const seatRow = legacySeatForUser(sqlite, userId) as any;
   if (seatRow) {
     const ownerRow = sqlite.prepare(
       "SELECT lab_id FROM users WHERE id = ?"
@@ -1315,9 +1321,7 @@ function resolveActiveLabForRequest(userId: number, req: any): any | null {
       // counts as the seat user's. Same read-only ownership/membership
       // check against the resolved owner_user_id.
       if (!mem) {
-        const seatOwner = (db as any).$client.prepare(
-          "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
-        ).get(userId) as any;
+        const seatOwner = legacySeatForUser((db as any).$client, userId) as any; // #82: owners never borrow another owner's seat
         if (seatOwner) {
           const seatMem = (db as any).$client.prepare(
             `SELECT 1 AS ok FROM labs WHERE id = ? AND owner_user_id = ?
@@ -2297,6 +2301,60 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ipAddress: req.ip,
     });
     res.json({ ok: true, table, id, name: row.name, before: row.finding_due_days ?? null, after: value, affectedLabs });
+  });
+
+  // Admin: re-attribute records that were stamped with the wrong user id
+  // (parking lot #82, 2026-10-08). From 2026-10-01 the auth layer resolved
+  // Michael (17) as a seat of St. Charles' owner (81), so rows he created in his
+  // OWN labs carry user_id 81. Moves rows from fromUserId to toUserId, only in
+  // the named labs, only where each lab is owned by toUserId (so a row can only
+  // move to the owner of the lab it lives in), only in the allowlisted tables.
+  // dryRun reports per-table ids without writing. Audit-logged per table.
+  app.post("/api/admin/reattribute-records", (req: any, res) => {
+    const { secret, fromUserId, toUserId, labIds, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const from = Number(fromUserId), to = Number(toUserId);
+    if (!Number.isInteger(from) || !Number.isInteger(to) || from <= 0 || to <= 0 || from === to) {
+      return res.status(400).json({ error: "fromUserId and toUserId must be different positive integers" });
+    }
+    if (!Array.isArray(labIds) || labIds.length === 0 || labIds.some((x: any) => !Number.isInteger(Number(x)) || Number(x) <= 0)) {
+      return res.status(400).json({ error: "labIds must be a non-empty array of lab ids" });
+    }
+    const sqlite = (db as any).$client;
+    const labs = labIds.map((x: any) => Number(x));
+    for (const id of labs) {
+      const lab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(id) as any;
+      if (!lab) return res.status(404).json({ error: `lab ${id} not found` });
+      if (Number(lab.owner_user_id) !== to) return res.status(400).json({ error: `lab ${id} is not owned by user ${to}` });
+    }
+    const TABLES = ["studies", "veritatrack_tasks", "veritatrack_signoffs", "veritacheck_verifications"];
+    const ph = labs.map(() => "?").join(",");
+    const report: Record<string, number[]> = {};
+    for (const t of TABLES) {
+      const cols = (sqlite.prepare(`PRAGMA table_info(${t})`).all() as any[]).map((c) => c.name);
+      if (!cols.includes("user_id") || !cols.includes("lab_id")) continue;
+      report[t] = (sqlite.prepare(`SELECT id FROM ${t} WHERE user_id = ? AND lab_id IN (${ph}) ORDER BY id`).all(from, ...labs) as any[]).map((r) => r.id);
+    }
+    const total = Object.values(report).reduce((n, ids) => n + ids.length, 0);
+    if (dryRun === true) return res.json({ ok: true, dryRun: true, fromUserId: from, toUserId: to, labIds: labs, total, report });
+    const tx = sqlite.transaction(() => {
+      for (const [t, ids] of Object.entries(report)) {
+        if (ids.length === 0) continue;
+        sqlite.prepare(`UPDATE ${t} SET user_id = ? WHERE user_id = ? AND lab_id IN (${ph})`).run(to, from, ...labs);
+        logAudit({
+          userId: to,
+          module: "admin",
+          action: "update",
+          entityType: "admin.reattribute_records",
+          entityLabel: `${t}: ${ids.length} row(s) user ${from} -> ${to} in labs ${labs.join(",")}`,
+          before: { table: t, user_id: from, ids },
+          after: { table: t, user_id: to, ids },
+          ipAddress: req.ip,
+        });
+      }
+    });
+    tx();
+    res.json({ ok: true, dryRun: false, fromUserId: from, toUserId: to, labIds: labs, total, report });
   });
 
   app.post("/api/admin/add-lab-membership", (req, res) => {
@@ -6197,9 +6255,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Also check if user is already an active seat (e.g. manually attached via admin)
     let activeSeat: any = null;
     if (!seatInvite) {
-      activeSeat = (db as any).$client.prepare(
-        "SELECT id, owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
-      ).get(user.id) as any;
+      activeSeat = legacySeatForUser((db as any).$client, user.id, "id, owner_user_id") as any; // #82
       if (!activeSeat) {
         activeSeat = (db as any).$client.prepare(
           "SELECT id, owner_user_id FROM user_seats WHERE seat_email = ? AND status = 'active' LIMIT 1"
@@ -6501,10 +6557,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const deviceInfo = req.headers["user-agent"] || "Unknown";
 
-    // Resolve seat info
-    const seatInfo = (db as any).$client.prepare(
-      "SELECT owner_user_id, permissions FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
-    ).get(user.id) as any;
+    // Resolve seat info. #82: an owner's account-level plan and permissions are
+    // their own, never a seat they hold on someone else's lab.
+    const seatInfo = legacySeatForUser((db as any).$client, user.id, "owner_user_id, permissions") as any;
     const isSeatUser = !!seatInfo;
     let seatPermissions: Record<string, string> | null = null;
     if (seatInfo) {
@@ -6596,10 +6651,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       (db as any).$client.prepare("UPDATE user_sessions SET last_active = ? WHERE session_token = ? AND is_active = 1").run(new Date().toISOString(), sessionToken);
     }
 
-    // Resolve seat info
-    const seatInfo = (db as any).$client.prepare(
-      "SELECT owner_user_id, permissions FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
-    ).get(user.id) as any;
+    // Resolve seat info. #82: an owner's account-level plan and permissions are
+    // their own, never a seat they hold on someone else's lab.
+    const seatInfo = legacySeatForUser((db as any).$client, user.id, "owner_user_id, permissions") as any;
     const isSeatUser = !!seatInfo;
     let seatPermissions: Record<string, string> | null = null;
     if (seatInfo) {
@@ -11616,10 +11670,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             if (seatRow) effectiveUserId = seatRow.owner_user_id;
           }
         } else {
-          // Legacy fallback: no active-lab context.
-          const seatRow = (db as any).$client.prepare(
-            "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
-          ).get(payload.userId) as any;
+          // Legacy fallback: no active-lab context (#82: owners act as themselves).
+          const seatRow = legacySeatForUser((db as any).$client, payload.userId) as any;
           if (seatRow) effectiveUserId = seatRow.owner_user_id;
         }
         if (effectiveUserId !== study.userId) {
@@ -11734,10 +11786,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             }
           }
         } else {
-          // Legacy fallback: no active-lab context. Preserve global behavior.
-          seatRow = (db as any).$client.prepare(
-            "SELECT owner_user_id, permissions FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
-          ).get(payload.userId) as any;
+          // Legacy fallback: no active-lab context. Non-owners keep the global
+          // behavior; owners act as themselves (#82).
+          seatRow = legacySeatForUser((db as any).$client, payload.userId, "owner_user_id, permissions") as any;
           if (seatRow) {
             let perms: Record<string, string> = {};
             try { perms = JSON.parse(seatRow.permissions || '{}'); } catch {}
@@ -12800,9 +12851,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             if (standards.length > 0) preferredStandards = standards;
           } else {
             // Fallback: read from user record (pre-migration data)
-            const seatRow = (db as any).$client.prepare(
-              "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' LIMIT 1"
-            ).get(payload.userId) as any;
+            const seatRow = legacySeatForUser((db as any).$client, payload.userId) as any; // #82
             const effectiveUserId = seatRow ? seatRow.owner_user_id : payload.userId;
             const userRow = (db as any).$client.prepare("SELECT clia_number, clia_lab_name, preferred_standards FROM users WHERE id = ?").get(effectiveUserId) as any;
             cliaNumber = userRow?.clia_number || undefined;
