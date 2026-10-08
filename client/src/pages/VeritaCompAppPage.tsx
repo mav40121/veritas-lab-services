@@ -4117,7 +4117,7 @@ function NewAssessmentDialog({
 function QuizzesTab({ program }: { program: Program }) {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const isReadOnly = useIsReadOnly();
+  const isReadOnly = useIsReadOnly("veritacomp");
   const [newQuizOpen, setNewQuizOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<QuizListItem | null>(null);
   const [previewQuizId, setPreviewQuizId] = useState<number | null>(null);
