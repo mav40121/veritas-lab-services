@@ -560,6 +560,40 @@ antibiogram is a PDF deliverable or a live table.
 
 ---
 
+### 84. Staff logins see a different site than editors; move them into the main app with recording rights and setup locked
+
+**Effort:** M (1-2 weeks)
+**Importance:** High. A paying client's lead tech could not find QC after signing in, and every staff member at every client sees screens that do not match the training, the quick reference, or what their manager sees.
+
+**What:** Gameday Plymouth's lead tech (Elizabeth Bensinger, staff seat on lab
+29) signed in on 2026-10-07 and landed on Account Settings with the owner
+"Complete your lab setup" banner and Run a Study, and no path to QC; Mike
+Hiltunen: "looks nothing like mine." Root cause: the Staff Portal was built for
+the retired CLIA+PIN kiosk (no accounts, so a separate stripped screen); since
+2026-09-30 staff have real logins but stay behind that separate door. Today
+JoinPage sends every accepted seat to the lab dashboard, the NavBar has no
+Staff Portal link, /api/auth/me does not report the seat type, and a
+staff_portal seat gets no lab_members row, so the main lab API turns it away.
+Michael's decision (2026-10-08): one app for every login; the login type
+changes what you can do, never what you see. A staff login sees the same
+module screens as the editors in its lab (Levey-Jennings charts included),
+does the recording work (QC results, notes, corrective actions, task
+sign-offs, maintenance events, inventory counts, read-and-sign), and setup and
+authoring stay locked. Most of the plumbing exists: the 2026-10-03 access
+model (record = requireWriteAccess, author = requireModuleEdit) and the
+per-module useIsReadOnly UI (32 call sites). Work: a staff seat also creates a
+lab membership; every module separates recording buttons from setup buttons
+(audit each useIsReadOnly site so recording stays enabled); the /staff-access
+page becomes a "My sign-offs" list inside the app; backfill existing staff
+seats (MedStar has 9); keep blockNonOperatorSeat on account-wide endpoints;
+update the /qa-sweep two-way matrix (staff admitted to lab reads, blocked from
+authoring). Pricing unchanged: the Staff band covers record and read.
+
+**Source:** Michael, 2026-10-08 ("why can't she see what an editor can see and just not have some of the functionality?"; "When different staff [see] settings different ways, errors happen"), from Mike Hiltunen's 2026-10-07 screenshot.
+**Status:** Open. Decided; build right after the VeritaQC basis rebuild (PR #1529) ships. Mike told 2026-10-08 that the same screens are coming and given www.veritaslabservices.com/staff-access for today.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C88. Env-gated Playwright specs never ran in CI; two shipped unrunnable (was #74)
