@@ -25,7 +25,8 @@ import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCo
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
 import { labLocalDate } from "./dateLocal";
 import { scanPhi } from "./phiScan";
-import { evaluateWestgardForLot } from "./qcWestgard";
+import { evaluateQcRun, westgardRulesAt } from "./qcWestgard";
+import { resolveBasis, computeBasis, basisConfig, lockEstablishedIfDue, sampleStats, type QcBasis } from "./qcBasis";
 import { buildWasteReport, generateWasteReportPDF, generateWasteReportExcel, type WasteEventRow, type WasteReportContext } from "./wasteReport";
 import { entireLabFlag, sanitizeSpecialties, expandEntireLabRoles, cms209Gaps } from "./cms209Roles";
 import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution, analyteMatch, stampMapDatesFromStudies } from "./veritacheckCoverage";
@@ -3899,6 +3900,111 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, matched: before.length, before, after });
   });
 
+  // POST /api/admin/qc/rescore {secret, labIds, since, dryRun = true}
+  // Re-judge accepted runs dated on or after `since` against the evaluation
+  // basis in server/qcBasis.ts (2026-10-08, MedStar: the lab's own numbers once
+  // a lot has enough runs, the manufacturer's until then). Each run is judged the way
+  // it would have been on entry: against the runs that precede it on its lot.
+  // dryRun (the default) returns the before and after per run and writes
+  // nothing. A commit marks the old flags superseded (never deleted; a
+  // corrective action may point at one), inserts the new flags, stamps the
+  // basis on every re-scored run, locks each lot's established mean/SD where it
+  // has enough runs, and writes one audit row per lab. Excluded (not accepted)
+  // runs keep their flags; the tech already acted on them.
+  app.post("/api/admin/qc/rescore", (req: any, res) => {
+    const { secret, labIds, since, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const labs = (Array.isArray(labIds) ? labIds : []).map(Number).filter((n: number) => Number.isFinite(n) && n > 0);
+    if (labs.length === 0) return res.status(400).json({ error: "labIds (non-empty array) required" });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(since || ""))) return res.status(400).json({ error: "since must be YYYY-MM-DD" });
+    const commit = dryRun === false;
+    const sqlite = (db as any).$client;
+    const now = new Date().toISOString();
+    const reason = `rescore ${now.slice(0, 10)}: lab-established basis (server/qcBasis.ts)`;
+    const report: any[] = [];
+    const work: { resultId: number; after: any[]; basis: QcBasis | null; changed: boolean }[] = [];
+    const lotsTouched: { labId: number; lotId: number }[] = [];
+    for (const labId of labs) {
+      const lots = sqlite.prepare(
+        "SELECT id, lab_id, analyte, level, lot_number, mfr_mean, mfr_sd, mfr_range_low, mfr_range_high, lab_mean, lab_sd, lab_basis_n, lab_basis_locked_at, lab_basis_source, prior_lot_id FROM qc_control_lots WHERE lab_id = ? ORDER BY analyte, level, id"
+      ).all(labId) as any[];
+      const labOut: any = { labId, lots: [], changed: 0, unchanged: 0 };
+      for (const lot of lots) {
+        const hist = sqlite.prepare(
+          "SELECT id, result_value, result_date FROM qc_results WHERE lab_id = ? AND control_lot_id = ? AND accepted_for_reporting = 1 AND voided_at IS NULL ORDER BY result_date ASC, id ASC"
+        ).all(labId, lot.id) as any[];
+        if (!hist.some((h: any) => h.result_date >= since)) continue;
+        lotsTouched.push({ labId, lotId: lot.id });
+        const cfg = basisConfig(sqlite, labId, lot.analyte);
+        const st = sqlite.prepare(
+          "SELECT bias_consecutive_count, trend_consecutive_count FROM qc_rule_settings WHERE lab_id = ? AND (analyte = ? OR analyte IS NULL) ORDER BY (analyte IS NULL) ASC LIMIT 1"
+        ).get(labId, lot.analyte) as any;
+        const biasN = st?.bias_consecutive_count ?? 10;
+        const trendN = st?.trend_consecutive_count ?? 7;
+        // A basis an owner/admin set by hand stands; an automatic lock is
+        // recomputed so every run is judged as it would have been on entry.
+        const simLot = (lot.lab_basis_source === "manual" || lot.lab_basis_source === "all_runs")
+          ? lot : { ...lot, lab_mean: null, lab_sd: null };
+        const vals = hist.map((h: any) => Number(h.result_value));
+        const ids = hist.map((h: any) => h.id);
+        const lotOut: any = { lotId: lot.id, analyte: lot.analyte, level: lot.level, lot_number: lot.lot_number, runs: hist.length, changes: [] as any[], unchanged: 0 };
+        for (let i = 0; i < hist.length; i++) {
+          if (hist[i].result_date < since) continue;
+          const basis = computeBasis(simLot, vals.slice(0, i), cfg);
+          const after = westgardRulesAt(vals, ids, i, basis ? basis.mean : NaN, basis ? basis.sd : NaN, biasN, trendN);
+          const before = sqlite.prepare("SELECT rule_code, severity FROM qc_rule_violations WHERE qc_result_id = ? AND superseded_at IS NULL ORDER BY rule_code").all(ids[i]) as any[];
+          const bKey = before.map((v: any) => v.rule_code).sort().join(",");
+          const aKey = after.map((v) => v.rule_code).sort().join(",");
+          const changed = bKey !== aKey;
+          work.push({ resultId: ids[i], after, basis, changed });
+          if (changed) {
+            lotOut.changes.push({
+              result_id: ids[i], result_date: hist[i].result_date, value: vals[i],
+              before: bKey ? bKey.split(",") : [], after: aKey ? aKey.split(",") : [],
+              basis: basis ? { mean: Number(basis.mean.toFixed(4)), sd: Number(basis.sd.toFixed(4)), source: basis.source } : null,
+            });
+          } else lotOut.unchanged++;
+        }
+        labOut.changed += lotOut.changes.length;
+        labOut.unchanged += lotOut.unchanged;
+        const nextBasis = computeBasis(simLot, vals, cfg);
+        lotOut.basis_next_run = nextBasis ? nextBasis.label : null;
+        labOut.lots.push(lotOut);
+      }
+      report.push(labOut);
+    }
+    if (!commit) return res.json({ ok: true, dryRun: true, since, report });
+    const tx = sqlite.transaction(() => {
+      const sup = sqlite.prepare("UPDATE qc_rule_violations SET superseded_at = ?, superseded_reason = ? WHERE qc_result_id = ? AND superseded_at IS NULL");
+      const ins = sqlite.prepare("INSERT INTO qc_rule_violations (qc_result_id, rule_code, severity, detail, related_result_ids, evaluated_at) VALUES (?, ?, ?, ?, ?, ?)");
+      const stamp = sqlite.prepare("UPDATE qc_results SET basis_mean = ?, basis_sd = ?, basis_source = ? WHERE id = ?");
+      for (const w of work) {
+        if (w.basis) stamp.run(w.basis.mean, w.basis.sd, w.basis.source, w.resultId);
+        if (!w.changed) continue;
+        sup.run(now, reason, w.resultId);
+        for (const v of w.after) ins.run(w.resultId, v.rule_code, v.severity, v.detail, JSON.stringify(v.related_result_ids), now);
+      }
+      for (const t of lotsTouched) lockEstablishedIfDue(sqlite, t.labId, t.lotId);
+    });
+    try { tx(); } catch (err: any) {
+      console.error("[qc/rescore] failed:", err.message);
+      return res.status(500).json({ error: err.message || "rescore failed" });
+    }
+    for (const r of report) {
+      logAudit({
+        userId: 0,
+        module: "admin",
+        action: "update",
+        entityType: "admin.qc_rescore",
+        entityLabel: `lab ${r.labId}: ${r.changed} run(s) re-flagged, ${r.unchanged} unchanged since ${since}`,
+        after: { since, lots: r.lots.map((l: any) => ({ lotId: l.lotId, changes: l.changes.length })) },
+        ipAddress: req.ip,
+      });
+    }
+    console.log(`[qc/rescore] committed labs=${labs.join(",")} since=${since}`);
+    res.json({ ok: true, dryRun: false, since, report });
+  });
+
   // ─── VeritaQC Phase 1A: Westgard evaluator + result POST ─────────────────
   // Phase 0 shipped the schema. Phase 1A adds the server-side rule evaluator
   // and the customer endpoint that tech staff use to log a QC result. The
@@ -3962,7 +4068,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const biasN = settings?.bias_consecutive_count ?? 10;
     const trendN = settings?.trend_consecutive_count ?? 7;
 
-    const violations = evaluateWestgardForLot(sqlite, req.scope.labId, Number(control_lot_id), newResultId, biasN, trendN);
+    const { violations, basis } = evaluateQcRun(sqlite, req.scope.labId, Number(control_lot_id), newResultId, biasN, trendN);
+    if (basis) sqlite.prepare("UPDATE qc_results SET basis_mean = ?, basis_sd = ?, basis_source = ? WHERE id = ?").run(basis.mean, basis.sd, basis.source, newResultId);
 
     const insertViol = sqlite.prepare(
       "INSERT INTO qc_rule_violations (qc_result_id, rule_code, severity, detail, related_result_ids, evaluated_at) VALUES (?, ?, ?, ?, ?, ?)"
@@ -3980,6 +4087,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       violations: storedViolations,
       requires_corrective_action,
       settings_used: { bias_consecutive_count: biasN, trend_consecutive_count: trendN },
+      basis,
     });
   });
 
@@ -3994,9 +4102,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/staff-portal-session/qc/lots", staffPortalAuthMiddleware, (req: any, res) => {
     const sqlite = (db as any).$client;
     const lots = sqlite.prepare(
-      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, expiration_date, status FROM qc_control_lots WHERE lab_id = ? AND status = 'active' ORDER BY analyte ASC, lot_number ASC"
-    ).all(req.staffPortalLabId);
-    res.json({ lots });
+      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, status FROM qc_control_lots WHERE lab_id = ? AND status = 'active' ORDER BY analyte ASC, lot_number ASC"
+    ).all(req.staffPortalLabId) as any[];
+    res.json({ lots: lots.map((l) => ({ ...l, basis: resolveBasis(sqlite, req.staffPortalLabId, l.id) })) });
   });
 
   app.get("/api/staff-portal-session/qc/results", staffPortalAuthMiddleware, (req: any, res) => {
@@ -4089,7 +4197,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const biasN = settings?.bias_consecutive_count ?? 10;
     const trendN = settings?.trend_consecutive_count ?? 7;
 
-    const violations = evaluateWestgardForLot(sqlite, req.staffPortalLabId, Number(control_lot_id), newResultId, biasN, trendN);
+    const { violations, basis } = evaluateQcRun(sqlite, req.staffPortalLabId, Number(control_lot_id), newResultId, biasN, trendN);
+    if (basis) sqlite.prepare("UPDATE qc_results SET basis_mean = ?, basis_sd = ?, basis_source = ? WHERE id = ?").run(basis.mean, basis.sd, basis.source, newResultId);
     const insertViol = sqlite.prepare(
       "INSERT INTO qc_rule_violations (qc_result_id, rule_code, severity, detail, related_result_ids, evaluated_at) VALUES (?, ?, ?, ?, ?, ?)"
     );
@@ -4099,7 +4208,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       storedViolations.push({ id: Number(r.lastInsertRowid), ...v });
     }
     const requires_corrective_action = violations.some((v: any) => v.severity === "rejection");
-    res.json({ ok: true, result_id: newResultId, violations: storedViolations, requires_corrective_action });
+    res.json({ ok: true, result_id: newResultId, violations: storedViolations, requires_corrective_action, basis });
   });
 
   // ─── VeritaQC Phase 1B: entry-UI support endpoints ───────────────────────
@@ -4115,8 +4224,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const sqlite = (db as any).$client;
     const lots = sqlite.prepare(
       "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, status, prior_lot_id, created_at, updated_at FROM qc_control_lots WHERE lab_id = ? ORDER BY (status = 'active') DESC, analyte ASC, lot_number ASC"
-    ).all(req.scope.labId);
-    res.json({ lots });
+    ).all(req.scope.labId) as any[];
+    // basis = the mean/SD that judges the lot's next run (server/qcBasis.ts);
+    // the chart draws it so the chart and the Westgard flags always agree.
+    res.json({ lots: lots.map((l) => ({ ...l, basis: resolveBasis(sqlite, req.scope.labId, l.id) })) });
   });
 
   // POST /api/labs/:labId/qc/control-lots — add a new control lot for this lab.
@@ -4256,6 +4367,61 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   //       mfr_range_low?, mfr_range_high?, expiration_date?, opened_date?,
   //       retire_prior? (default true).
   // Returns 409 on the (lab_id, analyte, lot_number) UNIQUE violation.
+  // POST /api/labs/:labId/qc/control-lots/:id/establish
+  // Owner/admin sets the lab's own mean/SD for a lot (server/qcBasis.ts):
+  //   { mode: "all_runs" }            from every accepted run on file
+  //   { mode: "manual", mean, sd }    values the lab established elsewhere
+  //   { mode: "auto" }                clear it; the lot re-locks from its first
+  //                                   establish_n runs on the next entry
+  // Runs already on file keep their flags (a re-score is a separate, approved
+  // step); new runs are judged against the new basis.
+  app.post("/api/labs/:labId/qc/control-lots/:id/establish", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!(req.scope?.role === "owner" || req.scope?.role === "admin")) {
+      return res.status(403).json({ error: "Only the lab owner or an admin can set the lab's established mean and SD." });
+    }
+    const lotId = Number(req.params.id);
+    const sqlite = (db as any).$client;
+    const lot = sqlite.prepare(
+      "SELECT id, analyte, level, lot_number, lab_mean, lab_sd, lab_basis_n, lab_basis_source FROM qc_control_lots WHERE id = ? AND lab_id = ?"
+    ).get(lotId, req.scope.labId) as any;
+    if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
+    const mode = String((req.body || {}).mode || "");
+    const now = new Date().toISOString();
+    let mean: number | null = null, sd: number | null = null, n: number | null = null, source: string | null = null, lockedAt: string | null = null;
+    if (mode === "all_runs") {
+      const vals = (sqlite.prepare(
+        "SELECT result_value FROM qc_results WHERE lab_id = ? AND control_lot_id = ? AND accepted_for_reporting = 1 AND voided_at IS NULL"
+      ).all(req.scope.labId, lotId) as any[]).map((r) => Number(r.result_value));
+      const st = sampleStats(vals);
+      if (vals.length < 2 || !Number.isFinite(st.sd) || st.sd <= 0) {
+        return res.status(400).json({ error: `Need at least 2 accepted runs with some spread to establish a mean and SD (this lot has ${vals.length}).` });
+      }
+      mean = st.mean; sd = st.sd; n = vals.length; source = "all_runs"; lockedAt = now;
+    } else if (mode === "manual") {
+      const m = Number((req.body || {}).mean), d = Number((req.body || {}).sd);
+      if (!Number.isFinite(m)) return res.status(400).json({ error: "mean must be a number" });
+      if (!Number.isFinite(d) || d <= 0) return res.status(400).json({ error: "sd must be a positive number" });
+      mean = m; sd = d; source = "manual"; lockedAt = now;
+    } else if (mode !== "auto") {
+      return res.status(400).json({ error: "mode must be all_runs, manual or auto" });
+    }
+    sqlite.prepare(
+      "UPDATE qc_control_lots SET lab_mean = ?, lab_sd = ?, lab_basis_n = ?, lab_basis_locked_at = ?, lab_basis_source = ?, lab_basis_set_by_user_id = ?, updated_at = ? WHERE id = ? AND lab_id = ?"
+    ).run(mean, sd, n, lockedAt, source, mode === "auto" ? null : req.userId, now, lotId, req.scope.labId);
+    logAudit({
+      userId: req.userId,
+      module: "veritaqc",
+      action: "update",
+      entityType: "qc_control_lot.established_basis",
+      entityId: lotId,
+      entityLabel: `${lot.analyte} ${lot.level} lot ${lot.lot_number}: ${mode}`,
+      before: { lab_mean: lot.lab_mean, lab_sd: lot.lab_sd, lab_basis_n: lot.lab_basis_n, lab_basis_source: lot.lab_basis_source },
+      after: { lab_mean: mean, lab_sd: sd, lab_basis_n: n, lab_basis_source: source },
+      ipAddress: req.ip,
+    });
+    res.json({ ok: true, basis: resolveBasis(sqlite, req.scope.labId, lotId) });
+  });
+
   app.post("/api/labs/:labId/qc/control-lots/:id/changeover", authMiddleware, labScopeMiddleware, (req: any, res) => {
     const priorId = Number(req.params.id);
     if (!Number.isFinite(priorId) || priorId <= 0) {
@@ -4379,25 +4545,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (rows.length > 0) {
       const rph = rows.map(() => "?").join(",");
       const vrows = sqlite.prepare(
-        "SELECT DISTINCT qc_result_id FROM qc_rule_violations WHERE severity = 'rejection' AND qc_result_id IN (" + rph + ")"
+        "SELECT DISTINCT qc_result_id FROM qc_rule_violations WHERE severity = 'rejection' AND superseded_at IS NULL AND qc_result_id IN (" + rph + ")"
       ).all(...rows.map(r => r.id)) as any[];
       for (const v of vrows) rejected.add(v.qc_result_id);
     }
-    const points = rows.map(r => ({
-      id: r.id,
-      control_lot_id: r.control_lot_id,
-      lot_number: r.lot_number,
-      result_value: r.result_value,
-      result_date: r.result_date,
-      run_time: r.run_time,
-      instrument: r.instrument,
-      accepted_for_reporting: r.accepted_for_reporting,
-      mfr_mean: r.mfr_mean,
-      mfr_sd: r.mfr_sd,
-      sdi: r.mfr_sd > 0 ? (r.result_value - r.mfr_mean) / r.mfr_sd : 0,
-      is_rejection: rejected.has(r.id),
-    }));
-    res.json({ analyte, level, lots, points });
+    // Each point is measured against its OWN lot's evaluation basis (the same
+    // mean/SD the Westgard rules and the per-lot chart use), so a lot change
+    // re-centers on the new lot.
+    const basisByLot = new Map<number, QcBasis | null>();
+    for (const l of lots) basisByLot.set(l.id, resolveBasis(sqlite, req.scope.labId, l.id));
+    const points = rows.map(r => {
+      const b = basisByLot.get(r.control_lot_id);
+      return {
+        id: r.id,
+        control_lot_id: r.control_lot_id,
+        lot_number: r.lot_number,
+        result_value: r.result_value,
+        result_date: r.result_date,
+        run_time: r.run_time,
+        instrument: r.instrument,
+        accepted_for_reporting: r.accepted_for_reporting,
+        mfr_mean: r.mfr_mean,
+        mfr_sd: r.mfr_sd,
+        basis_mean: b ? b.mean : null,
+        basis_sd: b ? b.sd : null,
+        sdi: b && b.sd > 0 ? (r.result_value - b.mean) / b.sd : 0,
+        is_rejection: rejected.has(r.id),
+      };
+    });
+    res.json({ analyte, level, lots: lots.map(l => ({ ...l, basis: basisByLot.get(l.id) || null })), points });
   });
 
   app.get("/api/labs/:labId/qc/results", authMiddleware, labScopeMiddleware, (req: any, res) => {
@@ -4420,7 +4596,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // ids are integers from the previous query, not user input.
     const placeholders = ids.map(() => "?").join(",");
     const violations = sqlite.prepare(
-      "SELECT id, qc_result_id, rule_code, severity, detail, related_result_ids, evaluated_at FROM qc_rule_violations WHERE qc_result_id IN (" + placeholders + ") ORDER BY id ASC"
+      "SELECT id, qc_result_id, rule_code, severity, detail, related_result_ids, evaluated_at FROM qc_rule_violations WHERE superseded_at IS NULL AND qc_result_id IN (" + placeholders + ") ORDER BY id ASC"
     ).all(...ids) as any[];
     const correctiveActions = sqlite.prepare(
       "SELECT id, qc_result_id, qc_rule_violation_id, action_taken, taken_by_user_id, taken_at, status, follow_up_notes, nce_reference FROM qc_corrective_actions WHERE qc_result_id IN (" + placeholders + ") ORDER BY id ASC"
@@ -4518,7 +4694,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const ids = results.map(r => r.id);
     const placeholders = ids.map(() => "?").join(",");
     const violations = sqlite.prepare(
-      "SELECT id, qc_result_id, rule_code, severity, detail, evaluated_at FROM qc_rule_violations WHERE qc_result_id IN (" + placeholders + ")"
+      "SELECT id, qc_result_id, rule_code, severity, detail, evaluated_at FROM qc_rule_violations WHERE superseded_at IS NULL AND qc_result_id IN (" + placeholders + ")"
     ).all(...ids) as any[];
     const cas = sqlite.prepare(
       "SELECT id, qc_result_id, qc_rule_violation_id, action_taken, status, taken_at, nce_reference FROM qc_corrective_actions WHERE qc_result_id IN (" + placeholders + ")"
@@ -4660,7 +4836,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const casByR: Record<number, any[]> = {};
     if (resultIds.length > 0) {
       const placeholders = resultIds.map(() => "?").join(",");
-      const vs = sqlite.prepare("SELECT id, qc_result_id, rule_code, severity, detail FROM qc_rule_violations WHERE qc_result_id IN (" + placeholders + ")").all(...resultIds) as any[];
+      const vs = sqlite.prepare("SELECT id, qc_result_id, rule_code, severity, detail FROM qc_rule_violations WHERE superseded_at IS NULL AND qc_result_id IN (" + placeholders + ")").all(...resultIds) as any[];
       for (const v of vs) (violationsByR[v.qc_result_id] = violationsByR[v.qc_result_id] || []).push(v);
       const cs = sqlite.prepare("SELECT id, qc_result_id, action_taken, status, taken_at FROM qc_corrective_actions WHERE qc_result_id IN (" + placeholders + ")").all(...resultIds) as any[];
       for (const c of cs) (casByR[c.qc_result_id] = casByR[c.qc_result_id] || []).push(c);
@@ -4684,7 +4860,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const mdReview = sqlite.prepare("SELECT md_signed_name, md_signed_at FROM qc_period_reviews WHERE lab_id = ? AND control_lot_id = ? AND period_year = ? AND period_month = ?").get(labId, lot.id, year, month) as any;
     return {
       lab: { id: lab.id, lab_name: lab.lab_name, clia_number: lab.clia_number },
-      lot: { id: lot.id, analyte: lot.analyte, level: lot.level, lot_number: lot.lot_number, manufacturer: lot.manufacturer, mfr_mean: lot.mfr_mean, mfr_sd: lot.mfr_sd, mfr_sd_interval: lot.mfr_sd_interval },
+      lot: { id: lot.id, analyte: lot.analyte, level: lot.level, lot_number: lot.lot_number, manufacturer: lot.manufacturer, mfr_mean: lot.mfr_mean, mfr_sd: lot.mfr_sd, mfr_sd_interval: lot.mfr_sd_interval, mfr_range_low: lot.mfr_range_low ?? null, mfr_range_high: lot.mfr_range_high ?? null },
+      // The chart and the narrative use the same basis the Westgard rules judge
+      // the lot's runs against (server/qcBasis.ts).
+      basis: (() => { const b = resolveBasis(sqlite, labId, lot.id); return b ? { mean: b.mean, sd: b.sd, source: b.source, label: b.label } : null; })(),
       periodYear: year, periodMonth: month, results, baselineMean, baselineSD,
       reviewerName: reviewerName || "Pending signature",
       reviewerTitle: "Medical director or designee",
@@ -4705,7 +4884,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     const sqlite = (db as any).$client;
     const lot = sqlite.prepare(
-      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval FROM qc_control_lots WHERE id = ? AND lab_id = ?"
+      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high FROM qc_control_lots WHERE id = ? AND lab_id = ?"
     ).get(controlLotId, req.scope.labId) as any;
     if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
     const lab = sqlite.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
@@ -4741,7 +4920,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const lab = sqlite.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
     if (!lab) return res.status(404).json({ error: "Lab not found" });
     const lots = sqlite.prepare(
-      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval FROM qc_control_lots WHERE lab_id = ? AND status = 'active' ORDER BY analyte, level, lot_number"
+      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high FROM qc_control_lots WHERE lab_id = ? AND status = 'active' ORDER BY analyte, level, lot_number"
     ).all(req.scope.labId) as any[];
     if (lots.length === 0) return res.status(404).json({ error: "No active control lots in this lab" });
     const reviewer = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
@@ -4791,7 +4970,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // metadata (rule_code / severity / detail) into their own finding on escalate.
     if (qc_rule_violation_id) {
       const v = sqlite.prepare(
-        "SELECT 1 FROM qc_rule_violations WHERE id = ? AND qc_result_id = ?"
+        "SELECT 1 FROM qc_rule_violations WHERE id = ? AND qc_result_id = ? AND superseded_at IS NULL"
       ).get(Number(qc_rule_violation_id), Number(qc_result_id));
       if (!v) return res.status(400).json({ error: "Rule violation does not belong to this result" });
     }
@@ -5112,7 +5291,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const rows = sqlite.prepare(
       `SELECT r.id, r.result_value, r.result_date, r.instrument,
               r.accepted_for_reporting,
-              EXISTS(SELECT 1 FROM qc_rule_violations v WHERE v.qc_result_id = r.id) AS was_westgard_flagged
+              EXISTS(SELECT 1 FROM qc_rule_violations v WHERE v.qc_result_id = r.id AND v.superseded_at IS NULL) AS was_westgard_flagged
        FROM qc_results r
        WHERE ${where.join(" AND ")}
        ORDER BY ${orderBy}
@@ -5324,7 +5503,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             `SELECT r.instrument, COUNT(*) AS result_count,
                     MAX(r.result_date) AS latest_result_date,
                     SUM(CASE WHEN EXISTS(
-                      SELECT 1 FROM qc_rule_violations v WHERE v.qc_result_id = r.id
+                      SELECT 1 FROM qc_rule_violations v WHERE v.qc_result_id = r.id AND v.superseded_at IS NULL
                     ) THEN 1 ELSE 0 END) AS was_westgard_flagged_count
                FROM qc_results r
               WHERE ${where}
@@ -5345,7 +5524,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             .prepare(
               `SELECT r.result_value,
                       (CASE WHEN EXISTS(
-                        SELECT 1 FROM qc_rule_violations v WHERE v.qc_result_id = r.id
+                        SELECT 1 FROM qc_rule_violations v WHERE v.qc_result_id = r.id AND v.superseded_at IS NULL
                       ) THEN 1 ELSE 0 END) AS was_flagged
                  FROM qc_results r
                 WHERE ${where} AND r.instrument = ?
@@ -27990,7 +28169,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch {}
     // QC corrective actions (rejection violations with no CA filed)
     try {
-      const miss = client.prepare("SELECT COUNT(*) AS n FROM qc_rule_violations v WHERE v.severity = 'rejection' AND v.qc_result_id IN (SELECT id FROM qc_results WHERE lab_id = ?) AND NOT EXISTS (SELECT 1 FROM qc_corrective_actions ca WHERE ca.qc_result_id = v.qc_result_id)").get(labId).n as number;
+      const miss = client.prepare("SELECT COUNT(*) AS n FROM qc_rule_violations v WHERE v.severity = 'rejection' AND v.superseded_at IS NULL AND v.qc_result_id IN (SELECT id FROM qc_results WHERE lab_id = ?) AND NOT EXISTS (SELECT 1 FROM qc_corrective_actions ca WHERE ca.qc_result_id = v.qc_result_id)").get(labId).n as number;
       const lots = client.prepare("SELECT COUNT(*) AS n FROM qc_control_lots WHERE lab_id = ? AND status = 'active'").get(labId).n as number;
       push("qc", "QC corrective actions", miss, 0, lots, "active lots");
     } catch {}

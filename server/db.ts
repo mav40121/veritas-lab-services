@@ -6501,6 +6501,28 @@ try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as a
   ensure("qc_rule_settings", "bias_consecutive_count",     "ALTER TABLE qc_rule_settings ADD COLUMN bias_consecutive_count INTEGER NOT NULL DEFAULT 10");
   ensure("qc_rule_settings", "trend_consecutive_count",    "ALTER TABLE qc_rule_settings ADD COLUMN trend_consecutive_count INTEGER NOT NULL DEFAULT 7");
   ensure("qc_rule_settings", "enabled_rules_json",         "ALTER TABLE qc_rule_settings ADD COLUMN enabled_rules_json TEXT NOT NULL DEFAULT '[\"1-2s\",\"1-3s\",\"2-2s\",\"R-4s\",\"4-1s\",\"N-x\",\"N-T\"]'");
+
+  // Lab-established evaluation basis (2026-10-08, MedStar; server/qcBasis.ts).
+  // The lab's own mean/SD for a lot, locked from its first establish_n accepted
+  // runs or re-established by an owner/admin. The mfr_* columns keep the
+  // manufacturer's published values as the reference and outer range.
+  ensure("qc_control_lots", "lab_mean",                 "ALTER TABLE qc_control_lots ADD COLUMN lab_mean REAL");
+  ensure("qc_control_lots", "lab_sd",                   "ALTER TABLE qc_control_lots ADD COLUMN lab_sd REAL");
+  ensure("qc_control_lots", "lab_basis_n",              "ALTER TABLE qc_control_lots ADD COLUMN lab_basis_n INTEGER");
+  ensure("qc_control_lots", "lab_basis_locked_at",      "ALTER TABLE qc_control_lots ADD COLUMN lab_basis_locked_at TEXT");
+  ensure("qc_control_lots", "lab_basis_source",         "ALTER TABLE qc_control_lots ADD COLUMN lab_basis_source TEXT");
+  ensure("qc_control_lots", "lab_basis_set_by_user_id", "ALTER TABLE qc_control_lots ADD COLUMN lab_basis_set_by_user_id INTEGER");
+  // The numbers that judged each run, stored with the run for the audit trail.
+  ensure("qc_results", "basis_mean",   "ALTER TABLE qc_results ADD COLUMN basis_mean REAL");
+  ensure("qc_results", "basis_sd",     "ALTER TABLE qc_results ADD COLUMN basis_sd REAL");
+  ensure("qc_results", "basis_source", "ALTER TABLE qc_results ADD COLUMN basis_source TEXT");
+  // A re-score never deletes a flag (a corrective action may point at it); the
+  // old row is marked superseded and every reader filters superseded_at IS NULL.
+  ensure("qc_rule_violations", "superseded_at",     "ALTER TABLE qc_rule_violations ADD COLUMN superseded_at TEXT");
+  ensure("qc_rule_violations", "superseded_reason", "ALTER TABLE qc_rule_violations ADD COLUMN superseded_reason TEXT");
+  // Accepted runs a lot needs before the lab's own mean/SD replaces the
+  // manufacturer's (per lab, optional per analyte).
+  ensure("qc_rule_settings", "establish_n", "ALTER TABLE qc_rule_settings ADD COLUMN establish_n INTEGER NOT NULL DEFAULT 20");
 }
 
 // VeritaQC indexes for the read paths Phase 1 will hit hardest.
