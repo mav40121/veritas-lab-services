@@ -23,6 +23,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import DOMPurify from "dompurify";
 import InventoryCountWorkflow, { type CountItem } from "@/components/InventoryCountWorkflow";
 import { clearAuth } from "@/lib/auth";
+import { useAuth } from "@/components/AuthContext";
 
 // 2026-06-09 PR2: shared DOMPurify config (mirrors VeritaCompAppPage).
 // Lets quiz prompts marked question_format='html' render inline tables,
@@ -76,6 +77,7 @@ export default function StaffPortalPage() {
   const [activeEmployee, setActiveEmployee] = useState<PortalEmployee | null>(null);
   const [activeModule, setActiveModule] = useState<"policies" | "inventory" | "audit" | "competency" | "quizzes" | "qc" | null>(null);
   const [bootstrapState, setBootstrapState] = useState<"loading" | "no-roster" | "no-auth" | "ready">("loading");
+  const { user: signedInUser } = useAuth();
 
   useEffect(() => {
     // 2026-06-09 followup fix: the real localStorage key set by the
@@ -151,23 +153,37 @@ export default function StaffPortalPage() {
     return null;
   }
 
-  // ── Not on the lab roster ────────────────────────────────────────────
+  // ── Not a staff login ────────────────────────────────────────────────
+  // 2026-10-08: an owner, admin or writer who opens /staff-access used to be
+  // bound to the first employee on their roster (server identity bug, fixed
+  // with this change). Now the server answers 404 for any account that is not
+  // a Staff Portal login, and this neutral screen says so instead of showing
+  // anyone's name or lab.
   if (bootstrapState === "no-roster" || !session || !activeEmployee) {
+    const who = signedInUser?.name || signedInUser?.email || "";
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+      <div className="min-h-screen bg-background flex items-center justify-center p-6" data-testid="staff-portal-not-staff">
         <div className="w-full max-w-sm border border-border rounded-xl bg-card p-6 shadow-sm text-center">
-          <div className="font-serif text-xl font-bold mb-2" style={{ color: "#01696F" }}>
+          <div className="font-serif text-xl font-bold mb-2 text-primary">
             VeritaAssure&trade; Staff Portal
           </div>
           <p className="text-sm text-muted-foreground mb-4">
-            Your account isn't linked to a VeritaStaff&trade; record on any of your labs. Ask the lab director to add you to VeritaStaff, then refresh this page.
+            This page is for staff logins.{who ? ` You are signed in as ${who}, which is not a staff login.` : ""} If you are a staff member, sign out and sign in with the account from your invitation email.
           </p>
+          <a
+            href="/dashboard"
+            className="block w-full text-white font-semibold py-2 rounded-md mb-2"
+            style={{ backgroundColor: "#01696F" }}
+            data-testid="staff-portal-go-dashboard"
+          >
+            Go to my dashboard
+          </a>
           <button
             onClick={signOut}
-            className="w-full text-white font-semibold py-2 rounded-md"
-            style={{ backgroundColor: "#01696F" }}
+            className="w-full font-semibold py-2 rounded-md border border-border"
+            data-testid="staff-portal-sign-out"
           >
-            Sign out
+            Sign out and sign in as staff
           </button>
         </div>
       </div>
@@ -255,7 +271,9 @@ export default function StaffPortalPage() {
       session={session}
       employee={activeEmployee}
       onPick={(m) => setActiveModule(m)}
-      onSwitchEmployee={() => setActiveEmployee(null)}
+      // "Not me / switch": a staff login IS one person; switching means signing
+      // in as someone else (the old in-page picker belonged to the retired kiosk).
+      onSwitchEmployee={signOut}
       onSignOut={signOut}
     />
   );
