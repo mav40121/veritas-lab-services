@@ -4778,10 +4778,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     // #84 (2026-10-08): anyone in the lab may file a corrective action, but
     // excluding the run from the QC baseline changes the lab's statistics, so it
-    // needs QC edit rights (owner, admin, or a seat with VeritaQC edit).
-    if (exclude_from_baseline && !hasModuleEditAccess(req.scope.labId, req.userId, "veritaqc")) {
-      return res.status(403).json({ error: "Only a supervisor with VeritaQC edit access can exclude a run from the baseline. File the corrective action without excluding it, and ask your supervisor." });
-    }
+    // needs QC edit rights (owner, admin, or a seat with VeritaQC edit). The
+    // console's checkbox defaults to "exclude", so a member without QC edit is
+    // NOT refused (that would lose the corrective action): the action is filed,
+    // the run stays in the baseline, and the response says so.
+    const excludeAllowed = !exclude_from_baseline || hasModuleEditAccess(req.scope.labId, req.userId, "veritaqc");
+    const doExclude = !!exclude_from_baseline && excludeAllowed;
     const sqlite = (db as any).$client;
     // Verify the qc_result belongs to this lab before recording any action
     // against it. Stops a caller from using a known result id from another
@@ -4828,12 +4830,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // accepted for reporting, which excludes it from the Westgard baseline
     // on future evaluations. Toggling this is an explicit user choice
     // captured in the same request to keep the audit trail intact.
-    if (exclude_from_baseline) {
+    if (doExclude) {
       sqlite.prepare(
         "UPDATE qc_results SET accepted_for_reporting = 0, updated_at = ? WHERE id = ? AND lab_id = ?"
       ).run(now, Number(qc_result_id), req.scope.labId);
     }
-    res.json({ ok: true, corrective_action_id: newId, excluded_from_baseline: !!exclude_from_baseline });
+    res.json({
+      ok: true, corrective_action_id: newId, excluded_from_baseline: doExclude,
+      ...(exclude_from_baseline && !excludeAllowed
+        ? { exclude_not_applied: "The corrective action was filed. Excluding the run from the QC baseline needs a supervisor with VeritaQC edit access, so the run stays in the baseline." }
+        : {}),
+    });
   });
 
   // Wave A7 (2026-06-12): escalate a QC corrective action into a VeritaResponse
