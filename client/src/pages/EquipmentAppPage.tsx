@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
-import { useIsReadOnly } from "@/components/SubscriptionBanner";
+import { useIsReadOnly, useCanRecord } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -64,6 +64,8 @@ function statusBadge(s: string) {
 // MLC-1 Phase 2: equipment maintenance-due email-reminder settings. The nightly
 // engine (server/equipmentReminders.ts) reads this per lab.
 function EquipmentRemindersPanel({ apiBase }: { apiBase: string }) {
+  // #84 Phase 3: reminder settings are VeritaMaintain setup.
+  const remindersReadOnly = useIsReadOnly("veritamaintain");
   const [enabled, setEnabled] = useState(false);
   const [leadDays, setLeadDays] = useState(14);
   const [recipients, setRecipients] = useState("");
@@ -113,7 +115,7 @@ function EquipmentRemindersPanel({ apiBase }: { apiBase: string }) {
         <div><Label className="text-xs">Recipients (comma-separated emails)</Label><Input value={recipients} onChange={e => { setRecipients(e.target.value); setSaved(false); }} placeholder="Defaults to the lab owner if blank" /></div>
       </div>
       <div className="mt-3 flex items-center gap-3">
-        <Button size="sm" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save reminder settings"}</Button>
+        <Button size="sm" onClick={save} disabled={saving || remindersReadOnly}>{saving ? "Saving..." : "Save reminder settings"}</Button>
         {saved && <span className="text-xs text-emerald-600">Saved.</span>}
       </div>
     </div>
@@ -122,7 +124,9 @@ function EquipmentRemindersPanel({ apiBase }: { apiBase: string }) {
 
 export default function EquipmentAppPage() {
   const { user, isLoggedIn } = useAuth();
-  const isReadOnly = useIsReadOnly("veritascan");
+  const isReadOnly = useIsReadOnly("veritamaintain");
+  // Logging a maintenance event is recording work, open to every lab member.
+  const canRecord = useCanRecord();
   const activeLabId = useActiveLabId();
   const { toast } = useToast();
 
@@ -342,7 +346,7 @@ export default function EquipmentAppPage() {
                       <td className="py-2 pr-2">{statusBadge(e.maintenance_status)}</td>
                       <td className="py-2 pr-2">
                         <div className="flex flex-wrap gap-1.5">
-                          <Button size="sm" variant="outline" onClick={() => openLogEvent(e)} disabled={isReadOnly}>Log maintenance</Button>
+                          <Button size="sm" variant="outline" onClick={() => openLogEvent(e)} disabled={!canRecord}>Log maintenance</Button>
                           <Button size="sm" variant="ghost" onClick={() => openHistory(e)}>History</Button>
                           <Button size="sm" variant="ghost" onClick={() => openEdit(e)} disabled={isReadOnly}>Edit</Button>
                           <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => retire(e)} disabled={isReadOnly}>Retire</Button>

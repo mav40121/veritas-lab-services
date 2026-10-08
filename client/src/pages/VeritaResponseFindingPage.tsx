@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { Link, useLocation, useParams } from "wouter";
 import { useAuth } from "@/components/AuthContext";
 import { API_BASE } from "@/lib/queryClient";
@@ -407,6 +408,8 @@ function EffectivenessPanel({ activeLabId, findingId, completionDate, canEdit, o
 }
 
 export default function VeritaResponseFindingPage() {
+  // #84 Phase 3: editing, saving and deleting a finding is VeritaResponse setup.
+  const isReadOnly = useIsReadOnly("veritaresponse");
   const labRoute = useLabRoute();
   const { user } = useAuth();
   const params = useParams<{ id?: string }>();
@@ -843,7 +846,7 @@ export default function VeritaResponseFindingPage() {
           confirmLabel="Delete"
           onConfirm={handleDelete}
         >
-          <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700">
+          <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" hidden={isReadOnly}>
             <Trash2 size={14} className="mr-1.5" />Delete
           </Button>
         </ConfirmDialog>
@@ -1500,7 +1503,7 @@ export default function VeritaResponseFindingPage() {
           activeLabId={activeLabId}
           findingId={id!}
           completionDate={finding.completion_date}
-          canEdit={hasPlanAccess}
+          canEdit={hasPlanAccess && !isReadOnly}
           onFindingChange={fetchFinding}
         />
       )}
@@ -1526,7 +1529,8 @@ export default function VeritaResponseFindingPage() {
         <Button
           className="bg-[#006064] hover:bg-[#004d50] text-white"
           onClick={handleSave}
-          disabled={saveState === "saving"}
+          disabled={saveState === "saving" || isReadOnly}
+          title={isReadOnly ? "View only: VeritaResponse edit access is needed to change a finding" : undefined}
         >
           <Save size={14} className="mr-1.5" />
           {saveState === "saving" ? "Saving..." : "Save"}

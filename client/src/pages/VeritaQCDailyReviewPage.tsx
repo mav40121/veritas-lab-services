@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -111,6 +112,9 @@ interface PeriodReview {
 }
 
 export default function VeritaQCDailyReviewPage() {
+  // #84 Phase 3: filing the monthly attestation and the co-sign policy are
+  // reviewer/admin actions; a view-only login (e.g. a Staff login) reads.
+  const isReadOnly = useIsReadOnly("veritaqc");
   const { user, isLoggedIn } = useAuth();
   const activeLabId = useActiveLabId();
   const { toast } = useToast();
@@ -745,16 +749,16 @@ export default function VeritaQCDailyReviewPage() {
               confirmLabel="File attestation"
               onConfirm={handleFileAttestation}
             >
-              <Button disabled={!reviewLotId || filing}>
+              <Button disabled={!reviewLotId || filing || isReadOnly} title={isReadOnly ? "Only a reviewer with VeritaQC edit access files the monthly attestation" : undefined}>
                 {filing ? "Filing..." : "File attestation"}
               </Button>
             </ConfirmDialog>
           </div>
 
-          <label className="flex items-start gap-2 text-xs text-muted-foreground mt-3 cursor-pointer">
+          {!isReadOnly && <label className="flex items-start gap-2 text-xs text-muted-foreground mt-3 cursor-pointer">
             <input type="checkbox" checked={mdCosignRequired} onChange={(e) => handleToggleCosign(e.target.checked)} className="mt-0.5" />
             <span>Require a Medical Director co-signature after the reviewer files (two-signature review). Owner or admin sets this; it applies to every lot in this lab.</span>
-          </label>
+          </label>}
 
           {mdCosignRequired && (() => {
             const cur = pastReviews.find((r: any) => r.period_year === reviewYear && r.period_month === reviewMonth) as any;

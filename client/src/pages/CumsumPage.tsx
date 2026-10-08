@@ -57,7 +57,7 @@ export default function CumsumPage() {
   const { isLoggedIn } = useAuth();
   const activeLabId = useActiveLabId();
   const { toast } = useToast();
-  const readOnly = useIsReadOnly();
+  const readOnly = useIsReadOnly("veritacheck");
 
   const [trackers, setTrackers] = useState<Tracker[]>([]);
   const [selectedTracker, setSelectedTracker] = useState<(Tracker & { entries: Entry[] }) | null>(null);
@@ -261,7 +261,7 @@ export default function CumsumPage() {
 
         <section className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
           <div className="flex items-center gap-3 flex-wrap">
-            <Button onClick={() => { setShowAddEntry(true); setIsInstallLot(selectedTracker.entries.length === 0); }} disabled={showAddEntry}>
+            <Button onClick={() => { setShowAddEntry(true); setIsInstallLot(selectedTracker.entries.length === 0); }} disabled={showAddEntry || readOnly}>
               <PlusCircle size={14} className="mr-1.5" />{selectedTracker.entries.length === 0 ? "Add Install Lot" : "Add Lot Change"}
             </Button>
             <Button variant="outline" onClick={downloadExcel} disabled={excelLoading || selectedTracker.entries.length === 0}>
@@ -270,7 +270,7 @@ export default function CumsumPage() {
             <Button variant="outline" onClick={downloadPDF} disabled={pdfLoading || selectedTracker.entries.length === 0}>
               <FileDown size={14} className="mr-1.5" />{pdfLoading ? "Generating..." : "Export PDF"}
             </Button>
-            <ConfirmDialog
+            {!readOnly && <ConfirmDialog
               title="Delete Tracker?"
               message="Delete this tracker and all its entries? This cannot be undone."
               confirmLabel="Delete"
@@ -279,7 +279,7 @@ export default function CumsumPage() {
               <Button variant="ghost" size="sm" className="text-destructive ml-auto">
                 <Trash2 size={14} className="mr-1" />Delete Tracker
               </Button>
-            </ConfirmDialog>
+            </ConfirmDialog>}
           </div>
 
           {/* History table */}
@@ -435,7 +435,7 @@ export default function CumsumPage() {
                   <p className="text-xs text-amber-500 flex items-center gap-1"><AlertTriangle size={12} />Fewer than 15 specimens entered. Minimum 15 recommended</p>
                 )}
 
-                <Button onClick={saveEntry} disabled={saving || !preview} className="w-full">
+                <Button onClick={saveEntry} disabled={saving || !preview || readOnly} className="w-full">
                   {saving ? <><Loader2 size={14} className="mr-1.5 animate-spin" />Saving...</> : "Save Entry"}
                 </Button>
               </CardContent>

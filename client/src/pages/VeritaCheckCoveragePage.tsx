@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -123,6 +124,8 @@ function Tile({ label, value, sub, tone }: { label: string; value: string; sub?:
 }
 
 export default function VeritaCheckCoveragePage() {
+  // #84 Phase 3: signing groups, exemptions and alignment are VeritaCheck setup.
+  const isReadOnly = useIsReadOnly("veritacheck");
   useSEO({ title: "Coverage | VeritaCheck", description: "See what verification your map requires versus the studies you have." });
   const { toast } = useToast();
   const labRoute = useLabRoute();
@@ -243,10 +246,10 @@ export default function VeritaCheckCoveragePage() {
         {u.coverageAnalyte ? (
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600">Aligned &rarr; {u.coverageAnalyte}</Badge>
-            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" data-testid={`cov-align-clear-${u.id}`} disabled={alignMut.isPending} onClick={() => alignMut.mutate({ studyId: u.id, analyte: "" })}>Clear</Button>
+            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" data-testid={`cov-align-clear-${u.id}`} hidden={isReadOnly} disabled={alignMut.isPending} onClick={() => alignMut.mutate({ studyId: u.id, analyte: "" })}>Clear</Button>
           </div>
         ) : (
-          <Select value="" onValueChange={(v) => alignMut.mutate({ studyId: u.id, analyte: v })}>
+          <Select value="" disabled={isReadOnly} onValueChange={(v) => alignMut.mutate({ studyId: u.id, analyte: v })}>
             <SelectTrigger className="h-8 w-[240px] text-xs" data-testid={`cov-align-select-${u.id}`}><SelectValue placeholder="Align to…" /></SelectTrigger>
             <SelectContent className="max-h-72">
               {mapAnalyteOptions.map((a: any) => <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>)}
@@ -514,13 +517,13 @@ export default function VeritaCheckCoveragePage() {
                     ? <span className={r.overdue ? "text-red-600 font-medium" : "text-muted-foreground"}>{r.nextDueOn}{r.overdue ? " (overdue)" : ""}</span>
                     : <span className="text-muted-foreground">-</span>}</td>
                   <td className="py-2 px-3 text-center" onClick={(e) => e.stopPropagation()}>
-                    <Checkbox checked={r.linearityExemptMultical} onCheckedChange={(v) => setExempt(r, "multical", !!v)} data-testid={`cov-multical-${r.instrumentTestId}`} />
+                    <Checkbox checked={r.linearityExemptMultical} disabled={isReadOnly} onCheckedChange={(v) => setExempt(r, "multical", !!v)} data-testid={`cov-multical-${r.instrumentTestId}`} />
                   </td>
                   <td className="py-2 px-3 text-center" onClick={(e) => e.stopPropagation()}>
-                    <Checkbox checked={r.linearityExemptNoncal} onCheckedChange={(v) => setExempt(r, "noncal", !!v)} data-testid={`cov-noncal-${r.instrumentTestId}`} />
+                    <Checkbox checked={r.linearityExemptNoncal} disabled={isReadOnly} onCheckedChange={(v) => setExempt(r, "noncal", !!v)} data-testid={`cov-noncal-${r.instrumentTestId}`} />
                   </td>
                   <td className="py-2 px-3 text-center" onClick={(e) => e.stopPropagation()}>
-                    <Checkbox checked={r.linearityExemptWaived} onCheckedChange={(v) => setExempt(r, "waived", !!v)} data-testid={`cov-waived-${r.instrumentTestId}`} />
+                    <Checkbox checked={r.linearityExemptWaived} disabled={isReadOnly} onCheckedChange={(v) => setExempt(r, "waived", !!v)} data-testid={`cov-waived-${r.instrumentTestId}`} />
                   </td>
                   <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
                     <input
@@ -528,6 +531,7 @@ export default function VeritaCheckCoveragePage() {
                       key={`other-${r.instrumentTestId}-${r.linearityExemptOther}`}
                       defaultValue={r.linearityExemptOther}
                       placeholder="reason…"
+                      disabled={isReadOnly}
                       data-testid={`cov-other-${r.instrumentTestId}`}
                       className="h-7 w-36 rounded border border-border bg-background px-2 text-xs"
                       onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
@@ -577,7 +581,7 @@ export default function VeritaCheckCoveragePage() {
 
       {/* Floating batch action bar: appears once studies are selected across
           either table, and adds them all to a sign-off group in one action. */}
-      {selectedStudies.size > 0 && labId && (
+      {selectedStudies.size > 0 && labId && !isReadOnly && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 rounded-full border border-border bg-background/95 backdrop-blur px-4 py-2 shadow-lg" data-testid="cov-bulk-bar">
           <span className="text-sm font-medium">{selectedStudies.size} {selectedStudies.size === 1 ? "study" : "studies"} selected</span>
           <BulkAddToSignoffGroup labId={labId} studyIds={Array.from(selectedStudies)} listUrl={studiesUrl!} onDone={clearStudySelection} />

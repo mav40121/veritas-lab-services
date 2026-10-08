@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useMemberships } from "@/hooks/useMemberships";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
 import { API_BASE } from "@/lib/queryClient";
@@ -23,8 +24,13 @@ interface SystemDoc {
 }
 
 export default function SystemRepositoryPage() {
+  // #84: adding or removing an org-wide shared document is owner/admin only
+  // (the server refuses everyone else since #1533).
+  const { data: repoMemberships } = useMemberships();
   const { user, isLoggedIn } = useAuth();
   const activeLabId = useActiveLabId();
+  const repoRole = repoMemberships?.find((m) => m.labId === activeLabId)?.role;
+  const canManageRepo = repoRole === "owner" || repoRole === "admin";
   const hasPlanAccess = !!user && SUITE_PLANS.includes(user.plan);
 
   const [orgId, setOrgId] = useState<number | null>(null);
@@ -157,7 +163,7 @@ export default function SystemRepositoryPage() {
       ) : (
         <>
           <div className="mb-4 flex justify-end">
-            <Button size="sm" onClick={() => setShowAdd(v => !v)}><Plus size={14} className="mr-1" /> Add document</Button>
+            <Button size="sm" hidden={!canManageRepo} onClick={() => setShowAdd(v => !v)}><Plus size={14} className="mr-1" /> Add document</Button>
           </div>
 
           {showAdd && (
@@ -221,7 +227,7 @@ export default function SystemRepositoryPage() {
                               {d.added_by_name ? `Added by ${d.added_by_name}` : "Added"}{d.created_at ? ` on ${d.created_at.slice(0, 10)}` : ""}
                             </div>
                           </div>
-                          <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-destructive shrink-0" onClick={() => removeDoc(d.id)} title="Remove">
+                          <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-destructive shrink-0" hidden={!canManageRepo} onClick={() => removeDoc(d.id)} title="Remove">
                             <Trash2 size={14} />
                           </Button>
                         </CardContent>

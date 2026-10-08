@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useAuth } from "./AuthContext";
+import { useIsStaffLogin } from "@/hooks/useStaffLogin";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { X, ArrowRight } from "lucide-react";
@@ -8,8 +9,11 @@ import { X, ArrowRight } from "lucide-react";
 export function OnboardingBanner() {
   const { user, isLoggedIn } = useAuth();
   const [dismissed, setDismissed] = useState(false);
+  const isStaff = useIsStaffLogin();
 
   if (!isLoggedIn || !user) return null;
+  // #84: "Complete your lab setup" is the owner's job, never a Staff login's.
+  if (isStaff) return null;
   if ((user as any).onboardingSeen) return null;
   if (dismissed) return null;
 

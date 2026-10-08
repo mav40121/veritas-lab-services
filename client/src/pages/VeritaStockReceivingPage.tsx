@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
-import { useIsReadOnly } from "@/components/SubscriptionBanner";
+import { useIsReadOnly, useCanRecord } from "@/components/SubscriptionBanner";
 import { useSEO } from "@/hooks/useSEO";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
@@ -75,6 +75,9 @@ export default function VeritaStockReceivingPage() {
 
   const { isLoggedIn } = useAuth();
   const readOnly = useIsReadOnly("veritastock");
+  // Receiving is recording work, open to every lab member (#84); applying a
+  // lead time to the item stays a setup action (readOnly).
+  const canRecord = useCanRecord();
   const { toast } = useToast();
   const activeLabId = useActiveLabId();
 
@@ -274,7 +277,7 @@ export default function VeritaStockReceivingPage() {
                         value={receiveQ[it.id] ?? ""}
                         onChange={(e) => setReceiveQ((p) => ({ ...p, [it.id]: e.target.value }))}
                         data-testid={`receiving-qty-${it.id}`}
-                        disabled={readOnly}
+                        disabled={!canRecord}
                       />
                       {/* Lot # + expiration of the arriving stock. If different
                           from the item's current lot/expiry, the received qty is
@@ -286,7 +289,7 @@ export default function VeritaStockReceivingPage() {
                         value={receiveLot[it.id] ?? ""}
                         onChange={(e) => setReceiveLot((p) => ({ ...p, [it.id]: e.target.value }))}
                         data-testid={`receiving-lot-${it.id}`}
-                        disabled={readOnly}
+                        disabled={!canRecord}
                         title="Lot number of the stock you are receiving. A new lot is stored separately from existing stock."
                       />
                       <Input
@@ -295,7 +298,7 @@ export default function VeritaStockReceivingPage() {
                         value={receiveExp[it.id] ?? ""}
                         onChange={(e) => setReceiveExp((p) => ({ ...p, [it.id]: e.target.value }))}
                         data-testid={`receiving-exp-${it.id}`}
-                        disabled={readOnly}
+                        disabled={!canRecord}
                         title="Expiration date of the stock you are receiving. A different expiry is tracked as its own lot."
                       />
                       <Input
@@ -305,7 +308,7 @@ export default function VeritaStockReceivingPage() {
                         value={receiveNote[it.id] ?? ""}
                         onChange={(e) => setReceiveNote((p) => ({ ...p, [it.id]: e.target.value }))}
                         data-testid={`receiving-note-${it.id}`}
-                        disabled={readOnly}
+                        disabled={!canRecord}
                         title="Optional: partial shipment, damaged, received out of temperature, etc."
                       />
                       {/* Optional document link: paste a URL to the PO, packing
@@ -318,7 +321,7 @@ export default function VeritaStockReceivingPage() {
                         value={receiveDocUrl[it.id] ?? ""}
                         onChange={(e) => setReceiveDocUrl((p) => ({ ...p, [it.id]: e.target.value }))}
                         data-testid={`receiving-docurl-${it.id}`}
-                        disabled={readOnly}
+                        disabled={!canRecord}
                         title="Optional: link to the PO, packing slip, or invoice for this delivery (URL only, no file upload)."
                       />
                       {(receiveDocUrl[it.id] || "").trim() && (
@@ -329,13 +332,13 @@ export default function VeritaStockReceivingPage() {
                           value={receiveDocLabel[it.id] ?? ""}
                           onChange={(e) => setReceiveDocLabel((p) => ({ ...p, [it.id]: e.target.value }))}
                           data-testid={`receiving-doclabel-${it.id}`}
-                          disabled={readOnly}
+                          disabled={!canRecord}
                           title="Optional label shown in the receipt history (defaults to 'Attached document')."
                         />
                       )}
                     </td>
                     <td className="px-3 py-2 text-right">
-                      <Button size="sm" onClick={() => handleReceive(it)} disabled={readOnly || busyId === it.id} data-testid={`receiving-receive-${it.id}`} style={{ backgroundColor: "#01696F" }}>
+                      <Button size="sm" onClick={() => handleReceive(it)} disabled={!canRecord || busyId === it.id} data-testid={`receiving-receive-${it.id}`} style={{ backgroundColor: "#01696F" }}>
                         <PackageCheck size={14} className="mr-1.5" />{busyId === it.id ? "..." : "Receive"}
                       </Button>
                     </td>

@@ -226,6 +226,19 @@ export default function LabMembersPage() {
     onError: (err: any) => toast({ title: "Email change failed", description: String(err?.message || err), variant: "destructive" }),
   });
 
+  // Inline name correction (2026-10-08): fixes a typo'd display name, e.g. a
+  // last name mistyped at signup. Same owner/admin gate as Edit email.
+  const [editNameFor, setEditNameFor] = useState<number | null>(null);
+  const [editNameValue, setEditNameValue] = useState("");
+  const nameMutation = useMutation({
+    mutationFn: async ({ memberId, name }: { memberId: number; name: string }) => {
+      const res = await apiRequest("PATCH", `/api/labs/${activeLabId}/members/${memberId}/name`, { name });
+      return res.json();
+    },
+    onSuccess: () => { toast({ title: "Name updated" }); setEditNameFor(null); setEditNameValue(""); invalidate(); },
+    onError: (err: any) => toast({ title: "Name change failed", description: String(err?.message || err), variant: "destructive" }),
+  });
+
   // Set (or clear) the lab's Laboratory Medical Director. Identified by email so it
   // can name a current member, the owner, or a pending invite; the MD gets one free
   // seat. Invoked from the per-member row actions below and from an invite with the
@@ -436,7 +449,27 @@ export default function LabMembersPage() {
                     return (
                       <tr key={`m-${m.membership_id}`} className="border-b last:border-b-0">
                         <td className="py-2 pr-3">
-                          {editEmailFor === m.membership_id ? (
+                          {editNameFor === m.membership_id ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Input
+                                value={editNameValue}
+                                onChange={e => setEditNameValue(e.target.value)}
+                                className="h-8 w-56 text-sm"
+                                placeholder="First Last"
+                                autoFocus
+                                aria-label="Corrected name"
+                                data-testid={`edit-name-input-${m.membership_id}`}
+                                onKeyDown={e => {
+                                  if (e.key === "Enter" && editNameValue.trim()) nameMutation.mutate({ memberId: m.membership_id, name: editNameValue.trim() });
+                                  if (e.key === "Escape") { setEditNameFor(null); setEditNameValue(""); }
+                                }}
+                              />
+                              <Button size="sm" data-testid={`edit-name-save-${m.membership_id}`} onClick={() => nameMutation.mutate({ memberId: m.membership_id, name: editNameValue.trim() })} disabled={nameMutation.isPending || !editNameValue.trim()}>
+                                {nameMutation.isPending && <Loader2 className="animate-spin mr-1" size={12} />} Save
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => { setEditNameFor(null); setEditNameValue(""); }}>Cancel</Button>
+                            </div>
+                          ) : editEmailFor === m.membership_id ? (
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <Input
                                 type="email"
@@ -498,8 +531,13 @@ export default function LabMembersPage() {
                               </Button>
                             )
                           )}
+                          {canManage && !isMemberOwner && editNameFor !== m.membership_id && (
+                            <Button size="sm" variant="ghost" data-testid={`edit-name-${m.membership_id}`} onClick={() => { setEditEmailFor(null); setEditNameFor(m.membership_id); setEditNameValue(m.name || ""); }} disabled={nameMutation.isPending} title="Correct this member's name in place">
+                              <Pencil size={12} className="mr-1" /> Edit name
+                            </Button>
+                          )}
                           {canManage && !isMemberOwner && editEmailFor !== m.membership_id && (
-                            <Button size="sm" variant="ghost" onClick={() => { setEditEmailFor(m.membership_id); setEditEmailValue(m.email); }} disabled={emailMutation.isPending} title="Correct this member's login email in place">
+                            <Button size="sm" variant="ghost" onClick={() => { setEditNameFor(null); setEditEmailFor(m.membership_id); setEditEmailValue(m.email); }} disabled={emailMutation.isPending} title="Correct this member's login email in place">
                               <Pencil size={12} className="mr-1" /> Edit email
                             </Button>
                           )}

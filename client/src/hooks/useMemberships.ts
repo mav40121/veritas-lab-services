@@ -7,6 +7,9 @@ export interface Membership {
   cliaNumber: string | null;
   labName: string | null;
   role: string;
+  // #84: the seat this user holds IN THIS LAB ('active', 'view_only',
+  // 'staff_portal', ...), null when none. Optional for deploy skew.
+  seatType?: string | null;
   permissions: Record<string, any>;
   isPrimaryLab: boolean;
   // STATIC account-home-lab flag derived from users.lab_id, which the
