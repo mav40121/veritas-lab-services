@@ -20,8 +20,8 @@
 // - No NavBar, no chrome, no links out. Kiosk surface.
 
 import { Fragment, useEffect, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import DOMPurify from "dompurify";
-import InventoryCountWorkflow, { type CountItem } from "@/components/InventoryCountWorkflow";
 import { clearAuth } from "@/lib/auth";
 import { useAuth } from "@/components/AuthContext";
 import { useLabRoute } from "@/hooks/useLabRoute";
@@ -76,7 +76,7 @@ export default function StaffPortalPage() {
   // "not on roster" message.
   const [session, setSession] = useState<StaffPortalSession | null>(null);
   const [activeEmployee, setActiveEmployee] = useState<PortalEmployee | null>(null);
-  const [activeModule, setActiveModule] = useState<"policies" | "inventory" | "audit" | "competency" | "quizzes" | "qc" | null>(null);
+  const [activeModule, setActiveModule] = useState<"policies" | "audit" | "competency" | "quizzes" | null>(null);
   const [bootstrapState, setBootstrapState] = useState<"loading" | "no-roster" | "no-auth" | "ready">("loading");
   const { user: signedInUser } = useAuth();
   const labRoute = useLabRoute();
@@ -206,17 +206,6 @@ export default function StaffPortalPage() {
       />
     );
   }
-  if (activeModule === "inventory") {
-    return (
-      <StaffPortalInventoryView
-        token={session.token}
-        employee={activeEmployee}
-        labName={session.lab.name}
-        onBack={() => setActiveModule(null)}
-        onSignOut={signOut}
-      />
-    );
-  }
   if (activeModule === "audit") {
     return (
       <StaffPortalActivityView
@@ -250,17 +239,6 @@ export default function StaffPortalPage() {
       />
     );
   }
-  if (activeModule === "qc") {
-    return (
-      <StaffPortalQcView
-        token={session.token}
-        employee={activeEmployee}
-        labName={session.lab.name}
-        onBack={() => setActiveModule(null)}
-        onSignOut={signOut}
-      />
-    );
-  }
 
   // 2026-06-09 Bugfix: techs land on the tile screen with no signal
   // that one tile has pending work. Fetch the three list endpoints once
@@ -273,304 +251,21 @@ export default function StaffPortalPage() {
       session={session}
       employee={activeEmployee}
       onPick={(m) => setActiveModule(m)}
-      // "Not me / switch": a staff login IS one person; switching means signing
-      // in as someone else (the old in-page picker belonged to the retired kiosk).
-      onSwitchEmployee={signOut}
       onSignOut={signOut}
     />
   );
 }
 
-// ── Record QC view ────────────────────────────────────────────────────
-// Front-line staff record QC runs on their lab. Mirrors the writer QC entry
-// but goes through the staff-portal-session endpoints; the server attributes
-// every run to this staff member (operator_staff_employee_id) and runs the
-// SAME Westgard evaluation as the writer path, so scoring is identical.
-interface StaffQcLot { id: number; analyte: string; level: string; lot_number: string; mfr_mean: number; mfr_sd: number; status: string; basis?: { mean: number; sd: number; label: string } | null; }
-interface StaffQcNote { id: number; note: string; author_name: string; source: string; created_at: string; }
-interface StaffQcResult { id: number; result_value: number; result_date: string; instrument: string | null; accepted_for_reporting: number; notes?: StaffQcNote[]; }
-
-function StaffPortalQcView({ token, employee, labName, onBack, onSignOut }: {
-  token: string;
-  employee: PortalEmployee;
-  labName: string;
-  onBack: () => void;
-  onSignOut: () => void;
-}) {
-  const h = { Authorization: `Bearer ${token}` };
-  const [lots, setLots] = useState<StaffQcLot[]>([]);
-  const [loadingLots, setLoadingLots] = useState(true);
-  const [lotId, setLotId] = useState<number | null>(null);
-  const [value, setValue] = useState("");
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [instrument, setInstrument] = useState("");
-  const [runTime, setRunTime] = useState("");
-  const [comment, setComment] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [recent, setRecent] = useState<StaffQcResult[]>([]);
-  const [msg, setMsg] = useState<{ kind: "ok" | "reject" | "error"; text: string } | null>(null);
-  // Append-only note thread on a saved point (2026-08-25 MedStar). canAddNote
-  // reflects the per-site labs.qc_note_frontline_can_add gate from the server.
-  const [canAddNote, setCanAddNote] = useState(true);
-  const [noteOpenId, setNoteOpenId] = useState<number | null>(null);
-  const [noteDraft, setNoteDraft] = useState("");
-  const [noteBusy, setNoteBusy] = useState(false);
-
-  const selected = lots.find(l => l.id === lotId) || null;
-  const instrumentSuggestions = Array.from(new Set(
-    lots.map(l => l.analyte.match(/\(([^)]+)\)\s*$/)?.[1] || "").map(s => s.trim()).filter(Boolean)
-  )).sort();
-
-  async function loadRecent(id: number) {
-    const d = await fetch(`/api/staff-portal-session/qc/results?control_lot_id=${id}&limit=10`, { headers: h })
-      .then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] }));
-    setRecent(d.results || []);
-    if (typeof d.can_add_note === "boolean") setCanAddNote(d.can_add_note);
-  }
-
-  // Add an append-only investigation note to a saved point. Gated server-side by
-  // the per-site setting; a 403 comes back as a friendly message.
-  async function addStaffNote(resultId: number) {
-    if (!noteDraft.trim() || !lotId) return;
-    setNoteBusy(true); setMsg(null);
-    try {
-      const res = await fetch(`/api/staff-portal-session/qc/results/${resultId}/notes`, {
-        method: "POST",
-        headers: { ...h, "Content-Type": "application/json" },
-        body: JSON.stringify({ note: noteDraft.trim() }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) { setMsg({ kind: "error", text: data.error || "Could not add the note." }); return; }
-      setNoteDraft("");
-      await loadRecent(lotId);
-      setMsg({ kind: "ok", text: "Note added." });
-    } catch {
-      setMsg({ kind: "error", text: "Network error adding the note. Try again." });
-    } finally {
-      setNoteBusy(false);
-    }
-  }
-
-  useEffect(() => {
-    fetch("/api/staff-portal-session/qc/lots", { headers: h })
-      .then(r => r.ok ? r.json() : { lots: [] })
-      .then(d => { setLots(d.lots || []); if (d.lots && d.lots.length) setLotId(d.lots[0].id); })
-      .catch(() => setLots([]))
-      .finally(() => setLoadingLots(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (!lotId) { setRecent([]); return; }
-    const lot = lots.find(l => l.id === lotId);
-    const m = lot?.analyte.match(/\(([^)]+)\)\s*$/);
-    setInstrument(m ? m[1].trim() : "");
-    loadRecent(lotId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lotId]);
-
-  async function submit() {
-    if (!lotId) { setMsg({ kind: "error", text: "Pick a control lot first." }); return; }
-    const v = Number(value);
-    if (!value || Number.isNaN(v)) { setMsg({ kind: "error", text: "Result value must be a number." }); return; }
-    if (!date) { setMsg({ kind: "error", text: "Result date is required." }); return; }
-    setSubmitting(true); setMsg(null);
-    try {
-      const res = await fetch("/api/staff-portal-session/qc/results", {
-        method: "POST",
-        headers: { ...h, "Content-Type": "application/json" },
-        body: JSON.stringify({ control_lot_id: lotId, result_value: v, result_date: date, instrument: instrument || null, run_time: runTime || null, comment: comment || null }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) { setMsg({ kind: "error", text: data.error || "Submit failed." }); return; }
-      if (data.requires_corrective_action) {
-        const rules = (data.violations || []).filter((x: any) => x.severity === "rejection").map((x: any) => x.rule_code).join(", ");
-        setMsg({ kind: "reject", text: `Rejection: ${rules || "rule fired"}. This run is out of control. Notify your lab director; a corrective action is required before reporting.` });
-      } else {
-        const warn = (data.violations || []).filter((x: any) => x.severity === "warning").map((x: any) => x.rule_code);
-        setMsg({ kind: "ok", text: warn.length ? `Recorded. Warning flag: ${warn.join(", ")} (review, no rejection).` : "Recorded. In control." });
-      }
-      setValue(""); setComment("");
-      await loadRecent(lotId);
-    } catch {
-      setMsg({ kind: "error", text: "Network error. Try again." });
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  const inputCls = "w-full border border-input rounded-md px-3 py-2 text-sm bg-background";
-
-  return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-2xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <button onClick={onBack} className="text-xs text-muted-foreground hover:underline">&larr; Back</button>
-            <div className="font-serif text-xl font-bold mt-1">Record QC</div>
-            <div className="text-xs text-muted-foreground">
-              {`${employee.first_name} ${employee.last_name}`} &middot; {labName}
-            </div>
-          </div>
-          <button onClick={onSignOut} className="text-xs text-muted-foreground hover:underline">Sign out</button>
-        </div>
-
-        {loadingLots ? (
-          <div className="text-sm text-muted-foreground">Loading control lots...</div>
-        ) : lots.length === 0 ? (
-          <div className="text-sm text-muted-foreground border border-border rounded-lg p-4">
-            No active control lots on this lab yet. Ask your lab director to add control lots in VeritaQC.
-          </div>
-        ) : (
-          <>
-            <div className="mb-4">
-              <label className="block text-xs text-muted-foreground mb-1">Control lot</label>
-              <select className={inputCls} value={lotId ?? ""} onChange={e => setLotId(Number(e.target.value))}>
-                {lots.map(l => <option key={l.id} value={l.id}>{l.analyte} &middot; Lot {l.lot_number} ({l.level})</option>)}
-              </select>
-            </div>
-
-            {selected && (
-              <div className="mb-4 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
-                <span className="text-muted-foreground">Logging for </span>
-                <span className="font-semibold">{selected.analyte}</span>
-                <span className="text-muted-foreground"> &middot; Lot {selected.lot_number} &middot; {selected.level} ({selected.basis ? selected.basis.label : `mean ${selected.mfr_mean}, SD ${selected.mfr_sd}`})</span>
-              </div>
-            )}
-
-            {msg && (
-              <div className={"mb-4 rounded-md px-3 py-2 text-sm border " + (
-                msg.kind === "reject" ? "border-red-500/30 bg-red-500/10 text-red-700"
-                : msg.kind === "error" ? "border-amber-500/30 bg-amber-500/10 text-amber-800"
-                : "border-emerald-500/30 bg-emerald-500/10 text-emerald-700")}>
-                {msg.text}
-              </div>
-            )}
-
-            <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-muted-foreground mb-1">Result value *</label>
-                <input className={inputCls} type="text" inputMode="decimal" step="any" value={value} onChange={e => setValue(e.target.value)} placeholder="e.g. 102.3" required />
-              </div>
-              <div>
-                <label className="block text-xs text-muted-foreground mb-1">Result date *</label>
-                <input className={inputCls} type="date" value={date} onChange={e => setDate(e.target.value)} required />
-              </div>
-              <div>
-                <label className="block text-xs text-muted-foreground mb-1">Instrument</label>
-                <input className={inputCls} list="sp-qc-instruments" value={instrument} onChange={e => setInstrument(e.target.value)} placeholder="Select or type the analyzer" />
-                <datalist id="sp-qc-instruments">
-                  {instrumentSuggestions.map(i => <option key={i} value={i} />)}
-                </datalist>
-              </div>
-              <div>
-                <label className="block text-xs text-muted-foreground mb-1">Run time</label>
-                <input className={inputCls} type="time" value={runTime} onChange={e => setRunTime(e.target.value)} />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-xs text-muted-foreground mb-1">Comment</label>
-                <textarea className={inputCls} rows={2} value={comment} onChange={e => setComment(e.target.value)} placeholder="Optional context (reagent lot, calibrator lot, note)" />
-              </div>
-              <div className="sm:col-span-2 flex justify-end">
-                <button type="submit" disabled={submitting} className="text-white font-semibold py-2 px-5 rounded-md disabled:opacity-60" style={{ backgroundColor: "#01696F" }}>
-                  {submitting ? "Submitting..." : "Submit result"}
-                </button>
-              </div>
-            </form>
-
-            {recent.length > 0 && (
-              <div className="mt-6">
-                <div className="text-xs text-muted-foreground mb-1">Recent results on this lot</div>
-                <div className="overflow-auto max-h-[70vh]">
-                  <table className="w-full text-sm">
-                    <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted text-left text-xs text-muted-foreground border-b">
-                      <tr><th className="py-1.5 pr-2">Date</th><th className="py-1.5 pr-2">Value</th><th className="py-1.5 pr-2">Instrument</th><th className="py-1.5 pr-2">Accepted</th><th className="py-1.5 pr-2">Notes</th></tr>
-                    </thead>
-                    <tbody>
-                      {recent.map(r => (
-                        <Fragment key={r.id}>
-                          <tr className="border-b last:border-b-0">
-                            <td className="py-1.5 pr-2">{r.result_date}</td>
-                            <td className="py-1.5 pr-2 font-mono">{r.result_value}</td>
-                            <td className="py-1.5 pr-2 text-muted-foreground">{r.instrument || "-"}</td>
-                            <td className="py-1.5 pr-2">{r.accepted_for_reporting === 1 ? "yes" : "excluded"}</td>
-                            <td className="py-1.5 pr-2">
-                              <button
-                                type="button"
-                                onClick={() => { setNoteOpenId(noteOpenId === r.id ? null : r.id); setNoteDraft(""); }}
-                                className="text-xs underline text-muted-foreground hover:text-foreground"
-                              >
-                                {(r.notes?.length || 0) > 0 ? `${r.notes!.length} note${r.notes!.length === 1 ? "" : "s"}` : "Add"}
-                              </button>
-                            </td>
-                          </tr>
-                          {noteOpenId === r.id && (
-                            <tr className="border-b last:border-b-0 bg-muted/30">
-                              <td colSpan={5} className="py-2 px-2">
-                                <div className="space-y-2">
-                                  {(r.notes || []).length === 0 ? (
-                                    <div className="text-xs text-muted-foreground">No notes on this point yet.</div>
-                                  ) : (
-                                    (r.notes || []).map(n => (
-                                      <div key={n.id} className="rounded border border-border bg-background p-2">
-                                        <div className="text-sm whitespace-pre-wrap">{n.note}</div>
-                                        <div className="text-[11px] text-muted-foreground mt-0.5">{n.author_name} &middot; {new Date(n.created_at).toLocaleString()}</div>
-                                      </div>
-                                    ))
-                                  )}
-                                  {canAddNote ? (
-                                    <div className="space-y-1">
-                                      <textarea
-                                        className={inputCls}
-                                        rows={2}
-                                        maxLength={2000}
-                                        value={noteDraft}
-                                        onChange={e => setNoteDraft(e.target.value)}
-                                        placeholder="Add your investigation note: what you found, that this run was a rerun, etc."
-                                      />
-                                      <div className="flex justify-end">
-                                        <button
-                                          type="button"
-                                          disabled={noteBusy || !noteDraft.trim()}
-                                          onClick={() => addStaffNote(r.id)}
-                                          className="text-white text-xs font-semibold py-1.5 px-4 rounded-md disabled:opacity-60"
-                                          style={{ backgroundColor: "#01696F" }}
-                                        >
-                                          {noteBusy ? "Adding..." : "Add note"}
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="text-[11px] text-muted-foreground">Notes at this site are added by a Technical Consultant or supervisor.</div>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ── 2026-06-09 Tile screen w/ pending-count badges ────────────────────
 function TileScreenWithPendingCounts({
-  session, employee, onPick, onSwitchEmployee, onSignOut,
+  session, employee, onPick, onSignOut,
 }: {
   session: StaffPortalSession;
   employee: PortalEmployee;
-  onPick: (m: "policies" | "competency" | "quizzes" | "inventory" | "audit" | "qc") => void;
-  onSwitchEmployee: () => void;
+  onPick: (m: "policies" | "competency" | "quizzes" | "audit") => void;
   onSignOut: () => void;
 }) {
+  const [, navigate] = useLocation();
   const [pending, setPending] = useState<{ quizzes: number; policies: number; competencies: number } | null>(null);
 
   useEffect(() => {
@@ -596,13 +291,17 @@ function TileScreenWithPendingCounts({
     return () => { cancelled = true; };
   }, [employee.id, session.token]);
 
-  const tiles = [
-    { key: "policies" as const,    label: "Sign Policies",     available: true,                          pending: pending?.policies ?? null },
-    { key: "competency" as const,  label: "Sign Competencies", available: true,                          pending: pending?.competencies ?? null },
-    { key: "quizzes" as const,     label: "Take a Quiz",        available: true,                          pending: pending?.quizzes ?? null },
-    { key: "qc" as const,          label: "Record QC",          available: true,                          pending: null },
-    { key: "inventory" as const,   label: "Adjust Inventory",   available: !!employee.can_adjust_inventory, pending: null },
-    { key: "audit" as const,       label: "View Audit Trail",   available: !!employee.can_view_audit,       pending: null },
+  // #84 (2026-10-08): this is "My sign-offs" inside the main app, not a separate
+  // site. Sign-offs open here; Record QC and inventory open the same VeritaQC and
+  // VeritaStock screens the editors use (staff record there since #1540).
+  const labHome = `/labs/${session.lab.id}`;
+  const tiles: Array<{ key: string; label: string; available: boolean; pending: number | null; go: () => void; hint?: string }> = [
+    { key: "policies",   label: "Sign Policies",     available: true, pending: pending?.policies ?? null,     go: () => onPick("policies") },
+    { key: "competency", label: "Sign Competencies", available: true, pending: pending?.competencies ?? null, go: () => onPick("competency") },
+    { key: "quizzes",    label: "Take a Quiz",        available: true, pending: pending?.quizzes ?? null,      go: () => onPick("quizzes") },
+    { key: "qc",         label: "Record QC",          available: true, pending: null, go: () => navigate(`${labHome}/veritaqc-app`), hint: "Opens VeritaQC." },
+    { key: "inventory",  label: "Count Inventory",    available: true, pending: null, go: () => navigate(`${labHome}/veritastock`), hint: "Opens VeritaStock." },
+    { key: "audit",      label: "My Activity",        available: !!employee.can_view_audit, pending: null, go: () => onPick("audit") },
   ];
   const totalPending = (pending?.quizzes ?? 0) + (pending?.policies ?? 0) + (pending?.competencies ?? 0);
 
@@ -611,16 +310,13 @@ function TileScreenWithPendingCounts({
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <div className="text-xs uppercase tracking-wider text-muted-foreground">Staff Portal</div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground" data-testid="sp-heading">My sign-offs</div>
             <div className="font-serif text-xl font-bold">{`${employee.first_name}${employee.middle_initial ? ` ${employee.middle_initial}.` : ""} ${employee.last_name}`}</div>
             <div className="text-xs text-muted-foreground">
               {employee.title || "(no title)"} · {session.lab.name}
             </div>
           </div>
           <div className="flex flex-col items-end gap-1">
-            <button onClick={onSwitchEmployee} className="text-xs text-muted-foreground hover:underline" data-testid="sp-switch-employee">
-              Not me / switch
-            </button>
             <button onClick={onSignOut} className="text-xs text-muted-foreground hover:underline">
               Sign out
             </button>
@@ -645,7 +341,7 @@ function TileScreenWithPendingCounts({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="sp-tiles">
           {tiles.map((t) => {
             const clickable = t.available;
-            const onClick = () => { if (clickable) onPick(t.key); };
+            const onClick = () => { if (clickable) t.go(); };
             const pendingCount = t.pending;
             const hasPending = pendingCount != null && pendingCount > 0;
             return (
@@ -680,7 +376,7 @@ function TileScreenWithPendingCounts({
                     ? "Not enabled for this staff member."
                     : hasPending
                       ? `${pendingCount} pending. Tap to start.`
-                      : "Tap to begin."}
+                      : t.hint || "Tap to begin."}
                 </div>
               </button>
             );
@@ -1024,399 +720,6 @@ function StaffPortalPoliciesView({
             </div>
           )}
         </div>
-      </div>
-    </div>
-  );
-}
-
-// ── StaffPortalInventoryView (Wave K6, 2026-06-08) ────────────────────
-// Inline screen behind sp-tile-inventory. Two states:
-//   1. List: all inventory items for the lab, with search box. Tapping
-//      a row opens the adjust panel.
-//   2. Adjust: shows current qty, lets the staff member enter a new
-//      qty + optional reason, posts to
-//      /api/staff-portal-session/inventory/items/:id/adjust with the
-//      active employee_id. Server records the staff_employee_id and
-//      employee name in the audit log — better surveyor trail than
-//      typed initials.
-//
-// can_adjust_inventory toggle gates this entire view: the tile won't
-// even appear unless the director enabled it. Server double-checks
-// (returns 403 if the flag is off).
-interface PortalInventoryItem {
-  id: number;
-  item_name: string;
-  catalog_number: string | null;
-  lot_number: string | null;
-  department: string | null;
-  category: string | null;
-  quantity_on_hand: number; // usage_unit total stored server-side
-  unit: string | null;
-  storage_location: string | null;
-  barcode_value: string | null;
-  expiration_date: string | null;
-  // 2026-06-09 count-unit view (set by decorateKioskItem server-side)
-  count_unit?: string;
-  usage_unit?: string;
-  units_per_count_unit?: number;
-  count_on_hand?: number;
-}
-
-function StaffPortalInventoryView({
-  token, employee, labName, onBack, onSignOut,
-}: {
-  token: string;
-  employee: PortalEmployee;
-  labName: string;
-  onBack: () => void;
-  onSignOut: () => void;
-}) {
-  const [items, setItems] = useState<PortalInventoryItem[] | null>(null);
-  const [listError, setListError] = useState<string | null>(null);
-  const [active, setActive] = useState<PortalInventoryItem | null>(null);
-  const [search, setSearch] = useState("");
-  const [newQty, setNewQty] = useState<string>("");
-  const [reason, setReason] = useState<string>("");
-  const [adjusting, setAdjusting] = useState(false);
-  const [adjustError, setAdjustError] = useState<string | null>(null);
-  const [savedFlash, setSavedFlash] = useState<{ itemId: number; delta: number } | null>(null);
-  // Task #129: scan-first count workflow
-  const [showList, setShowList] = useState(false);
-  const [countWorkflowOpen, setCountWorkflowOpen] = useState(false);
-
-  function fetchList() {
-    setItems(null);
-    setListError(null);
-    fetch(`/api/staff-portal-session/inventory/items`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(async (r) => {
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((d) => setItems(d.items || []))
-      .catch((e: any) => setListError(e.message || "Could not load inventory"));
-  }
-
-  useEffect(() => { fetchList(); }, [employee.id]);
-
-  function openItem(it: PortalInventoryItem) {
-    setActive(it);
-    // Prefill with the count-unit view so the staff member is editing
-    // "how many boxes" not "how many tests" by default. Falls back to
-    // raw qty when the item is at the each level (pack_size = 1).
-    setNewQty(String(it.count_on_hand ?? it.quantity_on_hand));
-    setReason("");
-    setAdjustError(null);
-  }
-
-  function closeItem() {
-    setActive(null);
-    setNewQty("");
-    setReason("");
-    setAdjustError(null);
-  }
-
-  async function submitAdjust() {
-    if (!active) return;
-    const parsed = Number(newQty);
-    if (!Number.isFinite(parsed) || parsed < 0 || !Number.isInteger(parsed)) {
-      setAdjustError("Enter a whole number, 0 or greater.");
-      return;
-    }
-    setAdjusting(true);
-    setAdjustError(null);
-    try {
-      // Send new_count (in count_unit) so the server multiplies by
-      // pack_size to derive the usage_unit total. Falls back to
-      // new_quantity for items at the each level (pack_size = 1) so the
-      // legacy direct path keeps working.
-      const isCountUnit = (active.units_per_count_unit ?? 1) > 1 && active.count_unit && active.count_unit !== active.usage_unit;
-      const payload: any = {
-        employee_id: employee.id,
-        reason: reason.trim() || null,
-      };
-      if (isCountUnit) payload.new_count = parsed;
-      else payload.new_quantity = parsed;
-      const r = await fetch(`/api/staff-portal-session/inventory/items/${active.id}/adjust`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(payload),
-      });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
-      const updated: PortalInventoryItem = data.item;
-      setItems((prev) => prev?.map((row) => row.id === updated.id ? updated : row) ?? prev);
-      setSavedFlash({ itemId: updated.id, delta: data.adjustment?.delta ?? 0 });
-      window.setTimeout(() => setSavedFlash((cur) => (cur?.itemId === updated.id ? null : cur)), 4000);
-      closeItem();
-    } catch (e: any) {
-      setAdjustError(e.message || "Adjustment failed");
-    } finally {
-      setAdjusting(false);
-    }
-  }
-
-  const visible = items
-    ? items.filter((it) => {
-        const q = search.trim().toLowerCase();
-        if (!q) return true;
-        return [it.item_name, it.catalog_number, it.lot_number, it.barcode_value, it.storage_location]
-          .filter(Boolean)
-          .some((v) => String(v).toLowerCase().includes(q));
-      })
-    : null;
-
-  // ── Adjust panel ─────────────────────────────────────────────────
-  if (active) {
-    return (
-      <div className="min-h-screen bg-background p-6" data-testid="sp-inventory-adjust">
-        <div className="max-w-md mx-auto">
-          <div className="flex items-center justify-between mb-4">
-            <button onClick={closeItem} className="text-xs text-muted-foreground hover:underline" data-testid="sp-inventory-back-to-list">
-              &larr; Back to inventory
-            </button>
-            <button onClick={onSignOut} className="text-xs text-muted-foreground hover:underline">
-              Sign out
-            </button>
-          </div>
-          <div className="border border-border rounded-lg bg-card p-4 mb-4">
-            <div className="text-xs uppercase tracking-wider text-muted-foreground">{labName} &middot; Item</div>
-            <div className="font-serif text-xl font-bold" data-testid="sp-inventory-detail-name">{active.item_name}</div>
-            <div className="text-xs text-muted-foreground mt-1">
-              {active.catalog_number && <>Catalog {active.catalog_number}</>}
-              {active.lot_number && <> &middot; Lot {active.lot_number}</>}
-              {active.storage_location && <> &middot; {active.storage_location}</>}
-            </div>
-            {(() => {
-              const pack = active.units_per_count_unit ?? 1;
-              const countUnit = active.count_unit || active.usage_unit || active.unit || "each";
-              const usageUnit = active.usage_unit || active.unit || "each";
-              const hasPack = pack > 1 && countUnit !== usageUnit;
-              return (
-                <div className="text-xs text-muted-foreground mt-1">
-                  On hand: <span className="font-mono font-semibold">{active.count_on_hand ?? active.quantity_on_hand}</span>
-                  {" "}{countUnit}{(active.count_on_hand ?? active.quantity_on_hand) === 1 ? "" : "s"}
-                  {hasPack && <span className="ml-1">({active.quantity_on_hand} {usageUnit}s)</span>}
-                </div>
-              );
-            })()}
-          </div>
-
-          <div className="border border-border rounded-lg bg-card p-4">
-            {(() => {
-              const pack = active.units_per_count_unit ?? 1;
-              const countUnit = active.count_unit || active.usage_unit || active.unit || "each";
-              const usageUnit = active.usage_unit || active.unit || "each";
-              const hasPack = pack > 1 && countUnit !== usageUnit;
-              const previewQty = Number(newQty);
-              const showPreview = hasPack && Number.isFinite(previewQty) && previewQty >= 0 && Number.isInteger(previewQty);
-              return (
-                <>
-                  <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1" htmlFor="sp-inventory-new-qty">
-                    New count ({countUnit}s)
-                  </label>
-                  <input
-                    id="sp-inventory-new-qty"
-                    type="text"
-                    inputMode="numeric"
-                    min={0}
-                    step={1}
-                    value={newQty}
-                    onChange={(e) => setNewQty(e.target.value)}
-                    className="w-full border border-border rounded-md p-2 text-lg font-mono text-center bg-background mb-1"
-                    data-testid="sp-inventory-new-qty"
-                  />
-                  {showPreview ? (
-                    <div className="text-xs text-muted-foreground mb-3 text-center" data-testid="sp-inventory-new-qty-preview">
-                      = {previewQty * pack} {usageUnit}s (pack of {pack})
-                    </div>
-                  ) : <div className="mb-2" />}
-                </>
-              );
-            })()}
-            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1" htmlFor="sp-inventory-reason">
-              Reason (optional)
-            </label>
-            <input
-              id="sp-inventory-reason"
-              type="text"
-              placeholder="Received shipment / used in run / damaged / ..."
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              className="w-full border border-border rounded-md p-2 text-sm bg-background mb-3"
-              data-testid="sp-inventory-reason"
-            />
-            {adjustError && (
-              <div className="text-xs text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 rounded p-2 mb-3">
-                {adjustError}
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={submitAdjust}
-              disabled={adjusting}
-              className="w-full text-white font-semibold py-2 rounded-md disabled:opacity-50"
-              style={{ backgroundColor: "#01696F" }}
-              data-testid="sp-inventory-save"
-            >
-              {adjusting ? "Saving..." : "Save adjustment"}
-            </button>
-            <p className="text-xs text-muted-foreground mt-2">
-              Your name, the before / after quantities, and the reason are recorded in the audit trail.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── List screen ───────────────────────────────────────────────────
-  return (
-    <div className="min-h-screen bg-background p-6" data-testid="sp-inventory-list">
-      <div className="max-w-2xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <div className="text-xs uppercase tracking-wider text-muted-foreground">Adjust Inventory</div>
-            <div className="font-serif text-xl font-bold">{labName}</div>
-            <div className="text-xs text-muted-foreground">Acting as {employee.first_name} {employee.last_name}</div>
-          </div>
-          <div className="flex flex-col items-end gap-1">
-            <button onClick={onBack} className="text-xs text-muted-foreground hover:underline" data-testid="sp-inventory-back">
-              &larr; Back to modules
-            </button>
-            <button onClick={onSignOut} className="text-xs text-muted-foreground hover:underline">
-              Sign out
-            </button>
-          </div>
-        </div>
-
-        {/* Task #129: scan-first count workflow */}
-        <button
-          type="button"
-          onClick={() => setCountWorkflowOpen(true)}
-          className="w-full text-white font-semibold py-3 rounded-md mb-3"
-          style={{ backgroundColor: "#01696F" }}
-          data-testid="sp-inventory-open-count-workflow"
-        >
-          Scan to count
-        </button>
-
-        <div className="mb-3 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowList(s => !s)}
-            className="text-xs px-3 py-1 rounded border border-border bg-card text-muted-foreground"
-            data-testid="sp-inventory-toggle-list"
-          >
-            {showList ? "Hide list" : "Show item list"}
-          </button>
-          {showList && (
-            <input
-              type="text"
-              placeholder="Search item name, catalog, lot, location..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="flex-1 border border-border rounded-md p-2 text-sm bg-background"
-              data-testid="sp-inventory-search"
-            />
-          )}
-        </div>
-
-        {!showList && (
-          <div className="border border-border rounded-lg bg-card p-4 text-xs text-muted-foreground text-center">
-            Tap <span className="font-medium">Scan to count</span> above to scan a barcode. Don't have the barcode handy? Tap <span className="font-medium">Show item list</span> to browse.
-          </div>
-        )}
-
-        {showList && <div className="border border-border rounded-lg bg-card p-4">
-          {listError && (
-            <div className="text-xs text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 rounded p-2 mb-3">
-              {listError}
-            </div>
-          )}
-          {visible === null ? (
-            <div className="text-sm text-muted-foreground py-6 text-center">Loading inventory...</div>
-          ) : visible.length === 0 ? (
-            <div className="text-sm text-muted-foreground py-6 text-center">
-              {items && items.length === 0
-                ? <>No inventory items on this lab yet. Ask the lab director.</>
-                : <>No items match "{search}".</>}
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {visible.map((it) => (
-                <button
-                  key={it.id}
-                  type="button"
-                  onClick={() => openItem(it)}
-                  className="w-full text-left py-3 px-2 hover:bg-muted flex items-center justify-between gap-3"
-                  data-testid="sp-inventory-row"
-                >
-                  <div className="flex-1">
-                    <div className="text-sm font-medium" data-testid="sp-inventory-row-name">{it.item_name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {it.catalog_number && <>Catalog {it.catalog_number}{" "}</>}
-                      {it.lot_number && <>&middot; Lot {it.lot_number}{" "}</>}
-                      {it.storage_location && <>&middot; {it.storage_location}</>}
-                    </div>
-                    {savedFlash?.itemId === it.id && (
-                      <div className="text-xs text-emerald-700 mt-1" data-testid="sp-inventory-row-saved">
-                        Saved {savedFlash.delta >= 0 ? "+" : ""}{savedFlash.delta} {it.unit || ""}
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    {(() => {
-                      const pack = it.units_per_count_unit ?? 1;
-                      const countUnit = it.count_unit || it.usage_unit || it.unit || "each";
-                      const usageUnit = it.usage_unit || it.unit || "each";
-                      const hasPack = pack > 1 && countUnit !== usageUnit;
-                      const displayQty = it.count_on_hand ?? it.quantity_on_hand;
-                      return (
-                        <>
-                          <div className="text-base font-mono font-semibold" data-testid="sp-inventory-row-qty">
-                            {displayQty}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {countUnit}{displayQty === 1 ? "" : "s"}
-                          </div>
-                          {hasPack && (
-                            <div className="text-[10px] text-muted-foreground">
-                              ({it.quantity_on_hand} {usageUnit}s)
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>}
-
-        <InventoryCountWorkflow
-          open={countWorkflowOpen}
-          onClose={() => {
-            setCountWorkflowOpen(false);
-            // Refresh the list so any saved adjustments reflect
-            fetch(`/api/staff-portal-session/inventory/items`, {
-              headers: { Authorization: `Bearer ${token}` },
-            })
-              .then(r => r.ok ? r.json() : null)
-              .then(d => { if (d?.items) setItems(d.items); })
-              .catch(() => {});
-          }}
-          authHeaders={() => ({ Authorization: `Bearer ${token}` })}
-          lookupPath={"/api/staff-portal-session/inventory/items/by-barcode"}
-          adjustItemBasePath={"/api/staff-portal-session/inventory/items"}
-          extraAdjustBody={{ employee_id: employee.id }}
-          signerWarning={null}
-          onAdjustComplete={(updated: CountItem) => {
-            setItems(prev => prev?.map(it => it.id === updated.id ? { ...it, ...updated } as any : it) ?? prev);
-          }}
-        />
       </div>
     </div>
   );

@@ -40,7 +40,9 @@ test.describe("VeritaQC writer log-form clarity", () => {
 });
 
 test.describe("Staff Portal QC entry", () => {
-  test("a staff seat sees a Record QC tile and can open the log screen", async ({ page }) => {
+  // #84 (2026-10-08): the Record QC tile on My sign-offs opens the main VeritaQC
+  // screen (staff record there since #1540), not a separate staff log screen.
+  test("a staff seat sees a Record QC tile and it opens VeritaQC", async ({ page }) => {
     if (!STAFF_TOKEN) { test.skip(true, "Set PW_STAFF_TOKEN (a staff-portal seat token)."); return; }
     await injectAuth(page, BASE, STAFF_TOKEN);
     await page.goto(`${BASE}/staff-access`, { waitUntil: "networkidle" });
@@ -49,8 +51,6 @@ test.describe("Staff Portal QC entry", () => {
     await expect(tile).toBeVisible();
     await tile.click();
 
-    await expect(page.getByRole("heading", { name: /Record QC/i })).toBeVisible();
-    // The staff log screen carries the same "Logging for" clarity.
-    await expect(page.getByText(/Logging for|No active control lots/i)).toBeVisible();
+    await expect(page).toHaveURL(/\/labs\/\d+\/veritaqc-app/);
   });
 });

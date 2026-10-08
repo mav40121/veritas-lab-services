@@ -522,6 +522,8 @@ function AppContent() {
               landing on the Staff Portal instead of a dead page. */}
           <Route path="/inventory">{() => <Redirect to="/staff-access" />}</Route>
           <Route path="/staff-access" component={StaffPortalPage} />
+          {/* #84: the same page as "My sign-offs" inside the lab (My work links here). */}
+          <Route path="/labs/:labId/my-signoffs" component={StaffPortalPage} />
           <Route path="/surveyor/:token" component={SurveyorViewPage} />
 
           {/* Multi-Lab Tier 2 — Phase 2b: lab-scoped variants of every workspace page.
