@@ -1104,8 +1104,12 @@ export function wrapVerificationPageHtml(
 export function registerVeritaCheckVerificationRoutes(
   app: Express,
   authMiddleware: any,
-  requireWriteAccess: any
+  requireWriteAccess: any,
+  requireModuleEdit: (module: string) => any,
 ) {
+  // #84 (2026-10-08): building a verification package is VeritaCheck setup; a
+  // staff login or non-admin member is view-only.
+  const editVerification = requireModuleEdit("veritacheck");
 
   // GET CLSI guidance for all elements (must be before /:id routes)
   app.get("/api/veritacheck/verifications/clsi-guidance", authMiddleware, (_req: any, res) => {
@@ -1217,7 +1221,7 @@ export function registerVeritaCheckVerificationRoutes(
 
   // POST create new verification (legacy — falls back to users.lab_id for
   // backward compatibility with unprefixed callers).
-  app.post("/api/veritacheck/verifications", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/veritacheck/verifications", authMiddleware, requireWriteAccess, editVerification, (req: any, res) => {
     const userId = req.ownerUserId ?? req.user.userId;
     const fallbackRow = sqlite.prepare("SELECT lab_id FROM users WHERE id = ?").get(userId) as any;
     return createVerificationRow(req, res, fallbackRow?.lab_id ?? null);
@@ -1225,7 +1229,7 @@ export function registerVeritaCheckVerificationRoutes(
 
   // Lab-scoped POST — stamps lab_id from the URL-validated scope so new
   // verifications land in the right lab even when users.lab_id is stale.
-  app.post("/api/labs/:labId/veritacheck/verifications", authMiddleware, verifLabScopeMW, requireWriteAccess, (req: any, res) => {
+  app.post("/api/labs/:labId/veritacheck/verifications", authMiddleware, verifLabScopeMW, requireWriteAccess, editVerification, (req: any, res) => {
     return createVerificationRow(req, res, req.scope.labId);
   });
 
@@ -1233,7 +1237,7 @@ export function registerVeritaCheckVerificationRoutes(
   // 2026-06-09 Shape A class sweep: resolveRowForMutation accepts ownership
   // either via the verification's user_id OR via active lab_members membership
   // of the verification's lab_id.
-  app.patch("/api/veritacheck/verifications/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.patch("/api/veritacheck/verifications/:id", authMiddleware, requireWriteAccess, editVerification, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const { row: existing, status } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
     if (!existing) {
@@ -1261,7 +1265,7 @@ export function registerVeritaCheckVerificationRoutes(
   });
 
   // DELETE verification — Shape A guard via resolveRowForMutation.
-  app.delete("/api/veritacheck/verifications/:id", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/veritacheck/verifications/:id", authMiddleware, requireWriteAccess, editVerification, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const { row: existing, status } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
     if (!existing) {
@@ -1284,7 +1288,7 @@ export function registerVeritaCheckVerificationRoutes(
   // ── Instruments (serial numbers) ──────────────────────────────────────────
 
   // POST add serial number unit
-  app.post("/api/veritacheck/verifications/:id/instruments", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/veritacheck/verifications/:id/instruments", authMiddleware, requireWriteAccess, editVerification, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     // Shape A guard: accept ownership or lab membership on the parent verification.
     const { row: parent, status: parentStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
@@ -1303,7 +1307,7 @@ export function registerVeritaCheckVerificationRoutes(
   });
 
   // PATCH update instrument unit
-  app.patch("/api/veritacheck/verifications/:id/instruments/:unitId", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.patch("/api/veritacheck/verifications/:id/instruments/:unitId", authMiddleware, requireWriteAccess, editVerification, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     // Shape A guard: accept ownership or lab membership on the parent verification.
     const { row: parent, status: parentStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
@@ -1328,7 +1332,7 @@ export function registerVeritaCheckVerificationRoutes(
   });
 
   // DELETE instrument unit
-  app.delete("/api/veritacheck/verifications/:id/instruments/:unitId", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/veritacheck/verifications/:id/instruments/:unitId", authMiddleware, requireWriteAccess, editVerification, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     // Shape A guard: accept ownership or lab membership on the parent verification.
     const { row: parent, status: parentStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
@@ -1371,7 +1375,7 @@ export function registerVeritaCheckVerificationRoutes(
     res.json(rows);
   });
 
-  app.post("/api/veritacheck/verifications/:id/analytes", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/veritacheck/verifications/:id/analytes", authMiddleware, requireWriteAccess, editVerification, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const { row: parent, status: parentStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
     if (!parent) {
@@ -1424,7 +1428,7 @@ export function registerVeritaCheckVerificationRoutes(
     res.json({ id: newAnalyteId, ok: true, slotsSeeded });
   });
 
-  app.patch("/api/veritacheck/verifications/:id/analytes/:analyteId", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.patch("/api/veritacheck/verifications/:id/analytes/:analyteId", authMiddleware, requireWriteAccess, editVerification, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const { row: parent, status: parentStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
     if (!parent) {
@@ -1462,7 +1466,7 @@ export function registerVeritaCheckVerificationRoutes(
     res.json({ ok: true });
   });
 
-  app.post("/api/veritacheck/verifications/:id/analytes/:analyteId/finalize", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/veritacheck/verifications/:id/analytes/:analyteId/finalize", authMiddleware, requireWriteAccess, editVerification, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const { row: parent, status: parentStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
     if (!parent) {
@@ -1486,7 +1490,7 @@ export function registerVeritaCheckVerificationRoutes(
     res.json({ ok: true });
   });
 
-  app.delete("/api/veritacheck/verifications/:id/analytes/:analyteId", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.delete("/api/veritacheck/verifications/:id/analytes/:analyteId", authMiddleware, requireWriteAccess, editVerification, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const { row: parent, status: parentStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
     if (!parent) {
@@ -1528,7 +1532,7 @@ export function registerVeritaCheckVerificationRoutes(
   // POST .../analytes/:analyteId/amend on a finalized analyte clones
   // it into a new draft analyte with amends_analyte_id pointing at
   // the original. Original stays finalized in the audit trail.
-  app.post("/api/veritacheck/verifications/:id/analytes/:analyteId/amend", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.post("/api/veritacheck/verifications/:id/analytes/:analyteId/amend", authMiddleware, requireWriteAccess, editVerification, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     const { row: parent, status: parentStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
     if (!parent) {
@@ -1567,7 +1571,7 @@ export function registerVeritaCheckVerificationRoutes(
   // ── Element studies ───────────────────────────────────────────────────────
 
   // PATCH update an element study slot (link study, set rationale, mark pass/fail)
-  app.patch("/api/veritacheck/verifications/:id/studies/:studySlotId", authMiddleware, requireWriteAccess, (req: any, res) => {
+  app.patch("/api/veritacheck/verifications/:id/studies/:studySlotId", authMiddleware, requireWriteAccess, editVerification, (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaCheck™ subscription required" });
     // Shape A guard: accept ownership or lab membership on the parent verification.
     const { row: parent, status: parentStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
