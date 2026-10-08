@@ -12,7 +12,7 @@ export function StaffMyWorkCard({ className = "" }: { className?: string }) {
     { href: labRoute("/veritatrack-app"), icon: ClipboardCheck, title: "Sign off tasks", detail: "Daily, weekly and monthly tasks assigned to the lab." },
     { href: labRoute("/veritastock"), icon: PackageCheck, title: "Count and receive inventory", detail: "Scan to count, receive orders and write off expired stock." },
     { href: labRoute("/equipment-app"), icon: Wrench, title: "Log maintenance", detail: "Record maintenance done on an instrument." },
-    { href: "/staff-access", icon: PenLine, title: "My sign-offs", detail: "Policies and competency items waiting for your signature." },
+    { href: labRoute("/my-signoffs"), icon: PenLine, title: "My sign-offs", detail: "Policies, competencies and quizzes waiting for your signature." },
   ];
   return (
     <div className={`rounded-lg border bg-card ${className}`} data-testid="staff-my-work">
