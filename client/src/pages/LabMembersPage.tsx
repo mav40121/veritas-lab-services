@@ -34,6 +34,7 @@ interface PendingInvite {
   status: string;
   invite_token: string | null;
   seat_type: "active" | "view_only";
+  invitee_name?: string | null;
 }
 
 interface SeatLimits {
@@ -129,7 +130,7 @@ export default function LabMembersPage() {
   const isOwner = myRole === "owner";
   const canManage = myRole === "owner" || myRole === "admin";
 
-  const { data, isLoading } = useQuery<{ members: LabMember[]; pendingInvites?: PendingInvite[]; seatLimits?: SeatLimits; seatCounts?: SeatCounts; medicalDirector?: { email: string; name: string | null } | null }>({
+  const { data, isLoading } = useQuery<{ members: LabMember[]; pendingInvites?: PendingInvite[]; seatLimits?: SeatLimits; seatCounts?: SeatCounts; staffPortal?: { band: "small" | "medium" | "large" | null; maxStaff: number | null; used: number } | null; medicalDirector?: { email: string; name: string | null } | null }>({
     queryKey: [`/api/labs/${activeLabId}/members`],
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!activeLabId,
@@ -138,6 +139,9 @@ export default function LabMembersPage() {
   const pendingInvites = data?.pendingInvites || [];
   const seatLimits = data?.seatLimits;
   const seatCounts = data?.seatCounts;
+  // Bug 4 (2026-10-09): the lab's Staff Portal band, so staff show as used of it.
+  const staffPortal = data?.staffPortal ?? null;
+  const bandLabel = staffPortal?.band ? `${staffPortal.band.charAt(0).toUpperCase()}${staffPortal.band.slice(1)} band` : null;
   // Designated Laboratory Medical Director (may be an active member or, as with
   // a director who has not accepted yet, a pending invite). Matched by email.
   const mdEmail = (data?.medicalDirector?.email || "").trim().toLowerCase();
@@ -180,7 +184,10 @@ export default function LabMembersPage() {
         });
         return res.json();
       }
-      const res = await apiRequest("POST", `/api/labs/${activeLabId}/members`, { email: inviteEmail, role: inviteRole, seatType: inviteSeatType });
+      // Bug 2 (2026-10-09): every invite carries the person's name, not only Staff.
+      const res = await apiRequest("POST", `/api/labs/${activeLabId}/members`, {
+        email: inviteEmail, role: inviteRole, seatType: inviteSeatType, firstName: inviteFirstName, lastName: inviteLastName,
+      });
       return res.json();
     },
     onSuccess: (r) => {
@@ -343,7 +350,11 @@ export default function LabMembersPage() {
                   staff belong in the Staff Portal, not seats. */}
               <div className="flex items-center gap-3">
                 <div>
-                  <div className="font-medium" data-testid="staff-portal-count">{staffPortalInvites.length} read-and-sign staff</div>
+                  <div className="font-medium" data-testid="staff-portal-count">
+                    {staffPortal?.maxStaff
+                      ? `${staffPortal.used} of ${staffPortal.maxStaff} read-and-sign staff (${bandLabel})`
+                      : `${staffPortal ? staffPortal.used : staffPortalInvites.length} read-and-sign staff`}
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     Bench staff who read and sign policies, record QC, and take inventory. They draw from your Staff Portal band, not your active seats, so adding them never uses an active seat. Add one above with the Staff (read and sign) role.
                   </div>
@@ -384,20 +395,21 @@ export default function LabMembersPage() {
                   <select id="invite-role" value={inviteRole} onChange={e => setInviteRole(e.target.value as "admin" | "staff" | "medical_director")} className="w-full h-10 border border-input bg-background rounded-md px-3 text-sm" data-testid="invite-role-select">
                     <option value="staff">Staff (read and sign)</option>
                     <option value="admin" disabled={!isOwner}>Admin / active{!isOwner ? " (owner only)" : ""}</option>
-                    <option value="medical_director">Medical Director (free)</option>
+                    <option value="medical_director" disabled={!isOwner}>Medical Director (free){!isOwner ? " (owner only)" : ""}</option>
                   </select>
                 </div>
                 <div className="flex items-end">
                   <Button
                     onClick={() => inviteMutation.mutate()}
-                    disabled={inviteMutation.isPending || !inviteEmail.includes("@") || (inviteRole === "staff" && (!inviteFirstName.trim() || !inviteLastName.trim()))}
+                    disabled={inviteMutation.isPending || !inviteEmail.includes("@") || !inviteFirstName.trim() || !inviteLastName.trim()}
                     data-testid="invite-send-btn"
                   >
                     {inviteMutation.isPending && <Loader2 className="animate-spin mr-1" size={14} />} Send invite
                   </Button>
                 </div>
               </div>
-              {inviteRole === "staff" && (
+              {/* Bug 2 (2026-10-09): first and last name for EVERY role. They were
+                  Staff-only, a holdover from the retired kiosk. */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
                     <Label htmlFor="invite-first" className="text-xs">First name</Label>
@@ -408,10 +420,9 @@ export default function LabMembersPage() {
                     <Input id="invite-last" value={inviteLastName} onChange={e => setInviteLastName(e.target.value)} placeholder="Last name" data-testid="invite-last-name" />
                   </div>
                 </div>
-              )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Three kinds of access. Admin / active seats are your writers: they create studies, upload policies, and enter or review data, and they count against your tier's active-seat cap. Staff seats are read and sign: bench staff who read and sign policies, record QC, and take inventory. They draw from your Staff Portal band, not your active seats, so adding them does not use an active seat. Medical Director is one free seat and is the person VeritaPolicy approvals and QC co-sign route to. You can also set or change the Medical Director on any existing member in the table below, the owner included.
+              Three kinds of access. Admin / active seats are your writers: they create studies, upload policies, and enter or review data, and they count against your tier's active-seat cap. Staff seats are read and sign: bench staff who read and sign policies, record QC, and take inventory. They draw from your Staff Portal band, not your active seats, so adding them does not use an active seat. Medical Director is one free seat and is the person VeritaPolicy approvals and QC co-sign route to. The owner can also set or change the Medical Director on any existing member in the table below, the owner included.
             </p>
           </CardContent>
         </Card>
@@ -519,8 +530,10 @@ export default function LabMembersPage() {
                           )}
                           {/* Medical Director is an additive designation (one free seat),
                               not a role swap, so it is available on ANY member row, the
-                              owner included. */}
-                          {canManage && (
+                              owner included. Designating the director is an OWNER action
+                              (bug 3, 2026-10-09; the server route has been owner-only since
+                              2026-10-03), so admins see the badge but not the buttons. */}
+                          {isOwner && (
                             isMedicalDirector(m.email) ? (
                               <Button size="sm" variant="ghost" data-testid="clear-md-btn" onClick={() => mdMutation.mutate({ email: "", name: "" })} disabled={mdMutation.isPending} title="Remove this person as the lab's Medical Director">
                                 <Stethoscope size={12} className="mr-1" /> Clear medical director
@@ -560,6 +573,9 @@ export default function LabMembersPage() {
                     return (
                       <tr key={`p-${inv.seat_id}`} className="border-b last:border-b-0 bg-amber-50/30">
                         <td className="py-2 pr-3">
+                          {inv.invitee_name && (
+                            <div className="font-medium flex items-center gap-2 flex-wrap" data-testid="pending-invitee-name">{inv.invitee_name}</div>
+                          )}
                           <div className="font-medium text-muted-foreground italic flex items-center gap-2 flex-wrap">
                             {inv.seat_email}
                             {isMedicalDirector(inv.seat_email) && medicalDirectorBadge(true)}
@@ -591,13 +607,13 @@ export default function LabMembersPage() {
                               <RotateCw size={12} className="mr-1" /> Reissue
                             </Button>
                           )}
-                          {canManage && (
+                          {isOwner && (
                             isMedicalDirector(inv.seat_email) ? (
                               <Button size="sm" variant="ghost" onClick={() => mdMutation.mutate({ email: "", name: "" })} disabled={mdMutation.isPending} title="Remove this pending invite as the lab's Medical Director">
                                 <Stethoscope size={12} className="mr-1" /> Clear medical director
                               </Button>
                             ) : (
-                              <Button size="sm" variant="outline" onClick={() => mdMutation.mutate({ email: inv.seat_email, name: "" })} disabled={mdMutation.isPending} title="Make this pending invite the lab's Medical Director (one free seat)">
+                              <Button size="sm" variant="outline" onClick={() => mdMutation.mutate({ email: inv.seat_email, name: inv.invitee_name || "" })} disabled={mdMutation.isPending} title="Make this pending invite the lab's Medical Director (one free seat)">
                                 <Stethoscope size={12} className="mr-1" /> Make medical director
                               </Button>
                             )
