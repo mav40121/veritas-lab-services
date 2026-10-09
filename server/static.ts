@@ -429,12 +429,17 @@ export function serveStatic(app: Express) {
 
   // SPA catch-all: only for routes that are NOT API requests or static asset requests
   app.use("/{*path}", (req, res, next) => {
-    // Never intercept API routes - let Express route handlers handle them
-    if (req.path.startsWith("/api")) {
-      return next();
+    // 2026-10-09: read the FULL path. Inside app.use("/{*path}") Express 5 makes
+    // req.path relative to the mount (it is "/" here), so the old
+    // req.path.startsWith("/api") never matched and every unknown /api address
+    // got the website's HTML with a 200, which hid broken or removed API calls.
+    const fullPath = String(req.originalUrl || req.url || "").split("?")[0];
+    // An /api address that no route matched is a real 404, as JSON.
+    if (fullPath.startsWith("/api/") || fullPath === "/api") {
+      return res.status(404).json({ error: "Not found", path: fullPath });
     }
     // If the request looks like a file (has an extension), return 404 instead of index.html
-    if (req.path.match(/\.[a-zA-Z0-9]+$/)) {
+    if (fullPath.match(/\.[a-zA-Z0-9]+$/)) {
       return next();
     }
     // Serve the index shell via getIndexHtml so the VeritaStock deployment flag
