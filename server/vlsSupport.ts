@@ -50,6 +50,7 @@ const ALWAYS: Record<string, string> = {
   "PATCH /api/labs/:labId/vls-support": "change its own access to a lab",
   "POST /api/labs/:labId/director-delegations": "write a medical director delegation",
   "PUT /api/labs/:labId/director-delegations/:id": "edit a medical director delegation",
+  "DELETE /api/labs/:labId/director-delegations/:id": "discard a medical director delegation draft",
   "POST /api/labs/:labId/director-delegations/:id/sign": "sign a medical director delegation",
   "POST /api/labs/:labId/director-delegations/:id/revoke": "revoke a medical director delegation",
   "PATCH /api/labs/:labId/members/:memberId": "change a member role",
