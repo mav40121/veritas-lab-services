@@ -1,0 +1,425 @@
+[
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR210390",
+  "parent": "K210858",
+  "analyte": "Phenobarbital",
+  "specialty": "Toxicology / TDM",
+  "complexity": "MODERATE",
+  "effective": "03/17/2022"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200364",
+  "parent": "K861387",
+  "analyte": "Creatine kinase MB fraction (CKMB)",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "08/18/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K030626",
+  "analyte": "C-reactive protein (CRP)",
+  "specialty": "General Immunology",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K934273",
+  "analyte": "Ethanol (alcohol)",
+  "specialty": "Toxicology / TDM",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K954933",
+  "analyte": "Acetaminophen",
+  "specialty": "Toxicology / TDM",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K182063",
+  "analyte": "Carbamazepine",
+  "specialty": "Toxicology / TDM",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K861367",
+  "analyte": "Theophylline",
+  "specialty": "Toxicology / TDM",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K081543",
+  "analyte": "Phenytoin",
+  "specialty": "Toxicology / TDM",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K942610",
+  "analyte": "Digoxin",
+  "specialty": "Toxicology / TDM",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K902356",
+  "analyte": "Salicylates",
+  "specialty": "Toxicology / TDM",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K924488",
+  "analyte": "Lithium",
+  "specialty": "Toxicology / TDM",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "X090008",
+  "analyte": "Lactate dehydrogenase (LDH)",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K820723",
+  "analyte": "Ammonia, plasma/serum",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "X090001",
+  "analyte": "Alanine aminotransferase (ALT) (SGPT)",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K190490",
+  "analyte": "Triglyceride",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "X090007",
+  "analyte": "Lactic acid (lactate)",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "X090009",
+  "analyte": "Lipase",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K190520",
+  "analyte": "Calcium, total",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K001679",
+  "analyte": "Aspartate aminotransferase (AST) (SGOT)",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K042006",
+  "analyte": "HDL cholesterol",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K182072",
+  "analyte": "Glucose",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K932729",
+  "analyte": "Phosphorus",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K081411",
+  "analyte": "Sodium",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K073157",
+  "analyte": "Potassium",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K052867",
+  "analyte": "Iron binding capacity, total",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K840606",
+  "analyte": "Bilirubin, direct",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K182063",
+  "analyte": "Creatinine",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K833833",
+  "analyte": "Creatine kinase (CK)",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K190490",
+  "analyte": "Cholesterol",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K190807",
+  "analyte": "Alkaline phosphatase (ALP)",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K023876",
+  "analyte": "Magnesium",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K812027",
+  "analyte": "Amylase",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K190326",
+  "analyte": "Urea (BUN)",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K182063",
+  "analyte": "Bilirubin, total",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K910143",
+  "analyte": "Iron",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K182072",
+  "analyte": "Chloride",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K041720",
+  "analyte": "LDL cholesterol",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K182072",
+  "analyte": "Carbon dioxide, total (CO2)",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K932728",
+  "analyte": "Uric acid",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K912217",
+  "analyte": "Cholinesterase",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "X090013",
+  "analyte": "Protein, total, urine",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "X090010",
+  "analyte": "Cerebrospinal fluid (CSF) protein",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K840606",
+  "analyte": "Bilirubin, neonatal",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K840606",
+  "analyte": "Bilirubin, unbound",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "X090006",
+  "analyte": "Gamma glutamyl transferase (GGT)",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "K023875",
+  "analyte": "Albumin",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ },
+ {
+  "system": "Ortho Clinical Diagnostics VITROS XT 3400 Chemistry System",
+  "document": "CR200111",
+  "parent": "X090011",
+  "analyte": "Protein, total",
+  "specialty": "General Chemistry",
+  "complexity": "MODERATE",
+  "effective": "04/06/2020"
+ }
+]
