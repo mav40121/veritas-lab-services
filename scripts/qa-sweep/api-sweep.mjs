@@ -204,17 +204,18 @@ const MD_ONLY = [
 // routes must ADMIT it (read-and-sign, plus the operational RECORD writes). A portal read
 // that 401/403s is UNDER-PERMISSION (staff wrongly locked out of their own door).
 const STAFF_PORTAL_READS = [
-  '/api/staff-portal-session/qc/lots', '/api/staff-portal-session/qc/results',
   '/api/staff-portal-session/employees', '/api/staff-portal-session/policies',
-  '/api/staff-portal-session/inventory/items', '/api/staff-portal-session/my-activity',
+  '/api/staff-portal-session/my-activity',
   '/api/staff-portal-session/competencies', '/api/staff-portal-session/quizzes',
 ];
 // Operational writes the access model says staff MUST be able to do (RECORD, not AUTHOR).
 // Empty body: a reached write returns 400/404/200 (PASS); a 403/401 is UNDER-PERMISSION
 // (the staff door wrongly blocks an operational action -- MedStar depends on QC entry).
-const STAFF_PORTAL_WRITES = [
-  { p: '/api/staff-portal-session/qc/results', label: 'Enter QC result (staff RECORD)' },
-];
+// 2026-10-09: staff record QC in the main VeritaQC screen (POST /api/labs/:labId/qc/results)
+// since #84; the Staff Portal QC and inventory routes were removed. The staff persona's
+// main-app expectations (admitted to lab reads and recording, blocked from authoring)
+// belong in the lab-route matrix above, not here.
+const STAFF_PORTAL_WRITES = [];
 
 async function hit(path, token, method = 'GET', body) {
   const headers = { Authorization: `Bearer ${token}`, 'X-Active-Lab-Id': String(LAB) };

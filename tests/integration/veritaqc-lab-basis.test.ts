@@ -6,7 +6,8 @@
 // enough runs, then the lab's own. Boots the REAL routes on a scratch DB and
 // proves, through the HTTP API a tech's browser uses:
 //   1. runs 1-20 are judged on the manufacturer mean/SD; run 21 on the lab's
-//      own mean/SD from the first 20, and the lot locks it
+//      own mean/SD from runs 1-20; after that the numbers keep refining with
+//      every accepted run and nothing is locked (Michael, 2026-10-09)
 //   2. GET /qc/lots hands the chart the same basis the rules used
 //   3. /qc/line measures each point against that basis
 //   4. owner re-establish: all_runs, manual, auto; bad input is refused
@@ -69,6 +70,8 @@ async function main() {
   const f20 = vals.slice(0, 20);
   const m20 = f20.reduce((a, b) => a + b, 0) / 20;
   const s20 = Math.sqrt(f20.reduce((s, x) => s + (x - m20) ** 2, 0) / 19);
+  const mAll = vals.reduce((a, b) => a + b, 0) / vals.length;
+  const sAll = Math.sqrt(vals.reduce((s, x) => s + (x - mAll) ** 2, 0) / (vals.length - 1));
 
   // 1
   check("1a. runs 1-20 judged on the manufacturer mean/SD (1.29 / 0.35)",
@@ -84,15 +87,15 @@ async function main() {
   // 2
   const lots = await j(await call("GET", `${L}/lots`, undefined, token));
   const lot = (lots.lots || []).find((l: any) => l.id === lotId);
-  check("2. GET /qc/lots gives the chart the locked lab basis (persisted, n 20)",
-    lot?.basis?.source === "established" && lot.basis.persisted === true && lot.basis.n === 20 && near(lot.basis.mean, m20) && near(lot.basis.sd, s20),
+  check("2. GET /qc/lots gives the chart the refining lab basis over all 21 runs (not locked)",
+    lot?.basis?.source === "established" && lot.basis.persisted === false && lot.basis.n === 21 && near(lot.basis.mean, mAll) && near(lot.basis.sd, sAll),
     lot?.basis?.label);
 
   // 3
   const line = await j(await call("GET", `${L}/line?analyte=${encodeURIComponent("PSA (FREND B)")}&level=${encodeURIComponent("Level 1")}`, undefined, token));
   const pt = (line.points || [])[3];
-  check("3. /qc/line SDI = (value - lab mean) / lab SD",
-    !!pt && near(pt.sdi, (pt.result_value - m20) / s20, 1e-9) && near(pt.basis_mean, m20),
+  check("3. /qc/line SDI = (value - current lab mean) / current lab SD (the refined basis the next run uses)",
+    !!pt && near(pt.sdi, (pt.result_value - mAll) / sAll, 1e-9) && near(pt.basis_mean, mAll),
     pt ? `sdi=${pt.sdi.toFixed(3)} value=${pt.result_value}` : "no points");
 
   // 4
@@ -106,7 +109,7 @@ async function main() {
     near(eAll?.basis?.mean, m21) && eAll.basis.n === 21 && eAll.basis.label.includes("from 21 runs")
     && eMan?.basis?.mean === 1.1 && eMan.basis.label.includes("entered by the lab")
     && eBad.status === 400 && eMode.status === 400
-    && eAuto?.basis?.persisted === false && near(eAuto.basis.mean, m20),
+    && eAuto?.basis?.persisted === false && near(eAuto.basis.mean, mAll),
     `${eAll?.basis?.label} | ${eMan?.basis?.label} | ${eAuto?.basis?.label}`);
 
   // 5. simulate a flag the old engine stored (a 1-3s on run 5) with a CA on it

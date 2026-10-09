@@ -56,8 +56,6 @@ const asCoworkerSign = await call("POST", `/api/staff-portal-session/policies/1/
 check("staff signing a policy as a coworker -> 403", asCoworkerSign.status === 403 && asCoworkerSign.code === "STAFF_PORTAL_NOT_SELF", `status=${asCoworkerSign.status}`);
 const asCoworkerQuiz = await call("POST", `/api/staff-portal-session/quizzes/1/attempt`, { employee_id: justin.id, answers: [], typed_signature: "Justin Grinnell" }, staff.token);
 check("staff taking a quiz as a coworker -> 403", asCoworkerQuiz.status === 403, `status=${asCoworkerQuiz.status}`);
-const asCoworkerInv = await call("POST", `/api/staff-portal-session/inventory/items/1/adjust`, { employee_id: justin.id, new_count: 1, reason: "x" }, staff.token);
-check("staff adjusting inventory as a coworker -> 403", asCoworkerInv.status === 403, `status=${asCoworkerInv.status}`);
 const selfSignMissingDoc = await call("POST", `/api/staff-portal-session/policies/999999/sign`, { employee_id: addison.id, version_id: 1, typed_signature: "Addison Timmins" }, staff.token);
 check("staff signing as herself passes the identity check (404 only because the doc does not exist)", selfSignMissingDoc.status === 404, `status=${selfSignMissingDoc.status}`);
 
