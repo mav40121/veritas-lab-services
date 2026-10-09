@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { ArrowLeft, Search, PackageCheck, QrCode, History, X, AlertTriangle, Clock, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import BarcodeScannerModal from "@/components/BarcodeScannerModal";
+import { unitLabel } from "@shared/units";
 
 // Open-PO row: an item with quantity on order not yet received.
 interface OpenItem {
@@ -187,7 +188,7 @@ export default function VeritaStockReceivingPage() {
       const body = await res.json();
       const lead = body.receipt?.actual_lead_time_days;
       toast({
-        title: `Received ${qty} ${item.usage_unit}${qty === 1 ? "" : "s"} of ${item.item_name}`,
+        title: `Received ${qty} ${unitLabel(item.usage_unit, qty)} of ${item.item_name}`,
         description: lead != null ? `Logged. Actual lead time: ${lead} days (programmed ${body.receipt.programmed_lead_time_days ?? "n/a"}).` : "Receipt logged.",
       });
       setReceiveQ((p) => { const n = { ...p }; delete n[item.id]; return n; });
@@ -267,7 +268,7 @@ export default function VeritaStockReceivingPage() {
                       {it.catalog_number && <div className="text-xs text-muted-foreground">{it.catalog_number}</div>}
                     </td>
                     <td className="px-3 py-2">{it.vendor || <span className="text-muted-foreground">-</span>}</td>
-                    <td className="px-3 py-2 text-right font-mono">{it.on_order_qty.toLocaleString()} {it.usage_unit}s</td>
+                    <td className="px-3 py-2 text-right font-mono">{it.on_order_qty.toLocaleString()} {unitLabel(it.usage_unit, it.on_order_qty)}</td>
                     <td className="px-3 py-2">{it.on_order_placed_date || <span className="text-muted-foreground">-</span>}</td>
                     <td className="px-3 py-2">{it.on_order_expected_date || <span className="text-muted-foreground">-</span>}</td>
                     <td className="px-3 py-2 text-right">
@@ -416,7 +417,7 @@ export default function VeritaStockReceivingPage() {
                     <td className="px-3 py-2">{r.received_date || "-"}</td>
                     <td className="px-3 py-2">{r.item_name}</td>
                     <td className="px-3 py-2">{r.vendor || <span className="text-muted-foreground">-</span>}</td>
-                    <td className="px-3 py-2 text-right font-mono">{(r.qty_received || 0).toLocaleString()} {r.usage_unit || ""}</td>
+                    <td className="px-3 py-2 text-right font-mono">{(r.qty_received || 0).toLocaleString()} {unitLabel(r.usage_unit, r.qty_received || 0)}</td>
                     <td className="px-3 py-2">{r.order_placed_date || <span className="text-muted-foreground">-</span>}</td>
                     <td className="px-3 py-2 text-right font-mono">{r.programmed_lead_time_days != null ? `${r.programmed_lead_time_days}d` : "-"}</td>
                     <td className={`px-3 py-2 text-right font-mono ${leadColor(r.actual_lead_time_days, r.programmed_lead_time_days)}`}>

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import { API_BASE } from "@/lib/queryClient";
+import { unitLabel } from "@shared/units";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   ResponsiveContainer, Tooltip as RechartsTooltip, ReferenceArea, Legend,
@@ -961,7 +962,7 @@ function InventorySection() {
                     </td>
                     <td className="px-3 py-2 text-xs">{item.category}</td>
                     <td className="px-3 py-2 font-mono text-sm">
-                      {item.quantity_on_hand.toLocaleString()} <span className="text-xs text-muted-foreground">{item.usage_unit}s</span>
+                      {item.quantity_on_hand.toLocaleString()} <span className="text-xs text-muted-foreground">{unitLabel(item.usage_unit, item.quantity_on_hand)}</span>
                     </td>
                     <td className="px-3 py-2 font-mono text-sm hidden sm:table-cell">
                       {item.burn_rate > 0 ? `${item.burn_rate}/day` : <span className="text-muted-foreground">-</span>}
