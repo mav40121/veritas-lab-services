@@ -109,7 +109,10 @@ export const CFR_MAP: Record<string, string> = {
   "Immunohematology": "§493.959",
   "Urinalysis": "§493.931",
   "Blood Gas": "§493.931",
-  "Microbiology": "§493.945",
+  // Microbiology is the specialty; its Subpart I PT sections are 493.911-493.919
+  // (eCFR headings as of 2026-10-01). It was mapped to §493.945, which is
+  // "Cytology; gynecologic examinations" (parking-lot fix 2026-10-09, Q29).
+  "Microbiology": "§§493.911-493.919",
   // Catalog specialty names the instrument menu stamps onto map rows, mapped to the
   // CLIA Part 493 Subpart I section for that specialty/subspecialty. Without these every
   // one fell through to the default and was cited under the wrong section.
@@ -118,11 +121,19 @@ export const CFR_MAP: Record<string, string> = {
   "Cardiac": "§493.931",
   "Point of Care": "§493.931",
   "Immunology": "§493.927",
-  "Syphilis Serology": "§493.927",
+  "Syphilis Serology": "§493.923",
   "Blood Bank": "§493.959",
   "Hemostasis": "§493.941",
-  "Bacteriology": "§493.945",
-  "Virology": "§493.945",
+  // Microbiology subspecialties (CMS specialty names), one Subpart I section each.
+  "Bacteriology": "§493.911",
+  "Mycobacteriology": "§493.913",
+  "Mycology": "§493.915",
+  "Parasitology": "§493.917",
+  "Virology": "§493.919",
+  // Pathology: §493.945 covers gynecologic cytology examinations only. Histopathology
+  // has no Subpart I PT section, so it cites none rather than borrowing chemistry's.
+  "Cytology": "§493.945",
+  "Histopathology": "",
 };
 
 // Compliance status helper
