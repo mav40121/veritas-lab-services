@@ -363,19 +363,19 @@ export default function StudyGuidePage() {
                   <td className="py-3 px-4 font-medium text-primary">Reportable Range Verification</td>
                   <td className="py-3 px-4 text-muted-foreground">What is the highest and lowest concentration I can reliably report on this analyzer for this analyte?</td>
                   <td className="py-3 px-4">At method introduction; when the manufacturer changes the AMR claim</td>
-                  <td className="py-3 px-4"><a href={REFS.cfr4931253.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.1253(b)(1)(iii)</a>; CLSI EP06</td>
+                  <td className="py-3 px-4"><a href={REFS.cfr4931253.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.1253(b)(1)(i)(C)</a>; CLSI EP06</td>
                 </tr>
                 <tr className="border-b border-border hover:bg-muted/20 transition-colors">
                   <td className="py-3 px-4 font-medium text-primary">Correlation / Method Comparison</td>
                   <td className="py-3 px-4 text-muted-foreground">Do my two instruments (or methods) agree with each other?</td>
-                  <td className="py-3 px-4">When introducing a new method; annually recommended</td>
-                  <td className="py-3 px-4"><a href={REFS.cfr4931253.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.1253(b)(2)</a>; analyte criterion from §493.927, .931, .937, .941 (lab-adopted)</td>
+                  <td className="py-3 px-4">When introducing a new method; twice a year while two instruments or methods run the same test</td>
+                  <td className="py-3 px-4"><a href={REFS.cfr4931281.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.1281(a)</a>; analyte criterion from §493.927, .931, .937, .941 (lab-adopted)</td>
                 </tr>
                 <tr className="border-b border-border hover:bg-muted/20 transition-colors">
                   <td className="py-3 px-4 font-medium text-primary">Precision</td>
                   <td className="py-3 px-4 text-muted-foreground">Is my instrument producing consistent, reproducible results?</td>
                   <td className="py-3 px-4">When introducing a new method; after major maintenance</td>
-                  <td className="py-3 px-4"><a href={REFS.cfr4931253.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.1253(b)(1)(ii)</a>; allowable imprecision adopted from analyte PT criterion</td>
+                  <td className="py-3 px-4"><a href={REFS.cfr4931253.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.1253(b)(1)(i)(B)</a>; allowable imprecision adopted from analyte PT criterion</td>
                 </tr>
                 <tr className="border-b border-border hover:bg-muted/20 transition-colors">
                   <td className="py-3 px-4 font-medium text-primary">Sensitivity Verification (EP17-A2)</td>
@@ -387,7 +387,7 @@ export default function StudyGuidePage() {
                   <td className="py-3 px-4 font-medium text-primary">Reference Range Verification</td>
                   <td className="py-3 px-4 text-muted-foreground">Can we adopt the manufacturer's reference ranges for our patient population?</td>
                   <td className="py-3 px-4">When adopting manufacturer reference ranges</td>
-                  <td className="py-3 px-4">CLSI EP28-A3c</td>
+                  <td className="py-3 px-4"><a href={REFS.cfr4931253.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">§493.1253(b)(1)(ii)</a>; CLSI EP28-A3c</td>
                 </tr>
                 <tr className="border-b border-border hover:bg-muted/20 transition-colors">
                   <td className="py-3 px-4 font-medium text-primary">Reagent Lot Verification (EP26)</td>
@@ -471,7 +471,7 @@ export default function StudyGuidePage() {
               "As an interim verification between full linearity studies if the director or designee determines it is sufficient",
             ]}
             frequency="At method introduction; when AMR claim changes; otherwise as the director or designee determines"
-            regulation="42 CFR §493.1253(b)(1)(iii); CLSI EP06 is the methodology standard"
+            regulation="42 CFR §493.1253(b)(1)(i)(C); CLSI EP06 is the methodology standard"
             passFail="Each level must fall within the calibration verification acceptance criterion adopted by your lab (typically the §493 PT TEa for that analyte). VeritaCheck™ evaluates each level individually. The AMR coverage analysis reports separately whether the tested range exercises both edges of the claimed AMR (full coverage at 95% each end, near-edge at 90 to 94%, under-tested below 90%). Your laboratory director or designee makes the final acceptability determination."
             refs={[
               REFS.cliaCalVerBrochure,
@@ -521,13 +521,14 @@ export default function StudyGuidePage() {
               "When introducing a new test method or reagent system",
               "When splitting work between two analyzers running the same test",
               "When resuming testing after an extended instrument downtime",
-              "Annually for instruments running the same assay (best practice)",
+              "Twice a year while two instruments or methods run the same test (42 CFR §493.1281(a))",
             ]}
-            frequency="At method introduction; annually recommended"
-            regulation="42 CFR §493.1253(b)(2)"
+            frequency="At method introduction; twice a year while two instruments or methods run the same test"
+            regulation="42 CFR §493.1281(a) (two instruments or methods in use); §493.1253(b)(2)"
             passFail="Each paired result is evaluated against the method comparison acceptance criterion adopted by your lab (typically the §493 PT TEa for that analyte, under §493.1253(b)(2)). The systematic error analysis at medical decision levels provides an additional per-MDL verdict: |SE at MDL| under TEa at that concentration meets criteria; |SE at MDL| at or above TEa at that concentration does not. A PASS requires the regression to meet the adopted criterion AND |SE at MDL| to be under TEa at every clinically relevant decision level. Your laboratory director or designee makes the final acceptability determination."
             refs={[
               REFS.cliaVerificationBrochure,
+              REFS.cfr4931281,
               REFS.cfr4931253,
               REFS.clsiEP9,
               REFS.clsiOverview,
@@ -551,7 +552,7 @@ export default function StudyGuidePage() {
               "Any time imprecision is suspected based on QC patterns",
             ]}
             frequency="At method introduction; after major maintenance"
-            regulation="42 CFR §493.1253(b)(1)(ii)"
+            regulation="42 CFR §493.1253(b)(1)(i)(B)"
             passFail="Each control level must have a CV% at or below the allowable imprecision adopted by your lab for that analyte. In Advanced mode, total imprecision CV is compared to the limit. VeritaCheck™ reports pass/fail per level. Your laboratory director or designee reviews and approves all precision data before the method enters clinical use. Note: some commercial tools evaluate precision against manufacturer-claimed imprecision rather than against the §493 PT TEa for the analyte. VeritaCheck™ uses §493 PT TEa as the precision benchmark when your lab adopts that approach (typical and recommended); this is the more conservative and easier-to-defend choice. Your medical director or designee approves the criterion in either case."
             refs={[
               REFS.cliaVerificationBrochure,
@@ -603,7 +604,7 @@ export default function StudyGuidePage() {
               "When the manufacturer updates its reference ranges",
             ]}
             frequency="At method introduction or reference range change"
-            regulation="CLSI EP28-A3c"
+            regulation="42 CFR §493.1253(b)(1)(ii); CLSI EP28-A3c"
             passFail="Pass if 2 or fewer of 20 specimens fall outside the manufacturer's stated reference range. If more than 2 fall outside, the reference range may not be appropriate for your population, and a full reference range study or further investigation is required. Your laboratory director or designee makes the final determination."
             refs={[
               REFS.cliaVerificationBrochure,

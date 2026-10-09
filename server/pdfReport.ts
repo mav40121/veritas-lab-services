@@ -523,7 +523,6 @@ const CFR_URLS: Record<string, string> = {
   "42 CFR §493.1253(b)(2)(ii)":"https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
   "42 CFR §493.1253(b)(2)(iii)":"https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
   "42 CFR §493.1253(b)(1)":    "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
-  "42 CFR §493.1253(b)(1)(iii)":"https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1253",
   "42 CFR §493.1255":          "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
   "42 CFR §493.1255(b)":       "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
   "42 CFR §493.1255(b)(3)":    "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255",
