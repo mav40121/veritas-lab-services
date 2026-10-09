@@ -28,7 +28,7 @@ import { storePdfToken, claimPdfToken } from "./pdfTokens";
 import { labLocalDate } from "./dateLocal";
 import { scanPhi } from "./phiScan";
 import { evaluateQcRun, rulesForRun } from "./qcWestgard";
-import { resolveBasis, computeBasis, basisConfig, lockEstablishedIfDue, sampleStats, type QcBasis } from "./qcBasis";
+import { resolveBasis, computeBasis, basisConfig, sampleStats, type QcBasis } from "./qcBasis";
 import { buildWasteReport, generateWasteReportPDF, generateWasteReportExcel, type WasteEventRow, type WasteReportContext } from "./wasteReport";
 import { entireLabFlag, sanitizeSpecialties, expandEntireLabRoles, cms209Gaps } from "./cms209Roles";
 import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution, analyteMatch, stampMapDatesFromStudies } from "./veritacheckCoverage";
@@ -3939,8 +3939,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // dryRun (the default) returns the before and after per run and writes
   // nothing. A commit marks the old flags superseded (never deleted; a
   // corrective action may point at one), inserts the new flags, stamps the
-  // basis on every re-scored run, locks each lot's established mean/SD where it
-  // has enough runs, and writes one audit row per lab. Excluded (not accepted)
+  // basis on every re-scored run, and writes one audit row per lab. The lab's
+  // numbers refine with every run after establish_n (2026-10-09), so nothing is
+  // locked here. Excluded (not accepted)
   // runs keep their flags; the tech already acted on them.
   app.post("/api/admin/qc/rescore", (req: any, res) => {
     const { secret, labIds, since, dryRun } = req.body || {};
@@ -3954,7 +3955,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const reason = `rescore ${now.slice(0, 10)}: lab-established basis (server/qcBasis.ts)`;
     const report: any[] = [];
     const work: { resultId: number; after: any[]; basis: QcBasis | null; changed: boolean }[] = [];
-    const lotsTouched: { labId: number; lotId: number }[] = [];
     for (const labId of labs) {
       const lots = sqlite.prepare(
         "SELECT id, lab_id, analyte, level, lot_number, mfr_mean, mfr_sd, mfr_range_low, mfr_range_high, lab_mean, lab_sd, lab_basis_n, lab_basis_locked_at, lab_basis_source, prior_lot_id FROM qc_control_lots WHERE lab_id = ? ORDER BY analyte, level, id"
@@ -3965,7 +3965,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           "SELECT id, result_value, result_date FROM qc_results WHERE lab_id = ? AND control_lot_id = ? AND accepted_for_reporting = 1 AND voided_at IS NULL ORDER BY result_date ASC, id ASC"
         ).all(labId, lot.id) as any[];
         if (!hist.some((h: any) => h.result_date >= since)) continue;
-        lotsTouched.push({ labId, lotId: lot.id });
         const cfg = basisConfig(sqlite, labId, lot.analyte);
         const st = sqlite.prepare(
           "SELECT bias_consecutive_count, trend_consecutive_count FROM qc_rule_settings WHERE lab_id = ? AND (analyte = ? OR analyte IS NULL) ORDER BY (analyte IS NULL) ASC LIMIT 1"
@@ -4015,7 +4014,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         sup.run(now, reason, w.resultId);
         for (const v of w.after) ins.run(w.resultId, v.rule_code, v.severity, v.detail, JSON.stringify(v.related_result_ids), now);
       }
-      for (const t of lotsTouched) lockEstablishedIfDue(sqlite, t.labId, t.lotId);
     });
     try { tx(); } catch (err: any) {
       console.error("[qc/rescore] failed:", err.message);
