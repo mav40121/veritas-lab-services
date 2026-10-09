@@ -186,7 +186,9 @@ def parse_cite(c):
     if not m:
         return None
     title, part, sec, path, upto = m.groups()
-    return {"title": title, "part": part, "section": f"{part}.{sec}" if sec else None, "path": path or "", "upto": upto or ""}
+    # CFR style "§ 493.1100 introductory text": only the lead-in before the first lettered paragraph.
+    intro = bool(re.search(r"introductory text\s*$", c))
+    return {"title": title, "part": part, "section": f"{part}.{sec}" if sec else None, "path": path or "", "upto": upto or "", "intro": intro}
 
 
 class Corpus:
@@ -214,9 +216,23 @@ class Corpus:
             self.heads[m.group(1)] = clean(head.group(1)) if head else m.group(1)
             self.sections[m.group(1)] = parse_section(m.group(2))
 
-    def text_at(self, section, path="", upto=""):
+    def text_at(self, section, path="", upto="", intro=False):
         ps = self.sections.get(section)
         if ps is None:
+            return None
+        if intro and not path:  # section lead-in: the unmarked paragraphs before the first marked one
+            lead = []
+            for p in ps:
+                if p["paths"]:
+                    break
+                lead.append(p["text"])
+            return " ".join(lead) or None
+        if intro:  # a paragraph's own lead-in, up to its first child marker
+            for p in ps:
+                if path in p["segments"]:
+                    seg = p["segments"][path]
+                    kids = [q for q in p["paths"] if q != path and under(q, path)]
+                    return (seg[: seg.index(p["segments"][kids[0]])].strip() if kids else seg) or None
             return None
         if not path:
             return " ".join(p["text"] for p in ps) or None
@@ -302,7 +318,10 @@ def excerpt(quote, cited):
         else:
             spans_c.append([a, z])
     pieces = [cited[a:z].strip() for a, z in spans_c]
-    return " ... ".join(p for p in pieces if p)
+    pieces = [p for p in pieces if p]
+    if len(pieces) > 1:  # a stray clause tail ("(6) of this section;") reads as noise, not a quote
+        pieces = [p for p in pieces if len(p.split()) >= 8] or pieces[:1]
+    return " ... ".join(pieces)
 
 
 STOP = set("the a an of to and or in for on by with as at be is are was were that this which any each such from its their must shall may will not under all other than these those if has have been it".split())
@@ -388,7 +407,7 @@ def main():
         c = b["_c"]
         quote = b.get("verbatim", "") or ""
         q = grams(quote)
-        cited = corpus.text_at(c["section"], c["path"], c["upto"]) if c and c["section"] else None
+        cited = corpus.text_at(c["section"], c["path"], c["upto"], c.get("intro")) if c and c["section"] else None
         cov_cited = (len(q & grams_all(cited)) / len(q)) if (cited and q) else 0.0
         best = corpus.best_match(quote, c["part"]) if c else None
         cov_best, best_cite, best_text = best if best else (0.0, None, None)
@@ -433,27 +452,50 @@ def main():
             "section_heading": corpus.heads.get(c["section"], "") if c and c["section"] else "",
         })
 
-    # A and B apply on --apply. C and D change only from Michael's decision file:
-    # {"<file>#<index>": {"action": "proposed" | "keep_citation" | "remove" | "replace", "citation"?, "text"?}}
-    decisions = json.load(open(a.decisions, encoding="utf-8")) if a.decisions else {}
+    # C and D change only from the decision file, approved by Michael before anything ships:
+    # {"<file>#<index>": {"action": "keep_citation" | "replace" | "remove", "citation"?, "label"?, "reason"}}
+    # The text is never typed into the decision: it is pulled from the eCFR at the chosen citation.
+    raw_dec = json.load(open(a.decisions, encoding="utf-8")) if a.decisions else {}
+    if a.apply and "_applied" in raw_dec:
+        raise SystemExit(f"{a.decisions} is marked applied ({raw_dec['_applied'][:60]}...); refusing to apply it again")
+    decisions = {k: v for k, v in raw_dec.items() if not k.startswith("_")}
+    for r in rows:
+        dec = decisions.get(f"{r['file']}#{r['index']}")
+        r["decision"] = dec
+        if not dec:
+            continue
+        if dec.get("was") and dec["was"] != r["citation"]:
+            raise SystemExit(f"{r['file']}#{r['index']}: decision expects {dec['was']} but the block cites {r['citation']}; decisions file is stale, nothing applied")
+        if dec["action"] == "relabel":
+            r["decision_citation"], r["decision_text"], r["decision_label"] = r["citation"], r["quote"], dec["label"]
+            continue
+        if dec["action"] == "remove":
+            r["decision_citation"], r["decision_label"], r["decision_text"] = None, None, None
+            continue
+        cite = r["citation"] if dec["action"] == "keep_citation" else dec["citation"]
+        c = parse_cite(cite)
+        if c["section"] not in corpus.sections:
+            corpus.load_part(c["title"], c["part"]) if (c["title"], c["part"]) in WHOLE_PARTS else corpus.load_section(c["title"], c["part"], c["section"])
+        src = corpus.text_at(c["section"], c["path"], c["upto"], c.get("intro"))
+        if not src:
+            raise SystemExit(f"{r['file']}#{r['index']}: decision citation {cite} has no eCFR text")
+        r["decision_citation"] = cite
+        r["decision_label"] = dec.get("label") or r["label"]
+        r["decision_text"] = house(excerpt(r["quote"], src))
     if a.apply:
         by_file = {}
         for r in rows:
-            dec = decisions.get(f"{r['file']}#{r['index']}")
-            if r["category"] in ("A", "B"):
-                change = (r["citation"], r["proposed_text"])
-            elif not dec:
-                continue
-            elif dec["action"] == "proposed":
-                change = (r["proposed_citation"], r["proposed_text"])
-            elif dec["action"] == "keep_citation":
-                change = (r["citation"], r["cited_text"])
-            elif dec["action"] == "replace":
-                change = (dec["citation"], dec["text"])
-            elif dec["action"] == "remove":
-                change = (None, None)
-            else:
+            dec = r.get("decision")
+            if dec and dec["action"] in ("keep_citation", "replace", "remove", "relabel"):
+                change = (r["decision_citation"], r["decision_text"], r["decision_label"])
+            elif dec:
                 raise SystemExit(f"unknown decision {dec}")
+            elif r["category"] in ("A", "B"):
+                if is_verbatim(r["quote"], r["cited_text"]):
+                    continue  # already the exact eCFR words: leave it alone (re-excerpting is not idempotent)
+                change = (r["citation"], r["proposed_text"], r["label"])
+            else:
+                continue
             by_file.setdefault(r["file"], []).append((r["index"], *change))
         for f, changes in by_file.items():
             write_in_place(os.path.join(TEMPLATES, f), changes)
@@ -467,7 +509,7 @@ def main():
             if c and c["section"]:
                 if c["section"] not in corpus.sections:
                     corpus.load_section(c["title"], c["part"], c["section"])
-                t = corpus.text_at(c["section"], c["path"], c["upto"])
+                t = corpus.text_at(c["section"], c["path"], c["upto"], c.get("intro"))
                 if t:
                     extract[b["citation"]] = house(t)
     os.makedirs(os.path.dirname(EXTRACT), exist_ok=True)
@@ -478,6 +520,21 @@ def main():
     write_report(a.report, rows, scan_in_text(corpus, rows))
 
 
+def is_verbatim(quote, cited):
+    """Same rule as scripts/verify-policy-cfr-quotes.mjs: every ' ... ' piece is in the cited text, in order."""
+    text = house(cited or "")
+    at = 0
+    pieces = [p.strip() for p in house(quote).split(" ... ") if p.strip()]
+    if not pieces or not text:
+        return False
+    for p in pieces:
+        i = text.find(p, at)
+        if i < 0:
+            return False
+        at = i + len(p)
+    return True
+
+
 def write_in_place(path, changes):
     """Change only the quote blocks' text in the template file, keeping its hand formatting (one-line
     arrays and so on). Afterwards the file must parse to exactly the expected content, or nothing is written."""
@@ -485,13 +542,13 @@ def write_in_place(path, changes):
     d = json.loads(raw)
     want = json.loads(raw)
     bl = want["cfr_text_blocks"]
-    for idx, cite, text in changes:
-        bl[idx] = None if cite is None else {**bl[idx], "citation": cite, "verbatim": text}
+    for idx, cite, text, label in changes:
+        bl[idx] = None if cite is None else {**bl[idx], "citation": cite, "verbatim": text, "label": label}
     want["cfr_text_blocks"] = [x for x in bl if x is not None]
     enc = lambda v: json.dumps(v, ensure_ascii=False)
     cur = raw.index('"cfr_text_blocks"')
     out, last = [], 0
-    todo = {idx: (cite, text) for idx, cite, text in changes}
+    todo = {idx: (cite, text, label) for idx, cite, text, label in changes}
     for i, old in enumerate(d["cfr_text_blocks"]):
         c0 = raw.index(f'"citation": {enc(old["citation"])}', cur)
         v0 = raw.index(f'"verbatim": {enc(old["verbatim"])}', c0)
@@ -499,20 +556,26 @@ def write_in_place(path, changes):
         cur = v1
         if i not in todo:
             continue
-        cite, text = todo[i]
+        cite, text, label = todo[i]
         if cite is None:  # drop the whole {...} block and its separating comma
             a = raw.rindex("{", 0, c0)
             z = raw.index("}", v1) + 1
-            m = re.match(r"\s*,", raw[z:])
-            if m:
+            m = re.match(r"[ \t]*,", raw[z:])
+            if m:  # not the last block: drop "{...}," and its whole line(s)
                 z += m.end()
-            else:
+                a = raw.rindex("\n", 0, a) + 1
+                n = re.match(r"[ \t]*\r?\n", raw[z:])
+                z += n.end() if n else 0
+            else:  # last block: drop the comma that ends the previous block
                 a = raw.rindex(",", 0, a)
             out.append(raw[last:a])
             last = z
         else:
             out.append(raw[last:c0])
-            out.append(raw[c0:v0].replace(f'"citation": {enc(old["citation"])}', f'"citation": {enc(cite)}', 1))
+            seg = raw[c0:v0].replace(f'"citation": {enc(old["citation"])}', f'"citation": {enc(cite)}', 1)
+            if "label" in old and label is not None:
+                seg = seg.replace(f'"label": {enc(old["label"])}', f'"label": {enc(label)}', 1)
+            out.append(seg)
             out.append(f'"verbatim": {enc(text)}')
             last = v1
     out.append(raw[last:])
@@ -586,8 +649,8 @@ def write_report(path, rows, in_text):
         (f"C  {cnt['C']} quotes: the words are real CFR text, but from a different paragraph than the one cited. Needs your decision.", False),
         (f"D  {cnt['D']} quotes: the words are not CFR text (reworded, outdated or invented). Needs your decision.", False),
         ("", False),
-        ("How to decide (sheet 'Decide C and D', column K): 'proposed' = take the proposed citation and text; 'keep citation' = keep the citation and quote what it actually says;", False),
-        ("'remove' = drop the block; or type a citation. A blank row stays as it is and the new check keeps failing on it, so nothing unreviewed ships.", False),
+        ("Sheet 'Decide C and D': Claude picked a citation for every C and D quote (column F-J, with the reason). The text in column I is pulled from the eCFR, not typed.", False),
+        ("Michael: mark column K 'Y' or write what to change. Nothing ships until the sheet is approved; the check script fails on any quote that is not verbatim.", False),
         ("", False),
         ("Long paragraphs are excerpted, not paraphrased: only the stretch the policy relies on, exact eCFR words, with ' ... ' where text is skipped.", False),
         ("Em dashes in the CFR are printed as hyphens (house copy rule). No word is changed.", False),
@@ -624,13 +687,13 @@ def write_report(path, rows, in_text):
 
     cut = lambda s: (s or "")[:32000]
     review = sorted([r for r in rows if r["category"] in ("C", "D")], key=lambda r: (r["category"], r["file"], r["index"]))
+    act = lambda r: {"keep_citation": "keep citation, quote its real text", "replace": "change citation", "remove": "remove block"}.get((r.get("decision") or {}).get("action"), "")
     sheet("Decide C and D", ["Template", "Cat", "Current citation", "What the template quotes", "What that citation actually says (eCFR)",
-                             "Words found at citation %", "Likely source (closest wording)", "Proposed action", "Proposed citation", "Proposed text (exact eCFR)",
-                             "Your decision", "Key"],
-          [[f"{r['file'][:-5]} | {r['template']}", r["category"], r["citation"], cut(r["quote"]), cut(r["cited_text"]), r["found_at_citation"],
-            f"{r['likely_source']} ({r['likely_score']})" if r["likely_source"] else "", r["proposed_action"], r["proposed_citation"], cut(r["proposed_text"]),
-            "", f"{r['file']}#{r['index']}"] for r in review],
-          [30, 6, 20, 55, 55, 10, 22, 26, 20, 55, 16, 8])
+                             "Claude's decision", "New citation", "New label", "Exact eCFR text that will print", "Reason", "Michael OK? (Y, or what to change)", "Key"],
+          [[f"{r['file'][:-5]} | {r['template']}", r["category"], r["citation"], cut(r["quote"]), cut(r["cited_text"]),
+            act(r), r.get("decision_citation") or ("(block removed)" if act(r) == "remove block" else ""), r.get("decision_label") or "",
+            cut(r.get("decision_text") or ""), (r.get("decision") or {}).get("reason", ""), "", f"{r['file']}#{r['index']}"] for r in review],
+          [28, 5, 18, 50, 50, 16, 20, 26, 60, 50, 18, 8])
     sheet("Applied A and B", ["Template", "Cat", "Citation", "Found at citation %", "Old quote", "New quote (exact eCFR)"],
           [[f"{r['file'][:-5]} | {r['template']}", r["category"], r["citation"], r["found_at_citation"], cut(r["quote"]), cut(r["proposed_text"])]
            for r in sorted(rows, key=lambda r: (r["category"], r["file"])) if r["category"] in ("A", "B")],

@@ -3,7 +3,7 @@
   "slug": "infection_prevention_and_standard_precautions",
   "policy_name": "Infection Prevention and Standard Precautions Policy",
   "section": "Safety",
-  "purpose": "This policy describes <<LAB_NAME>>'s infection prevention program and the implementation of standard precautions with personal protective equipment (PPE). Required by 42 CFR 493.1101(c) (physical environment and safety) and 29 CFR 1910.1030 (OSHA Bloodborne Pathogens Standard, including Hepatitis B vaccination, PPE provision, exposure control, and post-exposure evaluation and follow-up).",
+  "purpose": "This policy describes <<LAB_NAME>>'s infection prevention program and the implementation of standard precautions with personal protective equipment (PPE). Required by 42 CFR 493.1101(d) (physical environment and safety) and 29 CFR 1910.1030 (OSHA Bloodborne Pathogens Standard, including Hepatitis B vaccination, PPE provision, exposure control, and post-exposure evaluation and follow-up).",
   "scope": "All <<LAB_NAME>> laboratory personnel, the Safety Officer, and any non-laboratory staff entering the testing area.",
   "policy_statements": [
     "<<LAB_NAME>> maintains a written Exposure Control Plan and infection prevention program covering exposure determination, hand hygiene, PPE, sharps handling, biological spill response, Hepatitis B vaccination, and post-exposure evaluation and follow-up; the program is reviewed at least annually and updated whenever new tasks or procedures introduce new exposure risks.",
@@ -61,9 +61,9 @@
   ],
   "cfr_text_blocks": [
     {
-      "citation": "42 CFR 493.1101(c)",
-      "label": "Standard: Facilities (safety from biological hazards)",
-      "verbatim": "The safety of laboratory personnel from physical, chemical, biochemical, and electrical hazards is ensured."
+      "citation": "42 CFR 493.1101(d)",
+      "label": "Standard: Facilities (safety procedures)",
+      "verbatim": "(d) Safety procedures must be established, accessible, and observed to ensure protection from physical, chemical, biochemical, and electrical hazards, and biohazardous materials."
     },
     {
       "citation": "29 CFR 1910.1030(c)",

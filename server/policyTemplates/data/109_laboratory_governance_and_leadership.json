@@ -3,12 +3,12 @@
   "slug": "laboratory_governance_and_leadership",
   "policy_name": "Laboratory Governance and Leadership Policy",
   "section": "Leadership",
-  "purpose": "This policy describes <<LAB_NAME>>'s governance structure and leadership framework: organizational chart and reporting structure, governing body responsibilities, Laboratory Director responsibilities, culture of safety and quality, and code of ethical conduct (including anti-fraud, conflict of interest, anti-kickback, and Stark Law). Required by 42 CFR 493.1441 (Laboratory Director qualifications), 42 CFR 493.1445 (Laboratory Director responsibilities), 42 CFR 493.1100 (overall CLIA structure), 42 CFR 493.1200 (laboratory quality systems), 42 CFR 493.1232 (specimen and result integrity), 42 CFR 493.1775 (notification of changes), 42 USC 1320a-7b (anti-kickback), and 42 USC 1395nn (Stark Law).",
+  "purpose": "This policy describes <<LAB_NAME>>'s governance structure and leadership framework: organizational chart and reporting structure, governing body responsibilities, Laboratory Director responsibilities, culture of safety and quality, and code of ethical conduct (including anti-fraud, conflict of interest, anti-kickback, and Stark Law). Required by 42 CFR 493.1441 (Laboratory Director qualifications), 42 CFR 493.1445 (Laboratory Director responsibilities), 42 CFR 493.1100 (overall CLIA structure), 42 CFR 493.1200 (laboratory quality systems), 42 CFR 493.1232 (specimen and result integrity), 42 CFR 493.63(a) (notification of changes), 42 USC 1320a-7b (anti-kickback), and 42 USC 1395nn (Stark Law).",
   "scope": "All <<LAB_NAME>> personnel, the governing body, the Laboratory Director, and the laboratory leadership team.",
   "policy_statements": [
     "<<LAB_NAME>> maintains a current organizational chart that names each CLIA-required role (Laboratory Director, Technical Consultant for moderate complexity, Technical Supervisor for high complexity, General Supervisor, Clinical Consultant for moderate complexity, Testing Personnel) and the reporting line from each to the Director.",
     "The org chart is reviewed and approved by the medical director or designee at least annually and any time a CLIA-defined role changes; the current chart is posted in the lab and available to inspectors on request; previous versions are archived for at least 2 years per the record retention policy.",
-    "Any vacancy in a CLIA-required role (Director, Technical Consultant or Supervisor, General Supervisor, Clinical Consultant) is filled or covered by a qualified individual immediately; vacancies lasting more than 30 days are reported to the medical director or designee for escalation to CMS notification per 42 CFR 493.1775.",
+    "Any vacancy in a CLIA-required role (Director, Technical Consultant or Supervisor, General Supervisor, Clinical Consultant) is filled or covered by a qualified individual immediately; vacancies lasting more than 30 days are reported to the medical director or designee for escalation to CMS notification per 42 CFR 493.63(a).",
     "<<LAB_NAME>> has a defined governance structure: ownership entity, governing body (board or equivalent), medical director or designee, and operational management. The governing body's responsibilities are documented and include: appointment and oversight of the medical director or designee, approval of major operational and capital decisions, financial stewardship, and final accountability for regulatory compliance.",
     "The Laboratory Director holds the responsibilities listed at 42 CFR 493.1445, including final responsibility for every result reported, and may delegate specific duties to qualified designees while retaining responsibility. The Director reports to the governing body and is responsible for the overall operation and administration of the lab.",
     "The laboratory's quality program (42 CFR 493.1200) is governed by the Laboratory Director or designee, with documented review of QC, PT, complaints, incidents, and corrective action on the lab's documented cadence (typically quarterly); minutes are filed in the quality binder.",
@@ -23,7 +23,7 @@
   "procedure_steps": [
     "Maintain the organizational chart in the leadership binder; update on every role change within 5 business days; annual review with sign-off by the Laboratory Director.",
     "Post the current org chart at each testing site; archive prior versions with the personnel records for the 2-year retention.",
-    "Log any CLIA-required role vacancy on the Role Vacancy register; medical director or designee approves any interim coverage arrangement; vacancies longer than 30 days are escalated to CMS notification per 42 CFR 493.1775.",
+    "Log any CLIA-required role vacancy on the Role Vacancy register; medical director or designee approves any interim coverage arrangement; vacancies longer than 30 days are escalated to CMS notification per 42 CFR 493.63(a).",
     "Document the Laboratory Director's delegation of any specific responsibilities in writing; designee acknowledges in writing.",
     "Governing body meetings occur on a regular schedule (typically quarterly); minutes are retained; annual review of governance roles, reporting lines, and decision authorities is documented and signed.",
     "Hold the documented governance/quality review cadence (typically quarterly); minutes filed in the quality binder; trends in QC, PT, complaints, and incidents drive corrective action.",
@@ -33,7 +33,7 @@
     "Annual refresher training covers conflicts of interest, anti-fraud, confidentiality, and anti-kickback obligations; tracked in the personnel record.",
     "COI disclosures are collected at hire, annually, and on change; the medical director or designee or the COI committee reviews and manages; the disclosure register is updated.",
     "Suspected violations are reported via the lab's reporting channels (medical director or designee, anonymous hotline, or external authority); investigation follows the Whistleblower policy.",
-    "On change of ownership, governing body composition, or Laboratory Director: updated documentation is filed and CMS is notified per the Accreditation Body Notification policy and 42 CFR 493.1775.",
+    "On change of ownership, governing body composition, or Laboratory Director: updated documentation is filed and CMS is notified per the Accreditation Body Notification policy and 42 CFR 493.63(a).",
     "Conduct the annual leadership review of governance, structure, and code; document."
   ],
   "definitions": [
@@ -81,22 +81,22 @@
   "cfr_text_blocks": [
     {
       "citation": "42 CFR 493.1441",
-      "label": "Condition: Laboratories performing moderate complexity testing; laboratory director",
+      "label": "Condition: Laboratories performing high complexity testing; laboratory director",
       "verbatim": "The laboratory must have a director who meets the qualification requirements of § 493.1443 of this subpart and provides overall management and direction in accordance with § 493.1445 of this subpart."
     },
     {
-      "citation": "42 CFR 493.1445(a)",
+      "citation": "42 CFR 493.1445",
       "label": "Standard: Laboratory director responsibilities",
-      "verbatim": "The laboratory director is responsible for the overall operation and administration of the laboratory, including the employment of personnel who are competent to perform test procedures, and record and report test results promptly, accurately and proficiently and for assuring compliance with the applicable regulations."
+      "verbatim": "The laboratory director is responsible for the overall operation and administration of the laboratory, including the employment of personnel who are competent to perform test procedures, record and report test results promptly, accurately and proficiently, and for assuring compliance with the applicable regulations."
     },
     {
-      "citation": "42 CFR 493.1100",
-      "label": "Condition: General laboratory systems",
-      "verbatim": "Each laboratory that performs nonwaived testing must establish and follow written policies and procedures for an effective laboratory general systems including the policies and procedures specified in 493.1101 through 493.1105."
+      "citation": "42 CFR 493.1100 introductory text",
+      "label": "Condition: Facility administration",
+      "verbatim": "Each laboratory that performs nonwaived testing must meet the applicable requirements under §§ 493.1101 through 493.1105, unless HHS approves a procedure that provides equivalent quality testing as specified in Appendix C of the State Operations Manual (CMS Pub. 7)."
     },
     {
       "citation": "42 CFR 493.1200(a)",
-      "label": "Condition: Quality systems",
+      "label": "Introduction: Quality systems for nonwaived testing",
       "verbatim": "(a) Each laboratory that performs nonwaived testing must establish and maintain written policies and procedures that implement and monitor a quality system for all phases of the total testing process (that is, preanalytic, analytic, and postanalytic) as well as general laboratory systems."
     },
     {
@@ -110,9 +110,9 @@
       "verbatim": "(1) Ensure that testing systems developed and used for each of the tests performed in the laboratory provide quality laboratory services for all aspects of test performance, which includes the preanalytic, analytic, and postanalytic phases of testing;"
     },
     {
-      "citation": "42 CFR 493.1775",
-      "label": "Standard: Notification of changes (CMS notification)",
-      "verbatim": "The laboratory must notify HHS within 30 days of the following changes: (1) Any changes in ownership. (2) Any changes in the name of the laboratory. (3) Any changes in the laboratory director. (4) Any changes in the location of the laboratory. (5) Deletion or addition of tests or examinations. (6) Any increase of 5 percent or more in the total annual test volume reported on the most recent application as a result of changes in tests or examinations."
+      "citation": "42 CFR 493.63(a)",
+      "label": "Notification requirements (certificate of accreditation)",
+      "verbatim": "(a) Notify HHS and the approved accreditation program within 30 days of any changes in - (1) Ownership; (2) Name; (3) Location; or (4) Director."
     }
   ]
 }

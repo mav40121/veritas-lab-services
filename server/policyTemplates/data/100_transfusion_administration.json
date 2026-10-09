@@ -51,7 +51,7 @@
     ],
     [
       "Physician certification",
-      "Written statement signed by the ordering physician justifying the emergency release. Required by FDA 21 CFR 606.151(d)."
+      "Written statement signed by the ordering physician justifying the emergency release. Required by FDA 21 CFR 606.151(e)."
     ],
     [
       "RhIG",
@@ -109,14 +109,14 @@
       "verbatim": "(a) A method of collecting and identifying the blood samples of recipients to ensure positive identification."
     },
     {
-      "citation": "21 CFR 606.151(d)",
+      "citation": "21 CFR 606.151(e)",
       "label": "FDA: Procedure to expedite transfusion in life-threatening emergencies",
-      "verbatim": "A procedure to expedite transfusion in life-threatening emergencies. Records of all such incidents shall be maintained, including complete documentation justifying the emergency action, which shall be signed by a physician."
+      "verbatim": "(e) Procedures to expedite transfusion in life-threatening emergencies. Records of all such incidents shall be maintained, including complete documentation justifying the emergency action, which shall be signed by a physician."
     },
     {
-      "citation": "42 CFR 493.1271(d)",
-      "label": "Standard: Compatibility testing (emergency exception)",
-      "verbatim": "The laboratory must perform compatibility testing prior to the issuance of blood and blood products, except as provided for an emergency situation defined in writing by the laboratory."
+      "citation": "42 CFR 493.1271(a)(1)",
+      "label": "Standard: Immunohematology (patient testing)",
+      "verbatim": "(1) The laboratory must perform ABO grouping, D(Rho) typing, unexpected antibody detection, antibody identification, and compatibility testing by following the manufacturer's instructions, if provided, and as applicable, 21 CFR 606.151(a) through (e)."
     },
     {
       "citation": "21 CFR 606.151",
@@ -131,12 +131,7 @@
     {
       "citation": "21 CFR 606.100(b)",
       "label": "FDA: Standard operating procedures",
-      "verbatim": "Written standard operating procedures shall be maintained and shall include all steps to be followed in the collection, processing, compatibility testing, storage and distribution of blood and blood components for allogeneic and autologous transfusion, including notification of donors of any abnormal finding."
-    },
-    {
-      "citation": "42 CFR 493.1271(c)",
-      "label": "Patient testing",
-      "verbatim": "The laboratory must compare the results of current ABO group and D(Rho) typing determinations with those of previous records, if available. The laboratory must resolve any discrepancies before issuing blood or blood products."
+      "verbatim": "(b) Establishments must establish, maintain, and follow written standard operating procedures for all steps in the collection, processing, compatibility testing, storage, and distribution of blood and blood components for allogeneic transfusion, autologous transfusion, and further manufacturing purposes;"
     },
     {
       "citation": "21 CFR 606.170(a)",
@@ -145,7 +140,7 @@
     },
     {
       "citation": "21 CFR 606.170(b)",
-      "label": "FDA: Fatality investigation (15-day phone, 7-day written)",
+      "label": "FDA: Fatality reporting (notify CBER as soon as possible; written report within 7 days)",
       "verbatim": "(b) When a complication of blood collection or transfusion is confirmed to be fatal, the Director, Office of Compliance and Biologics Quality, CBER, must be notified by telephone, facsimile, express mail, or electronically transmitted mail as soon as possible. A written report of the investigation must be submitted to the Director, Office of Compliance and Biologics Quality, CBER, by mail, facsimile, or electronically transmitted mail (for mailing address, see § 600.2(a) of this chapter), within 7 days after the fatality by the collecting facility in the event of a donor reaction, or by the facility that performed the compatibility tests in the event of a transfusion reaction."
     }
   ]

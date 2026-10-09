@@ -27,14 +27,14 @@
   ],
   "cfr_text_blocks": [
     {
-      "citation": "21 CFR 610.46(a)",
-      "label": "FDA: HIV look-back requirements (transfusion service)",
-      "verbatim": "If you are a transfusion service, you must establish, maintain, and follow an appropriate system for the following actions, when you are notified by the collecting establishment of information indicating the potential risk of transmission of HIV by a blood or blood component you received from the collecting establishment, or, when you perform testing on previous collections from a repeat donor and obtain a reactive screening test result for HIV, or, when you obtain a reactive screening test result on a current donation from a repeat donor, indicating the potential risk of transmission of HIV by a previous blood or blood component you have prepared from the donor."
+      "citation": "21 CFR 610.46(b)",
+      "label": "FDA: HIV lookback (consignee / transfusion service)",
+      "verbatim": "(b) If you are a consignee of Whole Blood or blood components, including Source Plasma and Source Leukocytes, you must establish, maintain, and follow an appropriate system for the following actions: (1) You must quarantine all previously collected in-date blood and blood components identified under paragraph (a)(1) of this section, except pooled blood components intended solely for further manufacturing into products that are manufactured using validated viral clearance procedures, when notified by the collecting establishment. ... You must make reasonable attempts to perform the notification within 12 weeks after receiving the results of further testing for evidence of HIV infection from the collecting establishment, or after receiving the donor's reactive screening test result for HIV if further testing is not available, or if under an IND or IDE is exempted for such use by FDA."
     },
     {
-      "citation": "21 CFR 610.47",
-      "label": "FDA: HCV look-back requirements",
-      "verbatim": "If you are a transfusion service, you must establish, maintain, and follow an appropriate system for the following actions, when you are notified by the collecting establishment of information indicating the potential risk of transmission of HCV by a blood or blood component you received from the collecting establishment."
+      "citation": "21 CFR 610.47(b)",
+      "label": "FDA: HCV lookback (consignee / transfusion service)",
+      "verbatim": "(b) If you are a consignee of Whole Blood or blood components, including Source Plasma or Source Leukocytes, you must establish, maintain, and follow an appropriate system for the following actions: (1) You must quarantine all previously collected in-date blood and blood components identified under paragraph (a)(1) of this section, except pooled blood components intended solely for further manufacturing into products that are manufactured using validated viral clearance procedures, when notified by the collecting establishment. ... You must make reasonable attempts to perform the notification within 12 weeks after receiving the results of further testing for evidence of HCV infection from the collecting establishment, or after receiving the donor's reactive screening test result for HCV if further testing is not available, or if under an IND or IDE, is exempted for such use by FDA."
     }
   ]
 }

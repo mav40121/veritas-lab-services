@@ -6,9 +6,9 @@
   "purpose": "This policy describes how members of the public, patients, and staff can report concerns about <<LAB_NAME>> directly to CMS or to other regulatory authorities. CLIA at 42 CFR 493.1773 protects the right of any individual to communicate with CMS without lab interference.",
   "cfr_text_blocks": [
     {
-      "citation": "42 CFR 493.1773",
-      "label": "Standard: Inspection",
-      "verbatim": "A laboratory must permit CMS or a CMS agent to conduct an inspection to assess the laboratory's compliance with the requirements of this part. CMS or its agent is authorized to interview any laboratory employee, contractor, or other agent of the laboratory whose activities are subject to this part, and to inspect any laboratory record relevant to compliance with these requirements. A laboratory may not impede, obstruct, hinder, or interfere with any such inspection or interview."
+      "citation": "42 CFR 493.1773(a)-(b)",
+      "label": "Standard: Basic inspection requirements",
+      "verbatim": "(a) A laboratory issued a certificate must permit CMS or a CMS agent to conduct an inspection to assess the laboratory's compliance with the requirements of this part."
     }
   ],
   "scope": "All <<LAB_NAME>> personnel, contractors, vendors, patients, and members of the public who interact with the laboratory.",

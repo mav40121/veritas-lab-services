@@ -13,7 +13,7 @@
     {
       "citation": "42 CFR 493.1291(e)",
       "label": "Standard: Test report",
-      "verbatim": "If the laboratory transcribes or transmits the results directly or through an intermediary to the authorized person, the laboratory must, upon request, make available promptly to clients the methods used for performance of its laboratory tests and any information regarding the performance specifications established or verified as specified in 493.1253, the data and statistical analyses used in establishing the accuracy and precision of test performance, and any limitations in the test methodology."
+      "verbatim": "(e) The laboratory must, upon request, make available to clients a list of test methods employed by the laboratory and, as applicable, the performance specifications established or verified as specified in § 493.1253. In addition, information that may affect the interpretation of test results, for example test interferences, must be provided upon request. Pertinent updates on testing information must be provided to clients whenever changes occur that affect the test results or interpretation of test results."
     }
   ],
   "scope": "All <<LAB_NAME>> personnel involved in send-out testing, the medical director or designee, and the testing supervisors for affected specialties.",

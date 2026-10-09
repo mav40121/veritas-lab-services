@@ -13,12 +13,12 @@
     {
       "citation": "42 CFR 493.1251(e)",
       "label": "Standard: Procedure change",
-      "verbatim": "The laboratory must maintain a copy of each procedure with the dates of initial use and discontinuance. The laboratory must retain a copy of each procedure for at least 2 years after a procedure has been discontinued."
+      "verbatim": "(e) The laboratory must maintain a copy of each procedure with the dates of initial use and discontinuance as described in § 493.1105(a)(2)."
     },
     {
-      "citation": "42 CFR 493.1445(e)(11)",
-      "label": "Standard: Laboratory director responsibilities (procedure approval)",
-      "verbatim": "The laboratory director must ensure that prior to testing patients' specimens, all personnel have the appropriate education and experience, receive the appropriate training for the type and complexity of the services offered, and have demonstrated that they can perform all testing operations reliably to provide and report accurate results."
+      "citation": "42 CFR 493.1445(e)(12)",
+      "label": "Standard: Laboratory director responsibilities (personnel trained before testing)",
+      "verbatim": "(12) Ensure that prior to testing patients' specimens, all personnel have the appropriate education and experience, receive the appropriate training for the type and complexity of the services offered, and have demonstrated that they can perform all testing operations reliably to provide and report accurate results;"
     }
   ],
   "scope": "All <<LAB_NAME>> testing personnel, the medical director or designee, and any technical consultant or technical supervisor who authors or reviews procedures.",

@@ -55,17 +55,17 @@
     {
       "citation": "21 CFR 1271.85(a)",
       "label": "FDA: HCT/P donor eligibility testing",
-      "verbatim": "You must test a donor specimen for evidence of infection due to relevant communicable disease agents, with the exception of CJD and other transmissible spongiform encephalopathies, listed in 1271.85(a)(1) using appropriate FDA-licensed, approved, or cleared donor screening tests, in accordance with the manufacturer's instructions."
+      "verbatim": "(a) All donors. To adequately and appropriately reduce the risk of transmission of relevant communicable diseases, and except as provided under § 1271.90, you must test a specimen from the donor of cells or tissue, whether viable or nonviable, for evidence of infection due to relevant communicable disease agents, including: (1) Human immunodeficiency virus, type 1; (2) Human immunodeficiency virus, type 2; (3) Hepatitis B virus; (4) Hepatitis C virus; and (5) Treponema pallidum."
     },
     {
-      "citation": "21 CFR 1271.85(a)(1)",
-      "label": "FDA: HCT/P required communicable disease agents",
-      "verbatim": "You must test a donor specimen for evidence of infection due to the following communicable disease agents: (i) Human immunodeficiency virus, type 1; (ii) Human immunodeficiency virus, type 2; (iii) Hepatitis B virus; (iv) Hepatitis C virus; (v) Human T-lymphotropic virus, type I; (vi) Human T-lymphotropic virus, type II; (vii) Treponema pallidum."
+      "citation": "21 CFR 1271.85(b)",
+      "label": "FDA: Additional testing for viable, leukocyte-rich cells or tissue (HTLV-I/II, CMV)",
+      "verbatim": "(b) Donors of viable, leukocyte-rich cells or tissue. In addition to the relevant communicable disease agents for which testing is required under paragraph (a) of this section, and except as provided under § 1271.90, (1) You must test a specimen from the donor of viable, leukocyte-rich cells or tissue to adequately and appropriately reduce the risk of transmission of relevant cell-associated communicable diseases, including: (i) Human T-lymphotropic virus, type I; and (ii) Human T-lymphotropic virus, type II. (2) You must test a specimen from the donor of viable, leukocyte-rich cells or tissue for evidence of infection due to cytomegalovirus (CMV), to adequately and appropriately reduce the risk of transmission. You must establish and maintain a standard operating procedure governing the release of an HCT/P from a donor whose specimen tests reactive for CMV."
     },
     {
-      "citation": "21 CFR 1271.155(a)",
-      "label": "FDA: Donor screening (general)",
-      "verbatim": "You must screen a donor of cells or tissue by reviewing the donor's relevant medical records for risk factors for, and clinical evidence of, relevant communicable disease agents and diseases."
+      "citation": "21 CFR 1271.75(a)",
+      "label": "FDA: Donor screening (all donors)",
+      "verbatim": "(a) All donors. Except as provided under § 1271.90, if you are the establishment that performs donor screening, you must screen a donor of cells or tissue by reviewing the donor's relevant medical records for: (1) Risk factors for, and clinical evidence of, relevant communicable disease agents and diseases, including: (i) Human immunodeficiency virus; (ii) Hepatitis B virus; (iii) Hepatitis C virus; (iv) Human transmissible spongiform encephalopathy, including Creutzfeldt-Jakob disease; (v) Treponema pallidum ; and (2) Communicable disease risks associated with xenotransplantation."
     },
     {
       "citation": "21 CFR 1271.270",

@@ -6,9 +6,9 @@
   "purpose": "This policy describes how <<LAB_NAME>> designs, runs, evaluates, and acts on quality control (QC) for every nonwaived test. CLIA at 42 CFR 493.1256 sets the baseline control requirements; this policy operationalizes them and integrates with Westgard rule evaluation, corrective action, and the lab's monthly QC review.",
   "cfr_text_blocks": [
     {
-      "citation": "42 CFR 493.1256(a)",
+      "citation": "42 CFR 493.1256(a)-(b)",
       "label": "Standard: Control procedures",
-      "verbatim": "For each test system, the laboratory is responsible for having control procedures that monitor the accuracy and precision of the complete analytic process. The laboratory must establish the number, type, and frequency of testing control materials using, if applicable, the performance specifications verified or established by the laboratory as specified in 493.1253(b)(3)."
+      "verbatim": "(a) For each test system, the laboratory is responsible for having control procedures that monitor the accuracy and precision of the complete analytic process. (b) The laboratory must establish the number, type, and frequency of testing control materials using, if applicable, the performance specifications verified or established by the laboratory as specified in § 493.1253(b)(3)."
     },
     {
       "citation": "42 CFR 493.1256(d)",

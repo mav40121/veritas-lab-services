@@ -66,32 +66,32 @@
     {
       "citation": "21 CFR 606.100(b)",
       "label": "FDA: Standard operating procedures",
-      "verbatim": "Written standard operating procedures shall be maintained and shall include all steps to be followed in the collection, processing, compatibility testing, storage and distribution of blood and blood components for allogeneic and autologous transfusion, including notification of donors of any abnormal finding."
+      "verbatim": "(b) Establishments must establish, maintain, and follow written standard operating procedures for all steps in the collection, processing, compatibility testing, storage, and distribution of blood and blood components for allogeneic transfusion, autologous transfusion, and further manufacturing purposes;"
     },
     {
-      "citation": "21 CFR 607.20",
-      "label": "FDA: Registration of blood establishments",
-      "verbatim": "Establishments engaged in the manufacture of blood products shall register on Form FDA 2830 and list their products on the form provided by FDA."
+      "citation": "21 CFR 607.20(a)",
+      "label": "FDA: Who must register and submit a blood product list",
+      "verbatim": "(a) Owners or operators of all establishments, not exempt under section 510(g) of the act or subpart D of this part, that engage in the manufacture of blood products shall register and submit a list of every blood product in commercial distribution (except that registration and listing information may be submitted by the parent, subsidiary, and/or affiliate company for all establishments when operations are conducted at more than one establishment and there exists joint ownership and control among all the establishments). Blood products manufactured, prepared, propagated, compounded, or processed in any State as defined in section 201(a)(1) of the act must be listed whether or not the output of such blood product establishment or any particular blood product so listed enters interstate commerce."
     },
     {
       "citation": "21 CFR 610.40(a)",
       "label": "FDA: Testing requirements (donor specimen testing)",
-      "verbatim": "Except as specified in paragraphs (c) and (d) of this section, you must test each donation of human blood or blood component intended for use in preparing a product, including donations intended as a component of, or used to prepare, a medical device, for evidence of infection due to the following communicable disease agents: (1) Human immunodeficiency virus, type 1; (2) Human immunodeficiency virus, type 2; (3) Hepatitis B virus; (4) Hepatitis C virus; (5) Human T-lymphotropic virus, type I; (6) Human T-lymphotropic virus, type II; (7) Treponema pallidum."
+      "verbatim": "Except as specified in paragraphs (c) and (d) of this section, you, an establishment that collects blood and blood components for transfusion or for use in manufacturing a product, including donations intended as a component of, or used to manufacture, a medical device, must comply with the following requirements: (1) Test each donation for evidence of infection due to the relevant transfusion-transmitted infections described in § 630.3(h)(1)(i) through (iii) of this chapter (HIV, HBV, and HCV)."
     },
     {
       "citation": "21 CFR 630.10(a)",
       "label": "FDA: General donor eligibility requirements",
-      "verbatim": "A donor is eligible to donate blood or a blood component if you determine and document that the donor is in good health and free from transfusion-transmitted infections as required under this subpart, and meets all other applicable requirements under this subpart."
+      "verbatim": "(a) What factors determine the eligibility of a donor ? You, an establishment that collects blood or blood components, must not collect blood or blood components before determining that the donor is eligible to donate or before determining that an exception to this provision applies. To be eligible, the donor must be in good health and free from transfusion-transmitted infections as can be determined by the processes in this subchapter. A donor is not eligible if the donor is not in good health or if you identify any factor(s) that may cause the donation to adversely affect: (1) The health of the donor; or (2) The safety, purity, or potency of the blood or blood component."
     },
     {
-      "citation": "21 CFR 630.40",
-      "label": "FDA: Donor notification",
-      "verbatim": "You must make reasonable attempts to notify any donor, including an autologous donor, who has been deferred based on the results of reactive screening tests for evidence of infection due to a relevant transfusion-transmitted infection or to notify the donor's physician of record, of the deferral and the basis for the deferral."
+      "citation": "21 CFR 630.40(a)",
+      "label": "FDA: Notification of donors",
+      "verbatim": "(a) Notification of donors. You, an establishment that collects blood or blood components, must make reasonable attempts to notify any donor, including an autologous donor, who has been deferred based on the results of tests for evidence of infection with a relevant transfusion-transmitted infection(s) as required by § 610.41(a) of this chapter; any donor who has been deferred as required under § 630.30(b)(3) because their donated platelets have been determined under § 606.145(d) of this chapter to be contaminated with an organism that is identified as likely to be associated with a bacterial infection that is endogenous to the bloodstream of the donor; and any donor who has been determined not to be eligible as a donor based on eligibility criteria under §§ 630.10 and 630.15. You must attempt to obtain the results of further testing required under § 610.40(e) of this chapter prior to notifying a donor of the deferral. If notification occurs prior to receipt of such results, you must also notify a deferred donor of the results of the further testing. You must notify a donor as described in paragraph (b) of this section."
     },
     {
       "citation": "21 CFR 606.110(a)",
       "label": "FDA: Plateletpheresis, leukapheresis, and plasmapheresis",
-      "verbatim": "The plateletpheresis, leukapheresis, and plasmapheresis procedures shall be conducted under the supervision of a qualified, licensed physician knowledgeable in the medical procedures and informed of the medical status of the donor, and shall be responsible for any reactions encountered with the procedures."
+      "verbatim": "(a) The use of plateletpheresis and leukapheresis procedures to obtain a product for a specific recipient may be at variance with the additional standards for specific products prescribed in this part provided that: (1) A physician has determined that the recipient must be transfused with the leukocytes or platelets from a specific donor, and (2) the procedure is performed under the supervision of a responsible physician who is aware of the health status of the donor, and the physician has determined and documented that the donor's health permits plateletpheresis or leukapheresis."
     },
     {
       "citation": "21 CFR 606.160",

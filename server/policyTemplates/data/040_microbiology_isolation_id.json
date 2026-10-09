@@ -6,15 +6,15 @@
   "purpose": "This policy describes how <<LAB_NAME>> isolates and identifies bacterial, mycobacterial, fungal, and parasitic organisms from clinical specimens. Required by 42 CFR 493.1262 (microbiology QC) and 42 CFR 493.1261 (general bacteriology and mycology requirements).",
   "cfr_text_blocks": [
     {
-      "citation": "42 CFR 493.1262(a)",
-      "label": "Standard: Bacteriology",
-      "verbatim": "For each batch (i.e., shipment, lot, or in-house preparation) and shipment of media, the laboratory must check media for sterility if sterility is required for testing, ability to support growth, and, as appropriate, selectivity/inhibition and biochemical response."
+      "citation": "42 CFR 493.1256(e)(4)",
+      "label": "Standard: Control procedures (media checks)",
+      "verbatim": "(4) Before, or concurrent with the initial use - (i) Check each batch of media for sterility if sterility is required for testing; (ii) Check each batch of media for its ability to support growth and, as appropriate, select or inhibit specific organisms or produce a biochemical response; and (iii) Document the physical characteristics of the media when compromised and report any deterioration in the media to the manufacturer."
     }
   ],
   "scope": "All <<LAB_NAME>> microbiology testing personnel, the technical supervisor for microbiology, and the medical director or designee.",
   "policy_statements": [
     "Specimens are processed per the source-specific procedure (urine, wound, blood, respiratory, stool, body fluid, tissue) with appropriate primary plating media and incubation conditions.",
-    "Media QC: each batch and shipment of media is tested for sterility (when required), growth support with stock organisms, selectivity and inhibition (selective media), and biochemical response (differential media) per 42 CFR 493.1262(a); QC results are documented before patient use.",
+    "Media QC: each batch and shipment of media is tested for sterility (when required), growth support with stock organisms, selectivity and inhibition (selective media), and biochemical response (differential media) per 42 CFR 493.1256(e)(4); QC results are documented before patient use.",
     "Isolates are identified using validated methods (manual biochemical, automated identification systems, MALDI-TOF, molecular) per the lab's procedure; method choice is based on the organism and clinical relevance.",
     "Susceptibility testing follows the lab's procedure with current breakpoint interpretive criteria; results are reviewed by the technical supervisor or medical director or designee before release for critical isolates.",
     "Identification, susceptibility, and any pathogen-specific notification (reportable diseases) are documented; reportable conditions are reported to the public health authority per state requirements."
@@ -27,7 +27,7 @@
     "Reportable diseases are reported to the public health authority on the state's required cadence; the report is logged."
   ],
   "definitions": [
-    ["Media QC", "Quality control of culture media for sterility, growth support, selectivity, and biochemical response. Required on each batch and shipment per 42 CFR 493.1262(a)."],
+    ["Media QC", "Quality control of culture media for sterility, growth support, selectivity, and biochemical response. Required on each batch and shipment per 42 CFR 493.1256(e)(4)."],
     ["Susceptibility testing", "Determination of antimicrobial agents to which an isolated organism is susceptible or resistant. Performed with current interpretive criteria."]
   ]
 }

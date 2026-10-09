@@ -13,7 +13,7 @@
     "Components issued for transfusion are transported in validated coolers (red cells), unpacked validated containers (platelets), or insulated containers per the component's requirements; transport time and temperature are documented.",
     "Components returned to inventory are accepted only if they have been continuously in approved conditions: red cells returned within 30 minutes of issue (or longer if validated cooler maintained 1 to 10 degrees C per current standards and component integrity is intact); platelets, FFP, and cryo per the lab's validated return criteria. Returns that do not meet criteria are quarantined and discarded per the Component Disposal procedure.",
     "Release of components to external organizations follows a written sharing agreement, an emergency request from a recognized facility, or an FDA recall/look-back response; component traceability is maintained end-to-end and the medical director or designee is notified of any emergency external release within 5 business days.",
-    "Blood bank reagents meet manufacturer reactivity criteria; reactivity QC is performed each day of use per 42 CFR 493.1273(a) (reagent red cells confirmed reactive; antisera confirmed reactive with known antigen-positive reference cells; antiglobulin reagent confirmed reactive with IgG-sensitized reference cells; negative controls confirmed non-reactive). New reagent lots are parallel-tested against the prior lot and against patient samples covering the expected range of reactivity; acceptance is documented before placing the new lot into service.",
+    "Blood bank reagents meet manufacturer reactivity criteria; reactivity QC is performed each day of use per 21 CFR 606.65(c) (reagent red cells confirmed reactive; antisera confirmed reactive with known antigen-positive reference cells; antiglobulin reagent confirmed reactive with IgG-sensitized reference cells; negative controls confirmed non-reactive). New reagent lots are parallel-tested against the prior lot and against patient samples covering the expected range of reactivity; acceptance is documented before placing the new lot into service.",
     "Plasma components are processed (thawed, pooled, divided) per validated procedures. Thawing is performed in a validated plasma thawer (water bath or dry heat) per the manufacturer's instructions; thaw time and temperature are documented. ABO compatibility for plasma issue: AB plasma is universal; A plasma is compatible with A and O recipients; B plasma is compatible with B and O recipients; O plasma is compatible only with O recipients.",
     "Irradiated cellular blood components are issued to patients at risk of Transfusion-Associated Graft-Versus-Host Disease (TA-GVHD), including: intrauterine and neonatal transfusion, HLA-matched units, units from biologic relatives, hematologic malignancy, hematopoietic stem cell transplant recipients, congenital immunodeficiency, and other indications per the medical director or designee's approved list.",
     "Leukoreduced cellular components are issued to patients at risk of CMV transmission, febrile non-hemolytic transfusion reactions, HLA-alloimmunization, or per the medical director or designee's approved indication list. Pre-storage leukoreduction is the standard when supplier-supported; the supplier's certificate of leukoreduction or unit labeling indicating leukoreduced status is verified at receipt and at issue.",
@@ -27,7 +27,7 @@
     "Monthly, the medical director or designee reviews the Storage Alarm Response log to identify trends and prompt equipment replacement or process change.",
     "On component issue, pack per the component's transport requirements (red cells in validated cooler with monitored temperature; platelets without agitation interruption beyond validated time; FFP frozen); document issue time, courier, and destination.",
     "On component return, confirm transport conditions (cooler temperature in range, component appearance intact, time-since-issue within validated return window); accept or quarantine per the criteria; document.",
-    "Each day of use, perform reactivity QC per 42 CFR 493.1273(a) before patient testing begins; document results with reagent lot, control material lot, and accept/reject decision; failed QC pauses patient testing on the affected reagent.",
+    "Each day of use, perform reactivity QC per 21 CFR 606.65(c) before patient testing begins; document results with reagent lot, control material lot, and accept/reject decision; failed QC pauses patient testing on the affected reagent.",
     "On new reagent lot introduction, perform parallel testing against the prior lot using reference cells and patient samples; document acceptance before placing in service.",
     "For external release, verify the written agreement is current, obtain medical director or designee authorization for non-routine releases, document component release with recipient organization, unit ID, and expected use; obtain receipt acknowledgment; the medical director or designee reviews emergency releases within 5 business days.",
     "For plasma processing, thaw in the validated thawer per manufacturer instructions; document thaw time and temperature; verify ABO compatibility (AB universal; A to A and O; B to B and O; O to O only) before issue; apply new expiration time and label per 21 CFR 606.122.",
@@ -66,7 +66,7 @@
     ],
     [
       "Reactivity QC",
-      "Daily-of-use quality control on blood bank reagents confirming each reagent performs as expected with known reactive and non-reactive controls per 42 CFR 493.1273(a)."
+      "Daily-of-use quality control on blood bank reagents confirming each reagent performs as expected with known reactive and non-reactive controls per 21 CFR 606.65(c)."
     ],
     [
       "Antiglobulin reagent (Coombs reagent)",
@@ -90,14 +90,14 @@
     ],
     [
       "Daily QC",
-      "The CLIA-required reactivity testing performed at the start of each day of patient immunohematology testing per 42 CFR 493.1273(a): reagent red cells, antisera, antiglobulin reagent (against IgG-sensitized control), and negative controls. Failed daily QC pauses patient testing on the affected reagent until resolution."
+      "The CLIA-required reactivity testing performed at the start of each day of patient immunohematology testing per 21 CFR 606.65(c): reagent red cells, antisera, antiglobulin reagent (against IgG-sensitized control), and negative controls. Failed daily QC pauses patient testing on the affected reagent until resolution."
     ]
   ],
   "cfr_text_blocks": [
     {
       "citation": "21 CFR 606.100(b)",
       "label": "FDA: Standard operating procedures",
-      "verbatim": "Written standard operating procedures shall be maintained and shall include all steps to be followed in the collection, processing, compatibility testing, storage and distribution of blood and blood components for allogeneic and autologous transfusion, including notification of donors of any abnormal finding. Such procedures shall be available to the personnel for use in the areas where the procedures are performed."
+      "verbatim": "(b) Establishments must establish, maintain, and follow written standard operating procedures for all steps in the collection, processing, compatibility testing, storage, and distribution of blood and blood components for allogeneic transfusion, autologous transfusion, and further manufacturing purposes; ... Such procedures must be available to the personnel for use in the areas where the procedures are performed."
     },
     {
       "citation": "42 CFR 493.1252(b)",
@@ -107,22 +107,22 @@
     {
       "citation": "21 CFR 606.122",
       "label": "FDA: Instruction circular",
-      "verbatim": "An instruction circular shall be available for distribution if the product is intended for transfusion. The instruction circular shall provide adequate directions for use, including all information set forth below to the extent that it is applicable to the product."
+      "verbatim": "A circular of information must be available for distribution if the product is intended for transfusion. The circular of information must provide adequate directions for use, including the following information: (a) Instructions to mix the product before use."
     },
     {
-      "citation": "21 CFR 606.65(d)",
-      "label": "FDA: Supplies and reagents",
-      "verbatim": "Storage of blood and blood components shall be at a temperature that will provide for the maximum length of time during which the blood may be stored, with proper means for the recording and visual display of temperature."
+      "citation": "42 CFR 493.1271(c)",
+      "label": "Standard: Immunohematology (blood and blood products storage)",
+      "verbatim": "(c) Blood and blood products storage. Blood and blood products must be stored under appropriate conditions that include an adequate temperature alarm system that is regularly inspected. (1) An audible alarm system must monitor proper blood and blood product storage temperature over a 24-hour period. (2) Inspections of the alarm system must be documented."
     },
     {
-      "citation": "21 CFR 606.160(b)",
+      "citation": "21 CFR 606.160(d)",
       "label": "FDA: Records (retention)",
-      "verbatim": "Records shall be retained for such interval beyond the expiration date for the blood or blood component as necessary to facilitate the reporting of any unfavorable clinical reactions. You must retain individual product records no less than 10 years after the records of processing are completed or 6 months after the latest expiration date for the individual product, whichever is the later date."
+      "verbatim": "(d) Records shall be retained for such interval beyond the expiration date for the blood or blood component as necessary to facilitate the reporting of any unfavorable clinical reactions. You must retain individual product records no less than 10 years after the records of processing are completed or 6 months after the latest expiration date for the individual product, whichever is the later date. When there is no expiration date, records shall be retained indefinitely."
     },
     {
-      "citation": "42 CFR 493.1273(a)",
-      "label": "Standard: Immunohematology (control procedures)",
-      "verbatim": "If the laboratory performs ABO grouping, D(Rho) typing, unexpected antibody detection, antibody identification, or compatibility testing, the laboratory must, at a minimum, do the following: (1) Test reagent red cells to confirm reactivity. (2) Test antiserum (anti-A, anti-B, anti-A,B, anti-D) at the manufacturer's recommended concentration with reference red cells. (3) Test antiglobulin reagent (anti-IgG, polyspecific) for reactivity with IgG-sensitized red cells. (4) Test the negative control."
+      "citation": "42 CFR 493.1256(e)(1)",
+      "label": "Standard: Control procedures (reagent and antisera checks)",
+      "verbatim": "(1) Check each batch (prepared in-house), lot number (commercially prepared) and shipment of reagents, disks, stains, antisera, (except those specifically referenced in § 493.1261(a)(3)) and identification systems (systems using two or more substrates or two or more reagents, or a combination) when prepared or opened for positive and negative reactivity, as well as graded reactivity, if applicable."
     }
   ]
 }

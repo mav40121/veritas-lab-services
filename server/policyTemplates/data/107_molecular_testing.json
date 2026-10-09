@@ -69,14 +69,9 @@
       "verbatim": "(d) Unless CMS approves a procedure, specified in Appendix C of the State Operations Manual (CMS Pub. 7), that provides equivalent quality testing, the laboratory must - (1) Perform control procedures as defined in this section unless otherwise specified in the additional specialty and subspecialty requirements at §§ 493.1261 through 493.1278. (2) For each test system, perform control procedures using the number and frequency specified by the manufacturer or established by the laboratory when they meet or exceed the requirements in paragraph (d)(3) of this section. ... (i) Each quantitative procedure, include two control materials of different concentrations;"
     },
     {
-      "citation": "42 CFR 493.1256(d)(3)",
+      "citation": "42 CFR 493.1256(d)(3)(ii)",
       "label": "Standard: Control procedures (qualitative)",
-      "verbatim": "Include the following controls in each run of patient specimens: (ii) A negative and positive control for each qualitative procedure."
-    },
-    {
-      "citation": "42 CFR 493.1276(a)",
-      "label": "Standard: Molecular pathology",
-      "verbatim": "If the laboratory provides services in the subspecialty of Molecular Pathology, the laboratory must (1) Have written quality assurance procedures, and (2) Use only those slides, fluids, and stains that meet the laboratory's quality criteria."
+      "verbatim": "(ii) Each qualitative procedure, include a negative and positive control material;"
     }
   ]
 }

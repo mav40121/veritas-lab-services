@@ -3,7 +3,7 @@
   "slug": "waived_and_point_of_care_testing",
   "policy_name": "Waived and Point-of-Care Testing Policy",
   "section": "Testing",
-  "purpose": "This policy describes how <<LAB_NAME>> conducts waived and point-of-care (POC) testing: scope of waived tests offered, manufacturer-prescribed quality control, testing personnel competency, and central oversight by the laboratory's CLIA director. Required by 42 CFR 493.15 (waived tests), 42 CFR 493.17 (test categorization), 42 CFR 493.35 / 493.37 / 493.39 (CLIA certificates), 42 CFR 493.1235 (competency for all personnel), 42 CFR 493.1256 (QC for non-waived; waived QC follows manufacturer), and 42 CFR 493.1775 (notification of changes including new sites or addresses).",
+  "purpose": "This policy describes how <<LAB_NAME>> conducts waived and point-of-care (POC) testing: scope of waived tests offered, manufacturer-prescribed quality control, testing personnel competency, and central oversight by the laboratory's CLIA director. Required by 42 CFR 493.15 (waived tests), 42 CFR 493.17 (test categorization), 42 CFR 493.35 / 493.37 / 493.39 (CLIA certificates), 42 CFR 493.1235 (competency for all personnel), 42 CFR 493.1256 (QC for non-waived; waived QC follows manufacturer), and 42 CFR 493.63(a) (notification of changes including new sites or addresses).",
   "scope": "All <<LAB_NAME>> personnel performing waived or POC tests, the Laboratory Director or designee, the POC coordinator, and clinical staff at every POC site.",
   "policy_statements": [
     "Every waived test performed at <<LAB_NAME>> is on the current CMS waived-test list and is performed exactly per the manufacturer's instructions, with no modification.",
@@ -12,7 +12,7 @@
     "Critical results from waived tests follow the lab's Critical Value Reporting policy; the manufacturer's stated reportable range and limitations are followed at all times.",
     "Every person performing waived testing receives documented orientation to the specific test and to the lab's QC and result-reporting expectations before testing patients.",
     "Competency for waived testing is assessed on the same Initial / 6-month / Annual cadence as non-waived, against the six CLIA elements at 42 CFR 493.1235 (a streamlined six-element form is acceptable). The assessor for waived testing is the General Supervisor, the Technical Consultant, or the medical director or designee per CMS guidance for waived complexity.",
-    "Every POCT site operating under the <<LAB_NAME>> CLIA certificate is listed on the lab's CLIA application and approved by the medical director or designee. A new POCT site at a different address triggers a CLIA certificate update per 42 CFR 493.1775.",
+    "Every POCT site operating under the <<LAB_NAME>> CLIA certificate is listed on the lab's CLIA application and approved by the medical director or designee. A new POCT site at a different address triggers a CLIA certificate update per 42 CFR 493.63(a).",
     "POCT operators are trained, competency-assessed, and authorized in the lab's POCT roster before performing patient testing; the roster is maintained current.",
     "POCT results are entered into the LIS or EHR with operator ID, device ID, date/time, and result; critical results are reported per the lab's Critical Value Reporting policy.",
     "POC testing across the facility (in any clinic, ED, ICU, or off-site location) is centrally overseen by <<LAB_NAME>>; sites are inventoried, QC results aggregated, competency tracked centrally, and reagent inventory managed by the central lab or POC coordinator. Expired reagents are removed from POCT sites promptly.",
@@ -21,7 +21,7 @@
   ],
   "procedure_steps": [
     "On new waived test, the medical director or designee confirms the test is on the CMS waived-test list and the lab holds the appropriate CLIA certificate; register the test in the central oversight inventory; assign the responsible POC coordinator.",
-    "On new POCT site, the medical director or designee approves; if the new site is at a different address, the CLIA certificate is updated per 42 CFR 493.1775 before testing begins at that site.",
+    "On new POCT site, the medical director or designee approves; if the new site is at a different address, the CLIA certificate is updated per 42 CFR 493.63(a) before testing begins at that site.",
     "Place manufacturer's instructions, QC requirements, and quick-reference card at every testing site; verify each site has current manufacturer's instructions, in-date reagents, and a documented operator list.",
     "Train every operator on the specific test; complete Initial Training; perform initial competency assessment before independent patient testing; add operator to the POCT roster.",
     "Run manufacturer-required QC at every required event (new lot, new shipment, after service, prescribed frequency); document control identity, lot number, expiration, result, accept/reject decision, operator, date/time; failed QC pauses patient testing on the affected device until QC is in control.",
@@ -74,12 +74,7 @@
     {
       "citation": "42 CFR 493.15(e)",
       "label": "Standard: Laboratories performing waived tests",
-      "verbatim": "Laboratories must follow manufacturers' test instructions and meet the requirements specified in 493.35, 493.37, 493.39, 493.43, 493.45, and 493.51, when applicable, and the conditions specified in 493.5, 493.17, and 493.19."
-    },
-    {
-      "citation": "42 CFR 493.17(c)",
-      "label": "Standard: Test categorization (modification reclassifies)",
-      "verbatim": "When a test is modified by the laboratory, the test is considered to be high complexity and subject to the applicable requirements of subparts H, J, K, M, P, and Q of this part."
+      "verbatim": "(e) Laboratories eligible for a certificate of waiver must - (1) Follow manufacturers' instructions for performing the test; and (2) Meet the requirements in subpart B, Certificate of Waiver, of this part."
     },
     {
       "citation": "42 CFR 493.1291(g)",
@@ -89,17 +84,17 @@
     {
       "citation": "42 CFR 493.1235",
       "label": "Standard: Personnel competency assessment policies",
-      "verbatim": "As specified in the personnel responsibility sections of this subpart, the laboratory must establish and follow written policies and procedures to assess employee and, if applicable, consultant competency. For each employee performing waived, moderate, or high complexity testing, the procedures for assessment must include, but are not limited to, all of the following: (1) Direct observation of routine patient test performance, including, if applicable, patient preparation, specimen handling, processing and testing. (2) Monitoring the recording and reporting of test results, including, if applicable, reporting critical results. (3) Review of intermediate test results or worksheets, quality control records, proficiency testing results, and preventive maintenance records. (4) Direct observation of performance of instrument maintenance and function checks. (5) Assessment of test performance through testing previously analyzed specimens, internal blind testing samples or external proficiency testing samples. (6) Assessment of problem solving skills."
+      "verbatim": "As specified in the personnel requirements in subpart M, the laboratory must establish and follow written policies and procedures to assess employee and, if applicable, consultant competency."
     },
     {
-      "citation": "42 CFR 493.1256(a)",
+      "citation": "42 CFR 493.1256(a)-(b)",
       "label": "Standard: Control procedures",
-      "verbatim": "For each test system, the laboratory is responsible for having control procedures that monitor the accuracy and precision of the complete analytic process. The laboratory must establish the number, type, and frequency of testing control materials using, if applicable, the performance specifications verified or established by the laboratory as specified in 493.1253(b)(3)."
+      "verbatim": "(a) For each test system, the laboratory is responsible for having control procedures that monitor the accuracy and precision of the complete analytic process. (b) The laboratory must establish the number, type, and frequency of testing control materials using, if applicable, the performance specifications verified or established by the laboratory as specified in § 493.1253(b)(3)."
     },
     {
-      "citation": "42 CFR 493.1775",
-      "label": "Standard: Notification of changes (new site, address)",
-      "verbatim": "The laboratory must notify HHS within 30 days of the following changes: (1) Any changes in ownership. (2) Any changes in the name of the laboratory. (3) Any changes in the laboratory director. (4) Any changes in the location of the laboratory. (5) Deletion or addition of tests or examinations. (6) Any increase of 5 percent or more in the total annual test volume reported on the most recent application as a result of changes in tests or examinations."
+      "citation": "42 CFR 493.63(a)",
+      "label": "Notification requirements (certificate of accreditation)",
+      "verbatim": "(a) Notify HHS and the approved accreditation program within 30 days of any changes in - (1) Ownership; (2) Name; (3) Location; or (4) Director."
     }
   ]
 }

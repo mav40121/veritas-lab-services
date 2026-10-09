@@ -6,9 +6,9 @@
   "purpose": "This policy describes specimen collection, handling, and QC for coagulation testing (PT/INR, aPTT, fibrinogen, D-dimer, thrombin time, factor assays). Coagulation specimen integrity is uniquely sensitive to collection technique and time-to-testing; required by 42 CFR 493.1232 (specimen integrity), 42 CFR 493.1242 (handling), and 42 CFR 493.1256 (controls).",
   "cfr_text_blocks": [
     {
-      "citation": "42 CFR 493.1256(d)(3)",
-      "label": "Standard: Control procedures (each run)",
-      "verbatim": "Perform control material testing as specified in this paragraph (d) before resuming patient testing when a complete change of reagents is introduced; major preventive maintenance is performed; or any critical part that may influence test performance is replaced."
+      "citation": "42 CFR 493.1256(d)(6)",
+      "label": "Standard: Control procedures (reagent change, maintenance, part replacement)",
+      "verbatim": "(6) Perform control material testing as specified in this paragraph before resuming patient testing when a complete change of reagents is introduced; major preventive maintenance is performed; or any critical part that may influence test performance is replaced."
     }
   ],
   "scope": "All <<LAB_NAME>> personnel collecting or testing coagulation specimens.",

@@ -1,0 +1,416 @@
+{
+ "_about": "BUG-013 C/D decisions picked by Claude 2026-10-09 (Michael Q48: 'I want you to do the work', option 1). Each quote gets the citation whose real eCFR text supports what the policy says; text is pulled from the eCFR by rebuild_cfr_quotes.py (never typed here). Michael approves the whole sheet before anything ships.",
+ "111_hct_p_human_cells_tissues.json#2": {
+  "action": "replace",
+  "citation": "21 CFR 1271.75(a)",
+  "label": "FDA: Donor screening (all donors)",
+  "reason": "The quoted words are 1271.75(a), how to screen a donor; 1271.155(a) is the exemption-request rule."
+ },
+ "111_hct_p_human_cells_tissues.json#0": {
+  "action": "keep_citation",
+  "reason": "Right section, reworded; 1271.85(a) itself lists the required agents (HIV-1, HIV-2, HBV, HCV, T. pallidum)."
+ },
+ "111_hct_p_human_cells_tissues.json#1": {
+  "action": "replace",
+  "citation": "21 CFR 1271.85(b)",
+  "label": "FDA: Additional testing for viable, leukocyte-rich cells or tissue (HTLV-I/II, CMV)",
+  "reason": "The quote added HTLV-I/II to the (a) list; HTLV and CMV testing is 1271.85(b). (a) is already quoted in the block above."
+ },
+ "097_transfusion_service_master.json#1": {
+  "action": "keep_citation",
+  "reason": "Right section; the quote is the pre-2015 wording of 606.100(b). Current text: 'Establishments must establish, maintain, and follow...'."
+ },
+ "099_blood_component_handling.json#0": {
+  "action": "keep_citation",
+  "reason": "Right section; pre-2015 wording replaced with the current 606.100(b)."
+ },
+ "100_transfusion_administration.json#5": {
+  "action": "keep_citation",
+  "reason": "Right section; pre-2015 wording replaced with the current 606.100(b)."
+ },
+ "102_donor_operations.json#0": {
+  "action": "keep_citation",
+  "reason": "Right section; pre-2015 wording replaced with the current 606.100(b)."
+ },
+ "102_donor_operations.json#5": {
+  "action": "keep_citation",
+  "reason": "Right section, reworded; the physician-supervision requirement is in 606.110(a)(2) as quoted."
+ },
+ "099_blood_component_handling.json#2": {
+  "action": "keep_citation",
+  "reason": "Right section; 'instruction circular' is now 'circular of information' (606.122)."
+ },
+ "100_transfusion_administration.json#1": {
+  "action": "replace",
+  "citation": "21 CFR 606.151(e)",
+  "label": "FDA: Procedure to expedite transfusion in life-threatening emergencies",
+  "reason": "The quoted words are 606.151(e) word for word; (d) is the donor-serum crossmatch provision."
+ },
+ "099_blood_component_handling.json#4": {
+  "action": "replace",
+  "citation": "21 CFR 606.160(d)",
+  "label": "FDA: Records (retention)",
+  "reason": "The retention words are 606.160(d); (b) lists which records to keep."
+ },
+ "099_blood_component_handling.json#3": {
+  "action": "replace",
+  "citation": "42 CFR 493.1271(c)",
+  "label": "Standard: Immunohematology (blood and blood products storage)",
+  "reason": "The quoted storage-temperature sentence is not in Part 606; the federal storage rule with temperature alarm monitoring is 42 CFR 493.1271(c)."
+ },
+ "102_donor_operations.json#1": {
+  "action": "replace",
+  "citation": "21 CFR 607.20(a)",
+  "label": "FDA: Who must register and submit a blood product list",
+  "reason": "Right section; the old 'Form FDA 2830' wording is gone. Current text is 607.20(a)."
+ },
+ "102_donor_operations.json#2": {
+  "action": "keep_citation",
+  "reason": "Right section, reworded; quote the current 610.40(a)."
+ },
+ "101_blood_recipient_lookback.json#0": {
+  "action": "replace",
+  "citation": "21 CFR 610.46(b)",
+  "label": "FDA: HIV lookback (consignee / transfusion service)",
+  "reason": "The policy is for a transfusion service; the consignee duties are 610.46(b). (a) is for collecting establishments."
+ },
+ "101_blood_recipient_lookback.json#1": {
+  "action": "replace",
+  "citation": "21 CFR 610.47(b)",
+  "label": "FDA: HCV lookback (consignee / transfusion service)",
+  "reason": "Same as HIV: the consignee duties are 610.47(b)."
+ },
+ "102_donor_operations.json#3": {
+  "action": "keep_citation",
+  "reason": "Right section, reworded; quote the current 630.10(a)."
+ },
+ "102_donor_operations.json#4": {
+  "action": "replace",
+  "citation": "21 CFR 630.40(a)",
+  "label": "FDA: Notification of donors",
+  "reason": "The quote is 630.40(a), notification of deferred donors, in older wording."
+ },
+ "039_reagent_solution_labeling.json#3": {
+  "action": "replace",
+  "citation": "29 CFR 1910.1200(f)(1)",
+  "label": "OSHA HazCom: Labels on shipped containers",
+  "reason": "The quoted label elements are 1910.1200(f)(1); (f) as a whole runs eleven subparagraphs."
+ },
+ "001_accreditation_body_notification.json#1": {
+  "action": "keep_citation",
+  "reason": "Right section, reworded; quote the current 493.1100 (one sentence)."
+ },
+ "109_laboratory_governance_and_leadership.json#2": {
+  "action": "keep_citation",
+  "reason": "Right section, reworded; quote the current 493.1100."
+ },
+ "015_environment_of_care.json#0": {
+  "action": "replace",
+  "citation": "42 CFR 493.1101(a)",
+  "label": "Standard: Facilities",
+  "reason": "The quoted list is 493.1101(a)(1)-(5); citing (a) keeps the whole list."
+ },
+ "016_radiation_safety.json#1": {
+  "action": "replace",
+  "citation": "42 CFR 493.1101(d)",
+  "label": "Standard: Facilities (safety procedures)",
+  "reason": "Protection from physical, chemical, biochemical and electrical hazards is 493.1101(d); (c) is compliance with Federal, State and local requirements."
+ },
+ "110_infection_prevention_and_standard_precautions.json#0": {
+  "action": "replace",
+  "citation": "42 CFR 493.1101(d)",
+  "label": "Standard: Facilities (safety procedures)",
+  "reason": "Same as policy 016: the safety and biohazard protection text is 493.1101(d)."
+ },
+ "012_record_retention.json#0": {
+  "action": "keep_citation",
+  "reason": "Right paragraph, reworded; quote the current 493.1105(a) retention list."
+ },
+ "039_reagent_solution_labeling.json#5": {
+  "action": "replace",
+  "citation": "42 CFR 493.1105(a)(3)",
+  "label": "Standard: Retention requirements (analytic systems records)",
+  "reason": "Reagent, calibrator and control lot records are analytic-systems records under 493.1252-493.1289, kept 2 years per 493.1105(a)(3); (a)(2) is test procedures."
+ },
+ "104_training_and_competency.json#0": {
+  "action": "keep_citation",
+  "reason": "493.1235 is one sentence; the six assessment procedures the template quoted are at 493.1413(b)(8) and 493.1451(b)(8), not in 493.1235."
+ },
+ "105_performance_evaluation.json#0": {
+  "action": "keep_citation",
+  "reason": "Same as policy 104: quote the real one-sentence 493.1235."
+ },
+ "106_waived_and_point_of_care_testing.json#3": {
+  "action": "keep_citation",
+  "reason": "Same as policy 104: quote the real one-sentence 493.1235."
+ },
+ "004_unsuccessful_pt_response.json#1": {
+  "action": "replace",
+  "citation": "42 CFR 493.1281(a)",
+  "label": "Standard: Comparison of test results",
+  "reason": "The quoted twice-a-year comparability requirement is 493.1281(a); 493.1236(b) is accuracy checks for analytes without PT (as listed in the review on 10/9)."
+ },
+ "006_test_ordering.json#0": {
+  "action": "replace",
+  "citation": "42 CFR 493.1241(a)-(b)",
+  "label": "Standard: Test request",
+  "reason": "The quote joins (a) written request and (b) oral requests; citing (a)-(b) covers both exactly."
+ },
+ "033_test_procedure_approval_review.json#1": {
+  "action": "keep_citation",
+  "reason": "Right paragraph; the 2-year retention sentence the template added is in 493.1105(a)(2), not 493.1251(e)."
+ },
+ "035_quality_control_plan.json#0": {
+  "action": "replace",
+  "citation": "42 CFR 493.1256(a)-(b)",
+  "label": "Standard: Control procedures",
+  "reason": "The quote is (a) plus (b) word for word; citing (a)-(b) makes it exact."
+ },
+ "066_manual_hematology_qc.json#0": {
+  "action": "replace",
+  "citation": "42 CFR 493.1256(a)-(b)",
+  "label": "Standard: Control procedures",
+  "reason": "Same as policy 035."
+ },
+ "079_radiobioassay_qc.json#0": {
+  "action": "replace",
+  "citation": "42 CFR 493.1256(a)-(b)",
+  "label": "Standard: Control procedures",
+  "reason": "Same as policy 035."
+ },
+ "106_waived_and_point_of_care_testing.json#4": {
+  "action": "replace",
+  "citation": "42 CFR 493.1256(a)-(b)",
+  "label": "Standard: Control procedures",
+  "reason": "Same as policy 035."
+ },
+ "066_manual_hematology_qc.json#1": {
+  "action": "replace",
+  "citation": "42 CFR 493.1256(d)(3)",
+  "label": "Standard: Control procedures (each day of testing)",
+  "reason": "The quote is the pre-2003 'each run' wording; the current daily control requirement is 493.1256(d)(3)."
+ },
+ "080_virology_qc.json#0": {
+  "action": "replace",
+  "citation": "42 CFR 493.1256(d)(3)",
+  "label": "Standard: Control procedures (each day of testing)",
+  "reason": "The quoted control list is 493.1256(d)(3)(i)-(iii) in current wording; (d)(2) is manufacturer-or-lab frequency."
+ },
+ "067_coag_testing_qc.json#0": {
+  "action": "replace",
+  "citation": "42 CFR 493.1256(d)(6)",
+  "label": "Standard: Control procedures (reagent change, maintenance, part replacement)",
+  "reason": "The quoted words are 493.1256(d)(6) word for word."
+ },
+ "107_molecular_testing.json#2": {
+  "action": "replace",
+  "citation": "42 CFR 493.1256(d)(3)(ii)",
+  "label": "Standard: Control procedures (qualitative)",
+  "reason": "The qualitative negative/positive control requirement is (d)(3)(ii) in current wording."
+ },
+ "066_manual_hematology_qc.json#2": {
+  "action": "replace",
+  "citation": "42 CFR 493.1269(a)",
+  "label": "Standard: Hematology (manual cell counts)",
+  "reason": "Manual cell count QC is 493.1269 (Hematology); 493.1261 is Bacteriology."
+ },
+ "040_microbiology_isolation_id.json#0": {
+  "action": "replace",
+  "citation": "42 CFR 493.1256(e)(4)",
+  "label": "Standard: Control procedures (media checks)",
+  "reason": "Media sterility, growth and selectivity checks are 493.1256(e)(4); 493.1262 is Mycobacteriology."
+ },
+ "078_parasitology.json#0": {
+  "action": "replace",
+  "citation": "42 CFR 493.1256(e)(4)",
+  "label": "Standard: Control procedures (media checks)",
+  "reason": "Same as policy 040."
+ },
+ "098_pretransfusion_testing.json#3": {
+  "action": "replace",
+  "citation": "42 CFR 493.1271(a)(2)-(3)",
+  "label": "Standard: Immunohematology (ABO group and D(Rho) type)",
+  "reason": "ABO grouping and D typing are 493.1271(a)(2)-(3); (b) is blood product testing and distribution."
+ },
+ "098_pretransfusion_testing.json#4": {
+  "action": "remove",
+  "reason": "Comparing current ABO/Rh with historical records is an AABB standard, not federal regulation; no CFR paragraph says it. The policy statement can keep it; the 'verbatim regulation' block goes."
+ },
+ "100_transfusion_administration.json#6": {
+  "action": "remove",
+  "reason": "Same as policy 098: the historical-record check is an AABB standard with no CFR text to quote."
+ },
+ "098_pretransfusion_testing.json#5": {
+  "action": "replace",
+  "citation": "21 CFR 606.151(c)",
+  "label": "FDA: Compatibility testing (incompatibility procedures)",
+  "reason": "The federal compatibility-testing requirement is 21 CFR 606.151(c); 493.1271(d) is retention of transfused-unit samples."
+ },
+ "100_transfusion_administration.json#2": {
+  "action": "replace",
+  "citation": "42 CFR 493.1271(a)(1)",
+  "label": "Standard: Immunohematology (patient testing)",
+  "reason": "CLIA requires compatibility testing per the manufacturer and 21 CFR 606.151(a)-(e) at 493.1271(a)(1); the emergency exception is 606.151(e), quoted above."
+ },
+ "070_surgical_specimen.json#0": {
+  "action": "keep_citation",
+  "reason": "Right section, but the quoted sentence is not in it; quote 493.1273(a), the real histopathology stain-control requirement."
+ },
+ "073_histopathology_qmp.json#0": {
+  "action": "keep_citation",
+  "reason": "Same as policy 070."
+ },
+ "098_pretransfusion_testing.json#6": {
+  "action": "replace",
+  "citation": "42 CFR 493.1256(e)(1)",
+  "label": "Standard: Control procedures (reagent and antisera checks)",
+  "reason": "493.1273 is Histopathology; reagent red cell and antisera reactivity checks are 493.1256(e)(1)."
+ },
+ "099_blood_component_handling.json#5": {
+  "action": "replace",
+  "citation": "42 CFR 493.1256(e)(1)",
+  "label": "Standard: Control procedures (reagent and antisera checks)",
+  "reason": "Same as policy 098."
+ },
+ "107_molecular_testing.json#3": {
+  "action": "remove",
+  "reason": "CLIA has no molecular pathology standard; 493.1276 is Clinical cytogenetics and the quoted sentence exists nowhere in the CFR."
+ },
+ "068_histocompatibility.json#0": {
+  "action": "keep_citation",
+  "reason": "Right paragraph; the quoted sentence is not in it. Quote 493.1278(a), the real general histocompatibility requirements."
+ },
+ "028_lis_validation_verification.json#0": {
+  "action": "replace",
+  "citation": "42 CFR 493.1281(a)",
+  "label": "Standard: Comparison of test results",
+  "reason": "The quoted words are 493.1281(a) word for word; (c) is documentation."
+ },
+ "108_health_information_management.json#1": {
+  "action": "replace",
+  "citation": "42 CFR 493.1291(a)",
+  "label": "Standard: Test report (accurate data transmission)",
+  "reason": "The 'verify transmission accuracy' sentence is not in the CFR; the real requirement for accurate transmission from data entry to final report is 493.1291(a) (as listed in the review on 10/9)."
+ },
+ "037_corrective_action.json#0": {
+  "action": "keep_citation",
+  "reason": "Right paragraph, reworded; quote the real 493.1282(a)."
+ },
+ "081_sentinel_event.json#0": {
+  "action": "keep_citation",
+  "reason": "Right paragraph, reworded; quote the real 493.1282(a)."
+ },
+ "037_corrective_action.json#1": {
+  "action": "keep_citation",
+  "reason": "Right paragraph, reworded; 493.1282(b) is the corrective-action documentation rule (the 6-word match to 493.1425 is a different duty)."
+ },
+ "096_reference_laboratory_selection.json#1": {
+  "action": "keep_citation",
+  "reason": "Right paragraph, reworded; quote the real 493.1291(e)."
+ },
+ "103_personnel_qualifications.json#10": {
+  "action": "keep_citation",
+  "reason": "Right section, reworded; quote the real 493.1423."
+ },
+ "103_personnel_qualifications.json#3": {
+  "action": "replace",
+  "citation": "42 CFR 493.1405(a)",
+  "label": "Standard: Laboratory director qualifications (moderate complexity)",
+  "reason": "The label says moderate complexity, which is 493.1405 (493.1443 is the high complexity director). Quoting (a), the license requirement; the qualification routes in (b) run several pages."
+ },
+ "103_personnel_qualifications.json#4": {
+  "action": "replace",
+  "citation": "42 CFR 493.1445",
+  "label": "Standard: Laboratory director responsibilities",
+  "reason": "The quoted sentence opens 493.1445 itself (unlettered); (a) is delegation of duties."
+ },
+ "109_laboratory_governance_and_leadership.json#1": {
+  "action": "replace",
+  "citation": "42 CFR 493.1445",
+  "label": "Standard: Laboratory director responsibilities",
+  "reason": "Same as policy 103."
+ },
+ "033_test_procedure_approval_review.json#2": {
+  "action": "replace",
+  "citation": "42 CFR 493.1445(e)(12)",
+  "label": "Standard: Laboratory director responsibilities (personnel trained before testing)",
+  "reason": "The quoted words are 493.1445(e)(12) word for word; (e)(11) is staffing levels."
+ },
+ "103_personnel_qualifications.json#8": {
+  "action": "keep_citation",
+  "reason": "Right section, reworded; quote the real 493.1459."
+ },
+ "103_personnel_qualifications.json#9": {
+  "action": "keep_citation",
+  "reason": "Right paragraph, reworded; quote the real 493.1463(b) delegation list."
+ },
+ "103_personnel_qualifications.json#1": {
+  "action": "replace",
+  "citation": "42 CFR 493.1487",
+  "label": "Condition: Testing personnel (high complexity)",
+  "reason": "The moderate testing-personnel rule is already quoted from 493.1423 in this policy; 493.1487 is the high complexity condition, so the block now carries its real text and label."
+ },
+ "106_waived_and_point_of_care_testing.json#0": {
+  "action": "keep_citation",
+  "reason": "Right paragraph, reworded; quote the real 493.15(e)."
+ },
+ "106_waived_and_point_of_care_testing.json#1": {
+  "action": "remove",
+  "reason": "No CFR text says a modified test becomes high complexity (that is CMS guidance); 493.17(c) is the FDA categorization process. Keep it as a policy statement, not as quoted regulation."
+ },
+ "002_public_concern_reporting.json#0": {
+  "action": "replace",
+  "citation": "42 CFR 493.1773(a)-(b)",
+  "label": "Standard: Basic inspection requirements",
+  "reason": "The quote merges 493.1773(a) (CMS may inspect) and (b) (interviews and access) in older wording."
+ },
+ "003_non_retaliation_whistleblower.json#0": {
+  "action": "replace",
+  "citation": "42 CFR 493.1773(b)",
+  "label": "Standard: Basic inspection requirements (interviews and access)",
+  "reason": "For non-retaliation the operative text is 493.1773(b)(2): permit interviews of all personnel."
+ },
+ "103_personnel_qualifications.json#12": {
+  "action": "replace",
+  "citation": "42 CFR 493.63(a)",
+  "label": "Notification requirements (certificate of accreditation)",
+  "reason": "493.1775 is inspection of waiver/PPM labs. The 30-day change notice is 493.63(a) for accredited labs (493.51(a) for a certificate of compliance, same list)."
+ },
+ "106_waived_and_point_of_care_testing.json#5": {
+  "action": "replace",
+  "citation": "42 CFR 493.63(a)",
+  "label": "Notification requirements (certificate of accreditation)",
+  "reason": "Same as policy 103."
+ },
+ "109_laboratory_governance_and_leadership.json#6": {
+  "action": "replace",
+  "citation": "42 CFR 493.63(a)",
+  "label": "Notification requirements (certificate of accreditation)",
+  "reason": "Same as policy 103."
+ },
+ "001_accreditation_body_notification.json#0": {
+  "action": "replace",
+  "citation": "42 CFR 493.63(a)",
+  "label": "Notification requirements (certificate of accreditation)",
+  "reason": "The accreditation-body notification policy's rule is 493.63(a): notify HHS and the accreditation program within 30 days."
+ },
+ "004_unsuccessful_pt_response.json#0": {
+  "action": "replace",
+  "citation": "42 CFR 493.803(b)",
+  "label": "Condition: Successful participation",
+  "reason": "493.821(b) does not exist; the consequence of unsuccessful PT participation is 493.803(b). The two-out-of-three definition sits in each specialty standard (e.g. 493.851(f))."
+ },
+ "066_manual_hematology_qc.json#4": {
+  "action": "replace",
+  "citation": "42 CFR 493.851",
+  "label": "Standard; Hematology (proficiency testing)",
+  "reason": "Hematology PT scoring is 493.851 (80 percent, two of three); 493.927 is general immunology PT program content."
+ },
+ "108_health_information_management.json#5": {
+  "action": "replace",
+  "citation": "45 CFR 164.308(b)(1)",
+  "label": "HIPAA: Business associate contracts and other arrangements",
+  "reason": "The quoted words are 164.308(b)(1) word for word; 164.504(e) is the contract content standard."
+ },
+ "_applied": "Applied 2026-10-09 to the templates at commit c14e6a4d (keys are block positions in that state). Do not re-run: four blocks were removed, so later positions shifted."
+}

@@ -6,9 +6,9 @@
   "purpose": "This policy applies when <<LAB_NAME>> performs radiobioassay testing (radioimmunoassay or similar in-vitro testing with radioisotopes). Required by 42 CFR 493.1256 (QC), 42 CFR 493.1261-1278 (specialty QC), 10 CFR 20 (radiation protection), and 42 CFR 493.1101(c) (safety).",
   "cfr_text_blocks": [
     {
-      "citation": "42 CFR 493.1256(a)",
+      "citation": "42 CFR 493.1256(a)-(b)",
       "label": "Standard: Control procedures",
-      "verbatim": "For each test system, the laboratory is responsible for having control procedures that monitor the accuracy and precision of the complete analytic process. The laboratory must establish the number, type, and frequency of testing control materials using, if applicable, the performance specifications verified or established by the laboratory as specified in 493.1253(b)(3)."
+      "verbatim": "(a) For each test system, the laboratory is responsible for having control procedures that monitor the accuracy and precision of the complete analytic process. (b) The laboratory must establish the number, type, and frequency of testing control materials using, if applicable, the performance specifications verified or established by the laboratory as specified in § 493.1253(b)(3)."
     }
   ],
   "scope": "Applies only when <<LAB_NAME>> performs radiobioassay testing. Personnel and the Radiation Safety Officer.",

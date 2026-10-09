@@ -8,7 +8,7 @@
     {
       "citation": "42 CFR 493.1273(a)",
       "label": "Standard: Histopathology",
-      "verbatim": "If the laboratory provides services in the subspecialty of histopathology, the laboratory must (1) Have written quality assurance procedures, and (2) Use only those slides, fluids, and stains that meet the laboratory's quality criteria."
+      "verbatim": "(a) As specified in § 493.1256(e)(3), fluorescent and immunohistochemical stains must be checked for positive and negative reactivity each time of use. For all other differential or special stains, a control slide of known reactivity must be stained with each patient slide or group of patient slides. Reaction(s) of the control slide with each special stain must be documented."
     }
   ],
   "scope": "All <<LAB_NAME>> personnel who receive, accession, gross, or process surgical specimens.",

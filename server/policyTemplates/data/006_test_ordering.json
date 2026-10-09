@@ -6,9 +6,9 @@
   "purpose": "This policy describes how <<LAB_NAME>> accepts and processes test orders from authorized requesters. CLIA at 42 CFR 493.1241 requires a written or electronic request for every patient test and defines the minimum content of that request.",
   "cfr_text_blocks": [
     {
-      "citation": "42 CFR 493.1241(a)",
+      "citation": "42 CFR 493.1241(a)-(b)",
       "label": "Standard: Test request",
-      "verbatim": "The laboratory must have a written or electronic request for patient testing from an authorized person. The laboratory may accept oral requests for laboratory tests if it solicits a written or electronic authorization within 30 days of the oral request and maintains the authorization or documentation of its efforts to obtain the authorization."
+      "verbatim": "(a) The laboratory must have a written or electronic request for patient testing from an authorized person. (b) The laboratory may accept oral requests for laboratory tests if it solicits a written or electronic authorization within 30 days of the oral request and maintains the authorization or documentation of its efforts to obtain the authorization."
     },
     {
       "citation": "42 CFR 493.1241(c)",
@@ -33,7 +33,7 @@
   ],
   "definitions": [
     ["Authorized person", "An individual authorized under State law to order tests or receive test results, or both. Typically a licensed physician, advanced practice provider, dentist, or designee with prescriptive authority. State law controls."],
-    ["Oral order", "A test order communicated by voice (in person, phone, voicemail) rather than in writing or electronically. Must be reduced to writing at the time of receipt and confirmed in writing or electronically within 30 days per 42 CFR 493.1241(a)."],
+    ["Oral order", "A test order communicated by voice (in person, phone, voicemail) rather than in writing or electronically. Must be reduced to writing at the time of receipt and confirmed in writing or electronically within 30 days per 42 CFR 493.1241(b)."],
     ["Required order elements", "The eight items listed in 42 CFR 493.1241(c). Every order must contain all applicable elements before testing begins."]
   ]
 }
