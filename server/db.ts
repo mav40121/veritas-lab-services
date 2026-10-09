@@ -7802,6 +7802,12 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
   if (!cols.includes("staff_employee_id")) {
     try { sqlite.exec("ALTER TABLE user_seats ADD COLUMN staff_employee_id INTEGER REFERENCES staff_employees(id)"); } catch {}
   }
+  // Bug 2 (2026-10-09): the name the inviter typed, for EVERY role. Shown on the
+  // pending-invite row and pre-filled on the join page; the invitee's own
+  // signup name still wins once they create their account.
+  if (!cols.includes("invitee_name")) {
+    try { sqlite.exec("ALTER TABLE user_seats ADD COLUMN invitee_name TEXT"); } catch {}
+  }
 }
 
 // Veritas support access (2026-10-08, docs/design/VLS_Support_Access_Design.docx).

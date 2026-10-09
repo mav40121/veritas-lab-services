@@ -34,6 +34,7 @@ interface PendingInvite {
   status: string;
   invite_token: string | null;
   seat_type: "active" | "view_only";
+  invitee_name?: string | null;
 }
 
 interface SeatLimits {
@@ -180,7 +181,10 @@ export default function LabMembersPage() {
         });
         return res.json();
       }
-      const res = await apiRequest("POST", `/api/labs/${activeLabId}/members`, { email: inviteEmail, role: inviteRole, seatType: inviteSeatType });
+      // Bug 2 (2026-10-09): every invite carries the person's name, not only Staff.
+      const res = await apiRequest("POST", `/api/labs/${activeLabId}/members`, {
+        email: inviteEmail, role: inviteRole, seatType: inviteSeatType, firstName: inviteFirstName, lastName: inviteLastName,
+      });
       return res.json();
     },
     onSuccess: (r) => {
@@ -390,14 +394,15 @@ export default function LabMembersPage() {
                 <div className="flex items-end">
                   <Button
                     onClick={() => inviteMutation.mutate()}
-                    disabled={inviteMutation.isPending || !inviteEmail.includes("@") || (inviteRole === "staff" && (!inviteFirstName.trim() || !inviteLastName.trim()))}
+                    disabled={inviteMutation.isPending || !inviteEmail.includes("@") || !inviteFirstName.trim() || !inviteLastName.trim()}
                     data-testid="invite-send-btn"
                   >
                     {inviteMutation.isPending && <Loader2 className="animate-spin mr-1" size={14} />} Send invite
                   </Button>
                 </div>
               </div>
-              {inviteRole === "staff" && (
+              {/* Bug 2 (2026-10-09): first and last name for EVERY role. They were
+                  Staff-only, a holdover from the retired kiosk. */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
                     <Label htmlFor="invite-first" className="text-xs">First name</Label>
@@ -408,7 +413,6 @@ export default function LabMembersPage() {
                     <Input id="invite-last" value={inviteLastName} onChange={e => setInviteLastName(e.target.value)} placeholder="Last name" data-testid="invite-last-name" />
                   </div>
                 </div>
-              )}
             </div>
             <p className="text-xs text-muted-foreground">
               Three kinds of access. Admin / active seats are your writers: they create studies, upload policies, and enter or review data, and they count against your tier's active-seat cap. Staff seats are read and sign: bench staff who read and sign policies, record QC, and take inventory. They draw from your Staff Portal band, not your active seats, so adding them does not use an active seat. Medical Director is one free seat and is the person VeritaPolicy approvals and QC co-sign route to. The owner can also set or change the Medical Director on any existing member in the table below, the owner included.
@@ -562,6 +566,9 @@ export default function LabMembersPage() {
                     return (
                       <tr key={`p-${inv.seat_id}`} className="border-b last:border-b-0 bg-amber-50/30">
                         <td className="py-2 pr-3">
+                          {inv.invitee_name && (
+                            <div className="font-medium flex items-center gap-2 flex-wrap" data-testid="pending-invitee-name">{inv.invitee_name}</div>
+                          )}
                           <div className="font-medium text-muted-foreground italic flex items-center gap-2 flex-wrap">
                             {inv.seat_email}
                             {isMedicalDirector(inv.seat_email) && medicalDirectorBadge(true)}
@@ -599,7 +606,7 @@ export default function LabMembersPage() {
                                 <Stethoscope size={12} className="mr-1" /> Clear medical director
                               </Button>
                             ) : (
-                              <Button size="sm" variant="outline" onClick={() => mdMutation.mutate({ email: inv.seat_email, name: "" })} disabled={mdMutation.isPending} title="Make this pending invite the lab's Medical Director (one free seat)">
+                              <Button size="sm" variant="outline" onClick={() => mdMutation.mutate({ email: inv.seat_email, name: inv.invitee_name || "" })} disabled={mdMutation.isPending} title="Make this pending invite the lab's Medical Director (one free seat)">
                                 <Stethoscope size={12} className="mr-1" /> Make medical director
                               </Button>
                             )
