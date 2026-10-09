@@ -3,7 +3,7 @@
   "slug": "accreditation_body_notification",
   "policy_name": "Accreditation Body Notification Policy",
   "section": "Leadership",
-  "purpose": "This policy describes how <<LAB_NAME>> notifies CMS of changes that affect CLIA certification, including changes in ownership, location, lab director, certificate type, or services offered. Notification is required by 42 CFR 493.1100 and 42 CFR 493.1775 so the federal certification record stays accurate and inspections remain effective.",
+  "purpose": "This policy describes how <<LAB_NAME>> notifies CMS of changes that affect CLIA certification, including changes in ownership, location, lab director, certificate type, or services offered. Notification is required by 42 CFR 493.51 (certificate of compliance) and 42 CFR 493.63 (certificate of accreditation) so the federal certification record stays accurate and inspections remain effective.",
   "cfr_text_blocks": [
     {
       "citation": "42 CFR 493.63(a)",

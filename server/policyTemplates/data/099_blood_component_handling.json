@@ -3,7 +3,7 @@
   "slug": "blood_component_handling",
   "policy_name": "Blood Component Handling Policy",
   "section": "Specialty Services",
-  "purpose": "This policy describes how <<LAB_NAME>> handles blood and blood components from supplier receipt through final disposition: inventory management, release to internal and external organizations, transport and storage, storage alarm response, reagent criteria and reactivity testing, plasma component processing, irradiation, and leukoreduction. Required by 21 CFR 606 (FDA cGMP), 21 CFR 606.65 (storage), 21 CFR 606.122 (labeling), 42 CFR 493.1252 (specimen and reagent integrity), and 42 CFR 493.1273 (blood bank reagent QC).",
+  "purpose": "This policy describes how <<LAB_NAME>> handles blood and blood components from supplier receipt through final disposition: inventory management, release to internal and external organizations, transport and storage, storage alarm response, reagent criteria and reactivity testing, plasma component processing, irradiation, and leukoreduction. Required by 21 CFR 606 (FDA cGMP), 21 CFR 606.65 (supplies and reagents, including daily reagent testing), 21 CFR 606.121 (container label), 21 CFR 606.122 (circular of information), 42 CFR 493.1252 (specimen and reagent integrity), and 42 CFR 493.1271 (immunohematology, including blood storage).",
   "scope": "All <<LAB_NAME>> transfusion service personnel handling blood and blood components, the medical director or designee, and any external organization to which components are released.",
   "policy_statements": [
     "<<LAB_NAME>> maintains an inventory management system that tracks every blood component from receipt to final disposition (transfused, transferred, discarded, expired, returned to supplier) with unique unit identification.",
@@ -90,7 +90,7 @@
     ],
     [
       "Daily QC",
-      "The CLIA-required reactivity testing performed at the start of each day of patient immunohematology testing per 21 CFR 606.65(c): reagent red cells, antisera, antiglobulin reagent (against IgG-sensitized control), and negative controls. Failed daily QC pauses patient testing on the affected reagent until resolution."
+      "The required reactivity testing performed at the start of each day of patient immunohematology testing per 21 CFR 606.65(c): reagent red cells, antisera, antiglobulin reagent (against IgG-sensitized control), and negative controls. Failed daily QC pauses patient testing on the affected reagent until resolution."
     ]
   ],
   "cfr_text_blocks": [

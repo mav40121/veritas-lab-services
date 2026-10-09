@@ -3,14 +3,14 @@
   "slug": "molecular_testing",
   "policy_name": "Molecular Testing Policy",
   "section": "Testing",
-  "purpose": "This policy describes how <<LAB_NAME>> performs molecular testing: method verification, quality control specific to molecular methods (including run-level controls), contamination prevention for amplification-based methods, and the additional requirements for molecular genetic testing (including informed consent, variant classification, and variant reclassification). Required by 42 CFR 493.1253(b)(2) (verification of performance specifications), 42 CFR 493.1256(d) (QC including two control levels for quantitative procedures), and 42 CFR 493.1276 (molecular pathology specialty requirements).",
+  "purpose": "This policy describes how <<LAB_NAME>> performs molecular testing: method verification, quality control specific to molecular methods (including run-level controls), contamination prevention for amplification-based methods, and the additional requirements for molecular genetic testing (including informed consent, variant classification, and variant reclassification). Required by 42 CFR 493.1253(b)(2) (verification of performance specifications), 42 CFR 493.1256(d) (QC including two control levels for quantitative procedures). CLIA has no separate molecular pathology standard (42 CFR 493.1276 is clinical cytogenetics), so molecular testing meets the general nonwaived requirements.",
   "scope": "All <<LAB_NAME>> personnel performing molecular testing, the Technical Supervisor for high-complexity molecular work, and the Laboratory Director or designee.",
   "policy_statements": [
     "Every molecular test (FDA-cleared, modified, or laboratory-developed) has documented performance verification or establishment per 42 CFR 493.1253 before patient testing begins: accuracy, precision, reportable range, reference interval (where applicable), and analytical sensitivity / specificity.",
     "Workflow controls minimize contamination: physical separation of pre-amplification and post-amplification areas, unidirectional workflow, dedicated pipettes and reagents per area, and decontamination of work surfaces. Contamination-prevention practices are documented and audited on the documented cadence.",
     "Every molecular run includes appropriate controls: positive control (template at clinical decision concentration), negative control (no-template), and internal amplification control (where the test design supports). Quantitative assays include at least two concentration levels of positive control per 42 CFR 493.1256(d)(3).",
     "Failed controls (positive control negative, negative control positive, internal amplification control failed) trigger run rejection and corrective action before patient results are released. Investigation, corrective action, and re-run are documented.",
-    "Molecular genetic testing (germline or somatic) follows the additional requirements of 42 CFR 493.1276: documented test methodology, clinical and analytical performance characteristics, and report interpretation guidance signed by the Laboratory Director or designee.",
+    "Molecular genetic testing (germline or somatic) follows the general nonwaived requirements (42 CFR 493.1251, 493.1253 and 493.1256) and this laboratory's added requirements: documented test methodology, clinical and analytical performance characteristics, and report interpretation guidance signed by the Laboratory Director or designee.",
     "Genetic test orders include indication, family history when relevant, ethnicity when used in interpretation, and any prior testing in the patient or family.",
     "Informed consent for genetic testing is documented when required by state law or by the lab's policy; the consent covers the implications of positive, negative, and indeterminate results.",
     "Test interpretation includes variant classification per current ACMG-style criteria or equivalent (pathogenic, likely pathogenic, variant of uncertain significance, likely benign, benign); clinical significance; and any implications for family members.",
@@ -34,7 +34,7 @@
   "definitions": [
     [
       "Molecular genetic testing",
-      "Testing of nucleic acids for germline or somatic variants; subject to additional requirements at 42 CFR 493.1276 beyond general molecular QC."
+      "Testing of nucleic acids for germline or somatic variants; CLIA has no molecular-specific standard; the general nonwaived requirements and this policy's added requirements apply."
     ],
     [
       "Pre-amplification area",

@@ -8,7 +8,7 @@
   "policy_statements": [
     "Every person performing or supervising laboratory testing at <<LAB_NAME>> meets the CLIA qualifications for the role and complexity level they perform, per 42 CFR 493 Subpart M (high complexity) or the parallel moderate-complexity sections.",
     "The Laboratory Director meets the qualifications of 42 CFR 493.1405 (moderate complexity) or 42 CFR 493.1443 (high complexity) and holds responsibility for every test result reported by the laboratory. The Director may delegate specific duties to a qualified designee in writing, but cannot delegate the overall responsibility for laboratory operation and compliance.",
-    "The Director's responsibilities per 42 CFR 493.1445 (moderate) or 42 CFR 493.1407 (high) are documented in the Director's job description, signed and dated at appointment and at any change in responsibilities. The Director's oversight model (on-site days per month, remote access, on-call coverage) is documented and reviewed annually.",
+    "The Director's responsibilities per 42 CFR 493.1407 (moderate) or 42 CFR 493.1445 (high) are documented in the Director's job description, signed and dated at appointment and at any change in responsibilities. The Director's oversight model (on-site days per month, remote access, on-call coverage) is documented and reviewed annually.",
     "On any change of Laboratory Director, the lab notifies CMS in writing within 30 days per 42 CFR 493.63(a) (and the Accreditation Body Notification policy); the new Director re-reads, re-signs, and re-dates every active procedure within 6 months of appointment.",
     "The Technical Supervisor (for high-complexity testing) meets 42 CFR 493.1449 and is responsible for technical and scientific oversight per 42 CFR 493.1451(b). Each high-complexity specialty has a named Technical Supervisor; vacancies are reported to the medical director or designee and any vacancy longer than 30 days is escalated for resolution. Each Technical Supervisor is named on the lab's organizational chart and on the CLIA certification record; performance against the eight CLIA responsibilities is reviewed annually and the review is signed and filed.",
     "The General Supervisor (for high-complexity testing) meets 42 CFR 493.1461 and provides day-to-day supervision per 42 CFR 493.1463(b). Day-to-day oversight model is documented: when high-complexity testing is being performed, a General Supervisor is on-site, accessible by phone, or otherwise able to be present in person within a reasonable time per CMS guidance.",
@@ -49,7 +49,7 @@
     ],
     [
       "Medical director / Laboratory Director",
-      "The individual responsible for the overall operation and administration of the laboratory per 42 CFR 493.1445 (moderate) or 493.1407 (high). The terms are used interchangeably in this policy."
+      "The individual responsible for the overall operation and administration of the laboratory per 42 CFR 493.1407 (moderate) or 493.1445 (high). The terms are used interchangeably in this policy."
     ],
     [
       "Designee",

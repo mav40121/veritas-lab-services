@@ -3,7 +3,7 @@
   "slug": "microbiology_isolation_id",
   "policy_name": "Microbiology Isolation and Identification Policy",
   "section": "Specialty Services",
-  "purpose": "This policy describes how <<LAB_NAME>> isolates and identifies bacterial, mycobacterial, fungal, and parasitic organisms from clinical specimens. Required by 42 CFR 493.1262 (microbiology QC) and 42 CFR 493.1261 (general bacteriology and mycology requirements).",
+  "purpose": "This policy describes how <<LAB_NAME>> isolates and identifies bacterial, mycobacterial, fungal, and parasitic organisms from clinical specimens. Required by 42 CFR 493.1261 (bacteriology), 42 CFR 493.1262 (mycobacteriology), 42 CFR 493.1263 (mycology), and 42 CFR 493.1264 (parasitology).",
   "cfr_text_blocks": [
     {
       "citation": "42 CFR 493.1256(e)(4)",

@@ -3,7 +3,7 @@
   "slug": "system_downtime",
   "policy_name": "System Downtime and Service Interruption Policy",
   "section": "Information Systems",
-  "purpose": "This policy describes how <<LAB_NAME>> maintains testing and result delivery during planned or unplanned outages of the laboratory information system (LIS), instrument interfaces, or hospital information systems. Continuity is required by 42 CFR 493.1232 (specimen integrity), 42 CFR 493.1291 (test report delivery), and 42 CFR 493.1276 (immunohematology records).",
+  "purpose": "This policy describes how <<LAB_NAME>> maintains testing and result delivery during planned or unplanned outages of the laboratory information system (LIS), instrument interfaces, or hospital information systems. Continuity is required by 42 CFR 493.1232 (specimen integrity), 42 CFR 493.1291 (test report delivery), and 42 CFR 493.1105(a)(3)(ii) (immunohematology records).",
   "cfr_text_blocks": [
     {
       "citation": "42 CFR 493.1291(a)",

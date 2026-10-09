@@ -3,7 +3,7 @@
   "slug": "parasitology",
   "policy_name": "Parasitology Testing Procedures Policy",
   "section": "Specialty Services",
-  "purpose": "This policy describes how <<LAB_NAME>> performs parasitology testing (ova and parasite exam, antigen tests, malaria preparations, blood parasite smears). Required by 42 CFR 493.1204 (PT subspecialty parasitology), 42 CFR 493.821 (unsuccessful PT response applies to parasitology), and 42 CFR 493.1262 (microbiology QC).",
+  "purpose": "This policy describes how <<LAB_NAME>> performs parasitology testing (ova and parasite exam, antigen tests, malaria preparations, blood parasite smears). Required by 42 CFR 493.1204 (Condition: Parasitology), 42 CFR 493.1264 (Standard: Parasitology), and 42 CFR 493.821 (proficiency testing: microbiology includes parasitology).",
   "cfr_text_blocks": [
     {
       "citation": "42 CFR 493.1256(e)(4)",

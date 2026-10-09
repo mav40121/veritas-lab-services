@@ -11,7 +11,7 @@
     "Manufacturer-required QC is performed on each new lot, on each new shipment, after each instrument service event, and at the manufacturer's prescribed frequency; QC failures bar patient testing until resolved. The medical director or designee may approve additional QC frequency based on the lab's risk profile.",
     "Critical results from waived tests follow the lab's Critical Value Reporting policy; the manufacturer's stated reportable range and limitations are followed at all times.",
     "Every person performing waived testing receives documented orientation to the specific test and to the lab's QC and result-reporting expectations before testing patients.",
-    "Competency for waived testing is assessed on the same Initial / 6-month / Annual cadence as non-waived, against the six CLIA elements at 42 CFR 493.1235 (a streamlined six-element form is acceptable). The assessor for waived testing is the General Supervisor, the Technical Consultant, or the medical director or designee per CMS guidance for waived complexity.",
+    "Competency for waived testing is assessed on the same Initial / 6-month / Annual cadence as non-waived, against the six competency elements CLIA requires for nonwaived testing (42 CFR 493.1413(b)(8) and 493.1451(b)(8)); CLIA does not require them for waived testing, and this laboratory applies them anyway (a streamlined six-element form is acceptable). The assessor for waived testing is the General Supervisor, the Technical Consultant, or the medical director or designee per CMS guidance for waived complexity.",
     "Every POCT site operating under the <<LAB_NAME>> CLIA certificate is listed on the lab's CLIA application and approved by the medical director or designee. A new POCT site at a different address triggers a CLIA certificate update per 42 CFR 493.63(a).",
     "POCT operators are trained, competency-assessed, and authorized in the lab's POCT roster before performing patient testing; the roster is maintained current.",
     "POCT results are entered into the LIS or EHR with operator ID, device ID, date/time, and result; critical results are reported per the lab's Critical Value Reporting policy.",
@@ -67,7 +67,7 @@
     ],
     [
       "Waived competency",
-      "CLIA-required six-element competency assessment for staff performing waived testing, on the same Initial / 6-month / Annual cadence as moderate and high complexity testing. Assessor is the General Supervisor, Technical Consultant, or medical director or designee per CMS guidance."
+      "Six-element competency assessment (required by CLIA for nonwaived testing; applied here to waived testing as well) for staff performing waived testing, on the same Initial / 6-month / Annual cadence as moderate and high complexity testing. Assessor is the General Supervisor, Technical Consultant, or medical director or designee per CMS guidance."
     ]
   ],
   "cfr_text_blocks": [

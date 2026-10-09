@@ -3,7 +3,7 @@
   "slug": "radiobioassay_qc",
   "policy_name": "Radiobioassay QC and Radiation Safety Policy",
   "section": "Specialty Services",
-  "purpose": "This policy applies when <<LAB_NAME>> performs radiobioassay testing (radioimmunoassay or similar in-vitro testing with radioisotopes). Required by 42 CFR 493.1256 (QC), 42 CFR 493.1261-1278 (specialty QC), 10 CFR 20 (radiation protection), and 42 CFR 493.1101(c) (safety).",
+  "purpose": "This policy applies when <<LAB_NAME>> performs radiobioassay testing (radioimmunoassay or similar in-vitro testing with radioisotopes). Required by 42 CFR 493.1256 (QC), 42 CFR 493.1261-1278 (specialty QC), 10 CFR 20 (radiation protection), and 42 CFR 493.1101(d) (safety).",
   "cfr_text_blocks": [
     {
       "citation": "42 CFR 493.1256(a)-(b)",

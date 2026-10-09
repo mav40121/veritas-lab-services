@@ -3,7 +3,7 @@
   "slug": "histocompatibility",
   "policy_name": "Histocompatibility Mixed Lymphocyte Culture Policy",
   "section": "Specialty Services",
-  "purpose": "This policy applies when <<LAB_NAME>> performs mixed lymphocyte culture (MLC) testing for transplant compatibility. Required by 42 CFR 493.1262 (specialty histocompatibility).",
+  "purpose": "This policy applies when <<LAB_NAME>> performs mixed lymphocyte culture (MLC) testing for transplant compatibility. Required by 42 CFR 493.1278 (Standard: Histocompatibility).",
   "cfr_text_blocks": [
     {
       "citation": "42 CFR 493.1278(a)",

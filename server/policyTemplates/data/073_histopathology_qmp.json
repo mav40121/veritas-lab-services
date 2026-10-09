@@ -3,7 +3,7 @@
   "slug": "histopathology_qmp",
   "policy_name": "Histopathology Quality Management Plan",
   "section": "Specialty Services",
-  "purpose": "This policy describes how <<LAB_NAME>> monitors and improves quality in anatomic pathology and histology. Required by 42 CFR 493.1200 (quality systems), 42 CFR 493.1273 (histopathology QA), and 42 CFR 493.1249 (preanalytic) / 42 CFR 493.1289 (postanalytic) assessments.",
+  "purpose": "This policy describes how <<LAB_NAME>> monitors and improves quality in anatomic pathology and histology. Required by 42 CFR 493.1200 (quality systems), 42 CFR 493.1273 (histopathology QA), and 42 CFR 493.1249 (preanalytic), 42 CFR 493.1289 (analytic) and 42 CFR 493.1299 (postanalytic) assessments.",
   "cfr_text_blocks": [
     {
       "citation": "42 CFR 493.1273(a)",
