@@ -2285,6 +2285,11 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
   // parent_warehouse_lab_id). Pure grouping in Phase 1; no seat/role/billing read
   // from it yet, so the column is inert and fully reversible until consumed.
   ensure("organization_id",        "ALTER TABLE labs ADD COLUMN organization_id INTEGER");
+  // Bug 4 (2026-10-09): the lab's Staff Portal band ('small' 25 / 'medium' 100 /
+  // 'large' 250 staff, server/stripe.ts STAFF_PORTAL_BANDS). NULL = not set. Set
+  // by POST /api/admin/set-lab-staff-portal-band; the Members page shows staff
+  // used of the band (server/labSeats.ts).
+  ensure("staff_portal_band",      "ALTER TABLE labs ADD COLUMN staff_portal_band TEXT");
 }
 
 // ── Organizations (System entity) — Phase 1 of docs/SYSTEM_ENTITY_DESIGN.md ──
