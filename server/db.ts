@@ -7718,6 +7718,42 @@ try {
 }
 try { sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_employees_user_id_unique ON staff_employees(user_id) WHERE user_id IS NOT NULL"); } catch {}
 
+// 2026-10-08 VeritaStaff roster prompt (Michael, Q2 option 1). login_user_id ties
+// a roster row to the person's OWN login (users.id), so VeritaStaff can list lab
+// members who are not on the roster yet. Nullable: most rows predate it and a
+// person need not have a login. NOT the same as staff_employees.user_id, which
+// is NOT NULL and holds the account owner id. staff_roster_prompt_hidden records
+// members the director marked "not lab personnel" so the prompt stops listing
+// them (lab_id = labs.id).
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(staff_employees)").all() as any[]).map(c => c.name);
+  if (!cols.includes("login_user_id")) {
+    try { sqlite.exec("ALTER TABLE staff_employees ADD COLUMN login_user_id INTEGER REFERENCES users(id)"); } catch {}
+  }
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_staff_employees_login_user ON staff_employees(tier2_lab_id, login_user_id)"); } catch {}
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS staff_roster_prompt_hidden (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lab_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      hidden_by_user_id INTEGER,
+      hidden_at TEXT NOT NULL
+    )
+  `);
+  const hcols = (sqlite.prepare("PRAGMA table_info(staff_roster_prompt_hidden)").all() as any[]).map(c => c.name);
+  for (const [name, ddl] of [
+    ["lab_id", "INTEGER"],
+    ["user_id", "INTEGER"],
+    ["hidden_by_user_id", "INTEGER"],
+    ["hidden_at", "TEXT"],
+  ] as const) {
+    if (!hcols.includes(name)) {
+      try { sqlite.exec(`ALTER TABLE staff_roster_prompt_hidden ADD COLUMN ${name} ${ddl}`); } catch {}
+    }
+  }
+  try { sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_roster_prompt_hidden ON staff_roster_prompt_hidden(lab_id, user_id)"); } catch {}
+}
+
 // VeritaCEU phase 4 (parking-lot #55): per-lab CE requirement profiles. A named
 // requirement (credits + cycle months), e.g. "ASCP CMP" 36/36, "NY State License",
 // "None". One profile per lab may be the default; employees reference one via
