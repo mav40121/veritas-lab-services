@@ -478,18 +478,18 @@ export async function seedDemoData() {
 function seedMapData(sqlite: any, mapId: number, now: string) {
   const instruments = [
     { name: "Ortho VITROS 5600 [Primary]", role: "Primary", category: "Chemistry", tests: [
-      { analyte: "Sodium", specialty: "Electrolytes/Routine Chemistry", complexity: "MODERATE" },
-      { analyte: "Potassium", specialty: "Electrolytes/Routine Chemistry", complexity: "MODERATE" },
+      { analyte: "Sodium", specialty: "General Chemistry", complexity: "MODERATE" },
+      { analyte: "Potassium", specialty: "General Chemistry", complexity: "MODERATE" },
       { analyte: "Troponin", specialty: "Chemistry", complexity: "MODERATE" },
     ]},
     { name: "Ortho VITROS 5600 [Backup]", role: "Backup", category: "Chemistry", tests: [
-      { analyte: "Sodium", specialty: "Electrolytes/Routine Chemistry", complexity: "MODERATE" },
-      { analyte: "Potassium", specialty: "Electrolytes/Routine Chemistry", complexity: "MODERATE" },
+      { analyte: "Sodium", specialty: "General Chemistry", complexity: "MODERATE" },
+      { analyte: "Potassium", specialty: "General Chemistry", complexity: "MODERATE" },
       { analyte: "Troponin", specialty: "Chemistry", complexity: "MODERATE" },
     ]},
     { name: "Siemens ADVIA 1800", role: "Satellite", category: "Chemistry", tests: [
-      { analyte: "Sodium", specialty: "Electrolytes/Routine Chemistry", complexity: "MODERATE" },
-      { analyte: "Potassium", specialty: "Electrolytes/Routine Chemistry", complexity: "MODERATE" },
+      { analyte: "Sodium", specialty: "General Chemistry", complexity: "MODERATE" },
+      { analyte: "Potassium", specialty: "General Chemistry", complexity: "MODERATE" },
     ]},
     { name: "Tosoh", role: "Satellite", category: "Chemistry", tests: [
       { analyte: "Hemoglobin A1c", specialty: "Chemistry", complexity: "MODERATE" },

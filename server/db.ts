@@ -2285,6 +2285,11 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
   // parent_warehouse_lab_id). Pure grouping in Phase 1; no seat/role/billing read
   // from it yet, so the column is inert and fully reversible until consumed.
   ensure("organization_id",        "ALTER TABLE labs ADD COLUMN organization_id INTEGER");
+  // Bug 4 (2026-10-09): the lab's Staff Portal band ('small' 25 / 'medium' 100 /
+  // 'large' 250 staff, server/stripe.ts STAFF_PORTAL_BANDS). NULL = not set. Set
+  // by POST /api/admin/set-lab-staff-portal-band; the Members page shows staff
+  // used of the band (server/labSeats.ts).
+  ensure("staff_portal_band",      "ALTER TABLE labs ADD COLUMN staff_portal_band TEXT");
 }
 
 // ── Organizations (System entity) — Phase 1 of docs/SYSTEM_ENTITY_DESIGN.md ──
@@ -5092,6 +5097,11 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_receipts_lab ON inventory_
     if (!iiColNames.includes("catalog_number")) {
       try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN catalog_number TEXT"); } catch {}
     }
+    // Bug 1 (2026-10-09): the hospital's own item number (materials management /
+    // ERP item master), separate from the vendor catalog number.
+    if (!iiColNames.includes("internal_item_number")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN internal_item_number TEXT"); } catch {}
+    }
     if (!iiColNames.includes("lot_number")) {
       try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN lot_number TEXT"); } catch {}
     }
@@ -7801,6 +7811,12 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
   const cols = (sqlite.prepare("PRAGMA table_info(user_seats)").all() as any[]).map((c: any) => c.name);
   if (!cols.includes("staff_employee_id")) {
     try { sqlite.exec("ALTER TABLE user_seats ADD COLUMN staff_employee_id INTEGER REFERENCES staff_employees(id)"); } catch {}
+  }
+  // Bug 2 (2026-10-09): the name the inviter typed, for EVERY role. Shown on the
+  // pending-invite row and pre-filled on the join page; the invitee's own
+  // signup name still wins once they create their account.
+  if (!cols.includes("invitee_name")) {
+    try { sqlite.exec("ALTER TABLE user_seats ADD COLUMN invitee_name TEXT"); } catch {}
   }
 }
 

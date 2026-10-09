@@ -10,7 +10,7 @@
 // exercises the backend PUT round-trip (unchanged) to confirm designation still
 // works, restoring the lab to its prior state.
 //
-// Env-gated: PW_TOKEN (owner/admin on the lab) + PW_LAB_ID. Skips otherwise.
+// Env-gated: PW_TOKEN (the lab OWNER; admins no longer see the buttons, bug 3 2026-10-09) + PW_LAB_ID. Skips otherwise.
 //
 //   PW_TOKEN=... PW_LAB_ID=3 npx playwright test lab-members-medical-director
 
@@ -23,7 +23,7 @@ const LAB = process.env.PW_LAB_ID;
 
 test.describe("Lab Members: Medical Director seat", () => {
   test.beforeEach(() => {
-    test.skip(!TOKEN || !LAB, "Set PW_TOKEN (owner/admin) and PW_LAB_ID to run the medical-director check.");
+    test.skip(!TOKEN || !LAB, "Set PW_TOKEN (lab owner) and PW_LAB_ID to run the medical-director check.");
   });
 
   test("MD is a first-class seat type; the standalone designate card is gone", async ({ browser }) => {

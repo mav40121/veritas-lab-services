@@ -39,6 +39,7 @@ import { auditVeritamapConsistency } from "./veritamapConsistency";
 import { auditSystemOwnership } from "./systemOwnershipAudit";
 import { computeBackfillCandidates } from "./organizationBackfill";
 import { orgSeatCapForOwner } from "./organizationSeats";
+import { labSeatSummary } from "./labSeats";
 import { orgRoleForUserOnLab, labRoleFromOrgRole, transferBlockedOutOfOrg, isActiveOrgMember, resolveOwnerOrgId } from "./organizationRoles";
 import { planProvisionLabs, accreditationFlagsFor, operatorOverviewGrant } from "./organizationProvision";
 import { validateSystemDocument } from "./systemRepository";
@@ -2822,6 +2823,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ADMIN_SECRET-gated so it can be set for a client without their login.
   // Stored by email so it works while the director is still a pending invite.
   // Send an empty/absent email to clear. Returns before/after.
+  // POST /api/admin/set-lab-staff-portal-band {secret, labId, band}
+  //   band: "small" (25 staff) | "medium" (100) | "large" (250) | null to clear.
+  //   Bug 4 (2026-10-09): the Members page shows read-and-sign staff used of
+  //   this band. Admin-secret only; billing is unchanged by setting it.
+  app.post("/api/admin/set-lab-staff-portal-band", (req, res) => {
+    const { secret, labId, band } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const id = Number(labId);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: "labId required" });
+    const b = band == null || band === "" ? null : String(band).toLowerCase();
+    if (b !== null && !["small", "medium", "large"].includes(b)) return res.status(400).json({ error: "band must be small, medium, large or null" });
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id, lab_name, staff_portal_band FROM labs WHERE id = ?").get(id) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    sqlite.prepare("UPDATE labs SET staff_portal_band = ?, updated_at = ? WHERE id = ?").run(b, new Date().toISOString(), id);
+    console.log(`[admin/set-lab-staff-portal-band] lab ${id} ${lab.staff_portal_band ?? "null"} -> ${b ?? "null"}`);
+    res.json({ ok: true, labId: id, before: lab.staff_portal_band ?? null, after: b, summary: labSeatSummary(sqlite, id) });
+  });
+
   app.post("/api/admin/set-lab-medical-director", (req, res) => {
     const { secret, labId, email, name } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
@@ -10282,7 +10302,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (lab) {
         pendingInvites = sqlite.prepare(`
           SELECT id AS seat_id, seat_email, invited_at, status, invite_token, lab_id,
-                 COALESCE(seat_type, 'active') AS seat_type
+                 COALESCE(seat_type, 'active') AS seat_type,
+                 COALESCE(invitee_name, (SELECT TRIM(COALESCE(se.first_name, '') || ' ' || COALESCE(se.last_name, '')) FROM staff_employees se WHERE se.id = user_seats.staff_employee_id)) AS invitee_name
           FROM user_seats
           WHERE owner_user_id = ?
             AND status = 'pending'
@@ -10299,13 +10320,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // add-on hint without the client having to know plan internals.
     let seatLimits: { activeIncluded: number; viewOnlyIncluded: number; medicalDirectorIncluded: number; addOnRatePerYear: number; addOnPriceId: string | null } = { activeIncluded: 1, viewOnlyIncluded: 0, medicalDirectorIncluded: 0, addOnRatePerYear: 99, addOnPriceId: null };
     let seatCounts = { active: 0, viewOnly: 0, medicalDirector: 0 };
+    let staffPortal: { band: string | null; maxStaff: number | null; used: number } | null = null;
     try {
       if (lab) {
         const ownerRow = sqlite.prepare("SELECT plan, seat_count FROM users WHERE id = ?").get(lab.owner_user_id) as any;
         const ownerPlan = ownerRow?.plan || "free";
         const planSeatLimit = PLAN_SEATS[ownerPlan] ?? (PLAN_LIMITS as any)[ownerPlan]?.maxAnalysts ?? 1;
         const dbSeats = ownerRow?.seat_count || 0;
-        const activeIncluded = orgSeatCapForOwner(sqlite, lab.owner_user_id, dbSeats, planSeatLimit);
+        // Bug 4 (2026-10-09): cap and count per LAB (server/labSeats.ts), not the
+        // owner's account plan across every lab they own.
+        const summary = labSeatSummary(sqlite, req.scope.labId);
+        const activeIncluded = summary ? summary.activeIncluded : orgSeatCapForOwner(sqlite, lab.owner_user_id, dbSeats, planSeatLimit);
         const addon = getViewOnlyAddOnConfig();
         // Three-type seat model: active (writers), medical director (one free
         // seat per lab, tied to the director designation), staff portal. The
@@ -10325,16 +10350,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const thisLabMd = sqlite.prepare("SELECT medical_director_email AS e FROM labs WHERE id = ?").get(req.scope.labId) as { e: string | null } | undefined;
         seatLimits = { activeIncluded, viewOnlyIncluded: 0, medicalDirectorIncluded: (thisLabMd?.e && String(thisLabMd.e).trim()) ? 1 : 0, addOnRatePerYear: addon.ratePerYear, addOnPriceId: addon.priceId };
         seatCounts = {
-          active: activeSeatCount + 1 /* owner counts as active */,
+          active: summary ? summary.activeUsed : activeSeatCount + 1 /* owner counts as active */,
           viewOnly: 0,
-          medicalDirector: mdSeatCount,
+          medicalDirector: summary ? summary.medicalDirectorUsed : mdSeatCount,
         };
+        staffPortal = summary ? { band: summary.staffPortalBand, maxStaff: summary.staffPortalMax, used: summary.staffPortalUsed } : null;
       }
     } catch (err: any) {
       console.error("[labs/:labId/members GET seatLimits] query failed:", err.message);
     }
 
-    res.json({ members: rows, pendingInvites, seatLimits, seatCounts, medicalDirector });
+    res.json({ members: rows, pendingInvites, seatLimits, seatCounts, staffPortal, medicalDirector });
   });
 
   // PUT /api/labs/:labId/medical-director
@@ -10432,7 +10458,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // user.plan and existing user_seats count, matching /api/account/seats POST.
   app.post("/api/labs/:labId/members", authMiddleware, labScopeMiddleware, async (req: any, res) => {
     if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
-    const { email, role: requestedRole, permissions, seatType: requestedSeatType } = req.body || {};
+    const { email, role: requestedRole, permissions, seatType: requestedSeatType, firstName, lastName } = req.body || {};
+    // Bug 2 (2026-10-09): every invite carries the person's name, not only Staff.
+    // Optional on the server so older callers keep working.
+    const inviteeName = `${String(firstName || "").trim()} ${String(lastName || "").trim()}`.trim().slice(0, 120) || null;
     if (!email || !email.includes("@")) return res.status(400).json({ error: "Valid email required" });
     // Three seat types on invite: Staff, Admin, and Medical Director. MD is the one
     // FREE seat and is designated by email (labs.medical_director_email); its base
@@ -10448,6 +10477,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Only the owner can grant 'admin' on invite.
     if (role === "admin" && !isLabOwner(req.scope)) {
       return res.status(403).json({ error: "Only the owner can invite a member as admin" });
+    }
+    // Only the owner can designate the Medical Director (bug 3, 2026-10-09). The
+    // Make-medical-director route has been owner-only since 2026-10-03, but this
+    // invite path wrote labs.medical_director_email for an admin too, silently
+    // replacing the current director.
+    if (isMd && !isLabOwner(req.scope)) {
+      return res.status(403).json({ error: "Only the owner can designate the medical director" });
     }
 
     const sqlite = (db as any).$client;
@@ -10469,7 +10505,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const dbSeats = ownerRow.seat_count || 0;
     // Phase 2a: org-aware cap. Org-linked labs draw from organizations.active_seat_pool;
     // standalone labs keep max(seat_count, PLAN_SEATS[plan]).
-    const maxActiveSeats = orgSeatCapForOwner(sqlite, labOwnerId, dbSeats, planSeatLimit);
+    // Bug 4 (2026-10-09): the gate uses the same per-lab cap and count as the
+    // Members page (server/labSeats.ts), so the page and the gate never disagree.
+    const gateSummary = labSeatSummary(sqlite, req.scope.labId);
+    const maxActiveSeats = gateSummary ? gateSummary.activeIncluded : orgSeatCapForOwner(sqlite, labOwnerId, dbSeats, planSeatLimit);
     const maxViewOnlySeats = PLAN_VIEW_ONLY_SEATS[ownerPlan] ?? 0;
     // Three-type model: the designated medical director(s) across the owner's
     // labs sit on a free seat and are excluded from the active-seat count.
@@ -10485,7 +10524,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (s.t === "active") gateActive++;
       else if (s.t === "view_only") gateViewOnly++;
     }
-    const currentActive = gateActive + 1 /* owner counts as active */;
+    const currentActive = gateSummary ? gateSummary.activeUsed : gateActive + 1 /* owner counts as active */;
     const currentViewOnly = gateViewOnly;
     if (!isMd && seatType === "active" && currentActive + 1 > maxActiveSeats) {
       return res.status(402).json({
@@ -10553,12 +10592,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).get(labOwnerId, normalizedEmail, req.scope.labId) as any;
       if (deactivated) {
         sqlite.prepare(
-          "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ?, lab_id = ?, seat_type = ? WHERE id = ?"
-        ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, inviteToken, req.scope.labId, seatType, deactivated.id);
+          "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ?, lab_id = ?, seat_type = ?, invitee_name = ? WHERE id = ?"
+        ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, inviteToken, req.scope.labId, seatType, inviteeName, deactivated.id);
       } else {
         sqlite.prepare(
-          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id, seat_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        ).run(labOwnerId, normalizedEmail, seatUserId, now, newStatus, permJson, inviteToken, req.scope.labId, seatType);
+          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id, seat_type, invitee_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        ).run(labOwnerId, normalizedEmail, seatUserId, now, newStatus, permJson, inviteToken, req.scope.labId, seatType, inviteeName);
       }
       // Create lab_members row when the invited user already has an account.
       if (seatUserId) {
@@ -10573,7 +10612,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Reassigns if the lab already had a different MD (the prior MD's seat then
       // re-counts as a normal active seat, since the free exclusion keys off this email).
       if (isMd) {
-        const mdName = (existingUser && (existingUser as any).name) ? (existingUser as any).name : null;
+        const mdName = (existingUser && (existingUser as any).name) ? (existingUser as any).name : inviteeName;
         sqlite.prepare(
           "UPDATE labs SET medical_director_email = ?, medical_director_name = ?, updated_at = ? WHERE id = ?"
         ).run(normalizedEmail, mdName, now, req.scope.labId);
@@ -10929,8 +10968,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ).run(now, permJson, inviteToken, req.scope.labId, staffEmpId, deactivated.id);
       } else {
         sqlite.prepare(
-          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id, seat_type, staff_employee_id) VALUES (?, ?, NULL, ?, 'pending', ?, ?, ?, 'staff_portal', ?)"
-        ).run(labOwnerId, normalizedEmail, now, permJson, inviteToken, req.scope.labId, staffEmpId);
+          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id, seat_type, staff_employee_id, invitee_name) VALUES (?, ?, NULL, ?, 'pending', ?, ?, ?, 'staff_portal', ?, ?)"
+        ).run(labOwnerId, normalizedEmail, now, permJson, inviteToken, req.scope.labId, staffEmpId, `${String(firstName ?? "").trim()} ${String(lastName ?? "").trim()}`.trim().slice(0, 120) || null);
       }
       sqlite.exec("COMMIT");
     } catch (err: any) {
@@ -29880,12 +29919,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.json({ valid: false, reason: "expired" });
     }
 
-    const labName = seat.clia_lab_name || seat.hospital_name || seat.owner_name || "your lab";
+    // BUG-008 (2026-10-09): name the lab the person is actually invited to
+    // (user_seats.lab_id -> labs.lab_name). The owner's account fields are only a
+    // fallback for legacy invites with no lab; they named the lab after the owner
+    // ("join Lab Owner") and gave a multi-lab owner's account name for every lab.
+    let invitedLabName: string | null = null;
+    if (seat.lab_id) {
+      try {
+        invitedLabName = ((db as any).$client.prepare("SELECT lab_name FROM labs WHERE id = ?").get(seat.lab_id) as any)?.lab_name || null;
+      } catch { invitedLabName = null; }
+    }
+    const labName = invitedLabName || seat.clia_lab_name || seat.hospital_name || seat.owner_name || "your lab";
     res.json({
       valid: true,
       labName,
       inviterName: seat.owner_name || "Your lab administrator",
       seatEmail: seat.seat_email,
+      inviteeName: seat.invitee_name || null,
     });
   });
 

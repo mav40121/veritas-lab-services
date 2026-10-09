@@ -16,6 +16,7 @@ interface InviteInfo {
   labName?: string;
   inviterName?: string;
   seatEmail?: string;
+  inviteeName?: string | null;
   reason?: "expired" | "not_found" | "already_accepted";
 }
 
@@ -46,7 +47,9 @@ export default function JoinPage() {
       .then((data: InviteInfo) => {
         setInvite(data);
         if (data.valid && data.seatEmail) {
-          setForm(f => ({ ...f, email: data.seatEmail! }));
+          // Bug 2 (2026-10-09): pre-fill the name the inviter typed; the person can
+          // still change it, and what they enter is what their account keeps.
+          setForm(f => ({ ...f, email: data.seatEmail!, name: f.name || data.inviteeName || "" }));
         }
       })
       .catch(() => setInvite({ valid: false, reason: "not_found" }))

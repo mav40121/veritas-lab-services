@@ -7,6 +7,7 @@
 //   2. Jurisdiction                -> Staff Portal seat AND a plain (role 'staff') member are 403;
 //                                      owner + admin reach.
 //   3. Medical-director designation -> admin is 403 (owner-only); owner reaches.
+//      3b. The same through the invite form (POST /members role medical_director).
 //   4. Legacy /api/account/seats    -> non-owners (admin/staff/md) are 403; owner reaches.
 //
 // Run (from repo root):
@@ -133,6 +134,25 @@ async function main() {
     check("md-designation admin-blocked", da === 403, `admin=${da}`);
     check("md-designation staff-blocked", ds === 403, `staff=${ds}`);
     check("md-designation owner-reaches", dobj !== 403 && dobj !== 401, `owner=${dobj}`);
+  }
+
+  // 3b. Bug 3 (2026-10-09): the INVITE path must not let an admin designate the
+  // medical director either (POST /members with role medical_director).
+  {
+    const invite = async (who: string, email: string) => {
+      const r = await fetch(base + `/api/labs/${LAB_ID}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Active-Lab-Id": String(LAB_ID), Authorization: `Bearer ${T[who]}` },
+        body: JSON.stringify({ email, role: "medical_director", seatType: "active" }),
+      });
+      return r.status;
+    };
+    const ia = await invite("admin", "md-by-admin@qa.test");
+    const mdAfterAdmin = (sqlite.prepare("SELECT medical_director_email AS e FROM labs WHERE id=?").get(LAB_ID) as any)?.e;
+    check("md-invite admin-blocked", ia === 403, `admin=${ia}`);
+    check("md-invite admin did not change the director", mdAfterAdmin !== "md-by-admin@qa.test", `director=${mdAfterAdmin}`);
+    const io = await invite("owner", "md-by-owner@qa.test");
+    check("md-invite owner-reaches", io !== 403 && io !== 401, `owner=${io}`);
   }
 
   // 4. Legacy /api/account/seats: non-owners blocked; owner reaches.
