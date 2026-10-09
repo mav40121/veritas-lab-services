@@ -7716,7 +7716,11 @@ try {
     try { sqlite.exec("ALTER TABLE staff_employees ADD COLUMN ceu_profile_id INTEGER"); } catch {}
   }
 }
-try { sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_employees_user_id_unique ON staff_employees(user_id) WHERE user_id IS NOT NULL"); } catch {}
+// (Removed 2026-10-08, parking lot #90: a CREATE UNIQUE INDEX on staff_employees(user_id) sat here. user_id holds
+// the account OWNER id on every roster row and the boot seed puts three rows under one owner first, so the
+// CREATE always failed inside its try/catch and the index never existed anywhere. The roster-to-login link is
+// staff_employees.login_user_id. DROP keeps any database that somehow has it in step.)
+try { sqlite.exec("DROP INDEX IF EXISTS idx_staff_employees_user_id_unique"); } catch {}
 
 // 2026-10-08 VeritaStaff roster prompt (Michael, Q2 option 1). login_user_id ties
 // a roster row to the person's OWN login (users.id), so VeritaStaff can list lab
