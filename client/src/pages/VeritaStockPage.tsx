@@ -42,6 +42,7 @@ interface InventoryItem {
   account_id: number;
   item_name: string;
   catalog_number: string | null;
+  internal_item_number?: string | null;
   lot_number: string | null;
   department: string;
   category: string;
@@ -330,6 +331,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
       setForm({
         item_name: "",
         catalog_number: "",
+        internal_item_number: "",
         lot_number: "",
         // 2026-10-08 (Sampson): a user "Working in" Chemistry added items that
         // defaulted to Core Lab and vanished from her filtered list.
@@ -437,6 +439,10 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
               <div className="space-y-1.5">
                 <Label>Catalog #</Label>
                 <Input value={form.catalog_number ?? ""} onChange={(e) => setForm({ ...form, catalog_number: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="item-internal-number">Internal Item Number</Label>
+                <Input id="item-internal-number" data-testid="item-internal-number" placeholder="Your hospital's item number" value={form.internal_item_number ?? ""} onChange={(e) => setForm({ ...form, internal_item_number: e.target.value })} />
               </div>
               <div className="space-y-1.5">
                 <Label>Lot #</Label>
@@ -1806,6 +1812,7 @@ export default function VeritaStockInventoryPage() {
     const cols: CsvColumn<InventoryItem>[] = [
       { key: "item_name", header: "Item Name" },
       { key: "catalog_number", header: "Catalog #" },
+      { key: "internal_item_number", header: "Internal Item Number" },
       { key: "lot_number", header: "Lot #" },
       { key: "department", header: "Department" },
       { key: "category", header: "Category" },
@@ -2602,7 +2609,10 @@ export default function VeritaStockInventoryPage() {
                     >
                       {item.item_name}
                     </button>
-                    <div className="text-xs text-muted-foreground">{item.usage_unit}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {item.usage_unit}
+                      {item.internal_item_number ? <span data-testid={`internal-item-number-${item.id}`}> &middot; Item # {item.internal_item_number}</span> : null}
+                    </div>
                     <div className="flex flex-wrap items-center gap-1 mt-0.5">
                       {item.storage_temp && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300" data-testid={`storage-temp-badge-${item.id}`}>

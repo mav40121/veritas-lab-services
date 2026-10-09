@@ -382,7 +382,7 @@ export default function VeritaPTAppPage() {
   // Filter coverage rows
   const filteredCoverage = coverage.filter((row) => {
     if (filter === "all") return true;
-    if (filter === "gaps") return row.status === "gap" || row.status === "recommended";
+    if (filter === "gaps") return row.status === "gap" || row.status === "recommended" || row.status === "unmatched";
     if (filter === "covered") return row.status === "covered";
     if (filter === "aaa") return row.status === "aaa_covered";
     if (filter === "waived") return row.status === "waived";
@@ -664,6 +664,11 @@ export default function VeritaPTAppPage() {
                   <tr key={idx} className="border-b border-border/50 hover:bg-muted/20">
                     <td className="py-3 px-4 font-medium">
                       {row.analyteName}
+                      {Array.isArray(row.menuTests) && (row.menuTests.length > 1 || row.menuTests[0] !== row.analyteName) && (
+                        <div className="text-xs font-normal text-muted-foreground mt-0.5" data-testid="pt-menu-tests">
+                          Your {row.menuTests.length === 1 ? "test" : "tests"}: {row.menuTests.join(", ")}
+                        </div>
+                      )}
                       {row.notes && (
                         <div className="text-xs text-amber-700 dark:text-amber-400 mt-0.5 flex items-start gap-1">
                           <Info size={11} className="mt-0.5 shrink-0" />
@@ -701,14 +706,9 @@ export default function VeritaPTAppPage() {
                           Waived
                         </Badge>
                       )}
-                      {row.status === "no_pt_required" && (
-                        <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs whitespace-nowrap">
-                          {row.complexity ? row.complexity.charAt(0) + row.complexity.slice(1).toLowerCase() : "Moderate"} - PT Not Required
-                        </Badge>
-                      )}
                       {row.status === "unmatched" && (
                         <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs whitespace-nowrap">
-                          Verify Complexity
+                          Confirm PT Requirement
                         </Badge>
                       )}
                     </td>

@@ -1134,7 +1134,7 @@ export default function VeritaQCAppPage() {
         <>
           <Card className="mb-4">
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base">Control lot</CardTitle>
+              <CardTitle className="text-base">What are you running?</CardTitle>
               <Button
                 size="sm"
                 variant="outline"
@@ -1145,27 +1145,58 @@ export default function VeritaQCAppPage() {
               </Button>
             </CardHeader>
             <CardContent>
-              <Select
-                value={selectedLotId ? String(selectedLotId) : ""}
-                onValueChange={(v) => setSelectedLotId(Number(v))}
-              >
-                <SelectTrigger><SelectValue placeholder="Pick a lot..." /></SelectTrigger>
-                <SelectContent>
-                  {lineGroups.map(g => (
-                    <SelectGroup key={`${g.analyte}|||${g.level}`}>
-                      <SelectLabel>{g.analyte} &middot; {g.level}</SelectLabel>
-                      {g.lots.map(lot => (
-                        <SelectItem key={lot.id} value={String(lot.id)}>
-                          Lot {lot.lot_number}
-                          {lot.id === g.currentId ? " · current" : ""}
-                          {lot.status !== "active" ? ` · ${lot.status}` : ""}
-                          {lot.opened_date ? ` · opened ${lot.opened_date}` : ""}
+              {/* Bug 7/8 (2026-10-09, Gameday Brighton + Plymouth): staff could not
+                  find how to switch from PSA FREND A Level 1 to PSA FREND B or to
+                  Testosterone. The control line (analyte + analyzer + level) was only
+                  reachable through a lot dropdown whose closed state showed just
+                  "Lot 6361A26001 - current", and these control lots share lot numbers
+                  across analytes and analyzers. Pick the control first; the lot
+                  picker below lists only that control's lots. */}
+              <div className="grid gap-3 md:grid-cols-[2fr_1fr]">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="qc-control-line">Control (analyte, analyzer, level)</label>
+                  <Select
+                    value={selectedLine ? `${selectedLine.analyte}|||${selectedLine.level}` : ""}
+                    onValueChange={(v) => {
+                      const g = lineGroups.find(x => `${x.analyte}|||${x.level}` === v);
+                      if (g) setSelectedLotId(g.currentId);
+                    }}
+                  >
+                    <SelectTrigger id="qc-control-line" data-testid="qc-control-line"><SelectValue placeholder="Pick what you are running..." /></SelectTrigger>
+                    <SelectContent>
+                      {lineGroups.map(g => (
+                        <SelectItem key={`${g.analyte}|||${g.level}`} value={`${g.analyte}|||${g.level}`}>
+                          {g.analyte} &middot; {g.level}
                         </SelectItem>
                       ))}
-                    </SelectGroup>
-                  ))}
-                </SelectContent>
-              </Select>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="qc-lot">Lot</label>
+                  <Select
+                    value={selectedLotId ? String(selectedLotId) : ""}
+                    onValueChange={(v) => setSelectedLotId(Number(v))}
+                  >
+                    <SelectTrigger id="qc-lot" data-testid="qc-lot"><SelectValue placeholder="Pick a lot..." /></SelectTrigger>
+                    <SelectContent>
+                      {(selectedLine ? [selectedLine] : lineGroups).map(g => (
+                        <SelectGroup key={`${g.analyte}|||${g.level}`}>
+                          {!selectedLine && <SelectLabel>{g.analyte} &middot; {g.level}</SelectLabel>}
+                          {g.lots.map(lot => (
+                            <SelectItem key={lot.id} value={String(lot.id)}>
+                              Lot {lot.lot_number}
+                              {lot.id === g.currentId ? " · current" : ""}
+                              {lot.status !== "active" ? ` · ${lot.status}` : ""}
+                              {lot.opened_date ? ` · opened ${lot.opened_date}` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
               {selectedLine && selectedLine.lots.length > 1 && (
                 <p className="mt-2 text-xs text-muted-foreground">
                   {selectedLine.lots.length} lots on this control line. Pick any lot to see its history, or turn on <span className="font-medium text-foreground">Span all lots</span> on the chart to view them continuously with a shift marker at each changeover.

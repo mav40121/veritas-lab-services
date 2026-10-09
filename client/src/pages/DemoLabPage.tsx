@@ -1203,7 +1203,7 @@ export default function DemoLabPage() {
                                   )}
                                   {row.status === "unmatched" && (
                                     <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs whitespace-nowrap">
-                                      Verify Complexity
+                                      Confirm PT Requirement
                                     </Badge>
                                   )}
                                 </td>
