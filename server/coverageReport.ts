@@ -36,7 +36,7 @@ type LabwideAnalyte = {
 };
 type CovRow = { analyte: string; instrument: string; linearityStatus: string; nextDueOn?: string | null; overdue?: boolean };
 type MethodCompRow = { analyte: string; hasStudy: boolean; status?: "missing" | "failed" | "completed_unsigned"; nextDueOn?: string | null; overdue?: boolean };
-type PtRow = { analyteName: string; status?: string | null };
+type PtRow = { analyteName: string; menuTests?: string[]; status?: string | null };
 
 const norm = (s: string | null | undefined) => String(s || "").toLowerCase().replace(/\([^)]*\)/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 
@@ -46,7 +46,10 @@ const LINEARITY_LABEL: Record<string, string> = {
 const PT_LABEL: Record<string, string> = {
   enrolled: "Enrolled", covered: "Enrolled", gap: "Gap", missing: "Gap",
   waived: "Waived", aaa_covered: "Alt. assessment", unregulated: "Not regulated",
-  unmatched: "Not regulated", recommended_gap: "Gap (recommended)",
+  // Bug 6 (2026-10-09): a name the matcher cannot place is NOT known to be
+  // unregulated; the lab confirms it against 42 CFR 493 Subpart I.
+  unmatched: "Confirm PT requirement", recommended: "Not regulated (verify accuracy 2x/yr)",
+  recommended_gap: "Gap (recommended)",
 };
 
 export function buildCoverageReportRows(input: {
@@ -71,8 +74,13 @@ export function buildCoverageReportRows(input: {
     if (m.analyte) mcByAnalyte.set(norm(m.analyte), m);
   }
   const ptByAnalyte = new Map<string, string>();
+  // A PT row is one reference analyte; menuTests lists the lab's own test names
+  // that map to it (ABO forward grouping, ABO reverse grouping -> ABO Group), so
+  // every one of them gets the row's status.
   for (const p of ptCoverage || []) {
-    if (p.analyteName) ptByAnalyte.set(norm(p.analyteName), String(p.status || ""));
+    for (const name of [p.analyteName, ...(p.menuTests || [])]) {
+      if (name && !ptByAnalyte.has(norm(name))) ptByAnalyte.set(norm(name), String(p.status || ""));
+    }
   }
 
   return (analytes || []).map((a) => {
