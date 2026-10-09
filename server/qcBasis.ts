@@ -11,11 +11,15 @@
 //     lab has enough runs on it (establish_n accepted runs, default 20).
 //   - Until then (a new lot put into service without a parallel run) it is
 //     judged against the manufacturer's published mean and SD for the lot.
-//   - When the lot reaches establish_n accepted runs, the first establish_n
-//     lock in as the lab's established mean and SD (lockEstablishedIfDue), so
-//     voiding or excluding an early run later does not move the baseline.
-//   - An owner or admin can re-establish (from all runs on file, or entered
-//     values); a persisted basis always wins over the automatic one.
+//   - Once the lot has establish_n accepted runs, it is judged against the
+//     mean and SD of ALL accepted runs before it, so the lab's numbers keep
+//     refining as data accumulates (Michael, 2026-10-09: "after 20 points, it
+//     should continue to refine"). Nothing is frozen automatically; an earlier
+//     version locked the first establish_n runs and that lock (source 'auto')
+//     is now ignored.
+//   - An owner or admin can still fix a basis deliberately (entered values, or
+//     re-established from all runs on file at a point in time); a deliberate
+//     basis ('manual' / 'all_runs') wins over the refining one.
 //   - The manufacturer's mean and range stay on the lot as the reference drawn
 //     on the chart; they judge runs only while the lab is still establishing.
 
@@ -74,7 +78,8 @@ export function computeBasis(lot: QcBasisLot, priorRuns: number[], cfg: QcBasisC
   const labMean = lot.lab_mean == null ? NaN : Number(lot.lab_mean);
   const labSd = lot.lab_sd == null ? NaN : Number(lot.lab_sd);
 
-  if (Number.isFinite(labMean) && Number.isFinite(labSd) && labSd > 0) {
+  const deliberate = lot.lab_basis_source === "manual" || lot.lab_basis_source === "all_runs";
+  if (deliberate && Number.isFinite(labMean) && Number.isFinite(labSd) && labSd > 0) {
     const n = Number(lot.lab_basis_n) || 0;
     const how = lot.lab_basis_source === "manual" ? "entered by the lab"
       : lot.lab_basis_source === "all_runs" ? `from ${n} runs`
@@ -87,11 +92,12 @@ export function computeBasis(lot: QcBasisLot, priorRuns: number[], cfg: QcBasisC
   }
 
   if (runsOnLot >= establishN) {
-    const { mean, sd } = sampleStats(priorRuns.slice(0, establishN));
+    // Cumulative over every accepted run before this one: refines with each run.
+    const { mean, sd } = sampleStats(priorRuns);
     if (Number.isFinite(sd) && sd > 0) {
       return {
-        mean, sd, source: "established", n: establishN, runsOnLot, establishN, lockedAt: null, persisted: false,
-        label: `Lab established mean ${fmt(mean)}, SD ${fmt(sd)} (from the first ${establishN} runs)`,
+        mean, sd, source: "established", n: runsOnLot, runsOnLot, establishN, lockedAt: null, persisted: false,
+        label: `Lab established mean ${fmt(mean)}, SD ${fmt(sd)} (from ${runsOnLot} runs; updates with each accepted run)`,
       };
     }
   }
@@ -146,26 +152,4 @@ export function resolveBasis(sqlite: any, labId: number, lotId: number, opts: { 
     prior = i >= 0 ? hist.slice(0, i) : hist;
   }
   return computeBasis(lot, prior.map(r => Number(r.result_value)), basisConfig(sqlite, labId, lot.analyte));
-}
-
-// Persist the automatically established basis the first time a lot has
-// establish_n accepted runs, so voiding or excluding an early run later does not
-// move the lab's mean. Never overwrites a basis already on the lot.
-// excludeResultId = the run just entered: it has not yet had its chance to be
-// excluded after a rejection, so it never counts toward the locked numbers.
-export function lockEstablishedIfDue(sqlite: any, labId: number, lotId: number, excludeResultId?: number): QcBasis | null {
-  const lot = loadBasisLot(sqlite, labId, lotId);
-  if (!lot || lot.lab_mean != null) return null;
-  const cfg = basisConfig(sqlite, labId, lot.analyte);
-  const vals = acceptedHistory(sqlite, labId, lotId)
-    .filter(r => excludeResultId == null || r.id !== excludeResultId)
-    .map(r => Number(r.result_value));
-  if (vals.length < cfg.establishN) return null;
-  const { mean, sd } = sampleStats(vals.slice(0, cfg.establishN));
-  if (!Number.isFinite(sd) || sd <= 0) return null;
-  const now = new Date().toISOString();
-  const r = sqlite.prepare(
-    "UPDATE qc_control_lots SET lab_mean = ?, lab_sd = ?, lab_basis_n = ?, lab_basis_locked_at = ?, lab_basis_source = 'auto', updated_at = ? WHERE id = ? AND lab_id = ? AND lab_mean IS NULL"
-  ).run(mean, sd, cfg.establishN, now, now, lotId, labId);
-  return r.changes > 0 ? resolveBasis(sqlite, labId, lotId) : null;
 }

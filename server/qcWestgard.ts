@@ -9,7 +9,7 @@
 // mean/SD. The client (MedStar) wants the lab's own numbers once it has enough
 // runs and the manufacturer's only until then (emails 2026-09-30, 2026-10-08).
 
-import { resolveBasis, lockEstablishedIfDue, loadBasisLot, basisConfig, type QcBasis, type QcBasisConfig } from "./qcBasis";
+import { resolveBasis, loadBasisLot, basisConfig, type QcBasis, type QcBasisConfig } from "./qcBasis";
 
 export type WestgardViolation = {
   rule_code: string;
@@ -130,7 +130,6 @@ export function evaluateQcRun(
   const violations = rulesForRun(vals, ids, i, basis,
     { low: lot?.mfr_range_low ?? null, high: lot?.mfr_range_high ?? null },
     basisConfig(sqlite, labId, lot?.analyte ?? null), biasN, trendN);
-  lockEstablishedIfDue(sqlite, labId, controlLotId, newResultId);
   return { violations, basis };
 }
 

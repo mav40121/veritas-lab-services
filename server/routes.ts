@@ -28,7 +28,7 @@ import { storePdfToken, claimPdfToken } from "./pdfTokens";
 import { labLocalDate } from "./dateLocal";
 import { scanPhi } from "./phiScan";
 import { evaluateQcRun, rulesForRun } from "./qcWestgard";
-import { resolveBasis, computeBasis, basisConfig, lockEstablishedIfDue, sampleStats, type QcBasis } from "./qcBasis";
+import { resolveBasis, computeBasis, basisConfig, sampleStats, type QcBasis } from "./qcBasis";
 import { buildWasteReport, generateWasteReportPDF, generateWasteReportExcel, type WasteEventRow, type WasteReportContext } from "./wasteReport";
 import { entireLabFlag, sanitizeSpecialties, expandEntireLabRoles, cms209Gaps } from "./cms209Roles";
 import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution, analyteMatch, stampMapDatesFromStudies } from "./veritacheckCoverage";
@@ -3939,8 +3939,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // dryRun (the default) returns the before and after per run and writes
   // nothing. A commit marks the old flags superseded (never deleted; a
   // corrective action may point at one), inserts the new flags, stamps the
-  // basis on every re-scored run, locks each lot's established mean/SD where it
-  // has enough runs, and writes one audit row per lab. Excluded (not accepted)
+  // basis on every re-scored run, and writes one audit row per lab. The lab's
+  // numbers refine with every run after establish_n (2026-10-09), so nothing is
+  // locked here. Excluded (not accepted)
   // runs keep their flags; the tech already acted on them.
   app.post("/api/admin/qc/rescore", (req: any, res) => {
     const { secret, labIds, since, dryRun } = req.body || {};
@@ -3954,7 +3955,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const reason = `rescore ${now.slice(0, 10)}: lab-established basis (server/qcBasis.ts)`;
     const report: any[] = [];
     const work: { resultId: number; after: any[]; basis: QcBasis | null; changed: boolean }[] = [];
-    const lotsTouched: { labId: number; lotId: number }[] = [];
     for (const labId of labs) {
       const lots = sqlite.prepare(
         "SELECT id, lab_id, analyte, level, lot_number, mfr_mean, mfr_sd, mfr_range_low, mfr_range_high, lab_mean, lab_sd, lab_basis_n, lab_basis_locked_at, lab_basis_source, prior_lot_id FROM qc_control_lots WHERE lab_id = ? ORDER BY analyte, level, id"
@@ -3965,7 +3965,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           "SELECT id, result_value, result_date FROM qc_results WHERE lab_id = ? AND control_lot_id = ? AND accepted_for_reporting = 1 AND voided_at IS NULL ORDER BY result_date ASC, id ASC"
         ).all(labId, lot.id) as any[];
         if (!hist.some((h: any) => h.result_date >= since)) continue;
-        lotsTouched.push({ labId, lotId: lot.id });
         const cfg = basisConfig(sqlite, labId, lot.analyte);
         const st = sqlite.prepare(
           "SELECT bias_consecutive_count, trend_consecutive_count FROM qc_rule_settings WHERE lab_id = ? AND (analyte = ? OR analyte IS NULL) ORDER BY (analyte IS NULL) ASC LIMIT 1"
@@ -4015,7 +4014,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         sup.run(now, reason, w.resultId);
         for (const v of w.after) ins.run(w.resultId, v.rule_code, v.severity, v.detail, JSON.stringify(v.related_result_ids), now);
       }
-      for (const t of lotsTouched) lockEstablishedIfDue(sqlite, t.labId, t.lotId);
     });
     try { tx(); } catch (err: any) {
       console.error("[qc/rescore] failed:", err.message);
@@ -4143,125 +4141,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
-  // ─── VeritaQC: Staff Portal QC entry ─────────────────────────────────────
-  // Running QC is a front-line staff job, so Staff Portal seats can record QC
-  // on their own lab. These mirror the writer endpoints above but authenticate
-  // via staffPortalAuthMiddleware (scoped to the staff seat's lab, never the
-  // URL) and stamp the individual staff member as the operator
-  // (operator_staff_employee_id) for a surveyor-defensible audit trail. The
-  // Westgard evaluation is the SAME evaluateWestgardForLot the writer path
-  // calls, so a staff-entered run is scored identically to a writer-entered one.
-  app.get("/api/staff-portal-session/qc/lots", staffPortalAuthMiddleware, (req: any, res) => {
-    const sqlite = (db as any).$client;
-    const lots = sqlite.prepare(
-      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, status FROM qc_control_lots WHERE lab_id = ? AND status = 'active' ORDER BY analyte ASC, lot_number ASC"
-    ).all(req.staffPortalLabId) as any[];
-    res.json({ lots: lots.map((l) => ({ ...l, basis: resolveBasis(sqlite, req.staffPortalLabId, l.id) })) });
-  });
+  // 2026-10-09: the Staff Portal QC endpoints (GET lots, GET results, POST notes,
+  // POST results) were removed. Staff record QC in the main VeritaQC screen since
+  // #1540; My sign-offs (#1547) opens it. One way to record QC on the server.
 
-  app.get("/api/staff-portal-session/qc/results", staffPortalAuthMiddleware, (req: any, res) => {
-    const sqlite = (db as any).$client;
-    const lotId = parseInt(String((req.query || {}).control_lot_id || ""), 10);
-    if (!Number.isFinite(lotId)) return res.status(400).json({ error: "control_lot_id required" });
-    const lot = sqlite.prepare("SELECT id FROM qc_control_lots WHERE id = ? AND lab_id = ?").get(lotId, req.staffPortalLabId);
-    if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
-    const limit = Math.min(Number((req.query || {}).limit) || 20, 100);
-    const rows = sqlite.prepare(
-      "SELECT id, control_lot_id, instrument, result_value, result_date, run_time, accepted_for_reporting, created_at FROM qc_results WHERE lab_id = ? AND control_lot_id = ? ORDER BY result_date DESC, id DESC LIMIT ?"
-    ).all(req.staffPortalLabId, lotId, limit) as any[];
-    // Attach the append-only note thread per point (2026-08-25 MedStar).
-    if (rows.length) {
-      const ph = rows.map(() => "?").join(",");
-      const notes = sqlite.prepare(
-        "SELECT id, qc_result_id, note, author_name, source, created_at FROM qc_result_notes WHERE qc_result_id IN (" + ph + ") ORDER BY id ASC"
-      ).all(...rows.map((r: any) => r.id)) as any[];
-      const byR: Record<number, any[]> = {};
-      for (const n of notes) (byR[n.qc_result_id] = byR[n.qc_result_id] || []).push(n);
-      for (const r of rows) (r as any).notes = byR[r.id] || [];
-    }
-    const canAddNote = sqlite.prepare("SELECT qc_note_frontline_can_add FROM labs WHERE id = ?").get(req.staffPortalLabId) as any;
-    res.json({ results: rows, can_add_note: !canAddNote || canAddNote.qc_note_frontline_can_add !== 0 });
-  });
-
-  // POST /api/staff-portal-session/qc/results/:id/notes: front-line append-only
-  // note on a saved QC point (2026-08-25, MedStar). Gated by the lab setting:
-  // when a site limits notes to a console writer (Technical Consultant /
-  // supervisor), the front line gets a 403 and the note is added from the
-  // console instead. Stamped with the signed-in staff employee and the time.
-  app.post("/api/staff-portal-session/qc/results/:id/notes", staffPortalAuthMiddleware, (req: any, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
-    const note = String(req.body?.note ?? "").trim();
-    if (!note) return res.status(400).json({ error: "A note is required" });
-    if (note.length > 2000) return res.status(400).json({ error: "Note is too long (2000 character max)" });
-    const sqlite = (db as any).$client;
-    const allow = sqlite.prepare("SELECT qc_note_frontline_can_add FROM labs WHERE id = ?").get(req.staffPortalLabId) as any;
-    if (allow && allow.qc_note_frontline_can_add === 0) {
-      return res.status(403).json({ error: "Adding QC notes is limited to a Technical Consultant or supervisor at this site." });
-    }
-    const row = sqlite.prepare("SELECT id FROM qc_results WHERE id = ? AND lab_id = ?").get(id, req.staffPortalLabId) as any;
-    if (!row) return res.status(404).json({ error: "QC result not found in this lab" });
-    const emp = sqlite.prepare("SELECT NULLIF(TRIM(COALESCE(first_name,'') || ' ' || COALESCE(last_name,'')), '') AS nm FROM staff_employees WHERE id = ?").get(req.staffPortalStaffEmployeeId) as any;
-    const authorName = (emp?.nm && String(emp.nm).trim()) || "Staff";
-    const now = new Date().toISOString();
-    const ins = sqlite.prepare(
-      "INSERT INTO qc_result_notes (lab_id, qc_result_id, note, author_user_id, author_staff_employee_id, author_name, source, created_at) VALUES (?, ?, ?, NULL, ?, ?, 'staff_portal', ?)"
-    ).run(req.staffPortalLabId, id, note, req.staffPortalStaffEmployeeId || null, authorName, now);
-    res.json({ ok: true, note: { id: Number(ins.lastInsertRowid), qc_result_id: id, note, author_name: authorName, source: "staff_portal", created_at: now } });
-  });
-
-  app.post("/api/staff-portal-session/qc/results", staffPortalAuthMiddleware, (req: any, res) => {
-    const { control_lot_id, result_value, result_date, instrument, run_time, comment } = req.body || {};
-    if (!control_lot_id || result_value === undefined || result_value === null || !result_date) {
-      return res.status(400).json({ error: "control_lot_id, result_value, result_date required" });
-    }
-    if (!Number.isFinite(Number(result_value))) {
-      return res.status(400).json({ error: "result_value must be a finite number" });
-    }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(result_date))) {
-      return res.status(400).json({ error: "result_date must be in YYYY-MM-DD format" });
-    }
-    const sqlite = (db as any).$client;
-    const lot = sqlite.prepare(
-      "SELECT id, analyte FROM qc_control_lots WHERE id = ? AND lab_id = ? AND status = 'active'"
-    ).get(Number(control_lot_id), req.staffPortalLabId) as any;
-    if (!lot) return res.status(404).json({ error: "Active control lot not found in this lab" });
-
-    const now = new Date().toISOString();
-    let newResultId: number;
-    try {
-      const ins = sqlite.prepare(
-        "INSERT INTO qc_results (lab_id, control_lot_id, instrument, result_value, result_date, run_time, operator_user_id, operator_staff_employee_id, comment, accepted_for_reporting, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)"
-      ).run(
-        req.staffPortalLabId, Number(control_lot_id), instrument || null, Number(result_value),
-        String(result_date), run_time || null, req.staffPortalUserId, req.staffPortalStaffEmployeeId || null,
-        comment || null, now, now,
-      );
-      newResultId = Number(ins.lastInsertRowid);
-    } catch (err: any) {
-      console.error("[staff-portal qc/results] insert failed:", err.message);
-      return res.status(500).json({ error: err.message || "Insert failed" });
-    }
-
-    const settings = sqlite.prepare(
-      "SELECT bias_consecutive_count, trend_consecutive_count FROM qc_rule_settings WHERE lab_id = ? AND (analyte = ? OR analyte IS NULL) ORDER BY (analyte IS NULL) ASC LIMIT 1"
-    ).get(req.staffPortalLabId, lot.analyte) as any;
-    const biasN = settings?.bias_consecutive_count ?? 10;
-    const trendN = settings?.trend_consecutive_count ?? 7;
-
-    const { violations, basis } = evaluateQcRun(sqlite, req.staffPortalLabId, Number(control_lot_id), newResultId, biasN, trendN);
-    if (basis) sqlite.prepare("UPDATE qc_results SET basis_mean = ?, basis_sd = ?, basis_source = ? WHERE id = ?").run(basis.mean, basis.sd, basis.source, newResultId);
-    const insertViol = sqlite.prepare(
-      "INSERT INTO qc_rule_violations (qc_result_id, rule_code, severity, detail, related_result_ids, evaluated_at) VALUES (?, ?, ?, ?, ?, ?)"
-    );
-    const storedViolations: any[] = [];
-    for (const v of violations) {
-      const r = insertViol.run(newResultId, v.rule_code, v.severity, v.detail, JSON.stringify(v.related_result_ids), now);
-      storedViolations.push({ id: Number(r.lastInsertRowid), ...v });
-    }
-    const requires_corrective_action = violations.some((v: any) => v.severity === "rejection");
-    res.json({ ok: true, result_id: newResultId, violations: storedViolations, requires_corrective_action, basis });
-  });
 
   // ─── VeritaQC Phase 1B: entry-UI support endpoints ───────────────────────
   // Three reads/writes the tech-facing app page needs:
@@ -9618,189 +9501,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     };
   }
 
-  // ── Wave K6 (2026-06-08): Staff Portal inventory endpoints ───────────────
-  //
-  // Mirror of Wave K3's /api/inventory-session/{items,adjust} but authed
-  // via the staff-portal JWT (kind="staff_portal") instead of the
-  // inventory-kiosk JWT. Same item shape via decorateKioskItem, same
-  // audit-log write pattern. Two improvements over K3:
-  //   1. The actor is a real staff_employees row (FK validated at write
-  //      time), not just typed initials. Audit trail names the employee
-  //      explicitly.
-  //   2. can_adjust_inventory is gated server-side too, not just hidden
-  //      client-side. A staff member whose director didn't toggle the
-  //      flag will get 403 on /adjust even if they POST it directly.
-  //
-  // Read access (GET /items) is intentionally NOT gated on
-  // can_adjust_inventory — any signed-in staff member can browse the
-  // current stock list to know what to bring out of the supply room.
-  // Only the write (adjust quantity) is gated.
+  // 2026-10-09: the Staff Portal inventory endpoints (GET items, GET by-barcode,
+  // POST adjust) were removed. Staff count and adjust inventory in the main
+  // VeritaStock screens since #84 (My sign-offs, #1547); nothing called these.
 
-  // GET /api/staff-portal-session/inventory/items
-  app.get("/api/staff-portal-session/inventory/items", staffPortalAuthMiddleware, (req: any, res) => {
-    try {
-      const sqlite = (db as any).$client;
-      const rows = sqlite.prepare(
-        "SELECT * FROM inventory_items WHERE lab_id = ? ORDER BY item_name ASC"
-      ).all(req.staffPortalLabId);
-      const items = (rows as any[]).map(decorateKioskItem);
-      res.json({ items, total: items.length, lab_id: req.staffPortalLabId });
-    } catch (err: any) {
-      console.error("[staff-portal-session/inventory/items] error:", err);
-      res.status(500).json({ error: err.message || "list_failed" });
-    }
-  });
-
-  // GET /api/staff-portal-session/inventory/items/by-barcode?barcode=XYZ
-  // Read-only lookup for the scan-first count workflow (task #129). Mirrors
-  // the kiosk's by-barcode endpoint shape so the client UX is identical.
-  app.get("/api/staff-portal-session/inventory/items/by-barcode", staffPortalAuthMiddleware, (req: any, res) => {
-    try {
-      const barcode = String(req.query.barcode || "").trim();
-      if (!barcode) return res.status(400).json({ error: "barcode required" });
-      const sqlite = (db as any).$client;
-      const row = sqlite.prepare(
-        "SELECT * FROM inventory_items WHERE lab_id = ? AND barcode_value = ? LIMIT 1"
-      ).get(req.staffPortalLabId, barcode) as any;
-      if (!row) return res.status(404).json({ error: "unknown_barcode", barcode });
-      res.json({ item: decorateKioskItem(row) });
-    } catch (err: any) {
-      console.error("[staff-portal-session/inventory/items/by-barcode] error:", err);
-      res.status(500).json({ error: err.message || "lookup_failed" });
-    }
-  });
-
-  // POST /api/staff-portal-session/inventory/items/:id/adjust
-  //   Body: { employee_id, new_count?, new_quantity?, reason? }
-  //   Accepts EITHER new_count (in the item's count_unit; multiplied by
-  //   units_per_count_unit before write) OR new_quantity (in usage_unit,
-  //   legacy direct value). Exactly one required.
-  //   Validates: item belongs to JWT's lab, employee belongs to lab and
-  //   is active, employee.can_adjust_inventory = 1. Writes audit log
-  //   capturing BOTH the count-unit entry and the resulting usage-unit
-  //   total so the director can reconstruct what the staff member typed.
-  app.post("/api/staff-portal-session/inventory/items/:id/adjust", staffPortalAuthMiddleware, (req: any, res) => {
-    try {
-      const labId = req.staffPortalLabId;
-      const id = Number(req.params.id);
-      if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: "Invalid item id" });
-      const { employee_id, new_count, new_quantity, reason } = req.body || {};
-      const employeeId = parseInt(String(employee_id ?? ""), 10);
-      if (!Number.isFinite(employeeId) || employeeId <= 0) {
-        return res.status(400).json({ error: "employee_id required" });
-      }
-      const hasCount = typeof new_count === "number" && Number.isFinite(new_count);
-      const hasQty = typeof new_quantity === "number" && Number.isFinite(new_quantity);
-      if (!hasCount && !hasQty) {
-        return res.status(400).json({ error: "new_count (in count_unit) or new_quantity (in usage_unit) required" });
-      }
-
-      const sqlite = (db as any).$client;
-
-      // Validate employee belongs to lab + has the inventory toggle on
-      const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
-      if (!ownerRow) return res.status(404).json({ error: "Lab not found" });
-      const staffLab = staffLabByLabId(labId, ownerRow.owner_user_id) as any;
-      if (!staffLab) return res.status(404).json({ error: "Staff roster not found" });
-      const employee = sqlite.prepare(
-        `SELECT id, first_name, last_name, middle_initial, can_adjust_inventory
-         FROM staff_employees WHERE id = ? AND lab_id = ? AND status = 'active'`
-      ).get(employeeId, staffLab.id) as any;
-      if (!employee) return res.status(404).json({ error: "Employee not found on this lab's roster" });
-      if (employee.can_adjust_inventory !== 1) {
-        return res.status(403).json({ error: "This employee is not authorized to adjust inventory. Ask the lab director to enable the toggle." });
-      }
-
-      const item = sqlite.prepare(
-        "SELECT * FROM inventory_items WHERE id = ? AND lab_id = ?"
-      ).get(id, labId) as any;
-      if (!item) return res.status(404).json({ error: "Item not found in this lab" });
-
-      // Convert new_count -> usage_unit total. Pack size > 0 enforced
-      // server-side so a misconfigured item can never cause div-by-zero
-      // on the display side.
-      const packSize = Number.isFinite(item.units_per_count_unit) && item.units_per_count_unit > 0
-        ? item.units_per_count_unit
-        : 1;
-      let usageQty: number;
-      let countEntered: number | null = null;
-      if (hasCount) {
-        if (!Number.isInteger(new_count) || new_count < 0) {
-          return res.status(400).json({ error: "new_count must be a non-negative integer" });
-        }
-        countEntered = new_count;
-        usageQty = new_count * packSize;
-      } else {
-        if (!Number.isInteger(new_quantity) || new_quantity < 0) {
-          return res.status(400).json({ error: "new_quantity must be a non-negative integer" });
-        }
-        usageQty = new_quantity;
-      }
-
-      const beforeQty = item.quantity_on_hand;
-      const nowIso = new Date().toISOString();
-      sqlite.prepare(
-        "UPDATE inventory_items SET quantity_on_hand = ?, updated_at = ? WHERE id = ?"
-      ).run(usageQty, nowIso, id);
-
-      const mi = employee.middle_initial ? ` ${employee.middle_initial}.` : "";
-      const employeeFullName = `${employee.first_name}${mi} ${employee.last_name}`.trim();
-
-      logAudit({
-        userId: 0, // kiosk sentinel; the human identity is the staff_employee_id
-        ownerUserId: ownerRow.owner_user_id ?? 0,
-        module: "veritastock",
-        action: "update",
-        entityType: "inventory_item",
-        entityId: String(id),
-        entityLabel: `${item.item_name} qty by ${employeeFullName}`,
-        before: { quantity_on_hand: beforeQty },
-        after: {
-          quantity_on_hand: usageQty,
-          count_entered: countEntered, // null if legacy new_quantity path
-          count_unit: item.count_unit || "each",
-          units_per_count_unit: packSize,
-          staff_employee_id: employee.id,
-          staff_employee_name: employeeFullName,
-          reason: reason || null,
-          via: "staff_portal",
-        },
-        ipAddress: req.ip,
-      });
-
-      // Count-history ledger: a staff-portal adjust IS a physical count.
-      // Best-effort, never blocks the count. See countLedger.
-      logCount({
-        itemId: id,
-        labId,
-        accountId: item.account_id ?? ownerRow.owner_user_id ?? null,
-        countedQty: usageQty,
-        previousQty: beforeQty,
-        countedBy: employeeFullName,
-        source: "staff_portal",
-        occurredAt: nowIso,
-      });
-
-      const updated = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(id);
-      res.json({
-        item: decorateKioskItem(updated),
-        adjustment: {
-          before_qty: beforeQty,
-          after_qty: usageQty,
-          delta: usageQty - beforeQty,
-          count_entered: countEntered,
-          count_unit: item.count_unit || "each",
-          units_per_count_unit: packSize,
-          staff_employee_id: employee.id,
-          staff_employee_name: employeeFullName,
-          at: nowIso,
-        },
-      });
-    } catch (err: any) {
-      console.error("[staff-portal-session/inventory/adjust] error:", err);
-      res.status(500).json({ error: err.message || "adjust_failed" });
-    }
-  });
 
   // ── Wave K7 (2026-06-08): Staff Portal "My Activity" view ────────────────
   //
