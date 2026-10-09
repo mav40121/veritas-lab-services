@@ -50,7 +50,7 @@ and TJC (CAMLAB PDF + text extract).
 **Source:** prior session handoff. Re-confirmed during 2026-05-01 QC
 review.
 
-**Status:** Open. Multi-hour subagent fan-out work. Work-pass 2026-10-04: BLOCKED on materials. AABB and COLA columns cannot be source-grounded without the gated manuals (item #28); CAP is 11/12 modules verifiable from files on the drive, MOL file missing (item #27); TJC is operator-authoritative. Not startable without fabricating accreditor citations. Awaiting #27 + #28.
+**Status:** Open. Multi-hour subagent fan-out work. Work-pass 2026-10-04: BLOCKED on materials. AABB and COLA columns cannot be source-grounded without the gated manuals (item #28); CAP is 11/12 modules verifiable from files on the drive, MOL file missing (item #27); TJC is operator-authoritative. Not startable without fabricating accreditor citations. Awaiting #27 + #28. **CAP existence audit 2026-10-09:** scripts/audit-cap-citations-vs-mas.py (read-only) checked every CAP ID in the VeritaPolicy master list (58 policies, 525 distinct citations incl. 5 ranges) against the 12 MAS checklist files on the drive: 0 missing (all 520 single IDs and both endpoints of every range exist; nothing cites the missing MOL checklist). What remains for the CAP column is relevance (is each requirement the right one for its policy), a human review, not an existence problem.
 
 **Pre- vs post-COLA:** Pre-COLA. May 6-8 conference; Saturday + Sunday +
 Monday available before the booth.
