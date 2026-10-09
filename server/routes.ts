@@ -33661,6 +33661,98 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, dryRun: !!dryRun, mapId, complexity: cx, updated, results });
   });
 
+  // POST /api/admin/veritamap/merge-specialty
+  //   {secret, from: string | string[], to: string, labId?, dryRun = true}
+  // Relabels the SPECIALTY of saved VeritaMap rows (both stores) from one or more
+  // old labels to one new label, then re-derives each affected map's rollup.
+  // Label only: analyte names, complexity, dates and notes are untouched.
+  // Added 2026-10-09 (BUG-005) when Michael returned electrolytes to General
+  // Chemistry: "We separated electrolytes from general chemistry at the time of
+  // creation. Now I see that that causes more problems than it solves." The
+  // library change only affects instruments added afterwards; this carries the
+  // same decision to maps labs already saved. dryRun (the default) writes nothing
+  // and reports every row per lab and map.
+  app.post("/api/admin/veritamap/merge-specialty", (req, res) => {
+    const { secret, from, to, labId, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const fromList: string[] = (Array.isArray(from) ? from : [from]).map((x: any) => String(x ?? "").trim()).filter(Boolean);
+    const toLabel = String(to ?? "").trim();
+    if (fromList.length === 0 || !toLabel) return res.status(400).json({ error: "from (string or string[]) and to required" });
+    if (fromList.some((f) => f.toLowerCase() === toLabel.toLowerCase())) return res.status(400).json({ error: "from and to must differ" });
+    const isDry = dryRun !== false;
+    const sqlite = (db as any).$client;
+    const ph = fromList.map(() => "?").join(", ");
+    const labFilter = Number.isFinite(Number(labId)) && labId != null ? " AND m.lab_id = ?" : "";
+    const params = labFilter ? [...fromList, Number(labId)] : fromList;
+    const instRows = sqlite.prepare(
+      `SELECT it.id, it.map_id, it.analyte, it.specialty, m.lab_id, m.name AS map_name
+         FROM veritamap_instrument_tests it JOIN veritamap_maps m ON m.id = it.map_id
+        WHERE it.specialty IN (${ph})${labFilter}`
+    ).all(...params) as any[];
+    const testRows = sqlite.prepare(
+      `SELECT t.id, t.map_id, t.analyte, t.specialty, m.lab_id
+         FROM veritamap_tests t JOIN veritamap_maps m ON m.id = t.map_id
+        WHERE t.specialty IN (${ph})${labFilter}`
+    ).all(...params) as any[];
+    const byMap = new Map<number, { mapId: number; labId: number; mapName: string; instrumentRows: number; mapRows: number; analytes: Set<string> }>();
+    for (const r of instRows) {
+      const e = byMap.get(r.map_id) || { mapId: r.map_id, labId: r.lab_id, mapName: r.map_name, instrumentRows: 0, mapRows: 0, analytes: new Set<string>() };
+      e.instrumentRows++; e.analytes.add(r.analyte); byMap.set(r.map_id, e);
+    }
+    for (const r of testRows) {
+      const e = byMap.get(r.map_id) || { mapId: r.map_id, labId: r.lab_id, mapName: "", instrumentRows: 0, mapRows: 0, analytes: new Set<string>() };
+      e.mapRows++; e.analytes.add(r.analyte); byMap.set(r.map_id, e);
+    }
+    const maps = Array.from(byMap.values()).map((e) => ({ ...e, analytes: Array.from(e.analytes).sort() }));
+    if (!isDry && (instRows.length || testRows.length)) {
+      const updI = sqlite.prepare("UPDATE veritamap_instrument_tests SET specialty = ? WHERE id = ?");
+      const updT = sqlite.prepare("UPDATE veritamap_tests SET specialty = ? WHERE id = ?");
+      sqlite.transaction(() => {
+        for (const r of instRows) updI.run(toLabel, r.id);
+        for (const r of testRows) updT.run(toLabel, r.id);
+      })();
+      for (const m of maps) rebuildMapTests(m.mapId);
+      logAudit({
+        userId: 0,
+        ownerUserId: 0,
+        module: "veritamap",
+        action: "update",
+        entityType: "map_specialty_label",
+        entityId: maps.map((m) => m.mapId).join(","),
+        entityLabel: `${fromList.join(" / ")} -> ${toLabel}`,
+        before: { instrumentRows: instRows.length, mapRows: testRows.length },
+        after: { specialty: toLabel, maps: maps.map((m) => ({ mapId: m.mapId, labId: m.labId, instrumentRows: m.instrumentRows, mapRows: m.mapRows })) },
+        ipAddress: (req as any).ip,
+      });
+      console.log(`[admin/veritamap/merge-specialty] ${fromList.join("/")} -> ${toLabel}: ${instRows.length} instrument rows, ${testRows.length} map rows, ${maps.length} maps`);
+    }
+    res.json({ ok: true, dryRun: isDry, from: fromList, to: toLabel, instrumentRows: instRows.length, mapRows: testRows.length, maps });
+  });
+
+  // GET /api/admin/veritamap/instruments-by-name?secret=...&like=VITROS%204600
+  // READ-ONLY. Every saved instrument whose name contains `like`, with its lab,
+  // map and saved test rows (analyte, specialty, complexity, active). Used to find
+  // the maps that carry a library entry that was later corrected (BUG-005: the
+  // VITROS 4600 entry carried every test as HIGH; FDA lists them MODERATE).
+  app.get("/api/admin/veritamap/instruments-by-name", (req, res) => {
+    const secret = (req.query.secret as string) || (req.headers["x-admin-secret"] as string);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const like = String(req.query.like || "").trim();
+    if (like.length < 3) return res.status(400).json({ error: "like (3+ characters) required" });
+    const sqlite = (db as any).$client;
+    const insts = sqlite.prepare(
+      `SELECT i.id AS instrument_id, i.instrument_name, i.role, i.map_id, m.name AS map_name, m.lab_id, l.lab_name
+         FROM veritamap_instruments i
+         JOIN veritamap_maps m ON m.id = i.map_id
+         LEFT JOIN labs l ON l.id = m.lab_id
+        WHERE i.instrument_name LIKE ?
+        ORDER BY m.lab_id, m.id, i.id`
+    ).all(`%${like}%`) as any[];
+    const testsFor = sqlite.prepare("SELECT analyte, specialty, complexity, active FROM veritamap_instrument_tests WHERE instrument_id = ? ORDER BY analyte");
+    const out = insts.map((i) => ({ ...i, tests: testsFor.all(i.instrument_id) }));
+    res.json({ ok: true, like, count: out.length, instruments: out });
+  });
+
   // Surgically add ONE analyte to the instruments of a lab's map, matched by
   // instrument-name substring. Unlike the build page (which full-replaces an
   // instrument's whole test list), this is a targeted INSERT OR IGNORE per
