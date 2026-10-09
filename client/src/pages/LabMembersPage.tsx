@@ -362,7 +362,7 @@ export default function LabMembersPage() {
               </div>
             </div>
             {seatCounts.active >= seatLimits.activeIncluded && (
-              <div className="mt-3 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+              <div className="mt-3 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded px-2 py-1 dark:text-amber-200 dark:bg-amber-950/40 dark:border-amber-800" data-testid="seats-full-notice">
                 All active seats are in use. Inviting another writer requires a tier upgrade or an additional seat.
               </div>
             )}
@@ -571,16 +571,16 @@ export default function LabMembersPage() {
                     const daysPending = Math.floor((Date.now() - new Date(inv.invited_at).getTime()) / (1000 * 60 * 60 * 24));
                     const expired = daysPending > 30;
                     return (
-                      <tr key={`p-${inv.seat_id}`} className="border-b last:border-b-0 bg-amber-50/30">
+                      <tr key={`p-${inv.seat_id}`} className="border-b last:border-b-0 bg-amber-50/30 dark:bg-amber-500/10" data-testid="pending-invite-row">
                         <td className="py-2 pr-3">
                           {inv.invitee_name && (
                             <div className="font-medium flex items-center gap-2 flex-wrap" data-testid="pending-invitee-name">{inv.invitee_name}</div>
                           )}
-                          <div className="font-medium text-muted-foreground italic flex items-center gap-2 flex-wrap">
+                          <div className="font-medium text-muted-foreground dark:text-slate-300 italic flex items-center gap-2 flex-wrap" data-testid="pending-invite-email">
                             {inv.seat_email}
                             {isMedicalDirector(inv.seat_email) && medicalDirectorBadge(true)}
                           </div>
-                          <div className="text-xs text-muted-foreground">
+                          <div className="text-xs text-muted-foreground dark:text-slate-300">
                             Invited {fmtDate(inv.invited_at)} ({daysPending}d ago)
                           </div>
                         </td>
@@ -591,7 +591,7 @@ export default function LabMembersPage() {
                           </span>
                         </td>
                         <td className="py-2 pr-3">{seatTypeBadge(inv.seat_type || "active")}</td>
-                        <td className="py-2 pr-3 text-muted-foreground">{fmtDate(inv.invited_at)}</td>
+                        <td className="py-2 pr-3 text-muted-foreground dark:text-slate-300" data-testid="pending-invite-date">{fmtDate(inv.invited_at)}</td>
                         <td className="py-2 pr-3 text-right space-x-1">
                           {canManage && inv.invite_token && !expired && (
                             <Button size="sm" variant="ghost" onClick={() => {
@@ -619,7 +619,7 @@ export default function LabMembersPage() {
                             )
                           )}
                           {canManage && (
-                            <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => {
+                            <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive dark:text-red-400 dark:hover:text-red-300" data-testid="pending-invite-dismiss" onClick={() => {
                               if (confirm(`Dismiss the invitation for ${inv.seat_email}? They won't get any further emails. You can re-invite them later if needed.`)) {
                                 dismissMutation.mutate(inv.seat_id);
                               }
