@@ -29909,7 +29909,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.json({ valid: false, reason: "expired" });
     }
 
-    const labName = seat.clia_lab_name || seat.hospital_name || seat.owner_name || "your lab";
+    // BUG-008 (2026-10-09): name the lab the person is actually invited to
+    // (user_seats.lab_id -> labs.lab_name). The owner's account fields are only a
+    // fallback for legacy invites with no lab; they named the lab after the owner
+    // ("join Lab Owner") and gave a multi-lab owner's account name for every lab.
+    let invitedLabName: string | null = null;
+    if (seat.lab_id) {
+      try {
+        invitedLabName = ((db as any).$client.prepare("SELECT lab_name FROM labs WHERE id = ?").get(seat.lab_id) as any)?.lab_name || null;
+      } catch { invitedLabName = null; }
+    }
+    const labName = invitedLabName || seat.clia_lab_name || seat.hospital_name || seat.owner_name || "your lab";
     res.json({
       valid: true,
       labName,
