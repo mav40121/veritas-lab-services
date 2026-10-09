@@ -167,7 +167,7 @@ export const INSTRUCTIONS_CONTENT = [
   ["2. Column Guide"],
   ["• Columns A-F: Analyte identification - test name, department, specialty, complexity, instruments, and count."],
   ["• Column G: CFR Section - the applicable 42 CFR Part 493 section for the test specialty."],
-  ["• Column H: Correlation Required - Yes if non-waived test is run on 2+ instruments (42 CFR §493.1213)."],
+  ["• Column H: Correlation Required - Yes if non-waived test is run on 2+ instruments (42 CFR §493.1281)."],
   ["• Columns I-K: Unit of measure, reference range, and AMR (lab-entered values only)."],
   ["• Critical Low / Critical High: your laboratory's MEC-adopted critical value thresholds (lab-entered; blank until you enter them)."],
   ["• Columns S-Z: Compliance dates and calculated status for Calibration Verification, Correlation / Method Comparison, Precision, and SOP Review."],

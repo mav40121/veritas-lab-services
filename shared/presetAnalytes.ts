@@ -184,44 +184,244 @@ export function diffCorrelationKey(raw: string): string | null {
   return `diff:${cls}:${kind}`;
 }
 
-// Correlation grouping for VeritaMap (parking lot #76, 2026-10-08). The map
-// decided "correlation required" by counting instruments on the EXACT analyte
-// string, so a manual differential's "Lymphocytes" and the analyzer's "LYMPH%"
-// (the same measurand, two methods; 42 CFR 493.1281 comparability) were two
-// unrelated one-instrument tests and the requirement never appeared. The map now
-// groups with the same differential key VeritaCheck coverage already uses:
-// percent with percent, absolute with absolute, everything else by exact name.
+// Correlation grouping for VeritaMap (parking lot #76, 2026-10-08; BUG-011,
+// 2026-10-09). 42 CFR 493.1281: the same test run on two instruments or by two
+// methods needs a comparison twice a year. The map used to decide "same test" by
+// the EXACT analyte string, so the requirement never appeared when two instruments
+// (or a manual method) named one test differently. Michael: "Manual diff counts
+// lymph % same as the hematology analyzers do and does trigger correlation
+// requirements ... that is just an example of this class of bug." A production
+// audit of 37 maps found the class on six client labs: capital letters only
+// ("Antibody screen" vs "Antibody Screen"), a differential entered as one test
+// ("Manual Diff", CellaVision "White blood cell differential (WBC diff)"), NRBC,
+// urine sediment (manual vs UF-5000/UD-10), blood bank method suffixes ("(tube)"),
+// drug-screen spellings across devices.
+//
+// sameTestKeys() returns the identity keys of a map analyte. Two analytes are the
+// same test when they share a key. Rules, in order (first family that applies wins):
+//   1. WBC differential class, percent and absolute kept apart (diffCorrelationKey).
+//   2. A whole differential ("Manual Diff", "Differential", "WBC diff") carries the
+//      five percent keys, so it pairs with each class percentage the analyzer reports.
+//   3. NRBC, reticulocytes (percent / absolute), body fluid counts and differential.
+//   4. Urine sediment elements; specimen stays part of the identity, so a urine RBC
+//      never meets the CBC RBC. Dipstick chemistry is not sediment.
+//   5. Blood bank by test and phase; method words (tube, gel) do not split a test,
+//      and crossmatch IS, AHG and electronic stay separate.
+//   6. Drug classes (urine drug screens), so "Amphetamine" and "Amphetamines",
+//      "Cannabinoids (THC)" and "Cannabinoids" are one test. Morphine is not Opiates.
+//   7. Curated FDA / library name variants (PT, aPTT, FDA spellings).
+//   8. Otherwise the name itself, ignoring capital letters, spacing, punctuation,
+//      word order and a trailing plural ("Bilirubin, total" = "Total bilirubin").
+//   5b. Blood gas and point-of-care whole blood vs the chemistry or hematology
+//      analyzer for the same measurand ("cNa+" = "Sodium", "ctHb" = "HGB", "cGlu" =
+//      "Glucose"): Michael, BUG-011 part B (Q42 = 1, 2026-10-09). Ionized calcium
+//      stays apart from total calcium; any specimen word (urine, CSF) stays apart.
+// Kept apart by Michael's decision (Q42): urine dipstick vs quantitative urine
+// chemistry (a semi-quantitative screen is not the same test), Opiates vs Morphine
+// (different targets and cutoffs).
+
+const _stripParens = (s: string) => s.replace(/\([^)]*\)/g, " ");
+const _words = (s: string) => s.toLowerCase().replace(/[^a-z0-9#%+]+/g, " ").trim().split(/\s+/).filter(Boolean);
+const _fold = (w: string) => (w.length > 4 && /s$/.test(w) && !/(ss|us|is)$/.test(w) ? w.slice(0, -1) : w);
+
+// %-vs-# for the hematology families that are not differential classes. "count"
+// alone does not mean absolute here: a manual reticulocyte count is a percentage.
+function _pctOrAbs(raw: string): "pct" | "abs" {
+  const l = raw.toLowerCase();
+  if (/%|percent|\bpct\b/.test(l)) return "pct";
+  if (/#|absolute|\babs\b|x\s*10|10\^|\/\s*u?l\b|\/\s*mc?l\b|k\/u?l/.test(l)) return "abs";
+  return "pct";
+}
+
+const _DIFF_CLASSES = ["lymphocyte", "neutrophil", "monocyte", "eosinophil", "basophil"];
+const _SPECIMEN_WORDS = /\b(urine|urinary|csf|cerebrospinal|body fluid|synovial|pleural|peritoneal|pericardial|stool|fecal|wet prep|wet mount|vaginal|semen|amniotic|sweat|saliva)\b/;
+
+const _BLOOD_BANK: Array<[RegExp, string]> = [
+  [/^(red cell |unexpected )?(antibody|ab) (screen|screening|detection)$|^(unexpected antibody detection|indirect antiglobulin test|iat)$/, "abscreen"],
+  [/^(antibody|ab) (identification|id|panel|identification panel)$/, "abid"],
+  [/^abo( group| grouping| typing| type| forward grouping| reverse grouping| forward type| reverse type)?$|^(forward|reverse) (grouping|type|typing)$/, "abo"],
+  [/^(rh|rhd|d|rho|rh d)( type| typing| factor)?$/, "rh"],
+  [/^(dat|direct antiglobulin( test)?|direct coombs( test)?)$/, "dat"],
+  [/^(antigen|antigen typing|red cell antigen typing|rbc antigen typing|phenotyping|phenotype|antigen screen)$/, "antigen"],
+  [/^(antibody titer|antibody titration|titer)$/, "titer"],
+];
+
+// Blood gas and point-of-care names for a chemistry or hematology measurand, matched
+// on the name without parentheses (so "Glucose (POC)" and "cCa2+(7.4)" qualify).
+// Anchored, so "Hemoglobin A1c", "Calcium, total" and "Sodium, urine" never match.
+const _WHOLE_BLOOD: Array<[RegExp, string]> = [
+  [/^(sodium|na|na\+|cna\+|whole blood sodium|sodium whole blood)$/, "sodium"],
+  [/^(potassium|k|k\+|ck\+|whole blood potassium|potassium whole blood)$/, "potassium"],
+  [/^(chloride|cl|ccl|whole blood chloride|chloride whole blood)$/, "chloride"],
+  [/^(ionized calcium|calcium ionized|ionised calcium|ica|ca\+\+|ca2\+|cca2\+|free calcium)$/, "ionized calcium"],
+  [/^(glucose|glu|cglu|blood glucose|whole blood glucose|glucose whole blood|poc glucose|glucose poc|glucose meter|capillary glucose|fingerstick glucose)$/, "glucose"],
+  [/^(lactate|lactic acid|lactic acid lactate|clac|lac|whole blood lactate)$/, "lactate"],
+  [/^(hemoglobin|haemoglobin|hgb|hb|thb|cthb|total hemoglobin|hemoglobin total)$/, "hemoglobin"],
+  [/^(hematocrit|haematocrit|hct|hct calc|calculated hematocrit|hematocrit calculated)$/, "hematocrit"],
+];
+
+// Urine drug screen classes. Specimen words (urine) are ignored inside this family.
+const _DRUGS: Array<[RegExp, string]> = [
+  [/^(amphetamines?|amp)$/, "amphetamine"],
+  [/^(methamphetamines?|mamp|met)$/, "methamphetamine"],
+  [/^(cannabinoids?|thc|marijuana|cannabinoid thc)$/, "cannabinoid"],
+  [/^(cocaine|cocaine metabolites?|benzoylecgonine|coc)$/, "cocaine"],
+  [/^(phencyclidine|pcp)$/, "phencyclidine"],
+  [/^(opiates?|opi)$/, "opiate"],
+  [/^(barbiturates?|bar)$/, "barbiturate"],
+  [/^(benzodiazepines?|bzo)$/, "benzodiazepine"],
+  [/^(methadone|mtd)$/, "methadone"],
+  [/^(eddp|methadone metabolites?( eddp)?|eddp methadone metabolite)$/, "eddp"],
+  [/^(oxycodone|oxy)$/, "oxycodone"],
+  [/^(buprenorphine|bup)$/, "buprenorphine"],
+  [/^(mdma|ecstasy|methylenedioxymethamphetamine)$/, "mdma"],
+  [/^(tricyclic antidepressants?|tca)$/, "tca"],
+  [/^(propoxyphene|ppx)$/, "propoxyphene"],
+  [/^(fentanyl|fyl)$/, "fentanyl"],
+  [/^(6 acetylmorphine|6 monoacetylmorphine|6 mam)$/, "6mam"],
+];
+
+// Curated same-test names (FDA spelling variants and common short forms) found in
+// the BUG-009 library review and the BUG-011 production audit. Compared on _words.
+const _SAME_TEST: Array<[string, string[]]> = [
+  ["pt", ["pt", "prothrombin time", "pt inr", "protime"]],
+  ["inr", ["inr", "pt inr", "international normalized ratio"]],
+  ["aptt", ["aptt", "ptt", "activated partial thromboplastin time", "partial thromboplastin time"]],
+  ["pth", ["parathyroid hormone", "parathyroid hormone intact", "intact pth", "pth"]],
+  ["cystatin c", ["cystatin c", "cystacin c"]],
+  ["hba1c", ["glycosylated hemoglobin", "hemoglobin a1c", "hba1c", "a1c", "hgb a1c"]],
+  ["urine albumin", ["microalbumin", "albumin urinary", "urine albumin", "urine microalbumin"]],
+  ["stfr", ["soluble transferrin receptor", "transferrin receptor"]],
+  ["igg subclasses", ["igg subclasses 1 2 3 4", "immunoglobulins igg subclasses", "igg subclasses"]],
+  ["platelet estimate", ["platelet estimate", "plt estimate"]],
+];
+
+function _wordKey(s: string): string {
+  return _words(s).map(_fold).sort().join(" ");
+}
+
+let _sameIdx: Map<string, string> | null = null;
+function _sameTestIndex(): Map<string, string> {
+  if (_sameIdx) return _sameIdx;
+  const m = new Map<string, string>();
+  for (const [key, names] of _SAME_TEST) for (const n of names) m.set(_wordKey(n), key);
+  _sameIdx = m;
+  return m;
+}
+
+export function sameTestKeys(analyte: string): string[] {
+  const raw = String(analyte ?? "").normalize("NFKC").trim();
+  if (!raw) return [""];
+  const lower = raw.toLowerCase();
+  const base = _words(_stripParens(raw)).join(" ");
+
+  // 3a. Body fluid counts and differential (before the blood families).
+  if (/\b(body fluid|bf)\b|-bf\b/.test(lower) || /^(pmn|mn)\s*[#%]?$/i.test(raw.replace(/\s+/g, ""))) {
+    if (/pmn|polymorpho|neutro/.test(lower)) return [`bf:pmn:${_pctOrAbs(raw)}`];
+    if (/\bmn\b|mononuc/.test(lower)) return [`bf:mn:${_pctOrAbs(raw)}`];
+    if (/differential|\bdiff\b/.test(lower)) return ["bf:pmn:pct", "bf:mn:pct"];
+    if (/\btc\b|tc-bf|total nucleated|nucleated cell|tnc/.test(lower)) return ["bf:tnc"];
+    if (/\bwbc\b|white|leuko/.test(lower)) return ["bf:wbc"];
+    if (/\brbc\b|red|erythro/.test(lower)) return ["bf:rbc"];
+  }
+  // 4. Urine sediment. Whole words: "Erythrocyte Sedimentation Rate" is not urine sediment.
+  const urineCtx = /\b(urine|urinary|sediment|urinalysis)\b|\bmicroscop/.test(lower);
+  if (!/dipstick|esterase|occult|qualitative|nitrite|ketone|specific gravity|\bph\b|sedimentation|\besr\b/.test(lower)) {
+    const el: Array<[RegExp, string, boolean]> = [
+      [/\bcasts?\b/, "casts", true], [/\bcrystals?\b/, "crystals", true], [/\bepithel|\bsquamous\b/, "epithelial", true],
+      [/\bmucus\b/, "mucus", true], [/\b(rbc|red blood cells?|erythrocytes?)\b/, "rbc", false],
+      [/\b(wbc|white blood cells?|leukocytes?)\b/, "wbc", false], [/\bbacteria\b/, "bacteria", false],
+      [/\byeast\b|budding/, "yeast", false], [/\bsperm/, "sperm", false],
+    ];
+    for (const [re, name, bareOk] of el) {
+      if (!re.test(lower)) continue;
+      const otherSpecimen = _SPECIMEN_WORDS.test(lower) && !/\b(urine|urinary)\b/.test(lower);
+      if (urineCtx && !otherSpecimen) return [`urine:${name}`];
+      if (bareOk && !otherSpecimen && base.split(" ").length <= 3) return [`urine:${name}`];
+      break;
+    }
+  }
+  // 1. Differential class.
+  const dk = diffCorrelationKey(raw);
+  if (dk && !_SPECIMEN_WORDS.test(lower)) return [dk];
+  // 2. Whole differential.
+  if (!_SPECIMEN_WORDS.test(lower) &&
+      /^(manual |automated |digital |cbc |peripheral )?(wbc |white blood cell |white cell |leukocyte )?((5|five) part |(5|five) )?(diff|differential)( count| with smear review)?$/.test(base)) {
+    return _DIFF_CLASSES.map((c) => `diff:${c}:pct`);
+  }
+  // 3b. NRBC and reticulocytes.
+  if (/\bnrbc\b|nucleated red( blood)? cells?|nucleated rbc/.test(lower) && !_SPECIMEN_WORDS.test(lower)) return [`nrbc:${_pctOrAbs(raw)}`];
+  if (/\bretic(ulocyte)?s?\b|^ret\s*[#%]?$/.test(lower) && !/\bhe\b|ret-he|hemoglobin|\bhgb\b|\birf\b|immature|\bmrv\b|mean/.test(lower)) {
+    return [`retic:${_pctOrAbs(raw)}`];
+  }
+  // 5. Blood bank by test and phase (method words dropped).
+  const bb = base.replace(/\b(tube|gel|manual|automated|column|solid phase|card|cat|method|testing|test)\b/g, " ").replace(/\s+/g, " ").trim();
+  if (/^(crossmatch|cross match|xm|compatibility testing|crossmatch compatibility testing)\b/.test(bb)) {
+    const phase = /\b(is|immediate spin)\b/.test(lower) ? "is" : /\b(ahg|antiglobulin|iat|coombs)\b/.test(lower) ? "ahg" : /electronic|computer/.test(lower) ? "electronic" : "unspecified";
+    return [`bb:crossmatch:${phase}`];
+  }
+  for (const [re, key] of _BLOOD_BANK) if (re.test(bb)) return [`bb:${key}`];
+  // 5b. Blood gas / point-of-care whole blood vs chemistry and hematology (Q42 = 1).
+  // Device and setting words do not change the test: "i-STAT Sodium-POC" is sodium.
+  if (!_SPECIMEN_WORDS.test(lower)) {
+    const wb = base.replace(/\b(i stat|istat|epoc|piccolo|hemocue|statstrip|nova|accu chek|abl\d*|gem|poc|point of care|bedside|wb|meter)\b/g, " ").replace(/\s+/g, " ").trim();
+    for (const [re, key] of _WHOLE_BLOOD) if (re.test(base) || (wb && re.test(wb))) return [`same:${key}`];
+  }
+  // 6. Drug classes.
+  const drug = _words(_stripParens(raw)).filter((w) => !/^(urine|screen|ua|drug|qualitative|test|immunoassay)$/.test(w)).join(" ");
+  const drugFull = _words(raw).filter((w) => !/^(urine|screen|ua|drug|qualitative|test|immunoassay)$/.test(w)).join(" ");
+  for (const [re, key] of _DRUGS) if (re.test(drug) || re.test(drugFull)) return [`drug:${key}`];
+  // 7. Curated name variants (PT/INR carries both keys).
+  const idx = _sameTestIndex();
+  if (/^pt\s*\/\s*inr$/i.test(raw)) return ["same:pt", "same:inr"];
+  for (const cand of [_wordKey(raw), _wordKey(_stripParens(raw))]) {
+    const k = idx.get(cand);
+    if (k && (cand === _wordKey(raw) || !_SPECIMEN_WORDS.test(lower))) return [`same:${k}`];
+  }
+  // 8. The name, ignoring case, spacing, punctuation, word order, trailing plural.
+  return [`name:${_wordKey(raw)}`];
+}
+
+// First identity key (kept for callers that need one string).
 export function correlationGroupKey(analyte: string): string {
-  return diffCorrelationKey(analyte) ?? String(analyte ?? "");
+  return sameTestKeys(analyte)[0];
 }
 
 export interface CorrelationGroupInfo {
-  /** Distinct instruments running any analyte in this analyte's correlation group. */
+  /** Distinct instruments running this test under any name on the map. */
   instrumentCount: number;
-  /** The OTHER analytes on the map that share the group (e.g. "LYMPH%" for "Lymphocytes"). */
+  /** The OTHER analytes on the map that are the same test (e.g. "LYMPH%" for "Lymphocytes"). */
   peers: string[];
 }
 
 /**
- * For every analyte, the correlation group's distinct instrument count and peer
- * analytes. Input: analyte -> instruments running it (each with an id, or
- * instrument_id, or at least an instrument_name).
+ * For every analyte, the distinct instruments running the same test under any name,
+ * and those other names. Input: analyte -> instruments running it (each with an id,
+ * or instrument_id, or at least an instrument_name). Not transitive: a whole
+ * differential ("Manual Diff") pairs with LYMPH% and with NEUT%, but LYMPH% does not
+ * pair with NEUT%.
  */
 export function correlationGroupsFor(
   instrByAnalyte: Record<string, Array<{ id?: number | string; instrument_id?: number | string; instrument_name?: string; name?: string }>>,
 ): Record<string, CorrelationGroupInfo> {
+  const keysOf = new Map<string, string[]>();
   const byKey = new Map<string, string[]>();
   for (const analyte of Object.keys(instrByAnalyte)) {
-    const k = correlationGroupKey(analyte);
-    if (!byKey.has(k)) byKey.set(k, []);
-    byKey.get(k)!.push(analyte);
+    const ks = sameTestKeys(analyte);
+    keysOf.set(analyte, ks);
+    for (const k of ks) {
+      if (!byKey.has(k)) byKey.set(k, []);
+      byKey.get(k)!.push(analyte);
+    }
   }
   const instrKey = (i: any) => String(i?.id ?? i?.instrument_id ?? i?.instrument_name ?? i?.name ?? "");
   const out: Record<string, CorrelationGroupInfo> = {};
-  for (const members of byKey.values()) {
+  for (const [analyte, ks] of keysOf) {
+    const members = new Set<string>();
+    for (const k of ks) for (const m of byKey.get(k) ?? []) members.add(m);
     const ids = new Set<string>();
     for (const m of members) for (const i of instrByAnalyte[m] ?? []) { const k = instrKey(i); if (k) ids.add(k); }
-    for (const m of members) out[m] = { instrumentCount: ids.size, peers: members.filter((x) => x !== m).sort() };
+    out[analyte] = { instrumentCount: ids.size, peers: [...members].filter((x) => x !== analyte).sort() };
   }
   return out;
 }

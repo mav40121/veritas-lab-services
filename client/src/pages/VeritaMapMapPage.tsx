@@ -1552,7 +1552,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                     </li>
                   ))}
                 </ul>
-                <p className="text-muted-foreground">42 CFR §493.1213</p>
+                <p className="text-muted-foreground">42 CFR §493.1281</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -3127,7 +3127,7 @@ export default function VeritaMapMapPage() {
             Changes auto-save after 1.5 seconds. Calibration Verification and Correlation / Method Comparison required
             for non-waived tests (42 CFR §493.1255). SOP review cadence: 2 years.
             Correlations required when 2+ instruments run the same analyte (42 CFR
-            §493.1213).
+            §493.1281).
           </p>
           {/* Legend for the asterisk that appears on Blood Bank / Immunohematology
               compatibility tests. Hover tooltip is easy to miss (and broken on
