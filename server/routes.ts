@@ -10281,7 +10281,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (lab) {
         pendingInvites = sqlite.prepare(`
           SELECT id AS seat_id, seat_email, invited_at, status, invite_token, lab_id,
-                 COALESCE(seat_type, 'active') AS seat_type
+                 COALESCE(seat_type, 'active') AS seat_type,
+                 COALESCE(invitee_name, (SELECT TRIM(COALESCE(se.first_name, '') || ' ' || COALESCE(se.last_name, '')) FROM staff_employees se WHERE se.id = user_seats.staff_employee_id)) AS invitee_name
           FROM user_seats
           WHERE owner_user_id = ?
             AND status = 'pending'
@@ -10431,7 +10432,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // user.plan and existing user_seats count, matching /api/account/seats POST.
   app.post("/api/labs/:labId/members", authMiddleware, labScopeMiddleware, async (req: any, res) => {
     if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
-    const { email, role: requestedRole, permissions, seatType: requestedSeatType } = req.body || {};
+    const { email, role: requestedRole, permissions, seatType: requestedSeatType, firstName, lastName } = req.body || {};
+    // Bug 2 (2026-10-09): every invite carries the person's name, not only Staff.
+    // Optional on the server so older callers keep working.
+    const inviteeName = `${String(firstName || "").trim()} ${String(lastName || "").trim()}`.trim().slice(0, 120) || null;
     if (!email || !email.includes("@")) return res.status(400).json({ error: "Valid email required" });
     // Three seat types on invite: Staff, Admin, and Medical Director. MD is the one
     // FREE seat and is designated by email (labs.medical_director_email); its base
@@ -10559,12 +10563,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).get(labOwnerId, normalizedEmail, req.scope.labId) as any;
       if (deactivated) {
         sqlite.prepare(
-          "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ?, lab_id = ?, seat_type = ? WHERE id = ?"
-        ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, inviteToken, req.scope.labId, seatType, deactivated.id);
+          "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ?, lab_id = ?, seat_type = ?, invitee_name = ? WHERE id = ?"
+        ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, inviteToken, req.scope.labId, seatType, inviteeName, deactivated.id);
       } else {
         sqlite.prepare(
-          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id, seat_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        ).run(labOwnerId, normalizedEmail, seatUserId, now, newStatus, permJson, inviteToken, req.scope.labId, seatType);
+          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id, seat_type, invitee_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        ).run(labOwnerId, normalizedEmail, seatUserId, now, newStatus, permJson, inviteToken, req.scope.labId, seatType, inviteeName);
       }
       // Create lab_members row when the invited user already has an account.
       if (seatUserId) {
@@ -10579,7 +10583,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Reassigns if the lab already had a different MD (the prior MD's seat then
       // re-counts as a normal active seat, since the free exclusion keys off this email).
       if (isMd) {
-        const mdName = (existingUser && (existingUser as any).name) ? (existingUser as any).name : null;
+        const mdName = (existingUser && (existingUser as any).name) ? (existingUser as any).name : inviteeName;
         sqlite.prepare(
           "UPDATE labs SET medical_director_email = ?, medical_director_name = ?, updated_at = ? WHERE id = ?"
         ).run(normalizedEmail, mdName, now, req.scope.labId);
@@ -10935,8 +10939,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ).run(now, permJson, inviteToken, req.scope.labId, staffEmpId, deactivated.id);
       } else {
         sqlite.prepare(
-          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id, seat_type, staff_employee_id) VALUES (?, ?, NULL, ?, 'pending', ?, ?, ?, 'staff_portal', ?)"
-        ).run(labOwnerId, normalizedEmail, now, permJson, inviteToken, req.scope.labId, staffEmpId);
+          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id, seat_type, staff_employee_id, invitee_name) VALUES (?, ?, NULL, ?, 'pending', ?, ?, ?, 'staff_portal', ?, ?)"
+        ).run(labOwnerId, normalizedEmail, now, permJson, inviteToken, req.scope.labId, staffEmpId, `${String(firstName ?? "").trim()} ${String(lastName ?? "").trim()}`.trim().slice(0, 120) || null);
       }
       sqlite.exec("COMMIT");
     } catch (err: any) {
@@ -29922,6 +29926,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       labName,
       inviterName: seat.owner_name || "Your lab administrator",
       seatEmail: seat.seat_email,
+      inviteeName: seat.invitee_name || null,
     });
   });
 
