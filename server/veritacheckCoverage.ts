@@ -18,7 +18,7 @@
 // Instrument matching uses the map's registered nickname first (the map knows
 // "Bonnie" is the Ortho VITROS 5600), then falls back to model-token overlap.
 
-import { aliasesForPresetLabel, presetKeyForLabel, analytesShareGroup, diffCorrelationKey } from "@shared/presetAnalytes";
+import { aliasesForPresetLabel, presetKeyForLabel, analytesShareGroup, sameTestKeys } from "@shared/presetAnalytes";
 
 export type LinearityStatus = "covered" | "review" | "missing" | "exempt";
 // Recurrence-aware cal-ver / linearity status, mirroring method comparison
@@ -259,19 +259,23 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
   // Method comparisons: analytes running on 2+ instruments need a correlation.
   // Count DISTINCT instrument_ids (two units of the same model still count as
   // two, and both are shown via instLabel so the pair is legible).
-  // Group by a canonical key, not the raw analyte string, so a manual differential
-  // percentage ("Lymphs") and the analyzer's percentage point ("Lymph%"/"LY%")
-  // collapse into ONE correlation requirement (diffCorrelationKey). Non-differential
-  // analytes return null and fall back to the exact string, so their grouping is
-  // unchanged. Each group keeps its member analyte strings (for study matching,
-  // which still runs the full fuzzy matcher) and a stable display label.
+  // Group by the test's identity keys (sameTestKeys), not the raw analyte string, so
+  // a manual differential percentage ("Lymphs") and the analyzer's percentage point
+  // ("Lymph%"/"LY%") collapse into ONE correlation requirement. Each group keeps its
+  // member analyte strings (for study matching, which still runs the full fuzzy
+  // matcher) and a stable display label.
+  // BUG-011 (2026-10-09): one identity function for the map and coverage
+  // (sameTestKeys): capital letters, a whole differential, NRBC, urine sediment,
+  // blood bank method suffixes and drug-screen spellings no longer split a test.
+  // A whole differential carries several keys, so it joins each class's group.
   const groups = new Map<string, { instIds: Set<number>; analytes: Set<string> }>();
   for (const c of combos) {
-    const key = diffCorrelationKey(c.analyte) ?? c.analyte;
-    let g = groups.get(key);
-    if (!g) { g = { instIds: new Set(), analytes: new Set() }; groups.set(key, g); }
-    g.instIds.add(c.instrument_id);
-    g.analytes.add(c.analyte);
+    for (const key of sameTestKeys(c.analyte)) {
+      let g = groups.get(key);
+      if (!g) { g = { instIds: new Set(), analytes: new Set() }; groups.set(key, g); }
+      g.instIds.add(c.instrument_id);
+      g.analytes.add(c.analyte);
+    }
   }
   const methodComparisons: MethodComparisonRow[] = [];
   let mcNeeded = 0, mcDone = 0, mcOverdue = 0;

@@ -14670,7 +14670,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         calVerFrequency: calVerRequired ? 'Every 6 months (42 CFR §493.1255)' : 'Exempt - waived test',
         correlationRequired,
         correlationPeers: group.peers,
-        correlationReason: correlationRequired ? `${group.instrumentCount} instruments performing this test (${groupList.join(', ')}) - 42 CFR §493.1213, TJC QSA.04.05.01` : null,
+        correlationReason: correlationRequired ? `${group.instrumentCount} instruments performing this test (${groupList.join(', ')}) - 42 CFR §493.1281, TJC QSA.04.05.01` : null,
         instruments: instruments.map((i: any) => ({ name: i.instrument_name, role: i.role, id: i.instrument_id })),
       };
     }
@@ -15643,7 +15643,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         correlationRequired,
         correlationPeers: group.peers,
         correlationReason: correlationRequired
-          ? `${group.instrumentCount} instruments performing this test (${groupList.join(', ')}) - 42 CFR §493.1213, TJC QSA.04.05.01`
+          ? `${group.instrumentCount} instruments performing this test (${groupList.join(', ')}) - 42 CFR §493.1281, TJC QSA.04.05.01`
           : null,
         instruments: instruments.map((i: any) => ({ name: i.instrument_name, role: i.role, id: i.instrument_id })),
       };
