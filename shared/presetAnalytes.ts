@@ -212,9 +212,13 @@ export function diffCorrelationKey(raw: string): string | null {
 //   7. Curated FDA / library name variants (PT, aPTT, FDA spellings).
 //   8. Otherwise the name itself, ignoring capital letters, spacing, punctuation,
 //      word order and a trailing plural ("Bilirubin, total" = "Total bilirubin").
-// Not grouped here (Michael's call, BUG-011 part B): blood gas and POC whole blood
-// vs chemistry ("cNa+" vs "Sodium"), urine dipstick vs quantitative urine chemistry,
-// Opiates vs Morphine.
+//   5b. Blood gas and point-of-care whole blood vs the chemistry or hematology
+//      analyzer for the same measurand ("cNa+" = "Sodium", "ctHb" = "HGB", "cGlu" =
+//      "Glucose"): Michael, BUG-011 part B (Q42 = 1, 2026-10-09). Ionized calcium
+//      stays apart from total calcium; any specimen word (urine, CSF) stays apart.
+// Kept apart by Michael's decision (Q42): urine dipstick vs quantitative urine
+// chemistry (a semi-quantitative screen is not the same test), Opiates vs Morphine
+// (different targets and cutoffs).
 
 const _stripParens = (s: string) => s.replace(/\([^)]*\)/g, " ");
 const _words = (s: string) => s.toLowerCase().replace(/[^a-z0-9#%+]+/g, " ").trim().split(/\s+/).filter(Boolean);
@@ -240,6 +244,20 @@ const _BLOOD_BANK: Array<[RegExp, string]> = [
   [/^(dat|direct antiglobulin( test)?|direct coombs( test)?)$/, "dat"],
   [/^(antigen|antigen typing|red cell antigen typing|rbc antigen typing|phenotyping|phenotype|antigen screen)$/, "antigen"],
   [/^(antibody titer|antibody titration|titer)$/, "titer"],
+];
+
+// Blood gas and point-of-care names for a chemistry or hematology measurand, matched
+// on the name without parentheses (so "Glucose (POC)" and "cCa2+(7.4)" qualify).
+// Anchored, so "Hemoglobin A1c", "Calcium, total" and "Sodium, urine" never match.
+const _WHOLE_BLOOD: Array<[RegExp, string]> = [
+  [/^(sodium|na|na\+|cna\+|whole blood sodium|sodium whole blood)$/, "sodium"],
+  [/^(potassium|k|k\+|ck\+|whole blood potassium|potassium whole blood)$/, "potassium"],
+  [/^(chloride|cl|ccl|whole blood chloride|chloride whole blood)$/, "chloride"],
+  [/^(ionized calcium|calcium ionized|ionised calcium|ica|ca\+\+|ca2\+|cca2\+|free calcium)$/, "ionized calcium"],
+  [/^(glucose|glu|cglu|blood glucose|whole blood glucose|glucose whole blood|poc glucose|glucose poc|glucose meter|capillary glucose|fingerstick glucose)$/, "glucose"],
+  [/^(lactate|lactic acid|lactic acid lactate|clac|lac|whole blood lactate)$/, "lactate"],
+  [/^(hemoglobin|haemoglobin|hgb|hb|thb|cthb|total hemoglobin|hemoglobin total)$/, "hemoglobin"],
+  [/^(hematocrit|haematocrit|hct|hct calc|calculated hematocrit|hematocrit calculated)$/, "hematocrit"],
 ];
 
 // Urine drug screen classes. Specimen words (urine) are ignored inside this family.
@@ -343,6 +361,12 @@ export function sameTestKeys(analyte: string): string[] {
     return [`bb:crossmatch:${phase}`];
   }
   for (const [re, key] of _BLOOD_BANK) if (re.test(bb)) return [`bb:${key}`];
+  // 5b. Blood gas / point-of-care whole blood vs chemistry and hematology (Q42 = 1).
+  // Device and setting words do not change the test: "i-STAT Sodium-POC" is sodium.
+  if (!_SPECIMEN_WORDS.test(lower)) {
+    const wb = base.replace(/\b(i stat|istat|epoc|piccolo|hemocue|statstrip|nova|accu chek|abl\d*|gem|poc|point of care|bedside|wb|meter)\b/g, " ").replace(/\s+/g, " ").trim();
+    for (const [re, key] of _WHOLE_BLOOD) if (re.test(base) || (wb && re.test(wb))) return [`same:${key}`];
+  }
   // 6. Drug classes.
   const drug = _words(_stripParens(raw)).filter((w) => !/^(urine|screen|ua|drug|qualitative|test|immunoassay)$/.test(w)).join(" ");
   const drugFull = _words(raw).filter((w) => !/^(urine|screen|ua|drug|qualitative|test|immunoassay)$/.test(w)).join(" ");

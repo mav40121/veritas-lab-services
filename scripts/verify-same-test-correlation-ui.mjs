@@ -28,6 +28,8 @@ const INSTRUMENTS = [
   { name: "Sysmex UF-5000", tests: [t("Casts (urine microscopy)", "Urinalysis")] },
   { name: "Blood Bank Tube Method", tests: [t("Antibody Screen", "Immunohematology", "HIGH")] },
   { name: "QuidelOrtho ORTHO VISION Swift", tests: [t("Antibody screen", "Immunohematology", "HIGH")] },
+  { name: "Ortho VITROS 5600", tests: [t("Sodium", "General Chemistry")] },
+  { name: "Radiometer ABL90 FLEX PLUS", tests: [t("cNa+", "General Chemistry")] },
 ];
 const email = `same-test-${Date.now()}@example.com`;
 const token = (await call("POST", "/api/auth/register", { email, password: "testpass123", name: "Same Test", hipaa_acknowledged: true })).token;
@@ -38,11 +40,12 @@ sdb.prepare("UPDATE labs SET has_completed_onboarding = 1 WHERE id = ?").run(lab
 sdb.close();
 const map = await call("POST", `/api/labs/${labId}/veritamap/maps`, { name: "Hematology, Urine, Blood Bank" }, token);
 const seeded = await call("POST", `/api/admin/veritamap/seed-map?secret=${ADMIN}`, { mapId: map.id, defaultActive: 1, instruments: INSTRUMENTS });
-check("map seeded (6 instruments, 12 tests)", seeded?.totals?.inserted === 12, JSON.stringify(seeded?.totals));
+check("map seeded (8 instruments, 14 tests)", seeded?.totals?.inserted === 14, JSON.stringify(seeded?.totals));
 
 const intel = (await call("GET", `/api/labs/${labId}/veritamap/maps/${map.id}/intelligence`, undefined, token)).intelligence || {};
 const req = (a) => !!intel[a]?.correlationRequired;
 for (const a of ["Manual Diff", "Lymph%", "NRBC (manual)", "NRBC%", "Casts (urine)", "Casts (urine microscopy)", "Antibody screen", "Antibody Screen"]) check(`API: "${a}" requires a correlation`, req(a), intel[a]?.correlationReason || "(none)");
+for (const a of ["cNa+", "Sodium"]) check(`API: blood gas "${a}" pairs with the chemistry analyzer (Q42 = 1)`, req(a), intel[a]?.correlationReason || "(none)");
 for (const a of ["Neut%"]) check(`API: "${a}" requires a correlation (the manual diff covers it)`, req(a));
 for (const a of ["LYMPH#", "RBC", "RBC (urine micro)"]) check(`API: "${a}" does NOT require one (no other method runs it)`, !req(a), intel[a]?.correlationReason || "");
 

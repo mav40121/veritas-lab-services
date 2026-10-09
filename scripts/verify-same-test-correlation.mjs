@@ -82,8 +82,22 @@ diff("Parathyroid hormone (PTH)", "Parathyroid hormone - mid-molecule (PTH-M)");
 diff("Prostatic specific antigen (PSA)", "Prostatic specific antigen (PSA), free");
 diff("Hemoglobin", "Hemoglobin A1c"); diff("PT", "INR");
 
-console.log("\n=== part B, not grouped until Michael decides ===");
-diff("Sodium", "cNa+"); diff("Protein, total, urine", "Protein, urine");
+console.log("\n=== part B (Michael, Q42 = 1): blood gas / POC whole blood vs chemistry and hematology ===");
+same("Sodium", "cNa+"); same("Sodium", "Na+"); same("Potassium", "cK+"); same("Chloride", "cCl-");
+same("Calcium, ionized", "cCa2+"); same("Calcium, ionized", "iCa"); same("Ionized calcium", "cCa2+(7.4)");
+same("Glucose", "cGlu"); same("Glucose", "Glucose (POC)"); same("Glucose", "Blood glucose");
+same("Lactic acid (lactate)", "cLac"); same("Lactate", "Lactic acid (lactate)");
+same("HGB", "ctHb"); same("Hemoglobin", "HGB"); same("Hgb", "tHb"); same("HCT", "Hematocrit"); same("Hct", "Hct(calc)");
+diff("Calcium, ionized", "Calcium, total"); diff("cCa2+", "Calcium");
+diff("Sodium", "Sodium, urine"); diff("Potassium", "Urine potassium"); diff("Glucose", "Glucose, CSF");
+diff("HGB", "Hemoglobin A1c"); diff("ctHb", "FCOHb"); diff("Hct", "HGB");
+same("i-STAT Sodium-POC", "Sodium"); same("i-STAT Hgb-POC", "HGB"); same("i-STAT iCa", "Calcium, ionized");
+same("i-STAT Glucose-POC", "Glucose-POC (Nova StatStrip)"); same("i-STAT Lactate-POC", "Lactic acid (lactate)");
+diff("i-STAT Hct-POC", "i-STAT Hgb-POC"); diff("Carboxyhemoglobin", "Hemoglobin"); diff("Methemoglobin", "HGB");
+
+console.log("\n=== part B (Michael, Q42 = 1): kept apart ===");
+diff("Protein, total, urine", "Protein, urine"); diff("Glucose, urine", "Urine qualitative dipstick glucose");
+diff("Opiates", "Morphine");
 
 console.log("\n=== correlationGroupsFor on a real map shape (XN-2000 primary + backup, Manual Differential) ===");
 const map = {
