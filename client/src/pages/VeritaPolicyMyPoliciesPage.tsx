@@ -1409,10 +1409,8 @@ export default function VeritaPolicyMyPoliciesPage() {
           <h1 className="text-2xl font-bold">My Documents</h1>
           <p className="text-sm text-muted-foreground">
             Upload your lab policies and procedures, organize them by manual,
-            and route them through review and approval workflows. Phase 1
-            ships upload, organize, view, and download. Phases 2+ add the
-            multi-step approval workflow, electronic signature, and employee
-            attestations.
+            route each one through review and approval with electronic
+            signature, and assign read-and-sign to your staff.
           </p>
         </div>
         <div className="flex flex-wrap gap-2 sm:shrink-0">
@@ -2515,7 +2513,7 @@ export default function VeritaPolicyMyPoliciesPage() {
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
               {signAction === "approved"
-                ? "Your typed name plus a hash of the current version is recorded as your electronic signature for this approval step. 21 CFR Part 11 password re-auth lands in Phase 3."
+                ? "Your typed name plus a hash of the current version is recorded as your electronic signature for this approval step."
                 : "Rejecting returns the document to draft. The owner can revise and resubmit."}
             </p>
             <div>
