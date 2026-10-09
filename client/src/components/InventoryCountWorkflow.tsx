@@ -18,6 +18,7 @@
 // extraAdjustBody (initials for kiosk, employee_id for staff portal).
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { unitLabel } from "@shared/units";
 
 export interface CountItem {
   id: number;
@@ -543,13 +544,13 @@ export default function InventoryCountWorkflow({
               </div>
               <div className="text-xs text-slate-600 mt-1">
                 Currently on hand: <span className="font-mono font-semibold">{item.count_on_hand ?? item.quantity_on_hand}</span>{" "}
-                {countUnit}{(item.count_on_hand ?? item.quantity_on_hand) === 1 ? "" : "s"}
-                {hasPack && <span className="ml-1">({item.quantity_on_hand} {usageUnit}s)</span>}
+                {unitLabel(countUnit, item.count_on_hand ?? item.quantity_on_hand)}
+                {hasPack && <span className="ml-1">({item.quantity_on_hand} {unitLabel(usageUnit, item.quantity_on_hand)})</span>}
               </div>
             </div>
 
             <label className="block text-sm sm:text-xs font-medium text-slate-700">
-              New count ({countUnit}s)
+              New count ({unitLabel(countUnit)})
             </label>
             <input
               type="text"
@@ -564,7 +565,7 @@ export default function InventoryCountWorkflow({
             />
             {hasPack && previewValid && (
               <div className="text-xs text-slate-500 text-center" data-testid="count-workflow-preview">
-                = {previewQty * pack} {usageUnit}s (pack of {pack})
+                = {previewQty * pack} {unitLabel(usageUnit, previewQty * pack)} (pack of {pack})
               </div>
             )}
 
@@ -607,10 +608,10 @@ export default function InventoryCountWorkflow({
               <div className="text-sm sm:text-xs text-emerald-800 mt-1">
                 Saved.{" "}
                 {savedDelta != null && savedDelta !== 0 && (
-                  <>Delta {savedDelta >= 0 ? "+" : ""}{savedDelta} {usageUnit}s.</>
+                  <>Delta {savedDelta >= 0 ? "+" : ""}{savedDelta} {unitLabel(usageUnit, savedDelta)}.</>
                 )}
-                {" "}On hand: {item.count_on_hand ?? item.quantity_on_hand} {countUnit}{(item.count_on_hand ?? item.quantity_on_hand) === 1 ? "" : "s"}
-                {hasPack && <> ({item.quantity_on_hand} {usageUnit}s)</>}.
+                {" "}On hand: {item.count_on_hand ?? item.quantity_on_hand} {unitLabel(countUnit, item.count_on_hand ?? item.quantity_on_hand)}
+                {hasPack && <> ({item.quantity_on_hand} {unitLabel(usageUnit, item.quantity_on_hand)})</>}.
               </div>
             </div>
             <div className="flex items-center gap-2 pt-2">
