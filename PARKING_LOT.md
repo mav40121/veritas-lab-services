@@ -556,7 +556,7 @@ a new module), isolate data intake (LIS export vs manual), and whether the
 antibiogram is a PDF deliverable or a live table.
 
 **Source:** Lisa, 2026-10-07 ~13:40 ("Lets scope an antimicrobial stewardship program in the system"), then parked before scoping.
-**Status:** Open. Scope document on request (docs/ANTIMICROBIAL_STEWARDSHIP_SCOPE.md); no build.
+**Status:** Open. Scope document WRITTEN 2026-10-09: docs/ANTIMICROBIAL_STEWARDSHIP_SCOPE.md (verbatim 42 CFR 482.42(b) and 485.640(b); five lab-side parts; MVP M 1-2 weeks; recommends a Stewardship tab in VeritaQA, aggregate LIS totals only so it stays HIPAA-free). Six open questions for Lisa and Michael before any build. Also found: the master-list stewardship note sits on policy 66 (Manual Hematology QC), likely misplaced.
 
 ---
 
