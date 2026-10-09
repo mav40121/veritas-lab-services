@@ -7,11 +7,11 @@
 // the Westgard rules use the same numbers; a lot uses the manufacturer's
 // published ranges until it has enough data, then the lab's own. Exercises:
 //   1. new lot, 0 and 19 prior runs  -> manufacturer mean/SD
-//   2. 20 prior runs                 -> lab mean/SD from the first 20
-//   3. persisted basis wins (auto lock, all_runs, manual)
+//   2. 20+ prior runs                -> lab mean/SD from ALL prior runs (refines; Michael 2026-10-09)
+//   3. a deliberate basis wins (all_runs, manual); a leftover 'auto' lock is ignored
 //   4. 20 identical values (SD 0)    -> stays on the manufacturer values
-//   5. lock: the run just entered never counts; lock fires on run 21, is
-//      idempotent and never overwrites a persisted basis
+//   5. nothing is frozen: run 21 uses runs 1-20, run 25 uses runs 1-24, no
+//      value is written to the lot, and voiding a run updates the numbers
 //   6. Plymouth shape: lab runs ~1.08, insert 1.29/0.35. On the manufacturer
 //      basis every run is below the mean and 10-x fires; on the lab's own
 //      basis the same runs are in control
@@ -24,7 +24,7 @@
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const Database = require("better-sqlite3");
-import { computeBasis, resolveBasis, lockEstablishedIfDue, sampleStats } from "../server/qcBasis";
+import { computeBasis, resolveBasis, sampleStats } from "../server/qcBasis";
 import { evaluateQcRun, westgardRulesAt, rulesForRun } from "../server/qcWestgard";
 
 let failures = 0;
@@ -46,21 +46,30 @@ check("1a. 0 prior runs: manufacturer mean/SD", b0.source === "manufacturer" && 
 const b19 = computeBasis(MFR, runs.slice(0, 19), cfg)!;
 check("1b. 19 prior runs: still manufacturer, label counts 19 of 20", b19.source === "manufacturer" && b19.runsOnLot === 19 && b19.label.includes("19 of 20"), b19.label);
 
-// 2. lab's own from the first 20
+// 2. lab's own numbers, refining: all prior accepted runs once there are 20
 const first20 = sampleStats(runs.slice(0, 20));
+const first24 = sampleStats(runs.slice(0, 24));
+const all25 = sampleStats(runs.slice(0, 25));
 const b20 = computeBasis(MFR, runs.slice(0, 20), cfg)!;
 const b25 = computeBasis(MFR, runs.slice(0, 25), cfg)!;
-check("2. 20+ prior runs: lab mean/SD from the FIRST 20, not a running window",
-  b20.source === "established" && near(b20.mean, first20.mean) && near(b20.sd, first20.sd) && near(b25.mean, first20.mean) && near(b25.sd, first20.sd),
+check("2a. 20 prior runs: lab mean/SD from those 20",
+  b20.source === "established" && near(b20.mean, first20.mean) && near(b20.sd, first20.sd) && b20.n === 20,
   `mean ${b20.mean.toFixed(4)} sd ${b20.sd.toFixed(4)}`);
+check("2b. 25 prior runs: lab mean/SD from ALL 25 (refines), not frozen at the first 20",
+  near(b25.mean, all25.mean) && near(b25.sd, all25.sd) && b25.n === 25 && !near(b25.sd, first20.sd) && b25.label.includes("updates with each accepted run"),
+  `first20 sd ${first20.sd.toFixed(4)} -> 25-run sd ${b25.sd.toFixed(4)} | ${b25.label}`);
 
-// 3. persisted basis wins
-const pAuto = computeBasis({ ...MFR, lab_mean: 1.1, lab_sd: 0.1, lab_basis_n: 20, lab_basis_source: "auto", lab_basis_locked_at: "2026-10-08T00:00:00Z" }, [], cfg)!;
+// 3. a deliberate basis wins; a leftover automatic lock does not
+const pAutoNoRuns = computeBasis({ ...MFR, lab_mean: 1.1, lab_sd: 0.1, lab_basis_n: 20, lab_basis_source: "auto", lab_basis_locked_at: "2026-10-08T00:00:00Z" }, [], cfg)!;
+const pAutoRuns = computeBasis({ ...MFR, lab_mean: 1.1, lab_sd: 0.1, lab_basis_n: 20, lab_basis_source: "auto" }, runs, cfg)!;
 const pAll = computeBasis({ ...MFR, lab_mean: 1.09, lab_sd: 0.12, lab_basis_n: 33, lab_basis_source: "all_runs" }, runs, cfg)!;
 const pMan = computeBasis({ ...MFR, lab_mean: 1.0, lab_sd: 0.2, lab_basis_source: "manual" }, runs, cfg)!;
-check("3. a persisted basis wins over the automatic one (auto, all_runs, manual)",
-  pAuto.persisted && pAuto.mean === 1.1 && pAll.mean === 1.09 && pAll.label.includes("from 33 runs") && pMan.mean === 1.0 && pMan.label.includes("entered by the lab"),
-  `${pAuto.label} | ${pAll.label} | ${pMan.label}`);
+check("3a. a leftover 'auto' lock is ignored: no runs -> manufacturer; 25 runs -> refining cumulative",
+  pAutoNoRuns.source === "manufacturer" && !pAutoRuns.persisted && near(pAutoRuns.mean, all25.mean),
+  `${pAutoNoRuns.label} | ${pAutoRuns.label}`);
+check("3b. a deliberate basis still wins (re-established from all runs, or entered by the lab)",
+  pAll.persisted && pAll.mean === 1.09 && pAll.label.includes("from 33 runs") && pMan.persisted && pMan.mean === 1.0 && pMan.label.includes("entered by the lab"),
+  `${pAll.label} | ${pMan.label}`);
 
 // 4. zero spread does not become a basis
 const flat = computeBasis(MFR, Array(20).fill(1.1), cfg)!;
@@ -81,27 +90,26 @@ db.prepare("INSERT INTO qc_control_lots (id, lab_id, analyte, mfr_mean, mfr_sd, 
 const add = (i: number, v: number) => Number(db.prepare("INSERT INTO qc_results (lab_id, control_lot_id, result_value, result_date) VALUES (?, 1, ?, ?)")
   .run(LAB, v, `2026-06-${String(i + 1).padStart(2, "0")}`).lastInsertRowid);
 const evals: any[] = [];
-for (let i = 0; i < 21; i++) {
+for (let i = 0; i < 25; i++) {
   const id = add(i, runs[i]);
   const e = evaluateQcRun(db, LAB, 1, id, 10, 7);
-  const lot = db.prepare("SELECT lab_mean FROM qc_control_lots WHERE id = 1").get() as any;
-  evals.push({ id, basis: e.basis, violations: e.violations.map(v => v.rule_code), lockedAfter: lot.lab_mean != null });
+  evals.push({ id, basis: e.basis, violations: e.violations.map(v => v.rule_code) });
 }
-check("5a. runs 1-20 judged on the manufacturer basis; run 21 on the lab's own",
+check("5a. runs 1-20 judged on the manufacturer basis; run 21 on the lab's own (runs 1-20)",
   evals.slice(0, 20).every(e => e.basis.source === "manufacturer") && evals[20].basis.source === "established" && near(evals[20].basis.mean, first20.mean),
   `run21 basis ${evals[20].basis.label}`);
-check("5b. no lock while the 20th run is the one just entered; lock on run 21 from the first 20",
-  !evals[19].lockedAfter && evals[20].lockedAfter);
-const locked = db.prepare("SELECT lab_mean, lab_sd, lab_basis_n, lab_basis_source FROM qc_control_lots WHERE id = 1").get() as any;
-check("5c. locked values = first 20, source auto, n 20",
-  near(locked.lab_mean, first20.mean) && near(locked.lab_sd, first20.sd) && locked.lab_basis_n === 20 && locked.lab_basis_source === "auto");
+check("5b. run 25 is judged on runs 1-24: the numbers kept refining",
+  near(evals[24].basis.mean, first24.mean) && near(evals[24].basis.sd, first24.sd) && evals[24].basis.n === 24,
+  `run25 basis ${evals[24].basis.label}`);
+const lotRow = db.prepare("SELECT lab_mean, lab_sd, lab_basis_source FROM qc_control_lots WHERE id = 1").get() as any;
+check("5c. nothing is written to the lot (no automatic freeze)", lotRow.lab_mean == null && lotRow.lab_sd == null && lotRow.lab_basis_source == null);
 db.prepare("UPDATE qc_results SET voided_at = '2026-10-08' WHERE id = ?").run(evals[0].id);
 const afterVoid = resolveBasis(db, LAB, 1)!;
-check("5d. voiding an early run does not move the locked mean", near(afterVoid.mean, first20.mean) && afterVoid.persisted);
+const without1 = sampleStats(runs.slice(1, 25));
+check("5d. voiding a run updates the numbers (only accepted, non-voided runs count)", near(afterVoid.mean, without1.mean) && near(afterVoid.sd, without1.sd) && afterVoid.n === 24);
 db.prepare("UPDATE qc_control_lots SET lab_mean = 1.0, lab_sd = 0.2, lab_basis_source = 'manual' WHERE id = 1").run();
-const relock = lockEstablishedIfDue(db, LAB, 1);
-const manualKept = db.prepare("SELECT lab_mean, lab_basis_source FROM qc_control_lots WHERE id = 1").get() as any;
-check("5e. lock is idempotent and never overwrites a persisted basis", relock === null && manualKept.lab_mean === 1.0 && manualKept.lab_basis_source === "manual");
+const manualWins = resolveBasis(db, LAB, 1)!;
+check("5e. an entered (manual) basis on the lot is used as-is", manualWins.persisted && manualWins.mean === 1.0 && manualWins.sd === 0.2);
 
 // 6. Plymouth shape: the same 10 runs on each basis
 const ten = runs.slice(10, 20);

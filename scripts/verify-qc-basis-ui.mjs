@@ -60,7 +60,9 @@ for (const [tag, lab] of Object.entries(labs)) {
     const card = chart.locator("xpath=ancestor::div[contains(@class,'rounded')][1]");
     await (await card.count() ? card : chart).screenshot({ path: `${OUT}/qc_basis_${tag}_${mode}.png` });
     if (tag === "A") {
-      check(`A/${mode}: chart says it is on the lab's established numbers`, /^Lab established mean 1\.081, SD 0\.080/.test(label) && lotBasis.includes("Lab established mean 1.081"), label);
+      // 21 runs on the lot: the lab's numbers keep refining past 20 (Michael 2026-10-09), so the
+      // chart shows all 21 runs (1.082 / 0.079), not the first 20 (1.081 / 0.080).
+      check(`A/${mode}: chart says it is on the lab's own numbers, refined over all 21 runs`, /^Lab established mean 1\.082, SD 0\.079 \(from 21 runs; updates with each accepted run\)/.test(label) && lotBasis.includes("Lab established mean 1.082"), label);
       check(`A/${mode}: manufacturer mean drawn as a line; low/high named off-chart`,
         refs.some((t) => /^Mfr mean 1\.29$/.test(t.trim())) && refs.some((t) => /Mfr low 0\.590 \(below chart/.test(t)) && refs.some((t) => /Mfr high 1\.99 \(above chart/.test(t)), JSON.stringify(refs));
     } else {
