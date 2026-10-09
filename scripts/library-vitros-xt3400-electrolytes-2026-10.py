@@ -5,16 +5,17 @@
    parsed cell by cell): 47 records, all MODERATE, test system "Ortho Clinical
    Diagnostics VITROS XT 3400 Chemistry System" (documents CR200111 / CR200364 /
    CR210390). Source rows are committed at scripts/data/fda_clia_vitros_xt3400_2026-10-09.json.
-   Analyte names are the FDA's own (the vocabulary the other FDA-built entries use);
-   complexity is the FDA categorization, never inferred.
-2. REGROUP electrolytes on the three other entries rebuilt 2026-05-07, which filed
-   them under General Chemistry: Abbott ARCHITECT c4000, Siemens ADVIA 2400,
-   Siemens Dimension Vista 1000T. Specialty label only: names and complexity are
-   unchanged (renaming would leave duplicates on lab maps that already saved them).
-   The Electrolytes group is the 2026-03-29 rule (89333b03): calcium, phosphorus,
-   sodium, potassium, magnesium, chloride, total CO2.
-The VITROS 4600 entry is NOT touched here: FDA has no native record list for it
-(only third-party reagents), so its source is a separate decision.
+   Analyte names are the FDA's own; complexity is the FDA categorization, never inferred.
+2. RETURN ELECTROLYTES TO GENERAL CHEMISTRY (Michael, 2026-10-09: "We separated
+   electrolytes from general chemistry at the time of creation. Now I see that that
+   causes more problems than it solves."). The 2026-03-29 split (89333b03) filed
+   calcium, phosphorus, sodium, potassium, magnesium, chloride and total CO2 under an
+   "Electrolytes" specialty on some entries but not others, which is why the VITROS
+   4600's Electrolytes group showed 2 tests while its sodium/potassium/chloride sat
+   in General Chemistry. Every "Electrolytes" test in the library becomes "General
+   Chemistry". Specialty label only: names and complexity are unchanged.
+The VITROS 4600 entry's own menu is NOT rebuilt here (separate change, sourced
+from the FDA CLIA data).
 
 Usage: python scripts/library-vitros-xt3400-electrolytes-2026-10.py [--verify]
 """
@@ -26,11 +27,6 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LIB = os.path.join(ROOT, "client", "src", "lib", "fdaInstrumentData.json")
 SRC = os.path.join(ROOT, "scripts", "data", "fda_clia_vitros_xt3400_2026-10-09.json")
 KEY = "Ortho VITROS XT 3400"
-REGROUP = ["Abbott ARCHITECT c4000", "Siemens ADVIA 2400", "Siemens Dimension Vista 1000T"]
-ELECTROLYTE_NAMES = {
-    "sodium", "potassium", "chloride", "magnesium", "phosphorus",
-    "calcium", "calcium, total", "carbon dioxide", "carbon dioxide, total (co2)",
-}
 FDA_SPECIALTY = {"General Chemistry": "General Chemistry", "Toxicology / TDM": "Toxicology", "General Immunology": "General Immunology"}
 
 
@@ -38,27 +34,27 @@ def build_xt3400(rows):
     tests = {}
     for r in rows:
         name = r["analyte"].strip()
-        spec = "Electrolytes" if name.lower() in ELECTROLYTE_NAMES else FDA_SPECIALTY[r["specialty"]]
         cx = r["complexity"].upper()
         assert cx in ("WAIVED", "MODERATE", "HIGH"), r
         if name in tests:
             assert tests[name]["complexity"] == cx, ("conflicting FDA complexity", name)
             continue
-        tests[name] = {"complexity": cx, "specialty": spec}
+        tests[name] = {"complexity": cx, "specialty": FDA_SPECIALTY[r["specialty"]]}
     return {"vendor": "QuidelOrtho", "category": "Chemistry", "testCount": len(tests), "tests": tests, "menuLastVerifiedAt": "2026-10-09"}
 
 
 def apply(lib, rows):
-    lib[KEY] = build_xt3400(rows)
-    moved = {}
-    for name in REGROUP:
+    merged = {}
+    for name, entry in lib.items():
         n = 0
-        for analyte, t in lib[name]["tests"].items():
-            if analyte.lower() in ELECTROLYTE_NAMES and t.get("specialty") != "Electrolytes":
-                t["specialty"] = "Electrolytes"
+        for t in entry["tests"].values():
+            if t.get("specialty") == "Electrolytes":
+                t["specialty"] = "General Chemistry"
                 n += 1
-        moved[name] = n
-    return moved
+        if n:
+            merged[name] = n
+    lib[KEY] = build_xt3400(rows)
+    return merged
 
 
 def verify(lib, rows):
@@ -67,20 +63,17 @@ def verify(lib, rows):
         nonlocal fails
         print(("PASS" if ok else "FAIL"), label, detail)
         fails += 0 if ok else 1
+    left = [(n, a) for n, e in lib.items() for a, t in e["tests"].items() if t.get("specialty") == "Electrolytes"]
+    check("no library test is filed under Electrolytes", not left, str(left[:5]))
     e = lib.get(KEY)
     check("XT 3400 entry exists", e is not None)
     if e:
         fda = {r["analyte"].strip(): r["complexity"].upper() for r in rows}
         check("XT 3400 has every FDA record (47)", set(e["tests"]) == set(fda), f"{len(e['tests'])} tests")
         check("XT 3400 complexity equals the FDA value for every test", all(e["tests"][a]["complexity"] == c for a, c in fda.items()))
-        lytes = sorted(a for a, t in e["tests"].items() if t["specialty"] == "Electrolytes")
-        check("XT 3400 electrolytes grouped (Na, K, Cl, Ca, CO2, Mg, Phos)", len(lytes) == 7, str(lytes))
+        lytes = ["Sodium", "Potassium", "Chloride", "Calcium, total", "Carbon dioxide, total (CO2)", "Magnesium", "Phosphorus"]
+        check("XT 3400 electrolytes are under General Chemistry", all(e["tests"][a]["specialty"] == "General Chemistry" for a in lytes))
         check("XT 3400 testCount matches", e["testCount"] == len(e["tests"]))
-    for name in REGROUP:
-        t = lib[name]["tests"]
-        stray = [a for a, v in t.items() if a.lower() in ELECTROLYTE_NAMES and v["specialty"] != "Electrolytes"]
-        check(f"{name}: no electrolyte left under another group", not stray, str(stray))
-        check(f"{name}: has an Electrolytes group", any(v["specialty"] == "Electrolytes" for v in t.values()))
     print("ALL PASS" if fails == 0 else f"{fails} FAILURE(S)")
     return fails
 
@@ -90,14 +83,16 @@ def main():
     lib = json.load(open(LIB, encoding="utf-8"))
     if "--verify" in sys.argv:
         sys.exit(1 if verify(lib, rows) else 0)
-    before = {n: json.dumps(lib[n], sort_keys=True) for n in lib if n not in REGROUP and n != KEY}
-    moved = apply(lib, rows)
-    after = {n: json.dumps(lib[n], sort_keys=True) for n in lib if n not in REGROUP and n != KEY}
-    assert before == after, "an entry outside the intended four changed"
+    # Guard: apart from the new entry, only specialty labels may change.
+    def shape(l):
+        return {n: {a: (t.get("complexity"), t.get("specialty") if t.get("specialty") != "Electrolytes" else "General Chemistry") for a, t in e["tests"].items()} for n, e in l.items() if n != KEY}
+    expected = shape(lib)
+    merged = apply(lib, rows)
+    assert shape(lib) == expected, "something other than the Electrolytes label changed"
     with open(LIB, "w", encoding="utf-8") as f:
         json.dump(lib, f, ensure_ascii=False, indent=2)
         f.write("\n")
-    print("added", KEY, "with", lib[KEY]["testCount"], "tests; electrolytes regrouped:", moved)
+    print(f"added {KEY} with {lib[KEY]['testCount']} tests; Electrolytes -> General Chemistry in {len(merged)} entries ({sum(merged.values())} tests)")
 
 
 if __name__ == "__main__":

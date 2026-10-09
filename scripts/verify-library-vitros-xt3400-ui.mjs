@@ -4,7 +4,8 @@
 // creates a map, so never point it at production). Usage:
 //   PW_BASE=http://localhost:5147 SCRATCH_DB=<scratch db> OUT=<dir> node scripts/verify-library-vitros-xt3400-ui.mjs
 // On the VeritaMap build page, searching "XT 3400" offers "Ortho VITROS XT 3400"
-// (QuidelOrtho, 47 tests, from the FDA CLIA records). Light + dark shots.
+// (QuidelOrtho, 47 tests, from the FDA CLIA records); once added, its electrolytes
+// sit under General Chemistry and there is no Electrolytes group. Light + dark shots.
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { chromium } = require("@playwright/test");
@@ -43,8 +44,32 @@ for (const mode of ["light", "dark"]) {
   const visible = await result.isVisible().catch(() => false);
   const text = visible ? (await result.innerText()).replace(/\s+/g, " ") : "(no result)";
   check(`${mode}: searching "XT 3400" offers Ortho VITROS XT 3400 with 47 tests`, visible && /47 tests/.test(text) && /QuidelOrtho/.test(text), text);
-  const box = search.locator("xpath=ancestor::div[contains(@class,'rounded')][1]");
-  await (await box.count() ? box : page).screenshot({ path: `${OUT}/library_xt3400_${mode}.png` });
+  if (mode === "light") {
+    // Add it to the scratch map and read its groups: electrolytes sit in General
+    // Chemistry, and there is no Electrolytes group (Michael, 2026-10-09).
+    await result.click();
+    await page.getByRole("button", { name: /^Add Instrument$/ }).click();
+    await page.waitForTimeout(2000);
+    // The rebuilt VITROS 4600 (BUG-005 part 2): 101 tests, every FDA record for the 4600.
+    await search.fill("VITROS 4600");
+    await page.waitForTimeout(500);
+    const r4600 = page.locator("button", { hasText: "Ortho VITROS 4600" }).first();
+    const t4600 = (await r4600.isVisible().catch(() => false)) ? (await r4600.innerText()).replace(/\s+/g, " ") : "(no result)";
+    check("searching VITROS 4600 offers the rebuilt entry with 101 tests", /101 tests/.test(t4600), t4600);
+    await r4600.click();
+    await page.getByRole("button", { name: /^Add Instrument$/ }).click();
+    await page.waitForTimeout(2000);
+    await page.getByRole("button", { name: /Next: Select Tests/ }).click();
+    await page.waitForTimeout(2500);
+    const groups = await page.locator("span.uppercase.tracking-wide").allInnerTexts();
+    const names = groups.map((g) => g.trim().toLowerCase());
+    check("after adding: a General Chemistry group, no Electrolytes group", names.includes("general chemistry") && !names.includes("electrolytes"), JSON.stringify([...new Set(names)]));
+    check("after adding: Sodium is listed", await page.getByText("Sodium", { exact: true }).first().isVisible().catch(() => false));
+    await page.screenshot({ path: `${OUT}/library_xt3400_added_${mode}.png`, fullPage: false });
+  } else {
+    const box = search.locator("xpath=ancestor::div[contains(@class,'rounded')][1]");
+    await (await box.count() ? box : page).screenshot({ path: `${OUT}/library_xt3400_${mode}.png` });
+  }
   await page.close();
 }
 await browser.close();
