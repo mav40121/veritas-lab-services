@@ -191,7 +191,7 @@ export const cliaAnalytes: CliaAnalyte[] = [
   {
     id: "d-rho-typing",
     name: "D (Rho) Typing",
-    aliases: ["Rh typing", "Rh", "D antigen", "Rh factor"],
+    aliases: ["Rh typing", "Rh", "D antigen", "Rh factor", "Rh type", "Rh(D) type", "Rh(D) typing", "D typing", "D type"],
     specialty: "Immunohematology",
     subspecialty: "Immunohematology",
     tier: "regulated",
@@ -209,7 +209,7 @@ export const cliaAnalytes: CliaAnalyte[] = [
   {
     id: "compatibility-testing",
     name: "Compatibility Testing",
-    aliases: ["crossmatch", "Crossmatch IS", "Crossmatch AHG", "type and crossmatch", "T&C"],
+    aliases: ["crossmatch", "Crossmatch IS", "Crossmatch AHG", "type and crossmatch", "T&C", "immediate spin crossmatch", "IS crossmatch", "AHG crossmatch", "crossmatch compatibility testing", "donor-recipient compatibility"],
     specialty: "Immunohematology",
     subspecialty: "Immunohematology",
     tier: "regulated",
@@ -1158,6 +1158,49 @@ export const cliaAnalytes: CliaAnalyte[] = [
   },
 
   // ─── UNREGULATED - Commonly enrolled by labs ─────────────────────────────
+  // Blood bank and coagulation tests that are NOT on the 42 CFR 493.959 / 493.941
+  // lists (2026-10-09, bug 6). Listed so the coverage map can say "not regulated"
+  // from the reference instead of guessing from complexity.
+  {
+    id: "direct-antiglobulin-test",
+    name: "Direct Antiglobulin Test (DAT)",
+    aliases: ["DAT", "direct antiglobulin test", "direct Coombs", "DAT anti-IgG", "DAT anti-IgG/anti-C3d", "DAT polyspecific"],
+    specialty: "Immunohematology",
+    subspecialty: "Immunohematology",
+    tier: "unregulated",
+    ptCategory: "Blood Bank / Immunohematology",
+    notes: "Not a regulated analyte under 42 CFR 493 Subpart I. Verify its accuracy at least twice a year (42 CFR 493.1236(c)(1)).",
+  },
+  {
+    id: "rbc-antigen-typing",
+    name: "RBC Antigen Typing (other than ABO and D)",
+    aliases: ["phenotyping", "antigen typing", "red cell phenotyping", "RBC phenotyping", "RBC antigen type other than A or B"],
+    specialty: "Immunohematology",
+    subspecialty: "Immunohematology",
+    tier: "unregulated",
+    ptCategory: "Blood Bank / Immunohematology",
+    notes: "Not a regulated analyte under 42 CFR 493 Subpart I. Verify its accuracy at least twice a year (42 CFR 493.1236(c)(1)).",
+  },
+  {
+    id: "fetal-rbc-screen",
+    name: "Fetal RBC Screen (fetomaternal hemorrhage)",
+    aliases: ["fetal screen", "fetal bleed screen", "FMH screen", "rosette test", "fetal RBCs - maternal blood"],
+    specialty: "Immunohematology",
+    subspecialty: "Immunohematology",
+    tier: "unregulated",
+    ptCategory: "Blood Bank / Immunohematology",
+    notes: "Not a regulated analyte under 42 CFR 493 Subpart I. Verify its accuracy at least twice a year (42 CFR 493.1236(c)(1)).",
+  },
+  {
+    id: "heparin-anti-xa",
+    name: "Heparin (anti-Xa)",
+    aliases: ["heparin", "anti-Xa", "heparin anti-Xa", "unfractionated heparin", "low molecular weight heparin", "UFH", "LMWH"],
+    specialty: "Hematology",
+    subspecialty: "Coagulation",
+    tier: "unregulated",
+    ptCategory: "Coagulation",
+    notes: "Not a regulated analyte under 42 CFR 493 Subpart I. Verify its accuracy at least twice a year (42 CFR 493.1236(c)(1)).",
+  },
   {
     id: "urinalysis-microscopic",
     name: "Urinalysis (microscopic)",
