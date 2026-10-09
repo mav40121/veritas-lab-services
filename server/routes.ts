@@ -10448,6 +10448,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (role === "admin" && !isLabOwner(req.scope)) {
       return res.status(403).json({ error: "Only the owner can invite a member as admin" });
     }
+    // Only the owner can designate the Medical Director (bug 3, 2026-10-09). The
+    // Make-medical-director route has been owner-only since 2026-10-03, but this
+    // invite path wrote labs.medical_director_email for an admin too, silently
+    // replacing the current director.
+    if (isMd && !isLabOwner(req.scope)) {
+      return res.status(403).json({ error: "Only the owner can designate the medical director" });
+    }
 
     const sqlite = (db as any).$client;
     const lab = sqlite.prepare("SELECT id, owner_user_id, lab_name FROM labs WHERE id = ?").get(req.scope.labId) as any;

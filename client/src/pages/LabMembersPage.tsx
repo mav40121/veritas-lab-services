@@ -384,7 +384,7 @@ export default function LabMembersPage() {
                   <select id="invite-role" value={inviteRole} onChange={e => setInviteRole(e.target.value as "admin" | "staff" | "medical_director")} className="w-full h-10 border border-input bg-background rounded-md px-3 text-sm" data-testid="invite-role-select">
                     <option value="staff">Staff (read and sign)</option>
                     <option value="admin" disabled={!isOwner}>Admin / active{!isOwner ? " (owner only)" : ""}</option>
-                    <option value="medical_director">Medical Director (free)</option>
+                    <option value="medical_director" disabled={!isOwner}>Medical Director (free){!isOwner ? " (owner only)" : ""}</option>
                   </select>
                 </div>
                 <div className="flex items-end">
@@ -411,7 +411,7 @@ export default function LabMembersPage() {
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Three kinds of access. Admin / active seats are your writers: they create studies, upload policies, and enter or review data, and they count against your tier's active-seat cap. Staff seats are read and sign: bench staff who read and sign policies, record QC, and take inventory. They draw from your Staff Portal band, not your active seats, so adding them does not use an active seat. Medical Director is one free seat and is the person VeritaPolicy approvals and QC co-sign route to. You can also set or change the Medical Director on any existing member in the table below, the owner included.
+              Three kinds of access. Admin / active seats are your writers: they create studies, upload policies, and enter or review data, and they count against your tier's active-seat cap. Staff seats are read and sign: bench staff who read and sign policies, record QC, and take inventory. They draw from your Staff Portal band, not your active seats, so adding them does not use an active seat. Medical Director is one free seat and is the person VeritaPolicy approvals and QC co-sign route to. The owner can also set or change the Medical Director on any existing member in the table below, the owner included.
             </p>
           </CardContent>
         </Card>
@@ -519,8 +519,10 @@ export default function LabMembersPage() {
                           )}
                           {/* Medical Director is an additive designation (one free seat),
                               not a role swap, so it is available on ANY member row, the
-                              owner included. */}
-                          {canManage && (
+                              owner included. Designating the director is an OWNER action
+                              (bug 3, 2026-10-09; the server route has been owner-only since
+                              2026-10-03), so admins see the badge but not the buttons. */}
+                          {isOwner && (
                             isMedicalDirector(m.email) ? (
                               <Button size="sm" variant="ghost" data-testid="clear-md-btn" onClick={() => mdMutation.mutate({ email: "", name: "" })} disabled={mdMutation.isPending} title="Remove this person as the lab's Medical Director">
                                 <Stethoscope size={12} className="mr-1" /> Clear medical director
@@ -591,7 +593,7 @@ export default function LabMembersPage() {
                               <RotateCw size={12} className="mr-1" /> Reissue
                             </Button>
                           )}
-                          {canManage && (
+                          {isOwner && (
                             isMedicalDirector(inv.seat_email) ? (
                               <Button size="sm" variant="ghost" onClick={() => mdMutation.mutate({ email: "", name: "" })} disabled={mdMutation.isPending} title="Remove this pending invite as the lab's Medical Director">
                                 <Stethoscope size={12} className="mr-1" /> Clear medical director
