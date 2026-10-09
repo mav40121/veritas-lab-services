@@ -266,6 +266,8 @@ def main():
             bucket = "review: fallback match"
         elif cat in PARAMETER_LEVEL:
             bucket = "review: parameter-level"
+        elif re.search(r"\((?![^)]*\bmodule\))[^)]*\)", key, re.I):
+            bucket = "review: subset or variant entry"
         elif coverage < 0.5:
             bucket = "review: library menu differs from FDA"
         elif coverage < 0.8:
@@ -276,6 +278,8 @@ def main():
                 "none": "No FDA test system found under this name. Left as is until a source is identified."}[match]
         if bucket == "review: microbiology/molecular":
             note = "FDA lists microbiology and molecular systems by organism or panel, not by our panel names; needs its own mapping."
+        elif bucket == "review: subset or variant entry":
+            note = "The library name carries a qualifier (for example '(Toxicology)'), so this entry may hold only part of the analyzer's menu. FDA's full menu is shown for review; it is not written to this entry."
         elif bucket == "review: parameter-level":
             note = (f"FDA lists the test (CBC, WBC differential, blood gases, urine sediment); the library lists each reported parameter. "
                     f"Library parameters are kept. Adds need a name check so FDA's 'Hemoglobin' is not added beside the library's 'HGB'.")
@@ -283,6 +287,15 @@ def main():
             note = f"Only {coverage:.0%} of the library's tests appear in FDA's records for this analyzer. The library entry itself may be wrong (tests from a different analyzer)."
         elif bucket == "review: low coverage":
             note = f"FDA's records under these names cover {coverage:.0%} of the library's tests; the analyzer may be listed under other names (combination or family systems)."
+        name_map[key].update({
+            "bucket": bucket,
+            "proposed_adds": [{"analyte": x, "complexity": fda[x]["complexity"], "specialty": fda[x]["specialty"], "evidence": ev(x, 3)}
+                              for x in sorted(adds) if x not in conflicts],
+            "held_adds_fda_disagrees": [{"analyte": x, "complexity": "/".join(sorted(conflicts[x])), "evidence": ev(x, 10)}
+                                        for x in sorted(adds) if x in conflicts],
+            "proposed_complexity": [{"analyte": t, "from": o, "to": n, "evidence": ev(fda_norm[re.sub(r"\s+", " ", t.lower()).strip()])}
+                                    for t, o, n in cx_changes],
+        })
         summary.append([key, vendor, bucket, len(libt), len(fda) if systems else "", len(systems), len(recs), match,
                         len(adds), len(removes), len(renames), len(cx_changes), len(sp_changes), note])
 
