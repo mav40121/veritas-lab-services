@@ -219,18 +219,23 @@ const CFR_MAP: Record<string, string> = {
   Immunohematology: "§493.959",
   Urinalysis: "§493.931",
   "Blood Gas": "§493.931",
-  Microbiology: "§493.945",
+  Microbiology: "§§493.911-493.919",
   // Catalog specialty names (kept in sync with server/veritamapData.ts CFR_MAP).
   Chemistry: "§493.931",
   Electrolytes: "§493.931",
   Cardiac: "§493.931",
   "Point of Care": "§493.931",
   Immunology: "§493.927",
-  "Syphilis Serology": "§493.927",
+  "Syphilis Serology": "§493.923",
   "Blood Bank": "§493.959",
   Hemostasis: "§493.941",
-  Bacteriology: "§493.945",
-  Virology: "§493.945",
+  Bacteriology: "§493.911",
+  Mycobacteriology: "§493.913",
+  Mycology: "§493.915",
+  Parasitology: "§493.917",
+  Virology: "§493.919",
+  Cytology: "§493.945",
+  Histopathology: "",
 };
 
 function getCFR(specialty: string): string {

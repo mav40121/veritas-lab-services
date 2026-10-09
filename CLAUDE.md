@@ -193,7 +193,7 @@ A clean grep is a required step in the QC checklist, not optional. Visual inspec
 - ONE signature block on all PDFs: "LABORATORY DIRECTOR OR DESIGNEE REVIEW" with Accepted / Not accepted checkboxes + Print Name/Initials/Date.
 - NO separate "Accepted by" block — it is redundant.
 - Header must say "LABORATORY DIRECTOR OR DESIGNEE REVIEW" — never just "LABORATORY DIRECTOR REVIEW".
-- CFR by specialty: Chemistry = §493.931, Hematology = §493.941, Immunohematology = §493.959, Microbiology = §493.945, default = §493.931. (§493.927 is General Immunology, not Hematology. Full specialty→section map: server/veritamapData.ts CFR_MAP.)
+- CFR by specialty (42 CFR 493 Subpart I headings, eCFR as of 2026-10-01): Routine Chemistry = §493.931, Endocrinology = §493.933, Toxicology = §493.937, Hematology = §493.941, Immunohematology = §493.959, General Immunology = §493.927, Syphilis Serology = §493.923, Microbiology = §§493.911-493.919 (Bacteriology §493.911, Mycobacteriology §493.913, Mycology §493.915, Parasitology §493.917, Virology §493.919), default = §493.931. §493.945 is Cytology (gynecologic examinations) ONLY, never microbiology (it was wrongly listed here as Microbiology until 2026-10-09). Histopathology has no Subpart I section. Full specialty→section map: server/veritamapData.ts CFR_MAP, pinned by scripts/verify-cfr-specialty-map.mjs.
 - Cite ADLM-recommended internal goal alongside CLIA TEa where applicable.
 
 ### VeritaCheck labels
