@@ -14,6 +14,7 @@
 
 import { getBrowser } from "./pdfReport";
 import { stampPdfAuthor } from "./pdfMeta";
+import { unitLabel } from "@shared/units";
 
 // On the dedicated VeritaStock deployment, suppress CLIA on the order documents:
 // VeritaStock is an inventory product, not a CLIA-regulated compliance tool, so
@@ -168,14 +169,14 @@ function groupByVendor(items: ReorderItem[]): Array<{ vendor: string; items: Reo
 // of truth in decorateInventoryItem (veritabench.ts), not duplicated here.
 //
 // Two display modes:
-//   - Multi-pack packaging (upu > 1): "{packs} {orderUnit}s ({delivered} {unit})"
+//   - Multi-pack packaging (upu > 1): "{packs} {orderUnit, plural} ({delivered} {unit, plural})"
 //     Example: cool reagent, target 60, on-hand 13, 24-per-box
 //              shortfall 47 -> 2 boxes -> 48 each delivered
 //              Display: "2 boxes (48 each)"
-//   - Single-unit packaging (upu == 1): "{packs} {orderUnit}s"
+//   - Single-unit packaging (upu == 1): "{packs} {orderUnit, plural}"
 //     Example: target 100, on-hand 30, 1-per-order_unit
-//              shortfall 70 -> 70 eachs
-//              Display: "70 eachs"
+//              shortfall 70 -> 70 each
+//              Display: "70 each" (unitLabel in shared/units.ts; it used to read "70 eachs")
 //   - Zero shortfall (already at/above target): "—"
 function suggestedOrderText(it: ReorderItem): string {
   const packs = it.suggested_order_packs || 0;
@@ -185,9 +186,9 @@ function suggestedOrderText(it: ReorderItem): string {
   const usageUnit = it.unit || "each";
   if (packs === 0) return "—";
   if (upu > 1) {
-    return `${packs} ${orderUnit}${packs === 1 ? "" : "s"} (${delivered} ${usageUnit})`;
+    return `${packs} ${unitLabel(orderUnit, packs)} (${delivered} ${unitLabel(usageUnit, delivered)})`;
   }
-  return `${packs} ${orderUnit}${packs === 1 ? "" : "s"}`;
+  return `${packs} ${unitLabel(orderUnit, packs)}`;
 }
 
 const escapeHtml = (s: string | null | undefined): string =>

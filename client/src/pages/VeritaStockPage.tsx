@@ -35,6 +35,7 @@ import BarcodeScannerModal from "@/components/BarcodeScannerModal";
 import InventoryCountWorkflow, { type CountItem } from "@/components/InventoryCountWorkflow";
 import { useToast } from "@/hooks/use-toast";
 import { toCsv, downloadCsv, type CsvColumn } from "@/lib/csvExport";
+import { unitLabel } from "@shared/units";
 
 interface InventoryItem {
   id: number;
@@ -399,7 +400,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
                   <ul className="mt-1 space-y-0.5 text-amber-900/90 dark:text-amber-200/90">
                     {olderLots.slice(0, 4).map((lot) => (
                       <li key={lot.id}>
-                        Lot {lot.lot_number || "(no lot #)"} expires {lot.expiration_date}, {lot.quantity_on_hand} {lot.usage_unit ?? "unit"}{lot.quantity_on_hand === 1 ? "" : "s"} on hand
+                        Lot {lot.lot_number || "(no lot #)"} expires {lot.expiration_date}, {lot.quantity_on_hand} {unitLabel(lot.usage_unit, lot.quantity_on_hand)} on hand
                       </li>
                     ))}
                     {olderLots.length > 4 && (
@@ -533,7 +534,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
                 <p className="text-xs text-muted-foreground">What you physically count on the shelf (each / box / case / pack / kit).</p>
               </div>
               <div className="space-y-1.5">
-                <Label>Pack Size ({form.usage_unit ?? "each"}s per {form.count_unit ?? form.order_unit ?? "each"})</Label>
+                <Label>Pack Size ({unitLabel(form.usage_unit ?? "each")} per {form.count_unit ?? form.order_unit ?? "each"})</Label>
                 <DecimalInput
                   integer
                   min={1}
@@ -584,7 +585,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
             <h4 className="text-sm font-semibold mb-3" style={{ color: "#01696F" }}>Consumption and Ordering</h4>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Burn Rate ({usageUnit}s/day)</Label>
+                <Label>Burn Rate ({unitLabel(usageUnit)}/day)</Label>
                 <DecimalInput value={form.burn_rate ?? 0} onChangeNumber={(n) => setForm({ ...form, burn_rate: n })} fallback={0} min={0} />
               </div>
               <div className="space-y-1.5">
@@ -603,8 +604,8 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
             {/* Calculated preview */}
             {burnRate > 0 && (
               <div className="mt-3 p-3 rounded-lg bg-muted/50 text-sm space-y-1">
-                <div>Par Level: <strong>{calcReorderPoint} {usageUnit}s</strong></div>
-                <div>Order-to Quantity: <strong>{calcOrderToQty} {usageUnit}s</strong></div>
+                <div>Par Level: <strong>{calcReorderPoint} {unitLabel(usageUnit, calcReorderPoint)}</strong></div>
+                <div>Order-to Quantity: <strong>{calcOrderToQty} {unitLabel(usageUnit, calcOrderToQty)}</strong></div>
               </div>
             )}
             {/* Learned-burn advisor: suggests a burn rate from ACTUAL draw-down
@@ -702,7 +703,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
             <h4 className="text-sm font-semibold mb-3" style={{ color: "#01696F" }}>Current Status</h4>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Quantity on Hand ({usageUnit}s)</Label>
+                <Label>Quantity on Hand ({unitLabel(usageUnit)})</Label>
                 <DecimalInput integer min={0} value={form.quantity_on_hand ?? 0} fallback={0} onChangeNumber={(n) => setForm({ ...form, quantity_on_hand: Math.max(0, n) })} data-testid="quantity-on-hand-input" />
               </div>
               <div className="space-y-1.5">
@@ -715,7 +716,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
                 flagging Reorder Now and is not re-ordered. */}
             <div className="grid grid-cols-3 gap-3 mt-3">
               <div className="space-y-1.5">
-                <Label>On Order ({usageUnit}s)</Label>
+                <Label>On Order ({unitLabel(usageUnit)})</Label>
                 <DecimalInput min={0} fallback={0} value={Number(form.on_order_qty ?? 0)} onChangeNumber={(qty) => {
                   // Entering a quantity auto-stamps the order-placed date (today) and
                   // an expected arrival of placed + programmed lead time, both still
@@ -745,7 +746,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
             </div>
             {(form.on_order_qty || 0) > 0 && (
               <div className="mt-2 text-xs font-mono text-muted-foreground" data-testid="inventory-position-note">
-                Inventory position: {((form.quantity_on_hand || 0) + (form.on_order_qty || 0)).toLocaleString()} {usageUnit}s on hand plus on order
+                Inventory position: {((form.quantity_on_hand || 0) + (form.on_order_qty || 0)).toLocaleString()} {unitLabel(usageUnit, (form.quantity_on_hand || 0) + (form.on_order_qty || 0))} on hand plus on order
               </div>
             )}
           </div>
@@ -1552,8 +1553,8 @@ export default function VeritaStockInventoryPage() {
         toast({
           title: "Stock received",
           description: d?.split_lot
-            ? `${receiveQty} ${receiveTarget.usage_unit}s stored as a new lot of ${receiveTarget.item_name}`
-            : `${receiveQty} ${receiveTarget.usage_unit}s moved into on-hand`,
+            ? `${receiveQty} ${unitLabel(receiveTarget.usage_unit, receiveQty)} stored as a new lot of ${receiveTarget.item_name}`
+            : `${receiveQty} ${unitLabel(receiveTarget.usage_unit, receiveQty)} moved into on-hand`,
         });
         loadItems();
         reloadExpired();
@@ -1582,7 +1583,7 @@ export default function VeritaStockInventoryPage() {
       if (res.ok) {
         const data = await res.json();
         const v = data?.write_off?.waste_value || 0;
-        toast({ title: "Written off", description: `${writeOffQty} ${writeOffTarget.usage_unit}s (${writeOffReason}), $${v.toFixed(2)} recorded as waste` });
+        toast({ title: "Written off", description: `${writeOffQty} ${unitLabel(writeOffTarget.usage_unit, writeOffQty)} (${writeOffReason}), $${v.toFixed(2)} recorded as waste` });
         loadItems();
         reloadExpired(); // pulling expired stock should clear it from the alert
       } else {
@@ -1627,7 +1628,7 @@ export default function VeritaStockInventoryPage() {
       }
       const data = await res.json();
       const v = data?.write_off?.waste_value ?? (it.quantity_on_hand || 0) * (it.unit_cost || 0);
-      toast({ title: "Expired lot removed", description: `${it.quantity_on_hand} ${it.usage_unit}s of ${it.item_name}${it.lot_number ? ` (lot ${it.lot_number})` : ""}, $${Number(v).toFixed(2)} recorded as waste` });
+      toast({ title: "Expired lot removed", description: `${it.quantity_on_hand} ${unitLabel(it.usage_unit, it.quantity_on_hand)} of ${it.item_name}${it.lot_number ? ` (lot ${it.lot_number})` : ""}, $${Number(v).toFixed(2)} recorded as waste` });
       loadItems();
       reloadExpired();
     } catch {
@@ -2006,7 +2007,7 @@ export default function VeritaStockInventoryPage() {
                   <li key={i} data-testid="expired-product-row">
                     <span className="font-medium">{p.item_name}</span>{": "}
                     {p.locations.slice(0, 4).map((loc, j) => (
-                      <span key={j}>{j > 0 ? ", " : ""}{loc.location_name || `Lab ${loc.lab_id}`} ({loc.quantity_on_hand.toLocaleString()} {loc.usage_unit || "unit"}{loc.quantity_on_hand === 1 ? "" : "s"}, exp {loc.expiration_date})</span>
+                      <span key={j}>{j > 0 ? ", " : ""}{loc.location_name || `Lab ${loc.lab_id}`} ({loc.quantity_on_hand.toLocaleString()} {unitLabel(loc.usage_unit, loc.quantity_on_hand)}, exp {loc.expiration_date})</span>
                     ))}
                     {p.locations.length > 4 ? `, +${p.locations.length - 4} more location${p.locations.length - 4 === 1 ? "" : "s"}` : ""}
                   </li>
@@ -2641,14 +2642,14 @@ export default function VeritaStockInventoryPage() {
                           const countQty = pack > 1 ? Math.round(item.quantity_on_hand / pack) : item.quantity_on_hand;
                           return (
                             <>
-                              {countQty.toLocaleString()} <span className="text-xs text-muted-foreground">{countUnit}{countQty === 1 ? "" : "s"}</span>
+                              {countQty.toLocaleString()} <span className="text-xs text-muted-foreground">{unitLabel(countUnit, countQty)}</span>
                               {pack > 1 && (
-                                <div className="text-[10px] text-muted-foreground">({item.quantity_on_hand.toLocaleString()} {item.usage_unit}s)</div>
+                                <div className="text-[10px] text-muted-foreground">({item.quantity_on_hand.toLocaleString()} {unitLabel(item.usage_unit, item.quantity_on_hand)})</div>
                               )}
                             </>
                           );
                         }
-                        return <>{item.quantity_on_hand.toLocaleString()} <span className="text-xs text-muted-foreground">{item.usage_unit}s</span></>;
+                        return <>{item.quantity_on_hand.toLocaleString()} <span className="text-xs text-muted-foreground">{unitLabel(item.usage_unit, item.quantity_on_hand)}</span></>;
                       })()}
                     </td>
                   )}
@@ -2656,7 +2657,7 @@ export default function VeritaStockInventoryPage() {
                     <td className="px-3 py-2 font-mono text-sm">
                       {(item.on_order_qty || 0) > 0 ? (
                         <>
-                          {(item.on_order_qty || 0).toLocaleString()} <span className="text-xs text-muted-foreground">{item.usage_unit}s</span>
+                          {(item.on_order_qty || 0).toLocaleString()} <span className="text-xs text-muted-foreground">{unitLabel(item.usage_unit, item.on_order_qty || 0)}</span>
                           {item.on_order_expected_date && (
                             <div className="text-[10px] text-muted-foreground">ETA {String(item.on_order_expected_date).slice(0, 10)}</div>
                           )}
@@ -2705,7 +2706,7 @@ export default function VeritaStockInventoryPage() {
                           size="icon"
                           className="h-7 w-7"
                           style={{ color: "#01696F" }}
-                          title={`Receive ${item.on_order_qty} ${item.usage_unit}s on order`}
+                          title={`Receive ${item.on_order_qty} ${unitLabel(item.usage_unit, item.on_order_qty)} on order`}
                           onClick={() => { setReceiveTarget(item); setReceiveQty(item.on_order_qty || 0); }}
                           disabled={!canRecord}
                           data-testid={`button-receive-${item.id}`}
@@ -2805,7 +2806,7 @@ export default function VeritaStockInventoryPage() {
                     <tr key={l.id} className="border-b last:border-0">
                       <td className="py-1.5 pr-3 font-mono text-xs">{l.lot_number || <span className="text-muted-foreground">(no lot #)</span>}</td>
                       <td className="py-1.5 pr-3">{l.expiration_date || <span className="text-muted-foreground">-</span>}{i === 0 && lotsData.length > 1 && <span className="ml-1.5 text-[10px] text-emerald-700">use first</span>}</td>
-                      <td className="py-1.5 text-right font-mono">{l.quantity.toLocaleString()} {lotsTarget?.usage_unit}s</td>
+                      <td className="py-1.5 text-right font-mono">{l.quantity.toLocaleString()} {unitLabel(lotsTarget?.usage_unit, l.quantity)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2859,7 +2860,7 @@ export default function VeritaStockInventoryPage() {
                 {expiredLotTarget && (
                   <ul className="list-disc pl-5 space-y-0.5">
                     <li>{expiredLotTarget.item_name}{expiredLotTarget.lot_number ? ` (lot ${expiredLotTarget.lot_number})` : ""}</li>
-                    <li>Quantity: {expiredLotTarget.quantity_on_hand} {expiredLotTarget.usage_unit}{(expiredLotTarget.quantity_on_hand || 0) === 1 ? "" : "s"}</li>
+                    <li>Quantity: {expiredLotTarget.quantity_on_hand} {unitLabel(expiredLotTarget.usage_unit, expiredLotTarget.quantity_on_hand || 0)}</li>
                     <li>Expiration: {expiredLotTarget.expiration_date}</li>
                     <li>Loss: {wasteMoney((expiredLotTarget.quantity_on_hand || 0) * (expiredLotTarget.unit_cost || 0))}</li>
                   </ul>
@@ -2901,12 +2902,12 @@ export default function VeritaStockInventoryPage() {
               <div className="text-sm">
                 <div className="font-medium">{receiveTarget.item_name}</div>
                 <div className="text-muted-foreground">
-                  {receiveTarget.on_order_qty} {receiveTarget.usage_unit}s on order
+                  {receiveTarget.on_order_qty} {unitLabel(receiveTarget.usage_unit, receiveTarget.on_order_qty)} on order
                   {receiveTarget.on_order_expected_date ? ` · ETA ${String(receiveTarget.on_order_expected_date).slice(0, 10)}` : ""}
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label>Quantity received ({receiveTarget.usage_unit}s)</Label>
+                <Label>Quantity received ({unitLabel(receiveTarget.usage_unit)})</Label>
                 <DecimalInput
                   value={receiveQty}
                   onChangeNumber={setReceiveQty}
@@ -2915,7 +2916,7 @@ export default function VeritaStockInventoryPage() {
                   data-testid="receive-qty-input"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Moves into on-hand. Remaining stays on order. New on-hand: {((receiveTarget.quantity_on_hand || 0) + receiveQty).toLocaleString()} {receiveTarget.usage_unit}s.
+                  Moves into on-hand. Remaining stays on order. New on-hand: {((receiveTarget.quantity_on_hand || 0) + receiveQty).toLocaleString()} {unitLabel(receiveTarget.usage_unit, (receiveTarget.quantity_on_hand || 0) + receiveQty)}.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -2983,7 +2984,7 @@ export default function VeritaStockInventoryPage() {
               <div className="text-sm">
                 <div className="font-medium">{writeOffTarget.item_name}</div>
                 <div className="text-muted-foreground">
-                  {writeOffTarget.quantity_on_hand} {writeOffTarget.usage_unit}s on hand
+                  {writeOffTarget.quantity_on_hand} {unitLabel(writeOffTarget.usage_unit, writeOffTarget.quantity_on_hand)} on hand
                   {writeOffTarget.unit_cost ? ` at $${writeOffTarget.unit_cost.toFixed(2)} each` : ""}
                 </div>
               </div>
@@ -3001,7 +3002,7 @@ export default function VeritaStockInventoryPage() {
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Quantity ({writeOffTarget.usage_unit}s)</Label>
+                  <Label>Quantity ({unitLabel(writeOffTarget.usage_unit)})</Label>
                   <DecimalInput
                     value={writeOffQty}
                     onChangeNumber={setWriteOffQty}
