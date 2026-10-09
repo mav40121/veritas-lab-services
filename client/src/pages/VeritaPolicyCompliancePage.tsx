@@ -234,8 +234,7 @@ export default function VeritaPolicyCompliancePage() {
           <h1 className="text-2xl font-bold">Compliance Dashboard</h1>
           <p className="text-sm text-muted-foreground">
             Per-manual coverage, overdue policies, pending reviews, and attestation rates for
-            this lab. Numbers refresh every minute. Phase 6B will add cron-fired email
-            reminders and auto-expire.
+            this lab. Numbers refresh every minute.
           </p>
         </div>
         <div className="flex items-center gap-2 no-print">

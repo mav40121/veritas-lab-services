@@ -590,7 +590,7 @@ update the /qa-sweep two-way matrix (staff admitted to lab reads, blocked from
 authoring). Pricing unchanged: the Staff band covers record and read.
 
 **Source:** Michael, 2026-10-08 ("why can't she see what an editor can see and just not have some of the functionality?"; "When different staff [see] settings different ways, errors happen"), from Mike Hiltunen's 2026-10-07 screenshot.
-**Status:** Open. Decided; build right after the VeritaQC basis rebuild (PR #1529) ships. Mike told 2026-10-08 that the same screens are coming and given www.veritaslabservices.com/staff-access for today.
+**Status:** Nearly done 2026-10-08. Live: Phase 2 server gates (#1533), Phase 1 staff land on My work (#1540), Staff Portal identity fix (#1541), Phase 3 staff see the editors' screens with setup locked (#1544), and /staff-access becomes My sign-offs inside the lab (#1547). Last piece: #1548 removes the now-callerless /api/staff-portal-session/qc and /inventory routes and makes unknown /api addresses return a JSON 404; it ships 2026-10-09 about 07:00 ET (Michael, Q22 "1"). Close after #1548 is live.
 
 ---
 
@@ -602,18 +602,7 @@ _(item #86 closed 2026-10-08; see C90 below)_
 
 ---
 
-### 87. VeritaCheck page: handleBuy is defined and never called
-
-**Effort:** XS
-**Importance:** Low. Either a purchase path lost its button or it is dead code.
-
-**What:** client/src/pages/VeritaCheckPage.tsx defines handleBuy (~line 373, Stripe
-checkout with the CLIA prompt for Clinic-and-up plans) and nothing calls it. Decide
-whether a per-study or plan purchase button on this page is supposed to use it; if
-not, remove it (dead-code rule).
-
-**Source:** #84 client audit, 2026-10-08 (read-only sub-agent pass over every useIsReadOnly site; confirmed by reading the code).
-**Status:** Fix in review 2026-10-08 (branch veritacheck-dead-buy): handleBuy, goToStripeCheckout, handleCliaCheckout, the CLIA lookup modal and its state removed; nothing on the page called them. Close after deploy.
+_(item #87 closed 2026-10-08; see C92 below)_
 
 ---
 
@@ -633,7 +622,24 @@ _(item #88 closed 2026-10-08; see C91 below)_
 
 ---
 
+### 90. Dead statement in db.ts: a roster "unique index" that can never be created
+
+**Effort:** XS (under an hour)
+**Importance:** Low. Dead code with no effect today; remove it so nobody builds on it.
+
+**What:** server/db.ts runs `CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_employees_user_id_unique ON staff_employees(user_id) WHERE user_id IS NOT NULL` inside a try/catch, written for the 2026-06-09 idea that user_id would hold the staffer's own login. staff_employees.user_id actually holds the account OWNER id on every row, and the boot seed inserts three roster rows under one owner before this line runs, so the CREATE always fails and the index exists nowhere (production, the dev database, or a database built from scratch). Proven 2026-10-08 with scripts/verify-90-roster-index.mjs on a fresh database: no index, and three Add Employee saves in one lab all succeed. Fix: delete the statement (dead-code rule). The roster-to-login link is staff_employees.login_user_id (#1553).
+
+**Source:** 2026-10-08, found reading db.ts while building the roster prompt (#1553). First written up as a disaster-recovery risk; a fresh-database test disproved that the same evening.
+**Status:** Open. Removal is built on branch roster-index-90 and waiting for a ship OK.
+---
+
 ## CLOSED (audit trail)
+
+### C92. VeritaCheck page: handleBuy defined and never called (was #87)
+
+**Effort:** was XS / **Importance:** Low.
+
+**Closure evidence:** PR #1543 (squash f87b86b7, merged 2026-10-08 15:18 ET; live in every deploy since, production on 1a2fae14 at close). Removed handleBuy, goToStripeCheckout, handleCliaCheckout, and the CLIA lookup modal (CLIALookupModal.tsx, 208 lines) with its state; nothing on the page called any of them. Receipt scripts/verify-87-veritacheck-page.mjs with docs/receipts/p87_free_pricing.png. The cleanup surfaced #89 (discount code shown as applied, then dropped), which stays open.
 
 ### C91. Plan gates written as blocklists, and an audit that could not see them (was #88)
 

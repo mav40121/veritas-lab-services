@@ -8,6 +8,7 @@
 // user's active memberships, enforced server-side.
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { unitLabel } from "@shared/units";
 import { Link, useParams } from "wouter";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
@@ -489,7 +490,7 @@ export default function VeritaStockEnterprisePage() {
                       );
                     })}
                     <td className="text-center p-3 text-muted-foreground">
-                      {Object.values(r.by_location).reduce((s, c) => s + c.count_on_hand, 0)} {r.count_unit}
+                      {Object.values(r.by_location).reduce((s, c) => s + c.count_on_hand, 0)} {unitLabel(r.count_unit, Object.values(r.by_location).reduce((s, c) => s + c.count_on_hand, 0))}
                     </td>
                     <td className="text-center p-2">
                       {transferReady && srcCell ? (
@@ -534,7 +535,7 @@ export default function VeritaStockEnterprisePage() {
                     <li key={l.key} className="py-2 flex items-center gap-3 text-sm">
                       <span className="flex-1">{l.item_name}</span>
                       <span className={l.over ? "text-red-600 font-medium" : ""}>
-                        {l.qty} {l.count_unit}{l.over ? ` (only ${l.sourceCount} available)` : ""}
+                        {l.qty} {unitLabel(l.count_unit, l.qty)}{l.over ? ` (only ${l.sourceCount} available)` : ""}
                       </span>
                       <button onClick={() => setQty(l.key, "")} aria-label={`Remove ${l.item_name}`} className="text-muted-foreground hover:text-foreground">
                         <X size={14} />
