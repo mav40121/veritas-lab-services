@@ -10,6 +10,7 @@ import { blockNonOperatorSeat } from "./seatAccess";
 import { isDelegationPosition, isDelegationComplexity, sanitizeResponsibilities, DELEGATION_CATALOG, DELEGATION_POSITIONS, DELEGATION_COMPLEXITIES } from "./directorDelegation";
 import { mayAttestAsDirectorOrDesignee, complexityForAnalyte, labHighestComplexity, isLabOwnerUser } from "./delegationGate";
 import { vlsContext, isVlsSupportUser, labAllowsVlsSupport, vlsSupportBlocked, recordVlsActivity } from "./vlsSupport";
+import { membersNotOnRoster, rosterLinkProblem } from "./rosterMembers";
 import { deriveAttestationStatus } from "./policyAttestationStatus";
 import { DEFAULT_TEMPLATES, REMINDER_TYPES, REMINDER_MERGE_FIELDS, type ReminderType } from "./policyReminderTemplate";
 import { resolveStudyAccess, consumeStudyCredit, isUnlimitedPlan } from "./studyCredits";
@@ -14144,10 +14145,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ── Medical Director Letter of Delegation (item 5, Phase 1) ──────────────
-  // A signable Letter of Delegation: the designated Medical Director toggles the
-  // delegable responsibilities (server/directorDelegation.ts catalog) and e-signs.
-  // Create / edit-draft / sign / revoke are MD-only; list, catalog and PDF are
-  // viewable by any lab member. No access gates change here; the QC co-sign and
+  // A signable Letter of Delegation: the delegable responsibilities
+  // (server/directorDelegation.ts catalog) are toggled on a draft, then the
+  // designated Medical Director e-signs it. 2026-10-08 (Michael): "Most medical
+  // directors do as little as possible. The admin director does everything, and
+  // usually tells the medical director where to sign." So the lab's owner or an
+  // admin (or the MD) PREPARES: create, edit and discard drafts. SIGN and REVOKE
+  // stay MD-only. List, catalog and PDF are viewable by any lab member. No access gates change here; the QC co-sign and
   // finding-closure gates will read these signed letters in Phase 2.
   const isDesignatedMd = (labId: number, userId: number): boolean => {
     const row = (db as any).$client.prepare(
@@ -14158,6 +14162,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(labId, userId);
     return !!row;
   };
+  const canPrepareDelegation = (req: any): boolean =>
+    isDesignatedMd(req.scope.labId, req.userId) || canManageLabMembers(req.scope);
+  const PREPARE_REFUSAL = "Only the lab's owner, an admin, or the medical director can prepare a letter of delegation.";
   const ddSafeParse = (s: any) => { try { const v = JSON.parse(s || "{}"); return v && typeof v === "object" ? v : {}; } catch { return {}; } };
   const ddAudit = (labId: number, userId: number, action: string, detail: string) => {
     try {
@@ -14168,7 +14175,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   };
 
   app.get("/api/labs/:labId/director-delegations/catalog", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    res.json({ positions: DELEGATION_POSITIONS, complexities: DELEGATION_COMPLEXITIES, catalog: DELEGATION_CATALOG, isMedicalDirector: isDesignatedMd(req.scope.labId, req.userId) });
+    const mdEmail = ((db as any).$client.prepare("SELECT medical_director_email FROM labs WHERE id = ?").get(req.scope.labId) as any)?.medical_director_email || null;
+    const mdMember = mdEmail ? !!(db as any).$client.prepare(
+      "SELECT 1 FROM lab_members lm JOIN users u ON u.id = lm.user_id WHERE lm.lab_id = ? AND lm.status = 'active' AND lower(u.email) = lower(?) LIMIT 1"
+    ).get(req.scope.labId, mdEmail) : false;
+    res.json({
+      positions: DELEGATION_POSITIONS, complexities: DELEGATION_COMPLEXITIES, catalog: DELEGATION_CATALOG,
+      isMedicalDirector: isDesignatedMd(req.scope.labId, req.userId),
+      canPrepare: canPrepareDelegation(req),
+      medicalDirectorEmail: mdEmail,
+      medicalDirectorIsMember: mdMember,
+    });
   });
 
   app.get("/api/labs/:labId/director-delegations", authMiddleware, labScopeMiddleware, (req: any, res) => {
@@ -14179,7 +14196,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post("/api/labs/:labId/director-delegations", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    if (!isDesignatedMd(req.scope.labId, req.userId)) return res.status(403).json({ error: "Only the lab's designated medical director can create a letter of delegation." });
+    if (!canPrepareDelegation(req)) return res.status(403).json({ error: PREPARE_REFUSAL });
     const b = req.body || {};
     const position = String(b.position || "");
     if (!isDelegationPosition(position)) return res.status(400).json({ error: "Valid position required (clinical_consultant, technical_consultant, technical_supervisor, general_supervisor)." });
@@ -14198,7 +14215,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.put("/api/labs/:labId/director-delegations/:id", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    if (!isDesignatedMd(req.scope.labId, req.userId)) return res.status(403).json({ error: "Only the lab's designated medical director can edit a letter of delegation." });
+    if (!canPrepareDelegation(req)) return res.status(403).json({ error: PREPARE_REFUSAL });
     const row = (db as any).$client.prepare("SELECT * FROM director_delegations WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId) as any;
     if (!row) return res.status(404).json({ error: "Letter not found." });
     if (row.status !== "draft") return res.status(409).json({ error: "Only a draft letter can be edited. Revoke and create a new one to change a signed letter." });
@@ -14217,6 +14234,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       b.delegate_staff_employee_id !== undefined ? b.delegate_staff_employee_id : row.delegate_staff_employee_id,
       delegateName, position, complexity, JSON.stringify(resp), new Date().toISOString(), row.id, req.scope.labId,
     );
+    res.json({ ok: true });
+  });
+
+  // Discard a draft prepared by mistake (a signed or revoked letter is a record and stays).
+  app.delete("/api/labs/:labId/director-delegations/:id", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!canPrepareDelegation(req)) return res.status(403).json({ error: PREPARE_REFUSAL });
+    const row = (db as any).$client.prepare("SELECT * FROM director_delegations WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId) as any;
+    if (!row) return res.status(404).json({ error: "Letter not found." });
+    if (row.status !== "draft") return res.status(409).json({ error: "Only a draft can be discarded. Revoke a signed letter instead." });
+    (db as any).$client.prepare("DELETE FROM director_delegations WHERE id = ? AND lab_id = ? AND status = 'draft'").run(row.id, req.scope.labId);
+    ddAudit(req.scope.labId, req.userId, "discard", `discarded draft letter #${row.id} for ${row.delegate_name}`);
     res.json({ ok: true });
   });
 
@@ -26306,6 +26334,47 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(result);
   });
 
+  // ── VeritaStaff roster prompt (2026-10-08, Michael Q2 option 1) ──
+  // Lab members who are not on the roster yet, for "Add to roster" / "Link to
+  // existing entry". Editors of VeritaStaff only: it is a setup prompt and lists
+  // member emails. Veritas support users are never listed (server/rosterMembers.ts).
+  app.get("/api/labs/:labId/staff/members-not-on-roster", authMiddleware, labScopeMiddleware, requireModuleEdit('veritastaff'), (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    res.json(membersNotOnRoster((db as any).$client, req.scope.labId));
+  });
+
+  // Tie an existing roster row (no login yet) to a lab member's login.
+  app.post("/api/labs/:labId/staff/employees/:id/link-login", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const sqlite = (db as any).$client;
+    const labId = req.scope.labId;
+    const emp = sqlite.prepare("SELECT id, login_user_id, first_name, last_name FROM staff_employees WHERE id = ? AND tier2_lab_id = ? AND status = 'active'").get(req.params.id, labId) as any;
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+    const seatLinked = sqlite.prepare("SELECT 1 FROM user_seats WHERE staff_employee_id = ? AND seat_type = 'staff_portal' AND status = 'active' AND seat_user_id IS NOT NULL LIMIT 1").get(emp.id);
+    if (emp.login_user_id || seatLinked) return res.status(409).json({ error: "This roster entry is already linked to a login.", code: "ALREADY_LINKED" });
+    const problem = rosterLinkProblem(sqlite, labId, req.body?.userId);
+    if (problem) return res.status(problem.status).json({ error: problem.error, code: problem.code });
+    sqlite.prepare("UPDATE staff_employees SET login_user_id = ?, updated_at = ? WHERE id = ?").run(Number(req.body.userId), new Date().toISOString(), emp.id);
+    sqlite.prepare("DELETE FROM staff_roster_prompt_hidden WHERE lab_id = ? AND user_id = ?").run(labId, Number(req.body.userId));
+    res.json(sqlite.prepare("SELECT * FROM staff_employees WHERE id = ?").get(emp.id));
+  });
+
+  // Mark a member "not lab personnel" (hidden: true) or list them again (hidden: false).
+  app.post("/api/labs/:labId/staff/roster-prompt/hidden", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const sqlite = (db as any).$client;
+    const labId = req.scope.labId;
+    const uid = Number(req.body?.userId);
+    const isMember = Number.isInteger(uid) && sqlite.prepare("SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1").get(labId, uid);
+    if (!isMember) return res.status(400).json({ error: "That person is not an active member of this lab.", code: "NOT_A_MEMBER" });
+    if (req.body?.hidden === false) {
+      sqlite.prepare("DELETE FROM staff_roster_prompt_hidden WHERE lab_id = ? AND user_id = ?").run(labId, uid);
+    } else {
+      sqlite.prepare("INSERT OR IGNORE INTO staff_roster_prompt_hidden (lab_id, user_id, hidden_by_user_id, hidden_at) VALUES (?, ?, ?, ?)").run(labId, uid, req.userId, new Date().toISOString());
+    }
+    res.json(membersNotOnRoster(sqlite, labId));
+  });
+
   // Lab-scoped staff_labs upsert. The legacy POST /api/staff/lab scopes by
   // user_id (one staff_labs row per user); the multi-lab variant scopes by
   // tier2_lab_id so a multi-lab owner can configure VeritaStaff
@@ -26367,8 +26436,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const ownerUserId = req.scope.lab?.owner_user_id ?? req.userId;
     const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE tier2_lab_id = ?").get(tier2LabId) as any;
     if (!lab) return res.status(400).json({ error: "Set up your lab first" });
-    const { lastName, firstName, middleInitial, title, titleCode, hireDate, qualificationsText, qualificationsVerifiedAt, qualificationsVerifiedBy, highestComplexity, performsTesting, roles, canAdjustInventory, canViewAudit } = req.body;
+    const { lastName, firstName, middleInitial, title, titleCode, hireDate, qualificationsText, qualificationsVerifiedAt, qualificationsVerifiedBy, highestComplexity, performsTesting, roles, canAdjustInventory, canViewAudit, loginUserId } = req.body;
     if (!lastName?.trim() || !firstName?.trim()) return res.status(400).json({ error: "Name required" });
+    // Roster prompt "Add to roster": tie the new row to that member's login.
+    // Optional; a plain Add Employee sends no loginUserId.
+    const linkLogin = loginUserId !== undefined && loginUserId !== null && loginUserId !== "";
+    if (linkLogin) {
+      const problem = rosterLinkProblem((db as any).$client, tier2LabId, loginUserId);
+      if (problem) return res.status(problem.status).json({ error: problem.error, code: problem.code });
+    }
     const now = new Date().toISOString();
     // can_adjust_inventory / can_view_audit are the Staff Portal access grants
     // (EmployeeDialog always sends both). The lab-scoped handlers previously
@@ -26389,6 +26465,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // the column is NOT NULL and a null breaks employee creation.
       ).run(lab.id, tier2LabId, ownerUserId, lastName.trim(), firstName.trim(), middleInitial || null, title || null, titleCode || null, hireDate || null, qualificationsText || null, qualificationsVerifiedAt || null, qualificationsVerifiedBy || null, highestComplexity || 'H', performsTesting ? 1 : 0, canAdjustInventory ? 1 : 0, canViewAudit ? 1 : 0, 'active', now, now);
       const id = result.lastInsertRowid;
+      if (linkLogin) sqlite.prepare("UPDATE staff_employees SET login_user_id = ? WHERE id = ?").run(Number(loginUserId), id);
       if (Array.isArray(roles)) {
         const roleStmt = sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, tier2_lab_id, role, specialty_number, all_specialties) VALUES (?,?,?,?,?,?)");
         for (const r of roles) roleStmt.run(id, lab.id, tier2LabId, r.role, r.specialtyNumber || null, entireLabFlag(r));

@@ -16,7 +16,11 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Plus, Download, Trash2, CheckCircle, Pencil, ShieldCheck } from "lucide-react";
 
 type CatalogItem = { key: string; label: string; group: string; positions: string[]; gate?: string };
-type Catalog = { positions: string[]; complexities: string[]; catalog: CatalogItem[]; isMedicalDirector: boolean };
+type Catalog = {
+  positions: string[]; complexities: string[]; catalog: CatalogItem[]; isMedicalDirector: boolean;
+  // 2026-10-08: the owner or an admin prepares letters; the medical director signs.
+  canPrepare?: boolean; medicalDirectorEmail?: string | null; medicalDirectorIsMember?: boolean;
+};
 type Letter = {
   id: number; delegate_name: string; position: string; complexity_scope: string;
   status: string; signed_name?: string | null; signed_at?: string | null;
@@ -56,6 +60,14 @@ export function LettersOfDelegation({ activeLabId }: { activeLabId: number | nul
   });
 
   const isMd = !!catalogQ.data?.isMedicalDirector;
+  const canPrepare = !!catalogQ.data?.canPrepare || isMd;
+  const mdEmail = catalogQ.data?.medicalDirectorEmail || null;
+  const mdIsMember = !!catalogQ.data?.medicalDirectorIsMember;
+  const signLink = activeLabId && typeof window !== "undefined" ? `${window.location.origin}/labs/${activeLabId}/veritastaff-app?tab=delegations` : "";
+  const copySignLink = async () => {
+    try { await navigator.clipboard.writeText(signLink); toast({ title: "Signing link copied", description: "Send it to the medical director. It opens this list, where they sign." }); }
+    catch { toast({ title: "Copy failed", description: signLink }); }
+  };
   const catalog = catalogQ.data?.catalog ?? [];
   const positions = catalogQ.data?.positions ?? [];
 
@@ -90,6 +102,12 @@ export function LettersOfDelegation({ activeLabId }: { activeLabId: number | nul
     mutationFn: async () => { const r = await fetch(`${base}/${signTarget!.id}/sign`, { method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ signed_name: signName.trim() }) }); if (!r.ok) throw new Error(await r.text()); return r.json(); },
     onSuccess: () => { setSignTarget(null); setSignName(""); invalidate(); toast({ title: "Letter signed and active" }); },
     onError: (e: any) => toast({ title: "Sign failed", description: String(e?.message || e), variant: "destructive" }),
+  });
+
+  const discardMut = useMutation({
+    mutationFn: async (id: number) => { const r = await fetch(`${base}/${id}`, { method: "DELETE", headers: authHeaders() }); if (!r.ok) throw new Error(await r.text()); return r.json(); },
+    onSuccess: () => { invalidate(); toast({ title: "Draft discarded" }); },
+    onError: (e: any) => toast({ title: "Discard failed", description: String(e?.message || e), variant: "destructive" }),
   });
 
   const revokeMut = useMutation({
@@ -129,12 +147,26 @@ export function LettersOfDelegation({ activeLabId }: { activeLabId: number | nul
             who may co-sign QC period reviews and close findings.
           </p>
         </div>
-        {isMd && <Button onClick={openCreate} data-testid="new-delegation-btn"><Plus size={16} className="mr-1" /> New letter</Button>}
+        {canPrepare && <Button onClick={openCreate} data-testid="new-delegation-btn"><Plus size={16} className="mr-1" /> New letter</Button>}
       </div>
 
-      {!isMd && (
+      {canPrepare && !isMd && (
+        <div className="mb-4 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm" data-testid="delegation-prepare-note">
+          {mdEmail ? (
+            <>
+              You prepare the letters; the medical director (<span className="font-medium">{mdEmail}</span>) signs them.
+              {mdIsMember
+                ? <> When a draft is ready, send them the signing link. <button type="button" className="underline text-primary font-medium" onClick={copySignLink} data-testid="copy-sign-link">Copy signing link</button></>
+                : <> They are not a member of this lab yet, so invite them on the Members page as the medical director before they can sign.</>}
+            </>
+          ) : (
+            <>You prepare the letters; the medical director signs them. No medical director is set for this lab yet: designate one on the Members page so drafts can be signed.</>
+          )}
+        </div>
+      )}
+      {!canPrepare && (
         <div className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
-          Only the lab's designated medical director can create or sign letters of delegation. You can view and download existing letters below.
+          Letters of delegation are prepared by the lab's owner or an admin and signed by the medical director. You can view and download existing letters below.
         </div>
       )}
 
@@ -156,11 +188,21 @@ export function LettersOfDelegation({ activeLabId }: { activeLabId: number | nul
                   <TableCell>
                     {statusBadge(l.status)}
                     {l.signed_at && <div className="text-xs text-muted-foreground mt-0.5">by {l.signed_name}</div>}
+                    {l.status === "draft" && (
+                      <div className="text-xs mt-0.5 text-amber-700 dark:text-amber-400" data-testid={`delegation-awaiting-${l.id}`}>
+                        {isMd ? "Ready for your signature" : "Waiting for the medical director to sign"}
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell className="text-right whitespace-nowrap">
                     <Button variant="ghost" size="sm" title="Download PDF" onClick={() => downloadPdf(l)}><Download size={15} /></Button>
-                    {isMd && l.status === "draft" && <Button variant="ghost" size="sm" title="Edit draft" onClick={() => openEdit(l)}><Pencil size={15} /></Button>}
-                    {isMd && l.status === "draft" && <Button variant="ghost" size="sm" title="Sign" onClick={() => { setSignName(""); setSignTarget(l); }}><CheckCircle size={15} className="text-green-600" /></Button>}
+                    {canPrepare && l.status === "draft" && <Button variant="ghost" size="sm" title="Edit draft" onClick={() => openEdit(l)} data-testid={`edit-delegation-${l.id}`}><Pencil size={15} /></Button>}
+                    {canPrepare && l.status === "draft" && (
+                      <ConfirmDialog title="Discard this draft?" message={`This deletes the unsigned draft for ${l.delegate_name}. Nothing has been signed, so no record is lost.`} confirmLabel="Discard" onConfirm={() => discardMut.mutate(l.id)}>
+                        <Button variant="ghost" size="sm" title="Discard draft" data-testid={`discard-delegation-${l.id}`}><Trash2 size={15} className="text-muted-foreground" /></Button>
+                      </ConfirmDialog>
+                    )}
+                    {isMd && l.status === "draft" && <Button variant="ghost" size="sm" title="Sign" onClick={() => { setSignName(""); setSignTarget(l); }} data-testid={`sign-delegation-${l.id}`}><CheckCircle size={15} className="text-green-600" /></Button>}
                     {isMd && l.status === "active" && (
                       <ConfirmDialog title="Revoke this letter?" message={`This revokes the delegation to ${l.delegate_name}. They can no longer act under it, and a new letter is required to restore it.`} confirmLabel="Revoke" onConfirm={() => revokeMut.mutate(l.id)}>
                         <Button variant="ghost" size="sm" title="Revoke"><Trash2 size={15} className="text-destructive" /></Button>
