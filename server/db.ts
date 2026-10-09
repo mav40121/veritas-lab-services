@@ -5092,6 +5092,11 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_receipts_lab ON inventory_
     if (!iiColNames.includes("catalog_number")) {
       try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN catalog_number TEXT"); } catch {}
     }
+    // Bug 1 (2026-10-09): the hospital's own item number (materials management /
+    // ERP item master), separate from the vendor catalog number.
+    if (!iiColNames.includes("internal_item_number")) {
+      try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN internal_item_number TEXT"); } catch {}
+    }
     if (!iiColNames.includes("lot_number")) {
       try { sqlite.exec("ALTER TABLE inventory_items ADD COLUMN lot_number TEXT"); } catch {}
     }
