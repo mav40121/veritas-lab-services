@@ -1487,6 +1487,8 @@ export default function VeritaMapBuildPage() {
       if (Object.keys(testsByInstrument).length > 0) initialHydrationRef.current = false;
       return;
     }
+    // #84 Phase 3: never autosave for a view-only login (the server refuses).
+    if (readOnly) return;
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = setTimeout(async () => {
       if (!mapId) return;
@@ -1668,6 +1670,19 @@ export default function VeritaMapBuildPage() {
   }
 
   // ── Step 1 ────────────────────────────────────────────────────────────────
+  // #84 Phase 3: building a map (instruments, tests, complexity) is VeritaMap
+  // setup. A view-only login (e.g. a Staff login) gets a plain note and a way
+  // back to the map instead of an editor whose every change the server refuses.
+  if (readOnly) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-16 text-center" data-testid="map-build-view-only">
+        <h2 className="text-lg font-semibold mb-2">View only</h2>
+        <p className="text-sm text-muted-foreground mb-6">Building or editing a map needs VeritaMap edit access. Ask the lab owner or an admin if you need to change the test menu.</p>
+        <Button asChild variant="outline"><Link href={activeLabId ? `/labs/${activeLabId}/veritamap-app${mapId ? `/${mapId}` : ""}` : "/veritamap-app"}>Back to the map</Link></Button>
+      </div>
+    );
+  }
+
   if (step === 1) {
     return (
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">

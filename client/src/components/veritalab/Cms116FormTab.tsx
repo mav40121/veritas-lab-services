@@ -296,7 +296,8 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
     try {
       // Persist any unsaved field edits first so the PDF reflects what the
       // user just typed, not whatever was last saved to the cms116_drafts row.
-      await fetch(`${API_BASE}/api/labs/${labId}/veritalab/cms116-draft`, {
+      // A view-only login has no edits to persist (and the PUT would 403).
+      if (!isReadOnly) await fetch(`${API_BASE}/api/labs/${labId}/veritalab/cms116-draft`, {
         method: "PUT",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify(draft),
@@ -368,7 +369,11 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
         </CardContent>
       </Card>
 
-      <Accordion type="multiple" defaultValue={["i"]} className="space-y-2">
+      {/* #84 Phase 3: the CMS-116 draft is VeritaLab setup (PUT is
+          requireModuleEdit('veritalab')). A view-only login (e.g. a Staff
+          login) reads every section open, with the fields disabled. */}
+      <fieldset disabled={isReadOnly} className="contents">
+      <Accordion type="multiple" defaultValue={isReadOnly ? ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "signature"] : ["i"]} className="space-y-2">
         {/* SECTION I */}
         <AccordionItem value="i" className="border rounded-lg px-4">
           <AccordionTrigger className="text-left font-medium">
@@ -605,6 +610,7 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
           </AccordionContent>
         </AccordionItem>
       </Accordion>
+      </fieldset>
 
       {/* Footer save button + Phase-4 note */}
       <Card>

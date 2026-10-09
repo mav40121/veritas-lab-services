@@ -3388,16 +3388,29 @@ export function registerVeritaBenchRoutes(
 
     app.post("/api/labs/:labId/inventory", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastock'), (req: any, res) => {
       if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
-      const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, storage_temp, storage_temp_threshold, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, unit_cost, on_order_qty, on_order_expected_date, on_order_placed_date } = req.body;
+      const { item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, storage_temp, storage_temp_threshold, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit, barcode_value, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, unit_cost, on_order_qty, on_order_expected_date, on_order_placed_date } = req.body;
       if (!item_name) return res.status(400).json({ error: "item_name is required" });
+      // 2026-10-08: this lab-scoped create (the one every lab page uses) never
+      // read count_unit, units_per_count_unit or barcode_value, so Pack Size,
+      // Count Unit and a barcode typed on Add were silently dropped (only a later
+      // Edit saved them). Same resolution as the legacy create / edit routes.
+      const resolvedCountUnit = (typeof count_unit === "string" && count_unit.trim()) || order_unit || 'each';
+      const resolvedPackSize = Number.isFinite(Number(units_per_count_unit)) && Number(units_per_count_unit) > 0
+        ? Math.trunc(Number(units_per_count_unit))
+        : 1;
+      const typedBarcode = typeof barcode_value === "string" && barcode_value.trim() ? barcode_value.trim() : null;
+      if (typedBarcode) {
+        const collision = sqlite.prepare("SELECT id FROM inventory_items WHERE lab_id = ? AND barcode_value = ?").get(req.scope.labId, typedBarcode) as any;
+        if (collision) return res.status(409).json({ error: `Barcode "${typedBarcode}" is already bound to a different item in this lab.` });
+      }
       const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
       const accountId = ownerRow?.owner_user_id ?? req.userId;
       const now = new Date().toISOString();
       try {
         const result = sqlite.prepare(`
-          INSERT INTO inventory_items (account_id, lab_id, item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, storage_temp, storage_temp_threshold, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, unit_cost, on_order_qty, on_order_expected_date, on_order_placed_date, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(accountId, req.scope.labId, item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, storage_temp || null, storage_temp_threshold || null, notes ?? null, status ?? 'active', burn_rate ?? 0, order_unit ?? 'each', usage_unit ?? 'each', units_per_order_unit ?? 1, lead_time_days ?? 5, safety_stock_days ?? 3, desired_days_of_stock ?? 30, standing_order ?? 0, standing_order_review_date ?? null, Number(unit_cost ?? 0), Number(on_order_qty ?? 0), on_order_expected_date ?? null, on_order_placed_date ?? null, now, now);
+          INSERT INTO inventory_items (account_id, lab_id, item_name, catalog_number, lot_number, department, category, quantity_on_hand, unit, expiration_date, vendor, storage_location, storage_temp, storage_temp_threshold, notes, status, burn_rate, order_unit, usage_unit, units_per_order_unit, count_unit, units_per_count_unit, barcode_value, lead_time_days, safety_stock_days, desired_days_of_stock, standing_order, standing_order_review_date, unit_cost, on_order_qty, on_order_expected_date, on_order_placed_date, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(accountId, req.scope.labId, item_name, catalog_number ?? null, lot_number ?? null, department ?? 'Core Lab', category ?? 'Reagent', quantity_on_hand ?? 0, unit ?? 'each', expiration_date ?? null, vendor ?? null, storage_location ?? null, storage_temp || null, storage_temp_threshold || null, notes ?? null, status ?? 'active', burn_rate ?? 0, order_unit ?? 'each', usage_unit ?? 'each', units_per_order_unit ?? 1, resolvedCountUnit, resolvedPackSize, typedBarcode, lead_time_days ?? 5, safety_stock_days ?? 3, desired_days_of_stock ?? 30, standing_order ?? 0, standing_order_review_date ?? null, Number(unit_cost ?? 0), Number(on_order_qty ?? 0), on_order_expected_date ?? null, on_order_placed_date ?? null, now, now);
         // Persist canonical barcode_value (VLS-<padded id>) at creation so
         // the label code never changes across runtime/algorithm shifts.
         try {

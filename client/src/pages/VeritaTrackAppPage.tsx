@@ -1,10 +1,12 @@
 import { useState, useMemo, useEffect } from "react";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
@@ -466,6 +468,9 @@ function HistoryDialog({ task }: { task: Task }) {
 function CompactTaskRow({ task, onRefresh, trackApi, tasksKey, dashKey }: {
   task: Task; onRefresh: () => void; trackApi: string; tasksKey: string; dashKey: string;
 }) {
+  // #84 Phase 3: signing off a task is recording work (open to staff); editing
+  // or deleting the task is setup.
+  const isReadOnly = useIsReadOnly("veritatrack");
   const qc = useQueryClient();
 
   const deleteTask = useMutation({
@@ -526,15 +531,15 @@ function CompactTaskRow({ task, onRefresh, trackApi, tasksKey, dashKey }: {
       <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
         <SignoffDialog task={task} onDone={onRefresh} tasksKey={tasksKey} dashKey={dashKey} />
         <HistoryDialog task={task} />
-        <TaskFormDialog
+        {!isReadOnly && <TaskFormDialog
           trigger={<Button size="sm" variant="ghost" className="h-6 w-6 p-0"><Pencil size={10} /></Button>}
           existing={task}
           onDone={onRefresh}
           trackApi={trackApi}
           tasksKey={tasksKey}
           dashKey={dashKey}
-        />
-        <ConfirmDialog
+        />}
+        {!isReadOnly && <ConfirmDialog
           title="Delete Task?"
           message={`Delete "${task.name}"? This will remove all sign-off history for this task.`}
           confirmLabel="Delete"
@@ -543,7 +548,7 @@ function CompactTaskRow({ task, onRefresh, trackApi, tasksKey, dashKey }: {
           <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-red-500">
             <Trash2 size={10} />
           </Button>
-        </ConfirmDialog>
+        </ConfirmDialog>}
       </div>
 
       {/* Sign off always visible on overdue/due_soon */}
@@ -873,15 +878,15 @@ function RemindersPanel({ trackApi, cfgKey }: { trackApi: string; cfgKey: string
       <div className="rounded-2xl border border-border p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="text-xs font-medium text-foreground">Start reminding (days before due)</label>
-          <Input type="text" inputMode="numeric" min={1} max={60} value={leadDays}
-            onChange={e => setLeadDays(Math.max(1, Math.min(60, Number(e.target.value) || 14)))}
+          <DecimalInput integer min={1} max={60} value={leadDays} fallback={14}
+            onChangeNumber={n => setLeadDays(Math.max(1, Math.min(60, n)))}
             className="h-8 text-sm mt-1 w-28" data-testid="lead-days-input" />
           <p className="text-[11px] text-muted-foreground mt-1">Approaching reminders fire on a 14, 7, 3, 1 day schedule within this window.</p>
         </div>
         <div>
           <label className="text-xs font-medium text-foreground">Overdue reminder every (days)</label>
-          <Input type="text" inputMode="numeric" min={1} max={30} value={cadence}
-            onChange={e => setCadence(Math.max(1, Math.min(30, Number(e.target.value) || 2)))}
+          <DecimalInput integer min={1} max={30} value={cadence} fallback={2}
+            onChangeNumber={n => setCadence(Math.max(1, Math.min(30, n)))}
             className="h-8 text-sm mt-1 w-28" data-testid="cadence-input" />
           <p className="text-[11px] text-muted-foreground mt-1">Once a task is overdue, it repeats on this cadence until signed off.</p>
         </div>
@@ -908,6 +913,9 @@ function RemindersPanel({ trackApi, cfgKey }: { trackApi: string; cfgKey: string
 }
 
 export default function VeritaTrackAppPage() {
+  // #84 Phase 3: Quick Setup, Import, Add Task and Reminders are setup; a
+  // view-only login (e.g. a Staff login) signs off tasks but does not build them.
+  const isReadOnly = useIsReadOnly("veritatrack");
   const { user } = useAuth();
   const qc = useQueryClient();
   const [view, setView] = useState<"list" | "calendar" | "reminders">("list");
@@ -1124,7 +1132,7 @@ export default function VeritaTrackAppPage() {
       />
 
         <div className="flex items-center gap-2 flex-wrap">
-          <Button
+          {!isReadOnly && <Button
             size="sm" variant="outline"
             className={`h-8 text-xs gap-1 ${setupOpen ? "border-primary text-primary" : ""}`}
             onClick={() => setSetupOpen(o => !o)}
@@ -1132,23 +1140,23 @@ export default function VeritaTrackAppPage() {
           >
             <Settings size={12} />
             Quick Setup
-          </Button>
-          <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={handleImport} disabled={importLoading}
+          </Button>}
+          {!isReadOnly && <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={handleImport} disabled={importLoading}
             title="Import calibration verification, correlation / method comparison, precision, and SOP schedules from VeritaMap™">
             <Upload size={12} />
             {importLoading ? "Importing..." : "Import from VeritaMap™"}
-          </Button>
+          </Button>}
           <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={handleExcelExport}>
             <Download size={12} />
             Export Excel
           </Button>
-          <TaskFormDialog
+          {!isReadOnly && <TaskFormDialog
             trigger={<Button size="sm" className="h-8 text-xs gap-1"><Plus size={12} />Add Task</Button>}
             onDone={() => refetch()}
             trackApi={trackApi}
             tasksKey={tasksKey}
             dashKey={dashKey}
-          />
+          />}
         </div>
       </div>
 
@@ -1210,7 +1218,7 @@ export default function VeritaTrackAppPage() {
       )}
 
       {/* Quick Setup panel */}
-      {setupOpen && (
+      {setupOpen && !isReadOnly && (
         <div className="border border-border rounded-xl overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 bg-muted/40 border-b border-border">
             <div>
@@ -1312,10 +1320,10 @@ export default function VeritaTrackAppPage() {
             className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${view === "calendar" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
             <CalendarDays size={12} /> Calendar
           </button>
-          <button onClick={() => setView("reminders")} data-testid="reminders-tab"
+          {!isReadOnly && <button onClick={() => setView("reminders")} data-testid="reminders-tab"
             className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${view === "reminders" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
             <Bell size={12} /> Reminders
-          </button>
+          </button>}
         </div>
 
         {view !== "reminders" && (
@@ -1349,7 +1357,7 @@ export default function VeritaTrackAppPage() {
       </div>
 
       {/* Reminders panel */}
-      {view === "reminders" && <RemindersPanel trackApi={trackApi} cfgKey={cfgKey} />}
+      {view === "reminders" && !isReadOnly && <RemindersPanel trackApi={trackApi} cfgKey={cfgKey} />}
 
       {/* Error state: a failed load must not read as an empty calendar */}
       {view !== "reminders" && !isLoading && tasksError && (
@@ -1371,14 +1379,14 @@ export default function VeritaTrackAppPage() {
           <CalendarDays size={36} className="mx-auto text-muted-foreground mb-3" />
           <h3 className="font-semibold text-foreground mb-1">No tasks yet</h3>
           <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
-            Add tasks manually or import your calibration, correlation, and SOP schedule from VeritaMap™.
+            {isReadOnly ? "Tasks the lab sets up will appear here for sign-off." : "Add tasks manually or import your calibration, correlation, and SOP schedule from VeritaMap™."}
           </p>
-          <div className="flex items-center justify-center gap-3">
+          {!isReadOnly && <div className="flex items-center justify-center gap-3">
             <Button size="sm" variant="outline" onClick={handleImport} disabled={importLoading}>
               <Upload size={12} className="mr-1" />Import from VeritaMap™
             </Button>
             <TaskFormDialog trigger={<Button size="sm"><Plus size={12} className="mr-1" />Add Task</Button>} onDone={() => refetch()} trackApi={trackApi} tasksKey={tasksKey} dashKey={dashKey} />
-          </div>
+          </div>}
         </div>
       )}
 

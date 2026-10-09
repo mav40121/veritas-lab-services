@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/* The HTML hidden attribute must always hide. Tailwind's preflight rule for
+   [hidden] sits in the base layer, so any display utility on the same element
+   (shadcn Button is inline-flex) silently overrides it and a "hidden" control
+   stays on screen. Found 2026-10-08 (#84 Phase 3): setup buttons gated with
+   hidden={isReadOnly} still showed for Staff logins. Same selector as Tailwind
+   3.4 preflight (keeps hidden="until-found" find-in-page behavior), with
+   !important so it wins over utilities. */
+[hidden]:where(:not([hidden="until-found"])) {
+  display: none !important;
+}
+
 @layer base {
   :root {
     /* Veritas Lab Services — Clinical Authority palette

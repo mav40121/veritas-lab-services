@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { VerificationAnalytesPanel } from "@/components/VerificationAnalytesPanel";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -197,6 +198,9 @@ function statusLabel(v: Verification) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function VeritaCheckVerificationPage() {
+  // #84 Phase 3: building a verification package is VeritaCheck setup; a
+  // view-only login (e.g. a Staff login) reads it.
+  const isReadOnly = useIsReadOnly("veritacheck");
   const { user } = useAuth();
   const activeLabId = useActiveLabId();
   const [, navigate] = useLocation();
@@ -247,7 +251,7 @@ export default function VeritaCheckVerificationPage() {
           </div>
         </div>
         {view === "list" && (
-          <Button size="sm" className="gap-1" onClick={() => setView("new")}>
+          <Button size="sm" className="gap-1" onClick={() => setView("new")} hidden={isReadOnly}>
             <Plus size={13} /> New Instrument Verification
           </Button>
         )}
@@ -286,6 +290,9 @@ function VerificationList({ verifications, isLoading, onOpen, onDeleted, onNew }
   onDeleted: () => void;
   onNew: () => void;
 }) {
+  // #84 Phase 3: building a verification package is VeritaCheck setup; a
+  // view-only login (e.g. a Staff login) reads it.
+  const isReadOnly = useIsReadOnly("veritacheck");
   const [confirmId, setConfirmId] = useState<number | null>(null);
   const [bundleDownloadingId, setBundleDownloadingId] = useState<number | null>(null);
   const activeLabId = useActiveLabId();
@@ -344,7 +351,7 @@ function VerificationList({ verifications, isLoading, onOpen, onDeleted, onNew }
         <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
           Create a package to document CLIA-required performance verification for a new instrument or test.
         </p>
-        <Button onClick={onNew} className="gap-1"><Plus size={13} /> New Instrument Verification</Button>
+        <Button onClick={onNew} className="gap-1" hidden={isReadOnly}><Plus size={13} /> New Instrument Verification</Button>
       </div>
     );
   }
@@ -399,6 +406,7 @@ function VerificationList({ verifications, isLoading, onOpen, onDeleted, onNew }
               <Button
                 variant="ghost" size="icon"
                 className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                hidden={isReadOnly}
                 onClick={e => { e.stopPropagation(); setConfirmId(confirmId === v.id ? null : v.id); }}
               >
                 <Trash2 size={13} />
@@ -629,6 +637,9 @@ function NewVerificationForm({ onCreated, onCancel }: { onCreated: (id: number) 
 
 // ── Detail view ───────────────────────────────────────────────────────────────
 function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) {
+  // #84 Phase 3: building a verification package is VeritaCheck setup; a
+  // view-only login (e.g. a Staff login) reads it.
+  const isReadOnly = useIsReadOnly("veritacheck");
   const qc = useQueryClient();
   const activeLabId = useActiveLabId();
   const [activeTab, setActiveTab] = useState<"elements" | "analytes" | "units" | "director">("elements");
@@ -797,7 +808,7 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
             <div className="flex items-center gap-2 flex-wrap">
               <Badge variant="outline" className={statusColor(verification)}>{statusLabel(verification)}</Badge>
               {verification.status !== "complete" && (
-                <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-emerald-600 border-emerald-500/30" onClick={() => patchVerification({ status: "complete" })}>
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-emerald-600 border-emerald-500/30" hidden={isReadOnly} onClick={() => patchVerification({ status: "complete" })}>
                   <CheckCircle2 size={12} /> Mark Complete
                 </Button>
               )}
@@ -957,7 +968,7 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">Each unit requires a separate director sign-off. One study design covers all units.</p>
-            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={addUnit}>
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={addUnit} hidden={isReadOnly}>
               <Plus size={12} /> Add Unit
             </Button>
           </div>
@@ -995,6 +1006,9 @@ function ElementCard({ element, slot, suggested, verificationId, onPatch }: {
   verificationId: number;
   onPatch: (payload: object) => void;
 }) {
+  // #84 Phase 3: building a verification package is VeritaCheck setup; a
+  // view-only login (e.g. a Staff login) reads it.
+  const isReadOnly = useIsReadOnly("veritacheck");
   const [, navigate] = useLocation();
   const [showLinkExisting, setShowLinkExisting] = useState(false);
 
@@ -1037,6 +1051,7 @@ function ElementCard({ element, slot, suggested, verificationId, onPatch }: {
                 size="sm"
                 className="h-8 text-xs gap-1.5"
                 onClick={() => navigate(runStudyUrl)}
+                hidden={isReadOnly}
               >
                 <FlaskConical size={13} />
                 Run {studyLabel}
@@ -1045,6 +1060,7 @@ function ElementCard({ element, slot, suggested, verificationId, onPatch }: {
                 size="sm" variant="outline"
                 className="h-8 text-xs"
                 onClick={() => setShowLinkExisting(v => !v)}
+                hidden={isReadOnly}
               >
                 Link Existing Study
               </Button>
@@ -1054,7 +1070,7 @@ function ElementCard({ element, slot, suggested, verificationId, onPatch }: {
               <span className={`text-xs font-semibold ${isPassed ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
                 {isPassed ? "PASS" : "FAIL"}
               </span>
-              <button className="text-xs text-muted-foreground underline" onClick={() => onPatch({ passed: null, study_id: null })}>
+              <button className="text-xs text-muted-foreground underline" hidden={isReadOnly} onClick={() => onPatch({ passed: null, study_id: null })}>
                 Redo
               </button>
             </div>
@@ -1070,7 +1086,7 @@ function ElementCard({ element, slot, suggested, verificationId, onPatch }: {
           <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 px-3 py-2 rounded">
             <FlaskConical size={12} />
             <span>Linked: <strong>{slot.testName}</strong></span>
-            <button className="ml-auto underline" onClick={() => onPatch({ study_id: null })}>Unlink</button>
+            <button className="ml-auto underline" hidden={isReadOnly} onClick={() => onPatch({ study_id: null })}>Unlink</button>
           </div>
         )}
 
@@ -1085,6 +1101,7 @@ function ElementCard({ element, slot, suggested, verificationId, onPatch }: {
             <span className="text-amber-900 dark:text-amber-200 font-medium">Scope:</span>
             <button
               onClick={() => onPatch({ scope: "analyte" })}
+              disabled={isReadOnly}
               className={`px-2 py-0.5 rounded text-xs transition-colors ${(slot.scope ?? "analyte") === "analyte" ? "bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100 font-semibold" : "text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40"}`}
               data-testid="carryover-scope-analyte"
             >
@@ -1092,6 +1109,7 @@ function ElementCard({ element, slot, suggested, verificationId, onPatch }: {
             </button>
             <button
               onClick={() => onPatch({ scope: "instrument" })}
+              disabled={isReadOnly}
               className={`px-2 py-0.5 rounded text-xs transition-colors ${slot.scope === "instrument" ? "bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100 font-semibold" : "text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40"}`}
               data-testid="carryover-scope-instrument"
             >
@@ -1175,6 +1193,9 @@ function PerAnalyteElementCard({ element, analytes, slots, suggested, verificati
 // either the attested state (with Redo) or a "Manual method" button that opens
 // an inline note + evidence-URL form. onAttest is slot-bound by the caller.
 function ManualMethodControls({ slot, onAttest }: { slot?: VerificationStudy; onAttest: (payload: object) => void }) {
+  // #84 Phase 3: building a verification package is VeritaCheck setup; a
+  // view-only login (e.g. a Staff login) reads it.
+  const isReadOnly = useIsReadOnly("veritacheck");
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
   const [url, setUrl] = useState("");
@@ -1185,7 +1206,7 @@ function ManualMethodControls({ slot, onAttest }: { slot?: VerificationStudy; on
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-medium">Manual method</span>
           <span className="text-emerald-600 dark:text-emerald-400 font-semibold">PASS (attested)</span>
-          <button className="ml-auto underline text-muted-foreground" onClick={() => onAttest({ manual_method: 0, passed: null, manual_note: null, manual_evidence_url: null })}>Redo</button>
+          <button className="ml-auto underline text-muted-foreground" hidden={isReadOnly} onClick={() => onAttest({ manual_method: 0, passed: null, manual_note: null, manual_evidence_url: null })}>Redo</button>
         </div>
         {slot.manual_note && <div className="mt-1 text-muted-foreground">Note: {slot.manual_note}</div>}
         {slot.manual_evidence_url && <div className="mt-1"><a href={slot.manual_evidence_url} target="_blank" rel="noreferrer" className="text-primary underline break-all">Supporting data</a></div>}
@@ -1194,7 +1215,7 @@ function ManualMethodControls({ slot, onAttest }: { slot?: VerificationStudy; on
   }
   return (
     <div className="mt-1">
-      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setOpen(v => !v)} data-testid={`manual-method-toggle-${slot.id}`}>Manual method</Button>
+      <Button size="sm" variant="ghost" className="h-7 text-xs" hidden={isReadOnly} onClick={() => setOpen(v => !v)} data-testid={`manual-method-toggle-${slot.id}`}>Manual method</Button>
       {open && (
         <div className="mt-2 space-y-2 bg-muted/30 rounded p-2" data-testid={`manual-method-form-${slot.id}`}>
           <p className="text-[11px] text-muted-foreground">Attest this element was completed by a manual method and passed. Attach supporting data as a link (no patient data).</p>
@@ -1215,6 +1236,9 @@ function AnalyteSlotRow({ element, analyteName, slot, suggested, verificationId,
   verificationId: number;
   onPatch: (slotId: number, payload: object) => void;
 }) {
+  // #84 Phase 3: building a verification package is VeritaCheck setup; a
+  // view-only login (e.g. a Staff login) reads it.
+  const isReadOnly = useIsReadOnly("veritacheck");
   const [, navigate] = useLocation();
   const [showLink, setShowLink] = useState(false);
   const studyParam = ELEMENT_STUDY_PARAM[element.key];
@@ -1229,16 +1253,16 @@ function AnalyteSlotRow({ element, analyteName, slot, suggested, verificationId,
         {isDoneStudy ? (
           <div className="flex items-center gap-2">
             <span className={`text-xs font-semibold ${isPassed ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>{isPassed ? "PASS" : "FAIL"}</span>
-            <button className="text-xs text-muted-foreground underline" onClick={() => slot && onPatch(slot.id, { passed: null, study_id: null })}>Redo</button>
+            <button className="text-xs text-muted-foreground underline" hidden={isReadOnly} onClick={() => slot && onPatch(slot.id, { passed: null, study_id: null })}>Redo</button>
           </div>
         ) : !attested ? (
           <div className="flex items-center gap-2 flex-wrap">
             {slot?.testName && <span className="text-xs text-muted-foreground">Linked: <strong>{slot.testName}</strong></span>}
-            {slot?.testName && <button className="text-xs underline text-muted-foreground" onClick={() => slot && onPatch(slot.id, { study_id: null })}>Unlink</button>}
-            <Button size="sm" className="h-7 text-xs gap-1" onClick={() => navigate(runUrl)} data-testid={`analyte-run-${element.key}-${analyteName}`}>
+            {slot?.testName && <button className="text-xs underline text-muted-foreground" hidden={isReadOnly} onClick={() => slot && onPatch(slot.id, { study_id: null })}>Unlink</button>}
+            <Button size="sm" className="h-7 text-xs gap-1" hidden={isReadOnly} onClick={() => navigate(runUrl)} data-testid={`analyte-run-${element.key}-${analyteName}`}>
               <FlaskConical size={12} /> Run
             </Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowLink(v => !v)} disabled={!slot}>Link Existing Study</Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowLink(v => !v)} disabled={!slot} hidden={isReadOnly}>Link Existing Study</Button>
           </div>
         ) : null}
       </div>
@@ -1263,6 +1287,9 @@ function AnalyteSlotRow({ element, analyteName, slot, suggested, verificationId,
 }
 
 function UnitCard({ unit, verificationId, onSaved, onDeleted }: { unit: InstrumentUnit; verificationId: number; onSaved: () => void; onDeleted: () => void }) {
+  // #84 Phase 3: building a verification package is VeritaCheck setup; a
+  // view-only login (e.g. a Staff login) reads it.
+  const isReadOnly = useIsReadOnly("veritacheck");
   const [directorName, setDirectorName] = useState(unit.director_name || "");
   const [directorTitle, setDirectorTitle] = useState(unit.director_title || "");
   const [approvedDate, setApprovedDate] = useState(unit.approved_date || "");
@@ -1301,7 +1328,7 @@ function UnitCard({ unit, verificationId, onSaved, onDeleted }: { unit: Instrume
             confirmLabel="Remove"
             onConfirm={onDeleted}
           >
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" data-testid={`remove-unit-${unit.id}`} aria-label={`Remove unit ${unit.serial_number}`}>
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" data-testid={`remove-unit-${unit.id}`} aria-label={`Remove unit ${unit.serial_number}`} hidden={isReadOnly}>
               <Trash2 size={12} />
             </Button>
           </ConfirmDialog>
@@ -1322,7 +1349,7 @@ function UnitCard({ unit, verificationId, onSaved, onDeleted }: { unit: Instrume
         </div>
         {dirty && (
           <div className="mt-3 flex items-center gap-2">
-            <Button size="sm" className="h-7 text-xs" onClick={save}>Save</Button>
+            <Button size="sm" className="h-7 text-xs" onClick={save} hidden={isReadOnly}>Save</Button>
             {saveError && <span className="text-xs text-rose-600">{saveError}</span>}
           </div>
         )}
@@ -1333,6 +1360,9 @@ function UnitCard({ unit, verificationId, onSaved, onDeleted }: { unit: Instrume
 
 // ── Director approval card ────────────────────────────────────────────────────
 function DirectorApprovalCard({ verification, onSave }: { verification: Verification; onSave: (payload: object) => Promise<boolean> }) {
+  // #84 Phase 3: building a verification package is VeritaCheck setup; a
+  // view-only login (e.g. a Staff login) reads it.
+  const isReadOnly = useIsReadOnly("veritacheck");
   const [name, setName] = useState(verification.director_name || "");
   const [title, setTitle] = useState(verification.director_title || "");
   const [date, setDate] = useState(verification.approved_date || "");
@@ -1362,7 +1392,7 @@ function DirectorApprovalCard({ verification, onSave }: { verification: Verifica
         </div>
         <p className="text-xs text-muted-foreground">Signature line will appear on the PDF cover page.</p>
         {dirty && (
-          <Button size="sm" className="gap-1" onClick={async () => { const ok = await onSave({ director_name: name, director_title: title, approved_date: date }); if (ok) setDirty(false); }}>
+          <Button size="sm" className="gap-1" hidden={isReadOnly} onClick={async () => { const ok = await onSave({ director_name: name, director_title: title, approved_date: date }); if (ok) setDirty(false); }}>
             <CheckCircle2 size={13} /> Save Approval Info
           </Button>
         )}
@@ -1373,6 +1403,9 @@ function DirectorApprovalCard({ verification, onSave }: { verification: Verifica
 
 // ── Remediation card ──────────────────────────────────────────────────────────
 function RemediationCard({ verification, onSave }: { verification: Verification; onSave: (notes: string) => Promise<boolean> }) {
+  // #84 Phase 3: building a verification package is VeritaCheck setup; a
+  // view-only login (e.g. a Staff login) reads it.
+  const isReadOnly = useIsReadOnly("veritacheck");
   const [notes, setNotes] = useState(verification.remediation_notes || "");
   const [dirty, setDirty] = useState(false);
 
@@ -1391,7 +1424,7 @@ function RemediationCard({ verification, onSave }: { verification: Verification;
           placeholder="Describe the failure, root cause investigation, corrective action taken, and re-verification outcome. Include dates."
           className="text-xs h-24 resize-none"
         />
-        {dirty && <Button size="sm" className="h-7 text-xs mt-2" onClick={async () => { const ok = await onSave(notes); if (ok) setDirty(false); }}>Save</Button>}
+        {dirty && !isReadOnly && <Button size="sm" className="h-7 text-xs mt-2" onClick={async () => { const ok = await onSave(notes); if (ok) setDirty(false); }}>Save</Button>}
       </CardContent>
     </Card>
   );

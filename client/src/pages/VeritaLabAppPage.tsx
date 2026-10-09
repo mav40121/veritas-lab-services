@@ -479,7 +479,7 @@ export default function VeritaLabAppPage() {
                 Add your CLIA certificate, accreditations, state licenses, and lab director credentials.
                 {user?.cliaNumber && " Your CLIA certificate will be auto-populated when you refresh."}
               </p>
-              <Button onClick={openAddModal} className="bg-primary hover:bg-primary/90">
+              <Button onClick={openAddModal} className="bg-primary hover:bg-primary/90" hidden={isReadOnly}>
                 <Plus size={14} className="mr-1.5" /> Add Your First Certificate
               </Button>
             </CardContent>

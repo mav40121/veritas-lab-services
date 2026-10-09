@@ -298,13 +298,16 @@ interface ConsumptionSummary {
   per_item: Record<string, { events: number; qty: number; learned_burn: number; value: number }>;
 }
 
-function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptionSummary }: {
+function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptionSummary, viewingDepartment }: {
   open: boolean;
   onClose: () => void;
   onSave: (data: Partial<InventoryItem>) => void;
   editItem: InventoryItem | null;
   inventory: InventoryItem[];
   consumptionSummary: ConsumptionSummary | null;
+  // The department the list is filtered to ("All" when unfiltered). A new item
+  // starts in that department so it lands in the list the user is looking at.
+  viewingDepartment: string;
 }) {
   const [form, setForm] = useState<Partial<InventoryItem>>({});
   // Safety-stock advisor selections (not persisted; advisory only).
@@ -327,7 +330,9 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
         item_name: "",
         catalog_number: "",
         lot_number: "",
-        department: defaultDepartment,
+        // 2026-10-08 (Sampson): a user "Working in" Chemistry added items that
+        // defaulted to Core Lab and vanished from her filtered list.
+        department: viewingDepartment !== "All" ? viewingDepartment : defaultDepartment,
         category: defaultCategory,
         quantity_on_hand: 0,
         unit_cost: 0,
@@ -352,7 +357,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
         status: "active",
       });
     }
-  }, [editItem, open]);
+  }, [editItem, open, viewingDepartment]);
 
   // FIFO banner: when the lab adds a new lot of an item that already has older
   // unexpired stock on hand, prompt the user to open older lots first.
@@ -424,8 +429,8 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
               <div className="space-y-1.5">
                 <Label>Department</Label>
                 <Select value={form.department ?? defaultDepartment} onValueChange={(v) => setForm({ ...form, department: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{depts.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+                  <SelectTrigger data-testid="item-department-select"><SelectValue /></SelectTrigger>
+                  <SelectContent>{(form.department && !depts.includes(form.department) ? [...depts, form.department] : depts).map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
@@ -512,7 +517,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
               </div>
               <div className="space-y-1.5">
                 <Label>Units per Order Unit</Label>
-                <Input type="text" inputMode="decimal" min={1} value={form.units_per_order_unit ?? 1} onChange={(e) => setForm({ ...form, units_per_order_unit: parseInt(e.target.value) || 1 })} />
+                <DecimalInput integer min={1} value={form.units_per_order_unit ?? 1} fallback={1} onChangeNumber={(n) => setForm({ ...form, units_per_order_unit: Math.max(1, n) })} data-testid="units-per-order-unit-input" />
               </div>
             </div>
             {/* 2026-06-09: Count unit + pack size. What you physically count
@@ -529,11 +534,12 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
               </div>
               <div className="space-y-1.5">
                 <Label>Pack Size ({form.usage_unit ?? "each"}s per {form.count_unit ?? form.order_unit ?? "each"})</Label>
-                <Input
-                  type="text" inputMode="decimal"
+                <DecimalInput
+                  integer
                   min={1}
                   value={form.units_per_count_unit ?? 1}
-                  onChange={(e) => setForm({ ...form, units_per_count_unit: parseInt(e.target.value) || 1 })}
+                  fallback={1}
+                  onChangeNumber={(n) => setForm({ ...form, units_per_count_unit: Math.max(1, n) })}
                   data-testid="pack-size-input"
                 />
                 <p className="text-xs text-muted-foreground">e.g. 100 tests in a box. Set to 1 if you count by the each.</p>
@@ -583,15 +589,15 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
               </div>
               <div className="space-y-1.5">
                 <Label>Lead Time (days)</Label>
-                <Input type="text" inputMode="decimal" min={0} value={form.lead_time_days ?? 5} onChange={(e) => setForm({ ...form, lead_time_days: parseInt(e.target.value) || 0 })} />
+                <DecimalInput integer min={0} value={form.lead_time_days ?? 5} fallback={0} onChangeNumber={(n) => setForm({ ...form, lead_time_days: Math.max(0, n) })} data-testid="lead-time-input" />
               </div>
               <div className="space-y-1.5">
                 <Label>Safety Stock (days)</Label>
-                <Input type="text" inputMode="decimal" min={0} value={form.safety_stock_days ?? 3} onChange={(e) => setForm({ ...form, safety_stock_days: parseInt(e.target.value) || 0 })} />
+                <DecimalInput integer min={0} value={form.safety_stock_days ?? 3} fallback={0} onChangeNumber={(n) => setForm({ ...form, safety_stock_days: Math.max(0, n) })} data-testid="safety-stock-input" />
               </div>
               <div className="space-y-1.5">
                 <Label>Desired Days of Stock</Label>
-                <Input type="text" inputMode="decimal" min={0} value={form.desired_days_of_stock ?? 30} onChange={(e) => setForm({ ...form, desired_days_of_stock: parseInt(e.target.value) || 0 })} />
+                <DecimalInput integer min={0} value={form.desired_days_of_stock ?? 30} fallback={0} onChangeNumber={(n) => setForm({ ...form, desired_days_of_stock: Math.max(0, n) })} data-testid="desired-days-input" />
               </div>
             </div>
             {/* Calculated preview */}
@@ -697,7 +703,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Quantity on Hand ({usageUnit}s)</Label>
-                <Input type="text" inputMode="decimal" min={0} value={form.quantity_on_hand ?? 0} onChange={(e) => setForm({ ...form, quantity_on_hand: parseInt(e.target.value) || 0 })} />
+                <DecimalInput integer min={0} value={form.quantity_on_hand ?? 0} fallback={0} onChangeNumber={(n) => setForm({ ...form, quantity_on_hand: Math.max(0, n) })} data-testid="quantity-on-hand-input" />
               </div>
               <div className="space-y-1.5">
                 <Label>Expiration Date</Label>
@@ -1775,8 +1781,12 @@ export default function VeritaStockInventoryPage() {
     for (const it of items) {
       if (it.department && it.department.trim()) set.add(it.department.trim());
     }
+    // Always list the active filter (e.g. a saved "Working in" department with
+    // no items yet); otherwise the dropdown renders blank and the user cannot
+    // see that a filter is hiding the list.
+    if (filterDept !== "All") set.add(filterDept);
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [items]);
+  }, [items, filterDept]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -2439,7 +2449,7 @@ export default function VeritaStockInventoryPage() {
       {/* Filter Bar */}
       <div className="flex flex-wrap gap-3 mb-4">
         <Select value={filterDept} onValueChange={setFilterDept}>
-          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Department" /></SelectTrigger>
+          <SelectTrigger className="w-[180px]" data-testid="filter-dept-select"><SelectValue placeholder="Department" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="All">All Departments</SelectItem>
             {uniqueDepartments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
@@ -2536,9 +2546,16 @@ export default function VeritaStockInventoryPage() {
       ) : filteredItems.length === 0 ? (
         <div className="text-center py-12">
           <Package size={40} className="mx-auto text-muted-foreground mb-4" />
-          <p className="text-muted-foreground mb-4">
-            {items.length === 0 ? "No inventory items yet. Add your first item to get started." : "No items match the current filters."}
+          <p className="text-muted-foreground mb-4" data-testid="inventory-empty-message">
+            {items.length === 0
+              ? "No inventory items yet. Add your first item to get started."
+              : `No items match the current filters${filterDept !== "All" ? ` (department: ${filterDept})` : ""}. ${items.length} item${items.length === 1 ? " is" : "s are"} hidden.`}
           </p>
+          {items.length > 0 && (
+            <Button variant="outline" onClick={() => { setFilterDept("All"); setFilterCat("All"); setFilterStatus("All"); setFilterVendor("All"); }} data-testid="inventory-show-all">
+              Show all items
+            </Button>
+          )}
           {items.length === 0 && (
             <Button onClick={() => { setEditItem(null); setShowForm(true); }} disabled={readOnly} style={{ backgroundColor: "#01696F" }}>
               <Plus size={14} className="mr-1.5" />Add Item
@@ -2758,6 +2775,7 @@ export default function VeritaStockInventoryPage() {
         editItem={editItem}
         inventory={items}
         consumptionSummary={consumptionSummary}
+        viewingDepartment={filterDept}
       />
 
       {/* Lots dialog: a product's child lots (lot # + expiration + qty), oldest-

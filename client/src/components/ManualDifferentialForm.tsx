@@ -10,6 +10,7 @@
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -103,7 +104,7 @@ export default function ManualDifferentialForm({
                 <Button key={n} type="button" size="sm" variant={cellsCounted === n ? "default" : "outline"}
                   onClick={() => setCellsCounted(n)} data-testid={`md-cells-${n}`}>{n}</Button>
               ))}
-              <Input type="text" inputMode="numeric" min={1} value={cellsCounted} onChange={(e) => setCellsCounted(Math.max(1, Math.floor(Number(e.target.value) || 0)))}
+              <DecimalInput integer min={1} value={cellsCounted} fallback={1} onChangeNumber={(n) => setCellsCounted(Math.max(1, n))}
                 className="max-w-[100px]" data-testid="md-cells-counted" />
             </div>
           </div>

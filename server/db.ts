@@ -4040,10 +4040,62 @@ sqlite.exec(`
 {
   try {
     const eqCols = (sqlite.prepare("PRAGMA table_info(lab_equipment)").all() as { name: string }[]).map(c => c.name);
-    void eqCols; // Future ALTER TABLE lab_equipment ADD COLUMN ... blocks go here.
+    // 2026-10-08: link an equipment record to the analyzer on the VeritaMap test
+    // menu, so its calibration and maintenance join that analyzer's QC trail.
+    if (!eqCols.includes("map_instrument_id")) sqlite.exec("ALTER TABLE lab_equipment ADD COLUMN map_instrument_id INTEGER");
     const evCols = (sqlite.prepare("PRAGMA table_info(equipment_maintenance_events)").all() as { name: string }[]).map(c => c.name);
     void evCols; // Future ALTER TABLE equipment_maintenance_events ADD COLUMN ... blocks go here.
   } catch {}
+}
+
+// 2026-10-08 Competency reminders and escalation (St. Charles; Michael: weekly
+// supervisor digest, escalate to the director the day a competency goes
+// overdue then weekly, plus a monthly 90/60/30 report). Per-lab settings and a
+// send log (dedupe + history). Engine: server/competencyReminders.ts.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS competency_reminder_config (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL UNIQUE,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    lead_days INTEGER NOT NULL DEFAULT 30,
+    cadence_days INTEGER NOT NULL DEFAULT 7,
+    monthly_report INTEGER NOT NULL DEFAULT 1,
+    supervisor_recipients_json TEXT NOT NULL DEFAULT '[]',
+    escalation_recipients_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS competency_reminder_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    item_key TEXT,
+    period_key TEXT,
+    sent_on TEXT NOT NULL,
+    recipient_emails TEXT,
+    item_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_comp_rem_log_lab ON competency_reminder_log(lab_id, kind, sent_on);
+`);
+// PRAGMA migration block per the New DB Table Rule (CLAUDE.md §8).
+{
+  try {
+    const cols = (t: string) => (sqlite.prepare(`PRAGMA table_info(${t})`).all() as { name: string }[]).map(c => c.name);
+    const cfg = cols("competency_reminder_config");
+    if (!cfg.includes("lead_days")) sqlite.exec("ALTER TABLE competency_reminder_config ADD COLUMN lead_days INTEGER NOT NULL DEFAULT 30");
+    if (!cfg.includes("cadence_days")) sqlite.exec("ALTER TABLE competency_reminder_config ADD COLUMN cadence_days INTEGER NOT NULL DEFAULT 7");
+    if (!cfg.includes("monthly_report")) sqlite.exec("ALTER TABLE competency_reminder_config ADD COLUMN monthly_report INTEGER NOT NULL DEFAULT 1");
+    if (!cfg.includes("supervisor_recipients_json")) sqlite.exec("ALTER TABLE competency_reminder_config ADD COLUMN supervisor_recipients_json TEXT NOT NULL DEFAULT '[]'");
+    if (!cfg.includes("escalation_recipients_json")) sqlite.exec("ALTER TABLE competency_reminder_config ADD COLUMN escalation_recipients_json TEXT NOT NULL DEFAULT '[]'");
+    const log = cols("competency_reminder_log");
+    if (!log.includes("item_key")) sqlite.exec("ALTER TABLE competency_reminder_log ADD COLUMN item_key TEXT");
+    if (!log.includes("period_key")) sqlite.exec("ALTER TABLE competency_reminder_log ADD COLUMN period_key TEXT");
+    if (!log.includes("recipient_emails")) sqlite.exec("ALTER TABLE competency_reminder_log ADD COLUMN recipient_emails TEXT");
+    if (!log.includes("item_count")) sqlite.exec("ALTER TABLE competency_reminder_log ADD COLUMN item_count INTEGER NOT NULL DEFAULT 0");
+  } catch {
+    // fresh DB: CREATE TABLE above handled it
+  }
 }
 
 // MLC-1 Phase 2: equipment maintenance-due reminders. Per-lab config + dedup/
@@ -6693,11 +6745,24 @@ try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as a
   //   'westgard' = full Westgard rules against the manufacturer mean/SD
   //   'range'    = pass/fail on the manufacturer's published range only
   ensure("qc_rule_settings", "establishing_rules", "ALTER TABLE qc_rule_settings ADD COLUMN establishing_rules TEXT NOT NULL DEFAULT 'westgard'");
+  // Per-analyzer QC trail (2026-10-08, St. Charles: "trace a QC failure,
+  // corrective action, and resolution for a specific analyzer"). A run points at
+  // its analyzer through the VeritaMap instrument id (the test-system id IQCP,
+  // competency and verification already use); qc_results.instrument stays as
+  // the display snapshot and the fallback for runs recorded before this.
+  ensure("qc_results", "map_instrument_id", "ALTER TABLE qc_results ADD COLUMN map_instrument_id INTEGER");
+  // Close-out of a corrective action: what fixed it, who closed it, when.
+  // Recorded once and never edited (it is part of the QC record).
+  ensure("qc_corrective_actions", "resolution_notes",    "ALTER TABLE qc_corrective_actions ADD COLUMN resolution_notes TEXT");
+  ensure("qc_corrective_actions", "resolved_by_user_id", "ALTER TABLE qc_corrective_actions ADD COLUMN resolved_by_user_id INTEGER");
+  ensure("qc_corrective_actions", "resolved_by_name",    "ALTER TABLE qc_corrective_actions ADD COLUMN resolved_by_name TEXT");
+  ensure("qc_corrective_actions", "resolved_at",         "ALTER TABLE qc_corrective_actions ADD COLUMN resolved_at TEXT");
 }
 
 // VeritaQC indexes for the read paths Phase 1 will hit hardest.
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_control_lots_lab ON qc_control_lots(lab_id, status)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_results_lot_date ON qc_results(control_lot_id, result_date)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_results_map_instrument ON qc_results(map_instrument_id, result_date)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_results_lab_date ON qc_results(lab_id, result_date DESC)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_rule_violations_result ON qc_rule_violations(qc_result_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_corrective_actions_result ON qc_corrective_actions(qc_result_id)`); } catch {}
@@ -7653,6 +7718,42 @@ try {
 }
 try { sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_employees_user_id_unique ON staff_employees(user_id) WHERE user_id IS NOT NULL"); } catch {}
 
+// 2026-10-08 VeritaStaff roster prompt (Michael, Q2 option 1). login_user_id ties
+// a roster row to the person's OWN login (users.id), so VeritaStaff can list lab
+// members who are not on the roster yet. Nullable: most rows predate it and a
+// person need not have a login. NOT the same as staff_employees.user_id, which
+// is NOT NULL and holds the account owner id. staff_roster_prompt_hidden records
+// members the director marked "not lab personnel" so the prompt stops listing
+// them (lab_id = labs.id).
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(staff_employees)").all() as any[]).map(c => c.name);
+  if (!cols.includes("login_user_id")) {
+    try { sqlite.exec("ALTER TABLE staff_employees ADD COLUMN login_user_id INTEGER REFERENCES users(id)"); } catch {}
+  }
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_staff_employees_login_user ON staff_employees(tier2_lab_id, login_user_id)"); } catch {}
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS staff_roster_prompt_hidden (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lab_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      hidden_by_user_id INTEGER,
+      hidden_at TEXT NOT NULL
+    )
+  `);
+  const hcols = (sqlite.prepare("PRAGMA table_info(staff_roster_prompt_hidden)").all() as any[]).map(c => c.name);
+  for (const [name, ddl] of [
+    ["lab_id", "INTEGER"],
+    ["user_id", "INTEGER"],
+    ["hidden_by_user_id", "INTEGER"],
+    ["hidden_at", "TEXT"],
+  ] as const) {
+    if (!hcols.includes(name)) {
+      try { sqlite.exec(`ALTER TABLE staff_roster_prompt_hidden ADD COLUMN ${name} ${ddl}`); } catch {}
+    }
+  }
+  try { sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_roster_prompt_hidden ON staff_roster_prompt_hidden(lab_id, user_id)"); } catch {}
+}
+
 // VeritaCEU phase 4 (parking-lot #55): per-lab CE requirement profiles. A named
 // requirement (credits + cycle months), e.g. "ASCP CMP" 36/36, "NY State License",
 // "None". One profile per lab may be the default; employees reference one via
@@ -7697,4 +7798,36 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
   if (!cols.includes("staff_employee_id")) {
     try { sqlite.exec("ALTER TABLE user_seats ADD COLUMN staff_employee_id INTEGER REFERENCES staff_employees(id)"); } catch {}
   }
+}
+
+// Veritas support access (2026-10-08, docs/design/VLS_Support_Access_Design.docx).
+// users.vls_support marks a Veritas Lab Services person (set only by an
+// admin-secret endpoint); labs.vls_support_access is the lab owner's on/off
+// switch (default on); audit_log.acting_as stamps rows written through that
+// access; vls_support_activity records every change a Veritas user makes in a
+// lab, so the owner's activity list is complete even where a route writes no
+// audit row. CREATE + ALTER blocks together per the NEW DB TABLE RULE.
+{
+  const addCol = (table: string, col: string, ddl: string) => {
+    const cols = (sqlite.prepare(`PRAGMA table_info(${table})`).all() as any[]).map((c: any) => c.name);
+    if (!cols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+  };
+  addCol("users", "vls_support", "ALTER TABLE users ADD COLUMN vls_support INTEGER NOT NULL DEFAULT 0");
+  addCol("labs", "vls_support_access", "ALTER TABLE labs ADD COLUMN vls_support_access INTEGER NOT NULL DEFAULT 1");
+  addCol("audit_log", "acting_as", "ALTER TABLE audit_log ADD COLUMN acting_as TEXT");
+  try {
+    sqlite.exec(`CREATE TABLE IF NOT EXISTS vls_support_activity (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lab_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      method TEXT NOT NULL,
+      path TEXT NOT NULL,
+      status INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`);
+  } catch {}
+  addCol("vls_support_activity", "status", "ALTER TABLE vls_support_activity ADD COLUMN status INTEGER");
+  addCol("vls_support_activity", "note", "ALTER TABLE vls_support_activity ADD COLUMN note TEXT");
+  addCol("vls_support_activity", "created_at", "ALTER TABLE vls_support_activity ADD COLUMN created_at TEXT NOT NULL DEFAULT (datetime('now'))");
+  try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_vls_support_activity_lab ON vls_support_activity(lab_id, created_at DESC)`); } catch {}
 }

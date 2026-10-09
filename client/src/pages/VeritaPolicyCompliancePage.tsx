@@ -10,6 +10,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { VeritaPolicyTabs } from "@/components/VeritaPolicyTabs";
 import { apiRequest, queryClient, getQueryFn, API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
@@ -120,6 +121,9 @@ interface SurveyorLink {
 }
 
 export default function VeritaPolicyCompliancePage() {
+  // #84 Phase 3: surveyor public links grant outside access; creating or
+  // revoking one is VeritaPolicy setup (the server requires edit too).
+  const isReadOnly = useIsReadOnly("veritapolicy");
   const activeLabId = useActiveLabId();
   const { toast } = useToast();
 
@@ -470,7 +474,7 @@ export default function VeritaPolicyCompliancePage() {
             <span className="flex items-center gap-2">
               <LinkIcon size={16} /> Surveyor public links
             </span>
-            <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <Button size="sm" hidden={isReadOnly} onClick={() => setCreateOpen(true)}>
               Create link
             </Button>
           </CardTitle>
@@ -536,7 +540,7 @@ export default function VeritaPolicyCompliancePage() {
                               <Copy size={12} className="mr-1" /> Copy
                             </Button>
                           )}
-                          {!isRevoked && (
+                          {!isRevoked && !isReadOnly && (
                             <Button
                               size="sm"
                               variant="ghost"

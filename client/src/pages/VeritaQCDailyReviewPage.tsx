@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
+import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useLabRoute } from "@/hooks/useLabRoute";
 import { saveAs } from "file-saver";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,6 +35,9 @@ interface CARow {
   status: string;
   taken_at: string;
   nce_reference: string | null;
+  resolution_notes?: string | null;
+  resolved_by_name?: string | null;
+  resolved_at?: string | null;
 }
 interface RecentResult {
   id: number;
@@ -41,6 +46,7 @@ interface RecentResult {
   lot_number: string;
   level: string;
   instrument: string | null;
+  map_instrument_id?: number | null;
   result_value: number;
   result_date: string;
   run_time: string | null;
@@ -111,6 +117,9 @@ interface PeriodReview {
 }
 
 export default function VeritaQCDailyReviewPage() {
+  // #84 Phase 3: filing the monthly attestation and the co-sign policy are
+  // reviewer/admin actions; a view-only login (e.g. a Staff login) reads.
+  const isReadOnly = useIsReadOnly("veritaqc");
   const { user, isLoggedIn } = useAuth();
   const activeLabId = useActiveLabId();
   const { toast } = useToast();
@@ -134,6 +143,38 @@ export default function VeritaQCDailyReviewPage() {
   const [caTarget, setCaTarget] = useState<{ resultId: number; violationId: number | null; label: string } | null>(null);
   const [caText, setCaText] = useState("");
   const [filingCa, setFilingCa] = useState(false);
+  const labRoute = useLabRoute();
+
+  // 2026-10-08: close out a filed corrective action with its resolution (what
+  // fixed it, how that was confirmed). Needs VeritaQC edit access; the server
+  // refuses otherwise. Recorded once.
+  const [closeTarget, setCloseTarget] = useState<{ ca: CARow; label: string } | null>(null);
+  const [closeText, setCloseText] = useState("");
+  const [closingCa, setClosingCa] = useState(false);
+  async function submitClose() {
+    if (!activeLabId || !closeTarget || !closeText.trim()) return;
+    setClosingCa(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/qc/corrective-actions/${closeTarget.ca.id}/resolve`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ resolution_notes: closeText.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast({ title: "Could not close out the corrective action", description: data.error || "Try again.", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Corrective action closed out" });
+      setCloseTarget(null);
+      setCloseText("");
+      await load();
+    } catch {
+      toast({ title: "Could not close out the corrective action", description: "Network error.", variant: "destructive" });
+    } finally {
+      setClosingCa(false);
+    }
+  }
 
   async function submitCa() {
     if (!activeLabId || !caTarget || !caText.trim()) return;
@@ -599,7 +640,13 @@ export default function VeritaQCDailyReviewPage() {
                             {r.operator_name && <div className="text-[11px] text-muted-foreground">by {r.operator_name}</div>}
                           </td>
                           <td className="py-2 pr-2 font-mono">{r.result_value}</td>
-                          <td className="py-2 pr-2 text-muted-foreground">{r.instrument || "-"}</td>
+                          <td className="py-2 pr-2 text-muted-foreground">
+                            {r.map_instrument_id ? (
+                              <Link href={labRoute(`/instruments/${r.map_instrument_id}/trail`)} className="text-teal-700 hover:underline" title="Open this analyzer's QC trail">
+                                {r.instrument || "Analyzer"}
+                              </Link>
+                            ) : (r.instrument || "-")}
+                          </td>
                           <td className="py-2 pr-2">
                             {r.violations.length === 0 ? (
                               <span className="text-xs text-muted-foreground">none</span>
@@ -623,6 +670,25 @@ export default function VeritaQCDailyReviewPage() {
                                     <span className="text-muted-foreground">
                                       {r.corrective_actions.length} action{r.corrective_actions.length === 1 ? "" : "s"}
                                     </span>
+                                    {r.corrective_actions.map(c => c.resolved_at ? (
+                                      <span key={`res-${c.id}`} className="inline-flex items-center gap-1 text-emerald-700" title={c.resolution_notes || ""} data-testid={`ca-closed-${c.id}`}>
+                                        <CheckCircle2 className="h-3 w-3" /> Closed {c.resolved_at.slice(0, 10)}{c.resolved_by_name ? ` by ${c.resolved_by_name}` : ""}
+                                      </span>
+                                    ) : !isReadOnly ? (
+                                      <Button
+                                        key={`close-${c.id}`}
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 px-2 text-xs text-teal-700 hover:text-teal-800"
+                                        onClick={() => { setCloseText(""); setCloseTarget({ ca: c, label: `${r.result_date}, value ${r.result_value}` }); }}
+                                        title="Record what fixed it and how that was confirmed"
+                                        data-testid={`ca-close-${c.id}`}
+                                      >
+                                        Close out
+                                      </Button>
+                                    ) : (
+                                      <span key={`open-${c.id}`} className="text-amber-700">Open</span>
+                                    ))}
                                     {linked ? (
                                       <Link href={`/veritaresponse/${linked.nce_reference!.split("#")[1]}`} className="inline-flex items-center gap-1 text-emerald-700 hover:underline" title="Open in VeritaResponse">
                                         <ClipboardList className="h-3 w-3" /> VeritaResponse #{linked.nce_reference!.split("#")[1]}
@@ -745,16 +811,16 @@ export default function VeritaQCDailyReviewPage() {
               confirmLabel="File attestation"
               onConfirm={handleFileAttestation}
             >
-              <Button disabled={!reviewLotId || filing}>
+              <Button disabled={!reviewLotId || filing || isReadOnly} title={isReadOnly ? "Only a reviewer with VeritaQC edit access files the monthly attestation" : undefined}>
                 {filing ? "Filing..." : "File attestation"}
               </Button>
             </ConfirmDialog>
           </div>
 
-          <label className="flex items-start gap-2 text-xs text-muted-foreground mt-3 cursor-pointer">
+          {!isReadOnly && <label className="flex items-start gap-2 text-xs text-muted-foreground mt-3 cursor-pointer">
             <input type="checkbox" checked={mdCosignRequired} onChange={(e) => handleToggleCosign(e.target.checked)} className="mt-0.5" />
             <span>Require a Medical Director co-signature after the reviewer files (two-signature review). Owner or admin sets this; it applies to every lot in this lab.</span>
-          </label>
+          </label>}
 
           {mdCosignRequired && (() => {
             const cur = pastReviews.find((r: any) => r.period_year === reviewYear && r.period_month === reviewMonth) as any;
@@ -801,6 +867,38 @@ export default function VeritaQCDailyReviewPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* 2026-10-08: close out a corrective action with its resolution. */}
+      <Dialog open={!!closeTarget} onOpenChange={(o) => { if (!o) setCloseTarget(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Close out corrective action</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            {closeTarget && (
+              <>
+                <p className="text-xs text-muted-foreground">For the run: {closeTarget.label}.</p>
+                <p className="text-xs"><span className="font-medium">Action taken:</span> {closeTarget.ca.action_taken}</p>
+              </>
+            )}
+            <textarea
+              value={closeText}
+              onChange={(e) => setCloseText(e.target.value)}
+              rows={4}
+              placeholder="Resolution: what fixed it and how that was confirmed (e.g. recalibrated, repeat QC in range, patient results reviewed)."
+              className="w-full text-sm rounded border border-input bg-background px-3 py-2"
+              data-testid="ca-close-text"
+            />
+            <p className="text-[11px] text-muted-foreground">The close-out is recorded with your name and the time, and cannot be edited afterwards.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCloseTarget(null)} disabled={closingCa}>Cancel</Button>
+            <Button onClick={submitClose} disabled={closingCa || !closeText.trim()} data-testid="ca-close-submit">
+              {closingCa ? "Saving..." : "Close out"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Audit #11: file a corrective action directly from the daily review. */}
       <Dialog open={!!caTarget} onOpenChange={(o) => { if (!o) setCaTarget(null); }}>

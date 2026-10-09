@@ -702,7 +702,7 @@ export default function VeritaPacePage() {
             <div className="text-center py-12">
               <Activity size={40} className="mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground mb-4">No productivity data yet. Add your first month to get started.</p>
-              <Button onClick={openAdd} style={{ backgroundColor: "#01696F" }}><Plus size={14} className="mr-1.5" />Add Month</Button>
+              <Button onClick={openAdd} hidden={readOnly} style={{ backgroundColor: "#01696F" }}><Plus size={14} className="mr-1.5" />Add Month</Button>
             </div>
           ) : (
             <div className="overflow-auto max-h-[70vh]">

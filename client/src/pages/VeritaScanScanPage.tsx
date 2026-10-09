@@ -505,6 +505,8 @@ function ItemRow({
 }) {
   const [citExpanded, setCitExpanded] = useState(false);
   const [notesExpanded, setNotesExpanded] = useState(false);
+  // #84 Phase 3: a view-only login (e.g. a Staff login) reads the assessment.
+  const rowReadOnly = evidence.readOnly;
 
   const showDueDate =
     state.status === "Needs Attention" || state.status === "Immediate Action";
@@ -569,6 +571,7 @@ function ItemRow({
             <Select
               value={state.status}
               onValueChange={(v) => onChange({ status: v as ScanStatus })}
+              disabled={rowReadOnly}
             >
               <SelectTrigger
                 className={`h-7 text-xs w-40 border ${STATUS_COLORS[state.status]}`}
@@ -597,6 +600,7 @@ function ItemRow({
               className="h-7 text-xs w-32 min-w-0"
               placeholder="Owner"
               value={state.owner}
+              disabled={rowReadOnly}
               onChange={(e) => onChange({ owner: e.target.value })}
             />
 
@@ -606,6 +610,7 @@ function ItemRow({
                 type="date"
                 className="h-7 text-xs w-36 min-w-0"
                 value={state.dueDate}
+                disabled={rowReadOnly}
                 onChange={(e) => onChange({ dueDate: e.target.value })}
               />
             )}
@@ -626,6 +631,7 @@ function ItemRow({
               className="mt-2 text-xs min-h-[52px] resize-none"
               placeholder="Add notes, evidence references, or findings…"
               value={state.notes}
+              readOnly={rowReadOnly}
               onChange={(e) => onChange({ notes: e.target.value })}
             />
           )}
@@ -1194,6 +1200,7 @@ export default function VeritaScanScanPage() {
 
   const scheduleAutoSave = useCallback(
     (currentItems: Record<number, ItemState>) => {
+      if (readOnly) return;
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       setSaveStatus("saving");
       saveTimerRef.current = setTimeout(() => {
@@ -1201,12 +1208,13 @@ export default function VeritaScanScanPage() {
         saveMutation.mutate(itemsArray);
       }, 1500);
     },
-    [saveMutation]
+    [saveMutation, readOnly]
   );
 
   // ── Item change handler ─────────────────────────────────────────────────
   const handleItemChange = useCallback(
     (id: number, patch: Partial<ItemState>) => {
+      if (readOnly) return;
       setItems((prev) => {
         const next = {
           ...prev,
@@ -1217,7 +1225,7 @@ export default function VeritaScanScanPage() {
         return next;
       });
     },
-    [scheduleAutoSave]
+    [scheduleAutoSave, readOnly]
   );
 
   // Manual save
@@ -1408,6 +1416,7 @@ export default function VeritaScanScanPage() {
               className="h-7 text-xs gap-1.5"
               onClick={handleManualSave}
               disabled={saveMutation.isPending}
+              hidden={readOnly}
             >
               <Save className="h-3.5 w-3.5" />
               Save
@@ -1505,6 +1514,7 @@ export default function VeritaScanScanPage() {
               className="h-7 text-xs"
               onClick={handleManualSave}
               disabled={saveMutation.isPending}
+              hidden={readOnly}
             >
               {saveStatus === "saving" ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
