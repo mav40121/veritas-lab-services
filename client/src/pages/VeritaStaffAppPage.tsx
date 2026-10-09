@@ -210,7 +210,12 @@ export default function VeritaStaffAppPage() {
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [showInstrumentAssign, setShowInstrumentAssign] = useState(false);
   // VeritaCEU rides in VeritaStaff as a tab (not a separate module).
-  const [staffTab, setStaffTab] = useState<"roster" | "ce" | "delegations">("roster");
+  // ?tab=delegations deep-links to the Delegations tab (the "send this to the
+  // medical director to sign" link on a draft letter).
+  const [staffTab, setStaffTab] = useState<"roster" | "ce" | "delegations">(() => {
+    const t = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null;
+    return t === "delegations" || t === "ce" ? t : "roster";
+  });
 
   // Auth + plan check
   const hasAccess = isLoggedIn && !!user?.plan && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
