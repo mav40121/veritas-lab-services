@@ -105,8 +105,9 @@ const CATEGORY_ORDER = [
   "Manual Procedures",
 ];
 
+// 2026-10-09 (Michael): electrolytes are part of General Chemistry again; the
+// separate "Electrolytes" group (2026-03-29) caused more problems than it solved.
 const CHEMISTRY_SPECIALTY_ORDER = [
-  "Electrolytes",
   "General Chemistry",
   "Endocrinology",
   "General Immunology",
@@ -120,7 +121,6 @@ const CHEMISTRY_SPECIALTY_ORDER = [
 ];
 
 const CUSTOM_TEST_SPECIALTIES = [
-  "Electrolytes",
   "General Chemistry",
   "Hematology",
   "Coagulation",
