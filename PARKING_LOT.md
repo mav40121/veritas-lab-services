@@ -622,16 +622,15 @@ _(item #88 closed 2026-10-08; see C91 below)_
 
 ---
 
-### 90. A database rebuilt from scratch would allow only one VeritaStaff roster entry per account
+### 90. Dead statement in db.ts: a roster "unique index" that can never be created
 
-**Effort:** XS (under a day)
-**Importance:** Medium. Latent: production is not affected, but a disaster-recovery rebuild from server/db.ts (instead of a backup restore) would break Add Employee on every lab.
+**Effort:** XS (under an hour)
+**Importance:** Low. Dead code with no effect today; remove it so nobody builds on it.
 
-**What:** server/db.ts runs `CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_employees_user_id_unique ON staff_employees(user_id) WHERE user_id IS NOT NULL`, written for the 2026-06-09 idea that user_id would hold the staffer's own login. But staff_employees.user_id is NOT NULL and holds the account OWNER id on every row (see the staff_employees.user_id memory), so on an empty database the index allows exactly one roster entry per owner and the second Add Employee fails on the unique constraint. On production and the dev database the statement fails silently inside its try/catch, because rows already share an owner id (Riverside alone has 6), so the index does not exist there. Fix: remove the statement and add DROP INDEX IF EXISTS for any database that has it. The roster-to-login link is now staff_employees.login_user_id (#1553), with its own non-unique index.
+**What:** server/db.ts runs `CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_employees_user_id_unique ON staff_employees(user_id) WHERE user_id IS NOT NULL` inside a try/catch, written for the 2026-06-09 idea that user_id would hold the staffer's own login. staff_employees.user_id actually holds the account OWNER id on every row, and the boot seed inserts three roster rows under one owner before this line runs, so the CREATE always fails and the index exists nowhere (production, the dev database, or a database built from scratch). Proven 2026-10-08 with scripts/verify-90-roster-index.mjs on a fresh database: no index, and three Add Employee saves in one lab all succeed. Fix: delete the statement (dead-code rule). The roster-to-login link is staff_employees.login_user_id (#1553).
 
-**Source:** 2026-10-08, found reading db.ts while building the VeritaStaff roster prompt (#1553); confirmed the index is absent from the dev database copy.
-**Status:** Open. Related: the fresh-boot schema gap (a db.ts boot alone does not reproduce production's schema).
-
+**Source:** 2026-10-08, found reading db.ts while building the roster prompt (#1553). First written up as a disaster-recovery risk; a fresh-database test disproved that the same evening.
+**Status:** Open. Removal is built on branch roster-index-90 and waiting for a ship OK.
 ---
 
 ## CLOSED (audit trail)
