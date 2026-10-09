@@ -50,7 +50,7 @@ import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewRe
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard";
 import { legacySeatForUser, seatForRequest } from "./seatContext";
-import { correlationGroupsFor } from "@shared/presetAnalytes";
+import { labWideCorrelation, correlationPeerInstruments, describeCorrelationInstrument } from "./labWideCorrelation";
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
 import { isValidIfuUrl } from "@shared/ifu";
@@ -14314,7 +14314,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         corrByTestId[localTestId].push(corr);
       }
     }
-    const corrGroups = correlationGroupsFor(instrMap); // #76
+    // #76 + BUG-011 part C: correlation counts every map in the lab (Q43 = 1).
+    const { groups: corrGroups, all: corrAll } = labWideCorrelation((db as any).$client, req.params.id, instrMap);
     const tests = rawTests.map((t: any) => {
       const instruments = instrMap[t.analyte] ?? [];
       return {
@@ -14322,7 +14323,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         instruments,
         correlation_instrument_count: corrGroups[t.analyte]?.instrumentCount ?? instruments.length,
         correlation_peers: corrGroups[t.analyte]?.peers ?? [],
-        correlation_peer_instruments: (corrGroups[t.analyte]?.peers ?? []).flatMap((a: string) => (instrMap[a] ?? []).map((x: any) => ({ analyte: a, instrument_name: x.instrument_name, role: x.role }))),
+        correlation_peer_instruments: correlationPeerInstruments(corrAll, t.analyte, corrGroups[t.analyte]?.peers ?? []),
         correlations: corrByTestId[t.id] ?? [],
         cal_ver_exempt: instruments.length > 0 && instruments.every((x: any) => x.cal_ver_exempt === 1),
       };
@@ -14444,7 +14445,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         corrByTestId[localTestId].push(corr);
       }
     }
-    const corrGroups = correlationGroupsFor(instrMap); // #76
+    // #76 + BUG-011 part C: correlation counts every map in the lab (Q43 = 1).
+    const { groups: corrGroups, all: corrAll } = labWideCorrelation((db as any).$client, req.params.id, instrMap);
     const tests = (rawTests as any[]).map((t: any) => {
       const instruments = instrMap[t.analyte] ?? [];
       return {
@@ -14452,7 +14454,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         instruments,
         correlation_instrument_count: corrGroups[t.analyte]?.instrumentCount ?? instruments.length,
         correlation_peers: corrGroups[t.analyte]?.peers ?? [],
-        correlation_peer_instruments: (corrGroups[t.analyte]?.peers ?? []).flatMap((a: string) => (instrMap[a] ?? []).map((x: any) => ({ analyte: a, instrument_name: x.instrument_name, role: x.role }))),
+        correlation_peer_instruments: correlationPeerInstruments(corrAll, t.analyte, corrGroups[t.analyte]?.peers ?? []),
         correlations: corrByTestId[t.id] ?? [],
         cal_ver_exempt: instruments.length > 0 && instruments.every((x: any) => x.cal_ver_exempt === 1),
       };
@@ -14657,14 +14659,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const intelligence: Record<string, any> = {};
     // #76: correlation is decided per correlation GROUP (manual "Lymphocytes"
     // pairs with analyzer "LYMPH%"), not per exact analyte string.
-    const corrGroups = correlationGroupsFor(byAnalyte);
+    const { groups: corrGroups, all: corrAll } = labWideCorrelation((db as any).$client, req.params.id, byAnalyte); // BUG-011 part C
     for (const [analyte, instruments] of Object.entries(byAnalyte)) {
       const complexity = instruments[0].complexity;
       const isWaived = complexity === 'WAIVED';
       const group = corrGroups[analyte] ?? { instrumentCount: instruments.length, peers: [] };
       const correlationRequired = group.instrumentCount >= 2;
       const calVerRequired = !isWaived;
-      const groupList = [analyte, ...group.peers].flatMap((a) => (byAnalyte[a] ?? []).map((i: any) => `${i.instrument_name} [${i.role}]${a !== analyte ? ` as ${a}` : ''}`));
+      const groupList = [analyte, ...group.peers].flatMap((a) => (corrAll[a] ?? []).map((i: any) => describeCorrelationInstrument(i, a, analyte)));
       intelligence[analyte] = {
         complexity, isWaived, calVerRequired,
         calVerFrequency: calVerRequired ? 'Every 6 months (42 CFR §493.1255)' : 'Exempt - waived test',
@@ -15626,14 +15628,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     const intelligence: Record<string, any> = {};
-    const corrGroups = correlationGroupsFor(byAnalyte); // #76: group, not exact string
+    const { groups: corrGroups, all: corrAll } = labWideCorrelation((db as any).$client, req.params.id, byAnalyte); // #76 + BUG-011 part C
     for (const [analyte, instruments] of Object.entries(byAnalyte)) {
       const complexity = instruments[0].complexity;
       const isWaived = complexity === 'WAIVED';
       const group = corrGroups[analyte] ?? { instrumentCount: instruments.length, peers: [] };
       const correlationRequired = group.instrumentCount >= 2;
       const calVerRequired = !isWaived;
-      const groupList = [analyte, ...group.peers].flatMap((a) => (byAnalyte[a] ?? []).map((i: any) => `${i.instrument_name} [${i.role}]${a !== analyte ? ` as ${a}` : ''}`));
+      const groupList = [analyte, ...group.peers].flatMap((a) => (corrAll[a] ?? []).map((i: any) => describeCorrelationInstrument(i, a, analyte)));
 
       intelligence[analyte] = {
         complexity,
@@ -16293,7 +16295,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!instrMap[row.analyte]) instrMap[row.analyte] = [];
       instrMap[row.analyte].push(row);
     }
-    const corrGroups = correlationGroupsFor(instrMap); // #76
+    const { groups: corrGroups } = labWideCorrelation((db as any).$client, req.params.id, instrMap); // #76 + BUG-011 part C
     const tests = rawTests.map((t: any) => ({ ...t, instruments: instrMap[t.analyte] ?? [], correlation_instrument_count: corrGroups[t.analyte]?.instrumentCount ?? (instrMap[t.analyte] ?? []).length }));
 
     // Fetch lab-entered analyte values and AMR values.
@@ -19778,7 +19780,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           byAnalyte[row.analyte].push(row);
         }
         const intelligence: Record<string, any> = {};
-        const corrGroups = correlationGroupsFor(byAnalyte); // #76
+        const { groups: corrGroups } = labWideCorrelation((db as any).$client, m.id, byAnalyte); // #76 + BUG-011 part C
         for (const [analyte, insts] of Object.entries(byAnalyte)) {
           const complexity = insts[0].complexity;
           const isWaived = complexity === 'WAIVED';
@@ -20485,7 +20487,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!instrMap[row.analyte]) instrMap[row.analyte] = [];
       instrMap[row.analyte].push(row);
     }
-    const corrGroups = correlationGroupsFor(instrMap); // #76
+    const { groups: corrGroups } = labWideCorrelation((db as any).$client, map.id, instrMap); // #76 + BUG-011 part C
     const tests = rawTests.map((t: any) => ({ ...t, instruments: instrMap[t.analyte] ?? [], correlation_instrument_count: corrGroups[t.analyte]?.instrumentCount ?? (instrMap[t.analyte] ?? []).length }));
 
     tests.sort((a: any, b: any) => {
