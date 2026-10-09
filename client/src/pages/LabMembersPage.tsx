@@ -130,7 +130,7 @@ export default function LabMembersPage() {
   const isOwner = myRole === "owner";
   const canManage = myRole === "owner" || myRole === "admin";
 
-  const { data, isLoading } = useQuery<{ members: LabMember[]; pendingInvites?: PendingInvite[]; seatLimits?: SeatLimits; seatCounts?: SeatCounts; medicalDirector?: { email: string; name: string | null } | null }>({
+  const { data, isLoading } = useQuery<{ members: LabMember[]; pendingInvites?: PendingInvite[]; seatLimits?: SeatLimits; seatCounts?: SeatCounts; staffPortal?: { band: "small" | "medium" | "large" | null; maxStaff: number | null; used: number } | null; medicalDirector?: { email: string; name: string | null } | null }>({
     queryKey: [`/api/labs/${activeLabId}/members`],
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!activeLabId,
@@ -139,6 +139,9 @@ export default function LabMembersPage() {
   const pendingInvites = data?.pendingInvites || [];
   const seatLimits = data?.seatLimits;
   const seatCounts = data?.seatCounts;
+  // Bug 4 (2026-10-09): the lab's Staff Portal band, so staff show as used of it.
+  const staffPortal = data?.staffPortal ?? null;
+  const bandLabel = staffPortal?.band ? `${staffPortal.band.charAt(0).toUpperCase()}${staffPortal.band.slice(1)} band` : null;
   // Designated Laboratory Medical Director (may be an active member or, as with
   // a director who has not accepted yet, a pending invite). Matched by email.
   const mdEmail = (data?.medicalDirector?.email || "").trim().toLowerCase();
@@ -347,7 +350,11 @@ export default function LabMembersPage() {
                   staff belong in the Staff Portal, not seats. */}
               <div className="flex items-center gap-3">
                 <div>
-                  <div className="font-medium" data-testid="staff-portal-count">{staffPortalInvites.length} read-and-sign staff</div>
+                  <div className="font-medium" data-testid="staff-portal-count">
+                    {staffPortal?.maxStaff
+                      ? `${staffPortal.used} of ${staffPortal.maxStaff} read-and-sign staff (${bandLabel})`
+                      : `${staffPortal ? staffPortal.used : staffPortalInvites.length} read-and-sign staff`}
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     Bench staff who read and sign policies, record QC, and take inventory. They draw from your Staff Portal band, not your active seats, so adding them never uses an active seat. Add one above with the Staff (read and sign) role.
                   </div>
