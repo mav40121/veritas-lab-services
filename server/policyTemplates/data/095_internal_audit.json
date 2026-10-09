@@ -8,12 +8,12 @@
     {
       "citation": "42 CFR 493.1239(a)",
       "label": "Standard: General laboratory systems quality assessment",
-      "verbatim": "The laboratory must establish and follow written policies and procedures for an ongoing mechanism to monitor, assess and, when indicated, correct problems identified in the general laboratory systems requirements specified at 493.1101 through 493.1105."
+      "verbatim": "(a) The laboratory must establish and follow written policies and procedures for an ongoing mechanism to monitor, assess, and, when indicated, correct problems identified in the general laboratory systems requirements specified at §§ 493.1231 through 493.1236."
     },
     {
       "citation": "42 CFR 493.1289(a)",
       "label": "Standard: Postanalytic systems quality assessment",
-      "verbatim": "The laboratory must establish and follow written policies and procedures for an ongoing mechanism to monitor, assess and, when indicated, correct problems identified in the postanalytic systems specified at 493.1281 and 493.1283."
+      "verbatim": "(a) The laboratory must establish and follow written policies and procedures for an ongoing mechanism to monitor, assess, and when indicated, correct problems identified in the analytic systems specified in §§ 493.1251 through 493.1283."
     }
   ],
   "scope": "All <<LAB_NAME>> testing personnel, supervisors, the medical director or designee, and the quality coordinator (if assigned).",

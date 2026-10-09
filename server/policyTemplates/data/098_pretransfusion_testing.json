@@ -85,17 +85,17 @@
     {
       "citation": "42 CFR 493.1232",
       "label": "Standard: Specimen identification and integrity",
-      "verbatim": "The laboratory must establish and follow written policies and procedures to ensure positive identification and optimum integrity of a patient's specimen from the time of collection or receipt through completion of testing and reporting of results."
+      "verbatim": "The laboratory must establish and follow written policies and procedures that ensure positive identification and optimum integrity of a patient's specimen from the time of collection or receipt of the specimen through completion of testing and reporting of results."
     },
     {
       "citation": "42 CFR 493.1242",
       "label": "Standard: Specimen submission, handling, and referral",
-      "verbatim": "The laboratory must establish and follow written policies and procedures for each of the following, if applicable: (1) Patient preparation. (2) Specimen collection. (3) Specimen labeling, including patient name or unique patient identifier and, when appropriate, specimen source. (4) Specimen storage and preservation. (5) Conditions for specimen transportation. (6) Specimen processing. (7) Specimen acceptability and rejection. (8) Specimen referral."
+      "verbatim": "(a) The laboratory must establish and follow written policies and procedures for each of the following, if applicable: (1) Patient preparation. (2) Specimen collection. (3) Specimen labeling, including patient name or unique patient identifier and, when appropriate, specimen source. (4) Specimen storage and preservation. (5) Conditions for specimen transportation. (6) Specimen processing. (7) Specimen acceptability and rejection. (8) Specimen referral. (b) The laboratory must document the date and time it receives a specimen. (c) The laboratory must refer a specimen for testing only to a CLIA-certified laboratory or a laboratory meeting equivalent requirements as determined by CMS. (d) If the laboratory accepts a referral specimen, written instructions must be available to the laboratory's clients and must include, as appropriate, the information specified in paragraphs (a)(1) through (a)(7) of this section."
     },
     {
       "citation": "42 CFR 493.1271(a)",
       "label": "Standard: Immunohematology",
-      "verbatim": "If the laboratory provides services in the subspecialty of Immunohematology, the laboratory must perform ABO grouping, D(Rho) typing, unexpected antibody detection, antibody identification, and compatibility testing by following the manufacturer's instructions, if provided, and as applicable, meet the requirements of 493.1271(b) through (e)."
+      "verbatim": "(a) Patient testing. (1) The laboratory must perform ABO grouping, D(Rho) typing, unexpected antibody detection, antibody identification, and compatibility testing by following the manufacturer's instructions, if provided, and as applicable, 21 CFR 606.151(a) through (e). (2) The laboratory must determine ABO group by concurrently testing unknown red cells with, at a minimum, anti-A and anti-B grouping reagents. For confirmation of ABO group, the unknown serum must be tested with known A1 and B red cells. (3) The laboratory must determine the D(Rho) type by testing unknown red cells with anti-D (anti-Rho) blood typing reagent."
     },
     {
       "citation": "42 CFR 493.1271(b)",
@@ -120,12 +120,12 @@
     {
       "citation": "42 CFR 493.1256",
       "label": "Standard: Control procedures (general)",
-      "verbatim": "For each test system, the laboratory is responsible for having control procedures that monitor the accuracy and precision of the complete analytic process. The laboratory must establish the number, type, and frequency of testing control materials using, if applicable, the performance specifications verified or established by the laboratory as specified in 493.1253(b)(3)."
+      "verbatim": "(a) For each test system, the laboratory is responsible for having control procedures that monitor the accuracy and precision of the complete analytic process. (b) The laboratory must establish the number, type, and frequency of testing control materials using, if applicable, the performance specifications verified or established by the laboratory as specified in § 493.1253(b)(3)."
     },
     {
       "citation": "21 CFR 606.151(b)",
       "label": "FDA: Use of fresh recipient samples",
-      "verbatim": "The use of fresh recipient serum or plasma samples less than 3 days old for all pretransfusion testing if the recipient has been pregnant within the past 3 months or transfused within the past 3 months, or if the history is uncertain or unavailable."
+      "verbatim": "(b) The use of fresh recipient serum or plasma samples less than 3 days old for all pretransfusion testing if the recipient has been pregnant or transfused within the previous 3 months."
     }
   ]
 }

@@ -60,17 +60,17 @@
     {
       "citation": "42 CFR 493.1252(b)",
       "label": "Standard: Storage conditions",
-      "verbatim": "The laboratory must define criteria for those conditions that are essential for proper storage of reagents and specimens, accurate and reliable test system operation, and test result reporting. The criteria must be consistent with the manufacturer's instructions, if provided. These conditions must be monitored and documented and, if applicable, include the following: (1) Water quality. (2) Temperature. (3) Humidity. (4) Protection of equipment and instruments from fluctuations and interruptions in electrical current that adversely affect patient test results and test reports."
+      "verbatim": "(b) The laboratory must define criteria for those conditions that are essential for proper storage of reagents and specimens, accurate and reliable test system operation, and test result reporting. The criteria must be consistent with the manufacturer's instructions, if provided. These conditions must be monitored and documented and, if applicable, include the following: (1) Water quality. (2) Temperature. (3) Humidity. (4) Protection of equipment and instruments from fluctuations and interruptions in electrical current that adversely affect patient test results and test reports."
     },
     {
       "citation": "42 CFR 493.1252(c)",
       "label": "Standard: Reagent labeling",
-      "verbatim": "Reagents, solutions, culture media, control materials, calibration materials, and other supplies, as appropriate, must be labeled to indicate the following: (1) Identity and, when significant, titer, strength or concentration. (2) Storage requirements. (3) Preparation and expiration dates. (4) Other pertinent information required for proper use."
+      "verbatim": "(c) Reagents, solutions, culture media, control materials, calibration materials, and other supplies, as appropriate, must be labeled to indicate the following: (1) Identity and when significant, titer, strength or concentration. (2) Storage requirements. (3) Preparation and expiration dates. (4) Other pertinent information required for proper use."
     },
     {
       "citation": "42 CFR 493.1252(d)",
       "label": "Standard: Reagent acceptance",
-      "verbatim": "Reagents, solutions, culture media, control materials, calibration materials, and other supplies must not be used when they have exceeded their expiration date, have deteriorated, or are of substandard quality."
+      "verbatim": "(d) Reagents, solutions, culture media, control materials, calibration materials, and other supplies must not be used when they have exceeded their expiration date, have deteriorated, or are of substandard quality."
     },
     {
       "citation": "29 CFR 1910.1200(f)",
@@ -80,7 +80,7 @@
     {
       "citation": "29 CFR 1910.1200(g)",
       "label": "OSHA HazCom: Safety Data Sheets",
-      "verbatim": "Chemical manufacturers and importers shall obtain or develop a safety data sheet for each hazardous chemical they produce or import. Employers shall have a safety data sheet in the workplace for each hazardous chemical which they use."
+      "verbatim": "(1) Chemical manufacturers and importers shall obtain or develop a safety data sheet for each hazardous chemical they produce or import. Employers shall have a safety data sheet in the workplace for each hazardous chemical which they use."
     },
     {
       "citation": "42 CFR 493.1105(a)(2)",

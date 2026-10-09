@@ -8,7 +8,7 @@
     {
       "citation": "42 CFR 493.1291(c)",
       "label": "Standard: Test report",
-      "verbatim": "Test reports must indicate the following: (1) For positive patient identification, either the patient's name and identification number, or a unique patient identifier and identification number. (2) The name and address of the laboratory location where the test was performed. (3) The test report date. (4) The test performed. (5) Specimen source, when appropriate. (6) The test result and, if applicable, the units of measurement or interpretation, or both. (7) Any information regarding the condition and disposition of specimens that do not meet the laboratory's criteria for acceptability."
+      "verbatim": "(c) The test report must indicate the following: (1) For positive patient identification, either the patient's name and identification number, or a unique patient identifier and identification number. (2) The name and address of the laboratory location where the test was performed. (3) The test report date. (4) The test performed. (5) Specimen source, when appropriate. (6) The test result and, if applicable, the units of measurement or interpretation, or both. (7) Any information regarding the condition and disposition of specimens that do not meet the laboratory's criteria for acceptability."
     }
   ],
   "scope": "Applies only when <<LAB_NAME>> participates in a cell exchange program.",

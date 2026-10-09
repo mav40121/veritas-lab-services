@@ -8,12 +8,12 @@
     {
       "citation": "45 CFR 164.308(a)(6)(i)",
       "label": "HIPAA Security Rule: Security incident procedures (Standard)",
-      "verbatim": "Implement policies and procedures to address security incidents."
+      "verbatim": "(i) Standard: Security incident procedures. Implement policies and procedures to address security incidents."
     },
     {
       "citation": "45 CFR 164.308(a)(6)(ii)",
       "label": "HIPAA Security Rule: Response and reporting",
-      "verbatim": "Identify and respond to suspected or known security incidents; mitigate, to the extent practicable, harmful effects of security incidents that are known to the covered entity or business associate; and document security incidents and their outcomes."
+      "verbatim": "(ii) Implementation specification: Response and reporting (Required). Identify and respond to suspected or known security incidents; mitigate, to the extent practicable, harmful effects of security incidents that are known to the covered entity or business associate; and document security incidents and their outcomes."
     }
   ],
   "scope": "All <<LAB_NAME>> personnel, the IT staff supporting LIS and ePHI-containing systems, the security officer, the medical director or designee, and any business associates handling ePHI on behalf of the lab.",

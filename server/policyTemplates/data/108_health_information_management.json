@@ -83,7 +83,7 @@
     {
       "citation": "42 CFR 493.1231",
       "label": "Standard: Confidentiality of patient information",
-      "verbatim": "The laboratory must ensure confidentiality of patient information throughout all phases of the testing process that are under the laboratory's control."
+      "verbatim": "The laboratory must ensure confidentiality of patient information throughout all phases of the total testing process that are under the laboratory's control."
     },
     {
       "citation": "42 CFR 493.1281(c)",
@@ -93,7 +93,7 @@
     {
       "citation": "42 CFR 493.1283",
       "label": "Standard: Test records",
-      "verbatim": "The laboratory must maintain an information or record system that includes the following: (1) The positive identification of the specimen. (2) The date and time of specimen receipt into the laboratory. (3) The condition and disposition of specimens that do not meet the laboratory's criteria for specimen acceptability. (4) The records and dates of all specimen testing, including the identity of the personnel who performed the test(s). Records of patient testing including, if applicable, instrument printouts, must be retained."
+      "verbatim": "(a) The laboratory must maintain an information or record system that includes the following: (1) The positive identification of the specimen. (2) The date and time of specimen receipt into the laboratory. (3) The condition and disposition of specimens that do not meet the laboratory's criteria for specimen acceptability. (4) The records and dates of all specimen testing, including the identity of the personnel who performed the test(s). (b) Records of patient testing including, if applicable, instrument printouts, must be retained."
     },
     {
       "citation": "45 CFR 164.502(a)",
@@ -103,7 +103,7 @@
     {
       "citation": "45 CFR 164.502(b)",
       "label": "HIPAA: Minimum necessary",
-      "verbatim": "When using or disclosing protected health information or when requesting protected health information from another covered entity or business associate, a covered entity or business associate must make reasonable efforts to limit protected health information to the minimum necessary to accomplish the intended purpose of the use, disclosure, or request."
+      "verbatim": "(b) Standard: Minimum necessary - Minimum necessary applies. When using or disclosing protected health information or when requesting protected health information from another covered entity or business associate, a covered entity or business associate must make reasonable efforts to limit protected health information to the minimum necessary to accomplish the intended purpose of the use, disclosure, or request. (2) Minimum necessary does not apply. This requirement does not apply to: (i) Disclosures to or requests by a health care provider for treatment; (ii) Uses or disclosures made to the individual, as permitted under paragraph (a)(1)(i) of this section or as required by paragraph (a)(2)(i) of this section; (iii) Uses or disclosures made pursuant to an authorization under § 164.508; (iv) Disclosures made to the Secretary in accordance with subpart C of part 160 of this subchapter; (v) Uses or disclosures that are required by law, as described by § 164.512(a); and (vi) Uses or disclosures that are required for compliance with applicable requirements of this subchapter."
     },
     {
       "citation": "45 CFR 164.504(e)",
@@ -113,27 +113,27 @@
     {
       "citation": "45 CFR 164.306(a)",
       "label": "HIPAA Security Rule: General requirements",
-      "verbatim": "Covered entities and business associates must do the following: (1) Ensure the confidentiality, integrity, and availability of all electronic protected health information the covered entity or business associate creates, receives, maintains, or transmits. (2) Protect against any reasonably anticipated threats or hazards to the security or integrity of such information. (3) Protect against any reasonably anticipated uses or disclosures of such information that are not permitted or required under subpart E of this part. (4) Ensure compliance with this subpart by its workforce."
+      "verbatim": "(a) General requirements. Covered entities and business associates must do the following: (1) Ensure the confidentiality, integrity, and availability of all electronic protected health information the covered entity or business associate creates, receives, maintains, or transmits. (2) Protect against any reasonably anticipated threats or hazards to the security or integrity of such information. (3) Protect against any reasonably anticipated uses or disclosures of such information that are not permitted or required under subpart E of this part. (4) Ensure compliance with this subpart by its workforce."
     },
     {
       "citation": "45 CFR 164.312(a)(1)",
       "label": "HIPAA Security Rule: Access control (Standard)",
-      "verbatim": "Implement technical policies and procedures for electronic information systems that maintain electronic protected health information to allow access only to those persons or software programs that have been granted access rights as specified in 164.308(a)(4)."
+      "verbatim": "(1) Standard: Access control. Implement technical policies and procedures for electronic information systems that maintain electronic protected health information to allow access only to those persons or software programs that have been granted access rights as specified in § 164.308(a)(4)."
     },
     {
       "citation": "45 CFR 164.312(b)",
       "label": "HIPAA Security Rule: Audit controls",
-      "verbatim": "Implement hardware, software, and/or procedural mechanisms that record and examine activity in information systems that contain or use electronic protected health information."
+      "verbatim": "(b) Standard: Audit controls. Implement hardware, software, and/or procedural mechanisms that record and examine activity in information systems that contain or use electronic protected health information."
     },
     {
       "citation": "45 CFR 164.312(c)(1)",
       "label": "Standard: Integrity",
-      "verbatim": "Implement policies and procedures to protect electronic protected health information from improper alteration or destruction."
+      "verbatim": "(1) Standard: Integrity. Implement policies and procedures to protect electronic protected health information from improper alteration or destruction."
     },
     {
       "citation": "45 CFR 164.312(e)(1)",
       "label": "Standard: Transmission security",
-      "verbatim": "Implement technical security measures to guard against unauthorized access to electronic protected health information that is being transmitted over an electronic communications network."
+      "verbatim": "(1) Standard: Transmission security. Implement technical security measures to guard against unauthorized access to electronic protected health information that is being transmitted over an electronic communications network."
     },
     {
       "citation": "45 CFR 164.402",
@@ -143,7 +143,7 @@
     {
       "citation": "45 CFR 164.404(b)",
       "label": "HIPAA Breach Notification: Timeliness",
-      "verbatim": "Except as provided in 164.412, a covered entity shall provide the notification required by paragraph (a) of this section without unreasonable delay and in no case later than 60 calendar days after discovery of a breach."
+      "verbatim": "(b) Implementation specification: Timeliness of notification. Except as provided in § 164.412, a covered entity shall provide the notification required by paragraph (a) of this section without unreasonable delay and in no case later than 60 calendar days after discovery of a breach."
     }
   ]
 }
