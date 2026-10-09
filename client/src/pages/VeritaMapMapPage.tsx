@@ -121,7 +121,7 @@ interface TestRecord {
   // analyzer's "LYMPH%" (server-derived; parking lot #76).
   correlation_instrument_count?: number;
   correlation_peers?: string[];
-  correlation_peer_instruments?: { analyte: string; instrument_name: string; role: string }[];
+  correlation_peer_instruments?: { analyte: string; instrument_name: string; role: string; map_name?: string | null }[];
 }
 
 // #76: correlation is required when 2+ instruments run the test, counting the
@@ -1548,7 +1548,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                   {(test.correlation_peer_instruments ?? []).map((p, i) => (
                     <li key={`peer-${i}`} data-testid="correlation-peers">
                       {p.instrument_name}{" "}
-                      <span className="text-muted-foreground">[{p.role}] as {p.analyte}</span>
+                      <span className="text-muted-foreground">[{p.role}] as {p.analyte}{p.map_name ? ` on map "${p.map_name}"` : ""}</span>
                     </li>
                   ))}
                 </ul>
