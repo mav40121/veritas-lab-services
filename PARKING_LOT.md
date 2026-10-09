@@ -50,7 +50,7 @@ and TJC (CAMLAB PDF + text extract).
 **Source:** prior session handoff. Re-confirmed during 2026-05-01 QC
 review.
 
-**Status:** Open. Multi-hour subagent fan-out work. Work-pass 2026-10-04: BLOCKED on materials. AABB and COLA columns cannot be source-grounded without the gated manuals (item #28); CAP is 11/12 modules verifiable from files on the drive, MOL file missing (item #27); TJC is operator-authoritative. Not startable without fabricating accreditor citations. Awaiting #27 + #28.
+**Status:** Open. Multi-hour subagent fan-out work. Work-pass 2026-10-04: BLOCKED on materials. AABB and COLA columns cannot be source-grounded without the gated manuals (item #28); CAP is 11/12 modules verifiable from files on the drive, MOL file missing (item #27); TJC is operator-authoritative. Not startable without fabricating accreditor citations. Awaiting #27 + #28. **CAP existence audit 2026-10-09:** scripts/audit-cap-citations-vs-mas.py (read-only) checked every CAP ID in the VeritaPolicy master list (58 policies, 525 distinct citations incl. 5 ranges) against the 12 MAS checklist files on the drive: 0 missing (all 520 single IDs and both endpoints of every range exist; nothing cites the missing MOL checklist). What remains for the CAP column is relevance (is each requirement the right one for its policy), a human review, not an existence problem.
 
 **Pre- vs post-COLA:** Pre-COLA. May 6-8 conference; Saturday + Sunday +
 Monday available before the booth.
@@ -556,41 +556,11 @@ a new module), isolate data intake (LIS export vs manual), and whether the
 antibiogram is a PDF deliverable or a live table.
 
 **Source:** Lisa, 2026-10-07 ~13:40 ("Lets scope an antimicrobial stewardship program in the system"), then parked before scoping.
-**Status:** Open. Scope document on request (docs/ANTIMICROBIAL_STEWARDSHIP_SCOPE.md); no build.
+**Status:** Open. Scope document WRITTEN 2026-10-09: docs/ANTIMICROBIAL_STEWARDSHIP_SCOPE.md (verbatim 42 CFR 482.42(b) and 485.640(b); five lab-side parts; MVP M 1-2 weeks; recommends a Stewardship tab in VeritaQA, aggregate LIS totals only so it stays HIPAA-free). Six open questions for Lisa and Michael before any build. Also found: the master-list stewardship note sits on policy 66 (Manual Hematology QC), likely misplaced.
 
 ---
 
-### 84. Staff logins see a different site than editors; move them into the main app with recording rights and setup locked
-
-**Effort:** M (1-2 weeks)
-**Importance:** High. A paying client's lead tech could not find QC after signing in, and every staff member at every client sees screens that do not match the training, the quick reference, or what their manager sees.
-
-**What:** Gameday Plymouth's lead tech (Elizabeth Bensinger, staff seat on lab
-29) signed in on 2026-10-07 and landed on Account Settings with the owner
-"Complete your lab setup" banner and Run a Study, and no path to QC; Mike
-Hiltunen: "looks nothing like mine." Root cause: the Staff Portal was built for
-the retired CLIA+PIN kiosk (no accounts, so a separate stripped screen); since
-2026-09-30 staff have real logins but stay behind that separate door. Today
-JoinPage sends every accepted seat to the lab dashboard, the NavBar has no
-Staff Portal link, /api/auth/me does not report the seat type, and a
-staff_portal seat gets no lab_members row, so the main lab API turns it away.
-Michael's decision (2026-10-08): one app for every login; the login type
-changes what you can do, never what you see. A staff login sees the same
-module screens as the editors in its lab (Levey-Jennings charts included),
-does the recording work (QC results, notes, corrective actions, task
-sign-offs, maintenance events, inventory counts, read-and-sign), and setup and
-authoring stay locked. Most of the plumbing exists: the 2026-10-03 access
-model (record = requireWriteAccess, author = requireModuleEdit) and the
-per-module useIsReadOnly UI (32 call sites). Work: a staff seat also creates a
-lab membership; every module separates recording buttons from setup buttons
-(audit each useIsReadOnly site so recording stays enabled); the /staff-access
-page becomes a "My sign-offs" list inside the app; backfill existing staff
-seats (MedStar has 9); keep blockNonOperatorSeat on account-wide endpoints;
-update the /qa-sweep two-way matrix (staff admitted to lab reads, blocked from
-authoring). Pricing unchanged: the Staff band covers record and read.
-
-**Source:** Michael, 2026-10-08 ("why can't she see what an editor can see and just not have some of the functionality?"; "When different staff [see] settings different ways, errors happen"), from Mike Hiltunen's 2026-10-07 screenshot.
-**Status:** Nearly done 2026-10-08. Live: Phase 2 server gates (#1533), Phase 1 staff land on My work (#1540), Staff Portal identity fix (#1541), Phase 3 staff see the editors' screens with setup locked (#1544), and /staff-access becomes My sign-offs inside the lab (#1547). Last piece: #1548 removes the now-callerless /api/staff-portal-session/qc and /inventory routes and makes unknown /api addresses return a JSON 404; it ships 2026-10-09 about 07:00 ET (Michael, Q22 "1"). Close after #1548 is live.
+_(item #84 closed 2026-10-09; see C93 below)_
 
 ---
 
@@ -634,6 +604,12 @@ _(item #88 closed 2026-10-08; see C91 below)_
 ---
 
 ## CLOSED (audit trail)
+
+### C93. Staff logins see the same app as editors, recording allowed, setup locked (was #84)
+
+**Effort:** was M / **Importance:** High.
+
+**Closure evidence:** all live on production. Phase 2 server gates #1533; Phase 1, staff land on My work, #1540; Staff Portal identity fix #1541; Phase 3, staff see the editors' screens with setup locked, #1544; /staff-access becomes My sign-offs inside the lab, #1547; the now-callerless /api/staff-portal-session/qc and /inventory routes removed and unknown /api addresses return a JSON 404, #1548 (squash 7dd0070b, live 2026-10-09 07:30 ET). Overnight soak before #1548: Railway logs showed only unauthenticated 401 probes on those routes, no logged-in use. Prod check after deploy: the removed routes and an unknown /api address return 404 application/json; /labs/1/dashboard returns 200.
 
 ### C92. VeritaCheck page: handleBuy defined and never called (was #87)
 
