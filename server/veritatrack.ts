@@ -7,6 +7,7 @@ import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
 import { blockNonOperatorSeat } from "./seatAccess";
 import { preserveMapLink, applyMapSignoffWriteback, deriveMapLink, analyteFromTaskName } from "./veritatrackMapSync";
 import { labLocalDate } from "./dateLocal";
+import { labWideCorrelation } from "./labWideCorrelation";
 
 function trackLicenseCtx(req: any): LicenseContext {
   const u = req?.user || null;
@@ -724,9 +725,21 @@ export function registerVeritaTrackRoutes(
       { field: "last_precision",   label: "Precision Verification",   category: "Calibration Verification", frequency: "Biannual", months: 6 },
       { field: "last_sop_review",  label: "SOP Review",               category: "Policy Review",            frequency: "Biennial", months: 24 },
     ];
+    // BUG-018: a comparison task only for tests that 2+ nonwaived instruments run lab-wide (42 CFR 493.1281(a)).
+    const comparisonRequired = new Set<string>();
+    for (const m of maps) {
+      const rows = sqlite.prepare(
+        "SELECT it.analyte, i.id, i.instrument_name, i.serial_number FROM veritamap_instrument_tests it JOIN veritamap_instruments i ON i.id = it.instrument_id WHERE it.map_id = ? AND it.active = 1"
+      ).all(m.id) as any[];
+      const instrMap: Record<string, any[]> = {};
+      for (const r of rows) (instrMap[r.analyte] ??= []).push({ id: r.id, instrument_name: r.instrument_name, serial_number: r.serial_number || null });
+      const { groups } = labWideCorrelation(sqlite, m.id, instrMap);
+      for (const [a, g] of Object.entries(groups)) if (g.instrumentCount >= 2) comparisonRequired.add(a.trim().toLowerCase());
+    }
     for (const test of tests) {
       if (test.complexity === "WAIVED") continue;
       for (const fd of fieldDefs) {
+        if (fd.field === "last_method_comp" && !comparisonRequired.has(String(test.analyte || "").trim().toLowerCase())) continue;
         const taskName = `${fd.label} - ${test.analyte}`;
         const existing = sqlite.prepare(
           "SELECT id FROM veritatrack_tasks WHERE lab_id=? AND name=? AND active=1"

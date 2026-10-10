@@ -110,6 +110,35 @@ export function labWideCorrelation(sqlite: any, mapId: number | string, local: R
   return { groups, all, waived };
 }
 
+/** BUG-018: the map list's "gaps" count, using the same rules as the map page's score card. An active nonwaived test
+ *  is a gap when it has no calibration verification date (unless cal ver is marked not applicable or every
+ *  instrument on it is exempt), or no method comparison date where one is required: 2+ NONWAIVED instruments run
+ *  the test lab-wide (42 CFR 493.1281(a)). A test run on one instrument needs no comparison. */
+export function mapComplianceGaps(sqlite: any, mapId: number): { totalTests: number; gaps: number } {
+  const tests = sqlite.prepare("SELECT analyte, active, last_cal_ver, last_method_comp, complexity, cal_ver_na FROM veritamap_tests WHERE map_id = ?").all(mapId) as any[];
+  const active = tests.filter((t) => t.active);
+  const rows = sqlite.prepare(`
+    SELECT it.analyte, i.id, i.instrument_name, i.serial_number,
+      CASE WHEN COALESCE(it.linearity_exempt_multical, 0) = 1 OR COALESCE(it.linearity_exempt_noncal, 0) = 1
+                OR COALESCE(it.linearity_exempt_waived, 0) = 1 OR TRIM(COALESCE(it.linearity_exempt_other, '')) <> ''
+           THEN 1 ELSE 0 END AS cal_ver_exempt
+      FROM veritamap_instrument_tests it JOIN veritamap_instruments i ON i.id = it.instrument_id
+     WHERE it.map_id = ? AND it.active = 1
+  `).all(mapId) as any[];
+  const instrMap: Record<string, any[]> = {};
+  for (const r of rows) (instrMap[r.analyte] ??= []).push({ id: r.id, instrument_name: r.instrument_name, serial_number: r.serial_number || null, cal_ver_exempt: r.cal_ver_exempt });
+  const { groups } = labWideCorrelation(sqlite, mapId, instrMap);
+  let gaps = 0;
+  for (const t of active) {
+    if (t.complexity !== "MODERATE" && t.complexity !== "HIGH") continue;
+    const insts = instrMap[t.analyte] ?? [];
+    const calVerExempt = t.cal_ver_na === 1 || (insts.length > 0 && insts.every((x) => x.cal_ver_exempt === 1));
+    const mcRequired = (groups[t.analyte]?.instrumentCount ?? 0) >= 2;
+    if ((!calVerExempt && !t.last_cal_ver) || (mcRequired && !t.last_method_comp)) gaps++;
+  }
+  return { totalTests: active.length, gaps };
+}
+
 /** "XN-1000 [Primary] as LYMPH% on map "Hematology"" for the reason text and tooltips. */
 export function describeCorrelationInstrument(i: any, analyte: string, rowAnalyte: string): string {
   const name = i.instrument_name ?? i.name;
