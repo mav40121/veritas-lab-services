@@ -50,7 +50,7 @@ import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewRe
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard";
 import { legacySeatForUser, seatForRequest } from "./seatContext";
-import { labWideCorrelation, correlationPeerInstruments, describeCorrelationInstrument, rowComplexity } from "./labWideCorrelation";
+import { labWideCorrelation, correlationPeerInstruments, describeCorrelationInstrument, rowComplexity, mapComplianceGaps } from "./labWideCorrelation";
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
 import { isValidIfuUrl } from "@shared/ifu";
@@ -14045,17 +14045,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const maps = (db as any).$client.prepare(
       "SELECT id, name, instruments, created_at, updated_at FROM veritamap_maps WHERE lab_id = ? ORDER BY updated_at DESC"
     ).all(labId);
-    const result = maps.map((m: any) => {
-      const tests = (db as any).$client.prepare(
-        "SELECT active, last_cal_ver, last_method_comp, complexity FROM veritamap_tests WHERE map_id = ?"
-      ).all(m.id);
-      const activeTests = tests.filter((t: any) => t.active);
-      const gaps = activeTests.filter((t: any) =>
-        (t.complexity === 'MODERATE' || t.complexity === 'HIGH') &&
-        (!t.last_cal_ver || !t.last_method_comp)
-      ).length;
-      return { ...m, totalTests: activeTests.length, gaps };
-    });
+    // BUG-018: same rules as the map page's score card (method comparison only where 2+ nonwaived instruments run the test).
+    const result = maps.map((m: any) => ({ ...m, ...mapComplianceGaps((db as any).$client, m.id) }));
     res.json(result);
   });
 
@@ -14348,17 +14339,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const maps = (db as any).$client.prepare(
       "SELECT id, name, instruments, created_at, updated_at FROM veritamap_maps WHERE lab_id = ? ORDER BY updated_at DESC"
     ).all(req.scope.labId);
-    const result = maps.map((m: any) => {
-      const tests = (db as any).$client.prepare(
-        "SELECT active, last_cal_ver, last_method_comp, complexity FROM veritamap_tests WHERE map_id = ?"
-      ).all(m.id);
-      const activeTests = tests.filter((t: any) => t.active);
-      const gaps = activeTests.filter((t: any) =>
-        (t.complexity === 'MODERATE' || t.complexity === 'HIGH') &&
-        (!t.last_cal_ver || !t.last_method_comp)
-      ).length;
-      return { ...m, totalTests: activeTests.length, gaps };
-    });
+    // BUG-018: same rules as the map page's score card (method comparison only where 2+ nonwaived instruments run the test).
+    const result = maps.map((m: any) => ({ ...m, ...mapComplianceGaps((db as any).$client, m.id) }));
     res.json(result);
   });
 
@@ -16562,7 +16544,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           : instrumentExemptAnalytes.has(t.analyte)
           ? "Exempt (instrument exemption)"
           : getComplianceStatus(t.last_cal_ver, 6);
-        const mcStatus = isWaived ? "N/A (Waived)" : getComplianceStatus(t.last_method_comp, 6);
+        const mcStatus = isWaived ? "N/A (Waived)" : correlReq === "No" ? "Not Required (one instrument)" : getComplianceStatus(t.last_method_comp, 6); // BUG-018
         const precStatus = isWaived ? "N/A (Waived)" : getComplianceStatus(t.last_precision, 6);
         const sopStatus = getComplianceStatus(t.last_sop_review, 24);
 

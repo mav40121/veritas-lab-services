@@ -132,6 +132,12 @@ function correlationInstrumentCount(t: { instruments?: unknown[]; correlation_in
   return t.correlation_instrument_count ?? (t.instruments ?? []).length;
 }
 
+// BUG-018: the comparison requirement itself (42 CFR 493.1281(a)): a nonwaived test that 2+ nonwaived instruments
+// run lab-wide. Every count of "method comp missing" uses this, never complexity alone.
+function methodCompRequired(t: { complexity?: string | null; instruments?: unknown[]; correlation_instrument_count?: number }): boolean {
+  return t.complexity !== "WAIVED" && correlationInstrumentCount(t) >= 2;
+}
+
 interface AnalyteValues {
   ref_range_low?: string | null;
   ref_range_high?: string | null;
@@ -708,7 +714,8 @@ function calcCompliance(tests: TestRecord[]): {
 
   for (const t of nonWaived) {
     const cvStatus = calVerExempt(t) ? ("ok" as DateStatus) : getDateStatus(t.last_cal_ver, 6);
-    const mcStatus = getDateStatus(t.last_method_comp, 6);
+    // BUG-018: a method comparison is due only where 2+ nonwaived instruments run the test (42 CFR 493.1281(a)).
+    const mcStatus = methodCompRequired(t) ? getDateStatus(t.last_method_comp, 6) : ("ok" as DateStatus);
     const sopStatus = getDateStatus(t.last_sop_review, 24);
     if (cvStatus === "overdue" || cvStatus === "missing") calVerOverdue++;
     if (mcStatus === "missing") methodCompMissing++;
@@ -718,7 +725,7 @@ function calcCompliance(tests: TestRecord[]): {
   const bothOk = nonWaived.filter(
     (t) =>
       (calVerExempt(t) || getDateStatus(t.last_cal_ver, 6) === "ok") &&
-      getDateStatus(t.last_method_comp, 6) === "ok"
+      (!methodCompRequired(t) || getDateStatus(t.last_method_comp, 6) === "ok")
   ).length;
 
   const score =
@@ -755,7 +762,7 @@ function computeIntelligence(tests: TestRecord[]): IntelligenceData {
   const compliantTests = nonWaived.filter(
     (t) =>
       (calVerExempt(t) || getDateStatus(t.last_cal_ver, 6) === "ok") &&
-      getDateStatus(t.last_method_comp, 6) === "ok"
+      (!methodCompRequired(t) || getDateStatus(t.last_method_comp, 6) === "ok")
   ).length;
 
   return { correlationsRequired, calVerRequired, compliantTests };
