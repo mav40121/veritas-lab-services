@@ -89,6 +89,7 @@ def main():
                 cnt = body.count(X(oldt)); body = body.replace(X(oldt), X(rep))
             changed_intext += cnt
         new_xml = body + new_seg + tail
+        header_fixed = False
         minidom.parseString(new_xml.encode("utf-8"))  # must still be well-formed XML
         plain = re.sub(r"<[^>]+>", "", new_xml).replace("&quot;", '"').replace("&apos;", "'").replace("&amp;", "&")
         missing = [blk["citation"] for blk in td["cfr_text_blocks"] if blk["verbatim"][:120] not in plain]
@@ -97,16 +98,27 @@ def main():
         stale = [o["citation"] for o in old if o["verbatim"] in plain and not any(o["verbatim"] in t for t in new_texts)]
         if missing or stale:
             report.append((lab, fn, f"FAIL: missing {missing} stale {stale}")); continue
+        # Troy's page-2+ header band is a FLOATING table (w:tblpPr vertAnchor="text"), so Word reserves no room for it
+        # and body text that starts a page runs under it (4 of the 58 originals already did; BUG-017). Anchoring the
+        # table inline makes Word push the body below the header. Header text and design are unchanged.
+        parts = {}
+        for item in z.infolist():
+            data = new_xml.encode("utf-8") if item.filename == "word/document.xml" else z.read(item.filename)
+            if item.filename.startswith("word/header") and b"<w:tblpPr" in data:
+                data = re.sub(rb"<w:tblpPr\b[^>]*/>", b"", data)
+                minidom.parseString(data)
+                header_fixed = True
+            parts[item.filename] = (item, data)
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as w:
-            for item in z.infolist():
-                w.writestr(item, new_xml.encode("utf-8") if item.filename == "word/document.xml" else z.read(item.filename))
+            for name, (item, data) in parts.items():
+                w.writestr(item, data)
         lab_dir = os.path.join(out_dir, f"lab{lab}")
         os.makedirs(lab_dir, exist_ok=True)
         open(os.path.join(lab_dir, fn), "wb").write(buf.getvalue())
         zips.setdefault(lab, []).append(fn)
         diff = sum(1 for o, nb in zip(old, td["cfr_text_blocks"]) if o != {k: nb[k] for k in ("citation", "label", "verbatim")}) + abs(len(old) - len(td["cfr_text_blocks"]))
-        report.append((lab, fn, f"OK: {len(old)} -> {len(td['cfr_text_blocks'])} excerpts, {diff} changed; in-text citations fixed {changed_intext}"))
+        report.append((lab, fn, f"OK: {len(old)} -> {len(td['cfr_text_blocks'])} excerpts, {diff} changed; in-text citations fixed {changed_intext}{'; floating header anchored inline' if header_fixed else ''}"))
     for lab, files in zips.items():
         zp = os.path.join(out_dir, f"lab{lab}_VeritaPolicy_CFR_corrected_2026-10-09.zip")
         with zipfile.ZipFile(zp, "w", zipfile.ZIP_DEFLATED) as w:
