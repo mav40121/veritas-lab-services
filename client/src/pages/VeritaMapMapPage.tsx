@@ -116,6 +116,9 @@ interface TestRecord {
   // Per-test "cal ver not applicable" with the lab's reason (#77 part B).
   cal_ver_na?: 0 | 1;
   cal_ver_na_reason?: string | null;
+  // Per-test "correlation / method comparison not applicable" with the lab's reason (BUG-015).
+  method_comp_na?: 0 | 1;
+  method_comp_na_reason?: string | null;
   // Distinct instruments across this test's correlation group, and the other
   // analytes in it: a manual differential's "Lymphocytes" groups with the
   // analyzer's "LYMPH%" (server-derived; parking lot #76).
@@ -134,8 +137,8 @@ function correlationInstrumentCount(t: { instruments?: unknown[]; correlation_in
 
 // BUG-018: the comparison requirement itself (42 CFR 493.1281(a)): a nonwaived test that 2+ nonwaived instruments
 // run lab-wide. Every count of "method comp missing" uses this, never complexity alone.
-function methodCompRequired(t: { complexity?: string | null; instruments?: unknown[]; correlation_instrument_count?: number }): boolean {
-  return t.complexity !== "WAIVED" && correlationInstrumentCount(t) >= 2;
+function methodCompRequired(t: { complexity?: string | null; instruments?: unknown[]; correlation_instrument_count?: number; method_comp_na?: number }): boolean {
+  return t.complexity !== "WAIVED" && t.method_comp_na !== 1 && correlationInstrumentCount(t) >= 2; // BUG-015: N/A with a reason
 }
 
 interface AnalyteValues {
@@ -650,9 +653,13 @@ const CAL_VER_NA_REASONS = [
   "Other",
 ] as const;
 
-function CalVerNaControl({ onApply }: { onApply: (reason: string) => void }) {
+// One "not applicable, with a reason" popover for any per-test requirement (cal ver #77 part B, correlation
+// BUG-015). testIdPrefix keeps each control's test ids distinct ("cal-ver-na-open", "method-comp-na-open", ...).
+function NaReasonControl({ onApply, reasons, heading, title, testIdPrefix }: {
+  onApply: (reason: string) => void; reasons: readonly string[]; heading: string; title: string; testIdPrefix: string;
+}) {
   const [open, setOpen] = useState(false);
-  const [choice, setChoice] = useState<string>(CAL_VER_NA_REASONS[0]);
+  const [choice, setChoice] = useState<string>(reasons[0]);
   const [other, setOther] = useState("");
   const reason = choice === "Other" ? other.trim() : choice;
   return (
@@ -660,19 +667,19 @@ function CalVerNaControl({ onApply }: { onApply: (reason: string) => void }) {
       <PopoverTrigger asChild>
         <button
           type="button"
-          data-testid="cal-ver-na-open"
+          data-testid={`${testIdPrefix}-open`}
           className="text-[9px] text-primary hover:underline"
-          title="Mark calibration verification not applicable for this test"
+          title={title}
         >
           N/A
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-72 p-3 text-xs" align="start" data-testid="cal-ver-na-popover">
-        <div className="font-semibold mb-1.5">Calibration verification not applicable</div>
+      <PopoverContent className="w-72 p-3 text-xs" align="start" data-testid={`${testIdPrefix}-popover`}>
+        <div className="font-semibold mb-1.5">{heading}</div>
         <div className="space-y-1">
-          {CAL_VER_NA_REASONS.map((r) => (
+          {reasons.map((r, idx) => (
             <label key={r} className="flex items-start gap-2 cursor-pointer">
-              <input type="radio" name="cal-ver-na-reason" className="mt-0.5" checked={choice === r} onChange={() => setChoice(r)} data-testid={`cal-ver-na-reason-${CAL_VER_NA_REASONS.indexOf(r)}`} />
+              <input type="radio" name={`${testIdPrefix}-reason`} className="mt-0.5" checked={choice === r} onChange={() => setChoice(r)} data-testid={`${testIdPrefix}-reason-${idx}`} />
               <span>{r}</span>
             </label>
           ))}
@@ -683,18 +690,42 @@ function CalVerNaControl({ onApply }: { onApply: (reason: string) => void }) {
             placeholder="Reason a surveyor will read"
             value={other}
             onChange={(e) => setOther(e.target.value)}
-            data-testid="cal-ver-na-other"
+            data-testid={`${testIdPrefix}-other`}
           />
         )}
         <div className="flex justify-end gap-2 mt-3">
           <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button type="button" size="sm" className="h-7 text-xs" disabled={!reason} data-testid="cal-ver-na-save"
+          <Button type="button" size="sm" className="h-7 text-xs" disabled={!reason} data-testid={`${testIdPrefix}-save`}
             onClick={() => { onApply(reason); setOpen(false); }}>
             Mark not applicable
           </Button>
         </div>
       </PopoverContent>
     </Popover>
+  );
+}
+
+function CalVerNaControl({ onApply }: { onApply: (reason: string) => void }) {
+  return (
+    <NaReasonControl onApply={onApply} reasons={CAL_VER_NA_REASONS} testIdPrefix="cal-ver-na"
+      heading="Calibration verification not applicable" title="Mark calibration verification not applicable for this test" />
+  );
+}
+
+// BUG-015 (Michael Q65, 2026-10-10): correlation is required when 2+ nonwaived instruments run the same test, matched
+// by name. Some CMS analyte names are generic (ANTIMICROBIAL across panels for different organism groups; a fern
+// test under Body Fluid Microscopic Elements), so a name match is not the same test and 42 CFR 493.1281(a) does not
+// apply. The lab marks it not applicable with a reason a surveyor can read.
+const METHOD_COMP_NA_REASONS = [
+  "Different tests that share a generic CMS analyte name",
+  "Panels cover different organism groups",
+  "Other",
+] as const;
+
+function MethodCompNaControl({ onApply }: { onApply: (reason: string) => void }) {
+  return (
+    <NaReasonControl onApply={onApply} reasons={METHOD_COMP_NA_REASONS} testIdPrefix="method-comp-na"
+      heading="Correlation / method comparison not applicable" title="Mark correlation / method comparison not applicable for this test" />
   );
 }
 
@@ -749,6 +780,7 @@ function computeIntelligence(tests: TestRecord[]): IntelligenceData {
     .filter(
       (t) =>
         t.instruments &&
+        t.method_comp_na !== 1 && // BUG-015
         correlationInstrumentCount(t) >= 2 &&
         getDateStatus(t.last_method_comp, 6) !== "ok"
     )
@@ -1438,7 +1470,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
   const instruments = test.instruments ?? [];
 
   const correlationRequired =
-    !isWaived && correlationInstrumentCount(test) >= 2;
+    !isWaived && test.method_comp_na !== 1 && correlationInstrumentCount(test) >= 2; // BUG-015
 
   const isCalVerExempt = calVerExempt(test);
   const calVerStatus = isCalVerExempt
@@ -1532,7 +1564,24 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
       <td className="px-3 py-2 whitespace-nowrap">
         {isWaived ? (
           <span className="text-[10px] text-muted-foreground">N/A</span>
+        ) : test.method_comp_na === 1 ? (
+          <div data-testid="method-comp-na">
+            <span className="text-[10px] text-muted-foreground whitespace-normal">N/A: {test.method_comp_na_reason || "not applicable"}</span>
+            {!readOnly && onChangeMany && (
+              <div className="mt-0.5">
+                <button
+                  type="button"
+                  data-testid="method-comp-na-undo"
+                  className="text-[9px] text-primary hover:underline"
+                  onClick={() => onChangeMany(test.analyte, { method_comp_na: 0, method_comp_na_reason: null })}
+                >
+                  Correlation required again
+                </button>
+              </div>
+            )}
+          </div>
         ) : correlationRequired ? (
+          <div className="inline-flex items-center gap-2">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -1565,6 +1614,10 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          {!readOnly && onChangeMany && (
+            <MethodCompNaControl onApply={(reason) => onChangeMany(test.analyte, { method_comp_na: 1, method_comp_na_reason: reason })} />
+          )}
+          </div>
         ) : (
           <span className="text-[10px] text-muted-foreground">Not Required</span>
         )}
@@ -2545,9 +2598,18 @@ export default function VeritaMapMapPage() {
     (analyte: string, updates: Partial<TestRecord>) => {
       if (readOnly) return;
       setLocalTests((prev) => prev.map((t) => (t.analyte === analyte ? { ...t, ...updates } : t)));
-      saveMutation.mutate({ analyte, updates });
+      saveMutation.mutate({ analyte, updates }, {
+        // BUG-015: correlation counts are computed on the server (labWideCorrelation drops a not-applicable test from
+        // every count), so a method_comp_na change refetches the map and the intelligence panel.
+        onSuccess: () => {
+          if ("method_comp_na" in updates) {
+            qc.invalidateQueries({ queryKey: [mapDetailUrl] });
+            qc.invalidateQueries({ queryKey: [`${mapApiBase}/intelligence`] });
+          }
+        },
+      });
     },
-    [saveMutation, readOnly]
+    [saveMutation, readOnly, qc, mapDetailUrl, mapApiBase]
   );
 
   // Scroll to analyte row

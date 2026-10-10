@@ -50,6 +50,16 @@ export function rowComplexity(instruments: { complexity?: unknown }[]): string |
   return best;
 }
 
+// BUG-015 (2026-10-10, Michael Q65): a test the lab marked "correlation / method comparison not applicable"
+// (veritamap_tests.method_comp_na, with a reason) contributes NO instruments to any correlation count, on its own
+// map or as a peer from another map. Every caller (map page, intelligence, map-list gaps, Excel, VeritaTrack)
+// reads its counts from here, so they all agree.
+function methodCompNaAnalytes(sqlite: any, mapId: number): Set<string> {
+  try {
+    return new Set((sqlite.prepare("SELECT analyte FROM veritamap_tests WHERE map_id = ? AND COALESCE(method_comp_na, 0) = 1").all(mapId) as any[]).map((r) => r.analyte));
+  } catch { return new Set(); } // column not migrated yet
+}
+
 export function labWideCorrelation(sqlite: any, mapId: number | string, local: Record<string, any[]>): LabWideCorrelation {
   // Complexity per (instrument, analyte) on this map, read from the database: callers do not all load it.
   const cx = new Map<string, string>();
@@ -58,9 +68,11 @@ export function labWideCorrelation(sqlite: any, mapId: number | string, local: R
   }
   const all: Record<string, any[]> = {};
   const waived: Record<string, any[]> = {};
+  const naLocal = methodCompNaAnalytes(sqlite, Number(mapId));
   for (const [a, xs] of Object.entries(local)) {
     all[a] = [];
     waived[a] = [];
+    if (naLocal.has(a)) continue; // BUG-015: marked not applicable
     for (const x of xs) {
       const c = x.complexity ?? cx.get(`${x.instrument_id ?? x.id}|${a}`);
       (isWaived(c) ? waived[a] : all[a]).push(x);
@@ -69,7 +81,7 @@ export function labWideCorrelation(sqlite: any, mapId: number | string, local: R
   const map = sqlite.prepare("SELECT lab_id FROM veritamap_maps WHERE id = ?").get(Number(mapId)) as any;
   if (map?.lab_id) {
     const localTestKeys = new Set<string>();
-    for (const a of Object.keys(local)) for (const k of sameTestKeys(a)) localTestKeys.add(k);
+    for (const a of Object.keys(local)) if (!naLocal.has(a)) for (const k of sameTestKeys(a)) localTestKeys.add(k);
     // The map's own analyzers, read from the database (callers do not all load
     // serial numbers). Same analyzer = same serial, or same name when either has none.
     const ids = [...new Set(Object.values(local).flat().map((x: any) => Number(x.instrument_id ?? x.id)).filter((n) => Number.isFinite(n)))];
@@ -96,7 +108,10 @@ export function labWideCorrelation(sqlite: any, mapId: number | string, local: R
         JOIN veritamap_maps mp ON mp.id = it.map_id
        WHERE mp.lab_id = ? AND mp.id <> ? AND it.active = 1
     `).all(map.lab_id, Number(mapId)) as any[];
+    const naOther = new Map<number, Set<string>>(); // BUG-015: not-applicable tests on the lab's other maps
+    const naOn = (mid: number) => { let s = naOther.get(mid); if (!s) { s = methodCompNaAnalytes(sqlite, mid); naOther.set(mid, s); } return s; };
     for (const r of rows) {
+      if (naLocal.has(r.analyte) || naOn(Number(r.map_id)).has(r.analyte)) continue; // BUG-015
       if (!sameTestKeys(r.analyte).some((k) => localTestKeys.has(k))) continue;
       if (sameAsLocal(r)) continue; // the same analyzer is already on this map
       const pk = physicalKey(r);
