@@ -46,6 +46,8 @@ interface LabwideAnalyte {
   last_cal_ver: string | null;
   cal_ver_na?: 0 | 1;
   cal_ver_na_reason?: string | null;
+  method_comp_na?: 0 | 1; // BUG-015
+  method_comp_na_reason?: string | null;
   last_method_comp: string | null;
   last_precision: string | null;
   last_sop_review: string | null;
@@ -553,7 +555,9 @@ export default function VeritaMapLabwidePage() {
                       <td className="px-3 py-2 text-muted-foreground tabular-nums">
                         {a.cal_ver_na ? <span title={a.cal_ver_na_reason || ""}>N/A{a.cal_ver_na_reason ? `: ${a.cal_ver_na_reason}` : ""}</span> : formatDate(a.last_cal_ver)}
                       </td>
-                      <td className="px-3 py-2 text-muted-foreground tabular-nums">{formatDate(a.last_method_comp)}</td>
+                      <td className="px-3 py-2 text-muted-foreground tabular-nums">
+                        {a.method_comp_na ? <span title={a.method_comp_na_reason || ""}>N/A{a.method_comp_na_reason ? `: ${a.method_comp_na_reason}` : ""}</span> : formatDate(a.last_method_comp)}
+                      </td>
                       <td className="px-3 py-2 text-muted-foreground tabular-nums">{formatDate(a.last_precision)}</td>
                       <td className="px-3 py-2 text-muted-foreground tabular-nums">{formatDate(a.last_sop_review)}</td>
                       <td className="px-3 py-2 text-muted-foreground">

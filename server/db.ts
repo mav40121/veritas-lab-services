@@ -5436,6 +5436,13 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inv_transfers_owner ON invento
     ensureVt("cal_ver_na_reason", "ALTER TABLE veritamap_tests ADD COLUMN cal_ver_na_reason TEXT");
     ensureVt("cal_ver_na_set_by", "ALTER TABLE veritamap_tests ADD COLUMN cal_ver_na_set_by INTEGER");
     ensureVt("cal_ver_na_set_at", "ALTER TABLE veritamap_tests ADD COLUMN cal_ver_na_set_at TEXT");
+    // BUG-015 (2026-10-10, Michael Q65): per-test "correlation / method comparison not applicable", same shape as
+    // cal_ver_na. For tests that share only a generic CMS analyte name (ANTIMICROBIAL across panels that cover
+    // different organism groups; a fern test under Body Fluid Microscopic Elements). Read by labWideCorrelation.
+    ensureVt("method_comp_na", "ALTER TABLE veritamap_tests ADD COLUMN method_comp_na INTEGER NOT NULL DEFAULT 0");
+    ensureVt("method_comp_na_reason", "ALTER TABLE veritamap_tests ADD COLUMN method_comp_na_reason TEXT");
+    ensureVt("method_comp_na_set_by", "ALTER TABLE veritamap_tests ADD COLUMN method_comp_na_set_by INTEGER");
+    ensureVt("method_comp_na_set_at", "ALTER TABLE veritamap_tests ADD COLUMN method_comp_na_set_at TEXT");
   }
 }
 

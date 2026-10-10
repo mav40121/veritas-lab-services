@@ -156,7 +156,7 @@ function matchesAnalyte(s: Study, analyte: string): boolean {
   return (!!s.coverage_analyte && s.coverage_analyte === analyte) || analyteMatch(s.test_name, analyte);
 }
 type Instrument = { id: number; instrument_name: string; nickname: string | null; serial_number?: string | null };
-type Combo = { id: number; analyte: string; specialty: string; instrument_id: number; complexity?: string | null; test_cal_ver_na?: number; linearity_exempt_multical?: number; linearity_exempt_noncal?: number; linearity_exempt_waived?: number; linearity_exempt_other?: string | null };
+type Combo = { id: number; analyte: string; specialty: string; instrument_id: number; complexity?: string | null; test_cal_ver_na?: number; test_method_comp_na?: number; linearity_exempt_multical?: number; linearity_exempt_noncal?: number; linearity_exempt_waived?: number; linearity_exempt_other?: string | null };
 
 // Display label that distinguishes two units of the same model. A lab can run
 // the same analyzer twice (e.g. two Ortho VITROS 5600 named Bonnie and Clyde);
@@ -275,6 +275,7 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
   // device is the lab's choice, not a CLIA requirement.
   for (const c of combos) {
     if (String(c.complexity || "").toUpperCase() === "WAIVED") continue;
+    if (c.test_method_comp_na) continue; // BUG-015: the lab marked this test's comparison not applicable
     for (const key of sameTestKeys(c.analyte)) {
       let g = groups.get(key);
       if (!g) { g = { instIds: new Set(), analytes: new Set() }; groups.set(key, g); }
@@ -392,7 +393,7 @@ export function computeCoverageForLab(sqlite: any, labId: number): CoverageResul
     `SELECT it.id, it.analyte, it.specialty, it.instrument_id, it.complexity,
             it.linearity_exempt_multical, it.linearity_exempt_noncal,
             it.linearity_exempt_waived, it.linearity_exempt_other,
-            t.cal_ver_na AS test_cal_ver_na
+            t.cal_ver_na AS test_cal_ver_na, t.method_comp_na AS test_method_comp_na
      FROM veritamap_instrument_tests it JOIN veritamap_maps m ON m.id = it.map_id
      LEFT JOIN veritamap_tests t ON t.map_id = it.map_id AND t.analyte = it.analyte
      WHERE m.lab_id = ? AND (it.active = 1 OR it.active IS NULL)`

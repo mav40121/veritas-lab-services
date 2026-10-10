@@ -14068,7 +14068,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       SELECT
         t.id AS test_id, t.map_id, t.analyte, t.specialty, t.complexity, t.active,
         t.instrument_source, t.last_cal_ver, t.last_method_comp, t.last_precision,
-        t.last_sop_review, t.updated_at, t.cal_ver_na, t.cal_ver_na_reason
+        t.last_sop_review, t.updated_at, t.cal_ver_na, t.cal_ver_na_reason, t.method_comp_na, t.method_comp_na_reason
       FROM veritamap_tests t
       WHERE t.map_id IN (${placeholders}) AND t.active = 1
       ORDER BY t.specialty, t.analyte, t.map_id
@@ -14113,6 +14113,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         last_cal_ver: r.last_cal_ver, last_method_comp: r.last_method_comp,
         last_precision: r.last_precision, last_sop_review: r.last_sop_review,
         cal_ver_na: r.cal_ver_na ? 1 : 0, cal_ver_na_reason: r.cal_ver_na_reason ?? null,
+        method_comp_na: r.method_comp_na ? 1 : 0, method_comp_na_reason: r.method_comp_na_reason ?? null, // BUG-015
         has_ref_range: refByKey.has(key), has_critical: critByKey.has(key), has_amr: amrByKey.has(key),
         updated_at: r.updated_at,
       };
@@ -14710,6 +14711,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const reason = String(req.body.cal_ver_na_reason ?? "").trim().slice(0, 200);
       if (on && !reason) return res.status(400).json({ error: "A reason is required to mark calibration verification not applicable" });
       sets.push("cal_ver_na=?", "cal_ver_na_reason=?", "cal_ver_na_set_by=?", "cal_ver_na_set_at=?");
+      vals.push(on ? 1 : 0, on ? reason : null, on ? (req.userId ?? null) : null, on ? now : null);
+    }
+    // BUG-015 (2026-10-10): per-test "correlation / method comparison not applicable" with a required reason;
+    // turning it off clears the reason and the stamp. labWideCorrelation drops the test from every count.
+    if ('method_comp_na' in req.body) {
+      const on = req.body.method_comp_na === true || req.body.method_comp_na === 1 || req.body.method_comp_na === "1";
+      const reason = String(req.body.method_comp_na_reason ?? "").trim().slice(0, 200);
+      if (on && !reason) return res.status(400).json({ error: "A reason is required to mark correlation / method comparison not applicable" });
+      sets.push("method_comp_na=?", "method_comp_na_reason=?", "method_comp_na_set_by=?", "method_comp_na_set_at=?");
       vals.push(on ? 1 : 0, on ? reason : null, on ? (req.userId ?? null) : null, on ? now : null);
     }
     if (sets.length > 0) {
@@ -15808,6 +15818,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       sets.push("cal_ver_na=?", "cal_ver_na_reason=?", "cal_ver_na_set_by=?", "cal_ver_na_set_at=?");
       vals.push(on ? 1 : 0, on ? reason : null, on ? (req.userId ?? null) : null, on ? now : null);
     }
+    // BUG-015 (2026-10-10): per-test "correlation / method comparison not applicable" with a required reason;
+    // turning it off clears the reason and the stamp. labWideCorrelation drops the test from every count.
+    if ('method_comp_na' in req.body) {
+      const on = req.body.method_comp_na === true || req.body.method_comp_na === 1 || req.body.method_comp_na === "1";
+      const reason = String(req.body.method_comp_na_reason ?? "").trim().slice(0, 200);
+      if (on && !reason) return res.status(400).json({ error: "A reason is required to mark correlation / method comparison not applicable" });
+      sets.push("method_comp_na=?", "method_comp_na_reason=?", "method_comp_na_set_by=?", "method_comp_na_set_at=?");
+      vals.push(on ? 1 : 0, on ? reason : null, on ? (req.userId ?? null) : null, on ? now : null);
+    }
     if (sets.length > 0) {
       sets.push("updated_at=?"); vals.push(now);
       vals.push(req.params.id, safeDecodeParam(req.params.analyte));
@@ -16544,7 +16563,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           : instrumentExemptAnalytes.has(t.analyte)
           ? "Exempt (instrument exemption)"
           : getComplianceStatus(t.last_cal_ver, 6);
-        const mcStatus = isWaived ? "N/A (Waived)" : correlReq === "No" ? "Not Required (one instrument)" : getComplianceStatus(t.last_method_comp, 6); // BUG-018
+        const mcStatus = isWaived ? "N/A (Waived)"
+          : t.method_comp_na ? `N/A (${String(t.method_comp_na_reason || "not applicable")})` // BUG-015
+          : correlReq === "No" ? "Not Required (one instrument)" : getComplianceStatus(t.last_method_comp, 6); // BUG-018
         const precStatus = isWaived ? "N/A (Waived)" : getComplianceStatus(t.last_precision, 6);
         const sopStatus = getComplianceStatus(t.last_sop_review, 24);
 
