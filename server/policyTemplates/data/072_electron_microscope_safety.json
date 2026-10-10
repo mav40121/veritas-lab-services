@@ -3,7 +3,7 @@
   "slug": "electron_microscope_safety",
   "policy_name": "Electron Microscope Safety Policy",
   "section": "Specialty Services",
-  "purpose": "This policy applies when <<LAB_NAME>> operates an electron microscope. Governs hazardous chemicals (osmium tetroxide, glutaraldehyde, propylene oxide, uranyl acetate), high-voltage electrical safety, and X-ray emission from the EM tube. Required by 29 CFR 1910.1450 (laboratory standard for hazardous chemicals), 29 CFR 1910.1200 (hazard communication), and 42 CFR 493.1101(c) (physical hazard safety).",
+  "purpose": "This policy applies when <<LAB_NAME>> operates an electron microscope. Governs hazardous chemicals (osmium tetroxide, glutaraldehyde, propylene oxide, uranyl acetate), high-voltage electrical safety, and X-ray emission from the EM tube. Required by 29 CFR 1910.1450 (laboratory standard for hazardous chemicals), 29 CFR 1910.1200 (hazard communication), and 42 CFR 493.1101(d) (physical hazard safety).",
   "cfr_text_blocks": [
     {
       "citation": "29 CFR 1910.1450(c)",

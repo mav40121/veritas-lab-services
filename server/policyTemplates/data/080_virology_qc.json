@@ -6,9 +6,9 @@
   "purpose": "This policy describes QC for virology testing (viral culture, antigen detection, molecular viral testing, serology). Required by 42 CFR 493.1256 (controls), 42 CFR 493.1261-1278 (specialty QC).",
   "cfr_text_blocks": [
     {
-      "citation": "42 CFR 493.1256(d)(2)",
-      "label": "Standard: Controls in each run",
-      "verbatim": "Include the following controls in each run of patient specimens: (i) At least two control materials at different concentrations for each quantitative procedure. (ii) A negative control material and a positive control material for each qualitative procedure. (iii) A negative control material and a control material with graded or titered reactivity, respectively, for each test producing graded or titered results."
+      "citation": "42 CFR 493.1256(d)(3)",
+      "label": "Standard: Control procedures (each day of testing)",
+      "verbatim": "(3) At least once each day patient specimens are assayed or examined perform the following for - (i) Each quantitative procedure, include two control materials of different concentrations; (ii) Each qualitative procedure, include a negative and positive control material; (iii) Test procedures producing graded or titered results, include a negative control material and a control material with graded or titered reactivity, respectively; (iv) Each test system that has an extraction phase, include two control materials, including one that is capable of detecting errors in the extraction process; and (v) Each molecular amplification procedure, include two control materials and, if reaction inhibition is a significant source of false negative results, a control material capable of detecting the inhibition."
     }
   ],
   "scope": "All <<LAB_NAME>> virology testing personnel.",
@@ -16,7 +16,7 @@
     "Viral culture: positive and negative controls run per the procedure cadence; cell line viability and morphology assessed per QC plan.",
     "Antigen detection assays: positive and negative controls each run; internal control read where the kit supports.",
     "Molecular viral assays: positive, negative, and internal amplification controls each run per the Molecular QC policy.",
-    "Serology assays: positive and negative controls each run; quantitative serology (titer or index) uses two-level controls per 42 CFR 493.1256(d)(2)(i).",
+    "Serology assays: positive and negative controls each run; quantitative serology (titer or index) uses two-level controls per 42 CFR 493.1256(d)(3)(i).",
     "Failed controls trigger run rejection and corrective action before patient results are released.",
     "QC records retained per 42 CFR 493.1105."
   ],

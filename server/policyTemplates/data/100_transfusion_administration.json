@@ -51,7 +51,7 @@
     ],
     [
       "Physician certification",
-      "Written statement signed by the ordering physician justifying the emergency release. Required by FDA 21 CFR 606.151(d)."
+      "Written statement signed by the ordering physician justifying the emergency release. Required by FDA 21 CFR 606.151(e)."
     ],
     [
       "RhIG",
@@ -106,47 +106,42 @@
     {
       "citation": "21 CFR 606.151(a)",
       "label": "FDA: Compatibility testing (specimen ID)",
-      "verbatim": "A method of collecting and identifying the blood samples of recipients to ensure positive identification."
+      "verbatim": "(a) A method of collecting and identifying the blood samples of recipients to ensure positive identification."
     },
     {
-      "citation": "21 CFR 606.151(d)",
+      "citation": "21 CFR 606.151(e)",
       "label": "FDA: Procedure to expedite transfusion in life-threatening emergencies",
-      "verbatim": "A procedure to expedite transfusion in life-threatening emergencies. Records of all such incidents shall be maintained, including complete documentation justifying the emergency action, which shall be signed by a physician."
+      "verbatim": "(e) Procedures to expedite transfusion in life-threatening emergencies. Records of all such incidents shall be maintained, including complete documentation justifying the emergency action, which shall be signed by a physician."
     },
     {
-      "citation": "42 CFR 493.1271(d)",
-      "label": "Standard: Compatibility testing (emergency exception)",
-      "verbatim": "The laboratory must perform compatibility testing prior to the issuance of blood and blood products, except as provided for an emergency situation defined in writing by the laboratory."
+      "citation": "42 CFR 493.1271(a)(1)",
+      "label": "Standard: Immunohematology (patient testing)",
+      "verbatim": "(1) The laboratory must perform ABO grouping, D(Rho) typing, unexpected antibody detection, antibody identification, and compatibility testing by following the manufacturer's instructions, if provided, and as applicable, 21 CFR 606.151(a) through (e)."
     },
     {
       "citation": "21 CFR 606.151",
       "label": "FDA: Compatibility testing",
-      "verbatim": "Standard operating procedures for compatibility testing shall include the following: (a) A method of collecting and identifying the blood samples of recipients to ensure positive identification. (b) The use of fresh recipient serum or plasma samples less than 3 days old for all pretransfusion testing if the recipient has been pregnant within the past 3 months or transfused within the past 3 months, or if the history is uncertain or unavailable. (c) Testing the recipient's serum or plasma with the donor's cells (major crossmatch) by a method that will demonstrate agglutinating, coating and hemolytic antibodies. (d) A procedure to expedite transfusion in life-threatening emergencies. Records of all such incidents shall be maintained, including complete documentation justifying the emergency action, which shall be signed by a physician."
+      "verbatim": "Standard operating procedures for compatibility testing shall include the following: (a) A method of collecting and identifying the blood samples of recipients to ensure positive identification. (b) The use of fresh recipient serum or plasma samples less than 3 days old for all pretransfusion testing if the recipient has been pregnant or transfused within the previous 3 months. (c) Procedures to demonstrate incompatibility between the donor's cell type and the recipient's serum or plasma type. (d) A provision that, if the unit of donor's blood has not been screened by a method that will demonstrate agglutinating, coating and hemolytic antibodies, the recipient's cells shall be tested with the donor's serum (minor crossmatch) by a method that will so demonstrate. (e) Procedures to expedite transfusion in life-threatening emergencies. Records of all such incidents shall be maintained, including complete documentation justifying the emergency action, which shall be signed by a physician."
     },
     {
       "citation": "42 CFR 493.1271(a)",
       "label": "Standard: Immunohematology",
-      "verbatim": "If the laboratory provides services in the subspecialty of Immunohematology, the laboratory must perform ABO grouping, D(Rho) typing, unexpected antibody detection, antibody identification, and compatibility testing by following the manufacturer's instructions, if provided, and as applicable, meet the requirements of 493.1271(b) through (e)."
+      "verbatim": "(a) Patient testing. (1) The laboratory must perform ABO grouping, D(Rho) typing, unexpected antibody detection, antibody identification, and compatibility testing by following the manufacturer's instructions, if provided, and as applicable, 21 CFR 606.151(a) through (e). (2) The laboratory must determine ABO group by concurrently testing unknown red cells with, at a minimum, anti-A and anti-B grouping reagents. For confirmation of ABO group, the unknown serum must be tested with known A1 and B red cells. (3) The laboratory must determine the D(Rho) type by testing unknown red cells with anti-D (anti-Rho) blood typing reagent."
     },
     {
       "citation": "21 CFR 606.100(b)",
       "label": "FDA: Standard operating procedures",
-      "verbatim": "Written standard operating procedures shall be maintained and shall include all steps to be followed in the collection, processing, compatibility testing, storage and distribution of blood and blood components for allogeneic and autologous transfusion, including notification of donors of any abnormal finding."
-    },
-    {
-      "citation": "42 CFR 493.1271(c)",
-      "label": "Patient testing",
-      "verbatim": "The laboratory must compare the results of current ABO group and D(Rho) typing determinations with those of previous records, if available. The laboratory must resolve any discrepancies before issuing blood or blood products."
+      "verbatim": "(b) Establishments must establish, maintain, and follow written standard operating procedures for all steps in the collection, processing, compatibility testing, storage, and distribution of blood and blood components for allogeneic transfusion, autologous transfusion, and further manufacturing purposes;"
     },
     {
       "citation": "21 CFR 606.170(a)",
       "label": "FDA: Adverse reaction file",
-      "verbatim": "Records shall be maintained of any reports of complaints of adverse reactions arising as a result of blood collection or transfusion. A thorough investigation of each reported adverse reaction shall be made. A written report of the investigation of adverse reactions, including conclusions and followup, shall be prepared and maintained as part of the record for that lot of final product by the collecting or transfusing facility."
+      "verbatim": "(a) Records shall be maintained of any reports of complaints of adverse reactions regarding each unit of blood or blood product arising as a result of blood collection or transfusion. A thorough investigation of each reported adverse reaction shall be made. A written report of the investigation of adverse reactions, including conclusions and followup, shall be prepared and maintained as part of the record for that lot or unit of final product by the collecting or transfusing facility. When it is determined that the product was at fault in causing a transfusion reaction, copies of all such written reports shall be forwarded to and maintained by the manufacturer or collecting facility."
     },
     {
       "citation": "21 CFR 606.170(b)",
-      "label": "FDA: Fatality investigation (15-day phone, 7-day written)",
-      "verbatim": "When a complication of blood collection or transfusion is confirmed to be fatal, the Director, Office of Compliance and Biologics Quality, Center for Biologics Evaluation and Research (HFM-600) shall be notified by telephone, facsimile, express mail, or electronically transmitted mail as soon as possible; a written report of the investigation shall be submitted to the Director, Office of Compliance and Biologics Quality, Center for Biologics Evaluation and Research, by mail, courier, or electronically transmitted mail, within 7 days after the fatality by the collecting facility in the event of a donor reaction, or by the facility that performed the compatibility tests in the event of a transfusion reaction."
+      "label": "FDA: Fatality reporting (notify CBER as soon as possible; written report within 7 days)",
+      "verbatim": "(b) When a complication of blood collection or transfusion is confirmed to be fatal, the Director, Office of Compliance and Biologics Quality, CBER, must be notified by telephone, facsimile, express mail, or electronically transmitted mail as soon as possible. A written report of the investigation must be submitted to the Director, Office of Compliance and Biologics Quality, CBER, by mail, facsimile, or electronically transmitted mail (for mailing address, see § 600.2(a) of this chapter), within 7 days after the fatality by the collecting facility in the event of a donor reaction, or by the facility that performed the compatibility tests in the event of a transfusion reaction."
     }
   ]
 }

@@ -8,19 +8,19 @@
     {
       "citation": "42 CFR 493.1282(a)",
       "label": "Standard: Corrective actions",
-      "verbatim": "The laboratory must have and follow corrective action policies and procedures to ensure that: (1) Test systems perform as required throughout the patient's test result reporting process. (2) Patient test results are accurate, reliable, and prompt, and confidentiality of patient data is preserved. (3) When errors in the reported patient test results are detected, the laboratory does the following: (i) Promptly notifies the authorized person ordering the test and, if applicable, the individual using the test results, of reporting errors. (ii) Issues corrected reports promptly to the authorized person ordering the test and, if applicable, the individual using the test results. (iii) Maintains duplicates of the original report, as well as the corrected report."
+      "verbatim": "(a) Corrective action policies and procedures must be available and followed as necessary to maintain the laboratory's operation for testing patient specimens in a manner that ensures accurate and reliable patient test results and reports."
     },
     {
       "citation": "42 CFR 493.1282(b)",
       "label": "Standard: Corrective actions documentation",
-      "verbatim": "The laboratory must document all corrective actions taken when test systems deviate from the laboratory's established performance specifications."
+      "verbatim": "(b) The laboratory must document all corrective actions taken, including actions taken when any of the following occur: (1) Test systems do not meet the laboratory's verified or established performance specifications, as determined in § 493.1253(b), which include but are not limited to - (i) Equipment or methodologies that perform outside of established operating parameters or performance specifications; ... (2) Results of control or calibration materials, or both, fail to meet the laboratory's established criteria for acceptability."
     }
   ],
   "scope": "All <<LAB_NAME>> testing personnel, the medical director or designee, the technical consultant or technical supervisor, and the quality coordinator (if assigned).",
   "policy_statements": [
     "<<LAB_NAME>> documents every corrective action taken in response to a deviation from established performance specifications, a QC failure, a PT failure, a complaint, or any other quality finding.",
     "Corrective action records capture: trigger (what was observed), root cause (why it happened), action taken (what was done), responsible person (who did it), date and time, verification (how the action was confirmed effective), and any patient-result impact (results held, recalled, corrected).",
-    "Errors in reported patient results trigger: prompt notification of the ordering provider, prompt issuance of a corrected report, and retention of both the original and the corrected report per 42 CFR 493.1282(a)(3).",
+    "Errors in reported patient results trigger: prompt notification of the ordering provider, prompt issuance of a corrected report, and retention of both the original and the corrected report per 42 CFR 493.1291(k)(3).",
     "Corrective action records are reviewed monthly by the medical director or designee as part of the quality management plan; trends are analyzed and systemic actions taken where indicated.",
     "Corrective action records are retained for at least 2 years per 42 CFR 493.1105."
   ],
@@ -34,7 +34,7 @@
   ],
   "definitions": [
     ["Corrective action", "Action taken to address a quality finding (QC failure, PT failure, reporting error, complaint, near-miss). Includes immediate containment, root-cause analysis, action to prevent recurrence, and verification of effectiveness."],
-    ["Corrected report", "A patient report issued to replace a previously reported result that was found to be in error. The original report and the corrected report are both retained per 42 CFR 493.1282(a)(3)."],
+    ["Corrected report", "A patient report issued to replace a previously reported result that was found to be in error. The original report and the corrected report are both retained per 42 CFR 493.1291(k)(3)."],
     ["Root cause", "The underlying reason a quality finding occurred. Identified through systematic analysis (5-whys, fishbone, fault tree, etc.) rather than surface-level fix."]
   ]
 }

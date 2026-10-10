@@ -3,12 +3,12 @@
   "slug": "histocompatibility",
   "policy_name": "Histocompatibility Mixed Lymphocyte Culture Policy",
   "section": "Specialty Services",
-  "purpose": "This policy applies when <<LAB_NAME>> performs mixed lymphocyte culture (MLC) testing for transplant compatibility. Required by 42 CFR 493.1262 (specialty histocompatibility).",
+  "purpose": "This policy applies when <<LAB_NAME>> performs mixed lymphocyte culture (MLC) testing for transplant compatibility. Required by 42 CFR 493.1278 (Standard: Histocompatibility).",
   "cfr_text_blocks": [
     {
       "citation": "42 CFR 493.1278(a)",
       "label": "Standard: Histocompatibility",
-      "verbatim": "If the laboratory performs histocompatibility testing, the laboratory must, as applicable, meet the requirements specified in 493.1278(b) through (k)."
+      "verbatim": "(a) General. The laboratory must meet the following requirements: (1) Use a continuous monitoring system and alert system to monitor the storage temperature of specimens (donor and recipient) and reagents and notify laboratory personnel when temperature limits are exceeded. (2) Establish and follow written policies and procedures for the storage and retention of specimens based on the specific type of specimen. All specimens must be easily retrievable. The laboratory must have an emergency plan for alternate storage. (3) If the laboratory uses immunologic reagents to facilitate or enhance the isolation or identification of lymphocytes or lymphocyte subsets, the efficacy of the methods must be monitored with appropriate quality control procedures. (4) Participate in at least one national or regional cell exchange program, if available, or develop an exchange system with another laboratory in order to validate interlaboratory reproducibility."
     }
   ],
   "scope": "Applies only when <<LAB_NAME>> performs histocompatibility MLC. Personnel and the medical director or designee.",

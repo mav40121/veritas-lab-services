@@ -8,12 +8,12 @@
     {
       "citation": "42 CFR 493.1232",
       "label": "Standard: Specimen identification and integrity",
-      "verbatim": "The laboratory must establish and follow written policies and procedures to ensure positive identification and optimum integrity of a patient's specimen from the time of collection or receipt through completion of testing and reporting of results."
+      "verbatim": "The laboratory must establish and follow written policies and procedures that ensure positive identification and optimum integrity of a patient's specimen from the time of collection or receipt of the specimen through completion of testing and reporting of results."
     },
     {
       "citation": "42 CFR 493.1291(a)",
       "label": "Standard: Test report",
-      "verbatim": "The laboratory must have an adequate manual or electronic system(s) in place to ensure test results and other patient-specific data are accurately and reliably sent from the point of data entry (whether interfaced or entered manually) to final report destination, in a timely manner."
+      "verbatim": "(a) The laboratory must have an adequate manual or electronic system(s) in place to ensure test results and other patient-specific data are accurately and reliably sent from the point of data entry (whether interfaced or entered manually) to final report destination, in a timely manner. This includes the following: (1) Results reported from calculated data. (2) Results and patient-specific data electronically reported to network or interfaced systems. (3) Manually transcribed or electronically transmitted results and patient-specific information reported directly or upon receipt from outside referral laboratories, satellite or point-of-care testing locations."
     }
   ],
   "scope": "All <<LAB_NAME>> personnel involved in specimen receipt, testing, result release, shift change, and inter-bench or inter-facility transfer.",

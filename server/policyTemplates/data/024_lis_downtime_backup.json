@@ -8,12 +8,12 @@
     {
       "citation": "45 CFR 164.308(a)(7)(i)",
       "label": "HIPAA Security Rule: Contingency plan (Standard)",
-      "verbatim": "Establish (and implement as needed) policies and procedures for responding to an emergency or other occurrence (for example, fire, vandalism, system failure, and natural disaster) that damages systems that contain electronic protected health information."
+      "verbatim": "(i) Standard: Contingency plan. Establish (and implement as needed) policies and procedures for responding to an emergency or other occurrence (for example, fire, vandalism, system failure, and natural disaster) that damages systems that contain electronic protected health information."
     },
     {
       "citation": "45 CFR 164.308(a)(7)(ii)",
       "label": "HIPAA Security Rule: Contingency plan (Implementation specs)",
-      "verbatim": "(A) Data backup plan (Required). Establish and implement procedures to create and maintain retrievable exact copies of electronic protected health information. (B) Disaster recovery plan (Required). Establish (and implement as needed) procedures to restore any loss of data. (C) Emergency mode operation plan (Required). Establish (and implement as needed) procedures to enable continuation of critical business processes for protection of the security of electronic protected health information while operating in emergency mode."
+      "verbatim": "(ii) Implementation specifications: (A) Data backup plan (Required). Establish and implement procedures to create and maintain retrievable exact copies of electronic protected health information. (B) Disaster recovery plan (Required). Establish (and implement as needed) procedures to restore any loss of data. (C) Emergency mode operation plan (Required). Establish (and implement as needed) procedures to enable continuation of critical business processes for protection of the security of electronic protected health information while operating in emergency mode. (D) Testing and revision procedures (Addressable). Implement procedures for periodic testing and revision of contingency plans. (E) Applications and data criticality analysis (Addressable). Assess the relative criticality of specific applications and data in support of other contingency plan components."
     }
   ],
   "scope": "All <<LAB_NAME>> IT staff supporting the LIS and any system holding patient data, the medical director or designee, and all testing personnel during system recovery.",

@@ -6,19 +6,19 @@
   "purpose": "This policy describes how <<LAB_NAME>> responds to unsuccessful proficiency testing (PT) performance, including investigation, corrective action, and notification. CLIA requires that unsuccessful PT be investigated and that patient testing for the analyte be suspended in the most severe cases (42 CFR 493.801, 493.803, 493.821).",
   "cfr_text_blocks": [
     {
-      "citation": "42 CFR 493.821(b)",
-      "label": "Standard: Unsuccessful participation in proficiency testing for analytes, tests, subspecialties, or specialties",
-      "verbatim": "If a laboratory does not achieve a satisfactory score for an analyte, test, subspecialty, or specialty for two consecutive or two out of three testing events, the laboratory has performed unsuccessfully and must take corrective action including, as appropriate, the cessation of patient testing for the affected analyte, test, subspecialty, or specialty."
+      "citation": "42 CFR 493.803(b)",
+      "label": "Condition: Successful participation",
+      "verbatim": "(b) Except as specified in paragraph (c) of this section, if a laboratory fails to participate successfully in proficiency testing for a given specialty, subspecialty, analyte or test, as defined in this section, or fails to take remedial action when an individual fails gynecologic cytology, CMS imposes sanctions, as specified in subpart R of this part."
     },
     {
-      "citation": "42 CFR 493.1236(b)",
-      "label": "Standard: Evaluation of proficiency testing performance",
-      "verbatim": "The laboratory must evaluate and document, at least twice annually, the comparability of results between methods used to perform the same test, or between testing sites at which the same test is performed when more than one method or testing site is used to perform that test."
+      "citation": "42 CFR 493.1281(a)",
+      "label": "Standard: Comparison of test results",
+      "verbatim": "(a) If a laboratory performs the same test using different methodologies or instruments, or performs the same test at multiple testing sites, the laboratory must have a system that twice a year evaluates and defines the relationship between test results using the different methodologies, instruments, or testing sites."
     },
     {
       "citation": "42 CFR 493.1299(a)",
-      "label": "Standard: Corrective actions",
-      "verbatim": "The laboratory must establish and follow written policies and procedures for an ongoing mechanism to monitor, assess, and when indicated, correct problems identified in the post-analytic systems specified at 493.1289."
+      "label": "Standard: Postanalytic systems quality assessment",
+      "verbatim": "(a) The laboratory must establish and follow written policies and procedures for an ongoing mechanism to monitor, assess and, when indicated, correct problems identified in the postanalytic systems specified in § 493.1291."
     }
   ],
   "scope": "All <<LAB_NAME>> testing personnel, the medical director or designee, and the technical consultant or technical supervisor responsible for each PT-graded analyte. Applies to every analyte enrolled in PT, including ungraded events and educational challenges.",
@@ -44,7 +44,7 @@
     ],
     [
       "Unsuccessful PT performance",
-      "Failure of the same analyte on two consecutive events or two of three consecutive events, triggering mandatory cessation of patient testing per 42 CFR 493.821."
+      "Failure of the same analyte on two consecutive events or two of three consecutive events; unsuccessful participation subjects the laboratory to CMS sanctions under 42 CFR 493.803(b)."
     ],
     [
       "PT cessation",

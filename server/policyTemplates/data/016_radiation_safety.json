@@ -3,17 +3,17 @@
   "slug": "radiation_safety",
   "policy_name": "Radiation Safety Policy",
   "section": "Safety",
-  "purpose": "This policy describes how <<LAB_NAME>> manages radiation safety when the lab uses radioactive materials, X-ray devices, or accepts specimens containing radioisotopes. Required by 10 CFR 20 (NRC radiation protection) and 21 CFR 1020 (FDA radiation-emitting devices), with CLIA personnel-safety obligations at 42 CFR 493.1101(c).",
+  "purpose": "This policy describes how <<LAB_NAME>> manages radiation safety when the lab uses radioactive materials, X-ray devices, or accepts specimens containing radioisotopes. Required by 10 CFR 20 (NRC radiation protection) and 21 CFR 1020 (FDA radiation-emitting devices), with CLIA personnel-safety obligations at 42 CFR 493.1101(d).",
   "cfr_text_blocks": [
     {
       "citation": "10 CFR 20.1101(a)",
       "label": "NRC: Radiation Protection Programs",
-      "verbatim": "Each licensee shall develop, document, and implement a radiation protection program commensurate with the scope and extent of licensed activities and sufficient to ensure compliance with the provisions of this part."
+      "verbatim": "(a) Each licensee shall develop, document, and implement a radiation protection program commensurate with the scope and extent of licensed activities and sufficient to ensure compliance with the provisions of this part. (See § 20.2102 for recordkeeping requirements relating to these programs.)"
     },
     {
-      "citation": "42 CFR 493.1101(c)",
-      "label": "Standard: Facilities (safety from physical hazards)",
-      "verbatim": "The safety of laboratory personnel from physical, chemical, biochemical, and electrical hazards is ensured."
+      "citation": "42 CFR 493.1101(d)",
+      "label": "Standard: Facilities (safety procedures)",
+      "verbatim": "(d) Safety procedures must be established, accessible, and observed to ensure protection from physical, chemical, biochemical, and electrical hazards, and biohazardous materials."
     }
   ],
   "scope": "All <<LAB_NAME>> personnel who handle radioactive materials, operate radiation-emitting devices, or process specimens containing radioisotopes (radioimmunoassay, nuclear medicine bioassay).",

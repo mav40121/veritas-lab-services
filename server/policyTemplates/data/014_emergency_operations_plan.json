@@ -8,7 +8,7 @@
     {
       "citation": "42 CFR 493.1101(a)",
       "label": "Standard: Facilities",
-      "verbatim": "The laboratory must be constructed, arranged, and maintained to ensure the following: (1) The space, ventilation, and utilities necessary for conducting all phases of the testing process. (2) Contamination of patient specimens, equipment, instruments, reagents, materials, and supplies is minimized. (3) The safety of laboratory personnel from physical, chemical, biochemical, and electrical hazards is ensured."
+      "verbatim": "(a) The laboratory must be constructed, arranged, and maintained to ensure the following: (1) The space, ventilation, and utilities necessary for conducting all phases of the testing process. (2) Contamination of patient specimens, equipment, instruments, reagents, materials, and supplies is minimized. (3) Molecular amplification procedures that are not contained in closed systems have a uni-directional workflow. This must include separate areas for specimen preparation, amplification and product detection, and, as applicable, reagent preparation."
     }
   ],
   "scope": "All <<LAB_NAME>> personnel and the medical director or designee. Applies to all testing sites, satellite locations, and point-of-care sites under the lab's CLIA certificate.",

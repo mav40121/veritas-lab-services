@@ -3,17 +3,17 @@
   "slug": "accreditation_body_notification",
   "policy_name": "Accreditation Body Notification Policy",
   "section": "Leadership",
-  "purpose": "This policy describes how <<LAB_NAME>> notifies CMS of changes that affect CLIA certification, including changes in ownership, location, lab director, certificate type, or services offered. Notification is required by 42 CFR 493.1100 and 42 CFR 493.1775 so the federal certification record stays accurate and inspections remain effective.",
+  "purpose": "This policy describes how <<LAB_NAME>> notifies CMS of changes that affect CLIA certification, including changes in ownership, location, lab director, certificate type, or services offered. Notification is required by 42 CFR 493.51 (certificate of compliance) and 42 CFR 493.63 (certificate of accreditation) so the federal certification record stays accurate and inspections remain effective.",
   "cfr_text_blocks": [
     {
-      "citation": "42 CFR 493.1775(a)",
-      "label": "Standard: Notification requirements",
-      "verbatim": "A laboratory must notify HHS in writing within 30 days of any of the following changes: (1) Name of the laboratory. (2) Ownership of the laboratory. (3) Address. (4) Director of the laboratory. (5) Hours of operation. (6) Withdrawal of the laboratory's request for certification or licensure. (7) Any change of supervisor at a laboratory performing high complexity testing. The laboratory must report any change in the requirements specified in this paragraph to all responsible Federal, State, or local agencies, before or as the change occurs."
+      "citation": "42 CFR 493.63(a)",
+      "label": "Notification requirements (certificate of accreditation)",
+      "verbatim": "(a) Notify HHS and the approved accreditation program within 30 days of any changes in - (1) Ownership; (2) Name; (3) Location; or (4) Director."
     },
     {
-      "citation": "42 CFR 493.1100",
-      "label": "Condition: General laboratory systems",
-      "verbatim": "Each laboratory that performs nonwaived testing must establish and follow written policies and procedures for an effective laboratory general systems including the policies and procedures specified in 493.1101 through 493.1105."
+      "citation": "42 CFR 493.1100 introductory text",
+      "label": "Condition: Facility administration",
+      "verbatim": "Each laboratory that performs nonwaived testing must meet the applicable requirements under §§ 493.1101 through 493.1105, unless HHS approves a procedure that provides equivalent quality testing as specified in Appendix C of the State Operations Manual (CMS Pub. 7)."
     }
   ],
   "scope": "All <<LAB_NAME>> leadership, the medical director or designee, and any administrative personnel responsible for CLIA correspondence, licensure, or certification.",
@@ -31,7 +31,7 @@
     "At each CLIA renewal, the medical director or designee reviews the certificate against current operations and submits any required updates."
   ],
   "definitions": [
-    ["Reportable change", "Any change to lab name, ownership, address, lab director, hours of operation, withdrawal of certification, or supervisor at a high complexity site. Requires CMS notification within 30 days per 42 CFR 493.1775(a)."],
+    ["Reportable change", "Any change to lab name, ownership, address, lab director, hours of operation, withdrawal of certification, or supervisor at a high complexity site. Requires CMS notification within 30 days per 42 CFR 493.63(a)."],
     ["CMS-116", "The federal CLIA application form. Required for initial certification and for material amendments such as certificate-type change, location change, or director change."],
     ["State Agency", "The state-level CLIA office that processes CMS-116 applications and notifications on behalf of CMS in most states."]
   ]

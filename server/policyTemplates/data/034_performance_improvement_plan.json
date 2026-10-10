@@ -7,23 +7,23 @@
   "cfr_text_blocks": [
     {
       "citation": "42 CFR 493.1200(a)",
-      "label": "Condition: Quality systems",
-      "verbatim": "Each laboratory that performs nonwaived testing must establish and maintain written policies and procedures that implement and monitor a quality system for all phases of the total testing process (that is, preanalytic, analytic, and postanalytic) as well as general laboratory systems."
+      "label": "Introduction: Quality systems for nonwaived testing",
+      "verbatim": "(a) Each laboratory that performs nonwaived testing must establish and maintain written policies and procedures that implement and monitor a quality system for all phases of the total testing process (that is, preanalytic, analytic, and postanalytic) as well as general laboratory systems."
     },
     {
       "citation": "42 CFR 493.1239(a)",
       "label": "Standard: General laboratory systems quality assessment",
-      "verbatim": "The laboratory must establish and follow written policies and procedures for an ongoing mechanism to monitor, assess and, when indicated, correct problems identified in the general laboratory systems requirements specified at 493.1101 through 493.1105."
+      "verbatim": "(a) The laboratory must establish and follow written policies and procedures for an ongoing mechanism to monitor, assess, and, when indicated, correct problems identified in the general laboratory systems requirements specified at §§ 493.1231 through 493.1236."
     },
     {
       "citation": "42 CFR 493.1289(a)",
       "label": "Standard: Postanalytic systems quality assessment",
-      "verbatim": "The laboratory must establish and follow written policies and procedures for an ongoing mechanism to monitor, assess and, when indicated, correct problems identified in the postanalytic systems specified at 493.1281 and 493.1283."
+      "verbatim": "(a) The laboratory must establish and follow written policies and procedures for an ongoing mechanism to monitor, assess, and when indicated, correct problems identified in the analytic systems specified in §§ 493.1251 through 493.1283."
     },
     {
       "citation": "42 CFR 493.1299(a)",
       "label": "Standard: Postanalytic systems quality assessment (corrective action)",
-      "verbatim": "The laboratory must establish and follow written policies and procedures for an ongoing mechanism to monitor, assess, and when indicated, correct problems identified in the post-analytic systems specified at 493.1289."
+      "verbatim": "(a) The laboratory must establish and follow written policies and procedures for an ongoing mechanism to monitor, assess and, when indicated, correct problems identified in the postanalytic systems specified in § 493.1291."
     }
   ],
   "scope": "All <<LAB_NAME>> testing personnel, the medical director or designee, the technical consultant or technical supervisor, and the quality coordinator (if assigned).",

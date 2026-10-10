@@ -8,12 +8,12 @@
     {
       "citation": "42 CFR 493.1291(g)",
       "label": "Test report (test results that require immediate notification)",
-      "verbatim": "The laboratory must immediately alert the individual or entity requesting the test and, if applicable, the individual responsible for using the test results when any test result indicates an imminently life-threatening condition, or panic or alert values."
+      "verbatim": "(g) The laboratory must immediately alert the individual or entity requesting the test and, if applicable, the individual responsible for using the test results when any test result indicates an imminently life-threatening condition, or panic or alert values."
     },
     {
       "citation": "42 CFR 493.1232",
       "label": "Standard: Specimen identification and integrity",
-      "verbatim": "The laboratory must establish and follow written policies and procedures to ensure positive identification and optimum integrity of a patient's specimen from the time of collection or receipt through completion of testing and reporting of results."
+      "verbatim": "The laboratory must establish and follow written policies and procedures that ensure positive identification and optimum integrity of a patient's specimen from the time of collection or receipt of the specimen through completion of testing and reporting of results."
     }
   ],
   "scope": "All <<LAB_NAME>> personnel who perform, review, or release test results. Applies to all testing performed under CLIA (waived, moderate, and high complexity). Applies to results reported from in-house testing and to results reported on behalf of reference laboratories.",

@@ -1,0 +1,37 @@
+name: Policy CFR verbatim
+
+# Hard CI gate (BUG-013, Michael 2026-10-09): every VeritaPolicy DOCX tells labs its
+# "Federal Regulation Excerpts" are "reproduced verbatim from the Code of Federal
+# Regulations". On 2026-10-09, 79 of 178 template quotes were not CFR text at all
+# and 99 more were edited. scripts/verify-policy-cfr-quotes.mjs holds every quote in
+# server/policyTemplates/data/*.json to the eCFR text at its citation
+# (scripts/data/ecfr_policy_quotes_<date>.json, built from the eCFR by
+# scripts/policy-cfr/rebuild_cfr_quotes.py) and fails on any word that differs.
+# To change a quote: change it in the eCFR extract's terms (re-run the rebuild tool),
+# never by hand.
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  policy-cfr-verbatim:
+    name: policy-cfr-verbatim
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Every policy CFR quote is verbatim at its citation
+        run: node scripts/verify-policy-cfr-quotes.mjs

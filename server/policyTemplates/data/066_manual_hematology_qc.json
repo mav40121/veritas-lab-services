@@ -3,10 +3,10 @@
   "slug": "manual_hematology_qc",
   "policy_name": "Manual Hematology QC Policy",
   "section": "Specialty Services",
-  "purpose": "This policy describes QC for manual hematology procedures performed at <<LAB_NAME>>: manual differential of stained peripheral smear, manual cell counts (CSF, body fluid, manual platelet, manual WBC, manual RBC), manual reticulocyte count, and manual estimates (platelet estimate from smear, WBC estimate from smear). Required by 42 CFR 493.1256 (control procedures), 42 CFR 493.1261 (hematology), 42 CFR 493.1267 (urinalysis where applicable to body-fluid counts), and OSHA 29 CFR 1910.1030 for handling of blood and body fluids during smear preparation and review.",
+  "purpose": "This policy describes QC for manual hematology procedures performed at <<LAB_NAME>>: manual differential of stained peripheral smear, manual cell counts (CSF, body fluid, manual platelet, manual WBC, manual RBC), manual reticulocyte count, and manual estimates (platelet estimate from smear, WBC estimate from smear). Required by 42 CFR 493.1256 (control procedures), 42 CFR 493.1269 (hematology), and OSHA 29 CFR 1910.1030 for handling of blood and body fluids during smear preparation and review.",
   "scope": "All <<LAB_NAME>> hematology testing personnel performing manual hematology procedures, the Technical Supervisor for hematology (high-complexity), and the medical director or designee.",
   "policy_statements": [
-    "Manual cell counts (CSF, synovial fluid, peritoneal fluid, pleural fluid, manual WBC, manual platelet, manual RBC) have two levels of commercial control material run within each 8 hours of operation and each time a change in reagents occurs, per 42 CFR 493.1261(a). Body-fluid commercial controls (e.g. Streck CBC-XE, Sysmex e-CHECK Body Fluid) are the standard.",
+    "Manual cell counts (CSF, synovial fluid, peritoneal fluid, pleural fluid, manual WBC, manual platelet, manual RBC) have two levels of commercial control material run within each 8 hours of operation and each time a change in reagents occurs, which exceeds the 42 CFR 493.1269(a) minimum of one control material each 8 hours with patient specimens and controls tested in duplicate. Body-fluid commercial controls (e.g. Streck CBC-XE, Sysmex e-CHECK Body Fluid) are the standard.",
     "Manual differential review of the stained peripheral smear is performed against the lab's validated reference range; abnormal morphology findings (blasts, schistocytes, malaria, etc.) trigger pathologist review per the lab's smear-review criteria.",
     "Manual differential count: minimum 100 leukocytes counted (200 when feasible); each technologist's manual differential proficiency is assessed at competency cycles per the Staff Competency Assessment policy, including direct observation, blind sample, and problem-solving for atypical cells.",
     "Manual reticulocyte counts use either methylene blue or new methylene blue stain; minimum 1000 red cells counted per reticulocyte determination; QC includes a positive reference control and patient duplicate where indicated.",
@@ -37,7 +37,7 @@
   "definitions": [
     [
       "Manual cell count",
-      "Counting of cellular elements by manual hemocytometer (Neubauer chamber or equivalent), used for body fluids and when automated counts are unreliable. Subject to 42 CFR 493.1261(a) two-level, 8-hour control requirement."
+      "Counting of cellular elements by manual hemocytometer (Neubauer chamber or equivalent), used for body fluids and when automated counts are unreliable. Subject to 42 CFR 493.1269(a): one control material each 8 hours of operation, with patient specimens and controls tested in duplicate."
     ],
     [
       "Manual differential",
@@ -66,29 +66,29 @@
   ],
   "cfr_text_blocks": [
     {
-      "citation": "42 CFR 493.1256(a)",
+      "citation": "42 CFR 493.1256(a)-(b)",
       "label": "Standard: Control procedures",
-      "verbatim": "For each test system, the laboratory is responsible for having control procedures that monitor the accuracy and precision of the complete analytic process. The laboratory must establish the number, type, and frequency of testing control materials using, if applicable, the performance specifications verified or established by the laboratory as specified in 493.1253(b)(3)."
+      "verbatim": "(a) For each test system, the laboratory is responsible for having control procedures that monitor the accuracy and precision of the complete analytic process. (b) The laboratory must establish the number, type, and frequency of testing control materials using, if applicable, the performance specifications verified or established by the laboratory as specified in § 493.1253(b)(3)."
     },
     {
-      "citation": "42 CFR 493.1256(d)",
-      "label": "Standard: Control procedures (frequency)",
-      "verbatim": "Unless CMS approves a procedure, specified in Appendix C of the State Operations Manual (CMS Pub. 7), that provides equivalent quality testing, the laboratory must, at a minimum, (1) Include the following controls in each run of patient specimens: (i) At least two control materials at different concentrations for each quantitative procedure."
+      "citation": "42 CFR 493.1256(d)(3)",
+      "label": "Standard: Control procedures (each day of testing)",
+      "verbatim": "(3) At least once each day patient specimens are assayed or examined perform the following for - (i) Each quantitative procedure, include two control materials of different concentrations; (ii) Each qualitative procedure, include a negative and positive control material; (iii) Test procedures producing graded or titered results, include a negative control material and a control material with graded or titered reactivity, respectively; (iv) Each test system that has an extraction phase, include two control materials, including one that is capable of detecting errors in the extraction process; and (v) Each molecular amplification procedure, include two control materials and, if reaction inhibition is a significant source of false negative results, a control material capable of detecting the inhibition."
     },
     {
-      "citation": "42 CFR 493.1261(a)",
-      "label": "Standard: Hematology",
-      "verbatim": "If the laboratory performs automated hematology testing, the laboratory must perform at least two levels of control material each day of testing in accordance with 493.1256(d). If the laboratory performs manual cell counts, the laboratory must perform two controls within each 8 hours of operation and each time a change in reagents occurs."
+      "citation": "42 CFR 493.1269(a)",
+      "label": "Standard: Hematology (manual cell counts)",
+      "verbatim": "(a) For manual cell counts performed using a hemocytometer - (1) One control material must be tested each 8 hours of operation; and (2) Patient specimens and control materials must be tested in duplicate."
     },
     {
       "citation": "42 CFR 493.1252(b)",
       "label": "Standard: Reagent storage conditions",
-      "verbatim": "The laboratory must define criteria for those conditions that are essential for proper storage of reagents and specimens, accurate and reliable test system operation, and test result reporting. The criteria must be consistent with the manufacturer's instructions, if provided. These conditions must be monitored and documented."
+      "verbatim": "(b) The laboratory must define criteria for those conditions that are essential for proper storage of reagents and specimens, accurate and reliable test system operation, and test result reporting. The criteria must be consistent with the manufacturer's instructions, if provided. These conditions must be monitored and documented and, if applicable, include the following: (1) Water quality. (2) Temperature. (3) Humidity. (4) Protection of equipment and instruments from fluctuations and interruptions in electrical current that adversely affect patient test results and test reports."
     },
     {
-      "citation": "42 CFR 493.927",
-      "label": "Standard: Hematology proficiency testing",
-      "verbatim": "Failure to attain a score of at least 80 percent on each analyte or subspecialty constitutes unsuccessful performance for a testing event. To be successful for the analyte or subspecialty, the laboratory must obtain a score of at least 80 percent for two consecutive or two out of the last three testing events."
+      "citation": "42 CFR 493.851",
+      "label": "Standard; Hematology (proficiency testing)",
+      "verbatim": "(a) Failure to attain a score of at least 80 percent of acceptable responses for each analyte in each testing event is unsatisfactory analyte performance for the testing event. ... (b) Failure to attain an overall testing event score of at least 80 percent is unsatisfactory performance. ... (f) Failure to achieve satisfactory performance for the same analyte in two consecutive events or two out of three consecutive testing events is unsuccessful performance."
     },
     {
       "citation": "29 CFR 1910.1030(d)(3)",

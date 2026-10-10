@@ -3,12 +3,12 @@
   "slug": "histopathology_qmp",
   "policy_name": "Histopathology Quality Management Plan",
   "section": "Specialty Services",
-  "purpose": "This policy describes how <<LAB_NAME>> monitors and improves quality in anatomic pathology and histology. Required by 42 CFR 493.1200 (quality systems), 42 CFR 493.1273 (histopathology QA), and 42 CFR 493.1249 (preanalytic) / 42 CFR 493.1289 (postanalytic) assessments.",
+  "purpose": "This policy describes how <<LAB_NAME>> monitors and improves quality in anatomic pathology and histology. Required by 42 CFR 493.1200 (quality systems), 42 CFR 493.1273 (histopathology QA), and 42 CFR 493.1249 (preanalytic), 42 CFR 493.1289 (analytic) and 42 CFR 493.1299 (postanalytic) assessments.",
   "cfr_text_blocks": [
     {
       "citation": "42 CFR 493.1273(a)",
       "label": "Standard: Histopathology",
-      "verbatim": "If the laboratory provides services in the subspecialty of histopathology, the laboratory must (1) Have written quality assurance procedures, and (2) Use only those slides, fluids, and stains that meet the laboratory's quality criteria."
+      "verbatim": "(a) As specified in § 493.1256(e)(3), fluorescent and immunohistochemical stains must be checked for positive and negative reactivity each time of use. For all other differential or special stains, a control slide of known reactivity must be stained with each patient slide or group of patient slides. Reaction(s) of the control slide with each special stain must be documented."
     }
   ],
   "scope": "All <<LAB_NAME>> anatomic pathology personnel and the medical director or designee.",
@@ -17,7 +17,7 @@
     "Indicator targets are set by the medical director or designee; performance is tracked monthly and reviewed at least quarterly.",
     "Intradepartmental case review (peer review): a defined sample of cases is reviewed by a second pathologist; concordance is tracked and discordant cases are discussed and documented.",
     "Frozen section-to-final-diagnosis concordance is tracked; significant discordances are reviewed.",
-    "Slides, blocks, and special stains use only materials that meet the lab's quality criteria per 42 CFR 493.1273(a)(2).",
+    "Slides, blocks, and special stains use only materials that meet the lab's quality criteria per 42 CFR 493.1252(d).",
     "QA records are retained per 42 CFR 493.1105."
   ],
   "procedure_steps": [

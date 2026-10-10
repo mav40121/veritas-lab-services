@@ -3,12 +3,12 @@
   "slug": "parasitology",
   "policy_name": "Parasitology Testing Procedures Policy",
   "section": "Specialty Services",
-  "purpose": "This policy describes how <<LAB_NAME>> performs parasitology testing (ova and parasite exam, antigen tests, malaria preparations, blood parasite smears). Required by 42 CFR 493.1204 (PT subspecialty parasitology), 42 CFR 493.821 (unsuccessful PT response applies to parasitology), and 42 CFR 493.1262 (microbiology QC).",
+  "purpose": "This policy describes how <<LAB_NAME>> performs parasitology testing (ova and parasite exam, antigen tests, malaria preparations, blood parasite smears). Required by 42 CFR 493.1204 (Condition: Parasitology), 42 CFR 493.1264 (Standard: Parasitology), and 42 CFR 493.821 (proficiency testing: microbiology includes parasitology).",
   "cfr_text_blocks": [
     {
-      "citation": "42 CFR 493.1262(a)",
-      "label": "Standard: Bacteriology (general microbiology QC)",
-      "verbatim": "For each batch (i.e., shipment, lot, or in-house preparation) and shipment of media, the laboratory must check media for sterility if sterility is required for testing, ability to support growth, and, as appropriate, selectivity/inhibition and biochemical response."
+      "citation": "42 CFR 493.1256(e)(4)",
+      "label": "Standard: Control procedures (media checks)",
+      "verbatim": "(4) Before, or concurrent with the initial use - (i) Check each batch of media for sterility if sterility is required for testing; (ii) Check each batch of media for its ability to support growth and, as appropriate, select or inhibit specific organisms or produce a biochemical response; and (iii) Document the physical characteristics of the media when compromised and report any deterioration in the media to the manufacturer."
     }
   ],
   "scope": "All <<LAB_NAME>> microbiology personnel performing parasitology testing.",
