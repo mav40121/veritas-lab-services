@@ -455,6 +455,26 @@ app.use((req, res, next) => {
     console.error("[recall-reminders] Scheduler setup error:", err.message);
   }
 
+  // BUG-021 (2026-10-10): VeritaLab certificate renewal reminders, daily at 13:00 UTC (9 AM Eastern) so they
+  // land in the morning. Newest due stage per certificate only (server/certificateReminders.ts). No-op when
+  // RESEND_API_KEY is unset (local and CI).
+  try {
+    const { runCertificateReminders } = await import("./certificateReminders");
+    const now = new Date();
+    const next = new Date(now);
+    next.setUTCHours(13, 0, 0, 0);
+    if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
+    const run = () => {
+      if (!process.env.RESEND_API_KEY) return;
+      runCertificateReminders()
+        .then((r) => console.log(`[cert-reminders] due ${r.due}, sent ${r.sent}, skipped ${r.skipped.length}, errors ${r.errors}`))
+        .catch((err) => console.error("[cert-reminders] Run failed:", err?.message || err));
+    };
+    setTimeout(() => { run(); setInterval(run, 24 * 60 * 60 * 1000); }, next.getTime() - now.getTime());
+  } catch (err: any) {
+    console.error("[cert-reminders] Scheduler setup error:", err.message);
+  }
+
   // Schedule nightly off-site database backup at 04:00 UTC. Env-gated:
   // if GOOGLE_DRIVE_SA_JSON or GOOGLE_DRIVE_BACKUP_FOLDER_ID is unset
   // the run is a no-op. 04:00 chosen to clear the midnight UTC snapshot
