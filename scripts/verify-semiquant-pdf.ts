@@ -9,12 +9,16 @@
 //   2. Semi-quantitative: the status column reads Exact / +-1 / +-2 from the grade difference.
 //   3. Semi-quantitative: the threshold reads ">=80%", not ">=0.8%".
 //   4. Qualitative: the threshold reads ">=90%", not ">=0.9%".
+//   5-6. Follow-up (Michael Q63): the "User's Specifications" block on semi-quantitative and qualitative studies states the
+//      study's own acceptance rule and scale and cites 42 CFR 493.1281, with no TEa / PT TEa / systematic-error / EP09 rows
+//      ("UR Glucose" used to cite 42 CFR 493.931 as an adopted PT TEa).
+//   7. Null branch: a quantitative method comparison still prints its TEa rows unchanged.
 // Run (from repo root): node_modules/.bin/tsx scripts/verify-semiquant-pdf.ts
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { calculateSemiQuant, calculateQualitative } from "../client/src/lib/calculations";
+import { calculateSemiQuant, calculateQualitative, calculateMethodComparison } from "../client/src/lib/calculations";
 import { generatePDFBuffer } from "../server/pdfReport";
 
 let fails = 0;
@@ -49,6 +53,24 @@ async function main() {
   const q = calculateQualitative(qPoints as any, ["Comparison Analyzer"], ["Pos", "Neg"], 0.9);
   const qText = textOf(await generatePDFBuffer(study(9002, "UR Nitrite", { assayType: "qualitative", categories: ["Pos", "Neg"], passThreshold: 0.9, points: qPoints }), q), "qual.pdf");
   check("4. qualitative threshold reads ≥90%, not ≥0.9%", /≥90%/.test(qText) && !/≥0\.9%/.test(qText), (qText.match(/≥[0-9.]+%/g) || []).join(" "));
+
+  // 5-7: the Supporting Data & User Specifications page
+  const specOf = (t: string) => t.slice(t.indexOf("Supporting Data & User Specifications")).replace(/\s+/g, " ");
+  const QUANT_ROWS = /Adopted Acceptance Criterion|Lab-Set Internal Goal|Allowable Systematic Error|PT TEa|EP09|493\.931/;
+  const sqSpec = specOf(sqText), qSpec = specOf(qText);
+  check("5. semi-quant spec block states the grade-agreement rule, scale and 42 CFR §493.1281",
+    /Semi- ?Quantitative \(Grade Agreement\)/.test(sqSpec) && /≥80% of samples within ±1 grade/.test(sqSpec) && /Grade Scale Normal, 30, 50, 70, 100, 150/.test(sqSpec) && /§493\.1281/.test(sqSpec), sqSpec.slice(0, 330));
+  check("5. semi-quant spec block (UR Glucose) has no TEa / PT TEa / systematic-error / EP09 / §493.931 rows", !QUANT_ROWS.test(sqSpec), (sqSpec.match(QUANT_ROWS) || ["clean"])[0]);
+  check("6. qualitative spec block states the agreement rule, categories and 42 CFR §493.1281",
+    /Qualitative \(Categorical Agreement\)/.test(qSpec) && /≥90% overall agreement/.test(qSpec) && /Categories Pos, Neg/.test(qSpec) && /§493\.1281/.test(qSpec), qSpec.slice(0, 330));
+  check("6. qualitative spec block has no TEa / systematic-error / EP09 rows", !QUANT_ROWS.test(qSpec), (qSpec.match(QUANT_ROWS) || ["clean"])[0]);
+
+  // 7. Quantitative glucose method comparison: the TEa rows are unchanged
+  const mcPoints = [80, 100, 120, 150, 200, 250, 300, 400].map((v, i) => ({ level: i + 1, expectedValue: v, instrumentValues: { "Comparison Analyzer": v * 1.02 } }));
+  const mc = calculateMethodComparison(mcPoints as any, ["Comparison Analyzer"], 0.08);
+  const mcStudy = { ...study(9003, "Glucose", mcPoints), cliaAllowableError: 0.08 };
+  const mcSpec = specOf(textOf(await generatePDFBuffer(mcStudy, mc), "quant.pdf"));
+  check("7. quantitative method comparison still prints its TEa rows (null branch)", /Adopted Acceptance Criterion \(TEa\)/.test(mcSpec) && /Allowable Systematic Error/.test(mcSpec) && /EP09/.test(mcSpec), mcSpec.slice(0, 260));
 
   console.log(fails ? `\n${fails} FAILURE(S)` : "\nALL PASS");
   process.exit(fails ? 1 : 0);

@@ -725,7 +725,10 @@ function headerHTML(study: Study, cliaNumber?: string): string {
 }
 
 // ─── Supporting data page HTML ────────────────────────────────────────────────
-function supportingPageHTML(study: Study, instrumentNames: string[]): string {
+// BUG-022 follow-up (2026-10-10, Michael Q63): qualitative and semi-quantitative correlations are judged on agreement,
+// not on a TEa, so their spec block states the study's own acceptance rule and scale instead of the quantitative rows.
+type AgreementSpec = { kind: "qualitative" | "semi_quantitative"; thresholdPct: number; scale: string[] };
+function supportingPageHTML(study: Study, instrumentNames: string[], agreement?: AgreementSpec): string {
   const teaStr = teaDisplayStr(study);
   // Same resolution as the narrative: explicit study.cfr override, else the
   // analyte's CLIA subspecialty section (hematology -> §493.941), else §493.931.
@@ -755,6 +758,17 @@ function supportingPageHTML(study: Study, instrumentNames: string[]): string {
     [cfrReferenceLabel, cfrReferenceValue],
     ["Allowable Systematic Error", teaStr],
   ];
+  if (agreement) {
+    const semi = agreement.kind === "semi_quantitative";
+    const c1281 = "42 CFR §493.1281";
+    specs.splice(0, specs.length,
+      ["Study Type", semi ? "Correlation / Method Comparison: Semi-Quantitative (Grade Agreement)" : "Correlation / Method Comparison: Qualitative (Categorical Agreement)"],
+      ["Test Name", escHtml(study.testName)],
+      ["Acceptance Criterion", semi ? `≥${agreement.thresholdPct}% of samples within ±1 grade` : `≥${agreement.thresholdPct}% overall agreement`],
+      [semi ? "Grade Scale" : "Categories", escHtml(agreement.scale.join(", ")) || "-"],
+      ["CFR Reference", `<a href="${CFR_URLS[c1281]}" class="teal-link">${c1281}</a> (comparison of test results)`],
+    );
+  }
   // Phase 2 parity: surface optional precision-study inputs in User
   // Specifications so the supporting data table matches EE's panel when the
   // operator entered a vendor SD goal or a target mean.
@@ -1601,7 +1615,7 @@ function buildQualitativeHTML(study: Study, results: any): string {
 
   ${regulatoryComplianceBoxHTML(study.studyType, (study as any)._preferredStandards)}
   ${directorReviewHTML(study)}
-  ${supportingPageHTML(study, allInstrumentNames)}
+  ${supportingPageHTML(study, allInstrumentNames, { kind: "qualitative", thresholdPct: passThreshold, scale: categories })}
   </body></html>`;
 }
 
@@ -1717,7 +1731,7 @@ function buildSemiQuantHTML(study: Study, results: any): string {
     </table>
   </div>
 
-  ${supportingPageHTML(study, allInstrumentNames)}
+  ${supportingPageHTML(study, allInstrumentNames, { kind: "semi_quantitative", thresholdPct: passThreshold, scale: gradeScale })}
   </body></html>`;
 }
 
