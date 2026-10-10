@@ -35,3 +35,6 @@ jobs:
 
       - name: Every policy CFR quote is verbatim at its citation
         run: node scripts/verify-policy-cfr-quotes.mjs
+
+      - name: Every crosswalk CFR citation names a section in the eCFR
+        run: node scripts/verify-policy-crosswalk-cfr.mjs
