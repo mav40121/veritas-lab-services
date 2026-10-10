@@ -594,6 +594,8 @@ sqlite.exec(`
     scheduled_date TEXT NOT NULL,
     sent_at TEXT,
     is_sent INTEGER NOT NULL DEFAULT 0,
+    skipped_at TEXT,
+    skip_reason TEXT,
     FOREIGN KEY (certificate_id) REFERENCES lab_certificates(id),
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
@@ -3854,6 +3856,14 @@ for (const t of ["staff_employees", "staff_roles"]) {
     }
   }
   try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_staff_lab_specialties_lab ON staff_lab_specialties(lab_id)`); } catch {}
+}
+
+// BUG-021 (2026-10-10): certificate reminders that were superseded by a later notice are marked skipped (never
+// emailed) instead of sent; server/certificateReminders.ts filters on skipped_at IS NULL.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(lab_certificate_reminders)").all() as any[]).map(c => c.name);
+  if (!cols.includes("skipped_at")) { try { sqlite.exec("ALTER TABLE lab_certificate_reminders ADD COLUMN skipped_at TEXT"); } catch {} }
+  if (!cols.includes("skip_reason")) { try { sqlite.exec("ALTER TABLE lab_certificate_reminders ADD COLUMN skip_reason TEXT"); } catch {} }
 }
 
 // Multi-Lab Tier 2 — Phase 3.8 (VeritaLab module):
