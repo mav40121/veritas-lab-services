@@ -30697,73 +30697,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ rows, count: rows.length });
   });
 
-  // POST /api/veritalab/check-reminders - check and send due reminders
-  app.post("/api/veritalab/check-reminders", (req: any, res) => {
-    const adminSecret = req.headers["x-admin-secret"];
+  // POST /api/veritalab/check-reminders: send due certificate reminders now (the nightly job in server/index.ts
+  // runs the same code). BUG-021: newest due stage per certificate only; older stages are skipped, never sent.
+  // { dryRun: true } (body or ?dryRun=1) returns the plan and writes nothing. Admin secret by header or ?secret=.
+  app.post("/api/veritalab/check-reminders", async (req: any, res) => {
+    const adminSecret = req.headers["x-admin-secret"] || req.query.secret;
     if (adminSecret !== ADMIN_SECRET) {
       return res.status(403).json({ error: "Forbidden" });
     }
-
-    const today = new Date().toISOString().split("T")[0];
-    const dueReminders = (db as any).$client.prepare(
-      "SELECT r.*, c.cert_name, c.cert_number, c.expiration_date FROM lab_certificate_reminders r JOIN lab_certificates c ON c.id = r.certificate_id WHERE r.scheduled_date <= ? AND r.is_sent = 0 AND c.is_active = 1"
-    ).all(today) as any[];
-
-    let sent = 0;
-    let errors = 0;
-
-    const reminderLabels: Record<string, string> = {
-      "9month": "9-Month Reminder",
-      "6month": "6-Month Reminder",
-      "3month": "3-Month Reminder",
-      "30day": "30-Day Reminder",
-      "expired": "Expiration Notice",
-    };
-
-    for (const reminder of dueReminders) {
-      const user = (db as any).$client.prepare("SELECT email, clia_lab_name FROM users WHERE id = ?").get(reminder.user_id) as any;
-      if (!user?.email) continue;
-
-      const label = reminderLabels[reminder.reminder_type] || reminder.reminder_type;
-      const expDate = reminder.expiration_date ? new Date(reminder.expiration_date).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }) : "Unknown";
-      const subject = `${label} - ${reminder.cert_name} expires ${expDate}`;
-
-      const htmlBody = `
-        <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
-          <h2 style="color:#01696F;margin-bottom:16px">Your ${reminder.cert_name} is expiring soon.</h2>
-          <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
-            <tr><td style="padding:6px 0;color:#666">Certificate:</td><td style="padding:6px 0;font-weight:600">${reminder.cert_name}</td></tr>
-            <tr><td style="padding:6px 0;color:#666">Number:</td><td style="padding:6px 0">${reminder.cert_number || "N/A"}</td></tr>
-            <tr><td style="padding:6px 0;color:#666">Expiration:</td><td style="padding:6px 0;font-weight:600;color:#c53030">${expDate}</td></tr>
-            <tr><td style="padding:6px 0;color:#666">Lab:</td><td style="padding:6px 0">${user.clia_lab_name || "Your laboratory"}</td></tr>
-          </table>
-          <p style="margin-bottom:20px">Log in to VeritaAssure\u2122 to view your certificate details and upload renewal documentation.</p>
-          <a href="https://www.veritaslabservices.com/veritalab-app" style="display:inline-block;background:#01696F;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600">Open VeritaLab\u2122</a>
-          <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
-          <p style="color:#999;font-size:12px">VeritaAssure\u2122 | Veritas Lab Services, LLC</p>
-        </div>
-      `;
-
-      try {
-        if (resend) {
-          resend.emails.send({
-            from: "VeritaAssure\u2122 <info@veritaslabservices.com>",
-            to: user.email,
-            subject,
-            html: htmlBody,
-          });
-        }
-        (db as any).$client.prepare(
-          "UPDATE lab_certificate_reminders SET is_sent = 1, sent_at = ? WHERE id = ?"
-        ).run(new Date().toISOString(), reminder.id);
-        sent++;
-      } catch (err) {
-        console.error("[VeritaLab] Reminder email failed:", err);
-        errors++;
-      }
+    const dryRun = req.body?.dryRun === true || req.query.dryRun === "1" || req.query.dryRun === "true";
+    try {
+      const { runCertificateReminders } = await import("./certificateReminders");
+      res.json(await runCertificateReminders({ dryRun }));
+    } catch (err: any) {
+      console.error("[VeritaLab] check-reminders failed:", err?.message || err);
+      res.status(500).json({ error: "check-reminders failed" });
     }
-
-    res.json({ processed: dueReminders.length, sent, errors });
   });
 
   // POST /api/veritalab/certificates/excel - export certificates to Excel
