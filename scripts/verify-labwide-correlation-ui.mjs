@@ -5,8 +5,9 @@
 // on a scratch database (it registers an owner, provisions a lab and seeds two maps,
 // so never point it at production). Usage:
 //   PW_BASE=http://localhost:5150 SCRATCH_DB=<scratch db> OUT=<dir> node scripts/verify-labwide-correlation-ui.mjs
-// Shape from production (Milford): Glucose on the Chemistry map and on StatStrip
-// meters kept on the Blood Bank map. Light + dark shots of the tooltip.
+// Shape: Glucose on the Chemistry map and on a nonwaived i-STAT kept on the Blood Bank map (a WAIVED meter
+// would not count: BUG-016, Michael 2026-10-09). A WAIVED StatStrip meter also runs Glucose on the Chemistry map:
+// the row must still say 2 instruments and the tooltip must not list the meter. Light + dark shots of the tooltip.
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { chromium } = require("@playwright/test");
@@ -29,12 +30,12 @@ sdb.close();
 const chem = await call("POST", `/api/labs/${labId}/veritamap/maps`, { name: "Chemistry" }, token);
 const bb = await call("POST", `/api/labs/${labId}/veritamap/maps`, { name: "Blood Bank" }, token);
 const t = (analyte, complexity = "MODERATE") => ({ analyte, specialty: "General Chemistry", complexity, active: 1 });
-const s1 = await call("POST", `/api/admin/veritamap/seed-map?secret=${ADMIN}`, { mapId: chem.id, defaultActive: 1, instruments: [{ name: "Siemens Atellica CH 930", tests: [t("Glucose"), t("Magnesium")] }] });
-const s2 = await call("POST", `/api/admin/veritamap/seed-map?secret=${ADMIN}`, { mapId: bb.id, defaultActive: 1, instruments: [{ name: "Nova StatStrip Glucose", tests: [t("Glucose", "WAIVED")] }] });
-check("two maps seeded in one lab", s1?.totals?.inserted === 2 && s2?.totals?.inserted === 1, JSON.stringify([s1?.totals, s2?.totals]));
+const s1 = await call("POST", `/api/admin/veritamap/seed-map?secret=${ADMIN}`, { mapId: chem.id, defaultActive: 1, instruments: [{ name: "Siemens Atellica CH 930", tests: [t("Glucose"), t("Magnesium")] }, { name: "Nova StatStrip Glucose Hospital Meter", tests: [t("Glucose", "WAIVED")] }] });
+const s2 = await call("POST", `/api/admin/veritamap/seed-map?secret=${ADMIN}`, { mapId: bb.id, defaultActive: 1, instruments: [{ name: "Abbott i-STAT 1", tests: [t("Glucose", "MODERATE")] }] });
+check("two maps seeded in one lab", s1?.totals?.inserted === 3 && s2?.totals?.inserted === 1, JSON.stringify([s1?.totals, s2?.totals]));
 
 const intel = (await call("GET", `/api/labs/${labId}/veritamap/maps/${chem.id}/intelligence`, undefined, token)).intelligence || {};
-check("API: Chemistry-map Glucose requires a correlation with the Blood Bank meter", !!intel.Glucose?.correlationRequired && /on map "Blood Bank"/.test(intel.Glucose?.correlationReason || ""), intel.Glucose?.correlationReason || "(none)");
+check("API: Chemistry-map Glucose requires a correlation with the Blood Bank i-STAT", !!intel.Glucose?.correlationRequired && /on map "Blood Bank"/.test(intel.Glucose?.correlationReason || ""), intel.Glucose?.correlationReason || "(none)");
 check("API: Magnesium (one analyzer in the lab) does not", !intel.Magnesium?.correlationRequired);
 
 const browser = await chromium.launch();
@@ -53,7 +54,9 @@ for (const mode of ["light", "dark"]) {
   const peer = page.locator('[data-testid="correlation-peers"]').first();
   await peer.waitFor({ timeout: 8000 }).catch(() => {});
   const txt = (await peer.innerText().catch(() => "")).replace(/\s+/g, " ");
-  check(`${mode}: the tooltip names the other map`, /Nova StatStrip Glucose/.test(txt) && /on map "Blood Bank"/.test(txt), txt);
+  check(`${mode}: the tooltip names the other map`, /Abbott i-STAT 1/.test(txt) && /on map "Blood Bank"/.test(txt), txt);
+  const tip = (await page.locator("p", { hasText: "instruments running this test" }).first().locator("xpath=..").innerText().catch(() => "")).replace(/\s+/g, " ");
+  check(`${mode}: the tooltip counts 2 instruments and does not list the waived StatStrip (BUG-016)`, /^2 instruments running this test/.test(tip) && /Siemens Atellica CH 930/.test(tip) && !/StatStrip/.test(tip), tip);
   await page.screenshot({ path: `${OUT}/labwide_tooltip_${mode}.png`, fullPage: false });
   await page.close();
 }
