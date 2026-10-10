@@ -20,16 +20,52 @@ import { correlationGroupsFor, sameTestKeys, type CorrelationGroupInfo } from "@
 const norm = (s: unknown) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const physicalKey = (i: any) => (i?.serial_number ? `sn:${norm(i.serial_number)}` : `name:${norm(i?.instrument_name ?? i?.name)}`);
 
+// BUG-016 (Michael 2026-10-09): "They are required to do non-waived. It can be best practice to include waived,
+// but this is a choice, not a requirement." 42 CFR 493.1281 sits in Subpart K (nonwaived testing), so only
+// NONWAIVED instruments count toward the twice-a-year comparison requirement and appear in its peer list. A
+// waived device running the same test (e.g. a StatStrip meter beside the chemistry analyzer) never makes a test
+// "required"; comparing it is the lab's choice. `waived` lists those devices per analyte for any caller that
+// wants to mention the optional comparison.
+
 export interface LabWideCorrelation {
-  /** Correlation group per analyte on THIS map (counts instruments across the lab). */
+  /** Correlation group per analyte on THIS map: counts the lab's NONWAIVED instruments for the same test. */
   groups: Record<string, CorrelationGroupInfo>;
-  /** This map's instruments plus same-test instruments from the lab's other maps (other_map: true, map_name). */
+  /** Nonwaived instruments: this map's plus same-test ones from the lab's other maps (other_map: true, map_name). */
   all: Record<string, any[]>;
+  /** Waived devices running the same test (this map and the lab's other maps): optional to include, never required. */
+  waived: Record<string, any[]>;
+}
+
+const isWaived = (c: unknown) => String(c ?? "").trim().toUpperCase() === "WAIVED";
+const COMPLEXITY_RANK: Record<string, number> = { WAIVED: 0, MODERATE: 1, HIGH: 2 };
+
+/** A map row's complexity: the highest among its instruments (the veritamap_tests rollup rule), so a row is
+ *  WAIVED only when every instrument on it is. Never the first instrument's value alone (BUG-016). */
+export function rowComplexity(instruments: { complexity?: unknown }[]): string | null {
+  let best: string | null = null;
+  for (const i of instruments) {
+    const c = String(i.complexity ?? "").trim().toUpperCase();
+    if (c in COMPLEXITY_RANK && (best === null || COMPLEXITY_RANK[c] > COMPLEXITY_RANK[best])) best = c;
+  }
+  return best;
 }
 
 export function labWideCorrelation(sqlite: any, mapId: number | string, local: Record<string, any[]>): LabWideCorrelation {
+  // Complexity per (instrument, analyte) on this map, read from the database: callers do not all load it.
+  const cx = new Map<string, string>();
+  for (const r of sqlite.prepare("SELECT instrument_id, analyte, complexity FROM veritamap_instrument_tests WHERE map_id = ? AND active = 1").all(Number(mapId)) as any[]) {
+    cx.set(`${r.instrument_id}|${r.analyte}`, r.complexity);
+  }
   const all: Record<string, any[]> = {};
-  for (const [a, xs] of Object.entries(local)) all[a] = [...xs];
+  const waived: Record<string, any[]> = {};
+  for (const [a, xs] of Object.entries(local)) {
+    all[a] = [];
+    waived[a] = [];
+    for (const x of xs) {
+      const c = x.complexity ?? cx.get(`${x.instrument_id ?? x.id}|${a}`);
+      (isWaived(c) ? waived[a] : all[a]).push(x);
+    }
+  }
   const map = sqlite.prepare("SELECT lab_id FROM veritamap_maps WHERE id = ?").get(Number(mapId)) as any;
   if (map?.lab_id) {
     const localTestKeys = new Set<string>();
@@ -54,7 +90,7 @@ export function labWideCorrelation(sqlite: any, mapId: number | string, local: R
       return localNames.has(nm) && (!sn || localNames.get(nm) === true);
     };
     const rows = sqlite.prepare(`
-      SELECT it.analyte, i.id AS instrument_id, i.instrument_name, i.role, i.serial_number, mp.id AS map_id, mp.name AS map_name
+      SELECT it.analyte, it.complexity, i.id AS instrument_id, i.instrument_name, i.role, i.serial_number, mp.id AS map_id, mp.name AS map_name
         FROM veritamap_instrument_tests it
         JOIN veritamap_instruments i ON i.id = it.instrument_id
         JOIN veritamap_maps mp ON mp.id = it.map_id
@@ -64,14 +100,14 @@ export function labWideCorrelation(sqlite: any, mapId: number | string, local: R
       if (!sameTestKeys(r.analyte).some((k) => localTestKeys.has(k))) continue;
       if (sameAsLocal(r)) continue; // the same analyzer is already on this map
       const pk = physicalKey(r);
-      const list = (all[r.analyte] ??= []);
+      const list = isWaived(r.complexity) ? (waived[r.analyte] ??= []) : (all[r.analyte] ??= []);
       const id = `x:${pk}`;
       if (list.some((x) => x.id === id)) continue; // listed on two other maps: count once
-      list.push({ id, instrument_id: r.instrument_id, instrument_name: r.instrument_name, role: r.role, serial_number: r.serial_number || null, map_id: r.map_id, map_name: r.map_name, other_map: true });
+      list.push({ id, instrument_id: r.instrument_id, instrument_name: r.instrument_name, role: r.role, serial_number: r.serial_number || null, map_id: r.map_id, map_name: r.map_name, other_map: true, complexity: r.complexity });
     }
   }
   const groups = correlationGroupsFor(all);
-  return { groups, all };
+  return { groups, all, waived };
 }
 
 /** "XN-1000 [Primary] as LYMPH% on map "Hematology"" for the reason text and tooltips. */

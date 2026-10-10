@@ -9,6 +9,10 @@
 //   3. Another lab's maps never count.
 //   4. A test only one instrument runs lab-wide stays not required.
 //   5. Legacy maps with no lab keep the per-map behavior.
+//   8. BUG-016 original shape: a WAIVED-only row is never flagged, even when two nonwaived analyzers run the
+//      test on another map (the requirement sits on THOSE rows, and their reason never names the meter).
+//   9. A row whose FIRST instrument is the waived meter but which also has a nonwaived i-STAT reads MODERATE
+//      (cal ver required), not WAIVED.
 // Run (from repo root):
 //   DB_PATH=.tmp-verify-labwide.db JWT_SECRET=localqasecret ADMIN_SECRET=localadmin \
 //   STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy RESEND_API_KEY=re_dummy \
@@ -60,14 +64,31 @@ async function main() {
     sqlite.prepare("INSERT OR IGNORE INTO veritamap_tests (map_id, analyte, specialty, complexity, active, updated_at) VALUES (?,?,?,?,1,?)").run(mapId, analyte, "General Chemistry", cx, now);
   };
 
-  // Lab A: Chemistry map (VITROS, serial V1) and Blood Bank map (StatStrip glucose meter).
-  const labA = mkLab("Lab A"), labB = mkLab("Lab B");
-  for (const l of [labA, labB]) sqlite.prepare("UPDATE labs SET has_completed_onboarding = 1 WHERE id = ?").run(l);
+  // Lab A: Chemistry map (VITROS, serial V1) and Blood Bank map (a nonwaived i-STAT plus a WAIVED StatStrip meter).
+  // BUG-016 (Michael 2026-10-09): only nonwaived instruments count; including a waived meter is the lab's choice.
+  const labA = mkLab("Lab A"), labB = mkLab("Lab B"), labC = mkLab("Lab C");
+  for (const l of [labA, labB, labC]) sqlite.prepare("UPDATE labs SET has_completed_onboarding = 1 WHERE id = ?").run(l);
   const chem = mkMap(labA, "Chemistry"), bb = mkMap(labA, "Blood Bank"), copy = mkMap(labA, "Test");
   const vitros = mkInst(chem, "Ortho VITROS 5600", "V1");
   mkTest(vitros, chem, "Glucose"); mkTest(vitros, chem, "Magnesium");
+  const istat = mkInst(bb, "Abbott i-STAT 1", "IS1");
+  mkTest(istat, bb, "Glucose", "MODERATE");
   const meter = mkInst(bb, "Nova StatStrip Glucose", null);
   mkTest(meter, bb, "Glucose", "WAIVED");
+  // 7. Lab C (Milford's shape): chemistry analyzer glucose + a WAIVED meter on another map, nothing else.
+  const chemC = mkMap(labC, "Chemistry C"), bbC = mkMap(labC, "Blood Bank C");
+  mkTest(mkInst(chemC, "Siemens Atellica CH 930", "A1"), chemC, "Glucose");
+  mkTest(mkInst(bbC, "Nova StatStrip Glucose Hospital Meter", null), bbC, "Glucose", "WAIVED");
+  // 8 + 9. Lab D: Atellica + i-STAT on Chemistry D; a POC map with only a WAIVED meter; an ED map whose Glucose
+  // row lists the WAIVED meter FIRST and then a nonwaived i-STAT.
+  const labD = mkLab("Lab D");
+  sqlite.prepare("UPDATE labs SET has_completed_onboarding = 1 WHERE id = ?").run(labD);
+  const chemD = mkMap(labD, "Chemistry D"), pocD = mkMap(labD, "POC D"), edD = mkMap(labD, "ED D");
+  mkTest(mkInst(chemD, "Siemens Atellica CH 930", "A-D1"), chemD, "Glucose");
+  mkTest(mkInst(chemD, "Abbott i-STAT 1", "IS-D1"), chemD, "Glucose");
+  mkTest(mkInst(pocD, "Nova StatStrip Glucose Hospital Meter", "SS-D1"), pocD, "Glucose", "WAIVED");
+  mkTest(mkInst(edD, "Nova StatStrip Glucose Hospital Meter", "SS-D2"), edD, "Glucose", "WAIVED");
+  mkTest(mkInst(edD, "Abbott i-STAT 1", "IS-D2"), edD, "Glucose", "MODERATE");
   // 2. a copied map with the SAME VITROS (same serial) running Magnesium
   const vitrosCopy = mkInst(copy, "Ortho VITROS 5600", "V1");
   mkTest(vitrosCopy, copy, "Magnesium");
@@ -87,18 +108,29 @@ async function main() {
   const intel = await get(`/api/labs/${labA}/veritamap/maps/${chem}/intelligence`, labA);
   check("intelligence route answers", intel.status === 200, `HTTP ${intel.status}`);
   const g = intel.j.intelligence?.Glucose;
-  check("1. Chemistry-map Glucose requires a correlation with the Blood Bank meter", !!g?.correlationRequired, g?.correlationReason || "(none)");
-  check("1. the reason names the other map", /on map "Blood Bank"/.test(g?.correlationReason || ""), g?.correlationReason || "");
+  check("1. Chemistry-map Glucose requires a correlation with the Blood Bank i-STAT (nonwaived)", !!g?.correlationRequired, g?.correlationReason || "(none)");
+  check("1. the reason names the i-STAT on the other map", /i-STAT 1 \[Primary\] on map "Blood Bank"/.test(g?.correlationReason || ""), g?.correlationReason || "");
+  check("7. the WAIVED StatStrip is not counted or listed (2 instruments, no StatStrip)", /^2 instruments/.test(g?.correlationReason || "") && !/StatStrip/.test(g?.correlationReason || ""), g?.correlationReason || "");
   const g2 = (await get(`/api/labs/${labA}/veritamap/maps/${bb}/intelligence`, labA)).j.intelligence?.Glucose;
   check("1. the Blood Bank map's Glucose requires it too", !!g2?.correlationRequired && /on map "Chemistry"/.test(g2?.correlationReason || ""), g2?.correlationReason || "(none)");
+  const gc = (await get(`/api/labs/${labC}/veritamap/maps/${chemC}/intelligence`, labC)).j.intelligence?.Glucose;
+  check("7. analyzer + a WAIVED meter only: not required (comparing the meter is the lab's choice)", gc && !gc.correlationRequired, JSON.stringify(gc?.correlationReason ?? null));
+  const gw = (await get(`/api/labs/${labC}/veritamap/maps/${bbC}/intelligence`, labC)).j.intelligence?.Glucose;
+  check("7. the WAIVED meter's own row: not required", gw && !gw.correlationRequired, JSON.stringify(gw?.correlationReason ?? null));
+  const gp = (await get(`/api/labs/${labD}/veritamap/maps/${pocD}/intelligence`, labD)).j.intelligence?.Glucose;
+  check("8. a WAIVED-only row is not flagged, though two nonwaived analyzers run Glucose on another map", gp && gp.isWaived === true && !gp.correlationRequired, JSON.stringify({ cx: gp?.complexity, req: gp?.correlationRequired }));
+  const gd = (await get(`/api/labs/${labD}/veritamap/maps/${chemD}/intelligence`, labD)).j.intelligence?.Glucose;
+  check("8. the Chemistry rows are flagged and their reason never names a StatStrip", !!gd?.correlationRequired && !/StatStrip/.test(gd?.correlationReason || ""), gd?.correlationReason || "(none)");
+  const ge = (await get(`/api/labs/${labD}/veritamap/maps/${edD}/intelligence`, labD)).j.intelligence?.Glucose;
+  check("9. waived meter listed first + nonwaived i-STAT: the row reads MODERATE, cal ver required, correlation required", ge?.complexity === "MODERATE" && ge?.calVerRequired === true && !!ge?.correlationRequired && !/StatStrip/.test(ge?.correlationReason || ""), JSON.stringify({ cx: ge?.complexity, cv: ge?.calVerRequired, req: ge?.correlationRequired }));
   const mg = intel.j.intelligence?.Magnesium;
   check("2+3. Magnesium stays one instrument: the copied map's same analyzer and Lab B's analyzer do not count", mg && !mg.correlationRequired, JSON.stringify(mg?.correlationReason ?? null));
 
   const detail = await get(`/api/labs/${labA}/veritamap/maps/${chem}`, labA);
   const row = (detail.j.tests || []).find((t: any) => t.analyte === "Glucose");
-  check("map detail: Glucose counts 2 instruments lab-wide", row?.correlation_instrument_count === 2, `count=${row?.correlation_instrument_count}`);
-  const peer = (row?.correlation_peer_instruments || [])[0];
-  check("map detail: the tooltip peer is the StatStrip on map Blood Bank", peer?.instrument_name === "Nova StatStrip Glucose" && peer?.map_name === "Blood Bank", JSON.stringify(row?.correlation_peer_instruments));
+  check("map detail: Glucose counts 2 nonwaived instruments lab-wide (the waived meter is not one)", row?.correlation_instrument_count === 2, `count=${row?.correlation_instrument_count}`);
+  const peers = row?.correlation_peer_instruments || [];
+  check("map detail: the tooltip peer is the i-STAT on map Blood Bank, and the StatStrip is not listed", peers.length === 1 && peers[0]?.instrument_name === "Abbott i-STAT 1" && peers[0]?.map_name === "Blood Bank", JSON.stringify(peers));
 
   const wbc = (await get(`/api/labs/${labA}/veritamap/maps/${hemeA}/intelligence`, labA)).j.intelligence?.WBC;
   check("6. same model, different serials on two maps: two analyzers, correlation required", !!wbc?.correlationRequired && /on map "Hematology ED"/.test(wbc?.correlationReason || ""), wbc?.correlationReason || "(none)");

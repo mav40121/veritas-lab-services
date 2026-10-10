@@ -122,6 +122,8 @@ interface TestRecord {
   correlation_instrument_count?: number;
   correlation_peers?: string[];
   correlation_peer_instruments?: { analyte: string; instrument_name: string; role: string; map_name?: string | null }[];
+  // BUG-016: this map's NONWAIVED instruments for the test (the ones the correlation count uses).
+  correlation_local_instruments?: InstrumentOnTest[];
 }
 
 // #76: correlation is required when 2+ instruments run the test, counting the
@@ -743,7 +745,7 @@ function computeIntelligence(tests: TestRecord[]): IntelligenceData {
         correlationInstrumentCount(t) >= 2 &&
         getDateStatus(t.last_method_comp, 6) !== "ok"
     )
-    .map((t) => ({ analyte: t.analyte, instruments: t.instruments }));
+    .map((t) => ({ analyte: t.analyte, instruments: t.correlation_local_instruments ?? t.instruments }));
 
   // Cal verifications outstanding: non-waived tests whose cal ver is not current.
   const calVerRequired = nonWaived.filter(
@@ -1539,7 +1541,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                   {correlationInstrumentCount(test)} instruments running this test:
                 </p>
                 <ul className="space-y-0.5 mb-2">
-                  {instruments.map((instr, i) => (
+                  {(test.correlation_local_instruments ?? instruments).map((instr, i) => (
                     <li key={i}>
                       {instr.instrument_name}{" "}
                       <span className="text-muted-foreground">[{instr.role}]</span>

@@ -156,7 +156,7 @@ function matchesAnalyte(s: Study, analyte: string): boolean {
   return (!!s.coverage_analyte && s.coverage_analyte === analyte) || analyteMatch(s.test_name, analyte);
 }
 type Instrument = { id: number; instrument_name: string; nickname: string | null; serial_number?: string | null };
-type Combo = { id: number; analyte: string; specialty: string; instrument_id: number; test_cal_ver_na?: number; linearity_exempt_multical?: number; linearity_exempt_noncal?: number; linearity_exempt_waived?: number; linearity_exempt_other?: string | null };
+type Combo = { id: number; analyte: string; specialty: string; instrument_id: number; complexity?: string | null; test_cal_ver_na?: number; linearity_exempt_multical?: number; linearity_exempt_noncal?: number; linearity_exempt_waived?: number; linearity_exempt_other?: string | null };
 
 // Display label that distinguishes two units of the same model. A lab can run
 // the same analyzer twice (e.g. two Ortho VITROS 5600 named Bonnie and Clyde);
@@ -182,7 +182,9 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
     const instName = inst?.instrument_name || "";
     const multical = !!c.linearity_exempt_multical;
     const noncal = !!c.linearity_exempt_noncal;
-    const waived = !!c.linearity_exempt_waived;
+    // BUG-016 (2026-10-09): a WAIVED test is exempt by its complexity (cal ver 493.1255 and comparison 493.1281
+    // are Subpart K, nonwaived only), not only when someone ticked the manual 'waived' exemption.
+    const waived = !!c.linearity_exempt_waived || String(c.complexity || "").toUpperCase() === "WAIVED";
     const other = (c.linearity_exempt_other || "").trim();
     // A per-test "cal ver not applicable" on the map (veritamap_tests.cal_ver_na,
     // parking lot #77 part B) exempts the combo the same way the row flags do.
@@ -269,7 +271,10 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
   // blood bank method suffixes and drug-screen spellings no longer split a test.
   // A whole differential carries several keys, so it joins each class's group.
   const groups = new Map<string, { instIds: Set<number>; analytes: Set<string> }>();
+  // BUG-016 (Michael 2026-10-09): only nonwaived instruments make a comparison required; including a waived
+  // device is the lab's choice, not a CLIA requirement.
   for (const c of combos) {
+    if (String(c.complexity || "").toUpperCase() === "WAIVED") continue;
     for (const key of sameTestKeys(c.analyte)) {
       let g = groups.get(key);
       if (!g) { g = { instIds: new Set(), analytes: new Set() }; groups.set(key, g); }
@@ -384,7 +389,7 @@ export function computeCoverageForLab(sqlite: any, labId: number): CoverageResul
      WHERE m.lab_id = ?`
   ).all(labId) as Instrument[];
   const combos = sqlite.prepare(
-    `SELECT it.id, it.analyte, it.specialty, it.instrument_id,
+    `SELECT it.id, it.analyte, it.specialty, it.instrument_id, it.complexity,
             it.linearity_exempt_multical, it.linearity_exempt_noncal,
             it.linearity_exempt_waived, it.linearity_exempt_other,
             t.cal_ver_na AS test_cal_ver_na
@@ -426,7 +431,7 @@ export function stampMapDatesFromStudies(
     `SELECT i.id, i.instrument_name, i.nickname, i.serial_number FROM veritamap_instruments i WHERE i.map_id IN (${ph})`
   ).all(...mapIds) as Instrument[];
   const combos = sqlite.prepare(
-    `SELECT it.id, it.analyte, it.specialty, it.instrument_id,
+    `SELECT it.id, it.analyte, it.specialty, it.instrument_id, it.complexity,
             it.linearity_exempt_multical, it.linearity_exempt_noncal,
             it.linearity_exempt_waived, it.linearity_exempt_other
      FROM veritamap_instrument_tests it WHERE it.map_id IN (${ph}) AND (it.active = 1 OR it.active IS NULL)`

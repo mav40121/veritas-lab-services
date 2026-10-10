@@ -50,7 +50,7 @@ import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewRe
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard";
 import { legacySeatForUser, seatForRequest } from "./seatContext";
-import { labWideCorrelation, correlationPeerInstruments, describeCorrelationInstrument } from "./labWideCorrelation";
+import { labWideCorrelation, correlationPeerInstruments, describeCorrelationInstrument, rowComplexity } from "./labWideCorrelation";
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
 import { isValidIfuUrl } from "@shared/ifu";
@@ -14324,6 +14324,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         correlation_instrument_count: corrGroups[t.analyte]?.instrumentCount ?? instruments.length,
         correlation_peers: corrGroups[t.analyte]?.peers ?? [],
         correlation_peer_instruments: correlationPeerInstruments(corrAll, t.analyte, corrGroups[t.analyte]?.peers ?? []),
+        correlation_local_instruments: (corrAll[t.analyte] ?? []).filter((x: any) => !x.other_map), // BUG-016: nonwaived only
         correlations: corrByTestId[t.id] ?? [],
         cal_ver_exempt: instruments.length > 0 && instruments.every((x: any) => x.cal_ver_exempt === 1),
       };
@@ -14455,6 +14456,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         correlation_instrument_count: corrGroups[t.analyte]?.instrumentCount ?? instruments.length,
         correlation_peers: corrGroups[t.analyte]?.peers ?? [],
         correlation_peer_instruments: correlationPeerInstruments(corrAll, t.analyte, corrGroups[t.analyte]?.peers ?? []),
+        correlation_local_instruments: (corrAll[t.analyte] ?? []).filter((x: any) => !x.other_map), // BUG-016: nonwaived only
         correlations: corrByTestId[t.id] ?? [],
         cal_ver_exempt: instruments.length > 0 && instruments.every((x: any) => x.cal_ver_exempt === 1),
       };
@@ -14661,10 +14663,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // pairs with analyzer "LYMPH%"), not per exact analyte string.
     const { groups: corrGroups, all: corrAll } = labWideCorrelation((db as any).$client, req.params.id, byAnalyte); // BUG-011 part C
     for (const [analyte, instruments] of Object.entries(byAnalyte)) {
-      const complexity = instruments[0].complexity;
+      const complexity = rowComplexity(instruments) ?? instruments[0].complexity; // BUG-016: highest on the row, not the first
       const isWaived = complexity === 'WAIVED';
       const group = corrGroups[analyte] ?? { instrumentCount: instruments.length, peers: [] };
-      const correlationRequired = group.instrumentCount >= 2;
+      const correlationRequired = !isWaived && group.instrumentCount >= 2; // BUG-016: 493.1281 is nonwaived (Subpart K)
       const calVerRequired = !isWaived;
       const groupList = [analyte, ...group.peers].flatMap((a) => (corrAll[a] ?? []).map((i: any) => describeCorrelationInstrument(i, a, analyte)));
       intelligence[analyte] = {
@@ -15630,10 +15632,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const intelligence: Record<string, any> = {};
     const { groups: corrGroups, all: corrAll } = labWideCorrelation((db as any).$client, req.params.id, byAnalyte); // #76 + BUG-011 part C
     for (const [analyte, instruments] of Object.entries(byAnalyte)) {
-      const complexity = instruments[0].complexity;
+      const complexity = rowComplexity(instruments) ?? instruments[0].complexity; // BUG-016: highest on the row, not the first
       const isWaived = complexity === 'WAIVED';
       const group = corrGroups[analyte] ?? { instrumentCount: instruments.length, peers: [] };
-      const correlationRequired = group.instrumentCount >= 2;
+      const correlationRequired = !isWaived && group.instrumentCount >= 2; // BUG-016: 493.1281 is nonwaived (Subpart K)
       const calVerRequired = !isWaived;
       const groupList = [analyte, ...group.peers].flatMap((a) => (corrAll[a] ?? []).map((i: any) => describeCorrelationInstrument(i, a, analyte)));
 
@@ -19782,13 +19784,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const intelligence: Record<string, any> = {};
         const { groups: corrGroups } = labWideCorrelation((db as any).$client, m.id, byAnalyte); // #76 + BUG-011 part C
         for (const [analyte, insts] of Object.entries(byAnalyte)) {
-          const complexity = insts[0].complexity;
+          const complexity = rowComplexity(insts) ?? insts[0].complexity; // BUG-016: highest on the row, not the first
           const isWaived = complexity === 'WAIVED';
           intelligence[analyte] = {
             complexity,
             isWaived,
             calVerRequired: !isWaived,
-            correlationRequired: (corrGroups[analyte]?.instrumentCount ?? insts.length) >= 2,
+            correlationRequired: !isWaived && (corrGroups[analyte]?.instrumentCount ?? insts.length) >= 2, // BUG-016: nonwaived only
             correlationPeers: corrGroups[analyte]?.peers ?? [],
             instruments: insts.map((i: any) => ({ name: i.instrument_name, role: i.role, id: i.instrument_id })),
           };
