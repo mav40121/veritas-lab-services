@@ -1,0 +1,77 @@
+{
+ "source": "FDA CLIA download file clia_detail.zip (https://www.accessdata.fda.gov/premarket/ftparea/clia_detail.zip), local copy Downloads/Archive 2026-08-22, 78911 records; every record mentioning Vizion or OptiRead.",
+ "records": [
+  {
+   "DOCUMENT_NUMBER": "K112276",
+   "TEST_SYSTEM_ID": "19355",
+   "TEST_SYSTEM_NAME": "Trek Diagnostic Systems Sensititre",
+   "QUALIFIER1": "Vizion for reading Sensititre YeastOne plates",
+   "QUALIFIER2": "Caspofungin, Fluconazole, Itraconazole, 5-Flucytosine and Voriconazole",
+   "ANALYTE_ID": "71",
+   "ANALYTE_NAME": "Antimicrobial",
+   "SPECIALTY_ID": "8",
+   "COMPLEXITY": "HIGH",
+   "DATE_EFFECTIVE": "2011/12/06 00:00:00.000"
+  },
+  {
+   "DOCUMENT_NUMBER": "K110583",
+   "TEST_SYSTEM_ID": "19160",
+   "TEST_SYSTEM_NAME": "Trek Diagnostic Systems Sensititre",
+   "QUALIFIER1": "OptiRead - Autoreader 2",
+   "QUALIFIER2": "Non-fastidious Gram negative rods",
+   "ANALYTE_ID": "398",
+   "ANALYTE_NAME": "Antibiotic sensitivity",
+   "SPECIALTY_ID": "8",
+   "COMPLEXITY": "HIGH",
+   "DATE_EFFECTIVE": "2011/09/28 00:00:00.000"
+  },
+  {
+   "DOCUMENT_NUMBER": "K110331",
+   "TEST_SYSTEM_ID": "18596",
+   "TEST_SYSTEM_NAME": "Trek Diagnostic Systems, Sensititre",
+   "QUALIFIER1": "AIM, Autoinoculator",
+   "QUALIFIER2": "Vizion and AutoReader",
+   "ANALYTE_ID": "398",
+   "ANALYTE_NAME": "Antibiotic sensitivity",
+   "SPECIALTY_ID": "8",
+   "COMPLEXITY": "HIGH",
+   "DATE_EFFECTIVE": "2011/05/11 00:00:00.000"
+  },
+  {
+   "DOCUMENT_NUMBER": "K103532",
+   "TEST_SYSTEM_ID": "19066",
+   "TEST_SYSTEM_NAME": "Trek Diagnostic Systems Sensititre",
+   "QUALIFIER1": "OptiRead - Autoreader 2",
+   "QUALIFIER2": "Gram Positive Cocci (Fastidious and Non-Fastidious)",
+   "ANALYTE_ID": "398",
+   "ANALYTE_NAME": "Antibiotic sensitivity",
+   "SPECIALTY_ID": "8",
+   "COMPLEXITY": "HIGH",
+   "DATE_EFFECTIVE": "2011/12/02 00:00:00.000"
+  },
+  {
+   "DOCUMENT_NUMBER": "K103456",
+   "TEST_SYSTEM_ID": "18817",
+   "TEST_SYSTEM_NAME": "Trek Diagnostic Systems, Sensititre",
+   "QUALIFIER1": "AIM, Autoinoculator",
+   "QUALIFIER2": "Vizion (Gram-positive, Streptococci, and H. influenzae), AutoReader (Gram-positive and Streptococci) and manual mirror (Candida spp.)",
+   "ANALYTE_ID": "398",
+   "ANALYTE_NAME": "Antibiotic sensitivity",
+   "SPECIALTY_ID": "8",
+   "COMPLEXITY": "HIGH",
+   "DATE_EFFECTIVE": "2011/06/24 00:00:00.000"
+  },
+  {
+   "DOCUMENT_NUMBER": "K081520",
+   "TEST_SYSTEM_ID": "15556",
+   "TEST_SYSTEM_NAME": "Trek Diagnostic Systems Sensititre",
+   "QUALIFIER1": "Vizion",
+   "QUALIFIER2": "",
+   "ANALYTE_ID": "398",
+   "ANALYTE_NAME": "Antibiotic sensitivity",
+   "SPECIALTY_ID": "8",
+   "COMPLEXITY": "HIGH",
+   "DATE_EFFECTIVE": "2008/11/21 00:00:00.000"
+  }
+ ]
+}

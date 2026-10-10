@@ -40093,6 +40093,42 @@
       }
     }
   },
+  "Thermo Fisher Sensititre Vizion": {
+    "vendor": "Thermo Fisher",
+    "category": "Microbiology",
+    "testCount": 3,
+    "tests": {
+      "Antimicrobial susceptibility testing (gram-negative)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Antimicrobial susceptibility testing (gram-positive)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Yeast antifungal susceptibility testing": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      }
+    },
+    "menuLastVerifiedAt": "2026-10-10"
+  },
+  "Thermo Fisher Sensititre OptiRead": {
+    "vendor": "Thermo Fisher",
+    "category": "Microbiology",
+    "testCount": 2,
+    "tests": {
+      "Antimicrobial susceptibility testing (gram-negative)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      },
+      "Antimicrobial susceptibility testing (gram-positive)": {
+        "complexity": "HIGH",
+        "specialty": "Microbiology"
+      }
+    },
+    "menuLastVerifiedAt": "2026-10-10"
+  },
   "Copan WASP": {
     "vendor": "Copan",
     "category": "Microbiology",
