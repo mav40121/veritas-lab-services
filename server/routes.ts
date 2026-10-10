@@ -51,6 +51,7 @@ import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard";
 import { legacySeatForUser, seatForRequest } from "./seatContext";
 import { labWideCorrelation, correlationPeerInstruments, describeCorrelationInstrument, rowComplexity, mapComplianceGaps } from "./labWideCorrelation";
+import { seedProfileFor, seedTeaFor, seedCalVerPoints, seedMethodCompQuant, seedMethodCompCategorical, seedStudyDate } from "./seedStudyProfiles";
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
 import { isValidIfuUrl } from "@shared/ifu";
@@ -33967,6 +33968,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         coverage_analyte, comment, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pass', 'pass', 'finalized', ?, ?, ?, ?, ?, ?)
     `);
+    // BUG-023 (2026-10-10, Michael Q70): realistic seeded data. Values, units and the CLIA criterion come from
+    // server/seedStudyProfiles.ts; qualitative and graded tests get agreement data; each study carries a signer
+    // name (the results page prints "Signed Off by <finalized_signature>") and a date spread over the last
+    // ~5 months so next-due dates vary. Analytes with no known profile keep the generic scale and are listed in
+    // the response (genericScale) so the operator can see them.
+    const seedExtras = sqlite.prepare(
+      `UPDATE studies SET result_units = ?, clia_absolute_floor = ?, clia_absolute_unit = ?, finalized_signature = ? WHERE id = ?`
+    );
+    const ownerName = String((sqlite.prepare("SELECT name FROM users WHERE id = ?").get(lab.owner_user_id) as { name?: string } | undefined)?.name || "").trim();
+    const SIGNER = ownerName || "Laboratory Director or Designee";
+    const genericScale: string[] = [];
+    let seedIdx = 0;
+    const seedRow = (testName: string, label: string, studyType: "cal_ver" | "method_comparison", tea: { cliaAllowableError: number; teaIsPercentage: number; teaUnit: string; absFloor: number | null; absUnit: string | null },
+      dataPoints: string, instrumentsJson: string, units: string | null, coverageAnalyte: string) => {
+      const date = seedStudyDate(today, seedIdx++);
+      const at = `${date}T15:00:00.000Z`;
+      const info = insStudy.run(lab.owner_user_id, lid, testName, label, ANALYST, date, studyType,
+        tea.cliaAllowableError, tea.teaIsPercentage, tea.teaUnit, dataPoints, instrumentsJson, at, lab.owner_user_id, lab.owner_user_id, coverageAnalyte, MARK, at);
+      seedExtras.run(units, tea.absFloor, tea.absUnit, SIGNER, Number(info.lastInsertRowid));
+    };
 
     // 2. Cal-ver seeding on cal-verifiable combos. Gaps are chosen at the ANALYTE
     // level, not per combo: because studyMatchesInstrument credits on shared model
@@ -33997,8 +34018,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       seenCalModel.add(modelKey);
       const label = instLabel(inst);
       if (existsCalSeed.get(lid, MARK, cb.analyte, label)) { calSkipped++; continue; }
-      if (!dryRun) insStudy.run(lab.owner_user_id, lid, cb.analyte, label, ANALYST, today, "cal_ver",
-        0.075, 1, "%", genCalVer(label), JSON.stringify([label]), now, lab.owner_user_id, lab.owner_user_id, cb.analyte, MARK, now);
+      const prof = seedProfileFor(String(cb.analyte), String(cb.specialty || ""));
+      if (!prof || prof.kind !== "quant") genericScale.push(`cal_ver: ${cb.analyte}`);
+      if (!dryRun) {
+        if (prof && prof.kind === "quant") {
+          seedRow(cb.analyte, label, "cal_ver", seedTeaFor(String(cb.analyte), prof.label), JSON.stringify(seedCalVerPoints(prof, label)), JSON.stringify([label]), prof.units || null, cb.analyte);
+        } else {
+          seedRow(cb.analyte, label, "cal_ver", { cliaAllowableError: 0.075, teaIsPercentage: 1, teaUnit: "%", absFloor: null, absUnit: null }, genCalVer(label), JSON.stringify([label]), null, cb.analyte);
+        }
+      }
       calSeeded++;
     }
 
@@ -34025,7 +34053,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       (s) => !usedMc.has(s.id) && ((!!s.coverage_analyte && s.coverage_analyte === analyte) || analyteMatch(s.test_name, analyte))
     );
     const finalizeMC = sqlite.prepare(
-      `UPDATE studies SET lifecycle_state = 'finalized', finalized_at = ?, finalized_by_user_id = ?, status = 'pass', result = 'pass', instrument = ?, instruments = ?, coverage_analyte = ?, comment = ? WHERE id = ?`
+      `UPDATE studies SET lifecycle_state = 'finalized', finalized_at = ?, finalized_by_user_id = ?, finalized_signature = ?, status = 'pass', result = 'pass', instrument = ?, instruments = ?, coverage_analyte = ?, comment = ? WHERE id = ?`
     );
     let mcRepaired = 0, mcSeeded = 0, mcGaps = 0, mcSkipped = 0;
     for (let idx = 0; idx < mcAnalytes.length; idx++) {
@@ -34039,11 +34067,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       if (existing) {
         if (existing.lifecycle_state === "finalized") { mcSkipped++; continue; }
-        if (!dryRun) finalizeMC.run(now, lab.owner_user_id, labels.join(", "), JSON.stringify(labels), analyte, MARK, existing.id);
+        if (!dryRun) finalizeMC.run(now, lab.owner_user_id, SIGNER, labels.join(", "), JSON.stringify(labels), analyte, MARK, existing.id);
         mcRepaired++;
       } else {
-        if (!dryRun) insStudy.run(lab.owner_user_id, lid, analyte, labels.join(", "), ANALYST, today, "method_comparison",
-          4, 0, "", genMethodComp(labels), JSON.stringify(labels), now, lab.owner_user_id, lab.owner_user_id, analyte, MARK, now);
+        const prof = seedProfileFor(analyte, String(combos.find((cb) => cb.analyte === analyte)?.specialty || ""));
+        if (!prof) genericScale.push(`method_comparison: ${analyte}`);
+        if (!dryRun) {
+          if (prof && prof.kind === "quant") {
+            seedRow(analyte, labels.join(", "), "method_comparison", seedTeaFor(analyte, prof.label), JSON.stringify(seedMethodCompQuant(prof, labels)), JSON.stringify(labels), prof.units || null, analyte);
+          } else if (prof) {
+            const pair = labels.slice(0, 2); // agreement studies compare one reference with one comparison method
+            seedRow(analyte, pair.join(", "), "method_comparison", { cliaAllowableError: 0, teaIsPercentage: 1, teaUnit: "%", absFloor: null, absUnit: null },
+              JSON.stringify(seedMethodCompCategorical(prof, pair)), JSON.stringify(pair), null, analyte);
+          } else {
+            seedRow(analyte, labels.join(", "), "method_comparison", { cliaAllowableError: 4, teaIsPercentage: 0, teaUnit: "", absFloor: null, absUnit: null }, genMethodComp(labels), JSON.stringify(labels), null, analyte);
+          }
+        }
         mcSeeded++;
       }
     }
@@ -34062,6 +34101,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       calVer: { candidates: calverCombos.length, gapAnalytes: calGapAnalytes.size, seeded: calSeeded, deduped: calDeduped, gaps: calGaps, skipped: calSkipped },
       methodComparison: { needed: mcAnalytes.length, repaired: mcRepaired, seeded: mcSeeded, gaps: mcGaps, skipped: mcSkipped },
       cruftUntouched: cruft,
+      genericScale,
       before, after,
     });
   });
