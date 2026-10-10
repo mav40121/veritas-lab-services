@@ -676,8 +676,11 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
                     onClick={() => setForm({ ...form, safety_stock_days: suggestedSafetyDays })}
                     disabled={suggestedSafetyDays === safetyDays}
                     data-testid="apply-safety-days"
+                    title="Replaces your Safety Stock (days) with the suggestion"
                   >
-                    Apply
+                    {/* BUG-020 (Sampson, 2026-10-09): a bare "Apply" read as "save my number", and clicking it
+                        replaced the value the director had just typed with the suggestion. */}
+                    Use {suggestedSafetyDays} day{suggestedSafetyDays === 1 ? "" : "s"}
                   </Button>
                 </div>
               </div>
