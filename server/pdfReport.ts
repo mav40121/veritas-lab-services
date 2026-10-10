@@ -1517,6 +1517,14 @@ function interpretKappa(k: number): string {
 }
 
 // ─── QUALITATIVE METHOD COMPARISON HTML ─────────────────────────────────────
+// BUG-022 (2026-10-10): the client stores qualitative / semi-quantitative pass thresholds as fractions (0.90,
+// 0.80) while these PDFs print a percent. Accept either and return a percent for display and comparison.
+function thresholdPct(t: unknown, fallbackPct: number): number {
+  const n = Number(t);
+  if (!Number.isFinite(n) || n <= 0) return fallbackPct;
+  return n <= 1 ? Math.round(n * 10000) / 100 : n;
+}
+
 function buildQualitativeHTML(study: Study, results: any): string {
   const allInstrumentNames: string[] = safeJsonParse(study.instruments) || [];
   const primaryName = allInstrumentNames[0] || "Reference";
@@ -1530,7 +1538,7 @@ function buildQualitativeHTML(study: Study, results: any): string {
   const kappaInterp = interpretKappa(kappa);
   const sensitivity: number = results.sensitivity || 0;
   const specificity: number = results.specificity || 0;
-  const passThreshold: number = results.passThreshold || 90;
+  const passThreshold: number = thresholdPct(results.passThreshold, 90);
   const overallPass: boolean = results.overallPass ?? (pctAgreement >= passThreshold);
 
   // Build concordance matrix table
@@ -1611,7 +1619,7 @@ function buildSemiQuantHTML(study: Study, results: any): string {
   const wKappa: number = results.weightedKappa || 0;
   const wKappaInterp = interpretKappa(wKappa);
   const maxDiscrep: number = results.maxDiscrepancy || 0;
-  const passThreshold: number = results.passThreshold || 80;
+  const passThreshold: number = thresholdPct(results.passThreshold, 80);
   const overallPass: boolean = results.overallPass ?? (pctWithinOne >= passThreshold);
   const sampleDetails: any[] = results.sampleDetails || [];
 
@@ -1630,14 +1638,22 @@ function buildSemiQuantHTML(study: Study, results: any): string {
   }).join("");
 
   // Sample-by-sample detail table
+  // BUG-022: the client sends { sample, reference, comparison, gradeDiff, pass } (client/src/lib/calculations.ts
+  // SemiQuantSampleDetail); this table read refGrade / compGrade / refIndex / compIndex and printed "undefined".
+  // Both shapes are accepted; the grade difference falls back to the grade-scale positions.
   const detailRows = sampleDetails.map((s: any, i: number) => {
-    const diff = Math.abs(s.refIndex - s.compIndex);
+    const ref = s.reference ?? s.refGrade;
+    const comp = s.comparison ?? s.compGrade;
+    const ri = gradeScale.indexOf(String(ref)), ci = gradeScale.indexOf(String(comp));
+    const diff = typeof s.gradeDiff === "number" ? s.gradeDiff
+      : (typeof s.refIndex === "number" && typeof s.compIndex === "number") ? Math.abs(s.refIndex - s.compIndex)
+      : (ri >= 0 && ci >= 0) ? Math.abs(ri - ci) : null;
     const statusClass = diff === 0 ? "pass" : diff === 1 ? "warn" : "fail";
-    const statusText = diff === 0 ? "Exact" : diff === 1 ? "\u00B11" : `\u00B1${diff}`;
+    const statusText = diff === null ? "-" : diff === 0 ? "Exact" : diff === 1 ? "\u00B11" : `\u00B1${diff}`;
     return `<tr class="${i % 2 === 1 ? 'stripe' : ''}">
-      <td>S${s.sampleNum || i + 1}</td>
-      <td class="text-center">${s.refGrade}</td>
-      <td class="text-center">${s.compGrade}</td>
+      <td>S${s.sample ?? s.sampleNum ?? i + 1}</td>
+      <td class="text-center">${escHtml(String(ref ?? ""))}</td>
+      <td class="text-center">${escHtml(String(comp ?? ""))}</td>
       <td class="text-center ${statusClass}">${statusText}</td>
     </tr>`;
   }).join("");
