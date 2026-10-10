@@ -16653,13 +16653,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
 
       // ── Data rows (row 2 onward) ──
-      // Wave A4 shifted these +3 (MEC Reviewed/Approved after Critical High,
-      // plus the two 493.1253 attestation columns after the AMR pair).
-      const statusCols = [21, 23, 25, 27]; // 1-indexed: Cal Ver Status, Method Comp Status, Precision Status, SOP Status
-      const dateCols = [20, 22, 24, 26];   // 1-indexed: date columns
-      const numCol = 7; // 1-indexed: Number of Instruments
-      const complexityCol = 6; // 1-indexed: Complexity
-      const correlCol = 9;     // 1-indexed: Correlation Required
+      // BUG-019 (2026-10-10): column numbers come from the header row BY NAME. Hard-coded numbers went stale when
+      // "Age / Sex Band" was inserted (2026-07-16), so status cells were never color-coded and the wrong cells were
+      // centered. colOf() throws on a renamed header, so a header change cannot silently mis-style the export.
+      const colOf = (h: string) => { const i = headers.indexOf(h); if (i < 0) throw new Error(`VeritaMap export: no "${h}" column`); return i + 1; };
+      const statusCols = ["Calibration Verification Status", "Correlation / Method Comparison Status", "Precision Status", "SOP Review Status"].map(colOf);
+      const dateCols = ["Last Calibration Verification Date", "Last Correlation / Method Comparison Date", "Last Precision Date", "Last SOP Review Date"].map(colOf);
+      const numCol = colOf("Number of Instruments");
+      const complexityCol = colOf("Complexity");
+      const correlCol = colOf("Correlation Required");
       const neCols = [10, 11, 12, 13, 14, 15]; // 1-indexed: columns that may show 'Not established'
       for (let r = 2; r <= rows.length + 1; r++) {
         const row = ws.getRow(r);
