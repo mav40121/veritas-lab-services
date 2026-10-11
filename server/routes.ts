@@ -27682,6 +27682,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (nm) noteAssessed(assessedByName, nm, r.mg_id, dms);
     }
 
+    // BUG-037: waived programs ("2 of 4 methods per test") are built from a map and
+    // carry no method groups, so the loop below never saw them and every waived
+    // instrument read as a gap. A waived program covers the all-waived instruments on
+    // its map (any map in the lab when it names none), and a locked passing assessment
+    // on it counts as assessed for them, inside the same per-employee cadence window.
+    const waivedPrograms = client.prepare(
+      "SELECT id, name, map_id FROM competency_programs WHERE lab_id = ? AND type = 'waived'"
+    ).all(labId) as any[];
+    const waivedAssessedRows = client.prepare(
+      `SELECT ce.staff_employee_id AS staff_id, ce.name AS comp_name, a.program_id AS program_id, a.assessment_date AS adate
+       FROM competency_assessments a
+       JOIN competency_programs p ON p.id = a.program_id
+       JOIN competency_employees ce ON ce.id = a.employee_id
+       WHERE p.lab_id = ? AND p.type = 'waived' AND a.locked = 1 AND a.status = 'pass' AND a.assessment_date >= ?`
+    ).all(labId, widestCycleStart) as any[];
+    const waivedByStaffId = new Map<number, Map<number, number>>();
+    const waivedByName = new Map<string, Map<number, number>>();
+    for (const r of waivedAssessedRows) {
+      const d = new Date(r.adate); const dms = Number.isNaN(d.getTime()) ? 0 : d.getTime();
+      if (r.staff_id) noteAssessed(waivedByStaffId, r.staff_id, r.program_id, dms);
+      const nm = String(r.comp_name || "").trim().toLowerCase();
+      if (nm) noteAssessed(waivedByName, nm, r.program_id, dms);
+    }
+
     const rankComplexity = (c: string): number => {
       const u = String(c || "").toUpperCase();
       if (u.startsWith("H")) return 3;
@@ -27694,7 +27718,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const evaluatorTitle = (r: number): string => (r >= 3 ? "Technical Supervisor" : r === 2 ? "Technical Consultant" : r === 1 ? "General Supervisor" : "Technical Consultant");
 
     const instStmt = client.prepare(
-      `SELECT i.id, i.instrument_name, i.category
+      `SELECT i.id, i.instrument_name, i.category, i.map_id
        FROM staff_employee_instruments j
        JOIN veritamap_instruments i ON j.instrument_id = i.id
        JOIN veritamap_maps m ON i.map_id = m.id
@@ -27708,6 +27732,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const results = employees.map((e: any) => {
       const staffNameLC = `${e.first_name || ""} ${e.last_name || ""}`.trim().toLowerCase();
       const empAssessed = assessedByStaffId.get(e.id) || assessedByName.get(staffNameLC) || new Map<number, number>();
+      const empWaivedAssessed = waivedByStaffId.get(e.id) || waivedByName.get(staffNameLC) || new Map<number, number>();
       // Cadence-aware "assessed this cycle" cutoff: 6 months for a first-year
       // (semiannual) employee, 12 months once established (42 CFR 493.1451(b)(8)).
       const cycleCutoffMs = today.getTime() - competencyCycleWindowDays(e) * dayMs;
@@ -27730,9 +27755,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             if (!coverage) coverage = { programId: mg.programId, programName: mg.programName, methodGroupId: mg.id, methodGroupName: mg.name };
           }
         }
+        // BUG-037: an all-waived instrument is covered by a waived program on its map.
+        const coveringWaivedIds: number[] = [];
+        if (maxRank === 1) {
+          for (const wp of waivedPrograms) {
+            if (wp.map_id != null && Number(wp.map_id) !== Number(inst.map_id)) continue;
+            coveringWaivedIds.push(wp.id);
+            if (!coverage) coverage = { programId: wp.id, programName: wp.name, methodGroupId: null, methodGroupName: "Waived testing" };
+          }
+        }
         // "have" = a locked passing assessment WITHIN THIS EMPLOYEE'S CADENCE WINDOW
-        // on any method group that covers this instrument (semiannual in year 1).
-        const assessed = coveringMgIds.some((id) => { const d = empAssessed.get(id); return d != null && d >= cycleCutoffMs; });
+        // on any method group that covers this instrument (semiannual in year 1), or
+        // on a waived program within the last year (waived testing has no
+        // semiannual first year).
+        const inWindow = (m: Map<number, number>, id: number, cutoff: number) => { const d = m.get(id); return d != null && d >= cutoff; };
+        const waivedCutoffMs = today.getTime() - 365 * dayMs;
+        const assessed = coveringMgIds.some((id) => inWindow(empAssessed, id, cycleCutoffMs)) || coveringWaivedIds.some((id) => inWindow(empWaivedAssessed, id, waivedCutoffMs));
         return {
           instrumentId: inst.id,
           instrumentName: inst.instrument_name,
