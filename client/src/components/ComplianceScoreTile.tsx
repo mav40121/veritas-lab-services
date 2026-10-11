@@ -63,11 +63,11 @@ function scoreColor(pct: number): string {
 }
 
 const SIGNAL_LABELS: Array<{ key: keyof ScoreResponse["signals"]; label: string; reg: string }> = [
-  { key: "competencyCurrent", label: "Competency current", reg: "§493.1235(a)" },
+  { key: "competencyCurrent", label: "Competency current", reg: "§493.1451(b)(9) / §493.1413(b)(9)" },
   { key: "credentialsCurrent", label: "Credentials current", reg: "TJC HR.01.02.01" },
-  { key: "reassessmentsResolved", label: "Reassessments resolved", reg: "§493.1235(b)(7)" },
-  { key: "positionDescriptionsOnFile", label: "Position descriptions on file", reg: "§493.1235(b)(7)" },
-  { key: "dutyChangesResolved", label: "Duty-change events resolved", reg: "§493.1235(a)" },
+  { key: "reassessmentsResolved", label: "Reassessments resolved", reg: "§493.1445(e)(13) / §493.1407(e)(12)" },
+  { key: "positionDescriptionsOnFile", label: "Position descriptions on file", reg: "§493.1445(e)(15) / §493.1407(e)(14)" },
+  { key: "dutyChangesResolved", label: "Duty-change events resolved", reg: "§493.1451(b)(9) / §493.1413(b)(9)" },
 ];
 
 export function ComplianceScoreTile({ className = "" }: { className?: string }) {

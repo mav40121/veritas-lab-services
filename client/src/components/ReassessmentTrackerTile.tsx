@@ -5,7 +5,7 @@
 // and who have not yet had a passing follow-up. Pairs visually with the
 // CompetencyStatusTile (PR #562) and CredentialExpirationTile (PR #574).
 //
-// Per 42 CFR §493.1235(b)(7) and TJC HR.01.06.01, a failing assessment
+// Per 42 CFR §493.1445(e)(13) / §493.1407(e)(12) (remedial training) and TJC HR.01.06.01, a failing assessment
 // triggers a mandatory reassessment cycle. The lab director must track
 // who owes a follow-up — that is what this tile does. 30-day window is
 // the customary corrective-action window; longer counts as overdue.

@@ -352,7 +352,7 @@ export default function VeritaCompAppPage() {
       <ModuleHowToCard
         moduleKey="veritacomp"
         moduleName="VeritaComp™"
-        whatItDoes="VeritaComp manages competency assessment for testing personnel using the six CLIA-required elements at 42 CFR 493.1235. Tracks Initial / 6-month / Annual cadence, embeds a scored quiz engine, and produces the per-employee competency record with appendix PDF."
+        whatItDoes="VeritaComp manages competency assessment for testing personnel using the six CLIA-required elements (42 CFR 493.1451(b)(8) / 493.1413(b)(8); written policies under 493.1235). Tracks Initial / 6-month / 1st annual / Annual cadence, embeds a scored quiz engine, and produces the per-employee competency record with appendix PDF."
         howToUse={[
           "Add your testing personnel and assign them to the tests they perform.",
           "The system tracks each person next-due assessment per the CLIA timeline.",

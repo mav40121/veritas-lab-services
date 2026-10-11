@@ -233,7 +233,7 @@ export default function Dashboard() {
       {!isStaff && <CredentialExpirationTile className="mb-6" />}
 
       {/* Wave G PR G2: Open-reassessment queue tile. Self-hides when no
-          failing assessments are open. Per §493.1235(b)(7) a failing
+          failing assessments are open. Per §493.1445(e)(13) / §493.1407(e)(12) a failing
           assessment triggers a mandatory reassessment cycle; this tile
           surfaces who still owes a follow-up. */}
       {!isStaff && <ReassessmentTrackerTile className="mb-6" />}
@@ -241,7 +241,7 @@ export default function Dashboard() {
       {/* Wave H PR H4: Duty-change reassessment queue tile. Self-hides
           when no employee has an open duty-change event (instrument
           added but no follow-up duty-change competency assessment).
-          Per §493.1235(a) and TJC HR.01.06.01, an employee's testing
+          Per §493.1451(b)(9) / §493.1413(b)(9) and TJC HR.01.06.01, an employee's testing
           duties changing triggers a reassessment. */}
       {!isStaff && <DutyChangeTile className="mb-6" />}
 
