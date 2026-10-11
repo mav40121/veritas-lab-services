@@ -26876,6 +26876,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     },
   );
 
+
+  // ── BUG-024 (Michael Q72/Q74, 2026-10-11): setup assignments are not duty changes ──────────────────────
+  // 42 CFR §493.1413(b)(9) / §493.1451(b)(9) require reevaluation before reporting when test methodology or
+  // instrumentation CHANGES. A person's first recorded test systems are their existing duties (staff entered at
+  // setup) or a new hire's first duties (covered by training and the initial competency before patient testing),
+  // so additions inside the setup session (no baseline yet, or within 24 hours of it) raise no duty-change event;
+  // later additions do. The baseline (staff_employees.duties_baseline_at) is set once and never reset.
+  const DUTY_SETUP_WINDOW_MS = 24 * 60 * 60 * 1000;
+  const dutyBaselineAt = (client: any, employeeId: number): string | null => {
+    const e = client.prepare("SELECT duties_baseline_at FROM staff_employees WHERE id = ?").get(employeeId) as { duties_baseline_at: string | null } | undefined;
+    if (e?.duties_baseline_at) return e.duties_baseline_at;
+    // Records from before the baseline existed: earliest assignment or earliest event, whichever is earlier.
+    const a = client.prepare("SELECT MIN(created_at) AS t FROM staff_employee_instruments WHERE employee_id = ?").get(employeeId) as { t: string | null };
+    const v = client.prepare("SELECT MIN(detected_at) AS t FROM staff_duty_change_events WHERE employee_id = ?").get(employeeId) as { t: string | null };
+    const ts = [a?.t, v?.t].filter(Boolean) as string[];
+    return ts.length ? ts.sort()[0] : null;
+  };
+  const inDutySetupWindow = (baseline: string | null, nowIso: string): boolean =>
+    !baseline || !Number.isFinite(Date.parse(baseline)) || Date.parse(nowIso) - Date.parse(baseline) <= DUTY_SETUP_WINDOW_MS;
+
   // PUT sync — accepts {instrumentIds: number[]} and rewrites the join in a
   // single transaction so a partial failure can not leave drift behind.
   // Instrument ids are validated against the active lab's maps before insert.
@@ -26900,41 +26920,43 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     const now = new Date().toISOString();
     const client = (db as any).$client;
-    // Wave H PR H4: diff the old vs new assignment set BEFORE the
-    // transaction overwrites the joined rows, so we know which
-    // instruments are NEW additions that trigger a duty-change
-    // reassessment per §493.1235(a). Removals are intentionally
-    // ignored — taking an instrument away does not trigger a
-    // reassessment under standard CLIA reading.
+    const empId = Number(req.params.id);
+    // Diff the old vs new assignment set so only real additions and removals are written. Unchanged assignments keep
+    // their original created_at (BUG-024: the old delete-all / insert-all rewrote every row's date on each save).
+    // Removals never trigger a reassessment.
     const oldRows = client.prepare(
       "SELECT instrument_id FROM staff_employee_instruments WHERE employee_id = ?"
-    ).all(req.params.id) as Array<{ instrument_id: number }>;
+    ).all(empId) as Array<{ instrument_id: number }>;
     const oldIds = new Set(oldRows.map(r => Number(r.instrument_id)));
+    const keep = new Set(validIds);
     const addedIds = validIds.filter(id => !oldIds.has(id));
+    const removedIds = [...oldIds].filter(id => !keep.has(id));
+    // BUG-024: additions in the setup session are existing (or initial) duties, not a duty change.
+    const baseline = dutyBaselineAt(client, empId);
+    const setupSession = inDutySetupWindow(baseline, now);
+    const eventIds = setupSession ? [] : addedIds;
 
     const txn = client.transaction(() => {
-      client.prepare("DELETE FROM staff_employee_instruments WHERE employee_id = ?").run(req.params.id);
+      const del = client.prepare("DELETE FROM staff_employee_instruments WHERE employee_id = ? AND instrument_id = ?");
+      for (const iid of removedIds) del.run(empId, iid);
       const ins = client.prepare(
-        "INSERT INTO staff_employee_instruments (employee_id, instrument_id, created_at, created_by_user_id) VALUES (?, ?, ?, ?)"
+        "INSERT OR IGNORE INTO staff_employee_instruments (employee_id, instrument_id, created_at, created_by_user_id) VALUES (?, ?, ?, ?)"
       );
-      for (const iid of validIds) {
-        ins.run(req.params.id, iid, now, req.userId ?? null);
+      for (const iid of addedIds) ins.run(empId, iid, now, req.userId ?? null);
+      if (validIds.length > 0) {
+        client.prepare("UPDATE staff_employees SET duties_baseline_at = ? WHERE id = ? AND duties_baseline_at IS NULL").run(baseline ?? now, empId);
       }
-      // Wave H PR H4: emit one duty-change event per newly added
-      // instrument. The lab director sees these on the dashboard tile
-      // until a competency_assessment with type='duty_change' resolves
-      // them lazily on GET.
-      if (addedIds.length > 0) {
+      // One duty-change event per test system added AFTER the setup session; the dashboard tile shows them until a
+      // duty_change competency assessment resolves them (lazily, on GET) or an owner/admin closes one with a reason.
+      if (eventIds.length > 0) {
         const evt = client.prepare(
           "INSERT INTO staff_duty_change_events (lab_id, employee_id, instrument_id, detected_at) VALUES (?, ?, ?, ?)"
         );
-        for (const iid of addedIds) {
-          evt.run(labId, req.params.id, iid, now);
-        }
+        for (const iid of eventIds) evt.run(labId, empId, iid, now);
       }
     });
     txn();
-    res.json({ ok: true, count: validIds.length, droppedInvalid: ids.length - validIds.length, dutyChangeEventsCreated: addedIds.length });
+    res.json({ ok: true, count: validIds.length, droppedInvalid: ids.length - validIds.length, dutyChangeEventsCreated: eventIds.length, setupSession });
   });
 
   // ── Instrument-centric assignment (transpose of the per-employee endpoints) ──
@@ -26971,9 +26993,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // PUT /api/labs/:labId/staff/instruments/:instrumentId/employees  { employeeIds: number[] }
-  // Sets which staff run this instrument. Mirrors the per-employee PUT, including
-  // the §493.1235(a) duty-change event emitted for each NEWLY-added (employee,
-  // instrument) pair so both views trigger the same reassessment.
+  // Sets which staff run this instrument. Mirrors the per-employee PUT, including the duty-change event for each
+  // NEWLY-added (employee, instrument) pair outside that employee's setup session (BUG-024; 42 CFR §493.1413(b)(9) /
+  // §493.1451(b)(9)), so both views trigger the same reevaluation.
   app.put("/api/labs/:labId/staff/instruments/:instrumentId/employees", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const labId = req.scope.labId;
@@ -27002,24 +27024,108 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).all(instId) as Array<{ employee_id: number }>;
     const oldIds = new Set(oldRows.map((r) => Number(r.employee_id)).filter((id) => labEmpIds.has(id)));
     const addedIds = validIds.filter((id) => !oldIds.has(id));
+    const keep = new Set(validIds);
+    const removedIds = [...oldIds].filter((id) => !keep.has(id));
     const now = new Date().toISOString();
+    // BUG-024: per employee, an addition inside that employee's setup session is not a duty change.
+    const baselines = new Map(addedIds.map((eid) => [eid, dutyBaselineAt(client, eid)]));
+    const eventEmpIds = addedIds.filter((eid) => !inDutySetupWindow(baselines.get(eid) ?? null, now));
     const txn = client.transaction(() => {
-      // Remove this instrument's links only among the lab's active staff, then re-add.
+      // Only real removals and additions are written, so unchanged links keep their original created_at.
       const delStmt = client.prepare("DELETE FROM staff_employee_instruments WHERE instrument_id = ? AND employee_id = ?");
-      for (const eid of oldIds) delStmt.run(instId, eid);
+      for (const eid of removedIds) delStmt.run(instId, eid);
       const ins = client.prepare(
         "INSERT OR IGNORE INTO staff_employee_instruments (employee_id, instrument_id, created_at, created_by_user_id) VALUES (?, ?, ?, ?)"
       );
-      for (const eid of validIds) ins.run(eid, instId, now, req.userId ?? null);
-      if (addedIds.length > 0) {
+      for (const eid of addedIds) ins.run(eid, instId, now, req.userId ?? null);
+      const setBase = client.prepare("UPDATE staff_employees SET duties_baseline_at = ? WHERE id = ? AND duties_baseline_at IS NULL");
+      for (const eid of addedIds) setBase.run(baselines.get(eid) ?? now, eid);
+      if (eventEmpIds.length > 0) {
         const evt = client.prepare(
           "INSERT INTO staff_duty_change_events (lab_id, employee_id, instrument_id, detected_at) VALUES (?, ?, ?, ?)"
         );
-        for (const eid of addedIds) evt.run(labId, eid, instId, now);
+        for (const eid of eventEmpIds) evt.run(labId, eid, instId, now);
       }
     });
     txn();
-    res.json({ ok: true, count: validIds.length, droppedInvalid: ids.length - validIds.length, dutyChangeEventsCreated: addedIds.length });
+    res.json({ ok: true, count: validIds.length, droppedInvalid: ids.length - validIds.length, dutyChangeEventsCreated: eventEmpIds.length });
+  });
+
+  // POST /api/admin/staff/duty-change-events/close-setup  { secret, dryRun = true, labIds?: number[] }
+  // BUG-024 (Michael Q72/Q74, 2026-10-11): one-time cleanup of open duty-change events that the old rule created
+  // while a lab was entering its staff's existing test systems. An event is a setup event when it was logged within
+  // 24 hours of that person's duties baseline (see dutyBaselineAt). DRY RUN BY DEFAULT: returns per-lab counts and
+  // writes nothing. With dryRun:false it closes those events (resolution_type 'setup', reason recorded, resolved_at
+  // now, resolved_by_user_id NULL = system) and fills duties_baseline_at for the people involved. Events logged later
+  // than the setup session are left open; they are real additions.
+  app.post("/api/admin/staff/duty-change-events/close-setup", (req: any, res) => {
+    const { secret, labIds } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const dryRun = req.body?.dryRun !== false;
+    const client = (db as any).$client;
+    const only = Array.isArray(labIds) ? new Set(labIds.map((n: any) => Number(n))) : null;
+    const open = client.prepare(
+      `SELECT e.id, e.lab_id, e.employee_id, e.detected_at, l.lab_name FROM staff_duty_change_events e LEFT JOIN labs l ON l.id = e.lab_id WHERE e.resolved_at IS NULL`
+    ).all() as any[];
+    const REASON = "Recorded at setup: existing duty, not a change (BUG-024 cleanup)";
+    const perLab = new Map<number, { labId: number; labName: string | null; setupEvents: number; laterEvents: number; people: Set<number> }>();
+    const close: number[] = [];
+    const baselineFill = new Map<number, string>();
+    const baseCache = new Map<number, string | null>();
+    for (const e of open) {
+      if (only && !only.has(Number(e.lab_id))) continue;
+      if (!baseCache.has(e.employee_id)) baseCache.set(e.employee_id, dutyBaselineAt(client, e.employee_id));
+      const base = baseCache.get(e.employee_id) ?? null;
+      const setup = !base || Date.parse(e.detected_at) - Date.parse(base) <= DUTY_SETUP_WINDOW_MS;
+      let g = perLab.get(e.lab_id);
+      if (!g) { g = { labId: e.lab_id, labName: e.lab_name ?? null, setupEvents: 0, laterEvents: 0, people: new Set() }; perLab.set(e.lab_id, g); }
+      if (setup) { g.setupEvents++; g.people.add(e.employee_id); close.push(e.id); if (base) baselineFill.set(e.employee_id, base); }
+      else g.laterEvents++;
+    }
+    if (!dryRun && close.length > 0) {
+      const now = new Date().toISOString();
+      const upd = client.prepare("UPDATE staff_duty_change_events SET resolved_at = ?, resolution_type = 'setup', resolution_reason = ?, resolved_by_user_id = NULL WHERE id = ? AND resolved_at IS NULL");
+      const fill = client.prepare("UPDATE staff_employees SET duties_baseline_at = ? WHERE id = ? AND duties_baseline_at IS NULL");
+      client.transaction(() => {
+        for (const id of close) upd.run(now, REASON, id);
+        for (const [eid, base] of baselineFill) fill.run(base, eid);
+      })();
+      console.log(`[duty-change] close-setup closed ${close.length} setup events across ${perLab.size} labs`);
+    }
+    res.json({
+      ok: true, dryRun, reason: REASON,
+      totals: { setupEvents: close.length, laterEvents: [...perLab.values()].reduce((n, g) => n + g.laterEvents, 0) },
+      labs: [...perLab.values()].sort((a, b) => b.setupEvents - a.setupEvents).map((g) => ({ labId: g.labId, labName: g.labName, setupEvents: g.setupEvents, laterEvents: g.laterEvents, people: g.people.size })),
+    });
+  });
+
+  // POST /api/labs/:labId/staff/duty-change-events/close  { eventIds: number[], reason: string }
+  // BUG-024 (Michael Q72/Q74, 2026-10-11): an owner or admin closes open duty-change items that are not a change in
+  // duties (for example a test system the person already ran that was missing from the record), with a required
+  // reason. The close is recorded on the event (resolution_type 'not_a_change', reason, who, when) and in the audit log.
+  app.post("/api/labs/:labId/staff/duty-change-events/close", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required to close a duty-change item" });
+    const reason = String(req.body?.reason ?? "").trim().slice(0, 300);
+    if (!reason) return res.status(400).json({ error: "A reason is required to close a duty-change item without a reassessment" });
+    const ids = (Array.isArray(req.body?.eventIds) ? req.body.eventIds : []).map((v: any) => parseInt(String(v), 10)).filter((n: number) => Number.isFinite(n) && n > 0);
+    if (ids.length === 0) return res.status(400).json({ error: "eventIds required" });
+    const client = (db as any).$client;
+    const ph = ids.map(() => "?").join(",");
+    const rows = client.prepare(
+      `SELECT e.id, e.employee_id, e.instrument_id, se.first_name, se.last_name FROM staff_duty_change_events e JOIN staff_employees se ON se.id = e.employee_id
+       WHERE e.id IN (${ph}) AND e.lab_id = ? AND e.resolved_at IS NULL`
+    ).all(...ids, req.scope.labId) as any[];
+    if (rows.length === 0) return res.status(404).json({ error: "No open duty-change items with those ids in this lab" });
+    const now = new Date().toISOString();
+    const upd = client.prepare("UPDATE staff_duty_change_events SET resolved_at = ?, resolution_type = 'not_a_change', resolution_reason = ?, resolved_by_user_id = ? WHERE id = ?");
+    client.transaction(() => { for (const r of rows) upd.run(now, reason, req.userId ?? null, r.id); })();
+    try {
+      logAudit({ userId: req.userId, ownerUserId: req.scope.lab?.owner_user_id ?? req.userId, module: "veritastaff", action: "update",
+        entityType: "duty_change_event", entityId: rows.map((r) => r.id).join(","), entityLabel: `Closed as not a duty change: ${[...new Set(rows.map((r) => `${r.last_name}, ${r.first_name}`))].join("; ")}`,
+        before: null, after: { resolution_type: "not_a_change", reason, count: rows.length } } as any);
+    } catch {}
+    res.json({ ok: true, closed: rows.length, skipped: ids.length - rows.length });
   });
 
   // GET /api/labs/:labId/staff/duty-change-events
@@ -27029,14 +27135,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   //   - the employee has a completed competency_assessment with
   //     assessment_type='duty_change' AND assessment_date >= the event's
   //     detected_at, OR
-  //   - the lab manually closes the event (POST /resolve, future PR).
+  //   - an owner or admin closes it as not a duty change, with a reason (POST .../close, BUG-024).
   //
   // Lazy approach: on GET we walk the open events, look for a matching
   // assessment, UPDATE resolved_at + resolved_assessment_id when found.
   // No trigger on the assessment-insert path; the surface stays the
   // source of truth for "what's still open right now".
   //
-  // Reg anchor: 42 CFR §493.1235(a) + TJC HR.01.06.01.
+  // Reg anchor: 42 CFR §493.1451(b)(9) / §493.1413(b)(9) + TJC HR.01.06.01 (BUG-024 citation correction).
   app.get("/api/labs/:labId/staff/duty-change-events", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const labId = req.scope.labId;
@@ -27072,7 +27178,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
        LIMIT 1`
     );
     const resolveStmt = client.prepare(
-      "UPDATE staff_duty_change_events SET resolved_at = ?, resolved_assessment_id = ? WHERE id = ?"
+      "UPDATE staff_duty_change_events SET resolved_at = ?, resolved_assessment_id = ?, resolution_type = 'assessment' WHERE id = ?"
     );
     const stillOpen: typeof open = [];
     const now = new Date().toISOString();
@@ -28475,11 +28581,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const signalD = Math.round((Math.min(pdOnFile, PD_REQUIRED) / PD_REQUIRED) * 100);
 
     // ── Signal E: Duty-change events resolved ──
+    // BUG-024 (2026-10-11): only real duty changes count. Items closed as recorded at setup or as not a change were
+    // never a change in duties, so they sit in neither the numerator nor the denominator.
     const dcTotal = (client.prepare(
-      `SELECT COUNT(*) AS c FROM staff_duty_change_events WHERE lab_id = ?`
+      `SELECT COUNT(*) AS c FROM staff_duty_change_events WHERE lab_id = ? AND COALESCE(resolution_type, '') NOT IN ('setup', 'not_a_change')`
     ).get(labId) as { c: number }).c;
     const dcResolved = (client.prepare(
-      `SELECT COUNT(*) AS c FROM staff_duty_change_events WHERE lab_id = ? AND resolved_at IS NOT NULL`
+      `SELECT COUNT(*) AS c FROM staff_duty_change_events WHERE lab_id = ? AND resolved_at IS NOT NULL AND COALESCE(resolution_type, '') NOT IN ('setup', 'not_a_change')`
     ).get(labId) as { c: number }).c;
     const signalE = dcTotal === 0 ? 100 : Math.round((dcResolved / dcTotal) * 100);
 

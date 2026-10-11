@@ -7674,13 +7674,30 @@ try {
 // assessment_date >= detected_at. Lazy-evaluated on GET to avoid
 // wiring a trigger on every assessment insert.
 //
-// Reg anchor: 42 CFR §493.1235(a) — competency assessment whenever an
-// employee's testing duties change. TJC HR.01.06.01 mirrors.
+// Reg anchor (corrected 2026-10-11, BUG-024): 42 CFR §493.1451(b)(9) (high complexity) and §493.1413(b)(9)
+// (moderate): reevaluation before reporting when test methodology or instrumentation changes. TJC HR.01.06.01.
+// §493.1235 is only the written-policy standard.
+//
+// BUG-024: resolution_type ('assessment' | 'not_a_change' | 'setup'), resolution_reason and resolved_by_user_id
+// record WHY an event closed, so a close-out without a duty-change assessment is documented, not silent.
 {
   const cols = (sqlite.prepare("PRAGMA table_info(staff_duty_change_events)").all() as any[]).map(c => c.name);
-  void cols;
+  if (!cols.includes("resolution_type")) { try { sqlite.exec("ALTER TABLE staff_duty_change_events ADD COLUMN resolution_type TEXT"); } catch {} }
+  if (!cols.includes("resolution_reason")) { try { sqlite.exec("ALTER TABLE staff_duty_change_events ADD COLUMN resolution_reason TEXT"); } catch {} }
+  if (!cols.includes("resolved_by_user_id")) { try { sqlite.exec("ALTER TABLE staff_duty_change_events ADD COLUMN resolved_by_user_id INTEGER"); } catch {} }
   try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_staff_duty_change_events_lab_open ON staff_duty_change_events(lab_id, resolved_at)"); } catch {}
   try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_staff_duty_change_events_emp ON staff_duty_change_events(employee_id, resolved_at)"); } catch {}
+}
+
+// BUG-024 (2026-10-11): staff_employees.duties_baseline_at = when this person's test systems were first recorded.
+// Set once by the assignment routes and never reset (the per-employee save used to delete and re-insert every
+// assignment, so assignment created_at could not tell first-recorded duties from later additions). Additions within
+// 24 hours of the baseline are the setup session: existing duties, or a new hire's first duties covered by training
+// and the initial competency before patient testing, not a duty change. ALTER only; existing rows are left NULL and
+// read through a fallback (earliest assignment / earliest event), and are filled only by the admin close-setup route.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(staff_employees)").all() as any[]).map(c => c.name);
+  if (cols.length > 0 && !cols.includes("duties_baseline_at")) { try { sqlite.exec("ALTER TABLE staff_employees ADD COLUMN duties_baseline_at TEXT"); } catch {} }
 }
 
 // Wave H PR H3 (2026-06-06). NEW DB TABLE RULE sentinel for
