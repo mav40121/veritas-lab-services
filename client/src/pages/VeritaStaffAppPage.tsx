@@ -2619,6 +2619,8 @@ interface BulkPreview {
 function BulkImportDialog({ open, onOpenChange, lab }: { open: boolean; onOpenChange: (o: boolean) => void; lab: Lab }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  // BUG-014: the lab being viewed. Lab-scoped import routes let Veritas support and lab members import into it.
+  const activeLabId = useActiveLabId();
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<BulkPreview | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -2637,7 +2639,7 @@ function BulkImportDialog({ open, onOpenChange, lab }: { open: boolean; onOpenCh
   async function handleDownloadTemplate() {
     setDownloadingTemplate(true);
     try {
-      const res = await fetch(`${API_BASE}/api/staff/employees/template`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}${activeLabId ? `/api/labs/${activeLabId}` : "/api"}/staff/employees/template`, { headers: authHeaders() });
       if (!res.ok) throw new Error(await res.text());
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -2662,7 +2664,7 @@ function BulkImportDialog({ open, onOpenChange, lab }: { open: boolean; onOpenCh
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch(`${API_BASE}/api/staff/employees/bulk-preview`, {
+      const res = await fetch(`${API_BASE}${activeLabId ? `/api/labs/${activeLabId}` : "/api"}/staff/employees/bulk-preview`, {
         method: "POST",
         headers: authHeaders(),
         body: fd,
@@ -2690,7 +2692,7 @@ function BulkImportDialog({ open, onOpenChange, lab }: { open: boolean; onOpenCh
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch(`${API_BASE}/api/staff/employees/bulk-commit`, {
+      const res = await fetch(`${API_BASE}${activeLabId ? `/api/labs/${activeLabId}` : "/api"}/staff/employees/bulk-commit`, {
         method: "POST",
         headers: authHeaders(),
         body: fd,

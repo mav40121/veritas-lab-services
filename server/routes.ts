@@ -7403,6 +7403,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       lab: {
         id: labFields.lab_id,
         plan: labFields.plan,
+        // BUG-032 (2026-10-11): the data owner. Read above but never copied, so every
+        // req.scope.lab.owner_user_id ?? req.userId fell back to the signed-in person and
+        // filed staff rows, staff labs and audit rows under members or Veritas support.
+        owner_user_id: labFields.owner_user_id,
         // study_credits carried so credit-aware lab-scoped handlers (the
         // VeritaCheck free-study gate in POST /api/labs/:labId/studies) can
         // read the lab's pooled credits without a second query. Additive:
@@ -7464,6 +7468,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     next();
   }
+
+  // An upload step (multer) finishes on the request stream's own events, outside the context
+  // labScopeMiddleware opened, so a Veritas support upload lost its acting_as stamp in the audit log
+  // (BUG-014, 2026-10-11). Re-enter it after the upload: keepVlsContext as route middleware, or
+  // runInVlsContext around an inline multer callback.
+  function runInVlsContext(req: any, fn: () => void) {
+    if (req.scope?.viaVlsSupport) return vlsContext.run({ actingAs: "vls_support", labId: req.scope.labId, userId: req.userId }, fn);
+    return fn();
+  }
+  const keepVlsContext = (req: any, _res: any, next: any) => runInVlsContext(req, next);
 
   // Expose labScopeMiddleware on app.locals so Phase 2c module routes
   // can attach it without re-declaring. Pattern mirrors authMiddleware
@@ -17556,7 +17570,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // owner/admin action; a staff login or any non-admin member gets a 403.
     if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Only a lab owner or admin can manage shared documents." });
     const m = require("multer");
-    const upload = m({ storage: m.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } }).single("file");
+    const multerUpload = m({ storage: m.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } }).single("file");
+    const upload = (rq: any, rs: any, cb: (e: any) => void) => multerUpload(rq, rs, (e: any) => runInVlsContext(rq, () => cb(e)));
     upload(req, res, (err: any) => {
       if (err) return res.status(400).json({ error: err.code === "LIMIT_FILE_SIZE" ? "File too large (max 25 MB)." : "Upload failed." });
       const sqlite = (db as any).$client;
@@ -25845,14 +25860,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ── Bulk import: download Excel template ──
   // NOTE: must be registered BEFORE the /api/staff/employees/:id route below,
   // otherwise Express matches "template" as the :id param.
-  app.get("/api/staff/employees/template", authMiddleware, async (req: any, res) => {
-    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
-    // Resolve the ACTIVE lab (X-Active-Lab-Id header, access-validated) so a
-    // multi-lab owner's import targets the lab they are viewing, not an
-    // arbitrary staff_labs row. Falls back to the owner's staff_labs row when
-    // there is no active-lab header (single-lab / legacy page).
+  // Bulk import target (BUG-014, 2026-10-11). On the lab-scoped routes (/api/labs/:labId/staff/employees/...)
+  // the lab is the one in the URL, access-checked by labScopeMiddleware, and the data owner is that lab's owner
+  // (staff_employees.user_id is the OWNER), so Veritas support and lab members import into the client's lab.
+  // On the old /api/staff routes: the ACTIVE lab (X-Active-Lab-Id header, access-validated) so a multi-lab
+  // owner's import targets the lab they are viewing, falling back to the owner's staff_labs row when there is no
+  // active-lab header (single-lab / legacy page).
+  function staffImportTarget(req: any): { lab: any; dataUserId: number } {
+    if (req.scope?.labId) {
+      const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE tier2_lab_id = ?").get(req.scope.labId) as any;
+      return { lab, dataUserId: req.scope.lab?.owner_user_id ?? req.ownerUserId ?? req.userId };
+    }
     const dataUserId = req.ownerUserId ?? req.user.userId;
-    const lab = activeStaffLab(req, dataUserId) as any;
+    return { lab: activeStaffLab(req, dataUserId) as any, dataUserId };
+  }
+  const staffImportTemplateHandler = async (req: any, res: any) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
+    const { lab } = staffImportTarget(req);
     try {
       const { buildStaffImportWorkbook } = await import("./staffBulkImport");
       const buf = await buildStaffImportWorkbook({ labName: lab?.lab_name });
@@ -25864,7 +25888,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("[staff/template] error:", err);
       res.status(500).json({ error: err.message || "template_generation_failed" });
     }
-  });
+  };
+  app.get("/api/staff/employees/template", authMiddleware, staffImportTemplateHandler);
+  // Registered before /api/labs/:labId/staff/employees/:id so "template" is not read as an employee id.
+  app.get("/api/labs/:labId/staff/employees/template", authMiddleware, labScopeMiddleware, staffImportTemplateHandler);
 
   // Get single employee
   app.get("/api/staff/employees/:id", authMiddleware, (req: any, res) => {
@@ -27050,6 +27077,50 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
     txn();
     res.json({ ok: true, count: validIds.length, droppedInvalid: ids.length - validIds.length, dutyChangeEventsCreated: eventEmpIds.length });
+  });
+
+  // POST /api/admin/staff/repair-owner  { secret, dryRun = true, labIds?: number[] }
+  // BUG-032 (2026-10-11): req.scope.lab.owner_user_id was never set, so lab-scoped saves filed rows under whoever
+  // made them (a member or Veritas support) instead of the lab owner. staff_employees.user_id, staff_labs.user_id and
+  // competency_employees.user_id mean the lab OWNER: account deletion and the older unscoped routes key on them, so a
+  // member leaving could take the lab's roster with them. DRY RUN BY DEFAULT: per-lab counts of rows filed under
+  // someone other than the lab's owner, nothing written. With dryRun:false it re-points them to labs.owner_user_id.
+  app.post("/api/admin/staff/repair-owner", (req: any, res) => {
+    const { secret, labIds } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const dryRun = req.body?.dryRun !== false;
+    const client = (db as any).$client;
+    const only = Array.isArray(labIds) ? new Set(labIds.map((n: any) => Number(n))) : null;
+    const keep = (rows: any[]) => (only ? rows.filter((r) => only.has(Number(r.lab_id))) : rows);
+    const employees = keep(client.prepare(
+      `SELECT e.tier2_lab_id AS lab_id, l.lab_name, l.owner_user_id, e.user_id AS filed_under, u.name AS filed_under_name, COUNT(*) AS n
+       FROM staff_employees e JOIN labs l ON l.id = e.tier2_lab_id LEFT JOIN users u ON u.id = e.user_id
+       WHERE l.owner_user_id IS NOT NULL AND e.user_id IS NOT l.owner_user_id GROUP BY e.tier2_lab_id, e.user_id ORDER BY e.tier2_lab_id`
+    ).all() as any[]);
+    const staffLabs = keep(client.prepare(
+      `SELECT s.tier2_lab_id AS lab_id, l.lab_name, l.owner_user_id, s.user_id AS filed_under, u.name AS filed_under_name, COUNT(*) AS n
+       FROM staff_labs s JOIN labs l ON l.id = s.tier2_lab_id LEFT JOIN users u ON u.id = s.user_id
+       WHERE l.owner_user_id IS NOT NULL AND s.user_id IS NOT l.owner_user_id GROUP BY s.tier2_lab_id, s.user_id ORDER BY s.tier2_lab_id`
+    ).all() as any[]);
+    const compEmployees = keep(client.prepare(
+      `SELECT ce.lab_id AS lab_id, l.lab_name, l.owner_user_id, ce.user_id AS filed_under, u.name AS filed_under_name, COUNT(*) AS n
+       FROM competency_employees ce JOIN labs l ON l.id = ce.lab_id LEFT JOIN users u ON u.id = ce.user_id
+       WHERE l.owner_user_id IS NOT NULL AND ce.user_id IS NOT l.owner_user_id GROUP BY ce.lab_id, ce.user_id ORDER BY ce.lab_id`
+    ).all() as any[]);
+    const sum = (rows: any[]) => rows.reduce((a, r) => a + Number(r.n), 0);
+    const totals = { staffEmployees: sum(employees), staffLabs: sum(staffLabs), competencyEmployees: sum(compEmployees) };
+    if (!dryRun) {
+      const ids = (rows: any[]) => Array.from(new Set(rows.map((r) => Number(r.lab_id))));
+      const tx = client.transaction(() => {
+        for (const id of ids(employees)) client.prepare("UPDATE staff_employees SET user_id = (SELECT owner_user_id FROM labs WHERE id = ?) WHERE tier2_lab_id = ? AND user_id IS NOT (SELECT owner_user_id FROM labs WHERE id = ?)").run(id, id, id);
+        for (const id of ids(staffLabs)) client.prepare("UPDATE staff_labs SET user_id = (SELECT owner_user_id FROM labs WHERE id = ?) WHERE tier2_lab_id = ? AND user_id IS NOT (SELECT owner_user_id FROM labs WHERE id = ?)").run(id, id, id);
+        for (const id of ids(compEmployees)) client.prepare("UPDATE competency_employees SET user_id = (SELECT owner_user_id FROM labs WHERE id = ?) WHERE lab_id = ? AND user_id IS NOT (SELECT owner_user_id FROM labs WHERE id = ?)").run(id, id, id);
+      });
+      tx();
+      logAudit({ userId: 0, module: "admin", action: "update", entityType: "staff_owner_repair", entityLabel: "BUG-032 owner repair",
+        before: { employees, staffLabs, compEmployees }, after: { totals }, ipAddress: req.ip });
+    }
+    res.json({ ok: true, dryRun, totals, employees, staffLabs, competencyEmployees: compEmployees });
   });
 
   // POST /api/admin/staff/duty-change-events/close-setup  { secret, dryRun = true, labIds?: number[] }
@@ -28636,6 +28707,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const m = require("multer");
       return m({ storage: m.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } }).single("file");
     })(),
+    keepVlsContext,
     async (req: any, res) => {
       if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
       const labId = req.scope.labId;
@@ -28665,6 +28737,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const m = require("multer");
       return m({ storage: m.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } }).single("file");
     })(),
+    keepVlsContext,
     async (req: any, res) => {
       if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
       const labId = req.scope.labId;
@@ -28721,7 +28794,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
         logAudit({
           userId: req.userId,
-          ownerUserId: req.ownerUserId ?? req.userId,
+          ownerUserId,
           module: "veritacomp",
           action: "create",
           entityType: "bulk_import",
@@ -29162,17 +29235,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // POST /api/staff/employees/bulk-preview  (multipart/form-data, field 'file')
   // Returns { rows: ValidatedRow[], summary: {...}, fatal?: string }
   // No DB writes.
-  app.post("/api/staff/employees/bulk-preview", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'),
-    (() => {
-      const m = require("multer");
-      return m({ storage: m.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } }).single("file");
-    })(),
-    async (req: any, res) => {
+  const staffImportUpload = (() => {
+    const m = require("multer");
+    return m({ storage: m.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } }).single("file");
+  })();
+  const staffBulkPreviewHandler = async (req: any, res: any) => {
       if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
-      // Active-lab aware (X-Active-Lab-Id): multi-lab imports preview against the
-      // lab being viewed, not an arbitrary staff_labs row. See the template route.
-      const dataUserId = req.ownerUserId ?? req.user.userId;
-      const lab = activeStaffLab(req, dataUserId) as any;
+      // The lab being viewed (lab-scoped route) or the active lab (old route). See staffImportTarget.
+      const { lab } = staffImportTarget(req);
       if (!lab) return res.status(400).json({ error: "Set up your lab first" });
       if (!req.file?.buffer) return res.status(400).json({ error: "No file uploaded" });
       try {
@@ -29194,24 +29264,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         console.error("[staff/bulk-preview] error:", err);
         res.status(500).json({ error: err.message || "preview_failed" });
       }
-    }
-  );
+  };
+  app.post("/api/staff/employees/bulk-preview", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), staffImportUpload, staffBulkPreviewHandler);
+  app.post("/api/labs/:labId/staff/employees/bulk-preview", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), staffImportUpload, keepVlsContext, staffBulkPreviewHandler);
 
   // ── Bulk import: commit ──
   // POST /api/staff/employees/bulk-commit  (multipart/form-data, field 'file')
   // Re-parses, re-validates, then inserts/updates inside a single transaction.
   // If ANY row has status='error' or any insert/update throws, the entire batch rolls back.
-  app.post("/api/staff/employees/bulk-commit", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'),
-    (() => {
-      const m = require("multer");
-      return m({ storage: m.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } }).single("file");
-    })(),
-    async (req: any, res) => {
+  const staffBulkCommitHandler = async (req: any, res: any) => {
       if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
-      // Active-lab aware (X-Active-Lab-Id): multi-lab imports COMMIT to the lab
-      // being viewed, not an arbitrary staff_labs row. See the template route.
-      const dataUserId = req.ownerUserId ?? req.user.userId;
-      const lab = activeStaffLab(req, dataUserId) as any;
+      // The lab being viewed (lab-scoped route) or the active lab (old route); dataUserId is the lab's owner on the
+      // lab-scoped route, so imported rows never belong to the person doing the import. See staffImportTarget.
+      const { lab, dataUserId } = staffImportTarget(req);
       if (!lab) return res.status(400).json({ error: "Set up your lab first" });
       if (!req.file?.buffer) return res.status(400).json({ error: "No file uploaded" });
       try {
@@ -29252,7 +29317,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           "UPDATE staff_employees SET last_name=?, first_name=?, middle_initial=?, title=?, hire_date=?, qualifications_text=?, highest_complexity=?, performs_testing=?, can_adjust_inventory=?, can_view_audit=?, updated_at=? WHERE id=? AND lab_id=?"
         );
         const deleteRolesStmt = sqlite.prepare("DELETE FROM staff_roles WHERE employee_id = ?");
-        const insertRoleStmt = sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number) VALUES (?,?,?,?)");
+        const insertRoleStmt = sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, tier2_lab_id, role, specialty_number) VALUES (?,?,?,?,?)");
         const insertScheduleStmt = sqlite.prepare(
           "INSERT INTO staff_competency_schedules (employee_id, lab_id, six_month_due_at, first_annual_due_at, annual_due_at, nys_six_month_due_at) VALUES (?,?,?,?,?,?)"
         );
@@ -29274,7 +29339,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               );
               const empId = Number(result.lastInsertRowid);
               for (const role of p.roles) {
-                insertRoleStmt.run(empId, lab.id, role.role, role.specialtyNumber);
+                insertRoleStmt.run(empId, lab.id, lab.tier2_lab_id ?? null, role.role, role.specialtyNumber);
               }
               if (p.performsTesting === 1) {
                 const sched = computeSchedule(p.hireDate, p.highestComplexity);
@@ -29294,7 +29359,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               );
               deleteRolesStmt.run(p.employeeId);
               for (const role of p.roles) {
-                insertRoleStmt.run(p.employeeId, lab.id, role.role, role.specialtyNumber);
+                insertRoleStmt.run(p.employeeId, lab.id, lab.tier2_lab_id ?? null, role.role, role.specialtyNumber);
               }
               // Add schedule if newly performs testing and none exists
               if (p.performsTesting === 1) {
@@ -29314,7 +29379,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
         logAudit({
           userId: req.userId,
-          ownerUserId: req.ownerUserId ?? req.userId,
+          ownerUserId: dataUserId,
           module: "veritastaff",
           action: "create",
           entityType: "bulk_import",
@@ -29335,8 +29400,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         console.error("[staff/bulk-commit] error:", err);
         res.status(500).json({ error: err.message || "commit_failed", message: "All changes rolled back. No employees were imported." });
       }
-    }
-  );
+  };
+  app.post("/api/staff/employees/bulk-commit", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), staffImportUpload, staffBulkCommitHandler);
+  app.post("/api/labs/:labId/staff/employees/bulk-commit", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), staffImportUpload, keepVlsContext, staffBulkCommitHandler);
 
   // Reject a hand-entered competency date with an implausible year. A native
   // date input or paste can yield a 1-4 digit year (e.g. 0002, seen on Troy /
