@@ -214,7 +214,7 @@ A clean grep is a required step in the QC checklist, not optional. Visual inspec
 
 ### Competency (VeritaComp)
 
-- Timeline: Initial → 6-month → 1st Annual (6 months after the 6-month) → Annual thereafter.
+- Timeline (Michael 2026-10-11): orientation/training documented first; Initial before patient testing (no deadline from hire); 6-month at initial + 6; 1st Annual at initial + 12 (closes the first year of patient testing, whatever day the 6-month was done); Annual thereafter. 42 CFR 493.1451(b)(9) / 493.1413(b)(9); 493.1235 sets no interval.
 - Element 1 and 4: Observer initials field (not evaluator); observer must be LD, TC, or TS.
 - Element 3: Date the tech RAN QC, not date reviewed.
 - Evaluator signs the completed document; can be the same person as the observer; both fields required.

@@ -186,7 +186,7 @@ function headerRowHeight(headers: string[], colWidths: number[]): number {
 
 import { logAudit } from "./audit";
 import {
-  initialCompetencyDueDate, deriveCompetencyStatus,
+  deriveCompetencyStatus, competencyView,
   readCompetencyReminderConfig, writeCompetencyReminderConfig, planCompetencyReminders, runCompetencyReminders,
 } from "./competencyReminders";
 import { deleteMapCascade, mapDeleteBlockers } from "./veritamapDelete";
@@ -25836,7 +25836,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const result = employees.map((emp: any) => {
       const roles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(emp.id);
       const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(emp.id);
-      return { ...emp, roles, competencySchedule: schedule || null };
+      return { ...emp, roles, ...competencyView(emp, schedule) };
     });
     res.json(result);
   });
@@ -25877,7 +25877,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const roles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(emp.id);
     const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(emp.id);
-    res.json({ ...emp, roles, competencySchedule: schedule || null });
+    res.json({ ...emp, roles, ...competencyView(emp, schedule) });
   });
 
   // Create employee
@@ -25935,7 +25935,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const emp = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ?").get(empId);
     const empRoles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(empId);
     const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(empId);
-    res.json({ ...emp, roles: empRoles, competencySchedule: schedule || null });
+    res.json({ ...emp, roles: empRoles, ...competencyView(emp, schedule) });
   });
 
   // Update employee
@@ -25985,7 +25985,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const updated = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ?").get(req.params.id);
     const updRoles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(req.params.id);
     const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(req.params.id);
-    res.json({ ...updated, roles: updRoles, competencySchedule: schedule || null });
+    res.json({ ...updated, roles: updRoles, ...competencyView(updated, schedule) });
   });
 
   // Delete employee (hard delete)
@@ -26053,7 +26053,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const schedule = (db as any).$client.prepare(
         "SELECT * FROM staff_competency_schedules WHERE employee_id = ?"
       ).get(emp.id);
-      return { ...emp, roles, competencySchedule: schedule || null };
+      return { ...emp, roles, ...competencyView(emp, schedule) };
     });
     res.json(result);
   });
@@ -26145,7 +26145,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!emp) return res.status(404).json({ error: "Employee not found" });
     const roles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(emp.id);
     const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(emp.id);
-    res.json({ ...emp, roles, competencySchedule: schedule || null });
+    res.json({ ...emp, roles, ...competencyView(emp, schedule) });
   });
 
   // (The old hire-anchored ensureCompetencyScheduleMilestones back-fill was removed
@@ -26212,7 +26212,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const emp = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ?").get(empId);
     const empRoles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(empId);
     const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(empId);
-    res.json({ ...emp, roles: empRoles, competencySchedule: schedule || null });
+    res.json({ ...emp, roles: empRoles, ...competencyView(emp, schedule) });
   });
 
   // Update employee in the active lab
@@ -26280,7 +26280,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const updated = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ?").get(req.params.id);
     const updRoles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(req.params.id);
     const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(req.params.id);
-    res.json({ ...updated, roles: updRoles, competencySchedule: schedule || null });
+    res.json({ ...updated, roles: updRoles, ...competencyView(updated, schedule) });
   });
 
   // Delete employee in the active lab (hard delete)
@@ -27542,7 +27542,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               s.initial_completed_at,
               s.six_month_due_at, s.six_month_completed_at,
               s.first_annual_due_at, s.first_annual_completed_at,
-              s.annual_due_at, s.last_annual_completed_at
+              s.annual_due_at, s.last_annual_completed_at, s.recorded_as
        FROM staff_employees e
        LEFT JOIN staff_competency_schedules s ON s.employee_id = e.id
        WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1
@@ -28128,7 +28128,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               s.initial_completed_at,
               s.six_month_due_at, s.six_month_completed_at,
               s.first_annual_due_at, s.first_annual_completed_at,
-              s.annual_due_at, s.last_annual_completed_at
+              s.annual_due_at, s.last_annual_completed_at, s.recorded_as
        FROM staff_employees e
        LEFT JOIN staff_competency_schedules s ON s.employee_id = e.id
        WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1`
@@ -28166,42 +28166,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       let nextDue: Date | null = null;
       let reason = "";
 
-      if (!e.initial_completed_at) {
-        const initialDeadline = initialCompetencyDueDate(e.hire_date, e.created_at);
-        nextDue = initialDeadline ?? today;
-        reason = initialDeadline ? "Initial competency not completed" : "Initial competency not completed (no hire date)";
-      } else if (e.six_month_due_at && !e.six_month_completed_at) {
-        nextDue = parse(e.six_month_due_at);
-        reason = "6-month competency due";
-      } else if (e.first_annual_due_at && !e.first_annual_completed_at) {
-        nextDue = parse(e.first_annual_due_at);
-        reason = "1st annual competency due";
-      } else if (e.annual_due_at) {
-        const due = parse(e.annual_due_at);
-        const lastDone = parse(e.last_annual_completed_at);
-        if (due) {
-          if (lastDone && lastDone.getTime() > due.getTime() - 365 * dayMs) {
-            const next = new Date(due.getTime() + 365 * dayMs);
-            if (next.getTime() < today.getTime()) { nextDue = next; reason = "Annual cycle overdue"; }
-            else { nextDue = next; reason = "Annual due"; }
-          } else {
-            nextDue = due;
-            reason = "Annual competency due";
-          }
-        }
-      }
-
-      if (nextDue === null) {
-        bucket = "compliant";
-      } else if (nextDue.getTime() < today.getTime()) {
-        bucket = "overdue";
-      } else if (nextDue.getTime() <= plus30.getTime()) {
-        bucket = "dueSoon30";
-      } else if (nextDue.getTime() <= plus90.getTime()) {
-        bucket = "dueSoon90";
-      } else {
-        bucket = "compliant";
-      }
+      // The shared milestone walk (server/competencyReminders.ts), so this tile, the
+      // owed list, the reminders, the compliance score and the roster badge agree.
+      const st = deriveCompetencyStatus(e, today);
+      bucket = st.bucket; reason = st.reason; nextDue = parse(st.nextDue);
 
       counts[bucket] += 1;
 
@@ -28420,16 +28388,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Mirrors the next-due classification used by /compliance/score.
     try {
       const emps = client.prepare(
-        "SELECT s.initial_completed_at, s.six_month_due_at, s.six_month_completed_at, s.first_annual_due_at, s.first_annual_completed_at, s.annual_due_at, e.hire_date, e.created_at FROM staff_employees e LEFT JOIN staff_competency_schedules s ON s.employee_id = e.id WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1"
+        "SELECT s.initial_completed_at, s.six_month_due_at, s.six_month_completed_at, s.first_annual_due_at, s.first_annual_completed_at, s.annual_due_at, s.last_annual_completed_at, s.recorded_as, e.hire_date, e.created_at FROM staff_employees e LEFT JOIN staff_competency_schedules s ON s.employee_id = e.id WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1"
       ).all(labId) as any[];
       let od = 0, ds = 0;
+      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
       for (const e of emps) {
-        let nd: string | null = null;
-        if (!e.initial_completed_at) { const d = initialCompetencyDueDate(e.hire_date, e.created_at); nd = d ? d.toISOString().slice(0, 10) : today; }
-        else if (e.six_month_due_at && !e.six_month_completed_at) nd = String(e.six_month_due_at).slice(0, 10);
-        else if (e.first_annual_due_at && !e.first_annual_completed_at) nd = String(e.first_annual_due_at).slice(0, 10);
-        else if (e.annual_due_at) nd = String(e.annual_due_at).slice(0, 10);
-        if (nd) { const d = daysTo(nd); if (d < 0) od++; else if (d <= 30) ds++; }
+        // Shared walk (server/competencyReminders.ts).
+        const st = deriveCompetencyStatus(e, todayStart);
+        if (st.bucket === "overdue") od++; else if (st.bucket === "dueSoon30") ds++;
       }
       push("competency", "Competency assessments", od, ds, emps.length, "testing staff");
     } catch {}
@@ -28505,25 +28471,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               s.initial_completed_at,
               s.six_month_due_at, s.six_month_completed_at,
               s.first_annual_due_at, s.first_annual_completed_at,
-              s.annual_due_at, s.last_annual_completed_at
+              s.annual_due_at, s.last_annual_completed_at, s.recorded_as
        FROM staff_employees e
        LEFT JOIN staff_competency_schedules s ON s.employee_id = e.id
        WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1`
     ).all(labId) as Array<any>;
     let compCurrent = 0, compTotal = empRows.length;
     for (const e of empRows) {
-      let nextDue: Date | null = null;
-      if (!e.initial_completed_at) {
-        nextDue = initialCompetencyDueDate(e.hire_date, e.created_at) ?? today;
-      } else if (e.six_month_due_at && !e.six_month_completed_at) {
-        nextDue = parse(e.six_month_due_at);
-      } else if (e.first_annual_due_at && !e.first_annual_completed_at) {
-        nextDue = parse(e.first_annual_due_at);
-      } else if (e.annual_due_at) {
-        nextDue = parse(e.annual_due_at);
-      }
-      const ok = nextDue === null || nextDue.getTime() > plus30.getTime();
-      if (ok) compCurrent += 1;
+      // Shared walk; current = nothing due inside 30 days (compliant or due in 31-90).
+      const st = deriveCompetencyStatus(e, today);
+      if (st.bucket === "compliant" || st.bucket === "dueSoon90") compCurrent += 1;
     }
     const signalA = compTotal === 0 ? 100 : Math.round((compCurrent / compTotal) * 100);
 
@@ -29388,6 +29345,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   function implausibleCompetencyDate(body: any): string | null {
     const nowY = new Date().getFullYear();
     const fields: [string, any][] = [
+      ["Orientation/training completed date", body?.trainingCompletedAt],
       ["Initial completed date", body?.initialCompletedAt],
       ["6-Month completed date", body?.sixMonthCompletedAt],
       ["1st Annual completed date", body?.firstAnnualCompletedAt],
@@ -29404,6 +29362,76 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return null;
   }
 
+  // One save path for both competency-schedule front doors (legacy /api/staff and
+  // lab-scoped), so they cannot drift. 2026-10-11 (Michael Q74): the record carries
+  // whether the person is a new hire or existing staff, and the orientation/training
+  // that comes before the initial competency (completion date, who documented it, a
+  // link to the record). Training must be on or before the initial; a new hire's
+  // initial needs the training date. Every change is audit-logged, before and after.
+  function saveCompetencySchedule(req: any, res: any, lab: any, emp: any) {
+    const client = (db as any).$client;
+    const body = req.body || {};
+    const dateErr = implausibleCompetencyDate(body);
+    if (dateErr) return res.status(400).json({ error: dateErr });
+    const before = client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(emp.id) as any;
+    // The documentation fields keep their stored value when a caller does not send them.
+    const keep = (key: string, col: string): string | null =>
+      key in body ? (String(body[key] ?? "").trim() || null) : (before?.[col] ?? null);
+    const recordedAs = keep("recordedAs", "recorded_as");
+    if (recordedAs && recordedAs !== "new_hire" && recordedAs !== "existing") {
+      return res.status(400).json({ error: "Recorded as must be New hire or Existing staff." });
+    }
+    const trainingCompletedAt = keep("trainingCompletedAt", "training_completed_at");
+    const trainingDocumentedBy = keep("trainingDocumentedBy", "training_documented_by");
+    const trainingRecordUrl = keep("trainingRecordUrl", "training_record_url");
+    if (trainingRecordUrl && !/^https?:\/\/\S+$/i.test(trainingRecordUrl)) {
+      return res.status(400).json({ error: "Training record link must be a web address starting with http:// or https://." });
+    }
+    const { initialCompletedAt, initialSignedBy, sixMonthCompletedAt, sixMonthSignedBy, firstAnnualCompletedAt, firstAnnualSignedBy, lastAnnualCompletedAt, lastAnnualSignedBy, notes } = body;
+    if (initialCompletedAt && trainingCompletedAt && String(initialCompletedAt) < trainingCompletedAt) {
+      return res.status(400).json({ error: `The initial competency (${initialCompletedAt}) is dated before orientation/training was completed (${trainingCompletedAt}). Training comes first; check both dates.` });
+    }
+    if (initialCompletedAt && recordedAs === "new_hire" && !trainingCompletedAt) {
+      return res.status(400).json({ error: "Enter the date orientation/training was completed. For a new hire it is documented before the initial competency." });
+    }
+    // Due dates come from the shared regulatory engine (server/competencySchedule.ts),
+    // keyed off the recorded completion dates, the lab's accreditor + NYS regime, and the
+    // employee's highest complexity.
+    const due = competencyDueColumns(
+      { accreditor: lab.accreditation_body, nys: lab.includes_nys === 1, highestComplexity: emp.highest_complexity, hireDate: emp.hire_date },
+      { initialCompletedAt, sixMonthCompletedAt, firstAnnualCompletedAt, lastAnnualCompletedAt },
+    );
+    const vals = [
+      initialCompletedAt || null, initialSignedBy || null,
+      due.six_month_due_at, sixMonthCompletedAt || null, sixMonthSignedBy || null,
+      due.first_annual_due_at, firstAnnualCompletedAt || null, firstAnnualSignedBy || null,
+      due.annual_due_at, lastAnnualCompletedAt || null, lastAnnualSignedBy || null,
+      due.nys_six_month_due_at, notes || null,
+      recordedAs, trainingCompletedAt, trainingDocumentedBy, trainingRecordUrl,
+    ];
+    if (before) {
+      client.prepare(
+        `UPDATE staff_competency_schedules SET initial_completed_at=?, initial_signed_by=?, six_month_due_at=?, six_month_completed_at=?, six_month_signed_by=?, first_annual_due_at=?, first_annual_completed_at=?, first_annual_signed_by=?, annual_due_at=?, last_annual_completed_at=?, last_annual_signed_by=?, nys_six_month_due_at=?, notes=?, recorded_as=?, training_completed_at=?, training_documented_by=?, training_record_url=? WHERE employee_id=?`
+      ).run(...vals, emp.id);
+    } else {
+      client.prepare(
+        "INSERT INTO staff_competency_schedules (employee_id, lab_id, initial_completed_at, initial_signed_by, six_month_due_at, six_month_completed_at, six_month_signed_by, first_annual_due_at, first_annual_completed_at, first_annual_signed_by, annual_due_at, last_annual_completed_at, last_annual_signed_by, nys_six_month_due_at, notes, recorded_as, training_completed_at, training_documented_by, training_record_url) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+      ).run(emp.id, lab.id, ...vals);
+    }
+    const schedule = client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(emp.id) as any;
+    const changedFrom: Record<string, any> = {}, changedTo: Record<string, any> = {};
+    for (const k of Object.keys(schedule)) {
+      if (k === "id") continue;
+      const a = before?.[k] ?? null, b = schedule[k] ?? null;
+      if (a !== b) { changedFrom[k] = a; changedTo[k] = b; }
+    }
+    if (Object.keys(changedTo).length) {
+      logAudit({ userId: req.userId, ownerUserId: req.scope?.lab?.owner_user_id ?? req.ownerUserId ?? req.userId, module: "veritastaff", action: before ? "update" : "create",
+        entityType: "competency_schedule", entityId: emp.id, entityLabel: `${emp.first_name} ${emp.last_name}`, before: changedFrom, after: changedTo, ipAddress: req.ip });
+    }
+    res.json(schedule);
+  }
+
   // Update competency schedule
   app.put("/api/staff/competency/:employeeId", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
@@ -29413,51 +29441,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const emp = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ? AND lab_id = ?").get(req.params.employeeId, lab.id) as any;
     if (!emp) return res.status(404).json({ error: "Employee not found" });
-    const legacyDateErr = implausibleCompetencyDate(req.body);
-    if (legacyDateErr) return res.status(400).json({ error: legacyDateErr });
-
-    const { initialCompletedAt, initialSignedBy, sixMonthCompletedAt, sixMonthSignedBy, firstAnnualCompletedAt, firstAnnualSignedBy, lastAnnualCompletedAt, lastAnnualSignedBy, notes } = req.body;
-
-    // Due dates come from the shared regulatory engine (server/competencySchedule.ts),
-    // keyed off the recorded completion dates, the lab's accreditor + NYS regime, and the
-    // employee's highest complexity. Replaces the old inline TJC/CAP math, which skipped
-    // the CLIA 1st-annual milestone and seeded a 6-month for waived-only staff.
-    const due = competencyDueColumns(
-      { accreditor: lab.accreditation_body, nys: lab.includes_nys === 1, highestComplexity: emp.highest_complexity, hireDate: emp.hire_date },
-      { initialCompletedAt, sixMonthCompletedAt, firstAnnualCompletedAt, lastAnnualCompletedAt },
-    );
-    const sixMonthDue = due.six_month_due_at;
-    const firstAnnualDue = due.first_annual_due_at;
-    const annualDue = due.annual_due_at;
-    const nysSixMonthDue = due.nys_six_month_due_at;
-    const actualSixMonth = sixMonthCompletedAt;
-
-    const existing = (db as any).$client.prepare("SELECT id FROM staff_competency_schedules WHERE employee_id = ?").get(req.params.employeeId) as any;
-    if (existing) {
-      (db as any).$client.prepare(
-        `UPDATE staff_competency_schedules SET initial_completed_at=?, initial_signed_by=?, six_month_due_at=?, six_month_completed_at=?, six_month_signed_by=?, first_annual_due_at=?, first_annual_completed_at=?, first_annual_signed_by=?, annual_due_at=?, last_annual_completed_at=?, last_annual_signed_by=?, nys_six_month_due_at=?, notes=? WHERE employee_id=?`
-      ).run(
-        initialCompletedAt || null, initialSignedBy || null,
-        sixMonthDue, actualSixMonth || null, sixMonthSignedBy || null,
-        firstAnnualDue, firstAnnualCompletedAt || null, firstAnnualSignedBy || null,
-        annualDue, lastAnnualCompletedAt || null, lastAnnualSignedBy || null,
-        nysSixMonthDue, notes || null, req.params.employeeId
-      );
-    } else {
-      (db as any).$client.prepare(
-        "INSERT INTO staff_competency_schedules (employee_id, lab_id, initial_completed_at, initial_signed_by, six_month_due_at, six_month_completed_at, six_month_signed_by, first_annual_due_at, first_annual_completed_at, first_annual_signed_by, annual_due_at, last_annual_completed_at, last_annual_signed_by, nys_six_month_due_at, notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-      ).run(
-        req.params.employeeId, lab.id,
-        initialCompletedAt || null, initialSignedBy || null,
-        sixMonthDue, actualSixMonth || null, sixMonthSignedBy || null,
-        firstAnnualDue, firstAnnualCompletedAt || null, firstAnnualSignedBy || null,
-        annualDue, lastAnnualCompletedAt || null, lastAnnualSignedBy || null,
-        nysSixMonthDue, notes || null
-      );
-    }
-
-    const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(req.params.employeeId);
-    res.json(schedule);
+    return saveCompetencySchedule(req, res, lab, emp);
   });
 
   // Lab-scoped competency update. Scopes via tier2_lab_id so multi-lab
@@ -29471,45 +29455,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "SELECT * FROM staff_employees WHERE id = ? AND tier2_lab_id = ?"
     ).get(req.params.employeeId, tier2LabId) as any;
     if (!emp) return res.status(404).json({ error: "Employee not found" });
-    const dateErr = implausibleCompetencyDate(req.body);
-    if (dateErr) return res.status(400).json({ error: dateErr });
-    const { initialCompletedAt, initialSignedBy, sixMonthCompletedAt, sixMonthSignedBy, firstAnnualCompletedAt, firstAnnualSignedBy, lastAnnualCompletedAt, lastAnnualSignedBy, notes } = req.body;
-    // Shared regulatory engine (server/competencySchedule.ts) -- same call as the legacy
-    // recording endpoint, so both front doors produce identical regulation-correct dates.
-    const due = competencyDueColumns(
-      { accreditor: lab.accreditation_body, nys: lab.includes_nys === 1, highestComplexity: emp.highest_complexity, hireDate: emp.hire_date },
-      { initialCompletedAt, sixMonthCompletedAt, firstAnnualCompletedAt, lastAnnualCompletedAt },
-    );
-    const sixMonthDue = due.six_month_due_at;
-    const firstAnnualDue = due.first_annual_due_at;
-    const annualDue = due.annual_due_at;
-    const nysSixMonthDue = due.nys_six_month_due_at;
-    const actualSixMonth = sixMonthCompletedAt;
-    const existing = (db as any).$client.prepare("SELECT id FROM staff_competency_schedules WHERE employee_id = ?").get(req.params.employeeId) as any;
-    if (existing) {
-      (db as any).$client.prepare(
-        `UPDATE staff_competency_schedules SET initial_completed_at=?, initial_signed_by=?, six_month_due_at=?, six_month_completed_at=?, six_month_signed_by=?, first_annual_due_at=?, first_annual_completed_at=?, first_annual_signed_by=?, annual_due_at=?, last_annual_completed_at=?, last_annual_signed_by=?, nys_six_month_due_at=?, notes=? WHERE employee_id=?`
-      ).run(
-        initialCompletedAt || null, initialSignedBy || null,
-        sixMonthDue, actualSixMonth || null, sixMonthSignedBy || null,
-        firstAnnualDue, firstAnnualCompletedAt || null, firstAnnualSignedBy || null,
-        annualDue, lastAnnualCompletedAt || null, lastAnnualSignedBy || null,
-        nysSixMonthDue, notes || null, req.params.employeeId
-      );
-    } else {
-      (db as any).$client.prepare(
-        "INSERT INTO staff_competency_schedules (employee_id, lab_id, initial_completed_at, initial_signed_by, six_month_due_at, six_month_completed_at, six_month_signed_by, first_annual_due_at, first_annual_completed_at, first_annual_signed_by, annual_due_at, last_annual_completed_at, last_annual_signed_by, nys_six_month_due_at, notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-      ).run(
-        req.params.employeeId, lab.id,
-        initialCompletedAt || null, initialSignedBy || null,
-        sixMonthDue, actualSixMonth || null, sixMonthSignedBy || null,
-        firstAnnualDue, firstAnnualCompletedAt || null, firstAnnualSignedBy || null,
-        annualDue, lastAnnualCompletedAt || null, lastAnnualSignedBy || null,
-        nysSixMonthDue, notes || null
-      );
-    }
-    const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(req.params.employeeId);
-    res.json(schedule);
+    return saveCompetencySchedule(req, res, lab, emp);
   });
 
   // Lab-scoped CMS 209 PDF

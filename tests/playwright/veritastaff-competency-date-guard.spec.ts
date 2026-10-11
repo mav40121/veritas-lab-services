@@ -46,7 +46,7 @@ test.describe("VeritaStaff — competency date guard", () => {
     const updateBtn = page.getByRole("button", { name: /Update/i }).first();
     await updateBtn.click().catch(() => {});
     // The dialog title confirms we are in the competency editor.
-    await expect(page.getByText(/Competency Schedule:/i)).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText(/Competency (Schedule|Record):/i)).toBeVisible({ timeout: 8000 });
 
     const dateInput = page.locator('input[type="date"]').first();
     await expect(dateInput).toHaveAttribute("min", "1950-01-01");
@@ -56,7 +56,7 @@ test.describe("VeritaStaff — competency date guard", () => {
     await page.getByRole("button", { name: /^Save$/ }).click();
 
     // The guard must show the "Check the date" toast and must NOT send the PUT.
-    await expect(page.getByText(/Check the date/i)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/Check the (date|record)/i).first()).toBeVisible({ timeout: 5000 });
     expect(putCalls.length, "no competency PUT fired for an implausible year").toBe(0);
   });
 });
