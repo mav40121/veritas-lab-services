@@ -2,7 +2,7 @@
 //
 // Gate 3 step 8 for LHF-1: bench staff sign policies at the Staff Portal kiosk,
 // but no director-facing view read those signatures. This drives the VeritaPolicy
-// compliance dashboard and asserts the new "Staff Portal signatures (kiosk)" card
+// compliance dashboard and asserts the "Staff Portal signatures" card
 // renders, so the director surface actually shows the kiosk signers.
 //
 // Env:
@@ -34,6 +34,6 @@ test.describe("VeritaPolicy compliance: kiosk staff signatures surfaced (LHF-1)"
     // The kiosk-signatures panel is the LHF-1 addition. Its presence proves the
     // director surface now reads staff_portal_policy_signatures, not just
     // writer-account attestations.
-    await expect(page.getByText("Staff Portal signatures (kiosk)")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText("Staff Portal signatures", { exact: true })).toBeVisible({ timeout: 15000 });
   });
 });

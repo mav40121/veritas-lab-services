@@ -88,6 +88,11 @@ async function main() {
   check("7. after the boot recompute every seeded study is still PASS", after.length === rows.length && notPass.length === 0, notPass.map((r) => `${r.id} ${r.test_name} ${r.study_type} ${r.status}`).join("; ") || `${after.length} pass`);
   const gs: string[] = res?.genericScale || [];
   check("8. only the unknown analyte is reported on the generic scale", gs.length > 0 && gs.every((x) => /Zebra Factor/.test(x)), JSON.stringify(gs));
+  // BUG-036: the seeder stamps the VeritaMap date columns, as the study routes do, so the map agrees with Coverage.
+  const mapHgb = sqlite.prepare("SELECT last_method_comp, last_cal_ver FROM veritamap_tests WHERE map_id = ? AND analyte = 'Hemoglobin'").get(map.id) as any;
+  check("9. the map's Hemoglobin row carries the seeded correlation date; the seeder reports what it stamped",
+    (res?.mapDatesStamped?.stamped ?? 0) > 0 && !!hgbMc?.date && mapHgb?.last_method_comp === String(hgbMc.date).slice(0, 10),
+    `${JSON.stringify(res?.mapDatesStamped)} map ${JSON.stringify(mapHgb)} study ${hgbMc?.date}`);
 
   server.close();
   console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);

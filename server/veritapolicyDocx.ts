@@ -197,11 +197,12 @@ function signatureBlock() {
   //   1. Title line with controlled-vocab hint so surveyors can confirm
   //      the signer holds a role authorized to adopt the policy
   //      (Laboratory Director or designee per CLIA §493.1251).
-  //   2. Annual review-due-date line for the lab to mark forward when
-  //      the next review is required (matches §493.1251(b)(13) annual
-  //      review cycle).
-  //   3. Footnote citing 42 CFR §493.1251(b)(13) so the regulatory
-  //      basis for the signature is on the printed page itself.
+  //   2. Next-review-due line for the lab to mark forward. The cycle is the
+  //      lab's own (VeritaDC review interval); CLIA sets no review interval.
+  //   3. Footnote quoting 42 CFR §493.1251(d) (approval before use) so the
+  //      regulatory basis for the signature is on the printed page itself.
+  //      BUG-035 (2026-10-11): this cited §493.1251 paragraph (b)(13), the
+  //      result-reporting system, for an annual review CLIA does not set.
   return new Table({
     width: { size: 9360, type: WidthType.DXA },
     columnWidths: [9360],
@@ -260,14 +261,14 @@ function signatureBlock() {
           new Paragraph({
             spacing: { after: 120 },
             children: [
-              new TextRun({ text: "Annual review due: ", bold: true, color: TEXT_DARK, size: 20, font: "Calibri" }),
+              new TextRun({ text: "Next review due: ", bold: true, color: TEXT_DARK, size: 20, font: "Calibri" }),
               new TextRun({ text: "______________________________________", color: TEXT_DARK, size: 20, font: "Calibri" }),
             ],
           }),
           new Paragraph({
             children: [
               new TextRun({
-                text: "Per 42 CFR §493.1251(b)(13), the laboratory director is responsible for ensuring procedures are reviewed and approved at least annually by the director or designee.",
+                text: "42 CFR §493.1251(d): \"Procedures and changes in procedures must be approved, signed, and dated by the current laboratory director before use.\"",
                 italics: true,
                 color: TEXT_DARK,
                 size: 16,
