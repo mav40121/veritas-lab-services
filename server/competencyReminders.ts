@@ -39,8 +39,26 @@ export function initialCompetencyDueDate(hireDate: string | null | undefined, cr
 
 export type CompetencyBucket = "overdue" | "dueSoon30" | "dueSoon90" | "compliant";
 
+// "Recorded as" on the competency record (2026-10-11, Michael Q74). A NEW HIRE's
+// record starts with orientation/training and the initial competency, which must be
+// on file before the person tests patients. EXISTING STAFF were already testing before
+// the lab kept these records here: the lab enters their most recent competency and the
+// clock runs from it, so a missing initial is not a gap for them. NULL (records saved
+// before this field) reads as a new hire, which is how they were always treated.
+export const isExistingStaffRecord = (e: any): boolean => e?.recorded_as === "existing";
+
+// Cleared for patient testing (42 CFR 493.1445(e)(12) / 493.1407(e)(11): the person
+// demonstrates they can perform the testing before testing patients' specimens).
+export function patientTestingClearance(e: any): { cleared: boolean; label: string } {
+  if (e?.initial_completed_at) return { cleared: true, label: `Cleared ${String(e.initial_completed_at).slice(0, 10)} (initial competency)` };
+  if (isExistingStaffRecord(e)) return { cleared: true, label: "Existing staff: testing before these records" };
+  return { cleared: false, label: "Not cleared: initial competency not on file" };
+}
+
 // The CLIA milestone walk: initial, 6-month, 1st annual, then annual (rolled
 // forward a year when the last annual was completed inside the current cycle).
+// Every server reader (reminders, owed list, dashboard tile, compliance score,
+// attention summary, staff roster badge) calls this one function.
 export function deriveCompetencyStatus(e: any, today: Date): { bucket: CompetencyBucket; reason: string; nextDue: string | null; scheduled: boolean } {
   const parseDate = (s: string | null): Date | null => {
     if (!s) return null;
@@ -52,7 +70,14 @@ export function deriveCompetencyStatus(e: any, today: Date): { bucket: Competenc
   const scheduled = !!(e.initial_completed_at || e.six_month_due_at || e.first_annual_due_at || e.annual_due_at);
   let nextDue: Date | null = null;
   let reason = "";
-  if (!e.initial_completed_at) {
+  const existing = isExistingStaffRecord(e);
+  const anyCompletion = !!(e.initial_completed_at || e.six_month_completed_at || e.first_annual_completed_at || e.last_annual_completed_at);
+  if (existing && !anyCompletion) {
+    // Existing staff with nothing entered yet: the gap is the missing record, not a
+    // missing initial. Same 90-day reminder window from the day they were added.
+    nextDue = initialCompetencyDueDate(null, e.created_at) ?? today;
+    reason = "Most recent competency not entered";
+  } else if (!e.initial_completed_at && !existing) {
     nextDue = initialCompetencyDueDate(e.hire_date, e.created_at) ?? today;
     reason = "Initial competency not completed";
   } else if (e.six_month_due_at && !e.six_month_completed_at) {
@@ -77,6 +102,19 @@ export function deriveCompetencyStatus(e: any, today: Date): { bucket: Competenc
   return { bucket, reason, nextDue: nextDue ? nextDue.toISOString().slice(0, 10) : null, scheduled };
 }
 
+// The roster's competency fields for one employee: the stored schedule plus the
+// server's own reading of it (the same walk as every other reader) and whether the
+// person is cleared for patient testing. The staff pages show this instead of
+// re-deriving status in the browser.
+export function competencyView(emp: any, schedule: any): { competencySchedule: any; competencyStatus: any } {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const row = { ...(schedule || {}), hire_date: emp?.hire_date ?? null, created_at: emp?.created_at ?? null };
+  return {
+    competencySchedule: schedule || null,
+    competencyStatus: { ...deriveCompetencyStatus(row, today), ...patientTestingClearance(row) },
+  };
+}
+
 export interface CompetencyDueItem {
   employeeId: number;
   name: string;
@@ -92,7 +130,8 @@ export function computeCompetencyDue(sqlite: any, labId: number, todayIso: strin
   const rows = sqlite.prepare(
     `SELECT e.id, e.first_name, e.last_name, e.title, e.hire_date, e.created_at,
             s.initial_completed_at, s.six_month_due_at, s.six_month_completed_at,
-            s.first_annual_due_at, s.first_annual_completed_at, s.annual_due_at, s.last_annual_completed_at
+            s.first_annual_due_at, s.first_annual_completed_at, s.annual_due_at, s.last_annual_completed_at,
+            s.recorded_as
      FROM staff_employees e
      LEFT JOIN staff_competency_schedules s ON s.employee_id = e.id
      WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1

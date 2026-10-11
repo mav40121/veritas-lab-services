@@ -831,6 +831,14 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pt_vendor_programs ON pt_vendo
   if (!scsColNames.includes("nys_six_month_due_at")) {
     try { sqlite.exec("ALTER TABLE staff_competency_schedules ADD COLUMN nys_six_month_due_at TEXT"); } catch {}
   }
+  // 2026-10-11 (Michael Q74): competency documentation. recorded_as = 'new_hire' | 'existing'
+  // (NULL on older rows reads as a new hire); orientation/training completion date, who
+  // documented it, and a link to the training record (URL only; files stay in the lab's storage).
+  for (const col of ["recorded_as", "training_completed_at", "training_documented_by", "training_record_url"]) {
+    if (scsColNames.length > 0 && !scsColNames.includes(col)) {
+      try { sqlite.exec(`ALTER TABLE staff_competency_schedules ADD COLUMN ${col} TEXT`); } catch {}
+    }
+  }
 }
 
 // veritamap_test_correlations migration block (idempotent)

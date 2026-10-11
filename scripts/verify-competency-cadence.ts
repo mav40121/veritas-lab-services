@@ -3,6 +3,7 @@
 // Michael's May(Y1) -> January(Y2) NYS proof. Run:
 //   node_modules/.bin/tsx scripts/verify-competency-cadence.ts
 import { nextCompetencyDue, validMilestonesFor, competencyDueColumns, competencySeedAtCreate } from "../server/competencySchedule";
+import { deriveCompetencyStatus, patientTestingClearance } from "../server/competencyReminders";
 
 let pass = 0, fail = 0;
 function eq(label: string, got: any, want: any) {
@@ -66,12 +67,34 @@ function eqCols(label: string, got: any, want: any) {
   if (g === w) { pass++; console.log(`  PASS  ${label}`); }
   else { fail++; console.log(`  FAIL  ${label}\n        got : ${g}\n        want: ${w}`); }
 }
-// CLIA non-waived full chain. Proves the 1st-annual fix: six_month -> first_annual at +6,
-// first_annual -> annual at +12. The OLD inline code skipped first_annual for CLIA.
-eqCols("CLIA non-waived chain (initial/6mo/1st-annual recorded)",
+// CLIA non-waived full chain. 1st annual is pinned to initial + 12 (Michael 2026-10-11:
+// the first year of patient testing runs from the initial), so a 6-month done on 11-20
+// still leaves the 1st annual due 2027-05-15, not 05-20. first_annual -> annual at +12.
+eqCols("CLIA non-waived chain (initial/6mo/1st-annual recorded): 1st annual = initial + 12",
   competencyDueColumns({ accreditor: "CLIA", nys: false, highestComplexity: "H", hireDate: "2026-05-15" },
     { initialCompletedAt: "2026-05-15", sixMonthCompletedAt: "2026-11-20", firstAnnualCompletedAt: "2027-05-25" }),
-  { six_month_due_at: "2026-11-15", first_annual_due_at: "2027-05-20", annual_due_at: "2028-05-25", nys_six_month_due_at: null });
+  { six_month_due_at: "2026-11-15", first_annual_due_at: "2027-05-15", annual_due_at: "2028-05-25", nys_six_month_due_at: null });
+// Michael's example: hired 2026-01-05, initial 3 months later (2026-04-06); 6-month due
+// 2026-10-06 (9 months after hire), 1st annual 2027-04-06 (15 months after hire).
+eqCols("Michael's example: initial 3 months after hire -> 6-month at hire+9, 1st annual at hire+15",
+  competencyDueColumns({ accreditor: "TJC", nys: false, highestComplexity: "H", hireDate: "2026-01-05" },
+    { initialCompletedAt: "2026-04-06", sixMonthCompletedAt: "2026-10-01" }),
+  { six_month_due_at: "2026-10-06", first_annual_due_at: "2027-04-06", annual_due_at: null, nys_six_month_due_at: null });
+eqCols("late 6-month (7.5 months) does not push the 1st annual: still initial + 12",
+  competencyDueColumns({ accreditor: "CLIA", nys: false, highestComplexity: "M", hireDate: "2026-05-15" },
+    { initialCompletedAt: "2026-05-15", sixMonthCompletedAt: "2026-12-30" }),
+  { six_month_due_at: "2026-11-15", first_annual_due_at: "2027-05-15", annual_due_at: null, nys_six_month_due_at: null });
+eqCols("6-month only done at/after initial + 12: first year closed, next due 6 months after it",
+  competencyDueColumns({ accreditor: "CLIA", nys: false, highestComplexity: "H", hireDate: "2026-05-15" },
+    { initialCompletedAt: "2026-05-15", sixMonthCompletedAt: "2027-06-01" }),
+  { six_month_due_at: "2026-11-15", first_annual_due_at: "2027-12-01", annual_due_at: null, nys_six_month_due_at: null });
+eqCols("no initial on file (existing staff, 6-month entered): 1st annual = 6-month + 6",
+  competencyDueColumns({ accreditor: "CLIA", nys: false, highestComplexity: "H", hireDate: "2026-03-01" },
+    { sixMonthCompletedAt: "2026-09-10" }),
+  { six_month_due_at: null, first_annual_due_at: "2027-03-10", annual_due_at: null, nys_six_month_due_at: null });
+eq("TJC pinned 1st annual keeps the semiannual +20d tolerance",
+  r({ recordedMilestone: "six_month", recordedDate: "2026-11-20", initialDate: "2026-05-15", highestComplexity: "H", accreditor: "TJC" }),
+  { nextMilestone: "first_annual", targetDate: "2027-05-15", earliest: null, latest: "2027-06-04" });
 // Waived: NO 6-month, NO 1st-annual (over-application guard). initial -> annual at +12.
 eqCols("waived: only annual, no 6-month / no 1st-annual column",
   competencyDueColumns({ accreditor: "CLIA", nys: false, highestComplexity: "W", hireDate: "2026-05-15" },
@@ -98,6 +121,21 @@ eqCols("non-NYS create seed = all null (waits for recorded initial)",
 eqCols("NYS waived create seed = all null (waived never hire-anchored)",
   competencySeedAtCreate({ accreditor: "TJC", nys: true, highestComplexity: "W", hireDate: "2026-05-15" }),
   { six_month_due_at: null, first_annual_due_at: null, annual_due_at: null, nys_six_month_due_at: null });
+
+console.log("--- deriveCompetencyStatus / patientTestingClearance: new hire vs existing staff ---");
+const T = new Date("2026-10-11T00:00:00");
+const st = (e: any) => deriveCompetencyStatus(e, T);
+const nh = st({ recorded_as: "new_hire", hire_date: "2026-09-01", created_at: "2026-09-01T12:00:00Z" });
+truthy(`new hire, no initial -> "Initial competency not completed" (got ${nh.reason})`, nh.reason === "Initial competency not completed");
+const legacy = st({ recorded_as: null, hire_date: "2015-01-01", created_at: "2026-01-01T12:00:00Z" });
+truthy(`legacy record (recorded_as null), no initial -> read as a new hire (got ${legacy.reason})`, legacy.reason === "Initial competency not completed");
+const exNone = st({ recorded_as: "existing", hire_date: "2015-01-01", created_at: "2026-10-01T12:00:00Z" });
+truthy(`existing staff, nothing entered -> "Most recent competency not entered", added + 90 (got ${exNone.reason} ${exNone.nextDue})`, exNone.reason === "Most recent competency not entered" && exNone.nextDue === "2026-12-30");
+const exAnnual = st({ recorded_as: "existing", hire_date: "2015-01-01", created_at: "2026-10-01T12:00:00Z", last_annual_completed_at: "2026-03-01", annual_due_at: "2027-03-01" });
+truthy(`existing staff with last annual 2026-03-01 -> annual due 2027-03-01, not an initial gap (got ${exAnnual.reason} ${exAnnual.nextDue} ${exAnnual.bucket})`, exAnnual.reason === "Annual competency due" && exAnnual.nextDue === "2027-03-01" && exAnnual.bucket === "compliant");
+truthy("clearance: initial on file -> cleared", patientTestingClearance({ initial_completed_at: "2026-04-06" }).cleared === true);
+truthy("clearance: new hire, no initial -> not cleared", patientTestingClearance({ recorded_as: "new_hire" }).cleared === false);
+truthy("clearance: existing staff, no initial -> cleared as existing staff", /Existing staff/.test(patientTestingClearance({ recorded_as: "existing" }).label));
 
 console.log(`\nTOTAL: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
