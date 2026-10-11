@@ -307,8 +307,9 @@ export function registerVeritaTrackRoutes(
 
       // Wave F1 (VeritaComp move-3, 2026-06-07): staff competency
       // milestones whose due date is in the next 30 days AND have not
-      // been completed yet. CLIA §493.1235 chain: initial, 6-month,
-      // 1st annual, annual. Surveyor reads this as the lab director's
+      // been completed yet. CLIA chain (42 CFR §493.1451(b)(9) high,
+      // §493.1413(b)(9) moderate): initial, 6-month, 1st annual, annual.
+      // Surveyor reads this as the lab director's
       // active competency-management record. Three milestones tracked
       // separately so the worklist labels them ("6-month", "1st annual",
       // "annual") without forcing the director to remember which one
@@ -330,7 +331,13 @@ export function registerVeritaTrackRoutes(
         const candidates: Array<{ milestone: string; dueAt: string | null; doneAt: string | null }> = [
           { milestone: "6-month", dueAt: r.six_month_due_at, doneAt: r.six_month_completed_at },
           { milestone: "1st annual", dueAt: r.first_annual_due_at, doneAt: r.first_annual_completed_at },
-          { milestone: "annual", dueAt: r.annual_due_at, doneAt: r.last_annual_completed_at },
+          // annual_due_at is always the NEXT annual: every save figures it from the
+          // latest completion (server/competencySchedule.ts). last_annual_completed_at
+          // is the PREVIOUS annual, so it only counts against this due date when it
+          // was recorded on or after it. (BUG-028: treating any previous annual as
+          // "done" hid every annual after the first one from this worklist.)
+          { milestone: "annual", dueAt: r.annual_due_at,
+            doneAt: r.last_annual_completed_at && r.annual_due_at && String(r.last_annual_completed_at).slice(0, 10) >= String(r.annual_due_at).slice(0, 10) ? r.last_annual_completed_at : null },
         ];
         for (const c of candidates) {
           if (!c.dueAt || c.doneAt) continue;
