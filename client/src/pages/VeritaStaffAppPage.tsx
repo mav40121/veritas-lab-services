@@ -82,6 +82,22 @@ interface CompetencySchedule {
   last_annual_signed_by: string | null;
   nys_six_month_due_at: string | null;
   notes: string | null;
+  /** 2026-10-11: 'new_hire' | 'existing'; null on records saved before the field (read as a new hire). */
+  recorded_as?: string | null;
+  training_completed_at?: string | null;
+  training_documented_by?: string | null;
+  training_record_url?: string | null;
+}
+
+/** The server's reading of the schedule (server/competencyReminders.ts competencyView): the same
+ *  walk the dashboard tile, owed list, reminders and compliance score use. */
+interface CompetencyStatus {
+  bucket: "overdue" | "dueSoon30" | "dueSoon90" | "compliant";
+  reason: string;
+  nextDue: string | null;
+  scheduled: boolean;
+  cleared: boolean;
+  label: string;
 }
 
 interface Employee {
@@ -110,6 +126,7 @@ interface Employee {
   status: string;
   roles: Role[];
   competencySchedule: CompetencySchedule | null;
+  competencyStatus?: CompetencyStatus | null;
 }
 
 const CMS_SPECIALTIES: Record<number, string> = {
@@ -143,36 +160,23 @@ function isPlausibleYmd(v: string | null | undefined): boolean {
   return y >= 1950 && y <= nowY + 1;
 }
 
-function getCompetencyStatus(schedule: CompetencySchedule | null): { label: string; color: string } {
-  // The other branches all return text + bg + border so the Badge renders
-  // legibly against any page surface. The "Not set" branch used to return
-  // only `text-muted-foreground`, which let the default Badge variant
-  // paint the badge teal (bg-primary) and the text muted gray, producing
-  // gray-on-teal that failed contrast in both light and dark modes
-  // (customer report 2026-06-05 on San Carlos / Ria's session).
-  if (!schedule) return { label: "Not set", color: "text-muted-foreground bg-muted/40 border-muted-foreground/30" };
-
-  const now = new Date();
-  const checkDue = (dueStr: string | null, completedStr: string | null) => {
-    if (!dueStr) return null;
-    if (completedStr) return null; // completed
-    const due = new Date(dueStr);
-    const daysUntil = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    if (daysUntil < 0) return "overdue";
-    if (daysUntil <= 30) return "due-soon";
-    return "current";
-  };
-
-  const statuses = [
-    checkDue(schedule.six_month_due_at, schedule.six_month_completed_at),
-    checkDue(schedule.first_annual_due_at, schedule.first_annual_completed_at),
-    checkDue(schedule.annual_due_at, schedule.last_annual_completed_at),
-  ].filter(Boolean);
-
-  if (statuses.includes("overdue")) return { label: "Overdue", color: "text-red-600 bg-red-500/10 border-red-500/20" };
-  if (statuses.includes("due-soon")) return { label: "Due Soon", color: "text-amber-600 bg-amber-500/10 border-amber-500/20" };
-  return { label: "Current", color: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" };
+function getCompetencyStatus(emp: Employee): { label: string; color: string; title: string } {
+  // Every branch returns text + bg + border so the Badge renders legibly against any
+  // surface (the old "Not set" branch painted gray-on-teal; San Carlos, 2026-06-05).
+  // The status itself is the server's (emp.competencyStatus), so the badge, the dashboard
+  // tile and the reminders cannot disagree.
+  const st = emp.competencyStatus;
+  const title = st ? `${st.label}. ${st.reason}${st.nextDue ? `, due ${st.nextDue}` : ""}` : "";
+  if (!st) return { label: "Not set", color: "text-muted-foreground bg-muted/40 border-muted-foreground/30", title };
+  if (st.bucket === "overdue") return { label: "Overdue", color: "text-red-600 bg-red-500/10 border-red-500/20", title };
+  if (!emp.competencySchedule) return { label: "Not set", color: "text-muted-foreground bg-muted/40 border-muted-foreground/30", title };
+  if (!st.cleared) return { label: "Not cleared", color: "text-amber-600 bg-amber-500/10 border-amber-500/20", title };
+  if (st.bucket === "dueSoon30") return { label: "Due Soon", color: "text-amber-600 bg-amber-500/10 border-amber-500/20", title };
+  return { label: "Current", color: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20", title };
 }
+
+const isWaivedTester = (c?: string | null) => ["W", "WAIVED"].includes(String(c ?? "").trim().toUpperCase());
+const isWebLink = (v: string) => /^https?:\/\/\S+$/i.test(v.trim());
 
 // Top-level switcher between the staff roster and the embedded VeritaCEU
 // (Continuing Education) dashboard. CE lives as a tab in VeritaStaff, not a
@@ -556,7 +560,7 @@ export default function VeritaStaffAppPage() {
               return true;
             })
             .map((emp) => {
-            const compStatus = getCompetencyStatus(emp.competencySchedule);
+            const compStatus = getCompetencyStatus(emp);
             const roleNames = Array.from(new Set(emp.roles.map((r) => r.role)));
             return (
               <Card key={emp.id} data-testid="staff-employee-card" className="hover:border-primary/30 transition-colors cursor-pointer" onClick={() => navigate(labRoute(`/veritastaff-app/${emp.id}`))}>
@@ -1520,9 +1524,13 @@ function CompetencyDialog({ open, onOpenChange, employee, lab }: {
   const { toast } = useToast();
   const activeLabId = useActiveLabId();
   const s = employee.competencySchedule;
-  const includesTJCorCAP = ["TJC", "CAP"].includes(lab.accreditation_body);
+  const waived = isWaivedTester(employee.highest_complexity);
 
   const [form, setForm] = useState({
+    recordedAs: s?.recorded_as || "",
+    trainingCompletedAt: s?.training_completed_at || "",
+    trainingDocumentedBy: s?.training_documented_by || "",
+    trainingRecordUrl: s?.training_record_url || "",
     initialCompletedAt: s?.initial_completed_at || "",
     initialSignedBy: s?.initial_signed_by || "",
     sixMonthCompletedAt: s?.six_month_completed_at || "",
@@ -1534,19 +1542,33 @@ function CompetencyDialog({ open, onOpenChange, employee, lab }: {
     notes: s?.notes || "",
   });
   const [saving, setSaving] = useState(false);
+  const existing = form.recordedAs === "existing";
+  const newHire = form.recordedAs === "new_hire";
 
-  async function handleSave() {
+  // The same checks the server makes, so the person sees the reason before saving.
+  function problem(): string | null {
     for (const [label, v] of [
+      ["Orientation/training completed", form.trainingCompletedAt],
       ["Initial completed", form.initialCompletedAt],
       ["6-Month completed", form.sixMonthCompletedAt],
       ["1st Annual completed", form.firstAnnualCompletedAt],
       ["Annual completed", form.lastAnnualCompletedAt],
     ] as [string, string][]) {
-      if (!isPlausibleYmd(v)) {
-        toast({ title: "Check the date", description: `${label} has an invalid year. Enter a date between 1950 and next year.`, variant: "destructive" });
-        return;
-      }
+      if (!isPlausibleYmd(v)) return `${label} has an invalid year. Enter a date between 1950 and next year.`;
     }
+    if (form.trainingRecordUrl.trim() && !isWebLink(form.trainingRecordUrl)) return "Training record link must be a web address starting with http:// or https://.";
+    if (form.initialCompletedAt && form.trainingCompletedAt && form.initialCompletedAt < form.trainingCompletedAt) {
+      return `The initial competency (${form.initialCompletedAt}) is dated before orientation/training was completed (${form.trainingCompletedAt}). Training comes first; check both dates.`;
+    }
+    if (form.initialCompletedAt && newHire && !form.trainingCompletedAt) {
+      return "Enter the date orientation/training was completed. For a new hire it is documented before the initial competency.";
+    }
+    return null;
+  }
+
+  async function handleSave() {
+    const p = problem();
+    if (p) { toast({ title: "Check the record", description: p, variant: "destructive" }); return; }
     setSaving(true);
     try {
       const competencyUrl = activeLabId
@@ -1557,24 +1579,31 @@ function CompetencyDialog({ open, onOpenChange, employee, lab }: {
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-      if (!res.ok) throw new Error(await res.text());
-      await queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).endsWith('/staff/employees') });
-      toast({ title: "Competency schedule updated" });
+      if (!res.ok) {
+        const t = await res.text();
+        let msg = t; try { msg = JSON.parse(t).error || t; } catch {}
+        throw new Error(msg);
+      }
+      await queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === 'string' && ((q.queryKey[0] as string).endsWith('/staff/employees') || (q.queryKey[0] as string).includes('/staff/employees/') || (q.queryKey[0] as string).includes('/competency/')) });
+      toast({ title: "Competency record saved" });
       onOpenChange(false);
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Not saved", description: err.message, variant: "destructive" });
     } finally {
       setSaving(false);
     }
   }
 
-  function MilestoneRow({ label, dueDate, completedValue, completedKey, signedByValue, signedByKey }: any) {
-    const isDue = dueDate && !completedValue;
-    const isOverdue = isDue && new Date(dueDate) < new Date();
+  // Called as a function, not rendered as <MilestoneRow />: a component declared inside
+  // this one is a new type on every render, so React remounted the inputs on each
+  // keystroke and typing in "Signed by" lost focus after one character.
+  const milestoneRow = (label: string, testid: string, dueDate: string | null | undefined, completedKey: keyof typeof form, signedByKey: keyof typeof form) => {
+    const completedValue = form[completedKey];
+    const isOverdue = !!dueDate && !completedValue && new Date(dueDate) < new Date();
     return (
-      <div className="grid grid-cols-3 gap-2 items-end">
+      <div className="grid grid-cols-3 gap-2 items-center" data-testid={`comp-row-${testid}`}>
         <div>
-          <label className="text-xs font-medium flex items-center gap-1">
+          <label className="text-xs font-medium flex items-center gap-1 flex-wrap">
             {label}
             {dueDate && <span className="text-xs text-muted-foreground">(Due: {dueDate})</span>}
             {isOverdue && <AlertTriangle size={12} className="text-red-500" />}
@@ -1582,51 +1611,89 @@ function CompetencyDialog({ open, onOpenChange, employee, lab }: {
           </label>
         </div>
         <div>
-          <Input type="date" min={DATE_MIN} max={dateMax()} value={completedValue} onChange={(e) => setForm({ ...form, [completedKey]: e.target.value })} className="text-xs" />
+          <Input type="date" min={DATE_MIN} max={dateMax()} value={completedValue} onChange={(e) => setForm((f) => ({ ...f, [completedKey]: e.target.value }))} className="text-xs" data-testid={`comp-${testid}-date`} aria-label={`${label} completed`} />
         </div>
         <div>
-          <Input value={signedByValue} onChange={(e) => setForm({ ...form, [signedByKey]: e.target.value })} placeholder="Signed by" className="text-xs" />
+          <Input value={form[signedByKey]} onChange={(e) => setForm((f) => ({ ...f, [signedByKey]: e.target.value }))} placeholder="Evaluator" className="text-xs" data-testid={`comp-${testid}-by`} aria-label={`${label} evaluator`} />
         </div>
       </div>
     );
-  }
+  };
+
+  const clearance = form.initialCompletedAt && form.trainingCompletedAt && form.initialCompletedAt < form.trainingCompletedAt
+    ? { ok: false, text: "The initial competency is dated before orientation/training. Check both dates before saving." }
+    : form.initialCompletedAt && newHire && !form.trainingCompletedAt
+    ? { ok: false, text: "Enter when orientation/training was completed. For a new hire it comes before the initial competency." }
+    : form.initialCompletedAt
+    ? { ok: true, text: `Cleared for patient testing on ${form.initialCompletedAt} (initial competency).` }
+    : existing
+    ? { ok: true, text: "Existing staff: already testing before these records. Enter the most recent competency on file; the schedule runs from it." }
+    : { ok: false, text: "Not cleared for patient testing until the initial competency is recorded." };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto" data-testid="competency-dialog">
         <DialogHeader>
-          <DialogTitle>Competency Schedule: {employee.first_name} {employee.last_name}</DialogTitle>
+          <DialogTitle>Competency Record: {employee.first_name} {employee.last_name}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
-          <div className="bg-muted/50 rounded-lg p-3 text-xs">
-            <p><strong>Accreditor:</strong> {lab.accreditation_body}{lab.includes_nys ? " + NYS" : ""}</p>
-            <p><strong>Hire Date:</strong> {employee.hire_date || "Not set"}</p>
-            {includesTJCorCAP && <p className="text-amber-600">TJC/CAP: Initial competency required before patient testing.</p>}
+        <div className="space-y-4">
+          <div className="bg-muted/50 rounded-lg p-3 text-xs space-y-0.5">
+            <p><strong>Accreditor:</strong> {lab.accreditation_body}{lab.includes_nys ? " + NYS" : ""} &middot; <strong>Hire Date:</strong> {employee.hire_date || "Not set"}</p>
+            <p className="text-muted-foreground">
+              {waived
+                ? "Waived testing: initial competency before patient testing, then annually."
+                : "Initial competency before patient testing. 6-month due 6 months after the initial, 1st annual 12 months after the initial, then annually."}
+            </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 text-xs font-medium text-muted-foreground border-b pb-1">
-            <div>Milestone</div><div>Completed</div><div>Signed By</div>
+          <div>
+            <div className="text-sm font-medium mb-1.5">Recorded as</div>
+            <div className="grid sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Recorded as">
+              {([
+                ["new_hire", "New hire", "Orientation/training, then the initial competency before patient testing."],
+                ["existing", "Existing staff", "Already testing before these records. Enter the most recent competency."],
+              ] as const).map(([v, t, d]) => (
+                <label key={v} className={`flex items-start gap-2 rounded-md border p-2 cursor-pointer text-xs ${form.recordedAs === v ? "border-primary bg-primary/5" : "border-border"}`}>
+                  <input type="radio" name="recordedAs" value={v} checked={form.recordedAs === v} onChange={() => setForm((f) => ({ ...f, recordedAs: v }))} className="mt-0.5" data-testid={`comp-recorded-as-${v}`} />
+                  <span><span className="font-medium block">{t}</span><span className="text-muted-foreground">{d}</span></span>
+                </label>
+              ))}
+            </div>
           </div>
 
-          {includesTJCorCAP && (
-            <MilestoneRow label="Initial" dueDate={null}
-              completedValue={form.initialCompletedAt} completedKey="initialCompletedAt"
-              signedByValue={form.initialSignedBy} signedByKey="initialSignedBy" />
-          )}
+          <div className="rounded-md border p-3 space-y-2">
+            <div className="text-sm font-medium">Orientation / training {existing && <span className="text-xs font-normal text-muted-foreground">(if on file)</span>}</div>
+            <p className="text-xs text-muted-foreground">Completed and documented before the initial competency.</p>
+            <div className="grid sm:grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs font-medium">Completed</label>
+                <Input type="date" min={DATE_MIN} max={dateMax()} value={form.trainingCompletedAt} onChange={(e) => setForm((f) => ({ ...f, trainingCompletedAt: e.target.value }))} className="text-xs" data-testid="comp-training-date" />
+              </div>
+              <div>
+                <label className="text-xs font-medium">Documented by</label>
+                <Input value={form.trainingDocumentedBy} onChange={(e) => setForm((f) => ({ ...f, trainingDocumentedBy: e.target.value }))} placeholder="Trainer or supervisor" className="text-xs" data-testid="comp-training-by" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium">Training record (link)</label>
+              <Input value={form.trainingRecordUrl} onChange={(e) => setForm((f) => ({ ...f, trainingRecordUrl: e.target.value }))} placeholder="https://... (SharePoint, Drive or your document system)" className="text-xs" data-testid="comp-training-url" />
+            </div>
+          </div>
 
-          <MilestoneRow label="6-Month" dueDate={s?.six_month_due_at}
-            completedValue={form.sixMonthCompletedAt} completedKey="sixMonthCompletedAt"
-            signedByValue={form.sixMonthSignedBy} signedByKey="sixMonthSignedBy" />
+          <div className="space-y-2">
+            <div className="grid grid-cols-3 gap-2 text-xs font-medium text-muted-foreground border-b pb-1">
+              <div>Competency</div><div>Completed</div><div>Evaluator</div>
+            </div>
+            {milestoneRow(existing ? "Initial (if on file)" : "Initial", "initial", null, "initialCompletedAt", "initialSignedBy")}
+            {!waived && milestoneRow("6-Month", "six-month", s?.six_month_due_at, "sixMonthCompletedAt", "sixMonthSignedBy")}
+            {!waived && milestoneRow("1st Annual", "first-annual", s?.first_annual_due_at, "firstAnnualCompletedAt", "firstAnnualSignedBy")}
+            {milestoneRow(existing ? "Most recent annual" : "Annual", "annual", s?.annual_due_at, "lastAnnualCompletedAt", "lastAnnualSignedBy")}
+            <p className="text-[11px] text-muted-foreground">Due dates update when you save.</p>
+          </div>
 
-          {includesTJCorCAP && (
-            <MilestoneRow label="1st Annual" dueDate={s?.first_annual_due_at}
-              completedValue={form.firstAnnualCompletedAt} completedKey="firstAnnualCompletedAt"
-              signedByValue={form.firstAnnualSignedBy} signedByKey="firstAnnualSignedBy" />
-          )}
-
-          <MilestoneRow label="Annual" dueDate={s?.annual_due_at}
-            completedValue={form.lastAnnualCompletedAt} completedKey="lastAnnualCompletedAt"
-            signedByValue={form.lastAnnualSignedBy} signedByKey="lastAnnualSignedBy" />
+          <div data-testid="comp-clearance" className={`rounded-md px-3 py-2 text-xs ${clearance.ok ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-amber-500/10 text-amber-700 dark:text-amber-400"}`}>
+            {clearance.text}
+          </div>
 
           {lab.includes_nys === 1 && s?.nys_six_month_due_at && (
             <div className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1">
@@ -1636,11 +1703,11 @@ function CompetencyDialog({ open, onOpenChange, employee, lab }: {
 
           <div>
             <label className="text-sm font-medium">Notes</label>
-            <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
+            <Textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} />
           </div>
 
-          <div className="flex gap-2 pt-2">
-            <Button onClick={handleSave} disabled={saving} className="flex-1">{saving ? "Saving..." : "Save"}</Button>
+          <div className="flex gap-2 pt-1">
+            <Button onClick={handleSave} disabled={saving} className="flex-1" data-testid="comp-save">{saving ? "Saving..." : "Save"}</Button>
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           </div>
         </div>
@@ -1666,7 +1733,7 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
   // CMS-209 Part B: TC/TS scoped to the entire lab (expands to the lab list on the 209).
   const tcAllLab = employee.roles.some((r) => r.role === "TC" && r.all_specialties);
   const tsAllLab = employee.roles.some((r) => r.role === "TS" && r.all_specialties);
-  const compStatus = getCompetencyStatus(employee.competencySchedule);
+  const compStatus = getCompetencyStatus(employee);
   // Wave H PR H1: termination state for the dialog. The Remove button
   // opens the dialog instead of immediately calling DELETE so the lab
   // director can capture date + reason for the surveyor record.
@@ -1860,24 +1927,42 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
               <div className="flex justify-between items-center mb-3">
                 <h3 className="font-semibold">Competency Schedule</h3>
                 <div className="flex items-center gap-2">
-                  <Badge className={`border ${compStatus.color}`}>{compStatus.label}</Badge>
-                  <Button variant="outline" size="sm" onClick={() => setShowCompetency(true)} disabled={readOnly}>
+                  <Badge className={`border ${compStatus.color}`} title={compStatus.title} data-testid="comp-badge">{compStatus.label}</Badge>
+                  <Button variant="outline" size="sm" onClick={() => setShowCompetency(true)} disabled={readOnly} data-testid="comp-update">
                     <Calendar size={14} className="mr-1" /> Update
                   </Button>
                 </div>
               </div>
-              {employee.competencySchedule ? (
-                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {["TJC", "CAP"].includes(lab.accreditation_body) && (
-                    <MilestoneCard label="Initial" completed={employee.competencySchedule.initial_completed_at} signedBy={employee.competencySchedule.initial_signed_by} />
-                  )}
-                  <MilestoneCard label="6-Month" due={employee.competencySchedule.six_month_due_at} completed={employee.competencySchedule.six_month_completed_at} signedBy={employee.competencySchedule.six_month_signed_by} />
-                  {["TJC", "CAP"].includes(lab.accreditation_body) && (
-                    <MilestoneCard label="1st Annual" due={employee.competencySchedule.first_annual_due_at} completed={employee.competencySchedule.first_annual_completed_at} signedBy={employee.competencySchedule.first_annual_signed_by} />
-                  )}
-                  <MilestoneCard label="Annual" due={employee.competencySchedule.annual_due_at} completed={employee.competencySchedule.last_annual_completed_at} signedBy={employee.competencySchedule.last_annual_signed_by} />
+              {employee.competencySchedule ? (() => {
+                const cs = employee.competencySchedule;
+                const waivedT = isWaivedTester(employee.highest_complexity);
+                const existingT = cs.recorded_as === "existing";
+                return (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs" data-testid="comp-summary">
+                    <span><span className="text-muted-foreground">Recorded as:</span> {existingT ? "Existing staff" : cs.recorded_as === "new_hire" ? "New hire" : "Not set"}</span>
+                    {employee.competencyStatus && (
+                      <span className={employee.competencyStatus.cleared ? "text-emerald-600" : "text-amber-600"}>{employee.competencyStatus.label}</span>
+                    )}
+                  </div>
+                  <div className={`grid sm:grid-cols-2 ${waivedT ? "lg:grid-cols-3" : "lg:grid-cols-5"} gap-4`}>
+                    <div className={`rounded-lg border p-3 ${cs.training_completed_at ? "border-emerald-500/30 bg-emerald-500/5" : "border-border"}`} data-testid="comp-training-card">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        {cs.training_completed_at ? <CheckCircle2 size={14} className="text-emerald-500" /> : <Clock size={14} className="text-muted-foreground" />}
+                        <span className="text-xs font-semibold">Orientation / training</span>
+                      </div>
+                      {cs.training_completed_at ? <p className="text-xs text-emerald-600">Completed: {cs.training_completed_at}</p> : <p className="text-xs text-muted-foreground">{existingT ? "Not entered" : "Not documented"}</p>}
+                      {cs.training_documented_by && <p className="text-xs text-muted-foreground">By: {cs.training_documented_by}</p>}
+                      {cs.training_record_url && <a href={cs.training_record_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline">Training record</a>}
+                    </div>
+                    <MilestoneCard label="Initial" completed={cs.initial_completed_at} signedBy={cs.initial_signed_by} />
+                    {!waivedT && <MilestoneCard label="6-Month" due={cs.six_month_due_at} completed={cs.six_month_completed_at} signedBy={cs.six_month_signed_by} />}
+                    {!waivedT && <MilestoneCard label="1st Annual" due={cs.first_annual_due_at} completed={cs.first_annual_completed_at} signedBy={cs.first_annual_signed_by} />}
+                    <MilestoneCard label="Annual" due={cs.annual_due_at} completed={cs.last_annual_completed_at} signedBy={cs.last_annual_signed_by} />
+                  </div>
                 </div>
-              ) : (
+                );
+              })() : (
                 <p className="text-sm text-muted-foreground">No competency schedule set up yet.</p>
               )}
             </CardContent>

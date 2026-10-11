@@ -127,7 +127,7 @@ Plain-text questions in chat without numbering, without the ★, or without `[my
 - Freeze pane at C2 specifically (columns A=Analyte and B=Instruments always visible)
 
 ## Competency Rules (VeritaComp)
-- Timeline: Initial → 6-month → 1st Annual (6 months after 6-month) → Annual thereafter
+- Timeline (Michael 2026-10-11): orientation/training documented first; Initial before patient testing (no deadline from hire); 6-month at initial + 6; 1st Annual at initial + 12; Annual thereafter. 42 CFR 493.1451(b)(9) / 493.1413(b)(9).
 - Element 1 and 4: Observer initials field (not evaluator) — observer must be LD, TC, or TS
 - Element 3: Date the TECH RAN QC — not date reviewed
 - Evaluator signs completed document — can be same person as observer, both fields required

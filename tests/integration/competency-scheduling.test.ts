@@ -90,11 +90,11 @@ async function main() {
     check("CLIA initial -> six_month_due = 2026-11-15", r1.status === 200 && sched1.six_month_due_at === "2026-11-15", `six=${sched1.six_month_due_at}`);
     check("CLIA initial -> first_annual/annual still null", sched1.first_annual_due_at == null && sched1.annual_due_at == null, `fa=${sched1.first_annual_due_at} an=${sched1.annual_due_at}`);
 
-    // Record the 6-MONTH too -> 1st-annual due = six-month completion + 6 months.
-    // (The OLD inline CLIA math skipped the 1st annual entirely; this is the fix.)
+    // Record the 6-MONTH too -> 1st-annual due = initial + 12 months (pinned; the first year of
+    // patient testing runs from the initial, so the 11-20 six-month does not move it to 05-20).
     const r2 = await put(`/api/staff/competency/${emp1.id}`, { initialCompletedAt: "2026-05-15", sixMonthCompletedAt: "2026-11-20" }, token);
     const sched2: any = await r2.json().catch(() => ({}));
-    check("CLIA 6-month -> first_annual_due = 2027-05-20 (1st-annual fix)", r2.status === 200 && sched2.first_annual_due_at === "2027-05-20", `fa=${sched2.first_annual_due_at}`);
+    check("CLIA 6-month -> first_annual_due = 2027-05-15 (initial + 12)", r2.status === 200 && sched2.first_annual_due_at === "2027-05-15", `fa=${sched2.first_annual_due_at}`);
 
     // ── Flip the lab to NYS, then prove hire-anchoring ──────────────────────────
     const nysLabRes = await post("/api/staff/lab", {

@@ -1,10 +1,19 @@
 // Competency due-date scheduling engine.
 //
-// Sources: reference_competency_cadence_matrix memory; CLIA 42 CFR 493.1235 (CFR-0163:
-// "six months after initial training, again at twelve months from start of patient
-// testing, and at least annually thereafter"); TJC published interval tolerances
-// (6mo = +20d, 12mo = +30d, expressed as a late ceiling); NYS CLEP 10 NYCRR 58-1.2(d)
-// (semiannual = twice per calendar year, 4-8 months apart).
+// Sources: CLIA 42 CFR 493.1451(b)(9) (high complexity) and 493.1413(b)(9) (moderate):
+// "at least semiannually during the first year the individual tests patient specimens.
+// Thereafter, evaluations must be performed at least annually unless test methodology or
+// instrumentation changes ..."; 493.1445(e)(12) / 493.1407(e)(11) require the initial
+// demonstration "prior to testing patients' specimens". (493.1235 is the written-policy
+// standard only; it sets no interval.) TJC published interval tolerances (6mo = +20d,
+// 12mo = +30d, expressed as a late ceiling); NYS CLEP 10 NYCRR 58-1.2(d) (semiannual =
+// twice per calendar year, 4-8 months apart).
+//
+// The clock starts at the INITIAL competency, not the hire date (Michael, 2026-10-11):
+// the initial has no deadline from hire, it only has to come before patient testing. The
+// first year of patient testing runs initial -> initial + 12, so the 6-month is due at
+// initial + 6 and the 1st annual (the second semiannual) at initial + 12, whatever day the
+// 6-month was actually done. Annual after that.
 //
 // Given a competency just RECORDED (milestone + date), the employee's hire date and
 // testing complexity, and the lab's accreditor + regime, returns the NEXT milestone with
@@ -23,6 +32,7 @@ export type CompetencyMilestone = "initial" | "six_month" | "first_annual" | "an
 export interface NextDueInput {
   recordedMilestone: CompetencyMilestone;
   recordedDate: string;              // ISO (YYYY-MM-DD)
+  initialDate?: string | null;       // the recorded initial; pins the 1st annual to initial + 12
   hireDate?: string | null;
   highestComplexity?: string | null; // 'W'/'WAIVED' => waived
   accreditor?: string | null;        // 'TJC' | 'CAP' | 'COLA' | 'CLIA' ...
@@ -116,11 +126,21 @@ export function nextCompetencyDue(input: NextDueInput): NextDueResult {
       rule: `NYS + ${accLabel}: hire-anchored; due by the earlier of the NYS calendar ceiling and the ${accLabel} tolerance (${binds} binds)` };
   }
 
-  // NON-WAIVED national only (CLIA/TJC/CAP): chained from the recorded date.
-  const target = addMonthsIso(d, months);
+  // NON-WAIVED national only (CLIA/TJC/CAP): chained from the recorded date, except the
+  // 1st annual, which closes the first year of patient testing and so is pinned to the
+  // initial + 12 months (a late or early 6-month does not move it). If the 6-month was
+  // only done at or after initial + 12, the first year has already closed and the next
+  // one is due 6 months after it.
+  let target = addMonthsIso(d, months);
+  if (m === "six_month" && input.initialDate) {
+    const pinned = addMonthsIso(input.initialDate, 12);
+    if (pinned > d) target = pinned;
+  }
   return { nextMilestone: next, targetDate: target, earliest: null,
     latest: tjc ? addDaysIso(target, tjcTolDays(months)) : target,
-    rule: tjc
+    rule: m === "six_month" && input.initialDate && target !== addMonthsIso(d, months)
+      ? `${accLabel}: 12 months from the initial (closes the first year of patient testing)${tjc ? `, plus ${tjcTolDays(months)} days` : ""}`
+      : tjc
       ? `${accLabel}: ${months} months from the recorded ${m}, plus ${tjcTolDays(months)} days`
       : `${accLabel}: ${months} months from the recorded ${m} (no published day tolerance; target is the due date)` };
 }
@@ -136,7 +156,7 @@ export function nextCompetencyDue(input: NextDueInput): NextDueResult {
 //
 // Milestone -> column:
 //   initial      -> six_month_due_at   (non-waived)  |  annual_due_at (waived)
-//   six_month    -> first_annual_due_at (non-waived only)
+//   six_month    -> first_annual_due_at (non-waived only; initial + 12 when the initial is on file)
 //   first_annual -> annual_due_at      (non-waived only)
 //   annual       -> annual_due_at      (re-rolls annually)
 // Waived testers (TJC WT.03.01.01 EP 5) have NO 6-month and NO 1st-annual, so
@@ -182,7 +202,7 @@ export function competencyDueColumns(lab: CompetencyLabContext, comp: Competency
     else out.six_month_due_at = r.targetDate;                          // non-waived
   }
   if (!waived && comp.sixMonthCompletedAt) {
-    const r = nextCompetencyDue({ recordedMilestone: "six_month", recordedDate: comp.sixMonthCompletedAt, ...base });
+    const r = nextCompetencyDue({ recordedMilestone: "six_month", recordedDate: comp.sixMonthCompletedAt, initialDate: comp.initialCompletedAt ?? null, ...base });
     out.first_annual_due_at = r.targetDate;
   }
   if (!waived && comp.firstAnnualCompletedAt) {
