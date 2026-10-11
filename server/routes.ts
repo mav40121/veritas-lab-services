@@ -185,6 +185,7 @@ function headerRowHeight(headers: string[], colWidths: number[]): number {
 }
 
 import { logAudit } from "./audit";
+import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
 import {
   deriveCompetencyStatus, competencyView,
   readCompetencyReminderConfig, writeCompetencyReminderConfig, planCompetencyReminders, runCompetencyReminders,
@@ -29456,6 +29457,72 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(req.params.employeeId, tier2LabId) as any;
     if (!emp) return res.status(404).json({ error: "Employee not found" });
     return saveCompetencySchedule(req, res, lab, emp);
+  });
+
+  // Testing Personnel Competency Register (Michael Q74 = 1, plan part C, 2026-10-11): one workbook with every
+  // active testing person's competency dates (hire, orientation/training, initial, 6-month, 1st annual, annual),
+  // whether they are cleared for patient testing, what is due next, and duty-change reevaluations. Read-only;
+  // builder in server/competencyRegisterExcel.ts.
+  app.get("/api/labs/:labId/staff/competency-register.xlsx", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab) && !hasCompetencyAccess(req.user, req.scope?.lab)) {
+      return res.status(403).json({ error: "VeritaStaff™ or VeritaComp™ subscription required" });
+    }
+    const client = (db as any).$client;
+    const labId = req.scope.labId;
+    const staffLab = client.prepare("SELECT * FROM staff_labs WHERE tier2_lab_id = ?").get(labId) as any;
+    const employees = client.prepare(
+      `SELECT e.id, e.first_name, e.last_name, e.middle_initial, e.title, e.highest_complexity, e.hire_date, e.created_at,
+              s.recorded_as, s.training_completed_at, s.training_documented_by, s.training_record_url,
+              s.initial_completed_at, s.initial_signed_by, s.six_month_due_at, s.six_month_completed_at, s.six_month_signed_by,
+              s.first_annual_due_at, s.first_annual_completed_at, s.first_annual_signed_by,
+              s.annual_due_at, s.last_annual_completed_at, s.last_annual_signed_by
+       FROM staff_employees e
+       LEFT JOIN staff_competency_schedules s ON s.employee_id = e.id
+       WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1`
+    ).all(labId) as any[];
+    const label = (r: any) => (r.instrument_name ? `${r.instrument_name}${r.nickname ? ` (${r.nickname})` : ""}` : `Test system #${r.instrument_id}`);
+    const testSystems = new Map<number, string[]>();
+    const assigned = client.prepare(
+      `SELECT sei.employee_id, sei.instrument_id, i.instrument_name, i.nickname
+       FROM staff_employee_instruments sei
+       JOIN staff_employees e ON e.id = sei.employee_id
+       LEFT JOIN veritamap_instruments i ON i.id = sei.instrument_id
+       WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1
+       ORDER BY i.instrument_name`
+    ).all(labId) as any[];
+    for (const a of assigned) {
+      if (!testSystems.has(a.employee_id)) testSystems.set(a.employee_id, []);
+      testSystems.get(a.employee_id)!.push(label(a));
+    }
+    const events = (client.prepare(
+      `SELECT ev.employee_id, ev.instrument_id, ev.detected_at, ev.resolved_at, ev.resolution_type, ev.resolution_reason,
+              i.instrument_name, i.nickname, u.name AS closed_by_user, ca.evaluator_name
+       FROM staff_duty_change_events ev
+       JOIN staff_employees e ON e.id = ev.employee_id
+       LEFT JOIN veritamap_instruments i ON i.id = ev.instrument_id
+       LEFT JOIN users u ON u.id = ev.resolved_by_user_id
+       LEFT JOIN competency_assessments ca ON ca.id = ev.resolved_assessment_id
+       WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1
+       ORDER BY ev.detected_at`
+    ).all(labId) as any[]).map((ev) => ({
+      employee_id: ev.employee_id, test_system: label(ev), detected_at: ev.detected_at, resolved_at: ev.resolved_at,
+      resolution_type: ev.resolution_type, resolution_reason: ev.resolution_reason,
+      closed_by: ev.resolution_type === "not_a_change" ? ev.closed_by_user : ev.evaluator_name,
+    }));
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const rows = buildCompetencyRegisterRows({ employees, testSystems, events, nys: staffLab?.includes_nys === 1 }, today);
+    const labName = req.scope.lab?.lab_name || staffLab?.lab_name || "Laboratory";
+    const cliaNumber = req.scope.lab?.clia_number || staffLab?.clia_number || "";
+    try {
+      const buf = await generateCompetencyRegisterExcel(rows, { labName, cliaNumber }, new Date());
+      const safe = String(labName).replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60) || "Lab";
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="Competency_Register_${safe}_${new Date().toISOString().slice(0, 10)}.xlsx"`);
+      res.send(buf);
+    } catch (err: any) {
+      console.error("[competency-register]", err?.message);
+      res.status(500).json({ error: "Could not build the competency register" });
+    }
   });
 
   // Lab-scoped CMS 209 PDF
