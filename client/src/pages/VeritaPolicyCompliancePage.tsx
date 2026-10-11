@@ -658,14 +658,14 @@ export default function VeritaPolicyCompliancePage() {
         </CardContent>
       </Card>
 
-      {/* Staff Portal signatures (kiosk read-and-sign) — LHF-1 */}
+      {/* Staff Portal signatures (per-person staff logins; the shared kiosk was retired 2026-09-30) — LHF-1 */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Staff Portal signatures (kiosk)</CardTitle>
+          <CardTitle className="text-base">Staff Portal signatures</CardTitle>
         </CardHeader>
         <CardContent>
           {perStaffAttest.length === 0 ? (
-            <div className="text-sm text-muted-foreground">No bench-staff kiosk signatures yet.</div>
+            <div className="text-sm text-muted-foreground">No Staff Portal signatures yet.</div>
           ) : (
             <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-sm">

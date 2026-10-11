@@ -34281,8 +34281,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).all(lid, MARK) as Array<{ instrument: string }>).filter((s) => !instrModelMatches(s.instrument)).length;
 
     const after = dryRun ? null : computeCoverageForLab(sqlite, lid).summary;
+    // BUG-036: stamp the VeritaMap date columns from the studies just written, as the
+    // study create/update routes do; otherwise the map keeps its old dates and its
+    // compliance score disagrees with the Coverage Report.
+    const mapStamp = dryRun ? null : stampMapDatesFromStudies(sqlite, lid);
     res.json({
       ok: true, dryRun: !!dryRun, labId: lid, labName: lab.lab_name, resetArchived, cruftArchived,
+      mapDatesStamped: mapStamp ? { stamped: mapStamp.stamped, byField: mapStamp.byField } : null,
       exemptions: { waived: exemptWaived, noncal: exemptNoncal, alreadySet: exemptSkipped },
       calVer: { candidates: calverCombos.length, gapAnalytes: calGapAnalytes.size, seeded: calSeeded, deduped: calDeduped, gaps: calGaps, skipped: calSkipped },
       methodComparison: { needed: mcAnalytes.length, repaired: mcRepaired, seeded: mcSeeded, gaps: mcGaps, skipped: mcSkipped },
