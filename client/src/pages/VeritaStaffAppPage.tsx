@@ -177,6 +177,11 @@ function getCompetencyStatus(emp: Employee): { label: string; color: string; tit
 }
 
 const isWaivedTester = (c?: string | null) => ["W", "WAIVED"].includes(String(c ?? "").trim().toUpperCase());
+// BUG-031: waived testers read "Moderate" (anything not "H" fell through to Moderate).
+const complexityLabel = (c?: string | null): string => {
+  const v = String(c ?? "").trim().toUpperCase();
+  return v === "H" || v === "HIGH" ? "High" : v === "M" || v === "MODERATE" ? "Moderate" : v === "W" || v === "WAIVED" ? "Waived" : (c || "Not set");
+};
 const isWebLink = (v: string) => /^https?:\/\/\S+$/i.test(v.trim());
 
 // Top-level switcher between the staff roster and the embedded VeritaCEU
@@ -568,19 +573,20 @@ export default function VeritaStaffAppPage() {
             return (
               <Card key={emp.id} data-testid="staff-employee-card" className="hover:border-primary/30 transition-colors cursor-pointer" onClick={() => navigate(labRoute(`/veritastaff-app/${emp.id}`))}>
                 <CardContent className="py-4 px-5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div>
+                  {/* BUG-030: name and badges wrap on a narrow screen (long titles pushed the card past a phone's width). */}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="min-w-0 break-words">
                         <div className="font-semibold">
                           {emp.last_name}, {emp.first_name}{emp.middle_initial ? ` ${emp.middle_initial}.` : ""}
                           {emp.title && <span className="text-muted-foreground font-normal ml-1.5">{emp.title}</span>}
                         </div>
                         <div className="text-xs text-muted-foreground mt-0.5">
-                          Hired: {emp.hire_date || "N/A"} &middot; {emp.highest_complexity === "H" ? "High" : "Moderate"} complexity
+                          Hired: {emp.hire_date || "N/A"} &middot; {complexityLabel(emp.highest_complexity)} complexity
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {roleNames.map((r) => (
                         <Badge key={r} variant="outline" className="font-mono text-xs">{r}</Badge>
                       ))}
@@ -1872,7 +1878,7 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
             <h3 className="font-semibold mb-3">Employee Information</h3>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Hire Date</span><span>{employee.hire_date || "Not set"}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Complexity</span><Badge variant="outline">{employee.highest_complexity === "H" ? "High" : "Moderate"}</Badge></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Complexity</span><Badge variant="outline">{complexityLabel(employee.highest_complexity)}</Badge></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Performs Testing</span><span>{employee.performs_testing ? "Yes" : "No"}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Qualifications</span><span className="text-right max-w-[60%]">{employee.qualifications_text || "N/A"}</span></div>
               {/* Wave H PR H2: verification line. Renders only when at least
