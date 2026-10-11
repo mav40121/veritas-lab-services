@@ -1,9 +1,9 @@
 // Policy review-interval defaults.
 //
 // The federal / accreditor floor for reviewing a lab policy or procedure is
-// BIENNIAL (every 24 months) — CLIA 42 CFR 493.1251(d) requires review when a
-// procedure changes and periodically thereafter, and CAP COM.10000 sets the
-// two-year cadence. Defaulting every policy to annual over-schedules a lab to
+// BIENNIAL (every 24 months). CLIA 42 CFR 493.1251(d) requires the director to
+// approve, sign and date a procedure and each change before use; it sets no
+// periodic interval. CAP COM.10000 sets the two-year cadence. Defaulting every policy to annual over-schedules a lab to
 // twice the required review load, which makes the product feel heavier than the
 // regulation demands.
 //

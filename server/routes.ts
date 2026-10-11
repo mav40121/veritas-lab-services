@@ -28447,14 +28447,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const lots = client.prepare("SELECT COUNT(*) AS n FROM qc_control_lots WHERE lab_id = ? AND status = 'active'").get(labId).n as number;
       push("qc", "QC corrective actions", miss, 0, lots, "active lots");
     } catch {}
-    // Certificate expirations (lab_certificates keyed by the lab owner; due-soon 60d)
+    // Certificate expirations (this lab's certificates, by lab_id, as VeritaLab lists them;
+    // due-soon 60d). BUG-033: keyed by the owner's user_id this counted every lab the owner
+    // owns and missed this lab's certificates filed under another user.
     try {
-      const owner = client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
-      if (owner?.owner_user_id) {
-        const rows = client.prepare("SELECT expiration_date FROM lab_certificates WHERE user_id = ? AND is_active = 1 AND expiration_date IS NOT NULL AND TRIM(expiration_date) <> ''").all(owner.owner_user_id) as any[];
-        let od = 0, ds = 0; for (const r of rows) { const d = daysTo(String(r.expiration_date).slice(0, 10)); if (d < 0) od++; else if (d <= 60) ds++; }
-        push("certificates", "Certificate expirations", od, ds, rows.length, "certificates");
-      }
+      const rows = client.prepare("SELECT expiration_date FROM lab_certificates WHERE lab_id = ? AND is_active = 1 AND expiration_date IS NOT NULL AND TRIM(expiration_date) <> ''").all(labId) as any[];
+      let od = 0, ds = 0; for (const r of rows) { const d = daysTo(String(r.expiration_date).slice(0, 10)); if (d < 0) od++; else if (d <= 60) ds++; }
+      push("certificates", "Certificate expirations", od, ds, rows.length, "certificates");
     } catch {}
     // Competency (testing staff whose next assessment is overdue; due-soon 30d).
     // Mirrors the next-due classification used by /compliance/score.
@@ -39570,23 +39569,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         .all(labId);
 
       // Per-user attestation rate: how many open attestations vs how many
-      // they've completed (all-time).
+      // they've completed (all-time), on THIS lab's current policies (the same
+      // filter as Pending my attestations). BUG-034: the policy join used to sit
+      // beside the attestation join, so other labs' attestations were counted and
+      // a member with none showed 1 pending (the empty join row).
       const perUserAttest = sqlite
         .prepare(
           `SELECT u.id AS user_id, u.name AS user_name, u.email,
-                  SUM(CASE WHEN a.completed_at IS NULL THEN 1 ELSE 0 END) AS pending,
+                  SUM(CASE WHEN a.id IS NOT NULL AND a.completed_at IS NULL THEN 1 ELSE 0 END) AS pending,
                   SUM(CASE WHEN a.completed_at IS NOT NULL THEN 1 ELSE 0 END) AS completed,
                   COUNT(a.id) AS total
              FROM lab_members lm
              JOIN users u ON u.id = lm.user_id
-             LEFT JOIN policy_attestations a ON a.assigned_to_user_id = lm.user_id
-             LEFT JOIN policy_documents d
-               ON d.id = a.document_id AND d.lab_id = lm.lab_id
+             LEFT JOIN (SELECT pa.id, pa.assigned_to_user_id, pa.completed_at
+                          FROM policy_attestations pa
+                          JOIN policy_documents d ON d.id = pa.document_id
+                         WHERE d.lab_id = ? AND d.archived_at IS NULL) a
+               ON a.assigned_to_user_id = lm.user_id
             WHERE lm.lab_id = ? AND lm.status = 'active'
             GROUP BY u.id
             ORDER BY pending DESC, u.name ASC`
         )
-        .all(labId);
+        .all(labId, labId);
 
       // Pending review by step: which docs are sitting in_review at which step.
       const pendingReviewList = sqlite
@@ -39737,19 +39741,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
          ORDER BY d.next_review_date ASC
       `).all(labId) as any[];
 
+      // Same rollup as the dashboard (BUG-034): this lab's current policies only.
       const perUserAttest = sqlite.prepare(`
         SELECT u.name AS user_name, u.email,
-               SUM(CASE WHEN a.completed_at IS NULL THEN 1 ELSE 0 END) AS pending,
+               SUM(CASE WHEN a.id IS NOT NULL AND a.completed_at IS NULL THEN 1 ELSE 0 END) AS pending,
                SUM(CASE WHEN a.completed_at IS NOT NULL THEN 1 ELSE 0 END) AS completed,
                COUNT(a.id) AS total
           FROM lab_members lm
           JOIN users u ON u.id = lm.user_id
-          LEFT JOIN policy_attestations a ON a.assigned_to_user_id = lm.user_id
-          LEFT JOIN policy_documents d ON d.id = a.document_id AND d.lab_id = lm.lab_id
+          LEFT JOIN (SELECT pa.id, pa.assigned_to_user_id, pa.completed_at
+                       FROM policy_attestations pa
+                       JOIN policy_documents d ON d.id = pa.document_id
+                      WHERE d.lab_id = ? AND d.archived_at IS NULL) a
+            ON a.assigned_to_user_id = lm.user_id
          WHERE lm.lab_id = ? AND lm.status = 'active'
          GROUP BY u.id
          ORDER BY pending DESC, u.name ASC
-      `).all(labId) as any[];
+      `).all(labId, labId) as any[];
 
       const headline = sqlite.prepare(`
         SELECT
