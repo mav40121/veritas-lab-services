@@ -6,7 +6,7 @@
 // this year's assessment sees the year-over-year delta at the moment
 // of sign-off.
 //
-// Reg context: 42 CFR §493.1235(b) expects the lab director to track
+// Reg context: 42 CFR §493.1235 (written competency policies) and §493.1445(e)(13) expect the lab director to track
 // patterns over time, not just point-in-time. "Element 3 went from Pass
 // last year to Fail this year on the same QC instrument" is the kind
 // of regression this dialog surfaces inline.
@@ -135,7 +135,7 @@ export function PriorYearComparisonDialog({ open, onOpenChange, assessmentId, la
               </tbody>
             </table>
             <div className="text-[10px] text-muted-foreground mt-3">
-              Cite: 42 CFR §493.1235(b) (lab director tracks patterns over time). E1 / E4 cells include the prior observer's initials when recorded.
+              Cite: 42 CFR §493.1235 and §493.1445(e)(13) / §493.1407(e)(12) (lab director monitors competency over time). E1 / E4 cells include the prior observer's initials when recorded.
             </div>
           </div>
         )}

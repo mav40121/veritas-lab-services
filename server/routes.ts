@@ -25137,7 +25137,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // for the same program (assessment_date < current), with a per-element
   // pass/fail/N-A summary so a lab director signing off on this year's
   // assessment sees the year-over-year delta at the moment of sign-off.
-  // Reg anchor: §493.1235(b) "continuing competency" expects the LD to
+  // Reg anchor: §493.1235 (written competency policies) and §493.1445(e)(13) expect the LD to
   // track patterns over time, not just point-in-time.
   app.get("/api/labs/:labId/competency/assessments/:id/prior-year-comparison", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
@@ -28206,7 +28206,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // GET /api/labs/:labId/competency/reassessment-stats
   //
-  // Wave G PR G2 (2026-06-06). Per §493.1235(b)(7) and TJC HR.01.06.01,
+  // Wave G PR G2 (2026-06-06). Per §493.1445(e)(13) / §493.1407(e)(12) and TJC HR.01.06.01,
   // when an employee fails a competency assessment they must be reassessed
   // and may not perform unsupervised testing on the affected method group
   // until they pass. This endpoint surfaces the failed-without-resolution
@@ -29065,7 +29065,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // includes all six roles (synthesized empties when no row exists)
   // so the client can render six slots without an extra round-trip.
   //
-  // PR review-defense: §493.1235(b)(7) puts the lab director on the
+  // PR review-defense: §493.1445(e)(15) / §493.1407(e)(14) puts the lab director on the
   // hook for documenting "the duties and responsibilities of personnel".
   // A surveyor opens the personnel file expecting a PD per role; this
   // is where the lab stores it.

@@ -599,7 +599,7 @@ export default function VeritaStaffAppPage() {
 
       {/* Wave H PR H3 (2026-06-06): per-CLIA-role position descriptions.
           Surveyors expect to see a written PD per role on file
-          (§493.1235(b)(7)). One card with six expandable role rows. */}
+          (§493.1445(e)(15) / §493.1407(e)(14)). One card with six expandable role rows. */}
       {lab && <PositionDescriptionsCard className="mt-6" />}
 
       {/* Lab Setup Dialog */}
@@ -2855,7 +2855,7 @@ function BulkImportDialog({ open, onOpenChange, lab }: { open: boolean; onOpenCh
 // Wave H PR H3 (2026-06-06). Surfaces the lab's six per-CLIA-role
 // position descriptions. Six expandable rows; each opens to a title
 // input + description textarea + Save button. Reg anchor:
-// 42 CFR §493.1235(b)(7) — lab director documents personnel duties
+// 42 CFR §493.1445(e)(15) / §493.1407(e)(14): the lab director specifies, in writing, personnel duties
 // and responsibilities. The PD is the canonical surveyor artifact.
 
 interface PositionDescription {
@@ -2935,7 +2935,7 @@ function PositionDescriptionsCard({ className = "" }: { className?: string }) {
             <FileText size={16} className="text-primary" />
             <h3 className="font-semibold">Position Descriptions</h3>
             <span className="text-xs text-muted-foreground">
-              one per CLIA role, per §493.1235(b)(7)
+              one per CLIA role, per §493.1445(e)(15) / §493.1407(e)(14)
             </span>
           </div>
         </div>

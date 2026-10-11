@@ -4,7 +4,7 @@
 // from the instrument side. Pick a test system or manual test, then check off which
 // staff run it. Manual tests are just veritamap_instruments rows, so both are
 // covered. Save calls PUT /staff/instruments/:id/employees, which rewrites the join
-// for that instrument and emits the same §493.1235(a) duty-change events as the
+// for that instrument and emits the same duty-change events (§493.1451(b)(9) / §493.1413(b)(9)) as the
 // per-employee path.
 
 import { useEffect, useMemo, useState } from "react";

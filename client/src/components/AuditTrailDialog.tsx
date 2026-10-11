@@ -126,7 +126,7 @@ export function AuditTrailDialog({ open, onOpenChange, assessmentId, labId, empl
           </div>
         )}
         <div className="text-[10px] text-muted-foreground mt-4 border-t border-border pt-2">
-          Coverage: sign, unlock, and delete actions are instrumented as of this release. Create and per-field updates land in a follow-up. Reg anchor: 42 CFR §493.1235(b) (lab director documents personnel actions over time).
+          Coverage: sign, unlock, and delete actions are instrumented as of this release. Create and per-field updates land in a follow-up. Reg anchor: 42 CFR §493.1235 (written competency-assessment policies).
         </div>
       </DialogContent>
     </Dialog>

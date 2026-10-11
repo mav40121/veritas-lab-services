@@ -38,3 +38,8 @@ jobs:
 
       - name: Every crosswalk CFR citation names a section in the eCFR
         run: node scripts/verify-policy-crosswalk-cfr.mjs
+
+      # BUG-012 / BUG-029 (2026-10-11): verification, correlation and competency citations across the app name
+      # paragraphs that exist in the eCFR (42 CFR 493.1235 has none; the six elements are 493.1451(b)(8) / 493.1413(b)(8)).
+      - name: Every verification and competency CFR citation names a real paragraph
+        run: node scripts/verify-cfr-paragraph-citations.mjs

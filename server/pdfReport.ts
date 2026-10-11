@@ -4710,11 +4710,12 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
   const isNonTech = assessment.competency_type === "nontechnical";
 
   const typeLabel = isTechnical ? "Technical Competency Assessment" : isWaived ? "Waived Testing Competency Assessment" : "Non-Technical Competency Assessment";
-  // Wave F PR F1 (2026-06-06). Cite §493.1235 (competency assessment) rather
-  // than §493.1451 (high-complexity testing personnel responsibilities). The
-  // six-element framework rendered on pages 2+ flows directly from
-  // §493.1235(a)(1)-(6); citing the personnel CFR mis-targets the survey
-  // defense. TJC HR.01.06.01 EP 18 (observer qualification) is retained.
+  // Wave F PR F1 (2026-06-06) cites §493.1235 (the competency-assessment policy
+  // standard) in the header. BUG-029 (2026-10-11): §493.1235 is a single sentence
+  // with no paragraphs (eCFR 2026-10-01); the six elements on pages 2+ are listed
+  // at §493.1451(b)(8)(i)-(vi) (technical supervisor, high complexity) and
+  // §493.1413(b)(8)(i)-(vi) (technical consultant, moderate), so each element
+  // cites those. TJC HR.01.06.01 EP 18 (observer qualification) is retained.
   const standardRef = isTechnical ? "HR.01.06.01 EP 18 &middot; 42 CFR &sect;493.1235" : isWaived ? "WT.03.01.01 EP 5 &middot; 42 CFR &sect;493.15" : "HR.01.06.01 EP 5/6";
 
   const passColor = assessment.status === "pass" ? "#437A22" : assessment.status === "fail" ? "#A12C7B" : "#d97706";
@@ -4939,9 +4940,9 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
   // ─── PAGES 2+ ───
 
   if (isTechnical) {
-    // Each element gets its own section. `citation` overrides the default
-    // 42 CFR §493.1235(a)(N) anchor (used for the six CLIA elements) so the NYS
-    // CLEP elements 7 and 8 can cite 10 NYCRR 58-1.2(d) instead.
+    // Each element gets its own section. `citation` overrides the default anchor
+    // (42 CFR §493.1451(b)(8) / §493.1413(b)(8), item (i)-(vi) for elements 1-6) so
+    // the NYS CLEP elements 7 and 8 can cite 10 NYCRR 58-1.2(d) instead.
     const elementDefs: Array<{ num: number; title: string; note: string; citation?: string; cols: string[]; render: (item: any) => string }> = [
       {
         num: 1,
@@ -5046,7 +5047,7 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
       // alongside the activity, not just on page 1.
       html += `<div class="section" style="margin-bottom:6px;">
         <div class="section-header">${elDef.title}</div>
-        <div class="section-note">${elDef.note} <span style="color:#888;font-size:7pt;">(${elDef.citation || `42 CFR &sect;493.1235(a)(${elDef.num})`})</span></div>
+        <div class="section-note">${elDef.note} <span style="color:#888;font-size:7pt;">(${elDef.citation || `42 CFR &sect;493.1451(b)(8)(${["i", "ii", "iii", "iv", "v", "vi"][elDef.num - 1] ?? elDef.num}) / &sect;493.1413(b)(8)(${["i", "ii", "iii", "iv", "v", "vi"][elDef.num - 1] ?? elDef.num})`})</span></div>
         <table>
           <tr>${elDef.cols.map(c => `<th>${c}</th>`).join("")}</tr>`;
 

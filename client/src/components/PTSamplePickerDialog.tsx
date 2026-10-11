@@ -11,7 +11,7 @@
 // owner) but no employee_id. The picker shows lab-level events; the
 // director picks which one was run by the employee being assessed.
 //
-// Reg context: 42 CFR §493.1235(a)(5) is the Element 5 requirement
+// Reg context: 42 CFR §493.1451(b)(8)(v) / §493.1413(b)(8)(v) is the Element 5 requirement
 // (blind / PT sample performance). The PT report is the supporting
 // record; the picker just makes recording WHICH event easier.
 
@@ -66,7 +66,7 @@ export function PTSamplePickerDialog({ open, onOpenChange, labId, programId, onS
           <DialogTitle>Import PT sample from VeritaPT</DialogTitle>
         </DialogHeader>
         <div className="text-xs text-muted-foreground mb-3">
-          Recent PT events for this lab, filtered to analytes used by this program. Click Select to populate Element 5 with the chosen event's identifiers. Reg anchor: 42 CFR §493.1235(a)(5).
+          Recent PT events for this lab, filtered to analytes used by this program. Click Select to populate Element 5 with the chosen event's identifiers. Reg anchor: 42 CFR §493.1451(b)(8)(v) / §493.1413(b)(8)(v).
         </div>
         {isLoading && (
           <div className="text-sm text-muted-foreground py-8 text-center">Loading PT events...</div>
