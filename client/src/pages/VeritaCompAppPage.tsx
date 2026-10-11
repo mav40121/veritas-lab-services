@@ -4,6 +4,8 @@ import { Link, useLocation, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
+import { CompetencyRegisterButton } from "@/components/CompetencyRegisterButton";
+import { CompetencyTimingPanel } from "@/components/CompetencyTimingPanel";
 import { useIsReadOnly, useCanRecord } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
@@ -819,8 +821,9 @@ function ProgramListView() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
-      <div className="flex items-start justify-between gap-4 mb-8">
-        <div>
+      {/* BUG-030: the button row wraps under the title on narrow screens (it ran 660px off a phone screen). */}
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-8">
+        <div className="md:shrink-0">
           <div className="flex items-center gap-2 mb-1">
             <h1 className="text-2xl font-bold tracking-tight">VeritaComp{"™"}</h1>
             <Badge variant="outline" className="text-xs bg-primary/5 text-primary border-primary/20">Beta</Badge>
@@ -829,13 +832,14 @@ function ProgramListView() {
             CLIA Competency Assessment Management
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 md:justify-end">
           {/*
             * PR A (2026-06-05, customer-blockers wave item #1): top-level
             * "New Assessment". Skips the picker when only one program exists.
             * Friendly toast if zero programs (the lab director needs to
             * make a program first).
             */}
+          <CompetencyRegisterButton size="default" />
           <Button
             variant="outline"
             onClick={() => setBundleOpen(true)}
@@ -908,6 +912,8 @@ function ProgramListView() {
         </div>
       </div>
 
+      {/* 2026-10-11 (Michael Q74 part C): the competency clock in plain words, with the CFR text. */}
+      <CompetencyTimingPanel />
       {/* #48: employee-centric competencies owed, derived from VeritaStaff, with gap detection */}
       <CompetenciesOwedSection />
       {/* 2026-10-08: weekly supervisor digest, director escalation, monthly 90/60/30 report */}

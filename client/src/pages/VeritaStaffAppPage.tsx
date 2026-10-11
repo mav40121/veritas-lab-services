@@ -3,6 +3,7 @@ import { Link, useLocation, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
+import { CompetencyRegisterButton } from "@/components/CompetencyRegisterButton";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
@@ -413,7 +414,8 @@ export default function VeritaStaffAppPage() {
             </p>
           )}
         </div>
-        <div className="flex gap-2">
+        {/* BUG-030: the button row wraps on narrow screens (it ran 427px off a phone screen). */}
+        <div className="flex flex-wrap gap-2">
           {lab && (
             <>
               <Button variant="outline" size="sm" onClick={() => setShowAddEmployee(true)} disabled={readOnly}>
@@ -444,6 +446,7 @@ export default function VeritaStaffAppPage() {
                 <Archive size={14} className="mr-1.5" />
                 {generatingPacket ? "Building packet..." : "Day-1 Survey Packet"}
               </Button>
+              <CompetencyRegisterButton />
             </>
           )}
         </div>
