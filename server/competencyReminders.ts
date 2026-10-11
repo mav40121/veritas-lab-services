@@ -268,12 +268,12 @@ export function planCompetencyReminders(sqlite: any, labId: number, cfg: Compete
   const ownerList = owner?.email ? [{ email: owner.email, ...(owner.name ? { name: owner.name } : {}) }] : [];
 
   let supervisors = cfg.supervisor_recipients, supSource = "supervisor list";
-  if (!supervisors.length) { supervisors = ownerList; supSource = "lab owner (no supervisor list set)"; }
+  if (!supervisors.length) { supervisors = ownerList; supSource = "lab owner; no supervisor list set"; }
   let directors = cfg.escalation_recipients, dirSource = "escalation list";
   if (!directors.length && lab?.medical_director_email && EMAIL_RE.test(lab.medical_director_email)) {
-    directors = [{ email: lab.medical_director_email }]; dirSource = "medical director on file (no escalation list set)";
+    directors = [{ email: lab.medical_director_email }]; dirSource = "medical director on file; no escalation list set";
   }
-  if (!directors.length) { directors = ownerList; dirSource = "lab owner (no escalation list or medical director set)"; }
+  if (!directors.length) { directors = ownerList; dirSource = "lab owner; no escalation list or medical director set"; }
 
   const all = computeCompetencyDue(sqlite, labId, todayIso);
   const overdue = all.filter((i) => i.daysUntil < 0).sort((a, b) => a.daysUntil - b.daysUntil);
