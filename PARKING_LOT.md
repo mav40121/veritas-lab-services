@@ -602,6 +602,52 @@ _(item #88 closed 2026-10-08; see C91 below)_
 **Source:** 2026-10-08, found reading db.ts while building the roster prompt (#1553). First written up as a disaster-recovery risk; a fresh-database test disproved that the same evening.
 **Status:** Open. Removal is built on branch roster-index-90 and waiting for a ship OK.
 ---
+### 91. VeritaComp employee page shows the six CLIA elements for a waived instrument
+
+**Effort:** S (1-3 days)
+**Importance:** High. Point-of-care competency is the first thing hospital systems ask about (St. Charles, 10/14), and a waived tester's page asks for elements CLIA does not require for waived testing.
+
+**What:** the employee-centric competency page (client/src/pages/VeritaCompEmployeePage.tsx) builds one tab per assigned test system and always shows "CLIA (6 elements)": direct observation, monitoring results, QC, maintenance, blind sample, problem solving. For an all-waived instrument (a glucose meter, a urine dipstick reader) the requirement is the accreditor's waived competency, at hire and annually by two of four methods (the waived program type already models "2 of 4 methods per test"). Riverside's Lisa Thompson (Nova StatStrip) shows the six-element form. Fix: when a test system's tests are all WAIVED, show the waived methods instead of the six elements, and record it against the lab's waived program (coverage already counts waived programs since BUG-037, #1596).
+
+**Source:** St. Charles demo dry run, 2026-10-11 (Michael Q81 = 1).
+**Status:** Open. Run sheet says not to open Lisa Thompson's page on Wednesday.
+
+---
+
+### 92. VeritaLab auto-adds a CLIA certificate keyed on the person, not the lab
+
+**Effort:** XS (under a day)
+**Importance:** Medium. Latent: it can put one person's CLIA number into another lab's certificate list.
+
+**What:** GET /api/veritalab/certificates (server/routes.ts) auto-creates a "CLIA Certificate" when the signed-in user has users.clia_number and no active CLIA certificate WHERE user_id = that user, then files it under the ACTIVE lab. The check and the number both come from the person, not the lab: a member whose own CLIA certificate sits in another lab, or who has none, opens a different lab and gets their CLIA number inserted there. POST /api/clia/confirm has the same user-keyed dedupe. Fix: dedupe on the active lab (lab_id) and take the number from labs.clia_number. Found during the BUG-033 bug-class sweep; no wrong rows found on the 10/11 production copy.
+
+**Source:** BUG-033 sweep, 2026-10-11.
+**Status:** Open.
+
+---
+
+### 93. VeritaMap's SOP review column is separate from VeritaDC
+
+**Effort:** M (1-2 weeks)
+**Importance:** Medium. The map's compliance panel shows "17 SOP overdue" for a lab whose policies live in VeritaDC with their own review dates.
+
+**What:** veritamap_tests.last_sop_review is a hand-entered date per analyte with a 24-month cycle (client/src/pages/VeritaMapMapPage.tsx). VeritaDC tracks each policy's approval, version and next review date. The two never meet, so a lab keeps two sets of review dates or the map reads red. Options: link an analyte's SOP to a VeritaDC document and read its last approval date (the way VeritaCheck studies now stamp cal ver and correlation dates), or drop the SOP column from the map's score. Needs Michael's call.
+
+**Source:** St. Charles demo dry run, 2026-10-11 (Riverside map 1 reads 82% with "17 SOP overdue").
+**Status:** Open. Needs Michael's call on link vs drop.
+
+---
+
+### 94. Surveyor public links list keeps expired and revoked links forever
+
+**Effort:** XS (under a day)
+**Importance:** Low. Cosmetic, but it is on the screen a lab shows a surveyor.
+
+**What:** the "Surveyor public links" card on the VeritaDC Compliance page lists every link ever made, including expired and revoked ones. Riverside shows four 5/29 "QA test link" rows (two expired, two revoked). Fix: show active links by default with a "Show expired and revoked" toggle; the audit of each link stays.
+
+**Source:** St. Charles demo dry run, 2026-10-11.
+**Status:** Open.
+---
 
 ## CLOSED (audit trail)
 
