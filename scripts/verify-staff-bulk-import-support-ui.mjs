@@ -1,0 +1,72 @@
+// scripts/verify-staff-bulk-import-support-ui.mjs
+// Gate 3 browser receipt for BUG-014 / BUG-032 (2026-10-11): Veritas support, working in a client lab, opens
+// VeritaStaff Bulk Import, downloads the template, uploads a filled roster, previews and imports it, and the people
+// land on the CLIENT's roster, filed under the client's owner. LOCAL server + scratch DB only. Usage:
+//   PW_BASE=http://localhost:5160 SCRATCH_DB=<scratch db> OUT=<dir> node scripts/verify-staff-bulk-import-support-ui.mjs
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+const { chromium } = require("@playwright/test");
+const Database = require("better-sqlite3");
+const ExcelJS = require("exceljs");
+const BASE = process.env.PW_BASE || "http://localhost:5160", ADMIN = process.env.ADMIN_SECRET || "test-admin-secret", OUT = process.env.OUT || ".";
+const call = async (method, path, body, token) => { const r = await fetch(BASE + path, { method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) }); try { return await r.json(); } catch { return {}; } };
+let failures = 0;
+const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAIL"}  ${name}${detail ? "  :: " + detail : ""}`); if (!cond) failures++; };
+const stamp = Date.now();
+const ownerEmail = `bi-owner-${stamp}@example.com`, vlsEmail = `bi-vls-${stamp}@example.com`;
+const owner = await call("POST", "/api/auth/register", { email: ownerEmail, password: "testpass123", name: "Client Owner", hipaa_acknowledged: true });
+const vls = await call("POST", "/api/auth/register", { email: vlsEmail, password: "testpass123", name: "Veritas Support", hipaa_acknowledged: true });
+const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail, labName: "Client Roster Lab", plan: "hospital" })).labId;
+await call("POST", `/api/labs/${labId}/staff/lab`, { labName: "Client Roster Lab", cliaNumber: "11D7654350", accreditationBody: "CLIA_ONLY", complexity: "high" }, owner.token);
+await call("POST", "/api/admin/vls-support/user", { secret: ADMIN, email: vlsEmail, enabled: true });
+const sdb = new Database(process.env.SCRATCH_DB);
+sdb.prepare("UPDATE users SET has_completed_onboarding = 1, onboarding_seen = 1 WHERE email IN (?, ?)").run(ownerEmail, vlsEmail);
+sdb.prepare("UPDATE labs SET has_completed_onboarding = 1 WHERE id = ?").run(labId);
+const ownerId = sdb.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId).owner_user_id;
+sdb.close();
+check("fixture: client lab, Veritas support flagged", !!labId && !!vls.token);
+
+const browser = await chromium.launch();
+const ctx = await browser.newContext({ viewport: { width: 1400, height: 1000 }, acceptDownloads: true });
+const page = await ctx.newPage();
+await page.goto(`${BASE}/`);
+const me = await page.evaluate(async ([b, tk]) => { const r = await fetch(`${b}/api/auth/me`, { headers: { Authorization: `Bearer ${tk}` } }); return r.ok ? r.json() : null; }, [BASE, vls.token]);
+await page.evaluate(([tk, u, lab]) => { localStorage.setItem("veritas_token", tk); if (u) localStorage.setItem("veritas_user", JSON.stringify(u.user || u)); localStorage.setItem("veritas_active_lab_id", String(lab)); localStorage.setItem("theme", "light"); }, [vls.token, me, labId]);
+await page.goto(`${BASE}/labs/${labId}/veritastaff-app`, { waitUntil: "networkidle" });
+await page.getByRole("button", { name: /Bulk Import/ }).first().click();
+const dlTrigger = page.getByRole("button", { name: /template/i }).first();
+await dlTrigger.waitFor({ timeout: 15000 });
+const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 30000 }), dlTrigger.click()]);
+const tplPath = `${OUT}/bi_template.xlsx`;
+await dl.saveAs(tplPath);
+const wb = new ExcelJS.Workbook(); await wb.xlsx.readFile(tplPath);
+const ros = wb.getWorksheet("Roster");
+check("Veritas support downloads the client lab's import template from the dialog", !!ros, dl.suggestedFilename());
+const put = (row, vals) => vals.forEach((v, i) => { ros.getRow(row).getCell(i + 1).value = v; });
+put(2, [null, "Upload", "Ana", "", "MLS(ASCP)", "2019-04-01", "", "H", "Y", "", "", "", "Y", "", "", "", "", "N", "N"]);
+put(3, [null, "Upload", "Bo", "", "MLT(ASCP)", "2021-08-15", "", "M", "Y", "", "", "", "", "", "Y", "", "", "N", "N"]);
+for (let r = 4; r <= ros.rowCount; r++) ros.getRow(r).values = [];
+const upPath = `${OUT}/bi_roster.xlsx`;
+await wb.xlsx.writeFile(upPath);
+await page.locator('input[type="file"]').first().setInputFiles(upPath);
+const previewBtn = page.getByRole("button", { name: /Preview/i }).first();
+if (await previewBtn.count()) await previewBtn.click();
+await page.getByText(/Upload, Ana|Ana Upload|Upload/).first().waitFor({ timeout: 20000 }).catch(() => {});
+await page.waitForTimeout(1000);
+const dlgText = (await page.getByRole("dialog").innerText()).replace(/\s+/g, " ");
+check("preview lists both people", /Ana/.test(dlgText) && /Bo\b/.test(dlgText), dlgText.slice(0, 200));
+await page.screenshot({ path: `${OUT}/bi_preview.png` });
+await page.getByRole("button", { name: /Import|Commit/i }).last().click();
+await page.waitForTimeout(2500);
+await page.goto(`${BASE}/labs/${labId}/veritastaff-app`, { waitUntil: "networkidle" });
+const cards = await page.getByTestId("staff-employee-card").allInnerTexts();
+check("the two people are on the client's roster", cards.filter((c) => /Upload, (Ana|Bo)/.test(c.replace(/\s+/g, " "))).length === 2, cards.map((c) => c.replace(/\s+/g, " ").slice(0, 40)).join(" | "));
+await page.screenshot({ path: `${OUT}/bi_roster.png` });
+const sdb2 = new Database(process.env.SCRATCH_DB);
+const rows = sdb2.prepare("SELECT user_id, tier2_lab_id FROM staff_employees WHERE last_name = 'Upload'").all();
+const audit = sdb2.prepare("SELECT acting_as, owner_user_id FROM audit_log WHERE entity_type = 'bulk_import' ORDER BY id DESC LIMIT 1").get();
+sdb2.close();
+check("filed under the client's owner, in the client lab; audit stamped acting_as vls_support", rows.length === 2 && rows.every((r) => r.user_id === ownerId && r.tier2_lab_id === labId) && audit?.acting_as === "vls_support" && audit?.owner_user_id === ownerId, `${JSON.stringify(rows)} ${JSON.stringify(audit)}`);
+await browser.close();
+console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
+process.exit(failures === 0 ? 0 : 1);
