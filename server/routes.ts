@@ -13371,6 +13371,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // lab_members member of the lab that owns it. Replaces the legacy
   // `WHERE id = ? AND user_id = ?` check on veritamap_maps which 404'd
   // for lab_members members of multi-lab labs they don't own.
+  // BUG-038: a row in the lab this request is scoped to is in reach. req.scope.labId is only
+  // ever a lab the caller may access (labScopeMiddleware, which also admits Veritas support,
+  // or authMiddleware's membership-validated resolveActiveLabForRequest fallback), so this
+  // adds no new reach for members and lets Veritas support use the lab-scoped routes.
+  function inScopedLab(req: any, labId: any): boolean {
+    return labId != null && req.scope?.labId != null && Number(req.scope.labId) === Number(labId);
+  }
+
   function userCanAccessMap(mapId: number | string, req: any): any | null {
     const map = (db as any).$client.prepare(
       "SELECT * FROM veritamap_maps WHERE id = ?"
@@ -13384,6 +13392,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).get(map.lab_id, req.userId);
       if (member) return map;
     }
+    if (inScopedLab(req, map.lab_id)) return map;
     return null;
   }
 
@@ -13401,6 +13410,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).get(row.lab_id, req.userId);
       if (member) return row;
     }
+    if (inScopedLab(req, row.lab_id)) return row;
     return null;
   }
 
@@ -13415,6 +13425,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).get(row.lab_id, req.userId);
       if (member) return row;
     }
+    if (inScopedLab(req, row.lab_id)) return row;
     return null;
   }
 
@@ -13429,6 +13440,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).get(row.lab_id, req.userId);
       if (member) return row;
     }
+    if (inScopedLab(req, row.lab_id)) return row;
     return null;
   }
 
@@ -13443,6 +13455,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).get(row.lab_id, req.userId);
       if (member) return row;
     }
+    if (inScopedLab(req, row.lab_id)) return row;
     return null;
   }
 
@@ -13462,6 +13475,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).get(row.lab_id, req.userId);
       if (member) return row;
     }
+    if (inScopedLab(req, row.lab_id)) return row;
     return null;
   }
 
@@ -13481,6 +13495,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).get(row.lab_id, req.userId);
       if (member) return row;
     }
+    if (inScopedLab(req, row.lab_id)) return row;
     return null;
   }
 
