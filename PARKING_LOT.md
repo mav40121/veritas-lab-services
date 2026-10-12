@@ -634,22 +634,23 @@ _(item #88 closed 2026-10-08; see C91 below)_
 **What:** veritamap_tests.last_sop_review is a hand-entered date per analyte with a 24-month cycle (client/src/pages/VeritaMapMapPage.tsx). VeritaDC tracks each policy's approval, version and next review date. The two never meet, so a lab keeps two sets of review dates or the map reads red. Options: link an analyte's SOP to a VeritaDC document and read its last approval date (the way VeritaCheck studies now stamp cal ver and correlation dates), or drop the SOP column from the map's score. Needs Michael's call.
 
 **Source:** St. Charles demo dry run, 2026-10-11 (Riverside map 1 reads 82% with "17 SOP overdue").
-**Status:** Open. Needs Michael's call on link vs drop.
+**Decision (Michael Q85 = 1, 2026-10-11):** link, after the 10/14 St. Charles demo. Each analyte's SOP links to a VeritaDC policy and the map reads that policy's last review date.
+**Build breakdown (steps 1 and 2 approved, Q86 = 1):**
+1. Server: `veritamap_tests.sop_document_id` (nullable, ALTER migration). Set or clear it on the lab-scoped map route; the policy must be in the same lab and not archived. The map's test rows return the linked policy's title, status, last review date (newest `policy_signoffs` row with action 'approved' or 'recertified') and next review date. SOP overdue = linked policy not approved, or its next review date has passed. Rows with no link keep the hand-entered `last_sop_review` exactly as today. The map Excel export and the VeritaTrack seeding read the same derived date.
+2. Client: the SOP Review cell gets "Link policy" (search this lab's VeritaDC policies), then shows the policy title, its last review date and a status chip, with Unlink; one policy can be linked to several analytes at once (one chemistry procedure often covers many tests).
+3. Optional: the VeritaDC policy row shows "Used by N tests on VeritaMap".
+Receipts: an integration test for the derivation (linked, unlinked fallback, unapproved, review passed, recertified) that fails on the old code, and a browser receipt for the link picker.
+**Status:** Steps 1 and 2 approved (Michael Q86 = 1, 2026-10-11); build starts Thursday 10/15. Step 3 stays parked.
 
----
-
-### 94. Surveyor public links list keeps expired and revoked links forever
-
-**Effort:** XS (under a day)
-**Importance:** Low. Cosmetic, but it is on the screen a lab shows a surveyor.
-
-**What:** the "Surveyor public links" card on the VeritaDC Compliance page lists every link ever made, including expired and revoked ones. Riverside shows four 5/29 "QA test link" rows (two expired, two revoked). Fix: show active links by default with a "Show expired and revoked" toggle; the audit of each link stays.
-
-**Source:** St. Charles demo dry run, 2026-10-11.
-**Status:** Open.
 ---
 
 ## CLOSED (audit trail)
+
+### C94. Surveyor public links list kept expired and revoked links forever (was #94)
+
+**Effort:** was XS / **Importance:** Low.
+
+**Closure evidence:** PR #1598 (squash 1602f46a, Michael Q84 = 1). The VeritaDC Compliance card lists active links by default, with "Show expired and revoked (N)" / "Hide expired and revoked"; with links on file but none active it says "No active surveyor links. Create one when a survey starts." Nothing deleted; revoke and the per-link audit are unchanged. Local browser receipt 6/6 (the old card fails check 1). Production check on Riverside as the Demo User: live 1602f46a. Light and dark: by default 0 rows with 'No active surveyor links. Create one when a survey starts.' and 'Show expired and revoked (4)'; after Show, the 4 old QA links with their status (2026-10-11).
 
 ### C93. Staff logins see the same app as editors, recording allowed, setup locked (was #84)
 
