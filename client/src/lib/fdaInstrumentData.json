@@ -42876,5 +42876,81 @@
       }
     },
     "menuLastVerifiedAt": "2026-10-09"
+  },
+  "PHC PATHFAST": {
+    "vendor": "PHC Corporation",
+    "category": "Immunoassay",
+    "testCount": 6,
+    "tests": {
+      "Troponin-I (cardiac)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Myoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Creatine kinase MB fraction (CKMB)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "C-reactive protein (CRP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "B-type natriuretic peptide (BNP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "D-dimer": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    },
+    "menuLastVerifiedAt": "2026-10-12"
+  },
+  "CoaguSense Coag-Sense PT/INR Monitoring System (Professional)": {
+    "vendor": "CoaguSense",
+    "category": "Point of Care",
+    "testCount": 1,
+    "tests": {
+      "Prothrombin time (PT)": {
+        "complexity": "WAIVED",
+        "specialty": "Hematology"
+      }
+    },
+    "menuLastVerifiedAt": "2026-10-12"
+  },
+  "Nova StatSensor Creatinine Hospital Meter": {
+    "vendor": "Nova Biomedical",
+    "category": "Point of Care",
+    "testCount": 1,
+    "tests": {
+      "Creatinine": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      }
+    },
+    "menuLastVerifiedAt": "2026-10-12"
+  },
+  "Meridian Curian Analyzer": {
+    "vendor": "Meridian Bioscience",
+    "category": "Microbiology",
+    "testCount": 3,
+    "tests": {
+      "Shiga toxin antigen (Escherichia coli)": {
+        "complexity": "MODERATE",
+        "specialty": "Bacteriology"
+      },
+      "Campylobacter antigen": {
+        "complexity": "MODERATE",
+        "specialty": "Bacteriology"
+      },
+      "Helicobacter pylori stool antigen (HpSA)": {
+        "complexity": "MODERATE",
+        "specialty": "Bacteriology"
+      }
+    },
+    "menuLastVerifiedAt": "2026-10-12"
   }
 }

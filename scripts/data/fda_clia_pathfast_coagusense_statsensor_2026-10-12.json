@@ -1,0 +1,130 @@
+{
+  "source": "FDA CLIA database (accessdata.fda.gov/scripts/cdrh/cfdocs/cfClia), records sent by Michael 2026-10-12 (screenshots of the FDA results pages); Curian records sent 2026-10-12 (also Redington-Fairview in-app request #5, REQ-038).",
+  "PHC PATHFAST": [
+    {
+      "TEST_SYSTEM_NAME": "PHC Corporation, PATHFAST Analyzer {PHC Corporation, PATHFAST hs-cTnI-II}",
+      "DOCUMENT_NUMBER": "CR230386",
+      "PARENT": "K231974",
+      "ANALYTE_NAME": "Troponin-I (cardiac)",
+      "SPECIALTY": "General Chemistry",
+      "COMPLEXITY": "MODERATE",
+      "EFFECTIVE_DATE": "04/16/2024"
+    },
+    {
+      "TEST_SYSTEM_NAME": "Mitsubishi Chemical Medience Corp. PATHFAST Analyzer",
+      "DOCUMENT_NUMBER": "K100130",
+      "PARENT": "K100130",
+      "ANALYTE_NAME": "Troponin-I (cardiac)",
+      "SPECIALTY": "General Chemistry",
+      "COMPLEXITY": "MODERATE",
+      "EFFECTIVE_DATE": "06/14/2011"
+    },
+    {
+      "TEST_SYSTEM_NAME": "Mitsubishi Kagaku Iatron Inc. PATHFAST Analyzer",
+      "DOCUMENT_NUMBER": "K081360",
+      "PARENT": "K081360",
+      "ANALYTE_NAME": "Myoglobin",
+      "SPECIALTY": "General Chemistry",
+      "COMPLEXITY": "MODERATE",
+      "EFFECTIVE_DATE": "08/18/2009"
+    },
+    {
+      "TEST_SYSTEM_NAME": "Mitsubishi Kagaku Iatron Inc. PATHFAST Analyzer",
+      "DOCUMENT_NUMBER": "K081360",
+      "PARENT": "K081360",
+      "ANALYTE_NAME": "Creatine kinase MB fraction (CKMB)",
+      "SPECIALTY": "General Chemistry",
+      "COMPLEXITY": "MODERATE",
+      "EFFECTIVE_DATE": "08/18/2009"
+    },
+    {
+      "TEST_SYSTEM_NAME": "PATHFAST Diagnostic System {D-Dimer Assay}",
+      "DOCUMENT_NUMBER": "K072288",
+      "PARENT": "K072288",
+      "ANALYTE_NAME": "Antithrombin III (ATIII)",
+      "SPECIALTY": "Hematology",
+      "COMPLEXITY": "MODERATE",
+      "EFFECTIVE_DATE": "05/07/2009",
+      "NOTE": "The analyte field on this FDA record reads ATIII, but the record's test system is the PATHFAST D-Dimer Assay (510(k) K072288). The library lists it as D-dimer, the assay the record clears, with the record's complexity and specialty."
+    },
+    {
+      "TEST_SYSTEM_NAME": "Mitsubishi Kagaku Iatron Inc. PATHFAST Analyzer",
+      "DOCUMENT_NUMBER": "K083412",
+      "PARENT": "K083412",
+      "ANALYTE_NAME": "C-reactive protein (CRP)",
+      "SPECIALTY": "General Immunology",
+      "COMPLEXITY": "MODERATE",
+      "EFFECTIVE_DATE": "03/12/2009"
+    },
+    {
+      "TEST_SYSTEM_NAME": "Mitsubishi Kagaku Iatron Inc. PATHFAST Analyzer",
+      "DOCUMENT_NUMBER": "K072189",
+      "PARENT": "K072189",
+      "ANALYTE_NAME": "B-type natriuretic peptide (BNP)",
+      "SPECIALTY": "General Chemistry",
+      "COMPLEXITY": "MODERATE",
+      "EFFECTIVE_DATE": "02/08/2008"
+    }
+  ],
+  "CoaguSense Coag-Sense PT/INR Monitoring System (Professional)": [
+    {
+      "TEST_SYSTEM_NAME": "Coag-Sense Prothrombin Time (PT)/INR Monitoring System {Professional Use}",
+      "DOCUMENT_NUMBER": "K050243",
+      "PARENT": "K050243",
+      "ANALYTE_NAME": "Prothrombin time (PT)",
+      "SPECIALTY": "Hematology",
+      "COMPLEXITY": "WAIVED",
+      "EFFECTIVE_DATE": "01/16/2013"
+    },
+    {
+      "TEST_SYSTEM_NAME": "CoaguSense Prothrombin Time (PT)/INR Monitoring System {Professional Use}",
+      "DOCUMENT_NUMBER": "K050243",
+      "PARENT": "K050243",
+      "ANALYTE_NAME": "Prothrombin time (PT)",
+      "SPECIALTY": "Hematology",
+      "COMPLEXITY": "WAIVED",
+      "EFFECTIVE_DATE": "09/20/2011",
+      "NOTE": "The Self-Test (prescription home use, K093243) records are not a laboratory device and are not added."
+    }
+  ],
+  "Nova StatSensor Creatinine Hospital Meter": [
+    {
+      "TEST_SYSTEM_NAME": "Nova Biomedical Corp. StatSensor Creatinine Hospital Meter System {StatSensor Creatinine Test Strips}",
+      "DOCUMENT_NUMBER": "CR170203",
+      "PARENT": "K171059",
+      "ANALYTE_NAME": "Creatinine",
+      "SPECIALTY": "General Chemistry",
+      "COMPLEXITY": "MODERATE",
+      "EFFECTIVE_DATE": "06/02/2017"
+    }
+  ],
+  "Meridian Curian Analyzer": [
+    {
+      "TEST_SYSTEM_NAME": "Meridian Bioscience, Inc., Curian Shiga Toxin and Curian Analyzer (antigen)",
+      "DOCUMENT_NUMBER": "CR220334",
+      "PARENT": "K222829",
+      "ANALYTE_NAME": "Escherichia coli",
+      "SPECIALTY": "Bacteriology",
+      "COMPLEXITY": "MODERATE",
+      "EFFECTIVE_DATE": "04/20/2023"
+    },
+    {
+      "TEST_SYSTEM_NAME": "Meridian Bioscience, Inc., Curian Campy and Curian Analyzer (Antigen)",
+      "DOCUMENT_NUMBER": "CR210128",
+      "PARENT": "K210976",
+      "ANALYTE_NAME": "Campylobacter",
+      "SPECIALTY": "Bacteriology",
+      "COMPLEXITY": "MODERATE",
+      "EFFECTIVE_DATE": "01/05/2022"
+    },
+    {
+      "TEST_SYSTEM_NAME": "Meridian Bioscience, Inc., Curian HpSA and Curian Analyzer (antigen)",
+      "DOCUMENT_NUMBER": "CR190611",
+      "PARENT": "K192817",
+      "ANALYTE_NAME": "Helicobacter pylori",
+      "SPECIALTY": "Bacteriology",
+      "COMPLEXITY": "MODERATE",
+      "EFFECTIVE_DATE": "03/18/2020"
+    }
+  ]
+}
