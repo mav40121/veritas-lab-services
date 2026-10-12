@@ -1,6 +1,7 @@
 import { useAuth } from "@/components/AuthContext";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useMemberships, type Membership } from "@/hooks/useMemberships";
+import { pickCurrentMembership } from "@/lib/currentLab";
 
 // Multi-Lab Tier 2 Phase 4.3c: subscription state sourced from the active
 // lab's membership row when available, with user-level fallback for
@@ -31,13 +32,8 @@ function computeAccessLevel(expiresAtISO: string | null | undefined): AccessLeve
 
 function pickActive(memberships: Membership[] | undefined, activeLabId: number | null): Membership | null {
   if (!memberships || memberships.length === 0) return null;
-  if (activeLabId) {
-    const m = memberships.find(x => x.labId === activeLabId);
-    if (m) return m;
-  }
-  // Fall back to primary lab
-  const primary = memberships.find(x => x.isPrimaryLab);
-  return primary ?? memberships[0];
+  // URL lab, else the lab the user was last in, else primary (BUG-041).
+  return pickCurrentMembership(memberships, activeLabId);
 }
 
 export function useActiveSubscription(): ActiveSubscription {

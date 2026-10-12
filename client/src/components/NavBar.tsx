@@ -5,7 +5,7 @@ import { useIsStaffLogin } from "@/hooks/useStaffLogin";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, TestTube, User, LogOut, LayoutDashboard, Play, ListChecks, ShieldCheck } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { LabSwitcher, LabSwitcherMobile } from "@/components/LabSwitcher";
 import { PendingStaffPortalBell } from "@/components/PendingStaffPortalBell";
@@ -13,6 +13,8 @@ import { useLabRoute } from "@/hooks/useLabRoute";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { isStockHost, isSingleSiteDemo } from "@/lib/host";
+import { setActiveLabId } from "@/lib/auth";
+import { pickCurrentMembership } from "@/lib/currentLab";
 
 // Mobile menu IA \u2014 mirrors the desktop nav structure (top-level links +
 // collapsible groups) instead of dumping every route as a flat 27-item
@@ -115,10 +117,16 @@ export function NavBar() {
   const labRoute = useLabRoute();
   const { data: memberships } = useMemberships();
   const activeLabId = useActiveLabId();
-  const activeMembership =
-    memberships?.find(m => m.labId === activeLabId) ??
-    memberships?.find(m => m.isPrimaryLab) ??
-    memberships?.[0];
+  // BUG-041: remember the lab the user is IN (any /labs/:id page), not only
+  // the one last picked in the switcher. The VeritaAssure menu links to
+  // un-prefixed module paths, and LegacyWorkspaceRedirect resolves those to
+  // this remembered lab; without it a module switch from a lab the switcher
+  // cannot make primary (Veritas support or org access, or one opened from a
+  // link) landed in the user's primary lab.
+  useEffect(() => {
+    if (isLoggedIn && activeLabId) setActiveLabId(activeLabId);
+  }, [isLoggedIn, activeLabId]);
+  const activeMembership = pickCurrentMembership(memberships, activeLabId) ?? undefined;
   const showMembersLink = activeMembership && (activeMembership.role === "owner" || activeMembership.role === "admin");
   const membersHref = activeMembership ? `/labs/${activeMembership.labId}/members` : null;
 

@@ -5,6 +5,7 @@ import { groupMembershipsByOrg, hasOrgGrouping } from "@/lib/orgGrouping";
 import { useActiveLabId, withLabPrefix } from "@/hooks/useActiveLabId";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { setActiveLabId } from "@/lib/auth";
+import { pickCurrentMembership } from "@/lib/currentLab";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ChevronDown, Building2, Check, Users, Gauge, FolderOpen } from "lucide-react";
@@ -82,19 +83,17 @@ function useLabSwitcherState() {
   if (!memberships || memberships.length === 0) return null;
   if (memberships.length === 1) return null;
 
-  const current =
-    memberships.find(m => m.labId === activeLabId) ??
-    memberships.find(m => m.isPrimaryLab) ??
-    memberships[0];
+  // BUG-041: on a page with no lab in its URL, show the lab the user was last in, not the primary.
+  const current = pickCurrentMembership(memberships, activeLabId)!;
 
   const switchTo = async (m: Membership) => {
     if (m.labId === current.labId) return;
+    // BUG-041: remember the chosen lab even when the server cannot make it the
+    // default (403 for a Veritas-support or org-access lab with no membership),
+    // so pages with no lab in their URL keep showing and using it.
+    setActiveLabId(m.labId);
     try {
       await apiRequest("POST", "/api/labs/me/default", { labId: m.labId });
-      // Persist alongside the server-side default so authHeaders() can carry
-      // X-Active-Lab-Id on un-prefixed pages too (only on success, so the
-      // persisted value never diverges from the server default).
-      setActiveLabId(m.labId);
     } catch {}
     // Refetch memberships + auth/me and AWAIT them before navigating, so the
     // new active lab is fully settled first. These power:

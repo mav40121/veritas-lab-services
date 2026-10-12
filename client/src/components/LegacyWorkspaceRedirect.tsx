@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { useMemberships } from "@/hooks/useMemberships";
-import { isLoggedIn as authIsLoggedIn, setActiveLabId } from "@/lib/auth";
+import { isLoggedIn as authIsLoggedIn, setActiveLabId, getPersistedActiveLabId } from "@/lib/auth";
 
 // Wraps a legacy unprefixed workspace route (e.g. /dashboard,
 // /veritapolicy-app, /study/:id/results) and redirects to its lab-scoped
@@ -11,7 +11,8 @@ import { isLoggedIn as authIsLoggedIn, setActiveLabId } from "@/lib/auth";
 //   - user has zero memberships (onboarding case, no lab to redirect to)
 //   - current URL is already lab-scoped (defensive; shouldn't reach here)
 //
-// The destination lab is the user's primary membership (the /api/labs/me
+// The destination lab is the lab the user was last in, if still theirs (BUG-041),
+// else the user's primary membership (the /api/labs/me
 // response is server-side ordered: is_primary_lab DESC, id ASC), which
 // matches users.default_lab_id from Phase 1 backfill.
 //
@@ -34,7 +35,13 @@ export function LegacyWorkspaceRedirect({ children, appPath }: { children: React
 
   useEffect(() => {
     if (!willRedirect) return;
-    const target = memberships![0];
+    // BUG-041: stay in the lab the user was last in (remembered by NavBar on
+    // every /labs/:id page and by the switcher) when it is still in their lab
+    // list; fall back to the primary membership. Going straight to the primary
+    // moved a user out of a Veritas-support or org-access lab on every module
+    // switch from the VeritaAssure menu, whose links have no lab in them.
+    const remembered = getPersistedActiveLabId();
+    const target = memberships!.find((m) => m.labId === remembered) ?? memberships![0];
     // Persist the resolved lab so authHeaders() on any later un-prefixed page
     // carries X-Active-Lab-Id instead of leaving the server to pick a default.
     // A single-membership seat user never opens the LabSwitcher, so without

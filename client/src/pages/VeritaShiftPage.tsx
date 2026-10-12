@@ -6,6 +6,7 @@ import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useMemberships } from "@/hooks/useMemberships";
+import { pickCurrentMembership } from "@/lib/currentLab";
 import { staffingGridFte } from "@shared/operationsForecast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -634,7 +635,7 @@ export default function VeritaShiftPage() {
   // Active lab for scoping staffing studies (see VeritaPacePage for rationale).
   const activeLabIdFromUrl = useActiveLabId();
   const { data: memberships } = useMemberships();
-  const labId = activeLabIdFromUrl ?? memberships?.find((m) => m.isPrimaryLab)?.labId ?? memberships?.[0]?.labId ?? null;
+  const labId = activeLabIdFromUrl ?? pickCurrentMembership(memberships, null)?.labId ?? null; // BUG-041
   const labQ = labId != null ? `?labId=${labId}` : "";
 
   // Staffing grid (leverage chain, Phase 3): the shift build that produces the FTE need.
