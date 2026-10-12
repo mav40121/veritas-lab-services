@@ -3,6 +3,7 @@ import { AlertTriangle, Lock, ArrowRight } from "lucide-react";
 import { resolveSeatPermission } from "@shared/schema";
 import { useActiveSubscription } from "@/hooks/useActiveSubscription";
 import { useMemberships } from "@/hooks/useMemberships";
+import { pickCurrentMembership } from "@/lib/currentLab";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 
 // Multi-Lab Tier 2 Phase 4.3c: accessLevel and subscription dates source
@@ -40,7 +41,7 @@ export function useIsReadOnly(module?: string): boolean {
   // lab wins, full stop.
   const activeMembership = activeLabId
     ? memberships?.find(m => m.labId === activeLabId)
-    : (memberships?.find(m => m.isPrimaryLab) ?? memberships?.[0]);
+    : (pickCurrentMembership(memberships, null) ?? undefined); // BUG-041: remembered lab before primary
   if (activeMembership && (activeMembership.role === 'owner' || activeMembership.role === 'admin')) {
     return false;
   }

@@ -105,13 +105,16 @@ function getActiveLabIdFromUrl(): number | null {
   return m ? Number(m[1]) : null;
 }
 
-// The lab the user last SWITCHED to, persisted so it survives navigation to an
-// un-prefixed page and page refreshes. LabSwitcher.switchTo sets this in the
-// same step it updates the server-side default lab, so the two stay aligned.
+// The lab the user was last IN, persisted so it survives navigation to an
+// un-prefixed page and page refreshes. LabSwitcher.switchTo sets it with the
+// server-side default lab, and NavBar sets it on every /labs/:id page
+// (BUG-041), so a lab the switcher cannot make primary (Veritas support or org
+// access) is still remembered. Every use is validated (server: membership;
+// LegacyWorkspaceRedirect: the user's own lab list).
 export function setActiveLabId(labId: number): void {
   try { localStorage.setItem(ACTIVE_LAB_KEY, String(labId)); } catch {}
 }
-function getPersistedActiveLabId(): number | null {
+export function getPersistedActiveLabId(): number | null {
   try {
     const v = Number(localStorage.getItem(ACTIVE_LAB_KEY));
     return Number.isFinite(v) && v > 0 ? v : null;

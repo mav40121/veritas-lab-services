@@ -8,6 +8,7 @@ import { downloadPdfToken } from "@/lib/utils";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useMemberships } from "@/hooks/useMemberships";
+import { pickCurrentMembership } from "@/lib/currentLab";
 import { forecastFromGoal, chainGap } from "@shared/operationsForecast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -94,7 +95,7 @@ export default function VeritaPacePage() {
   // lab the switcher last activated).
   const activeLabIdFromUrl = useActiveLabId();
   const { data: memberships } = useMemberships();
-  const labId = activeLabIdFromUrl ?? memberships?.find((m) => m.isPrimaryLab)?.labId ?? memberships?.[0]?.labId ?? null;
+  const labId = activeLabIdFromUrl ?? pickCurrentMembership(memberships, null)?.labId ?? null; // BUG-041
   const labQ = labId != null ? `?labId=${labId}` : "";
   const [tab, setTab] = useState<"data" | "dashboard">("dashboard");
   const [months, setMonths] = useState<ProductivityMonth[]>([]);

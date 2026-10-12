@@ -1,0 +1,9 @@
+{
+  "source": "FDA CLIA database (accessdata.fda.gov/scripts/cdrh/cfdocs/cfClia), searched 2026-10-12: Analyte_Name=procalcitonin, Test_System_Name=vitros; Test_System_Name=xt7600; Analyte_Name=thyroid stimulating, Test_System_Name=vitros",
+  "records": [
+    {"TEST_SYSTEM_NAME": "Ortho-Clinical Diagnostics VITROS 5600/ XT7600 Integrated System {BRAHMS PCT}", "ANALYTE_NAME": "Procalcitonin (PCT)", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "05/04/2020", "DOCUMENT_NUMBER": "CR200191", "PARENT_DOCUMENT_NUMBER": "K200236", "SPECIALTY": "Endocrinology"}
+  ],
+  "tsh_on_xt7600": "No FDA CLIA record names the XT 7600 for TSH. TSH records exist for VITROS 5600 (K081543, 10/28/2008), VITROS 3600 (K083173), VITROS ECiQ (K962919), VITROS ECi (K964558), all MODERATE. Per BUG-009 rules (FDA records only, nothing inferred) TSH is not added to the XT 7600 library menu; a lab running it adds it on its own map.",
+  "xt7600_records_total": 7,
+  "xt7600_records": ["CA 19-9 (12/19/2023)", "CEA (12/15/2023)", "T3 Uptake II (04/10/2023)", "Total T3 II (04/10/2023)", "Prolactin (03/13/2023)", "Procalcitonin (5600/ XT7600, 05/04/2020)", "Phenobarbital (01/28/2020)"]
+}
