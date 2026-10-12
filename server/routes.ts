@@ -34002,7 +34002,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // allowlisted. Audited, because this rewrites a regulatory value on a
   // customer's live map. rebuildMapTests then propagates to the rollup.
   app.post("/api/admin/veritamap/set-complexity", (req, res) => {
-    const { secret, labId, instrumentNameLike, analyte, analytes, complexity, dryRun } = req.body || {};
+    const { secret, labId, mapId: wantMapId, instrumentNameLike, analyte, analytes, complexity, dryRun } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
 
     const list: string[] = Array.isArray(analytes)
@@ -34024,8 +34024,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const sqlite = (db as any).$client;
     const maps = sqlite.prepare("SELECT id FROM veritamap_maps WHERE lab_id = ?").all(Number(labId)) as Array<{ id: number }>;
     if (maps.length === 0) return res.status(404).json({ error: `no map for lab ${labId}` });
-    if (maps.length > 1) return res.status(400).json({ error: `lab ${labId} has ${maps.length} maps; ambiguous`, mapIds: maps.map((m) => m.id) });
-    const mapId = maps[0].id;
+    // Same rule as add-analyte: a lab with several maps names the map with mapId, and it must be one of this lab's maps.
+    if (wantMapId !== undefined && wantMapId !== null && !maps.some((m) => m.id === Number(wantMapId))) {
+      return res.status(400).json({ error: `map ${wantMapId} is not one of lab ${labId}'s maps`, mapIds: maps.map((m) => m.id) });
+    }
+    if (wantMapId == null && maps.length > 1) return res.status(400).json({ error: `lab ${labId} has ${maps.length} maps; ambiguous, pass mapId`, mapIds: maps.map((m) => m.id) });
+    const mapId = wantMapId != null ? Number(wantMapId) : maps[0].id;
 
     const instruments = sqlite.prepare(
       "SELECT id, instrument_name FROM veritamap_instruments WHERE map_id = ? AND instrument_name LIKE ?"

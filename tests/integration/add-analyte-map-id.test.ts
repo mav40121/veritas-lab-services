@@ -11,6 +11,8 @@
 //      untouched) and the map's veritamap_tests rollup lists the analyte
 //   5. a repeat is skipped-exists (no duplicate)
 //   6. a single-map lab without mapId works as before
+//   7-9. POST /api/admin/veritamap/set-complexity: same mapId rule (refused without it on a multi-map lab, foreign map
+//      refused, dryRun writes nothing, run touches only the named map, single-map lab unchanged)
 // Run (from bash): DB_PATH=.tmp-aa.db JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy npx tsx tests/integration/add-analyte-map-id.test.ts
 import http from "node:http";
 import express from "express";
@@ -89,6 +91,23 @@ async function main() {
 
   const single = await post("/api/admin/veritamap/add-analyte", { secret: ADMIN, labId: other.labId, instrumentNameLike: "VITROS", analyte: "Procalcitonin (PCT)", copyFromAnalyte: "Lipase", dryRun: true });
   check("6. single-map lab without mapId works as before", single.s === 200 && single.j.mapId === otherMap && single.j.results?.[0]?.action === "would-insert", `${single.s} ${JSON.stringify(single.j)}`);
+
+  // set-complexity had the same one-map refusal (Riverside, two maps: Clinitek Novus pH/SG WAIVED -> MODERATE, 2026-10-12).
+  const sc = { secret: ADMIN, labId: A.labId, instrumentNameLike: "VITROS", analytes: ["Lipase"], complexity: "HIGH" };
+  const scAmb = await post("/api/admin/veritamap/set-complexity", { ...sc, dryRun: true });
+  const scForeign = await post("/api/admin/veritamap/set-complexity", { ...sc, mapId: otherMap, dryRun: true });
+  check("7. set-complexity: two maps and no mapId refused (map ids listed); a foreign mapId refused",
+    scAmb.s === 400 && /ambiguous/.test(scAmb.j.error) && [mapPoc, mapChem].every((m) => scAmb.j.mapIds?.includes(m)) && scForeign.s === 400 && /not one of lab/.test(scForeign.j.error),
+    `${scAmb.s} ${scAmb.j.error} | ${scForeign.s} ${scForeign.j.error}`);
+  const scDry = await post("/api/admin/veritamap/set-complexity", { ...sc, mapId: mapPoc, dryRun: true });
+  const scRun = await post("/api/admin/veritamap/set-complexity", { ...sc, mapId: mapPoc });
+  check("8. set-complexity with mapId: dryRun writes nothing; run changes only that map's instrument (the other map's Lipase untouched)",
+    scDry.s === 200 && scDry.j.results?.length === 1 && scDry.j.results[0].action === "would-update" &&
+    scRun.s === 200 && scRun.j.results?.length === 1 && scRun.j.results[0].instrumentId === pocVitros && scRun.j.results[0].action === "updated" &&
+    rows(pocVitros, "Lipase")[0]?.complexity === "HIGH" && rows(chemVitros, "Lipase")[0]?.complexity === "MODERATE",
+    `${JSON.stringify(scDry.j.results)} | ${JSON.stringify(scRun.j.results)}`);
+  const scSingle = await post("/api/admin/veritamap/set-complexity", { secret: ADMIN, labId: other.labId, instrumentNameLike: "VITROS", analytes: ["Lipase"], complexity: "HIGH", dryRun: true });
+  check("9. set-complexity: single-map lab without mapId works as before", scSingle.s === 200 && scSingle.j.results?.[0]?.action === "would-update", `${scSingle.s} ${JSON.stringify(scSingle.j.results)}`);
 
   server.close();
   console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
