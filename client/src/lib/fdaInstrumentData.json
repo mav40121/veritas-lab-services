@@ -42928,5 +42928,25 @@
       }
     },
     "menuLastVerifiedAt": "2026-10-12"
+  },
+  "Meridian Curian Analyzer": {
+    "vendor": "Meridian Bioscience",
+    "category": "Microbiology",
+    "testCount": 3,
+    "tests": {
+      "Shiga toxin antigen (Escherichia coli)": {
+        "complexity": "MODERATE",
+        "specialty": "Bacteriology"
+      },
+      "Campylobacter antigen": {
+        "complexity": "MODERATE",
+        "specialty": "Bacteriology"
+      },
+      "Helicobacter pylori stool antigen (HpSA)": {
+        "complexity": "MODERATE",
+        "specialty": "Bacteriology"
+      }
+    },
+    "menuLastVerifiedAt": "2026-10-12"
   }
 }

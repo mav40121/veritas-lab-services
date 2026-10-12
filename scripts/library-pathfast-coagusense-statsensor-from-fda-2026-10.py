@@ -8,6 +8,8 @@ instruments to the VeritaMap library from the FDA CLIA records he sent (BUG-009 
   CoaguSense Coag-Sense PT/INR Monitoring System (Professional) (Point of Care): Prothrombin time (PT), WAIVED
     (K050243). The Self-Test home-use record (K093243) is not a lab device and is not added.
   Nova StatSensor Creatinine Hospital Meter (Point of Care): Creatinine, MODERATE (CR170203, parent K171059).
+  Meridian Curian Analyzer (Microbiology): Shiga toxin, Campylobacter and H. pylori stool antigen, all MODERATE
+    (CR220334, CR210128, CR190611). Named as antigen tests so they never pair with the molecular panels' organism rows.
 
 Test names are the library's most common names for the same tests, so these group with other analyzers.
 Evidence: scripts/data/fda_clia_pathfast_coagusense_statsensor_2026-10-12.json.
@@ -21,7 +23,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LIB = os.path.join(ROOT, "client", "src", "lib", "fdaInstrumentData.json")
 SRC = os.path.join(ROOT, "scripts", "data", "fda_clia_pathfast_coagusense_statsensor_2026-10-12.json")
-M, GC, GI, HE, W = "MODERATE", "General Chemistry", "General Immunology", "Hematology", "WAIVED"
+M, GC, GI, HE, W, BA = "MODERATE", "General Chemistry", "General Immunology", "Hematology", "WAIVED", "Bacteriology"
 WANT = {
     "PHC PATHFAST": ("PHC Corporation", "Immunoassay", {
         "Troponin-I (cardiac)": (M, GC), "Myoglobin": (M, GC), "Creatine kinase MB fraction (CKMB)": (M, GC),
@@ -30,9 +32,13 @@ WANT = {
         "Prothrombin time (PT)": (W, HE)}),
     "Nova StatSensor Creatinine Hospital Meter": ("Nova Biomedical", "Point of Care", {
         "Creatinine": (M, GC)}),
+    "Meridian Curian Analyzer": ("Meridian Bioscience", "Microbiology", {
+        "Shiga toxin antigen (Escherichia coli)": (M, BA), "Campylobacter antigen": (M, BA),
+        "Helicobacter pylori stool antigen (HpSA)": (M, BA)}),
 }
 # FDA analyte name per library test (the D-dimer record carries ATIII in its analyte field; see the data file).
-FDA_ANALYTE = {"D-dimer": "Antithrombin III (ATIII)"}
+FDA_ANALYTE = {"D-dimer": "Antithrombin III (ATIII)", "Shiga toxin antigen (Escherichia coli)": "Escherichia coli",
+               "Campylobacter antigen": "Campylobacter", "Helicobacter pylori stool antigen (HpSA)": "Helicobacter pylori"}
 
 
 def main():
