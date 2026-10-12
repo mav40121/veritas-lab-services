@@ -34172,7 +34172,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // specialty/complexity, pass copyFromAnalyte = an existing analyte on the same
   // instrument and this mirrors its specialty + complexity. dryRun previews.
   app.post("/api/admin/veritamap/add-analyte", (req, res) => {
-    const { secret, labId, instrumentNameLike, analyte, copyFromAnalyte, specialty, complexity, dryRun } = req.body || {};
+    const { secret, labId, mapId: wantMapId, instrumentNameLike, analyte, copyFromAnalyte, specialty, complexity, dryRun } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
     if (!Number.isFinite(Number(labId)) || !analyte || !instrumentNameLike) {
       return res.status(400).json({ error: "labId, analyte, instrumentNameLike required" });
@@ -34180,8 +34180,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const sqlite = (db as any).$client;
     const maps = sqlite.prepare("SELECT id FROM veritamap_maps WHERE lab_id = ?").all(Number(labId)) as Array<{ id: number }>;
     if (maps.length === 0) return res.status(404).json({ error: `no map for lab ${labId}` });
-    if (maps.length > 1) return res.status(400).json({ error: `lab ${labId} has ${maps.length} maps; ambiguous`, mapIds: maps.map((m) => m.id) });
-    const mapId = maps[0].id;
+    // A lab with several maps (one per department) names the map with mapId; it must be one of this lab's maps.
+    if (wantMapId !== undefined && wantMapId !== null && !maps.some((m) => m.id === Number(wantMapId))) {
+      return res.status(400).json({ error: `map ${wantMapId} is not one of lab ${labId}'s maps`, mapIds: maps.map((m) => m.id) });
+    }
+    if (wantMapId == null && maps.length > 1) return res.status(400).json({ error: `lab ${labId} has ${maps.length} maps; ambiguous, pass mapId`, mapIds: maps.map((m) => m.id) });
+    const mapId = wantMapId != null ? Number(wantMapId) : maps[0].id;
     const instruments = sqlite.prepare(
       "SELECT id, instrument_name, nickname FROM veritamap_instruments WHERE map_id = ? AND instrument_name LIKE ?"
     ).all(mapId, `%${instrumentNameLike}%`) as Array<{ id: number; instrument_name: string; nickname: string | null }>;
