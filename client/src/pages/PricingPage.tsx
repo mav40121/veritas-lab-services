@@ -406,7 +406,7 @@ return (
               </li>
               <li className="flex items-start gap-2 text-sm">
                 <CheckCircle2 size={16} className="text-primary mt-0.5 shrink-0" />
-                <span><strong>Your facility name</strong> on our Founding Labs page (logo placement with your marketing approval)</span>
+                <span><strong>Your facility name</strong> on our <Link href="/founding-labs" className="underline underline-offset-2 hover:text-primary">Founding Labs page</Link> (logo placement with your marketing approval)</span>
               </li>
               <li className="flex items-start gap-2 text-sm">
                 <CheckCircle2 size={16} className="text-primary mt-0.5 shrink-0" />

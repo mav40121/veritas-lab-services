@@ -83,7 +83,7 @@ export function isLoggedIn(): boolean { return !!_token; }
 const PUBLIC_PATH_PREFIXES = [
   "/resources", "/pricing", "/faq", "/demo", "/learn", "/book",
   "/study-guide", "/trust", "/security", "/roadmap", "/veritaassure",
-  "/calculator", "/founding-lab", "/request-invoice",
+  "/calculator", "/founding-lab", "/founding-labs", "/request-invoice",
 ];
 export function isPublicMarketingPath(pathname: string): boolean {
   if (!pathname) return false;

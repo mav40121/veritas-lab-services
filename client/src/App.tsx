@@ -137,6 +137,7 @@ const HospitalInventoryPage = lazy(() => import("@/pages/HospitalInventoryPage")
 const VeritaOpsAppPage = lazy(() => import("@/pages/VeritaOpsAppPage"));
 const LabMembersPage = lazy(() => import("@/pages/LabMembersPage"));
 const FoundingLabApplyPage = lazy(() => import("@/pages/FoundingLabApplyPage"));
+const FoundingLabsPage = lazy(() => import("@/pages/FoundingLabsPage"));
 const StaffPortalPage = lazy(() => import("@/pages/StaffPortalPage"));
 const VeritaQAPage = lazy(() => import("@/pages/VeritaQAPage"));
 // #84 Phase 3: Staff logins get a plain note on the Operations management views
@@ -519,6 +520,7 @@ function AppContent() {
           <Route path="/account/seats">{() => { window.location.replace("/account/settings"); return null; }}</Route>
           <Route path="/account">{() => { window.location.replace("/account/settings"); return null; }}</Route>
           <Route path="/founding-lab/apply" component={FoundingLabApplyPage} />
+          <Route path="/founding-labs" component={FoundingLabsPage} />
           {/* The standalone CLIA+PIN inventory kiosk is retired (superseded by the
               Staff Portal's Adjust Inventory module). Its page + endpoints were
               removed 2026-09-30; this redirect keeps old /inventory bookmarks

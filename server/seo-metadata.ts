@@ -598,6 +598,10 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     title: "Book a Scoping Call | Veritas Lab Services",
     description: "Schedule a 30-minute scoping call with Michael Veri to plan your VeritaAssure\u2122 rollout, accreditation timeline, or lab operations review.",
   },
+  "/founding-labs": {
+    title: "Founding Labs | VeritaAssure\u2122 Founding Lab Program",
+    description: "The charter customers of VeritaAssure\u2122. Founding labs share their experience on reference calls with laboratories evaluating the platform. Apply to join the Founding Lab Program.",
+  },
   "/founding-lab/apply": {
     title: "Founding Lab Program Application | VeritaAssure\u2122",
     description: "Apply to the VeritaAssure\u2122 Founding Lab Program. Locked rate, annual at-will mutual renewal, priority support Year 1, and named recognition.",
