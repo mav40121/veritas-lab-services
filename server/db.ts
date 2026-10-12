@@ -7876,6 +7876,11 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
   };
   addCol("users", "vls_support", "ALTER TABLE users ADD COLUMN vls_support INTEGER NOT NULL DEFAULT 0");
   addCol("labs", "vls_support_access", "ALTER TABLE labs ADD COLUMN vls_support_access INTEGER NOT NULL DEFAULT 1");
+  // Retired (2026-10-12, Michael Q102 = 1): a lab Veritas no longer services (an abandoned sign-up such as lab 20
+  // "ery"). Set and cleared only by POST /api/admin/labs/:labId/retire. A retired lab drops out of Veritas support
+  // access and the Client labs list; its owner and members keep their access. Nothing is deleted.
+  addCol("labs", "retired_at", "ALTER TABLE labs ADD COLUMN retired_at TEXT");
+  addCol("labs", "retired_reason", "ALTER TABLE labs ADD COLUMN retired_reason TEXT");
   addCol("audit_log", "acting_as", "ALTER TABLE audit_log ADD COLUMN acting_as TEXT");
   try {
     sqlite.exec(`CREATE TABLE IF NOT EXISTS vls_support_activity (
