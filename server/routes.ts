@@ -55,7 +55,7 @@ import { seedProfileFor, seedTeaFor, seedCalVerPoints, seedMethodCompQuant, seed
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
 import { isValidIfuUrl } from "@shared/ifu";
-import { incompleteElementCells as compIncompleteCells, incompleteElementCellsByInstrument as compIncompleteCellsByInstrument, aggregateElementStatus as compAggregateElementStatus, itemElementStatus as compItemElementStatus, competencyCycleWindowDays, WAIVED_METHOD_NAMES, WAIVED_METHODS_REQUIRED, waivedMethodPassed, waivedPassedCount } from "@shared/competencyStatus";
+import { incompleteElementCells as compIncompleteCells, incompleteElementCellsByInstrument as compIncompleteCellsByInstrument, aggregateElementStatus as compAggregateElementStatus, itemElementStatus as compItemElementStatus, competencyCycleWindowDays, WAIVED_METHOD_NAMES, WAIVED_METHODS_REQUIRED, waivedMethodPassed, waivedPassedCount, methodGroupCoversInstrument } from "@shared/competencyStatus";
 import { competencyDueColumns, competencySeedAtCreate } from "./competencySchedule";
 
 // Express already URL-decodes route params before the handler runs, so
@@ -27851,10 +27851,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         let coverage: any = null;
         const coveringMgIds: number[] = [];
         for (const mg of mgParsed) {
-          const instMatch = mg.instrumentsLC.some((n: string) => n && (n.includes(instNameLC) || instNameLC.includes(n)));
-          const analyteMatch = analytesLC.some((a) => mg.analytesLC.has(a));
-          const catMatch = !!catLC && mg.nameLC.includes(catLC);
-          if (instMatch || analyteMatch || catMatch) {
+          // BUG-043: an all-waived instrument is covered only by a group that names it (or a waived program below).
+          if (methodGroupCoversInstrument(mg, { nameLC: instNameLC, categoryLC: catLC, analytesLC, allWaived: maxRank === 1 })) {
             coveringMgIds.push(mg.id);
             if (!coverage) coverage = { programId: mg.programId, programName: mg.programName, methodGroupId: mg.id, methodGroupName: mg.name };
           }
@@ -27990,7 +27988,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const instNameLC = String(inst.instrument_name || "").trim().toLowerCase();
       const catLC = String(inst.category || "").trim().toLowerCase();
       const analytesLC = tests.map((t: any) => String(t.analyte || "").trim().toLowerCase()).filter(Boolean);
-      const coveringMg = mgParsed.filter((mg) => mg.instrumentsLC.some((n) => n && (n.includes(instNameLC) || instNameLC.includes(n))) || analytesLC.some((a) => mg.analytesLC.has(a)) || (!!catLC && mg.nameLC.includes(catLC)));
+      const coveringMg = mgParsed.filter((mg) => methodGroupCoversInstrument(mg, { nameLC: instNameLC, categoryLC: catLC, analytesLC, allWaived: maxRank === 1 }));
       // Prefer the employee-centric instrument-keyed items (Phase 2 entry); fall
       // back to legacy method-group items so pre-migration data still shows.
       const directItems = itemsByInstrument.get(inst.id) || [];
