@@ -39,20 +39,6 @@ import {
 import { Link } from "wouter";
 import { useLabRoute } from "@/hooks/useLabRoute";
 
-const PT_CATEGORIES = [
-  "General Chemistry",
-  "Special Chemistry",
-  "Endocrinology",
-  "Toxicology / TDM",
-  "Hematology",
-  "Coagulation",
-  "Blood Bank / Immunohematology",
-  "Microbiology",
-  "Immunology / Serology",
-  "Urinalysis",
-];
-
-const VENDORS = ["CAP", "API", "WSLH", "Other"];
 
 const AAA_METHODS: { value: string; label: string }[] = [
   { value: "split_sample_external", label: "Split sample, external reference lab" },
@@ -164,7 +150,6 @@ export default function VeritaPTAppPage() {
     trends: Array<{ analyte: string; state: string; fails_in_last_3: number }>;
     framing?: Record<string, string>;
   } | null>(null);
-  const [showEnrollModal, setShowEnrollModal] = useState(false);
   const [showAaaModal, setShowAaaModal] = useState(false);
   // A5-ext (per Q1.a): PT event entry dialog state. The per-tech dropdown
   // is populated from the lab's staff_employees roster so the director
@@ -184,32 +169,6 @@ export default function VeritaPTAppPage() {
   const [ptEvents, setPtEvents] = useState<any[]>([]); // MLC-2: events, for deadline surfacing
   const [staffRoster, setStaffRoster] = useState<Array<{ id: number; first_name: string; last_name: string; middle_initial: string | null; title: string | null }>>([]);
   const [saving, setSaving] = useState(false);
-
-  // New enrollment form state
-  const [newVendor, setNewVendor] = useState("CAP");
-  const [newProgramName, setNewProgramName] = useState("");
-  const [newCategory, setNewCategory] = useState("");
-  const [newYear, setNewYear] = useState(String(new Date().getFullYear()));
-  // Vendor program catalog driving the Program Name dropdown (GET /api/veritapt/programs).
-  const [vendorPrograms, setVendorPrograms] = useState<Array<{ programCode: string | null; programName: string; ptCategory: string; analytes: string[] }>>([]);
-  const [selectedProgram, setSelectedProgram] = useState<{ programName: string; ptCategory: string; analytes: string[] } | null>(null);
-
-  // Load the selected vendor's program catalog for the Program Name dropdown.
-  // The catalog is vendor-global, so this hits the fixed /api/veritapt/programs
-  // path (not the lab-scoped ptApi). "Other" has no catalog (free-text fallback).
-  useEffect(() => {
-    if (!showEnrollModal || newVendor === "Other") { setVendorPrograms([]); return; }
-    let cancelled = false;
-    (async () => {
-      try {
-        const r = await fetch(`${API_BASE}/api/veritapt/programs?vendor=${encodeURIComponent(newVendor)}`, { headers: authHeaders() });
-        if (!r.ok) { if (!cancelled) setVendorPrograms([]); return; }
-        const j = await r.json();
-        if (!cancelled) setVendorPrograms(Array.isArray(j?.programs) ? j.programs : []);
-      } catch { if (!cancelled) setVendorPrograms([]); }
-    })();
-    return () => { cancelled = true; };
-  }, [showEnrollModal, newVendor]);
 
   // New AAA record form state
   const [newAaaAnalyte, setNewAaaAnalyte] = useState("");
@@ -289,40 +248,6 @@ export default function VeritaPTAppPage() {
     // coverage/enrollments/AA-records instead of leaving the prior lab's data.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasPlanAccess, activeLabId]);
-
-  const handleAddEnrollment = async () => {
-    if (!newVendor || !newProgramName.trim() || !newCategory || !newYear) return;
-    setSaving(true);
-    try {
-      await fetch(`${ptApi}/enrollments`, {
-        method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({
-          vendor: newVendor,
-          program_name: newProgramName.trim(),
-          pt_category: newCategory,
-          year_enrolled: Number(newYear),
-        }),
-      });
-      setNewVendor("CAP");
-      setNewProgramName("");
-      setNewCategory("");
-      setSelectedProgram(null);
-      setNewYear(String(new Date().getFullYear()));
-      setShowEnrollModal(false);
-      await fetchData();
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleRemoveEnrollment = async (id: number) => {
-    await fetch(`${ptApi}/enrollments/${id}`, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
-    await fetchData();
-  };
 
   const handleAddAaaRecord = async () => {
     if (!newAaaAnalyte.trim() || !newAaaMethod) return;
@@ -457,14 +382,17 @@ export default function VeritaPTAppPage() {
             <Plus size={14} className="mr-1.5" />
             Manage AAA Records
           </Button>
+          {/* 2026-10-12 (Michael): enrollments are their own screen, not an overlay. */}
           <Button
+            asChild
             size="sm"
             className="bg-[#006064] hover:bg-[#004d50] text-white"
             hidden={isReadOnly}
-            onClick={() => setShowEnrollModal(true)}
           >
-            <Plus size={14} className="mr-1.5" />
-            Manage Enrollments
+            <Link href={labRoute("/veritapt/enrollments")} data-testid="pt-manage-enrollments">
+              <Plus size={14} className="mr-1.5" />
+              Manage Enrollments
+            </Link>
           </Button>
           {/* A5-ext (per Q1.a): Record PT Event button. Surfaces the
               new entry form with per-tech attribution dropdown. */}
@@ -764,171 +692,6 @@ export default function VeritaPTAppPage() {
           Unregulated nonwaived tests are not required to have PT under CLIA Subpart I, but enrolling in a PT program is strongly recommended as standard practice and may be required by your accreditation organization.
         </p>
       </div>
-
-      {/* Manage Enrollments Modal */}
-      <Dialog open={showEnrollModal} onOpenChange={setShowEnrollModal}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>PT Program Enrollments</DialogTitle>
-          </DialogHeader>
-
-          {/* Existing enrollments */}
-          <div className="space-y-3">
-            {enrollments.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No enrollments recorded yet.</p>
-            ) : (
-              <div className="overflow-x-auto rounded border">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-muted-foreground border-b text-xs bg-muted/30">
-                      <th className="text-left py-2 px-3">Vendor</th>
-                      <th className="text-left py-2 pr-3">Program Name</th>
-                      <th className="text-left py-2 pr-3">Category</th>
-                      <th className="text-left py-2 pr-3">Year</th>
-                      <th className="py-2 pr-3"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {enrollments.map((e) => (
-                      <tr key={e.id} className="border-b border-border/50">
-                        <td className="py-2 px-3 font-medium">{e.vendor}</td>
-                        <td className="py-2 pr-3 text-muted-foreground">{e.program_name}</td>
-                        <td className="py-2 pr-3 text-muted-foreground text-xs">{e.pt_category}</td>
-                        <td className="py-2 pr-3 text-muted-foreground">{e.year_enrolled}</td>
-                        <td className="py-2 pr-3">
-                          <ConfirmDialog
-                            title="Remove Enrollment?"
-                            message="Remove this PT enrollment? Your coverage analysis will be updated."
-                            confirmLabel="Remove"
-                            onConfirm={() => handleRemoveEnrollment(e.id)}
-                          >
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
-                            >
-                              <Trash2 size={13} />
-                            </Button>
-                          </ConfirmDialog>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* Add new enrollment */}
-            <div className="rounded-lg border p-4 space-y-3 bg-muted/20">
-              <p className="text-sm font-medium">Add Enrollment</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Vendor</Label>
-                  <Select value={newVendor} onValueChange={(v) => { setNewVendor(v); setNewProgramName(""); setNewCategory(""); setSelectedProgram(null); }}>
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {VENDORS.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Year Enrolled</Label>
-                  <Input
-                    type="text" inputMode="decimal"
-                    value={newYear}
-                    onChange={(e) => setNewYear(e.target.value)}
-                    className="h-8 text-sm"
-                    min={2020}
-                    max={2030}
-                  />
-                </div>
-                <div className="space-y-1 col-span-2">
-                  <Label className="text-xs">Program Name</Label>
-                  {newVendor !== "Other" && vendorPrograms.length > 0 ? (
-                    <Select
-                      value={newProgramName}
-                      onValueChange={(name) => {
-                        const p = vendorPrograms.find((x) => x.programName === name) || null;
-                        setNewProgramName(name);
-                        setSelectedProgram(p);
-                        if (p) setNewCategory(p.ptCategory);
-                      }}
-                    >
-                      <SelectTrigger className="h-8 text-sm">
-                        <SelectValue placeholder={`Select a ${newVendor} program`} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {vendorPrograms.map((p) => (
-                          <SelectItem key={p.programName} value={p.programName}>
-                            {p.programName}{p.programCode ? ` (${p.programCode})` : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <>
-                      <Input
-                        value={newProgramName}
-                        onChange={(e) => { setNewProgramName(e.target.value); setSelectedProgram(null); }}
-                        placeholder="e.g. CAP Chemistry Survey (C)"
-                        className="h-8 text-sm"
-                      />
-                      {newVendor !== "Other" && (
-                        <p className="text-xs text-muted-foreground">No {newVendor} catalog loaded yet. Type the program name, or ask Veritas to load the {newVendor} catalog.</p>
-                      )}
-                    </>
-                  )}
-                </div>
-                <div className="space-y-1 col-span-2">
-                  <Label className="text-xs">PT Category</Label>
-                  {selectedProgram ? (
-                    <div className="rounded-md border px-3 py-2 text-sm bg-background">
-                      <span className="font-medium">{newCategory}</span>
-                      <span className="text-xs text-muted-foreground"> (from program)</span>
-                      {selectedProgram.analytes.length > 0 && (
-                        <div className="mt-2">
-                          <p className="text-xs text-muted-foreground mb-1">Tests included ({selectedProgram.analytes.length}):</p>
-                          <div className="flex flex-wrap gap-1">
-                            {selectedProgram.analytes.map((a) => (
-                              <Badge key={a} variant="secondary" className="text-[10px] font-normal">{a}</Badge>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <>
-                      <Select value={newCategory} onValueChange={setNewCategory}>
-                        <SelectTrigger className="h-8 text-sm">
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PT_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">Enrolling by category covers all regulated analytes in that group.</p>
-                    </>
-                  )}
-                </div>
-              </div>
-              <Button
-                size="sm"
-                className="bg-[#006064] hover:bg-[#004d50] text-white"
-                onClick={handleAddEnrollment}
-                disabled={saving || !newVendor || !newProgramName.trim() || !newCategory || !newYear}
-              >
-                {saving ? "Saving..." : "Add Enrollment"}
-              </Button>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEnrollModal(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Manage AAA Records Modal */}
       <Dialog open={showAaaModal} onOpenChange={setShowAaaModal}>
