@@ -100,6 +100,24 @@ export function waivedMethodPassed(item: any): boolean {
   return !!item?.passed && !!str(item?.waived_date);
 }
 
+/**
+ * BUG-043: does a competency method group cover a test system (instrument)? A group always covers the instruments it
+ * names. For a moderate or high test system it also covers by a shared analyte, or when the group's name contains the
+ * instrument's department (the original method-based match). An ALL-WAIVED test system is covered only by a group that
+ * names it (or by a waived program, which the caller checks): a waived device must not be labeled or credited through
+ * another analyzer's technical group because they share a test (a Clinitek Status reports pH like the Clinitek Novus)
+ * or a department. Inputs are lowercased by the caller.
+ */
+export function methodGroupCoversInstrument(
+  mg: { instrumentsLC: string[]; analytesLC: Set<string>; nameLC: string },
+  inst: { nameLC: string; categoryLC: string; analytesLC: string[]; allWaived: boolean },
+): boolean {
+  const named = mg.instrumentsLC.some((n) => !!n && (n.includes(inst.nameLC) || inst.nameLC.includes(n)));
+  if (named) return true;
+  if (inst.allWaived) return false;
+  return inst.analytesLC.some((a) => mg.analytesLC.has(a)) || (!!inst.categoryLC && mg.nameLC.includes(inst.categoryLC));
+}
+
 /** Passed waived methods recorded for one test system (instrument). */
 export function waivedPassedCount(items: any[], instrumentId: number): number {
   const nums = new Set<number>();
