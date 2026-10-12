@@ -7,6 +7,8 @@
 // current-cycle record per employee.
 //   GET /api/labs/:labId/competency/employee/:employeeId
 //   PUT /api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId
+// #91 (2026-10-12): an all-waived test system (glucose meter, urine dipstick reader)
+// shows the four waived methods (two required) instead of the six CLIA elements.
 import { useState, useEffect } from "react";
 import { Link, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -45,9 +47,11 @@ const ELEMENT_FIELDS: Record<number, Array<{ key: string; label: string; type: "
 };
 
 interface ElementData { num: number; status: string; passed?: boolean; na?: boolean; naJustification?: string; [k: string]: any; }
+interface WaivedMethod { num: number; name: string; evidence: string; date: string; initials: string; passed: boolean; status: string; }
 interface TestSystem {
   instrumentId: number; instrumentName: string; department: string | null; complexity: string;
   analyteCount: number; covered: boolean; hasData: boolean; complete: boolean; elements: ElementData[];
+  waived?: boolean; waivedRequired?: number; waivedPassed?: number; waivedMethods?: WaivedMethod[];
 }
 interface CompRecord {
   assessmentId: number; locked: boolean; completionDate: string | null;
@@ -57,6 +61,13 @@ interface CompRecord {
 interface EmployeeView {
   employee: { id: number; name: string; title: string | null; complexity: string };
   elementCount: number; latestAssessmentId: number | null; record: CompRecord | null; testSystems: TestSystem[];
+}
+
+function waivedBadge(status: string) {
+  if (status === "pass") return <Badge className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">PASS</Badge>;
+  if (status === "fail") return <Badge className="text-[10px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">Not passed</Badge>;
+  if (status === "incomplete") return <Badge className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">Needs date</Badge>;
+  return <Badge className="text-[10px] bg-muted text-muted-foreground">Not used</Badge>;
 }
 
 function statusBadge(status: string) {
@@ -78,6 +89,8 @@ export default function VeritaCompEmployeePage() {
   const [activeTs, setActiveTs] = useState<number | null>(null);
   // Edit buffer for the active test system: { [elementNum]: { field: value } }.
   const [form, setForm] = useState<Record<number, any>>({});
+  // Waived test system edit buffer: { [methodNum]: { evidence, date, initials, passed } }.
+  const [wform, setWform] = useState<Record<number, any>>({});
   // Sign & Complete panel state.
   const [signing, setSigning] = useState(false);
   const [evalName, setEvalName] = useState("");
@@ -104,16 +117,22 @@ export default function VeritaCompEmployeePage() {
 
   // Seed the edit buffer whenever the active test system (or fetched data) changes.
   useEffect(() => {
-    if (!current) { setForm({}); return; }
+    if (!current) { setForm({}); setWform({}); return; }
     const seed: Record<number, any> = {};
     for (const el of current.elements) {
       seed[el.num] = { ...el };
     }
     setForm(seed);
+    const wseed: Record<number, any> = {};
+    for (const m of current.waivedMethods || []) wseed[m.num] = { evidence: m.evidence, date: m.date, initials: m.initials, passed: m.passed };
+    setWform(wseed);
   }, [current?.instrumentId, data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setField = (num: number, key: string, value: any) => {
     setForm((prev) => ({ ...prev, [num]: { ...(prev[num] || {}), [key]: value } }));
+  };
+  const setWField = (num: number, key: string, value: any) => {
+    setWform((prev) => ({ ...prev, [num]: { ...(prev[num] || {}), [key]: value } }));
   };
 
   const saveMutation = useMutation({
@@ -123,10 +142,11 @@ export default function VeritaCompEmployeePage() {
         const f = form[el.num] || {};
         return { num: el.num, ...f };
       });
+      const waivedMethods = (current.waivedMethods || []).map((m) => ({ num: m.num, ...(wform[m.num] || {}) }));
       const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/competency/employee/${employeeId}/test-system/${current.instrumentId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ elements }),
+        body: JSON.stringify(current.waived ? { waivedMethods } : { elements }),
       });
       if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || `HTTP ${r.status}`); }
       return r.json();
@@ -197,7 +217,12 @@ export default function VeritaCompEmployeePage() {
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-2xl font-bold">{data.employee.name}</h1>
                 {data.employee.title && <span className="text-sm text-muted-foreground">{data.employee.title}</span>}
-                <Badge variant="outline" className="text-[10px]">{data.elementCount === 8 ? "NYS CLEP (8 elements)" : "CLIA (6 elements)"}</Badge>
+                {(testSystems.length === 0 || testSystems.some((t) => !t.waived)) && (
+                  <Badge variant="outline" className="text-[10px]">{data.elementCount === 8 ? "NYS CLEP (8 elements)" : "CLIA (6 elements)"}</Badge>
+                )}
+                {testSystems.some((t) => t.waived) && (
+                  <Badge variant="outline" className="text-[10px]" data-testid="waived-badge">Waived testing (2 of 4 methods)</Badge>
+                )}
               </div>
               <p className="text-sm text-muted-foreground mt-1">
                 Competency by test system, from this person's VeritaStaff&trade; instrument assignments. Analytes run the same way on one instrument are covered by a single competency.
@@ -249,7 +274,7 @@ export default function VeritaCompEmployeePage() {
                     )}
                   </div>
                   {!readOnly && !allComplete && (
-                    <p className="text-[11px] text-muted-foreground mt-2">Every assigned test system must be complete (data or N/A on all elements) before you can sign.</p>
+                    <p className="text-[11px] text-muted-foreground mt-2">Every assigned test system must be complete (data or N/A on all elements; two passed methods on a waived test system) before you can sign.</p>
                   )}
                   {!readOnly && signing && allComplete && (
                     <div className="mt-3 border-t pt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -316,6 +341,53 @@ export default function VeritaCompEmployeePage() {
                         {current.complete ? <Badge className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">Complete</Badge>
                           : <Badge className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">In progress</Badge>}
                       </div>
+                      {current.waived ? (
+                        <div data-testid="waived-panel">
+                          <p className="text-[11px] text-muted-foreground mb-1">
+                            Waived test system: record at least {current.waivedRequired ?? 2} of the four methods below, at hire and annually (the accreditor's waived-testing standard). The six CLIA elements apply to moderate and high complexity test systems.
+                          </p>
+                          <p className="text-xs font-medium mb-3" data-testid="waived-count">
+                            {current.waivedPassed ?? 0} of {current.waivedRequired ?? 2} required methods passed
+                          </p>
+                          <div className="space-y-3">
+                            {(current.waivedMethods || []).map((m) => {
+                              const w = wform[m.num] || {};
+                              return (
+                                <div key={m.num} className="border border-border rounded-lg p-3" data-testid={`waived-method-${m.num}`}>
+                                  <div className="flex items-center justify-between gap-2 mb-2">
+                                    <div className="text-xs font-semibold">Method {m.num}: {m.name}</div>
+                                    <div className="flex items-center gap-3 shrink-0">
+                                      <label className="flex items-center gap-1 text-[11px] cursor-pointer">
+                                        <input type="checkbox" className="w-3.5 h-3.5" disabled={readOnly || locked} checked={!!w.passed}
+                                          onChange={(e) => setWField(m.num, "passed", e.target.checked)} data-testid={`waived-method-${m.num}-passed`} /> Pass
+                                      </label>
+                                      {waivedBadge(m.status)}
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    <div className="flex-[2] min-w-[160px]">
+                                      <label className="text-[10px] text-muted-foreground">Evidence</label>
+                                      <Input className="text-xs h-8" disabled={readOnly || locked} value={w.evidence ?? ""}
+                                        onChange={(e) => setWField(m.num, "evidence", e.target.value)} data-testid={`waived-method-${m.num}-evidence`} />
+                                    </div>
+                                    <div className="flex-1 min-w-[120px]">
+                                      <label className="text-[10px] text-muted-foreground">Date performed</label>
+                                      <Input type="date" className="text-xs h-8" disabled={readOnly || locked} value={w.date ?? ""}
+                                        onChange={(e) => setWField(m.num, "date", e.target.value)} data-testid={`waived-method-${m.num}-date`} />
+                                    </div>
+                                    <div className="flex-1 min-w-[100px]">
+                                      <label className="text-[10px] text-muted-foreground">Evaluator initials</label>
+                                      <Input className="text-xs h-8" disabled={readOnly || locked} value={w.initials ?? ""}
+                                        onChange={(e) => setWField(m.num, "initials", e.target.value)} data-testid={`waived-method-${m.num}-initials`} />
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                      <>
                       <p className="text-[11px] text-muted-foreground mb-3">Enter each element's data, or mark N/A with a reason. Every element needs data or N/A to be complete.</p>
 
                       <div className="space-y-3">
@@ -364,6 +436,8 @@ export default function VeritaCompEmployeePage() {
                           );
                         })}
                       </div>
+                      </>
+                      )}
 
                       {!readOnly && !locked && (
                         <div className="flex justify-end mt-3">
