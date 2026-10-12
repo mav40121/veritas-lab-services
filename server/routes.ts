@@ -13288,6 +13288,37 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ total: total?.n ?? 0, by_status: byStatus, count: rows.length, applications: rows });
   });
 
+  // POST /api/admin/founding-lab/record  {secret, labId, dryRun?}
+  // Records an EXISTING customer lab as an accepted founding lab (2026-10-12, Michael Q99 = 1, Redington-Fairview
+  // first). Writes one founding_lab_applications row, status 'accepted', from the lab's own record (name, CLIA, plan)
+  // and its owner (name, email), with a note that Veritas recorded it: it is not a self-submitted application, so it
+  // sends no email to anyone. Idempotent per lab (lab_id kept in notes). The PUBLIC listing is separate and reviewed:
+  // client/src/lib/foundingLabs.ts. Audited.
+  app.post("/api/admin/founding-lab/record", (req: any, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const labId = Number(req.body?.labId);
+    if (!Number.isFinite(labId)) return res.status(400).json({ error: "labId required" });
+    const dryRun = req.body?.dryRun === true;
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id, lab_name, clia_number, plan, owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    const owner = sqlite.prepare("SELECT id, name, email FROM users WHERE id = ?").get(lab.owner_user_id) as any;
+    if (!owner?.email) return res.status(400).json({ error: "Lab owner has no email on file" });
+    const tag = `lab_id=${labId};`;
+    const existing = sqlite.prepare("SELECT id FROM founding_lab_applications WHERE status = 'accepted' AND notes LIKE ?").get(`${tag}%`) as any;
+    if (existing) return res.json({ ok: true, alreadyRecorded: true, applicationId: existing.id });
+    const note = `${tag} recorded by Veritas Lab Services on Michael Veri's instruction ${new Date().toISOString().slice(0, 10)}; existing customer, not a self-submitted application.`;
+    if (dryRun) return res.json({ ok: true, dryRun: true, wouldInsert: { lab_name: lab.lab_name, clia_number: lab.clia_number || null, contact_name: owner.name || owner.email, tier_of_interest: lab.plan || null, status: "accepted", notes: note } });
+    const r = sqlite.prepare(
+      `INSERT INTO founding_lab_applications (lab_name, clia_number, contact_name, contact_email, tier_of_interest, marketing_logo_approval, status, notes)
+       VALUES (?, ?, ?, ?, ?, 0, 'accepted', ?)`
+    ).run(lab.lab_name, lab.clia_number || null, owner.name || owner.email, owner.email, lab.plan || null, note);
+    const applicationId = Number(r.lastInsertRowid);
+    logAudit({ userId: 0, ownerUserId: lab.owner_user_id, module: "admin", action: "create", entityType: "founding_lab", entityId: String(applicationId), entityLabel: `${lab.lab_name} (lab ${labId}) recorded as founding lab`, ipAddress: req.ip });
+    res.json({ ok: true, applicationId, labName: lab.lab_name, status: "accepted" });
+  });
+
   // POST /api/admin/founding-lab/applications/:id/status — triage an application
   // by updating its status and/or notes (the status column was written once at
   // insert and never updated before this). Auth: x-admin-secret header or
