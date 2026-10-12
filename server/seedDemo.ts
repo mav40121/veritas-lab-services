@@ -381,7 +381,14 @@ export async function seedDemoData() {
   seedInventoryData(sqlite, demoUserId, now);
 
   // ─── VeritaStaff: Lab + Employees ──────────────────────────────────────────
-  const existingStaffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(demoUserId);
+  // BUG-039 (2026-10-12): the guard also looks at the demo user's lab. Keyed on user_id
+  // alone, it re-seeded six duplicate people into Riverside at the first boot after the
+  // BUG-032 owner repair moved Riverside's staff rows from the demo user to the lab owner.
+  const demoLabId = (sqlite.prepare("SELECT lab_id FROM users WHERE id = ?").get(demoUserId) as any)?.lab_id ?? null;
+  const existingStaffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(demoUserId)
+    || (demoLabId != null && (
+      sqlite.prepare("SELECT id FROM staff_labs WHERE tier2_lab_id = ? LIMIT 1").get(demoLabId)
+      || sqlite.prepare("SELECT id FROM staff_employees WHERE tier2_lab_id = ? LIMIT 1").get(demoLabId)));
   if (!existingStaffLab) {
     seedVeritaStaffData(sqlite, demoUserId, now);
   }
