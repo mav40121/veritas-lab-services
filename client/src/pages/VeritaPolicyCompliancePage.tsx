@@ -140,6 +140,12 @@ export default function VeritaPolicyCompliancePage() {
     enabled: !!activeLabId,
   });
   const links = linksData?.links || [];
+  // Parking lot #94 (2026-10-11): active links by default; expired and revoked
+  // ones stay one click away (their audit is unchanged).
+  const [showInactiveLinks, setShowInactiveLinks] = useState(false);
+  const isInactiveLink = (l: SurveyorLink) => !!l.revoked_at || new Date(l.expires_at).getTime() < Date.now();
+  const inactiveLinkCount = links.filter(isInactiveLink).length;
+  const visibleLinks = showInactiveLinks ? links : links.filter((l) => !isInactiveLink(l));
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createLabel, setCreateLabel] = useState("");
@@ -484,8 +490,20 @@ export default function VeritaPolicyCompliancePage() {
             authentication. Auto-expires after the window you pick. Revoke any time. Audit
             captures every hit.
           </p>
+          {inactiveLinkCount > 0 && (
+            <button
+              type="button"
+              className="text-xs text-primary hover:underline mb-2"
+              onClick={() => setShowInactiveLinks((v) => !v)}
+              data-testid="surveyor-links-toggle"
+            >
+              {showInactiveLinks ? "Hide expired and revoked" : `Show expired and revoked (${inactiveLinkCount})`}
+            </button>
+          )}
           {links.length === 0 ? (
             <div className="text-sm text-muted-foreground">No surveyor links yet.</div>
+          ) : visibleLinks.length === 0 ? (
+            <div className="text-sm text-muted-foreground" data-testid="surveyor-links-none-active">No active surveyor links. Create one when a survey starts.</div>
           ) : (
             <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-sm">
@@ -500,7 +518,7 @@ export default function VeritaPolicyCompliancePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {links.map((l) => {
+                  {visibleLinks.map((l) => {
                     const isRevoked = !!l.revoked_at;
                     const isExpired = !isRevoked && new Date(l.expires_at).getTime() < Date.now();
                     return (
