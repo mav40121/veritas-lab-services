@@ -28,8 +28,9 @@ export function isVlsSupportUser(sqlite: any, userId: number): boolean {
 
 export function labAllowsVlsSupport(sqlite: any, labId: number): boolean {
   try {
-    const r = sqlite.prepare("SELECT vls_support_access FROM labs WHERE id = ?").get(labId) as any;
-    return r ? Number(r.vls_support_access ?? 1) === 1 : false;
+    const r = sqlite.prepare("SELECT vls_support_access, retired_at FROM labs WHERE id = ?").get(labId) as any;
+    // A retired lab (POST /api/admin/labs/:labId/retire) is out of Veritas support reach.
+    return r ? Number(r.vls_support_access ?? 1) === 1 && !r.retired_at : false;
   } catch { return false; }
 }
 

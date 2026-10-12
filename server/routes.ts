@@ -5710,6 +5710,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // (server/vlsSupport.ts). Never creates an account. Optional `name` renames it
   // (e.g. the unused info@ account becoming "Veritas Automation", so its
   // changes are not labeled as Michael). dryRun shows before/after.
+  // POST /api/admin/labs/:labId/retire  {secret, retired: true|false, reason?, dryRun?}
+  // Retire (or restore) a lab Veritas no longer services, e.g. an abandoned sign-up (lab 20 "ery", Michael Q102 = 1,
+  // 2026-10-12). Retired: out of Veritas support access and the Client labs list (labs.retired_at set). The lab's own
+  // owner and members keep their access; nothing is deleted; retired:false restores it. Audited.
+  app.post("/api/admin/labs/:labId/retire", (req: any, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const labId = Number(req.params.labId);
+    if (!Number.isFinite(labId)) return res.status(400).json({ error: "Bad labId" });
+    const retire = req.body?.retired !== false;
+    const reason = String(req.body?.reason || "").trim() || null;
+    if (retire && !reason) return res.status(400).json({ error: "reason required to retire a lab" });
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id, lab_name, owner_user_id, retired_at, retired_reason FROM labs WHERE id = ?").get(labId) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    const before = { retired_at: lab.retired_at ?? null, retired_reason: lab.retired_reason ?? null };
+    const after = retire ? { retired_at: lab.retired_at || new Date().toISOString(), retired_reason: reason } : { retired_at: null, retired_reason: null };
+    if (req.body?.dryRun === true) return res.json({ ok: true, dryRun: true, labId, labName: lab.lab_name, before, after });
+    sqlite.prepare("UPDATE labs SET retired_at = ?, retired_reason = ?, updated_at = ? WHERE id = ?").run(after.retired_at, after.retired_reason, new Date().toISOString(), labId);
+    logAudit({ userId: 0, ownerUserId: lab.owner_user_id, module: "admin", action: retire ? "update" : "restore", entityType: "lab", entityId: String(labId), entityLabel: `${lab.lab_name} (lab ${labId}) ${retire ? "retired" : "restored"}${reason ? ": " + reason : ""}`, before, after, ipAddress: req.ip });
+    res.json({ ok: true, labId, labName: lab.lab_name, before, after });
+  });
+
   app.post("/api/admin/vls-support/user", (req, res) => {
     const { secret, email, enabled, dryRun } = req.body || {};
     const newName = typeof req.body?.name === "string" ? req.body.name.replace(/\s+/g, " ").trim().slice(0, 120) : "";
@@ -6984,7 +7007,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         -- Veritas support (server/vlsSupport.ts): every client lab whose owner left
         -- access on. Demo labs stay out of the list (Michael 2026-10-08), so the
         -- Client labs group is real clients only.
-        OR ((SELECT COALESCE(u.vls_support, 0) FROM users u WHERE u.id = ?) = 1 AND COALESCE(l.vls_support_access, 1) = 1 AND COALESCE(l.is_demo, 0) = 0)
+        OR ((SELECT COALESCE(u.vls_support, 0) FROM users u WHERE u.id = ?) = 1 AND COALESCE(l.vls_support_access, 1) = 1 AND COALESCE(l.is_demo, 0) = 0 AND l.retired_at IS NULL)
       )
       ORDER BY COALESCE(lm.is_primary_lab, 0) DESC, l.id ASC
     `).all(req.userId, req.userId, req.userId, req.userId) as any[];
