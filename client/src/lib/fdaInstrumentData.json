@@ -9026,7 +9026,7 @@
   "Ortho VITROS XT 7600": {
     "vendor": "QuidelOrtho",
     "category": "Chemistry",
-    "testCount": 135,
+    "testCount": 136,
     "tests": {
       "Troponin-I (cardiac)": {
         "complexity": "MODERATE",
@@ -9565,6 +9565,10 @@
         "specialty": "General Chemistry"
       },
       "Prolactin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Procalcitonin (PCT)": {
         "complexity": "MODERATE",
         "specialty": "Endocrinology"
       }

@@ -3,6 +3,7 @@ import { setAuth, clearAuth, getUser, getToken, authHeaders, type AuthUser } fro
 import { API_BASE } from "@/lib/queryClient";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useMemberships, type Membership } from "@/hooks/useMemberships";
+import { pickCurrentMembership } from "@/lib/currentLab";
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -32,11 +33,7 @@ function accessLevelFromExpiry(expiresAtISO?: string | null): AuthUser["accessLe
 
 function pickActiveLab(memberships: Membership[] | undefined, activeLabId: number | null): Membership | null {
   if (!memberships || memberships.length === 0) return null;
-  if (activeLabId) {
-    const m = memberships.find((x) => x.labId === activeLabId);
-    if (m) return m;
-  }
-  return memberships.find((x) => x.isPrimaryLab) ?? memberships[0];
+  return pickCurrentMembership(memberships, activeLabId); // BUG-041: remembered lab before primary
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

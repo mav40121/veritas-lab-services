@@ -1,6 +1,7 @@
 import { FlaskConical } from "lucide-react";
 import { useAuth } from "./AuthContext";
 import { useMemberships } from "@/hooks/useMemberships";
+import { pickCurrentMembership } from "@/lib/currentLab";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 
 // USON bake-off: a persistent, unmissable band shown whenever the active lab
@@ -17,7 +18,7 @@ export function DemoLabBanner() {
 
   const activeMembership = activeLabId
     ? memberships?.find(m => m.labId === activeLabId)
-    : (memberships?.find(m => m.isPrimaryLab) ?? memberships?.[0]);
+    : (pickCurrentMembership(memberships, null) ?? undefined); // BUG-041: remembered lab before primary
   if (!activeMembership?.isDemo) return null;
 
   return (
