@@ -4799,8 +4799,16 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
     <div class="note">Evaluator must be Lab Director or designee, Technical Consultant (moderate complexity), or Technical Supervisor (high complexity) as appropriate for this employee's testing category.</div>
   </div>`;
 
+  // #91: an employee competency record can carry waived test systems (two of four
+  // methods, rows with waived_method_number) beside element rows. A record with only
+  // waived rows prints the waived summary instead of six empty elements.
+  const empWaivedRows = input.blank ? [] : (items || []).filter((i: any) => i.waived_method_number != null);
+  const empWaivedOnly = isTechnical && empWaivedRows.length > 0 && empWaivedRows.length === items.length;
+  const empWaivedByInst = new Map<string, any[]>();
+  for (const r of empWaivedRows) { const k = String(r.waived_instrument || r.method_group_name || ""); if (!empWaivedByInst.has(k)) empWaivedByInst.set(k, []); empWaivedByInst.get(k)!.push(r); }
+
   // ─── Assessment Summary Table (compact, page 1) ───
-  if (isTechnical) {
+  if (isTechnical && !empWaivedOnly) {
     const summaryElements = [
       { num: 1, name: "Direct Observation of Routine Patient Test Performance" },
       { num: 2, name: "Monitoring, Recording and Reporting of Test Results" },
@@ -4849,6 +4857,25 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
           <th style="padding:4px 6px;text-align:center;font-size:7.5pt;font-weight:600;width:15%;">Status</th>
         </tr>
         ${summaryRows}
+      </table>
+    </div>`;
+  }
+  if (isTechnical && empWaivedRows.length > 0) {
+    const wRows = Array.from(empWaivedByInst.entries()).map(([inst, rs]) => {
+      const passedNames = rs.filter((r: any) => r.passed && String(r.waived_date || "").trim()).map((r: any) => WAIVED_METHODS[Number(r.waived_method_number) - 1] || `Method ${r.waived_method_number}`);
+      const ok = new Set(passedNames).size >= 2;
+      return `<tr>
+        <td style="width:85%;"><b>${esc(inst)}</b>: ${new Set(passedNames).size} of 2 required methods passed${passedNames.length ? ` (${esc(passedNames.join("; "))})` : ""}</td>
+        <td style="text-align:center;width:15%;font-weight:700;color:${ok ? "#437A22" : "#964219"}">${ok ? "PASS" : "IN PROGRESS"}</td>
+      </tr>`;
+    }).join("");
+    html += `<div style="margin:10px 24px;">
+      <table style="width:100%;border-collapse:collapse;font-size:9pt;">
+        <tr style="background:#01696F;color:white;">
+          <th style="padding:4px 6px;text-align:left;font-size:7.5pt;font-weight:600;width:85%;">Waived test system (2 of 4 methods)</th>
+          <th style="padding:4px 6px;text-align:center;font-size:7.5pt;font-weight:600;width:15%;">Status</th>
+        </tr>
+        ${wRows}
       </table>
     </div>`;
   }
@@ -5039,7 +5066,7 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
 
     // Single page break before all elements, then they flow naturally
     html += `<div class="page-break"></div>`;
-    for (const elDef of elementDefs) {
+    for (const elDef of (empWaivedOnly ? [] : elementDefs)) {
       const naKey = `el${elDef.num}_na` as string;
       const naJustKey = `el${elDef.num}_na_justification` as string;
       // Wave F PR F1: each element gets the matching §493.1235 subsection cited
@@ -5141,6 +5168,24 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
       }
 
       html += `</div>`;
+    }
+
+    if (empWaivedRows.length > 0) {
+      html += `<div class="section">
+        <div class="section-header">Waived Test Systems - 2 of 4 Methods Required Per Test</div>
+        <table>
+          <tr><th>Assessment Method</th><th>Instrument/Test</th><th>Evidence</th><th>Date</th><th>Initials</th><th>Pass</th></tr>`;
+      for (const item of empWaivedRows) {
+        html += `<tr>
+          <td>${WAIVED_METHODS[Number(item.waived_method_number) - 1] || `Method ${item.waived_method_number}`}</td>
+          <td>${esc(item.waived_instrument || item.method_group_name || "")}</td>
+          <td>${esc(item.waived_evidence || "")}</td>
+          <td>${esc(item.waived_date || "")}</td>
+          <td>${esc(item.waived_initials || "")}</td>
+          ${compItemVerdictCell(item)}
+        </tr>`;
+      }
+      html += `</table></div>`;
     }
 
   } else if (isWaived) {
@@ -5361,6 +5406,9 @@ interface EmployeeCompetencyRecordInput {
   testSystems: Array<{
     instrumentName: string; department: string | null; complexity: string; analyteCount: number;
     elements: Array<{ num: number; status: string }>;
+    // #91: an all-waived test system carries two-of-four waived methods instead of elements.
+    waived?: boolean; waivedRequired?: number; waivedPassed?: number;
+    waivedMethods?: Array<{ num: number; name: string; date: string; status: string }>;
   }>;
 }
 
@@ -5394,7 +5442,26 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
   };
 
   let anyIncompleteOverall = false;
+  const anyWaived = input.testSystems.some((ts) => ts.waived);
+  const anyElements = input.testSystems.some((ts) => !ts.waived);
   const rows = input.testSystems.map((ts) => {
+    if (ts.waived) {
+      // #91: one cell spanning the element columns lists the passed waived methods.
+      const required = ts.waivedRequired || 2;
+      const passedCount = ts.waivedPassed || 0;
+      const passedNames = (ts.waivedMethods || []).filter((m) => m.status === "pass").map((m) => `${esc(m.name)}${m.date ? ` (${esc(String(m.date).slice(0, 10))})` : ""}`);
+      const anyFailW = (ts.waivedMethods || []).some((m) => m.status === "fail");
+      const incW = passedCount < required;
+      if (incW) anyIncompleteOverall = true;
+      const resultW = incW ? "In progress" : anyFailW ? "Not competent" : "Competent";
+      const rClassW = incW ? "c-amber" : anyFailW ? "c-fail" : "c-pass";
+      const deptW = ts.department ? esc(ts.department) : "";
+      return `<tr>
+      <td class="sys"><b>${esc(ts.instrumentName)}</b><span>${[deptW, esc(ts.complexity), `${ts.analyteCount} analyte${ts.analyteCount === 1 ? "" : "s"}`].filter(Boolean).join(" &middot; ")}</span></td>
+      <td colspan="${anyElements ? elementCount : 1}" style="text-align:left;"><b>Waived testing: ${passedCount} of ${required} required methods passed.</b>${passedNames.length ? ` ${passedNames.join("; ")}` : ""}</td>
+      <td><span class="chip ${rClassW}">${resultW}</span></td>
+    </tr>`;
+    }
     const cells: string[] = [];
     for (let el = 1; el <= elementCount; el++) {
       const e = ts.elements.find((x) => x.num === el);
@@ -5413,8 +5480,9 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
     </tr>`;
   }).join("");
 
-  const elHeaders = Array.from({ length: elementCount }, (_, i) => `<th>El ${i + 1}</th>`).join("");
-  const legend = Array.from({ length: elementCount }, (_, i) => `<div>El ${i + 1}: ${EMP_REC_ELEMENT_NAMES[i + 1]}</div>`).join("");
+  // #91: an all-waived employee gets one "Waived methods" column instead of the element columns.
+  const elHeaders = anyElements ? Array.from({ length: elementCount }, (_, i) => `<th>El ${i + 1}</th>`).join("") : `<th>Waived methods</th>`;
+  const legend = anyElements ? Array.from({ length: elementCount }, (_, i) => `<div>El ${i + 1}: ${EMP_REC_ELEMENT_NAMES[i + 1]}</div>`).join("") : "";
   const statusText = signed ? "Signed and complete" : anyIncompleteOverall ? "In progress" : "Complete, awaiting sign-off";
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8" />
@@ -5470,12 +5538,12 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
       <div><span>Highest complexity</span><b>${esc(input.employee.complexity || "") || "&nbsp;"}</b></div>
       <div><span>Status</span><b>${statusText}</b></div>
       <div><span>Test systems</span><b>${input.testSystems.length} assigned</b></div>
-      <div><span>Elements per system</span><b>${elementCount} (${elementCount === 8 ? "NYS CLEP" : "CLIA"})</b></div>
+      <div><span>Elements per system</span><b>${anyElements ? `${elementCount} (${elementCount === 8 ? "NYS CLEP" : "CLIA"})` : ""}${anyElements && anyWaived ? "; " : ""}${anyWaived ? "Waived: 2 of 4 methods" : ""}</b></div>
       <div><span>Completion date</span><b>${completionDate || "&nbsp;"}</b></div>
       <div><span>Signed on paper</span><b>${signedOnPaper || "&nbsp;"}</b></div>
     </div>
     ${signed ? `<div class="signedbar"><b>Signed and complete for this cycle.</b> Evaluator: ${evalName || "(recorded)"}${evalTitle ? `, ${evalTitle}` : ""}${completionDate ? ` on ${completionDate}` : ""}.</div>` : ""}
-    <div class="reg">Technical competency assessed per 42 CFR 493.1235. The required procedures are shown per test system; N/A elements carry a recorded justification. Analytes run the same way on one instrument are covered by a single test-system competency.</div>
+    <div class="reg">Technical competency assessed per 42 CFR 493.1235. The required procedures are shown per test system; N/A elements carry a recorded justification. Analytes run the same way on one instrument are covered by a single test-system competency.${anyWaived ? " Waived test systems are assessed by two of four methods (blind specimen testing, periodic observation by supervisor, monitoring of QC performance, written test) under the accreditor's waived-testing standard." : ""}</div>
     <h2>Competency by test system</h2>
     <table>
       <thead><tr><th style="width:30%">Test system</th>${elHeaders}<th style="width:12%">Result</th></tr></thead>

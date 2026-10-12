@@ -80,20 +80,56 @@ export function incompleteElementCells(
 }
 
 /**
+ * Waived testing competency (#91, 2026-10-12): an all-waived test system (a
+ * glucose meter, a urine dipstick reader) is assessed by two of four methods per
+ * test, at hire and annually, under the accreditor's waived-testing standard;
+ * the six CLIA elements apply to moderate and high complexity test systems. On
+ * the employee record a waived method is an item row with waived_method_number
+ * (1-4) and NULL element/method numbers, so no element logic ever counts it.
+ */
+export const WAIVED_METHOD_NAMES = [
+  "Blind specimen testing",
+  "Periodic observation by supervisor",
+  "Monitoring of QC performance",
+  "Written test specific to the test assessed",
+];
+export const WAIVED_METHODS_REQUIRED = 2;
+
+/** A waived method counts toward the two required when it is marked passed AND dated. */
+export function waivedMethodPassed(item: any): boolean {
+  return !!item?.passed && !!str(item?.waived_date);
+}
+
+/** Passed waived methods recorded for one test system (instrument). */
+export function waivedPassedCount(items: any[], instrumentId: number): number {
+  const nums = new Set<number>();
+  for (const i of items || []) {
+    if (Number(i.instrument_id) === Number(instrumentId) && i.waived_method_number != null && waivedMethodPassed(i)) nums.add(Number(i.waived_method_number));
+  }
+  return nums.size;
+}
+
+/**
  * Employee-centric variant: the incomplete element cells keyed by TEST SYSTEM
  * (instrument_id) instead of method group. The per-employee record (Phase 2+)
  * stores items keyed by instrument_id, so the Sign & Complete gate must check
  * completeness per assigned instrument. An instrument with no row for an element
  * counts that element as incomplete, so passing the FULL assigned-instrument
- * list enforces "every assigned test system complete before sign."
+ * list enforces "every assigned test system complete before sign." A waived
+ * instrument (waived: true) is complete with two passed waived methods instead.
  */
 export function incompleteElementCellsByInstrument(
   items: any[],
-  instruments: Array<{ id: number; name?: string | null }>,
+  instruments: Array<{ id: number; name?: string | null; waived?: boolean }>,
   elementCount: number,
 ): string[] {
   const missing: string[] = [];
   for (const inst of instruments || []) {
+    if (inst.waived) {
+      const n = waivedPassedCount(items, inst.id);
+      if (n < WAIVED_METHODS_REQUIRED) missing.push(`${inst.name || `Instrument ${inst.id}`} · ${n} of ${WAIVED_METHODS_REQUIRED} waived methods passed`);
+      continue;
+    }
     for (let el = 1; el <= elementCount; el++) {
       const row = (items || []).find(
         (i) => Number(i.instrument_id) === Number(inst.id) && Number(i.element_number ?? i.method_number) === el,

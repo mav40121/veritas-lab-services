@@ -55,7 +55,7 @@ import { seedProfileFor, seedTeaFor, seedCalVerPoints, seedMethodCompQuant, seed
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
 import { isValidIfuUrl } from "@shared/ifu";
-import { incompleteElementCells as compIncompleteCells, incompleteElementCellsByInstrument as compIncompleteCellsByInstrument, aggregateElementStatus as compAggregateElementStatus, competencyCycleWindowDays } from "@shared/competencyStatus";
+import { incompleteElementCells as compIncompleteCells, incompleteElementCellsByInstrument as compIncompleteCellsByInstrument, aggregateElementStatus as compAggregateElementStatus, itemElementStatus as compItemElementStatus, competencyCycleWindowDays, WAIVED_METHOD_NAMES, WAIVED_METHODS_REQUIRED, waivedMethodPassed, waivedPassedCount } from "@shared/competencyStatus";
 import { competencyDueColumns, competencySeedAtCreate } from "./competencySchedule";
 
 // Express already URL-decodes route params before the handler runs, so
@@ -27721,6 +27721,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (nm) noteAssessed(waivedByName, nm, r.program_id, dms);
     }
 
+    // BUG-040: the record signed on the employee page (the per-lab implicit program)
+    // keys its items by instrument, not method group, so the queries above never saw
+    // it and a signed test system stayed "owed". A locked record counts as assessed,
+    // as of its sign date, for each test system it shows competent: every element
+    // pass or N/A, or (waived, #91) two passed waived methods.
+    const implicitRows = client.prepare(
+      `SELECT a.id AS aid, ce.staff_employee_id AS staff_id, COALESCE(substr(a.completion_date, 1, 10), a.assessment_date) AS adate, ai.*
+       FROM competency_assessments a
+       JOIN competency_programs p ON p.id = a.program_id
+       JOIN competency_employees ce ON ce.id = a.employee_id
+       JOIN competency_assessment_items ai ON ai.assessment_id = a.id
+       WHERE p.lab_id = ? AND p.is_implicit = 1 AND a.locked = 1 AND ai.instrument_id IS NOT NULL
+         AND COALESCE(substr(a.completion_date, 1, 10), a.assessment_date) >= ?`
+    ).all(labId, widestCycleStart) as any[];
+    const implicitGroups = new Map<string, any[]>();
+    for (const r of implicitRows) {
+      const k = `${r.aid}|${r.instrument_id}`;
+      if (!implicitGroups.has(k)) implicitGroups.set(k, []);
+      implicitGroups.get(k)!.push(r);
+    }
+    const implicitByStaffId = new Map<number, Map<number, number>>(); // staff -> instrument -> latest sign date (ms)
+    for (const rows of Array.from(implicitGroups.values())) {
+      const first = rows[0];
+      if (!first.staff_id) continue;
+      const waivedRows = rows.filter((r: any) => r.waived_method_number != null);
+      const elementRows = rows.filter((r: any) => r.waived_method_number == null);
+      const competent = waivedRows.length
+        ? waivedPassedCount(waivedRows, first.instrument_id) >= WAIVED_METHODS_REQUIRED
+        : elementRows.length > 0 && elementRows.every((r: any) => { const st = compItemElementStatus(r, Number(r.element_number ?? r.method_number)); return st === "pass" || st === "na"; });
+      if (!competent) continue;
+      const d = new Date(first.adate); const dms = Number.isNaN(d.getTime()) ? 0 : d.getTime();
+      noteAssessed(implicitByStaffId, first.staff_id, Number(first.instrument_id), dms);
+    }
+    const implicitProgram = client.prepare("SELECT id, name FROM competency_programs WHERE lab_id = ? AND is_implicit = 1 LIMIT 1").get(labId) as any;
+
     const rankComplexity = (c: string): number => {
       const u = String(c || "").toUpperCase();
       if (u.startsWith("H")) return 3;
@@ -27785,7 +27820,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // semiannual first year).
         const inWindow = (m: Map<number, number>, id: number, cutoff: number) => { const d = m.get(id); return d != null && d >= cutoff; };
         const waivedCutoffMs = today.getTime() - 365 * dayMs;
-        const assessed = coveringMgIds.some((id) => inWindow(empAssessed, id, cycleCutoffMs)) || coveringWaivedIds.some((id) => inWindow(empWaivedAssessed, id, waivedCutoffMs));
+        // BUG-040: the employee-page record for this instrument (waived: one-year window).
+        const empRecord = implicitByStaffId.get(e.id);
+        const recordAssessed = !!empRecord && inWindow(empRecord, Number(inst.id), maxRank === 1 ? waivedCutoffMs : cycleCutoffMs);
+        if (empRecord?.has(Number(inst.id)) && !coverage && implicitProgram) {
+          coverage = { programId: implicitProgram.id, programName: implicitProgram.name || "Competency", methodGroupId: null, methodGroupName: "Employee competency record" };
+        }
+        const assessed = recordAssessed || coveringMgIds.some((id) => inWindow(empAssessed, id, cycleCutoffMs)) || coveringWaivedIds.some((id) => inWindow(empWaivedAssessed, id, waivedCutoffMs));
         return {
           instrumentId: inst.id,
           instrumentName: inst.instrument_name,
@@ -27899,6 +27940,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Prefer the employee-centric instrument-keyed items (Phase 2 entry); fall
       // back to legacy method-group items so pre-migration data still shows.
       const directItems = itemsByInstrument.get(inst.id) || [];
+      // #91: an all-waived test system is assessed by two of four waived methods,
+      // not the six elements. Its rows carry waived_method_number (1-4).
+      if (maxRank === 1) {
+        const waivedRows = directItems.filter((it: any) => it.waived_method_number != null);
+        const waivedMethods = WAIVED_METHOD_NAMES.map((name, i) => {
+          const row: any = waivedRows.find((it: any) => Number(it.waived_method_number) === i + 1) || null;
+          const hasData = !!row && !!(String(row.waived_evidence || "").trim() || String(row.waived_date || "").trim() || row.passed);
+          return {
+            num: i + 1, name,
+            evidence: row?.waived_evidence || "", date: row?.waived_date || "", initials: row?.waived_initials || "", passed: !!row?.passed,
+            status: !hasData ? "unused" : waivedMethodPassed(row) ? "pass" : row.passed ? "incomplete" : "fail",
+          };
+        });
+        const passedCount = waivedPassedCount(waivedRows, inst.id);
+        return {
+          instrumentId: inst.id,
+          instrumentName: inst.instrument_name,
+          department: inst.category || null,
+          complexity: cLabel(maxRank),
+          analyteCount: analytesLC.length,
+          covered: true,
+          hasData: waivedMethods.some((m) => m.status !== "unused"),
+          complete: passedCount >= WAIVED_METHODS_REQUIRED,
+          waived: true,
+          waivedRequired: WAIVED_METHODS_REQUIRED,
+          waivedPassed: passedCount,
+          waivedMethods,
+          elements: [],
+        };
+      }
       const instItems: any[] = directItems.length ? directItems : [];
       if (!instItems.length) { for (const mg of coveringMg) { const its = itemsByMg.get(mg.id); if (its) instItems.push(...its); } }
       const elements = [];
@@ -28013,6 +28084,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const ownerUserId = labRow?.owner_user_id ?? req.userId;
     const now = new Date().toISOString();
 
+    // #91: an all-waived test system saves two-of-four waived methods, not elements.
+    const instTests = sqlite.prepare("SELECT DISTINCT complexity FROM veritamap_instrument_tests WHERE instrument_id = ? AND active = 1").all(instrumentId) as any[];
+    const instMaxRank = instTests.reduce((m: number, t: any) => { const u = String(t.complexity || "").toUpperCase(); return Math.max(m, u.startsWith("H") ? 3 : u.startsWith("M") ? 2 : u.startsWith("W") ? 1 : 0); }, 0);
+    const isWaivedSystem = instMaxRank === 1;
+    const waivedIn: any[] = Array.isArray(req.body?.waivedMethods) ? req.body.waivedMethods : [];
+    if (isWaivedSystem && !Array.isArray(req.body?.waivedMethods)) {
+      return res.status(400).json({ error: `${inst.instrument_name} is a waived test system: record two of the four waived methods.` });
+    }
+    const waivedRows: Array<{ num: number; evidence: string | null; date: string | null; initials: string | null; passed: boolean }> = [];
+    for (const m of waivedIn) {
+      const num = Number(m?.num);
+      if (!Number.isInteger(num) || num < 1 || num > WAIVED_METHOD_NAMES.length) return res.status(400).json({ error: `Unknown waived method ${m?.num}.` });
+      const evidence = String(m?.evidence || "").trim() || null;
+      const date = String(m?.date || "").trim() || null;
+      const initials = String(m?.initials || "").trim() || null;
+      const passed = !!m?.passed;
+      if (passed && !date) return res.status(400).json({ error: `${WAIVED_METHOD_NAMES[num - 1]}: enter the date it was performed.` });
+      if (evidence || date || initials || passed) waivedRows.push({ num, evidence, date, initials, passed });
+    }
+
     const elements: any[] = Array.isArray(req.body?.elements) ? req.body.elements : [];
     // Mirror the form rule: an N/A element needs a justification.
     for (const el of elements) {
@@ -28062,6 +28153,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       // Replace this instrument's items only.
       sqlite.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ? AND instrument_id = ?").run(assessment.id, instrumentId);
+      if (isWaivedSystem) {
+        // Element and method numbers stay NULL so no element logic counts these rows.
+        const wStmt = sqlite.prepare(
+          `INSERT INTO competency_assessment_items (assessment_id, instrument_id, method_number, element_number, item_label, method_group_name,
+             waived_instrument, waived_method_number, waived_evidence, waived_date, waived_initials, passed)
+           VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`
+        );
+        for (const w of waivedRows) {
+          wStmt.run(assessment.id, instrumentId, WAIVED_METHOD_NAMES[w.num - 1], inst.instrument_name, inst.instrument_name, w.num, w.evidence, w.date, w.initials, w.passed ? 1 : 0);
+        }
+        return assessment.id;
+      }
       const stmt = sqlite.prepare(
         `INSERT INTO competency_assessment_items (
            assessment_id, instrument_id, method_number, element_number, item_label, method_group_name,
@@ -28160,6 +28263,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (assessment.locked === 1) return res.status(409).json({ error: "This competency record is already signed and locked." });
 
     const items = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(assessment.id) as any[];
+    // #91: an all-waived test system is complete with two passed waived methods.
+    const signTestsStmt = sqlite.prepare("SELECT DISTINCT complexity FROM veritamap_instrument_tests WHERE instrument_id = ? AND active = 1");
+    for (const inst of instruments) {
+      // Same rule as the view and the save: the highest complexity on the instrument is WAIVED.
+      const rank = (signTestsStmt.all(inst.id) as any[]).reduce((m: number, t: any) => { const u = String(t.complexity || "").toUpperCase(); return Math.max(m, u.startsWith("H") ? 3 : u.startsWith("M") ? 2 : u.startsWith("W") ? 1 : 0); }, 0);
+      inst.waived = rank === 1;
+    }
     const incomplete = compIncompleteCellsByInstrument(items, instruments, elementCount);
     if (incomplete.length) {
       return res.status(409).json({ error: "Every assigned test system must be complete (data or N/A on all elements) before signing.", incomplete });
