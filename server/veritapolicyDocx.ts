@@ -660,7 +660,12 @@ export async function generatePolicyDocxBuffer(
 ): Promise<Buffer | null> {
   const tmpl = loadTemplate(policyId);
   if (!tmpl) return null;
-  const houseCtx = house ? { ...house, watermark: opts?.uncontrolled ? uncontrolledWatermarkParagraph() : null } : null;
+  // Two instances: a format with a separate first-page header (redington_fairview) needs the watermark in both headers.
+  const houseCtx = house ? {
+    ...house,
+    watermark: opts?.uncontrolled ? uncontrolledWatermarkParagraph() : null,
+    watermarkFirst: opts?.uncontrolled ? uncontrolledWatermarkParagraph() : null,
+  } : null;
   const doc = houseCtx && houseCtx.format === "umass_milford"
     ? buildUmassMilfordDocument(tmpl, lab, crosswalk ?? null, opts, houseCtx)
     : houseCtx && houseCtx.format === "redington_fairview"
