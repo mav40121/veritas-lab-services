@@ -67,5 +67,26 @@ check("sanitize non-array -> []", JSON.stringify(sanitizeSpecialties(null)) === 
   check("gaps: with a lab list, only the null-TS remains a gap (1)", gapsWithList.length === 1 && gapsWithList[0].employeeId === 10);
 }
 
+// BUG-044 (Redington-Fairview, 2026-10-12): the form's TC/TS placeholder row (no specialty) left beside real specialty rows.
+{
+  const emps = [
+    { id: 20, last_name: "Morgan", first_name: "Brandy", roles: [{ role: "TC", specialty_number: null }, { role: "TC", specialty_number: 7 }, { role: "TC", specialty_number: 5 }, { role: "TS", specialty_number: null }, { role: "TS", specialty_number: 5 }, { role: "GS", specialty_number: null }] },
+    { id: 21, last_name: "Only", first_name: "Placeholder", roles: [{ role: "TC", specialty_number: null }] },
+    { id: 22, last_name: "Entire", first_name: "Lab", roles: [{ role: "TS", specialty_number: null }, { role: "TS", specialty_number: null, all_specialties: 1 }] },
+  ];
+  const gaps = cms209Gaps(emps, [1, 5, 7]);
+  check("BUG-044 gaps: placeholder beside real TC/TS specialties is not a gap; a TC with ONLY the placeholder still is",
+    gaps.length === 1 && gaps[0].employeeId === 21 && gaps[0].role === "TC", JSON.stringify(gaps));
+  const out = expandEntireLabRoles(emps, [1, 5, 7]);
+  const morgan = out.find((e: any) => e.id === 20)!.roles!;
+  check("BUG-044 209 rows: Morgan prints TC 5, TC 7, TS 5 and GS, with no blank TC/TS line",
+    !morgan.some((r: any) => (r.role === "TC" || r.role === "TS") && r.specialty_number == null) && morgan.filter((r: any) => r.role === "TC").length === 2 && morgan.some((r: any) => r.role === "GS"),
+    JSON.stringify(morgan));
+  const entire = out.find((e: any) => e.id === 22)!.roles!;
+  check("BUG-044 209 rows: a placeholder beside an entire-lab TS expands to the lab list only", JSON.stringify(specs(entire)) === JSON.stringify([1, 5, 7]), JSON.stringify(entire));
+  const only = out.find((e: any) => e.id === 21)!.roles!;
+  check("BUG-044 209 rows: a TC with only the placeholder keeps its row (still surfaces as needs-review)", only.length === 1 && only[0].role === "TC" && only[0].specialty_number == null);
+}
+
 console.log(fails === 0 ? "\nALL PASS" : `\n${fails} FAILURE(S)`);
 process.exit(fails === 0 ? 0 : 1);
