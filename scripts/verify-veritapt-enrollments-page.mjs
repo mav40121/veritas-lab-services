@@ -7,6 +7,9 @@
 //   3. the filter narrows the list; the vendor filter works
 //   4. Add Enrollment adds a row and stays on the screen; Remove deletes one
 //   5. the back link returns to the VeritaPT app; light, dark and 390px render with no horizontal scroll
+//   6. (Redington 10/12) the Program Name picker is searchable by code or name: "JAT" ranks JAT first, then JATE1;
+//      "transfusion" finds the transfusion programs; "151" ranks API 151 first; picking a program fills its category.
+//      The scratch catalog rows below are TEST FIXTURES in the local scratch DB only (never production).
 // Run: PW_BASE=http://localhost:5166 SCRATCH_DB=<db> OUT=<dir> node scripts/verify-veritapt-enrollments-page.mjs
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
@@ -28,6 +31,17 @@ sdb.close();
 const mapId = (await call("POST", `/api/labs/${labId}/veritamap/maps`, { name: "Core" }, owner.token)).id;
 await call("POST", `/api/admin/veritamap/seed-map?secret=${ADMIN}`, { mapId, defaultActive: 1, instruments: [
   { name: "Beckman Coulter AU5800", category: "Chemistry", tests: [{ analyte: "Glucose", specialty: "General Chemistry", complexity: "MODERATE", active: 1 }, { analyte: "Potassium", specialty: "General Chemistry", complexity: "MODERATE", active: 1 }] },
+] });
+// Scratch-DB catalog fixtures for check 6 (local test data only).
+await call("POST", "/api/admin/veritapt/vendor-programs", { secret: ADMIN, programs: [
+  { vendor: "CAP", programCode: "J", programName: "Transfusion Medicine-Comprehensive", ptCategory: "Blood Bank / Immunohematology", analytes: [], source: "test fixture" },
+  { vendor: "CAP", programCode: "JAT", programName: "Transfusion Medicine-Automated", ptCategory: "Blood Bank / Immunohematology", analytes: [], source: "test fixture" },
+  { vendor: "CAP", programCode: "JATE1", programName: "Transfusion Med-Automated EDU Challenge", ptCategory: "Blood Bank / Immunohematology", analytes: [], source: "test fixture" },
+  { vendor: "CAP", programCode: "C", programName: "Chemistry/Therapeutic Drug Monitoring", ptCategory: "General Chemistry", analytes: [], source: "test fixture" },
+  { vendor: "CAP", programCode: "WBCR", programName: "Whole Blood Creatinine", ptCategory: "General Chemistry", analytes: [], source: "test fixture" },
+  { vendor: "API", programCode: "151", programName: "Sperm Count", ptCategory: "Hematology", analytes: ["Sperm Count"], source: "test fixture" },
+  { vendor: "API", programCode: "161", programName: "Sperm Motility (Virtual only)", ptCategory: "Hematology", analytes: ["Sperm Motility"], source: "test fixture" },
+  { vendor: "API", programCode: "217", programName: "Coagulation", ptCategory: "Coagulation", analytes: ["APTT"], source: "test fixture" },
 ] });
 const cats = ["General Chemistry", "Hematology", "Microbiology", "Immunology / Serology", "Coagulation"];
 for (let i = 1; i <= 40; i++) {
@@ -62,6 +76,15 @@ for (const [scheme, width] of [["light", 1400], ["dark", 1400], ["light", 390]])
   check(`5. ${tag} no horizontal page scroll`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: `${OUT}/pt_enrollments_${scheme}_${width}.png`, fullPage: false });
+  if (scheme === "dark") {
+    // Dark mode: the open program search, to check contrast of the highlighted row and its code.
+    await page.getByTestId("pt-enroll-vendor").click(); await page.getByRole("option", { name: "CAP", exact: true }).click(); await page.waitForTimeout(600);
+    await page.getByTestId("pt-enroll-program-select").click(); await page.waitForTimeout(300);
+    await page.getByTestId("pt-enroll-program-search").fill("JAT"); await page.waitForTimeout(300);
+    check(`6d. ${tag} the program search opens in dark mode`, (await page.getByTestId("pt-enroll-program-option").count()) === 2);
+    await page.screenshot({ path: `${OUT}/pt_program_search_jat_dark.png`, fullPage: false });
+    await page.keyboard.press("Escape"); await page.waitForTimeout(200);
+  }
 
   if (width === 1400 && scheme === "light") {
     await page.getByTestId("pt-enroll-filter").fill("Microbiology"); await page.waitForTimeout(300);
@@ -82,6 +105,34 @@ for (const [scheme, width] of [["light", 1400], ["dark", 1400], ["light", 390]])
     await page.getByRole("button", { name: /^Remove$/ }).click(); await page.waitForTimeout(1500);
     const afterRemove = await rows.count();
     check(`4b. ${tag} Remove deletes it`, afterRemove === 40 && (await rows.filter({ hasText: "Regional Blood Gas Survey" }).count()) === 0, `rows ${afterRemove}`);
+
+    // 6. Searchable Program Name picker.
+    const opts = page.getByTestId("pt-enroll-program-option");
+    const optTexts = async () => (await opts.allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim());
+    await page.getByTestId("pt-enroll-vendor").click(); await page.getByRole("option", { name: "CAP", exact: true }).click(); await page.waitForTimeout(600);
+    await page.getByTestId("pt-enroll-program-select").click(); await page.waitForTimeout(300);
+    await page.getByTestId("pt-enroll-program-search").fill("JAT"); await page.waitForTimeout(300);
+    const jat = await optTexts();
+    await page.screenshot({ path: `${OUT}/pt_program_search_jat.png`, fullPage: false });
+    await page.getByTestId("pt-enroll-program-search").fill("transfusion"); await page.waitForTimeout(300);
+    const trans = await optTexts();
+    await page.getByTestId("pt-enroll-program-search").fill("JAT"); await page.waitForTimeout(300);
+    await opts.first().click(); await page.waitForTimeout(300);
+    const picked = (await page.getByTestId("pt-enroll-program-select").innerText()).trim();
+    const cat = (await page.getByTestId("pt-enroll-category-from-program").innerText()).trim();
+    check(`6a. ${tag} CAP search "JAT": JAT first, then JATE1, nothing else; picking it fills the name and category`,
+      jat.length === 2 && /Transfusion Medicine-Automated JAT$/.test(jat[0]) && /JATE1$/.test(jat[1]) && picked === "Transfusion Medicine-Automated (JAT)" && cat === "Blood Bank / Immunohematology",
+      `${JSON.stringify(jat)} | picked "${picked}" | category "${cat}"`);
+    check(`6b. ${tag} CAP search "transfusion" finds the three transfusion programs`, trans.length === 3 && trans.every((t) => /transfusion/i.test(t)), JSON.stringify(trans));
+    await page.getByTestId("pt-enroll-vendor").click(); await page.getByRole("option", { name: "API", exact: true }).click(); await page.waitForTimeout(600);
+    await page.getByTestId("pt-enroll-program-select").click(); await page.waitForTimeout(300);
+    await page.getByTestId("pt-enroll-program-search").fill("151"); await page.waitForTimeout(300);
+    const api151 = await optTexts();
+    await page.getByTestId("pt-enroll-program-search").fill("zzz"); await page.waitForTimeout(300);
+    const none = await opts.count();
+    const emptyText = await page.getByText(/No API program matches/).count();
+    await page.keyboard.press("Escape"); await page.waitForTimeout(200);
+    check(`6c. ${tag} API search "151" shows Sperm Count only; no match shows the empty message`, api151.length === 1 && /^Sperm Count 151$/.test(api151[0]) && none === 0 && emptyText === 1, `${JSON.stringify(api151)} | none ${none} empty ${emptyText}`);
     await page.getByTestId("pt-enrollments-back").click(); await page.waitForTimeout(1000);
     check(`5b. ${tag} back link returns to the VeritaPT app`, page.url().endsWith(`/labs/${labId}/veritapt/app`), page.url().replace(BASE, ""));
   }

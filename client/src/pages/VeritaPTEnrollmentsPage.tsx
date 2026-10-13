@@ -21,8 +21,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronLeft, Plus, Search, Trash2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Check, ChevronLeft, ChevronsUpDown, Plus, Search, Trash2 } from "lucide-react";
 import { PT_CATEGORIES, VENDORS } from "@/lib/veritaptConstants";
+
+// Program search: an item's value is "CODE | Program Name". An exact code ranks first, then a code that starts with
+// the search, then any program whose code or name contains it. Plain substring, not fuzzy, so "151" finds 151 only.
+const programFilter = (value: string, search: string): number => {
+  const s = search.trim().toLowerCase();
+  if (!s) return 1;
+  const v = value.toLowerCase();
+  const code = v.split(" | ")[0].trim();
+  if (code && code === s) return 1;
+  if (code && code.startsWith(s)) return 0.8;
+  return v.includes(s) ? 0.5 : 0;
+};
 
 type Enrollment = { id: number; vendor: string; program_name: string; pt_category: string; year_enrolled: number };
 type VendorProgram = { programCode: string | null; programName: string; ptCategory: string; analytes: string[] };
@@ -47,6 +61,7 @@ export default function VeritaPTEnrollmentsPage() {
   const [newYear, setNewYear] = useState(String(new Date().getFullYear()));
   const [vendorPrograms, setVendorPrograms] = useState<VendorProgram[]>([]);
   const [selectedProgram, setSelectedProgram] = useState<VendorProgram | null>(null);
+  const [programOpen, setProgramOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -141,22 +156,44 @@ export default function VeritaPTEnrollmentsPage() {
               <div className="space-y-1 sm:col-span-2">
                 <Label className="text-xs">Program Name</Label>
                 {newVendor !== "Other" && vendorPrograms.length > 0 ? (
-                  <Select
-                    value={newProgramName}
-                    onValueChange={(name) => {
-                      const p = vendorPrograms.find((x) => x.programName === name) || null;
-                      setNewProgramName(name);
-                      setSelectedProgram(p);
-                      if (p) setNewCategory(p.ptCategory);
-                    }}
-                  >
-                    <SelectTrigger className="h-9 text-sm" data-testid="pt-enroll-program-select"><SelectValue placeholder={`Select a ${newVendor} program`} /></SelectTrigger>
-                    <SelectContent className="max-h-80">
-                      {vendorPrograms.map((p) => (
-                        <SelectItem key={p.programName} value={p.programName}>{p.programName}{p.programCode ? ` (${p.programCode})` : ""}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  // Type-to-search picker (Redington, 10/12): the catalog runs to hundreds of programs, so the lab finds one
+                  // by its program name or its vendor code (JAT, 151) instead of scrolling a dropdown.
+                  <Popover open={programOpen} onOpenChange={setProgramOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" role="combobox" aria-expanded={programOpen}
+                        className="h-9 w-full justify-between text-sm font-normal" data-testid="pt-enroll-program-select">
+                        <span className={`truncate ${newProgramName ? "" : "text-muted-foreground"}`}>
+                          {newProgramName
+                            ? `${newProgramName}${selectedProgram?.programCode ? ` (${selectedProgram.programCode})` : ""}`
+                            : `Search ${newVendor} programs by name or code`}
+                        </span>
+                        <ChevronsUpDown size={14} className="ml-2 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)]" align="start">
+                      <Command filter={programFilter}>
+                        <CommandInput placeholder="Type a name or code, e.g. Transfusion or JAT" data-testid="pt-enroll-program-search" />
+                        <CommandList className="max-h-72">
+                          <CommandEmpty>No {newVendor} program matches. Check the code, or pick Other to type the name.</CommandEmpty>
+                          <CommandGroup>
+                            {vendorPrograms.map((p) => (
+                              <CommandItem key={p.programName} value={`${p.programCode ?? ""} | ${p.programName}`} data-testid="pt-enroll-program-option"
+                                onSelect={() => {
+                                  setNewProgramName(p.programName);
+                                  setSelectedProgram(p);
+                                  setNewCategory(p.ptCategory);
+                                  setProgramOpen(false);
+                                }}>
+                                <Check size={14} className={`mr-2 shrink-0 ${newProgramName === p.programName ? "opacity-100" : "opacity-0"}`} />
+                                <span className="flex-1">{p.programName}</span>
+                                {p.programCode && <span className="ml-2 font-mono text-xs opacity-70">{p.programCode}</span>}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 ) : (
                   <Input value={newProgramName} onChange={(e) => { setNewProgramName(e.target.value); setSelectedProgram(null); }}
                     placeholder="e.g. CAP Chemistry Survey (C)" className="h-9 text-sm" data-testid="pt-enroll-program-input" />
@@ -170,7 +207,7 @@ export default function VeritaPTEnrollmentsPage() {
                 <Label className="text-xs">PT Category</Label>
                 {selectedProgram ? (
                   <div className="rounded-md border px-3 py-2 text-sm bg-background">
-                    <span className="font-medium">{newCategory}</span>
+                    <span className="font-medium" data-testid="pt-enroll-category-from-program">{newCategory}</span>
                     <span className="text-xs text-muted-foreground"> (from program)</span>
                     {selectedProgram.analytes.length > 0 && (
                       <div className="mt-2">
