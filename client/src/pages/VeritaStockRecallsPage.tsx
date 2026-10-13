@@ -11,7 +11,7 @@
 // Copy rule: no lab wording anywhere on this page (VeritaStock is general
 // supply inventory).
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ClipboardEvent } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_BASE } from "@/lib/queryClient";
@@ -29,7 +29,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   ArrowLeft, Plus, ShieldAlert, Mail, Users, Trash2, Download, Upload, CheckCircle2, Circle,
-  PackageX, Pencil, Send, Lock, History,
+  PackageX, Pencil, Send, Lock, History, ClipboardPaste,
 } from "lucide-react";
 
 const NOTICE_TYPES = [
@@ -610,6 +610,20 @@ function FilesCard({ base, c, onDone }: { base: string; c: CaseDetail; onDone: (
     catch (e: any) { toast({ title: "Upload failed", description: e.message, variant: "destructive" }); }
     finally { setUploading(false); }
   };
+  // Paste a screenshot straight in (Milford, Brenda Benson via Lisa Veri 2026-10-13, REQ-054): click the box, Ctrl+V.
+  // The clipboard image becomes a file named for the local time it was pasted and goes through the same upload.
+  const pasteScreenshot = (e: ClipboardEvent<HTMLDivElement>) => {
+    const item = Array.from(e.clipboardData?.items || []).find((i) => i.kind === "file" && i.type.startsWith("image/"));
+    const blob = item?.getAsFile();
+    if (!blob) {
+      toast({ title: "No screenshot to paste", description: "Copy a screenshot first (Windows: Win+Shift+S), then click the box and press Ctrl+V.", variant: "destructive" });
+      return;
+    }
+    e.preventDefault();
+    const n = new Date(), p2 = (x: number) => String(x).padStart(2, "0");
+    const ext = blob.type === "image/jpeg" ? "jpg" : (blob.type.split("/")[1] || "png");
+    upload(new File([blob], `Screenshot ${n.getFullYear()}-${p2(n.getMonth() + 1)}-${p2(n.getDate())} ${p2(n.getHours())}${p2(n.getMinutes())}.${ext}`, { type: blob.type }));
+  };
   const download = async (d: RecallDoc) => {
     const r = await fetch(`${API_BASE}${base}/${c.id}/documents/${d.id}`, { headers: authHeaders() });
     if (!r.ok) { toast({ title: "Download failed", variant: "destructive" }); return; }
@@ -654,6 +668,16 @@ function FilesCard({ base, c, onDone }: { base: string; c: CaseDetail; onDone: (
               <input type="file" className="sr-only" onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ""; }} disabled={uploading} data-testid="recall-file-input" />
               <span className={`inline-flex items-center rounded-md border px-3 h-9 text-sm cursor-pointer hover:bg-muted ${uploading ? "opacity-50" : ""}`}><Upload size={14} className="mr-1.5" />{uploading ? "Uploading..." : "Add file"}</span>
             </label>
+            <div
+              tabIndex={0}
+              role="button"
+              aria-label="Paste a screenshot: click here, then press Ctrl+V"
+              onPaste={pasteScreenshot}
+              data-testid="recall-paste-zone"
+              className={`inline-flex items-center rounded-md border border-dashed px-3 py-1.5 min-h-9 text-sm text-left text-muted-foreground cursor-text hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary focus:text-foreground ${uploading ? "opacity-50 pointer-events-none" : ""}`}
+            >
+              <ClipboardPaste size={14} className="mr-1.5 shrink-0" />Paste a screenshot: click here, then Ctrl+V
+            </div>
           </div>
         )}
       </CardContent>
