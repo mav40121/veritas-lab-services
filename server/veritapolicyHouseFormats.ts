@@ -25,7 +25,7 @@ import {
 } from "docx";
 import type { PolicyTemplate, LabContext, AccreditorCrosswalk, PolicyDocxOptions } from "./veritapolicyDocx";
 
-export const HOUSE_FORMATS = ["veritadc", "umass_milford"] as const;
+export const HOUSE_FORMATS = ["veritadc", "umass_milford", "redington_fairview"] as const;
 export type HouseFormat = (typeof HOUSE_FORMATS)[number];
 
 export interface HouseFormatContext {
@@ -36,6 +36,7 @@ export interface HouseFormatContext {
   revision?: string | null;          // the lab's revision tag, e.g. "Rev 07-25"
   draftDate: string;                 // YYYY-MM-DD of this render
   watermark?: Paragraph | null;      // UNCONTROLLED COPY paragraph, built by the caller
+  department?: string | null;        // Redington: the department line; "Laboratory" when unset
 }
 
 // Her document: Times New Roman 12, black, Roman-numeral section headings.
@@ -212,6 +213,161 @@ export function buildUmassMilfordDocument(
             }),
             ...(opts?.downloadedBy
               ? [new Paragraph({ alignment: AlignmentType.CENTER, children: [run(`Downloaded by ${opts.downloadedBy} on ${opts.downloadedAt ?? house.draftDate}`, { size: 16, italics: true, color: GRAY })] })]
+              : []),
+          ],
+        }),
+      },
+      children,
+    }],
+  });
+}
+
+// ── Redington-Fairview General Hospital (lab 34), 2026-10-12 ────────────────
+// Lindsay Webber sent "Phlebotomy Policy Template.docx" (10/12) and asked that every draft policy use their header and
+// format. Section order and labels are taken from that template's text: Title, Department, Effective Date,
+// Authorization/Date line, Principle, Policy, Procedure, References, Revised, Biannual Approval/Review Documentation.
+// RF_FONT and the page header are provisional until the .docx itself is read (the mail connector returns its text
+// only); they are isolated here so matching the file changes nothing else.
+const RF_FONT = "Calibri";
+const RF_SZ = 22;    // 11 pt
+const RF_SZ_SM = 18; // 9 pt
+
+function rfRun(text: string, o: { bold?: boolean; italics?: boolean; size?: number; color?: string } = {}) {
+  return new TextRun({ text, font: RF_FONT, size: o.size ?? RF_SZ, bold: o.bold, italics: o.italics, color: o.color ?? BLACK });
+}
+function rfPara(children: TextRun[], o: { after?: number; before?: number; numbering?: string } = {}) {
+  return new Paragraph({
+    spacing: { before: o.before ?? 0, after: o.after ?? 100, line: 264 },
+    numbering: o.numbering ? { reference: o.numbering, level: 0 } : undefined,
+    children,
+  });
+}
+function rfField(label: string, value: string) {
+  return rfPara([rfRun(label + " ", { bold: true }), rfRun(value)], { after: 60 });
+}
+function rfSection(label: string) {
+  return rfPara([rfRun(label, { bold: true })], { before: 200, after: 80 });
+}
+function rfCell(text: string, width: number, o: { bold?: boolean; shade?: boolean } = {}) {
+  return new TableCell({
+    width: { size: width, type: WidthType.DXA },
+    shading: o.shade ? { fill: "F2F2F2", type: ShadingType.CLEAR } : undefined,
+    margins: { top: 80, bottom: 80, left: 120, right: 120 },
+    children: [rfPara([rfRun(text, { bold: o.bold, size: RF_SZ_SM })], { after: 0 })],
+  });
+}
+// Biannual approval/review log: one row per review (the template names the section; the rows are filled in by hand).
+function rfReviewTable() {
+  const widths = [2200, 2700, 2460, 2000];
+  const border = { style: BorderStyle.SINGLE, size: 4, color: BLACK };
+  const blank = () => new TableRow({ children: widths.map((w) => rfCell("", w)) });
+  return new Table({
+    width: { size: PAGE_W, type: WidthType.DXA },
+    columnWidths: widths,
+    borders: { top: border, bottom: border, left: border, right: border, insideHorizontal: border, insideVertical: border },
+    rows: [
+      new TableRow({ tableHeader: true, children: [
+        rfCell("Reviewed / approved by", widths[0], { bold: true, shade: true }),
+        rfCell("Title", widths[1], { bold: true, shade: true }),
+        rfCell("Signature", widths[2], { bold: true, shade: true }),
+        rfCell("Date", widths[3], { bold: true, shade: true }),
+      ] }),
+      blank(), blank(), blank(), blank(),
+    ],
+  });
+}
+
+export function buildRedingtonFairviewDocument(
+  tmpl: PolicyTemplate,
+  lab: LabContext,
+  crosswalk: AccreditorCrosswalk | null,
+  opts: PolicyDocxOptions | undefined,
+  house: HouseFormatContext,
+): Document {
+  const children: (Paragraph | Table)[] = [];
+  const subst = (s: string | undefined) => (s || "").replace(/<<LAB_NAME>>/g, lab.lab_name);
+
+  children.push(rfField("Title:", tmpl.policy_name));
+  // Our template sections ("Specialty Services", "Testing") are VeritaPolicy categories, not hospital departments, so the
+  // default is "Laboratory"; the lab changes it per policy if it files under a sub-department (e.g. Phlebotomy).
+  children.push(rfField("Department:", (house.department || "").trim() || "Laboratory"));
+  children.push(rfField("Effective Date:", ""));
+  children.push(rfPara([rfRun("Authorization: ", { bold: true }), rfRun("________________________     "), rfRun("Date: ", { bold: true }), rfRun("______________")], { after: 160 }));
+
+  children.push(rfSection("Principle:"));
+  if (tmpl.purpose) children.push(rfPara([rfRun(subst(tmpl.purpose))]));
+  if (tmpl.scope) children.push(rfPara([rfRun(subst(tmpl.scope))]));
+  if (!tmpl.purpose && !tmpl.scope) children.push(rfPara([rfRun("[Enter the principle of this policy.]")]));
+
+  children.push(rfSection("Policy:"));
+  const statements = tmpl.policy_statements || [];
+  if (statements.length) statements.forEach((s) => children.push(rfPara([rfRun(subst(s))], { numbering: "rf-policy" })));
+  else children.push(rfPara([rfRun("[Enter the policy statements.]")]));
+
+  children.push(rfSection("Procedure:"));
+  const steps = tmpl.procedure_steps || [];
+  if (steps.length) steps.forEach((s) => children.push(rfPara([rfRun(subst(s))], { numbering: "rf-procedure" })));
+  else children.push(rfPara([rfRun("[Enter the procedure steps.]")]));
+  const defs = (tmpl.definitions || []).filter((d): d is [string, string] => Array.isArray(d) && d.length === 2);
+  if (defs.length) {
+    children.push(rfPara([rfRun("Definitions:", { bold: true })], { before: 120, after: 60 }));
+    defs.forEach(([term, def]) => children.push(rfPara([rfRun(term + ": ", { bold: true }), rfRun(def)], { numbering: "rf-defs" })));
+  }
+
+  children.push(rfSection("References:"));
+  const refs: string[] = [];
+  for (const b of tmpl.cfr_text_blocks || []) refs.push(b.label ? `${b.citation}, ${b.label}` : b.citation);
+  if (crosswalk?.tjc) refs.push(`TJC: ${crosswalk.tjc}`);
+  if (crosswalk?.cap) refs.push(`CAP: ${crosswalk.cap}`);
+  if (crosswalk?.cola) refs.push(`COLA: ${crosswalk.cola}`);
+  if (crosswalk?.aabb) refs.push(`AABB: ${crosswalk.aabb}`);
+  if (refs.length) refs.forEach((r) => children.push(rfPara([rfRun(r)], { after: 40 })));
+  else children.push(rfPara([rfRun("None cited.")]));
+
+  children.push(rfSection("Revised:"));
+  children.push(rfPara([rfRun(house.revision || `Draft ${house.draftDate}, prepared in VeritaDC from the stock policy for review and adoption by the laboratory director or designee.`)]));
+
+  children.push(rfSection("Biannual Approval/Review Documentation:"));
+  children.push(rfReviewTable());
+
+  return new Document({
+    creator: "Perplexity Computer",
+    title: tmpl.policy_name,
+    description: "Generated by VeritaPolicy (house format: Redington-Fairview)",
+    styles: { default: { document: { run: { font: RF_FONT, size: RF_SZ } } } },
+    numbering: {
+      config: [
+        { reference: "rf-policy", levels: [{ level: 0, format: LevelFormat.DECIMAL, text: "%1.", alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 720, hanging: 360 } } } }] },
+        { reference: "rf-procedure", levels: [{ level: 0, format: LevelFormat.DECIMAL, text: "%1.", alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 720, hanging: 360 } } } }] },
+        { reference: "rf-defs", levels: [{ level: 0, format: LevelFormat.BULLET, text: "•", alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 720, hanging: 360 } } } }] },
+      ],
+    },
+    sections: [{
+      properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } },
+      headers: {
+        default: new Header({
+          children: [
+            ...(house.watermark ? [house.watermark] : []),
+            new Paragraph({ alignment: AlignmentType.RIGHT, children: [rfRun(lab.lab_name, { size: RF_SZ_SM, color: GRAY }), rfRun("    CLIA: " + lab.clia_number, { size: RF_SZ_SM, color: GRAY })] }),
+          ],
+        }),
+      },
+      footers: {
+        default: new Footer({
+          children: [
+            new Paragraph({
+              tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
+              children: [
+                rfRun(`${lab.lab_name}: ${tmpl.policy_name}`, { size: RF_SZ_SM }),
+                new TextRun({ text: "\t", font: RF_FONT, size: RF_SZ_SM }),
+                rfRun("Page ", { size: RF_SZ_SM }),
+                new TextRun({ children: [PageNumber.CURRENT], font: RF_FONT, size: RF_SZ_SM, color: BLACK }),
+                rfRun(" of ", { size: RF_SZ_SM }),
+                new TextRun({ children: [PageNumber.TOTAL_PAGES], font: RF_FONT, size: RF_SZ_SM, color: BLACK }),
+              ],
+            }),
+            ...(opts?.downloadedBy
+              ? [new Paragraph({ alignment: AlignmentType.CENTER, children: [rfRun(`Downloaded by ${opts.downloadedBy} on ${opts.downloadedAt ?? house.draftDate}`, { size: 16, italics: true, color: GRAY })] })]
               : []),
           ],
         }),
