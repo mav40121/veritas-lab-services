@@ -3327,7 +3327,7 @@ sqlite.exec(`
 // each rebuild is transaction- and catch-wrapped so it can never crash boot.
 // The three consolidation blocks above are stale-guarded no-ops post-consolidation
 // and catch-wrapped, so their legacy ON CONFLICT(user_id, policy_id) is never
-// reached; backfillVeritapolicySeatsOnStartup uses UPDATE/DELETE only. See the
+// reached; the startup seat backfill (removed 2026-10-13, BUG-045) used UPDATE/DELETE only. See the
 // project_site_module_audit memory (VeritaPolicy HIGH #1/#2).
 {
   const uniqueIndexOn = (table: string, cols: string[]): string | null => {
