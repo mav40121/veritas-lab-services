@@ -50,6 +50,17 @@ export function sanitizeSpecialties(input: any): number[] {
   return [...set].sort((a, b) => a - b);
 }
 
+// BUG-044 (2026-10-12, Redington-Fairview): ticking TC or TS in the VeritaStaff employee form saves a placeholder row
+// with no specialty, and choosing specialties adds one row per specialty without removing it. So a TC/TS with real
+// specialties also carries an empty row, which read as "no specialty number assigned" and would print a blank TC/TS line
+// on the 209. A specialty-less, non-entire-lab TC/TS row is a leftover placeholder when the same person holds the same
+// role with a specialty number or the entire-lab flag; it is skipped. A TC/TS with ONLY the empty row is still a gap.
+export function isPlaceholderRole(r: RoleRow, all: RoleRow[]): boolean {
+  if (r.role !== "TC" && r.role !== "TS") return false;
+  if (r.specialty_number != null || r.all_specialties === 1 || r.all_specialties === true) return false;
+  return all.some((o) => o !== r && o.role === r.role && (o.specialty_number != null || o.all_specialties === 1 || o.all_specialties === true));
+}
+
 // Turn any TC/TS role flagged all_specialties=1 into one role row per specialty
 // the lab performs, so the real CMS-209 renders the whole-lab convention (one
 // row per specialty, the number in both columns). Deduplicates on
@@ -71,6 +82,7 @@ export function expandEntireLabRoles<T extends EmployeeWithRoles>(
       out.push({ role, specialty_number: sn });
     };
     for (const r of emp.roles || []) {
+      if (isPlaceholderRole(r, emp.roles || [])) continue; // BUG-044
       const isTcTs = r.role === "TC" || r.role === "TS";
       const entireLab = r.all_specialties === 1 || r.all_specialties === true;
       if (isTcTs && entireLab) {
@@ -99,6 +111,7 @@ export function cms209Gaps(
   for (const emp of employeesWithRoles) {
     for (const r of emp.roles || []) {
       if (r.role !== "TC" && r.role !== "TS") continue;
+      if (isPlaceholderRole(r, emp.roles || [])) continue; // BUG-044
       const hasSpecialty = r.specialty_number != null;
       const entireLab = r.all_specialties === 1 || r.all_specialties === true;
       const name = `${emp.last_name}, ${emp.first_name}`;
