@@ -23544,6 +23544,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Update program settings (method groups, checklist items, name)
+  // Save a program's method groups WITHOUT re-keying the ones that stay (2026-10-12). A group whose name matches an
+  // existing group keeps its id and is updated in place; new names are inserted; groups no longer listed are removed.
+  // Assessment items point at method_group_id, so the old delete-and-reinsert detached every recorded assessment from
+  // its group on any API edit (the UI only renames programs, so no client had hit it).
+  const saveMethodGroupsKeepingIds = (client: any, programId: number | string, groups: any[]) => {
+    const existing = client.prepare("SELECT id, name FROM competency_method_groups WHERE program_id = ?").all(programId) as Array<{ id: number; name: string }>;
+    const byName = new Map(existing.map((g) => [String(g.name || "").trim().toLowerCase(), g.id]));
+    const kept = new Set<number>();
+    const upd = client.prepare("UPDATE competency_method_groups SET name = ?, instruments = ?, analytes = ?, notes = ? WHERE id = ?");
+    const ins = client.prepare("INSERT INTO competency_method_groups (program_id, name, instruments, analytes, notes) VALUES (?, ?, ?, ?, ?)");
+    for (const g of groups) {
+      const id = byName.get(String(g?.name || "").trim().toLowerCase());
+      const instruments = JSON.stringify(g?.instruments || []), analytes = JSON.stringify(g?.analytes || []);
+      if (id != null && !kept.has(id)) { upd.run(g.name, instruments, analytes, g.notes || null, id); kept.add(id); }
+      else ins.run(programId, g.name, instruments, analytes, g.notes || null);
+    }
+    const del = client.prepare("DELETE FROM competency_method_groups WHERE id = ?");
+    for (const g of existing) if (!kept.has(g.id)) del.run(g.id);
+  };
+
   app.put("/api/competency/programs/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
@@ -23553,16 +23573,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const now = new Date().toISOString();
     if (name) (db as any).$client.prepare("UPDATE competency_programs SET name = ?, updated_at = ? WHERE id = ?").run(name.trim(), now, req.params.id);
     if (department) (db as any).$client.prepare("UPDATE competency_programs SET department = ?, updated_at = ? WHERE id = ?").run(department, now, req.params.id);
-    // Replace method groups
-    if (Array.isArray(methodGroups)) {
-      (db as any).$client.prepare("DELETE FROM competency_method_groups WHERE program_id = ?").run(req.params.id);
-      const stmt = (db as any).$client.prepare(
-        "INSERT INTO competency_method_groups (program_id, name, instruments, analytes, notes) VALUES (?, ?, ?, ?, ?)"
-      );
-      for (const g of methodGroups) {
-        stmt.run(req.params.id, g.name, JSON.stringify(g.instruments || []), JSON.stringify(g.analytes || []), g.notes || null);
-      }
-    }
+    // Save method groups, keeping the ids of groups that stay (see saveMethodGroupsKeepingIds).
+    if (Array.isArray(methodGroups)) saveMethodGroupsKeepingIds((db as any).$client, req.params.id, methodGroups);
     // Replace checklist items
     if (Array.isArray(checklistItems)) {
       (db as any).$client.prepare("DELETE FROM competency_checklist_items WHERE program_id = ?").run(req.params.id);
@@ -23737,15 +23749,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const now = new Date().toISOString();
     if (name) (db as any).$client.prepare("UPDATE competency_programs SET name = ?, updated_at = ? WHERE id = ?").run(name.trim(), now, req.params.id);
     if (department) (db as any).$client.prepare("UPDATE competency_programs SET department = ?, updated_at = ? WHERE id = ?").run(department, now, req.params.id);
-    if (Array.isArray(methodGroups)) {
-      (db as any).$client.prepare("DELETE FROM competency_method_groups WHERE program_id = ?").run(req.params.id);
-      const stmt = (db as any).$client.prepare(
-        "INSERT INTO competency_method_groups (program_id, name, instruments, analytes, notes) VALUES (?, ?, ?, ?, ?)"
-      );
-      for (const g of methodGroups) {
-        stmt.run(req.params.id, g.name, JSON.stringify(g.instruments || []), JSON.stringify(g.analytes || []), g.notes || null);
-      }
-    }
+    // Save method groups, keeping the ids of groups that stay (see saveMethodGroupsKeepingIds).
+    if (Array.isArray(methodGroups)) saveMethodGroupsKeepingIds((db as any).$client, req.params.id, methodGroups);
     if (Array.isArray(checklistItems)) {
       (db as any).$client.prepare("DELETE FROM competency_checklist_items WHERE program_id = ?").run(req.params.id);
       const stmt = (db as any).$client.prepare(
@@ -27846,13 +27851,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const analytes = tests.map((t: any) => String(t.analyte || "").trim()).filter(Boolean);
         const maxRank = tests.reduce((m: number, t: any) => Math.max(m, rankComplexity(t.complexity)), 0);
         const instNameLC = String(inst.instrument_name || "").trim().toLowerCase();
-        const catLC = String(inst.category || "").trim().toLowerCase();
-        const analytesLC = analytes.map((a) => a.toLowerCase());
         let coverage: any = null;
         const coveringMgIds: number[] = [];
         for (const mg of mgParsed) {
-          // BUG-043: an all-waived instrument is covered only by a group that names it (or a waived program below).
-          if (methodGroupCoversInstrument(mg, { nameLC: instNameLC, categoryLC: catLC, analytesLC, allWaived: maxRank === 1 })) {
+          // A group covers only the analyzers it names (Michael 10/12: no new or unique skills = one group). BUG-043.
+          if (methodGroupCoversInstrument(mg, { nameLC: instNameLC })) {
             coveringMgIds.push(mg.id);
             if (!coverage) coverage = { programId: mg.programId, programName: mg.programName, methodGroupId: mg.id, methodGroupName: mg.name };
           }
@@ -27986,9 +27989,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const tests = testsStmt.all(inst.id) as any[];
       const maxRank = tests.reduce((m: number, t: any) => Math.max(m, rankC(t.complexity)), 0);
       const instNameLC = String(inst.instrument_name || "").trim().toLowerCase();
-      const catLC = String(inst.category || "").trim().toLowerCase();
       const analytesLC = tests.map((t: any) => String(t.analyte || "").trim().toLowerCase()).filter(Boolean);
-      const coveringMg = mgParsed.filter((mg) => methodGroupCoversInstrument(mg, { nameLC: instNameLC, categoryLC: catLC, analytesLC, allWaived: maxRank === 1 }));
+      const coveringMg = mgParsed.filter((mg) => methodGroupCoversInstrument(mg, { nameLC: instNameLC }));
       // Prefer the employee-centric instrument-keyed items (Phase 2 entry); fall
       // back to legacy method-group items so pre-migration data still shows.
       const directItems = itemsByInstrument.get(inst.id) || [];
