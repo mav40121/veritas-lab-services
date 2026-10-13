@@ -221,6 +221,7 @@ A clean grep is a required step in the QC checklist, not optional. Visual inspec
 - Technical competency = any test producing a reportable result, including manual methods (Gram Stain, Manual Diff, Urine Micro).
 - Evaluator title by complexity: Moderate = Technical Consultant, High = Technical Supervisor, Waived = General Supervisor.
 - Competency assessment type dropdown: Laboratory Director, Technical Consultant (Moderate), Technical Supervisor (High), General Supervisor (Waived/PPM).
+- Coverage rule (Michael 2026-10-12): "If there are no new or unique skills, the competency covers both. Same rationale as 'you are competencied for potassium, therefore sodium is covered.'" A method group covers ONLY the analyzers it names (shared/competencyStatus.ts methodGroupCoversInstrument); analyzers with no unique skills between them (XN-1000 / XN-450, CA-660 Primary / Backup) go in ONE group. Never credit an analyzer through another group because they share a test or a department (that credited the manual differential via the XN-1000; BUG-043). A waived device with no naming group falls to a waived program.
 
 ---
 

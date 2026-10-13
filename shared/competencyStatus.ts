@@ -101,21 +101,19 @@ export function waivedMethodPassed(item: any): boolean {
 }
 
 /**
- * BUG-043: does a competency method group cover a test system (instrument)? A group always covers the instruments it
- * names. For a moderate or high test system it also covers by a shared analyte, or when the group's name contains the
- * instrument's department (the original method-based match). An ALL-WAIVED test system is covered only by a group that
- * names it (or by a waived program, which the caller checks): a waived device must not be labeled or credited through
- * another analyzer's technical group because they share a test (a Clinitek Status reports pH like the Clinitek Novus)
- * or a department. Inputs are lowercased by the caller.
+ * Does a competency method group cover a test system (instrument)? Only when the group NAMES it.
+ *
+ * Michael's rule (2026-10-12): "If there are no new or unique skills, the competency covers both. Same rationale as
+ * 'you are competencied for potassium, therefore sodium is covered.'" The software cannot see skills, so the lab says it
+ * through the group: analyzers with no new or unique skills between them (XN-1000 / XN-450, CA-660 Primary / Backup) go
+ * in ONE group and one competency covers both; an analyzer with its own skills (a manual differential, tube method, a
+ * different chemistry platform) has its own group. Analytes inside a group are covered together (potassium covers sodium).
+ * Before this, a group also covered any instrument that shared a test or a department with it, so an XN-1000 assessment
+ * credited the manual differential and a Beckman AU group credited the Ortho VITROS (BUG-043 fixed the waived half first).
+ * A waived device with no naming group falls to a waived program, which the caller checks. Inputs are lowercased.
  */
-export function methodGroupCoversInstrument(
-  mg: { instrumentsLC: string[]; analytesLC: Set<string>; nameLC: string },
-  inst: { nameLC: string; categoryLC: string; analytesLC: string[]; allWaived: boolean },
-): boolean {
-  const named = mg.instrumentsLC.some((n) => !!n && (n.includes(inst.nameLC) || inst.nameLC.includes(n)));
-  if (named) return true;
-  if (inst.allWaived) return false;
-  return inst.analytesLC.some((a) => mg.analytesLC.has(a)) || (!!inst.categoryLC && mg.nameLC.includes(inst.categoryLC));
+export function methodGroupCoversInstrument(mg: { instrumentsLC: string[] }, inst: { nameLC: string }): boolean {
+  return mg.instrumentsLC.some((n) => !!n && (n.includes(inst.nameLC) || inst.nameLC.includes(n)));
 }
 
 /** Passed waived methods recorded for one test system (instrument). */
