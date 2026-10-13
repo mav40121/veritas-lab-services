@@ -530,7 +530,7 @@ dialog on lab 5 offers FH9 and RT4 under Hematology, FH2P is gone from the
 picker, and an existing enrollment on a retired code still displays.
 
 **Source:** Lisa, 2026-10-07 ~10:20 (screenshot, lab 5 VeritaPT enrollments dialog).
-**Status:** VERIFICATION STEP 2026-10-07: Lisa supplied the CAP Surveys 2026 and 2027 catalog PDFs; scripts/cap_catalog/extract_cap_catalog.py (pdftotext -layout parse: 756 codes in 2026, 764 in 2027, FH9 and RT4 present, FH2P absent from both) and build_cap_review_workbook.py produced the review workbook at Verita Products/VeritaPT/CAP_Surveys_catalog_review_2026-10-07.xlsx (773 rows: add 696, keep 72, retire FH2P and CMP3, 3 low-confidence rows). Scripts merged (PR 1d9e70e2). Waiting on Lisa's verification; then one admin load with the catalog edition as source, retired codes set inactive (4 existing CAP enrollments keep displaying). API vendor list still to check the same way.
+**Status:** VERIFICATION STEP 2026-10-07: Lisa supplied the CAP Surveys 2026 and 2027 catalog PDFs; scripts/cap_catalog/extract_cap_catalog.py (pdftotext -layout parse: 756 codes in 2026, 764 in 2027, FH9 and RT4 present, FH2P absent from both) and build_cap_review_workbook.py produced the review workbook at Verita Products/VeritaPT/CAP_Surveys_catalog_review_2026-10-07.xlsx (773 rows: add 696, keep 72, retire FH2P and CMP3, 3 low-confidence rows). Scripts merged (PR 1d9e70e2). Waiting on Lisa's verification; then one admin load with the catalog edition as source, retired codes set inactive (4 existing CAP enrollments keep displaying). API vendor list still to check the same way. **2026-10-12:** five codes Redington-Fairview could not find were loaded on Michael's Q119 = 1 (DAT, JAT, JATE1, JE1, WBCR; names from CAP's online list via Lindsay Webber's screenshot, checked against the 2026 catalog pages); CAP catalog 74 -> 79. The rest of the review workbook still waits on a director's sign-off.
 ---
 
 ### 81. Antimicrobial stewardship: the laboratory's share of the hospital program, inside VeritaAssure
@@ -602,18 +602,6 @@ _(item #88 closed 2026-10-08; see C91 below)_
 **Source:** 2026-10-08, found reading db.ts while building the roster prompt (#1553). First written up as a disaster-recovery risk; a fresh-database test disproved that the same evening.
 **Status:** Open. Removal is built on branch roster-index-90 and waiting for a ship OK.
 ---
-### 91. VeritaComp employee page shows the six CLIA elements for a waived instrument
-
-**Effort:** S (1-3 days)
-**Importance:** High. Point-of-care competency is the first thing hospital systems ask about (St. Charles, 10/14), and a waived tester's page asks for elements CLIA does not require for waived testing.
-
-**What:** the employee-centric competency page (client/src/pages/VeritaCompEmployeePage.tsx) builds one tab per assigned test system and always shows "CLIA (6 elements)": direct observation, monitoring results, QC, maintenance, blind sample, problem solving. For an all-waived instrument (a glucose meter, a urine dipstick reader) the requirement is the accreditor's waived competency, at hire and annually by two of four methods (the waived program type already models "2 of 4 methods per test"). Riverside's Lisa Thompson (Nova StatStrip) shows the six-element form. Fix: when a test system's tests are all WAIVED, show the waived methods instead of the six elements, and record it against the lab's waived program (coverage already counts waived programs since BUG-037, #1596).
-
-**Source:** St. Charles demo dry run, 2026-10-11 (Michael Q81 = 1).
-**Status:** Open. Run sheet says not to open Lisa Thompson's page on Wednesday.
-
----
-
 ### 92. VeritaLab auto-adds a CLIA certificate keyed on the person, not the lab
 
 **Effort:** XS (under a day)
@@ -644,7 +632,26 @@ Receipts: an integration test for the derivation (linked, unlinked fallback, una
 
 ---
 
+### 95. VeritaComp: one-click preset reasons when a competency element is marked N/A
+
+**Effort:** S (1-3 days)
+**Importance:** Medium. Redington's microbiology supervisor types the same justification on every Bactec FX record; a preset keeps the documented reason a surveyor reads and removes the typing.
+
+**What:** on the VeritaComp employee page (client/src/pages/VeritaCompEmployeePage.tsx) any of the six elements can be marked N/A, and the form then requires a typed "Justification for N/A". Add a short pick-list of common reasons next to the box, for example "No QC required after initial verification per the manufacturer's instructions", that fills the justification in one click and can still be edited. The reason stays required. Element 3 covers more than QC (review of intermediate results, QC, PT and preventive-maintenance records, 42 CFR 493.1451(b)(8)(iii) paraphrased), so the presets name the specific record that does not apply rather than the whole element.
+
+**Source:** Brandy Morgan, Redington-Fairview, 2026-10-12 (REQ-050): "Can you make it so QC is not something that is required for the Bactec FX (if you choose N/A it makes you type a reason)?"
+**Decision (Michael Q123 = 1, 2026-10-12):** keep the reason required; add one-click presets; build after the 10/14 St. Charles demo.
+**Status:** Open. Build after Wednesday 10/14.
+
+---
+
 ## CLOSED (audit trail)
+
+### C95. VeritaComp employee page showed the six CLIA elements for a waived instrument (was #91)
+
+**Effort:** was S / **Importance:** High.
+
+**Closure evidence:** PR #1602 (squash 043f9d2b, live 2026-10-12). A test system whose tests are all waived shows the four waived methods (two required, each dated) instead of the six elements; the record PDF and Survey Bundle print them; the coverage map counts a record signed on the employee page (BUG-040). tests/integration/employee-waived-competency.test.ts ALL PASS (17). Production 10/12 as the Demo User: Lisa Thompson's glucose meter shows the waived methods (light and dark). Follow-ups the same day: Riverside's Clinitek Novus corrected to MODERATE per FDA (Q114 = 1, its tabs now show six elements) and BUG-043 (a waived device is covered only by a group that names it or a waived program, #1610, live 5551a844).
 
 ### C94. Surveyor public links list kept expired and revoked links forever (was #94)
 
