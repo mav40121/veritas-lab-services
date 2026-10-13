@@ -43016,5 +43016,29 @@
       }
     },
     "menuLastVerifiedAt": "2026-10-12"
+  },
+  "Abbott Determine HIV-1/2 Ag/Ab Combo (Venous Blood/Serum/Plasma)": {
+    "vendor": "Abbott",
+    "category": "Manual Procedures",
+    "testCount": 1,
+    "tests": {
+      "HIV-1 and HIV-2 antigens and antibodies": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      }
+    },
+    "menuLastVerifiedAt": "2026-10-13"
+  },
+  "Abbott Determine HIV-1/2 Ag/Ab Combo (Fingerstick Whole Blood)": {
+    "vendor": "Abbott",
+    "category": "Manual Procedures",
+    "testCount": 1,
+    "tests": {
+      "HIV-1 and HIV-2 antigens and antibodies": {
+        "complexity": "WAIVED",
+        "specialty": "General Immunology"
+      }
+    },
+    "menuLastVerifiedAt": "2026-10-13"
   }
 }
