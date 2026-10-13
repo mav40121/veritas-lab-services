@@ -42952,5 +42952,69 @@
       }
     },
     "menuLastVerifiedAt": "2026-10-12"
+  },
+  "AmniSure ROM (Rupture of Fetal Membranes) Test": {
+    "vendor": "AmniSure International",
+    "category": "Manual Procedures",
+    "testCount": 1,
+    "tests": {
+      "Placental alpha-1 microglobulin (PAMG-1)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      }
+    },
+    "menuLastVerifiedAt": "2026-10-12"
+  },
+  "TechLab GIARDIA/CRYPTOSPORIDIUM QUIK CHEK": {
+    "vendor": "TechLab",
+    "category": "Manual Procedures",
+    "testCount": 2,
+    "tests": {
+      "Giardia lamblia antigen": {
+        "complexity": "MODERATE",
+        "specialty": "Parasitology"
+      },
+      "Cryptosporidium antigen": {
+        "complexity": "MODERATE",
+        "specialty": "Parasitology"
+      }
+    },
+    "menuLastVerifiedAt": "2026-10-12"
+  },
+  "TechLab C. DIFF QUIK CHEK COMPLETE": {
+    "vendor": "TechLab",
+    "category": "Manual Procedures",
+    "testCount": 1,
+    "tests": {
+      "Clostridioides difficile GDH antigen and toxins A/B": {
+        "complexity": "MODERATE",
+        "specialty": "Bacteriology"
+      }
+    },
+    "menuLastVerifiedAt": "2026-10-12"
+  },
+  "Cardinal Health Mono II Rapid Test (Serum/Plasma)": {
+    "vendor": "Cardinal Health",
+    "category": "Manual Procedures",
+    "testCount": 1,
+    "tests": {
+      "Heterophile Antibody (monospot)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      }
+    },
+    "menuLastVerifiedAt": "2026-10-12"
+  },
+  "Cardinal Health Mono II Rapid Test (Whole Blood)": {
+    "vendor": "Cardinal Health",
+    "category": "Manual Procedures",
+    "testCount": 1,
+    "tests": {
+      "Heterophile Antibody (monospot)": {
+        "complexity": "WAIVED",
+        "specialty": "General Immunology"
+      }
+    },
+    "menuLastVerifiedAt": "2026-10-12"
   }
 }

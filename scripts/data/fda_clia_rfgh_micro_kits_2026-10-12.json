@@ -1,0 +1,20 @@
+{
+  "_source": "FDA CLIA database (accessdata.fda.gov/scripts/cdrh/cfdocs/cfClia), searched 2026-10-12 for Redington-Fairview's manual microbiology kits (Brandy Morgan, REQ-039). Rows quoted as returned.",
+  "_not_added": "Alere HIV test: Brandy has not named the product yet (runs on serum SST). FDA lists HIV kits as waived for fingerstick whole blood and moderate for serum/plasma, so the product is needed to pick the record.",
+  "AmniSure ROM (Rupture of Fetal Membranes) Test": [
+    {"DOCUMENT": "K081767", "TEST_SYSTEM_NAME": "AmniSure International AmniSure ROM (Rupture of [Fetal] Membranes) Test", "SPECIALTY": "General Immunology", "ANALYTE_NAME": "Placental alpha-1 microglobulin (PAMG-1)", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "04/01/2009"}
+  ],
+  "TechLab GIARDIA/CRYPTOSPORIDIUM QUIK CHEK": [
+    {"DOCUMENT": "K103673", "TEST_SYSTEM_NAME": "TECHLAB GIARDIA/CRYPTOSPORIDIUM QUIK CHEK test", "SPECIALTY": "Parasitology", "ANALYTE_NAME": "Giardia lamblia", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "08/25/2011"},
+    {"DOCUMENT": "K103673", "TEST_SYSTEM_NAME": "TECHLAB GIARDIA/CRYPTOSPORIDIUM QUIK CHEK test", "SPECIALTY": "Parasitology", "ANALYTE_NAME": "Cryptosporidium", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "08/25/2011"}
+  ],
+  "TechLab C. DIFF QUIK CHEK COMPLETE": [
+    {"DOCUMENT": "K082499", "TEST_SYSTEM_NAME": "TechLab C. Diff Quick Chek Complete", "SPECIALTY": "Bacteriology", "ANALYTE_NAME": "Clostridium difficile", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "05/11/2009"}
+  ],
+  "Cardinal Health Mono II Rapid Test (Serum/Plasma)": [
+    {"DOCUMENT": "CR170062", "PARENT": "K972231", "TEST_SYSTEM_NAME": "Cardinal Health Mono II Rapid Test (Serum/Plasma)", "SPECIALTY": "General Immunology", "ANALYTE_NAME": "Infectious mononucleosis antibodies (mono)", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "03/13/2017"}
+  ],
+  "Cardinal Health Mono II Rapid Test (Whole Blood)": [
+    {"DOCUMENT": "CR170062", "PARENT": "K972231", "TEST_SYSTEM_NAME": "Cardinal Health Mono II Rapid Test (For whole blood)", "SPECIALTY": "General Immunology", "ANALYTE_NAME": "Infectious mononucleosis antibodies (mono)", "COMPLEXITY": "WAIVED", "EFFECTIVE_DATE": "03/13/2017"}
+  ]
+}
