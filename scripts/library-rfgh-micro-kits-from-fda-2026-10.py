@@ -7,8 +7,10 @@ test system with its own complexity, the way the reply described it.
   TechLab C. DIFF QUIK CHEK COMPLETE: C. difficile GDH antigen and toxins A/B, MODERATE (K082499; FDA spells it "Quick").
   Cardinal Health Mono II Rapid Test: two entries because FDA splits it by specimen (CR170062): Serum/Plasma MODERATE,
     Whole Blood WAIVED. Test name matches the library's Monospot entry so the kits group with it.
+  Abbott Determine HIV-1/2 Ag/Ab Combo (added 10/13, Brandy named it; she runs serum and plasma): two entries because
+    FDA splits it by specimen (CR220031): Venous Blood/Serum/Plasma MODERATE, Fingerstick Whole Blood WAIVED.
 Antigen kits are named as antigen tests (the Curian precedent) so they never pair with the molecular panels' organism
-rows. The Alere HIV kit is NOT added until Brandy names the product (complexity depends on it).
+rows. The HIV kit uses the library's existing "HIV-1 and HIV-2 antigens and antibodies" test name.
 Evidence: scripts/data/fda_clia_rfgh_micro_kits_2026-10-12.json.
 Usage: python scripts/library-rfgh-micro-kits-from-fda-2026-10.py [--verify]
 """
@@ -32,6 +34,10 @@ WANT = {
         "Heterophile Antibody (monospot)": (M, GI)}),
     "Cardinal Health Mono II Rapid Test (Whole Blood)": ("Cardinal Health", MP, {
         "Heterophile Antibody (monospot)": (W, GI)}),
+    "Abbott Determine HIV-1/2 Ag/Ab Combo (Venous Blood/Serum/Plasma)": ("Abbott", MP, {
+        "HIV-1 and HIV-2 antigens and antibodies": (M, GI)}),
+    "Abbott Determine HIV-1/2 Ag/Ab Combo (Fingerstick Whole Blood)": ("Abbott", MP, {
+        "HIV-1 and HIV-2 antigens and antibodies": (W, GI)}),
 }
 # FDA analyte name behind each library test name.
 FDA_ANALYTE = {"Giardia lamblia antigen": "Giardia lamblia", "Cryptosporidium antigen": "Cryptosporidium",
@@ -57,7 +63,7 @@ def main():
             vendor, cat, tests = WANT[n]
             entry = {"vendor": vendor, "category": cat, "testCount": len(tests),
                      "tests": {t: {"complexity": cx, "specialty": sp} for t, (cx, sp) in tests.items()},
-                     "menuLastVerifiedAt": "2026-10-12"}
+                     "menuLastVerifiedAt": "2026-10-13" if "Determine" in n else "2026-10-12"}
             body = json.dumps(entry, indent=2, ensure_ascii=False).replace("\n", nl + "  ")
             blocks.append("  " + json.dumps(n) + ": " + body)
         end = raw.rstrip().rindex("}")  # the file's closing brace
