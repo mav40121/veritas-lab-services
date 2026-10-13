@@ -28102,6 +28102,73 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(view);
   });
 
+  // "By instrument" (2026-10-13, Michael Q154 = 2): the mirror of the per-employee view. Read-only. Each person's block
+  // for an instrument is taken from assembleEmployeeCompetencyView, so the two views always show the same record.
+  // Active VeritaStaff people in this lab assigned to the instrument (instrument must be on one of this lab's maps).
+  const instrumentPeopleIds = (sqlite: any, labId: number, instrumentId: number): number[] =>
+    (sqlite.prepare(
+      `SELECT DISTINCT se.id FROM staff_employee_instruments j
+       JOIN staff_employees se ON se.id = j.employee_id
+       JOIN veritamap_instruments i ON i.id = j.instrument_id
+       JOIN veritamap_maps m ON m.id = i.map_id
+       WHERE j.instrument_id = ? AND m.lab_id = ? AND se.tier2_lab_id = ? AND se.status = 'active'
+       ORDER BY se.last_name, se.first_name`
+    ).all(instrumentId, labId, labId) as any[]).map((r) => r.id);
+
+  // GET /api/labs/:labId/competency/by-instrument : every instrument on the lab's maps with its people and completion.
+  app.get("/api/labs/:labId/competency/by-instrument", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const sqlite = (db as any).$client;
+    const instruments = sqlite.prepare(
+      `SELECT i.id, i.instrument_name, i.category FROM veritamap_instruments i JOIN veritamap_maps m ON m.id = i.map_id
+       WHERE m.lab_id = ? ORDER BY i.category, i.instrument_name`
+    ).all(labId) as any[];
+    const views = new Map<number, any>();
+    const viewOf = (empId: number) => { if (!views.has(empId)) views.set(empId, assembleEmployeeCompetencyView(sqlite, labId, empId)); return views.get(empId); };
+    // Complexity from the instrument's own active tests (highest wins), so an instrument nobody is assigned to still shows it.
+    const cxStmt = sqlite.prepare("SELECT DISTINCT complexity FROM veritamap_instrument_tests WHERE instrument_id = ? AND active = 1");
+    const cxOf = (instId: number): string | null => {
+      const r = (cxStmt.all(instId) as any[]).reduce((m: number, t: any) => { const u = String(t.complexity || "").toUpperCase(); return Math.max(m, u.startsWith("H") ? 3 : u.startsWith("M") ? 2 : u.startsWith("W") ? 1 : 0); }, 0);
+      return r >= 3 ? "HIGH" : r === 2 ? "MODERATE" : r === 1 ? "WAIVED" : null;
+    };
+    const rows = instruments.map((inst: any) => {
+      const blocks = instrumentPeopleIds(sqlite, labId, inst.id)
+        .map((id) => viewOf(id)?.testSystems?.find((t: any) => t.instrumentId === inst.id))
+        .filter(Boolean);
+      return {
+        instrumentId: inst.id, instrumentName: inst.instrument_name, department: inst.category || null,
+        complexity: cxOf(inst.id), people: blocks.length, complete: blocks.filter((b: any) => b.complete).length,
+      };
+    });
+    res.json({ instruments: rows });
+  });
+
+  // GET /api/labs/:labId/competency/instrument/:instrumentId : the instrument and each assigned person's block.
+  app.get("/api/labs/:labId/competency/instrument/:instrumentId", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const sqlite = (db as any).$client;
+    const instrumentId = Number(req.params.instrumentId);
+    if (!Number.isFinite(instrumentId)) return res.status(400).json({ error: "Bad instrumentId" });
+    const inst = sqlite.prepare(
+      `SELECT i.id, i.instrument_name, i.category FROM veritamap_instruments i JOIN veritamap_maps m ON m.id = i.map_id
+       WHERE i.id = ? AND m.lab_id = ?`
+    ).get(instrumentId, labId) as any;
+    if (!inst) return res.status(404).json({ error: "Instrument not found" });
+    const labRow = sqlite.prepare("SELECT primary_regime FROM labs WHERE id = ?").get(labId) as any;
+    const people = instrumentPeopleIds(sqlite, labId, instrumentId).map((empId) => {
+      const v = assembleEmployeeCompetencyView(sqlite, labId, empId);
+      const testSystem = v?.testSystems?.find((t: any) => t.instrumentId === instrumentId);
+      return v && testSystem ? { employee: v.employee, record: v.record, testSystem } : null;
+    }).filter(Boolean);
+    res.json({
+      instrument: { id: inst.id, name: inst.instrument_name, department: inst.category || null },
+      elementCount: labRow?.primary_regime === "NYS-CLEP" ? 8 : 6,
+      people,
+    });
+  });
+
   // PUT /api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId
   //
   // Employee-centric data entry (2026-09-27, Phase 2). Saves the 6/8 element data
