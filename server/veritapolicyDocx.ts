@@ -21,7 +21,7 @@ import {
   TextWrappingType,
 } from "docx";
 import { CFR_TOPICS_IN_OUR_WORDS } from "./cfrTopicsInOurWords";
-import { buildUmassMilfordDocument, type HouseFormatContext } from "./veritapolicyHouseFormats";
+import { buildUmassMilfordDocument, buildRedingtonFairviewDocument, type HouseFormatContext } from "./veritapolicyHouseFormats";
 
 // Brand palette per CLAUDE.md §6.
 const TEAL = "01696F";
@@ -655,14 +655,17 @@ export async function generatePolicyDocxBuffer(
   crosswalk?: AccreditorCrosswalk | null,
   opts?: PolicyDocxOptions,
   // Per-lab house format (parking lot #71). null/undefined or 'veritadc' = the
-  // stock VeritaDC layout above; 'umass_milford' = server/veritapolicyHouseFormats.ts.
+  // stock VeritaDC layout above; 'umass_milford' and 'redington_fairview' = server/veritapolicyHouseFormats.ts.
   house?: HouseFormatContext | null,
 ): Promise<Buffer | null> {
   const tmpl = loadTemplate(policyId);
   if (!tmpl) return null;
-  const doc = house && house.format === "umass_milford"
-    ? buildUmassMilfordDocument(tmpl, lab, crosswalk ?? null, opts, { ...house, watermark: opts?.uncontrolled ? uncontrolledWatermarkParagraph() : null })
-    : buildDocument(tmpl, lab, crosswalk ?? null, opts);
+  const houseCtx = house ? { ...house, watermark: opts?.uncontrolled ? uncontrolledWatermarkParagraph() : null } : null;
+  const doc = houseCtx && houseCtx.format === "umass_milford"
+    ? buildUmassMilfordDocument(tmpl, lab, crosswalk ?? null, opts, houseCtx)
+    : houseCtx && houseCtx.format === "redington_fairview"
+      ? buildRedingtonFairviewDocument(tmpl, lab, crosswalk ?? null, opts, houseCtx)
+      : buildDocument(tmpl, lab, crosswalk ?? null, opts);
   const buf = await Packer.toBuffer(doc);
   return buf;
 }
