@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Wrench, Lock, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { TemperatureLogsPanel } from "@/components/TemperatureLogsPanel";
 
 interface Equipment {
   id: number;
@@ -327,7 +328,7 @@ export default function EquipmentAppPage() {
         <Wrench className="h-6 w-6 text-primary shrink-0" />
         <div>
           <h1 className="text-2xl font-bold leading-tight">VeritaMaintain&#8482;</h1>
-          <p className="text-sm text-muted-foreground">Instrument maintenance and function-check log</p>
+          <p className="text-sm text-muted-foreground">Instrument maintenance, function checks and temperature logs</p>
         </div>
         <div className="ml-auto">
           <Button size="sm" onClick={openAdd} disabled={isReadOnly}>+ Add instrument</Button>
@@ -403,6 +404,9 @@ export default function EquipmentAppPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Temperature logs (St. Charles REQ-068): storage units, readings, out-of-range corrective action. */}
+      <TemperatureLogsPanel labId={Number(activeLabId)} />
 
       {/* Add / edit equipment */}
       <Dialog open={eqOpen} onOpenChange={(o) => { if (!o) resetEqForm(); setEqOpen(o); }}>

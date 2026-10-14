@@ -41622,6 +41622,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const { registerStockRecallRoutes } = await import('./stockRecalls');
   registerStockRecallRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
 
+  // VeritaMaintain temperature logs (/api/labs/:labId/temp-logs/*; St. Charles REQ-068)
+  const { registerTemperatureLogRoutes } = await import('./temperatureLogs');
+  registerTemperatureLogRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
+
   // VeritaOps routes (Cost-Per-Reportable-Test studies, PARKING_LOT #10)
   const { registerVeritaOpsRoutes } = await import('./veritaops');
   registerVeritaOpsRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
