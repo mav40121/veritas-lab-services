@@ -196,6 +196,7 @@ function SiteFooter() {
           <div>
             <div className="font-serif font-bold text-base mb-2">Veritas Lab Services, LLC</div>
             <p className="text-sm text-muted-foreground leading-relaxed">Expert clinical laboratory consulting: leadership coaching, regulatory readiness, productivity analysis, and VeritaCheck™ study analysis.</p>
+            <a href="/team" className="inline-block mt-3 text-sm text-primary hover:underline" data-testid="footer-team-link">Meet our team</a>
           </div>
           <div>
             <div className="font-semibold text-sm mb-3">Services</div>

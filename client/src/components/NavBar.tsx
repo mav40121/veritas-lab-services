@@ -23,6 +23,7 @@ import { pickCurrentMembership } from "@/lib/currentLab";
 const mobileTopLinks: { href: string; label: string }[] = [
   { href: "/", label: "Home" },
   { href: "/services", label: "Consulting" },
+  { href: "/team", label: "Our Team" },
   { href: "/pricing", label: "Plans" },
 ];
 // Single source of truth for the eighteen VeritaAssure modules, kept in the
@@ -87,7 +88,6 @@ const mobileResourcesLinks: { href: string; label: string }[] = [
   { href: "/faq", label: "FAQ" },
 ];
 const mobileFooterLinks: { href: string; label: string }[] = [
-  { href: "/team", label: "Our Team" },
   { href: "/contact", label: "Contact" },
 ];
 
@@ -201,6 +201,12 @@ export function NavBar() {
           <Link href="/services" className={cn("px-2 py-1.5 rounded-md text-sm font-medium transition-colors",
             isActive("/services") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
             Consulting
+          </Link>
+
+          {/* Our Team (Michael 2026-10-14: the team page had no visible link on desktop) */}
+          <Link href="/team" className={cn("px-2 py-1.5 rounded-md text-sm font-medium transition-colors",
+            isActive("/team") ? "text-foreground bg-secondary" : "text-muted-foreground hover:text-foreground hover:bg-secondary")}>
+            Our Team
           </Link>
 
           {/* Plans (route stays /pricing; only the displayed label changes) */}

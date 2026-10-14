@@ -138,7 +138,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/team": {
     title: "Our Team | Veritas Lab Services",
-    description: "Meet Michael Veri, MS, MBA, MLS(ASCP), CPHQ - laboratory compliance expert, former Joint Commission surveyor, and founder of Veritas Lab Services.",
+    description: "Meet the Veritas Lab Services team: founder Michael Veri, MS, MBA, MLS(ASCP), CPHQ, a former Joint Commission surveyor, and David McCormick.",
   },
   "/faq": {
     title: "FAQ | VeritaAssure\u2122 Lab Compliance Software",
