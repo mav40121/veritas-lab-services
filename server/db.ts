@@ -5052,6 +5052,40 @@ sqlite.exec(`
 }
 try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_lots_item ON inventory_lots(item_id)"); } catch {}
 try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_lots_lab_exp ON inventory_lots(lab_id, expiration_date)"); } catch {}
+// 2026-10-14 (St. Charles REQ-067): when each lot was put in use and taken out of use. A separate log,
+// not columns on inventory_lots, because a lot row is deleted once its quantity reaches zero
+// (inventoryLots.reconcileLots) and the in-use history must outlive the stock. Keyed by item + lot number.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS inventory_lot_use (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    item_id INTEGER NOT NULL,
+    lot_number TEXT,
+    expiration_date TEXT,
+    in_use_date TEXT NOT NULL,
+    in_use_by_user_id INTEGER,
+    in_use_by_name TEXT,
+    out_of_use_date TEXT,
+    out_of_use_by_user_id INTEGER,
+    out_of_use_by_name TEXT,
+    out_of_use_reason TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+{
+  // NEW DB TABLE RULE: an older live copy gets any missing columns.
+  const cols = (sqlite.prepare("PRAGMA table_info(inventory_lot_use)").all() as { name: string }[]).map((c) => c.name);
+  const need: Array<[string, string]> = [
+    ["lab_id", "INTEGER"], ["item_id", "INTEGER"], ["lot_number", "TEXT"], ["expiration_date", "TEXT"],
+    ["in_use_date", "TEXT"], ["in_use_by_user_id", "INTEGER"], ["in_use_by_name", "TEXT"],
+    ["out_of_use_date", "TEXT"], ["out_of_use_by_user_id", "INTEGER"], ["out_of_use_by_name", "TEXT"],
+    ["out_of_use_reason", "TEXT"], ["created_at", "TEXT"], ["updated_at", "TEXT"],
+  ];
+  for (const [c, t] of need) if (!cols.includes(c)) { try { sqlite.exec(`ALTER TABLE inventory_lot_use ADD COLUMN ${c} ${t}`); } catch {} }
+}
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_lot_use_item ON inventory_lot_use(item_id)"); } catch {}
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_lot_use_lab ON inventory_lot_use(lab_id, in_use_date)"); } catch {}
 // One-shot backfill: seed one lot per item that has stock but no lot row yet,
 // mirroring its current (lot_number, expiration_date, quantity_on_hand). Gated on
 // NOT EXISTS so subsequent boots are no-ops (boot-migration-no-cascading-writes
@@ -6811,6 +6845,9 @@ try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as a
   ensure("qc_control_lots", "mfr_range_high",     "ALTER TABLE qc_control_lots ADD COLUMN mfr_range_high REAL");
   ensure("qc_control_lots", "expiration_date",    "ALTER TABLE qc_control_lots ADD COLUMN expiration_date TEXT");
   ensure("qc_control_lots", "opened_date",        "ALTER TABLE qc_control_lots ADD COLUMN opened_date TEXT");
+  // 2026-10-14 (St. Charles REQ-067): the date a control lot was taken out of use. opened_date is its
+  // in-use date; out_of_use_date is stamped when the lot is retired (or replaced by a changeover).
+  ensure("qc_control_lots", "out_of_use_date",    "ALTER TABLE qc_control_lots ADD COLUMN out_of_use_date TEXT");
   ensure("qc_control_lots", "status",             "ALTER TABLE qc_control_lots ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
   // prior_lot_id links a replacement lot to the lot it succeeds, forming a
   // per-(analyte, level) changeover chain. NULL = the first lot of a line.

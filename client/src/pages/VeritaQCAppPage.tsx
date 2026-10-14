@@ -35,6 +35,8 @@ interface ControlLot {
   mfr_range_high: number | null;
   expiration_date: string | null;
   opened_date: string | null;
+  // Date the lot was taken out of use (stamped on retire or changeover; St. Charles REQ-067).
+  out_of_use_date?: string | null;
   status: string;
   prior_lot_id: number | null;
   created_at: string;
@@ -425,6 +427,7 @@ export default function VeritaQCAppPage() {
   const [newOpened, setNewOpened] = useState("");
   const [addLotSubmitting, setAddLotSubmitting] = useState(false);
   const [retireSubmitting, setRetireSubmitting] = useState(false);
+  const [outOfUseDate, setOutOfUseDate] = useState(todayIsoDate());
 
   // Continuous cross-lot ("Span all lots") view state. When on, the chart plots
   // the whole control line (analyte + level) across every lot with a shift
@@ -821,7 +824,7 @@ export default function VeritaQCAppPage() {
         {
           method: "PATCH",
           headers: { ...authHeaders(), "Content-Type": "application/json" },
-          body: JSON.stringify({ status: nextStatus }),
+          body: JSON.stringify(nextStatus === "retired" ? { status: nextStatus, out_of_use_date: outOfUseDate || undefined } : { status: nextStatus }),
         },
       );
       if (!res.ok) {
@@ -1189,6 +1192,7 @@ export default function VeritaQCAppPage() {
                               {lot.id === g.currentId ? " · current" : ""}
                               {lot.status !== "active" ? ` · ${lot.status}` : ""}
                               {lot.opened_date ? ` · opened ${lot.opened_date}` : ""}
+                              {lot.out_of_use_date ? ` · out of use ${lot.out_of_use_date}` : ""}
                             </SelectItem>
                           ))}
                         </SelectGroup>
@@ -1213,6 +1217,12 @@ export default function VeritaQCAppPage() {
                     <div><span className="font-medium text-foreground">Mfr mean:</span> {selectedLot.mfr_mean}</div>
                     <div><span className="font-medium text-foreground">Mfr SD:</span> {selectedLot.mfr_sd}</div>
                     <div><span className="font-medium text-foreground">SD interval:</span> &plusmn;{selectedLot.mfr_sd_interval}</div>
+                    <div className="col-span-2 sm:col-span-4" data-testid="qc-lot-in-use">
+                      <span className="font-medium text-foreground">In use:</span>{" "}
+                      {selectedLot.opened_date ? `opened ${selectedLot.opened_date}` : "opened date not recorded"}
+                      {" "}to{" "}
+                      {selectedLot.out_of_use_date ? `out of use ${selectedLot.out_of_use_date}` : (selectedLot.status === "retired" ? "out-of-use date not recorded" : "still in use")}
+                    </div>
                     <div>
                       <span className="font-medium text-foreground">Exp:</span>{" "}
                       {selectedLot.expiration_date || "n/a"}
@@ -1242,6 +1252,19 @@ export default function VeritaQCAppPage() {
                         >
                           Hold
                         </Button>
+                        <label className="flex items-center gap-1 text-xs text-muted-foreground" htmlFor="qc-out-of-use-date">
+                          Out of use on
+                          <Input
+                            id="qc-out-of-use-date"
+                            type="date"
+                            className="h-8 w-[9.5rem] text-xs"
+                            value={outOfUseDate}
+                            max={todayIsoDate()}
+                            onChange={(e) => setOutOfUseDate(e.target.value)}
+                            disabled={isReadOnly || retireSubmitting}
+                            data-testid="qc-out-of-use-date"
+                          />
+                        </label>
                         <Button
                           size="sm"
                           variant="outline"
