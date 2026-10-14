@@ -115,7 +115,7 @@ export default function VeritaResponseAppPage() {
   const [newDescription, setNewDescription] = useState("");
   // PT-failure investigation (source_type = 'pt_failure'). Reuses the same
   // finding record + CAPA workflow; these are the PT-specific head fields.
-  const [newSourceType, setNewSourceType] = useState<"inspection" | "pt_failure" | "internal_nce">("inspection");
+  const [newSourceType, setNewSourceType] = useState<"inspection" | "pt_failure" | "internal_nce" | "fda_deviation">("inspection");
   const [newPtProgram, setNewPtProgram] = useState("");
   const [newPtEvent, setNewPtEvent] = useState("");
   const [newPtAnalyte, setNewPtAnalyte] = useState("");
@@ -127,6 +127,23 @@ export default function VeritaResponseAppPage() {
   const [newDiscoveredBy, setNewDiscoveredBy] = useState("");
   const isPt = newSourceType === "pt_failure";
   const isNce = newSourceType === "internal_nce";
+  // FDA product deviation (21 CFR 606.171, St. Charles REQ-065): a lab event like an NCE (no accreditor),
+  // plus the three 606.171(b) reportability questions and the date the information was acquired.
+  const isFda = newSourceType === "fda_deviation";
+  const noAccreditor = isNce || isFda;
+  const [fdaInfoDate, setFdaInfoDate] = useState("");
+  const [fdaProductType, setFdaProductType] = useState("");
+  const [fdaProductId, setFdaProductId] = useState("");
+  const [fdaKind, setFdaKind] = useState("");
+  const [fdaAffects, setFdaAffects] = useState("");
+  const [fdaInFacility, setFdaInFacility] = useState("");
+  const [fdaDistributed, setFdaDistributed] = useState("");
+  const fdaAllYes = fdaAffects === "yes" && fdaInFacility === "yes" && fdaDistributed === "yes";
+  const fdaAnyNo = fdaAffects === "no" || fdaInFacility === "no" || fdaDistributed === "no";
+  const fdaDue = (() => {
+    if (!fdaAllYes || !/^\d{4}-\d{2}-\d{2}$/.test(fdaInfoDate)) return "";
+    const d = new Date(fdaInfoDate + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + 45); return d.toISOString().slice(0, 10);
+  })();
 
   const hasPlanAccess = !!user?.plan && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
@@ -189,17 +206,22 @@ export default function VeritaResponseAppPage() {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
-          accreditor: isNce ? null : newAccreditor,
-          inspection_id: isNce ? null : (newInspectionId.trim() || null),
-          finding_number: isNce ? null : (newFindingNumber.trim() || null),
-          standard_ref: isNce ? null : (newStandardRef.trim() || null),
+          accreditor: noAccreditor ? null : newAccreditor,
+          inspection_id: noAccreditor ? null : (newInspectionId.trim() || null),
+          finding_number: noAccreditor ? null : (newFindingNumber.trim() || null),
+          standard_ref: noAccreditor ? null : (newStandardRef.trim() || null),
           phase_or_severity: newPhaseOrSeverity.trim() || null,
           description: newDescription.trim() || null,
-          anchor_date: isNce ? null : (newAnchorDate || null),
+          anchor_date: noAccreditor ? null : (newAnchorDate || null),
           status: "open",
           source_type: newSourceType,
-          event_date: isNce ? (newEventDate || null) : null,
-          discovered_by: isNce ? (newDiscoveredBy.trim() || null) : null,
+          event_date: isNce ? (newEventDate || null) : isFda ? (fdaInfoDate || null) : null,
+          discovered_by: noAccreditor ? (newDiscoveredBy.trim() || null) : null,
+          ...(isFda ? {
+            fda_info_date: fdaInfoDate || null, fda_product_type: fdaProductType || null, fda_product_id: fdaProductId.trim() || null,
+            fda_event_kind: fdaKind || null, fda_affects_product: fdaAffects || null, fda_in_facility: fdaInFacility || null,
+            fda_distributed: fdaDistributed || null,
+          } : {}),
           pt_program: isPt ? (newPtProgram.trim() || null) : null,
           pt_event: isPt ? (newPtEvent.trim() || null) : null,
           pt_analyte: isPt ? (newPtAnalyte.trim() || null) : null,
@@ -226,6 +248,7 @@ export default function VeritaResponseAppPage() {
       setNewPtProgram(""); setNewPtEvent(""); setNewPtAnalyte(""); setNewPtScore("");
       setNewPtResultSummary(""); setNewRootCauseCategory("");
       setNewEventDate(""); setNewDiscoveredBy("");
+      setFdaInfoDate(""); setFdaProductType(""); setFdaProductId(""); setFdaKind(""); setFdaAffects(""); setFdaInFacility(""); setFdaDistributed("");
       setShowCreate(false);
       await fetchData();
     } catch {
@@ -458,6 +481,9 @@ export default function VeritaResponseAppPage() {
                         {(f as any).source_type === "internal_nce" && (
                           <Badge className="ml-2 bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 text-[10px] whitespace-nowrap">Internal NCE</Badge>
                         )}
+                        {(f as any).source_type === "fda_deviation" && (
+                          <Badge className="ml-2 bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300 text-[10px] whitespace-nowrap">FDA deviation</Badge>
+                        )}
                       </td>
                       <td className="py-3 pr-4 text-muted-foreground">{f.finding_number || "-"}</td>
                       <td className="py-3 pr-4 text-muted-foreground text-xs">{f.standard_ref || "-"}</td>
@@ -506,7 +532,7 @@ export default function VeritaResponseAppPage() {
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{isPt ? "Log PT Failure Investigation" : isNce ? "Log Internal Event (NCE)" : "New Finding"}</DialogTitle>
+            <DialogTitle>{isPt ? "Log PT Failure Investigation" : isNce ? "Log Internal Event (NCE)" : isFda ? "Log FDA Product Deviation" : "New Finding"}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-3">
@@ -514,9 +540,10 @@ export default function VeritaResponseAppPage() {
                 investigation, or an internal non-conforming event (#36). All three
                 reuse the same CAPA workflow; only the head fields differ. */}
             <div className="flex gap-2 flex-wrap">
-              <Button type="button" size="sm" variant={(!isPt && !isNce) ? "default" : "outline"} className={(!isPt && !isNce) ? "bg-[#006064] hover:bg-[#004d50] text-white" : ""} onClick={() => setNewSourceType("inspection")}>Inspection finding</Button>
+              <Button type="button" size="sm" variant={(!isPt && !noAccreditor) ? "default" : "outline"} className={(!isPt && !noAccreditor) ? "bg-[#006064] hover:bg-[#004d50] text-white" : ""} onClick={() => setNewSourceType("inspection")}>Inspection finding</Button>
               <Button type="button" size="sm" variant={isPt ? "default" : "outline"} className={isPt ? "bg-[#006064] hover:bg-[#004d50] text-white" : ""} onClick={() => setNewSourceType("pt_failure")}>PT failure</Button>
               <Button type="button" size="sm" variant={isNce ? "default" : "outline"} className={isNce ? "bg-[#006064] hover:bg-[#004d50] text-white" : ""} onClick={() => setNewSourceType("internal_nce")}>Internal event (NCE)</Button>
+              <Button type="button" size="sm" variant={isFda ? "default" : "outline"} className={isFda ? "bg-[#006064] hover:bg-[#004d50] text-white" : ""} onClick={() => setNewSourceType("fda_deviation")} data-testid="source-fda-deviation">FDA product deviation</Button>
             </div>
             {isPt && (
               <p className="text-xs text-muted-foreground">CLIA 42 CFR 493.801(b): unsuccessful proficiency testing must be investigated and corrected. This opens a finding with the PT context below plus the full corrective-action workflow.</p>
@@ -555,6 +582,65 @@ export default function VeritaResponseAppPage() {
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">
+              {isFda && (
+                <>
+                  <div className="space-y-1 col-span-2">
+                    <p className="text-xs text-muted-foreground">21 CFR 606.171: a deviation or unexpected event in manufacturing, testing, processing, labeling, storage, holding or distribution of blood or blood components. It is reportable to FDA (Form FDA 3486 to CBER) when all three questions below are yes, no later than 45 calendar days after you acquire information suggesting a reportable event. Every deviation is investigated, reportable or not. No patient information.</p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Date information acquired</Label>
+                    <Input type="date" value={fdaInfoDate} onChange={(e) => setFdaInfoDate(e.target.value)} className="h-8 text-sm" data-testid="fda-info-date" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Discovered by</Label>
+                    <Input value={newDiscoveredBy} onChange={(e) => setNewDiscoveredBy(e.target.value)} placeholder="Name or role who found it" className="h-8 text-sm" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Product</Label>
+                    <Select value={fdaProductType} onValueChange={setFdaProductType}>
+                      <SelectTrigger className="h-8 text-sm" data-testid="fda-product-type"><SelectValue placeholder="Select product" /></SelectTrigger>
+                      <SelectContent>
+                        {[["red_cells", "Red blood cells"], ["whole_blood", "Whole blood"], ["plasma", "Plasma"], ["platelets", "Platelets"], ["cryoprecipitate", "Cryoprecipitate"], ["granulocytes", "Granulocytes"], ["source_plasma", "Source plasma"], ["other", "Other"]].map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Unit / product number</Label>
+                    <Input value={fdaProductId} onChange={(e) => setFdaProductId(e.target.value)} placeholder="Product unit number (no patient identifiers)" className="h-8 text-sm" />
+                  </div>
+                  <div className="space-y-1 col-span-2">
+                    <Label className="text-xs">Type of event</Label>
+                    <Select value={fdaKind} onValueChange={setFdaKind}>
+                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="deviation">Deviation from cGMP, regulations, standards or specifications</SelectItem>
+                        <SelectItem value="unexpected_event">Unexpected or unforeseeable event</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {[
+                    ["fda-q-affects", "1. May it affect the safety, purity or potency of the product?", fdaAffects, setFdaAffects],
+                    ["fda-q-facility", "2. Did it occur in your facility or one under contract with you?", fdaInFacility, setFdaInFacility],
+                    ["fda-q-distributed", "3. Was the product distributed?", fdaDistributed, setFdaDistributed],
+                  ].map(([tid, label, val, set]: any) => (
+                    <div key={tid} className="col-span-2 flex flex-wrap items-center justify-between gap-2 rounded border border-border px-2 py-1.5">
+                      <span className="text-xs">{label}</span>
+                      <div className="flex gap-1" data-testid={tid}>
+                        {["yes", "no"].map((opt) => (
+                          <Button key={opt} type="button" size="sm" variant={val === opt ? "default" : "outline"} className={`h-7 px-3 text-xs ${val === opt ? "bg-[#006064] hover:bg-[#004d50] text-white" : ""}`} onClick={() => set(opt)}>{opt === "yes" ? "Yes" : "No"}</Button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  <div className="col-span-2 text-xs rounded px-2 py-1.5 bg-muted/40" data-testid="fda-reportability">
+                    {fdaAllYes
+                      ? (fdaDue ? <span className="font-medium text-rose-700 dark:text-rose-300">Reportable to FDA. Submit Form FDA 3486 to CBER by {fdaDue}.</span> : <span className="font-medium text-rose-700 dark:text-rose-300">Reportable to FDA. Enter the date the information was acquired to set the 45-day report-by date.</span>)
+                      : fdaAnyNo
+                        ? <span>Not reportable under 606.171(b). Investigate and document it here (606.171(f)).</span>
+                        : <span className="text-muted-foreground">Answer the three questions to see whether it is reportable.</span>}
+                  </div>
+                </>
+              )}
               {isNce && (
                 <>
                   <div className="space-y-1 col-span-2">
@@ -570,7 +656,7 @@ export default function VeritaResponseAppPage() {
                   </div>
                 </>
               )}
-              {!isNce && (
+              {!noAccreditor && (
                 <>
                   <div className="space-y-1">
                     <Label className="text-xs">Accreditor</Label>
@@ -603,7 +689,7 @@ export default function VeritaResponseAppPage() {
                   </div>
                 </>
               )}
-              {!isNce && (
+              {!noAccreditor && (
                 <>
                   <div className="space-y-1">
                     <Label className="text-xs">Finding #</Label>
@@ -626,7 +712,7 @@ export default function VeritaResponseAppPage() {
                 </>
               )}
               <div className="space-y-1">
-                <Label className="text-xs">{isNce ? "Severity / impact" : "Phase / Severity"}</Label>
+                <Label className="text-xs">{noAccreditor ? "Severity / impact" : "Phase / Severity"}</Label>
                 <Input
                   value={newPhaseOrSeverity}
                   onChange={(e) => setNewPhaseOrSeverity(e.target.value)}
@@ -634,7 +720,7 @@ export default function VeritaResponseAppPage() {
                   className="h-8 text-sm"
                 />
               </div>
-              {!isNce && (
+              {!noAccreditor && (
                 <div className="space-y-1">
                   <Label className="text-xs">Inspection ID (optional)</Label>
                   <Input
@@ -646,7 +732,7 @@ export default function VeritaResponseAppPage() {
                 </div>
               )}
               <div className="space-y-1 col-span-2">
-                <Label className="text-xs">{isPt ? "Description of the PT failure" : isNce ? "Description of the event" : "Description of the deficiency"}</Label>
+                <Label className="text-xs">{isPt ? "Description of the PT failure" : isFda ? "Description of the deviation" : isNce ? "Description of the event" : "Description of the deficiency"}</Label>
                 <Textarea
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
@@ -662,9 +748,9 @@ export default function VeritaResponseAppPage() {
             <Button
               className="bg-[#006064] hover:bg-[#004d50] text-white"
               onClick={handleCreate}
-              disabled={saving || (!isNce && !newAccreditor)}
+              disabled={saving || (!noAccreditor && !newAccreditor) || (isFda && !fdaInfoDate)}
             >
-              {saving ? "Saving..." : isPt ? "Log PT Failure" : isNce ? "Log Internal Event" : "Create Finding"}
+              {saving ? "Saving..." : isPt ? "Log PT Failure" : isNce ? "Log Internal Event" : isFda ? "Log FDA Deviation" : "Create Finding"}
             </Button>
           </DialogFooter>
         </DialogContent>

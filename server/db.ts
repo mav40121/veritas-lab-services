@@ -6613,6 +6613,21 @@ sqlite.exec(`
       if (!have.has("event_date")) sqlite.exec("ALTER TABLE findings ADD COLUMN event_date TEXT");
       if (!have.has("discovered_by")) sqlite.exec("ALTER TABLE findings ADD COLUMN discovered_by TEXT");
       if (!have.has("signoff_role")) sqlite.exec("ALTER TABLE findings ADD COLUMN signoff_role TEXT");
+      // FDA product deviation (2026-10-14, St. Charles REQ-065): source_type 'fda_deviation'. The three
+      // 21 CFR 606.171(b) criteria are stored as the lab answered them (1/0/NULL); fda_info_date is the date
+      // the lab acquired information reasonably suggesting a reportable event (606.171(c)); fda_report_due is
+      // that date + 45 calendar days when all three criteria are met; the submission date and the FDA
+      // confirmation number record the Form FDA 3486 filing.
+      if (!have.has("fda_product_type")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_product_type TEXT");
+      if (!have.has("fda_product_id")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_product_id TEXT");
+      if (!have.has("fda_event_kind")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_event_kind TEXT");
+      if (!have.has("fda_affects_product")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_affects_product INTEGER");
+      if (!have.has("fda_in_facility")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_in_facility INTEGER");
+      if (!have.has("fda_distributed")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_distributed INTEGER");
+      if (!have.has("fda_info_date")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_info_date TEXT");
+      if (!have.has("fda_report_due")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_report_due TEXT");
+      if (!have.has("fda_submitted_date")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_submitted_date TEXT");
+      if (!have.has("fda_confirmation_number")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_confirmation_number TEXT");
     }
   } catch {
     // fresh DB: CREATE TABLE above handled it
