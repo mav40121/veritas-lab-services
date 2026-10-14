@@ -21980,7 +21980,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // PT trigger). All three reuse the CAPA workflow; source_type steers the UI.
   // internal_nce carries no accreditor deadline and its sign-off is gated to the
   // designated medical director or a lab owner/admin.
-  const VALID_FINDING_SOURCE_TYPES = ['inspection','pt_failure','internal_nce'];
+  const VALID_FINDING_SOURCE_TYPES = ['inspection','pt_failure','internal_nce','fda_deviation'];
+  // FDA product deviation (21 CFR 606.171, St. Charles REQ-065, 2026-10-14). Reportable when all three
+  // 606.171(b) criteria are met: (1) a deviation from cGMP/regulations/standards/specifications, or an
+  // unexpected or unforeseeable event, that may affect the product's safety, purity or potency; (2) it
+  // occurred in the facility or one under contract; (3) the product was distributed. A reportable event is
+  // due to CBER on Form FDA 3486 within 45 calendar days of acquiring the information (606.171(c)).
+  // Events that are not reportable are still investigated (606.171(f)); they get no report-by date.
+  const FDA_PRODUCT_TYPES = new Set(["red_cells", "whole_blood", "plasma", "platelets", "cryoprecipitate", "granulocytes", "source_plasma", "other"]);
+  const FDA_EVENT_KINDS = new Set(["deviation", "unexpected_event"]);
+  const fdaFlag = (v: any): number | null => (v === true || v === 1 || v === "1" || v === "yes") ? 1 : (v === false || v === 0 || v === "0" || v === "no") ? 0 : null;
+  const fdaReportDue = (infoDate: string | null, affects: number | null, inFacility: number | null, distributed: number | null): string | null => {
+    if (!infoDate || !/^\d{4}-\d{2}-\d{2}$/.test(infoDate)) return null;
+    if (affects !== 1 || inFacility !== 1 || distributed !== 1) return null;
+    const d = new Date(infoDate + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + 45);
+    return d.toISOString().slice(0, 10);
+  };
 
   // Resolve the set of accreditors a given lab is allowed to file findings
   // under. CMS is always included because every lab holds CLIA. "Other" is
@@ -22175,10 +22191,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // PUT update finding
-  app.put("/api/findings/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
-    const dataUserId = req.ownerUserId ?? req.user?.userId;
-    const existing = userCanAccessFinding(req.params.id, req) as any;
-    if (!existing) return res.status(404).json({ error: "Finding not found" });
+  // Shared finding update for the legacy /api/findings/:id route and the lab-scoped
+  // /api/labs/:labId/findings/:id route. BUG-054 (2026-10-14): the finding page saves to the
+  // lab-scoped URL (findingUrl), which had no PUT route, so every Save returned 404 in production.
+  const updateFinding = (req: any, res: any, existing: any, gateLabId: number | null) => {
 
     const body = req.body || {};
     if (body.accreditor && !VALID_ACCREDITORS.includes(body.accreditor)) {
@@ -22195,7 +22211,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // flag after the fact) stay readable and editable in OTHER fields;
     // only attempts to switch TO a disallowed accreditor are blocked.
     if (body.accreditor && body.accreditor !== existing.accreditor) {
-      const labIdForGate = getUserPrimaryLabId(dataUserId);
+      const labIdForGate = gateLabId;
       const allowed = getLabAllowedAccreditors(labIdForGate);
       if (!allowed.has(body.accreditor)) {
         return res.status(400).json({
@@ -22207,9 +22223,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Recompute due_date when accreditor or anchor_date changes
     const nextAccreditor = body.accreditor ?? existing.accreditor;
     const nextAnchor = body.anchor_date !== undefined ? body.anchor_date : existing.anchor_date;
-    const recomputed = (body.accreditor !== undefined || body.anchor_date !== undefined)
-      ? dueDateForFinding(nextAccreditor, nextAnchor)
-      : existing.due_date;
+    // An FDA product deviation's due date is its 606.171 report-by date; never recompute it from an accreditor.
+    const recomputed = existing.source_type === 'fda_deviation'
+      ? existing.due_date
+      : (body.accreditor !== undefined || body.anchor_date !== undefined)
+        ? dueDateForFinding(nextAccreditor, nextAnchor)
+        : existing.due_date;
 
     (db as any).$client.prepare(
       `UPDATE findings SET
@@ -22279,8 +22298,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch {}
     const updated = (db as any).$client.prepare("SELECT * FROM findings WHERE id = ?").get(req.params.id);
     res.json(updated);
+  };
+
+  app.put("/api/findings/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const existing = userCanAccessFinding(req.params.id, req) as any;
+    if (!existing) return res.status(404).json({ error: "Finding not found" });
+    return updateFinding(req, res, existing, getUserPrimaryLabId(dataUserId));
   });
 
+  app.put("/api/labs/:labId/findings/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
+    const existing = (db as any).$client.prepare("SELECT * FROM findings WHERE id = ? AND lab_id = ?").get(Number(req.params.id), req.scope.labId) as any;
+    if (!existing) return res.status(404).json({ error: "Finding not found in this lab" });
+    return updateFinding(req, res, existing, req.scope.labId);
+  });
   // DELETE finding
   app.delete("/api/findings/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
@@ -22872,7 +22903,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // not filed under an accreditor and carries no accreditor deadline; it stores
     // 'Other' as a neutral accreditor to satisfy the findings.accreditor NOT NULL
     // / CHECK column.
-    const isInternalNce = source_type === 'internal_nce';
+    const isFdaDeviation = source_type === 'fda_deviation';
+    const isInternalNce = source_type === 'internal_nce' || isFdaDeviation;
     const effectiveAccreditor = isInternalNce
       ? (accreditor && VALID_ACCREDITORS.includes(accreditor) ? accreditor : 'Other')
       : accreditor;
@@ -22930,6 +22962,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ).run(event_date ?? null, discovered_by ?? null, Number(result.lastInsertRowid));
       } catch {}
     }
+    // FDA product deviation: stamp the 606.171 fields and the 45-day report-by date (as the due date).
+    if (isFdaDeviation) {
+      const b = req.body || {};
+      const infoDate = typeof b.fda_info_date === "string" && b.fda_info_date ? b.fda_info_date : (event_date ?? null);
+      const affects = fdaFlag(b.fda_affects_product), inFac = fdaFlag(b.fda_in_facility), dist = fdaFlag(b.fda_distributed);
+      const due = fdaReportDue(infoDate, affects, inFac, dist);
+      (db as any).$client.prepare(
+        `UPDATE findings SET fda_product_type = ?, fda_product_id = ?, fda_event_kind = ?, fda_affects_product = ?,
+           fda_in_facility = ?, fda_distributed = ?, fda_info_date = ?, fda_report_due = ?, due_date = ?,
+           standard_ref = COALESCE(standard_ref, '21 CFR 606.171') WHERE id = ?`
+      ).run(
+        FDA_PRODUCT_TYPES.has(b.fda_product_type) ? b.fda_product_type : null,
+        b.fda_product_id ? String(b.fda_product_id).slice(0, 80) : null,
+        FDA_EVENT_KINDS.has(b.fda_event_kind) ? b.fda_event_kind : null,
+        affects, inFac, dist, infoDate, due, due, Number(result.lastInsertRowid),
+      );
+    }
     try {
       (db as any).$client.prepare(
         `INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)`
@@ -22946,6 +22995,44 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // MD-cosign and VeritaPolicy medical_director routing); owner/admin passes via
   // req.scope.role. Anyone else gets 403. Signing stamps signed_by/signed_at/
   // signoff_role, closes the finding, and writes an audit-trail row.
+  // FDA product deviation fields (St. Charles REQ-065). Updates the 606.171(b) criteria, the information
+  // date, the product, and the Form FDA 3486 submission; recomputes the 45-day report-by date.
+  app.patch("/api/labs/:labId/findings/:id/fda", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const f = sqlite.prepare("SELECT * FROM findings WHERE id = ? AND lab_id = ?").get(Number(req.params.id), req.scope.labId) as any;
+    if (!f) return res.status(404).json({ error: "Finding not found in this lab" });
+    if (f.source_type !== "fda_deviation") return res.status(400).json({ error: "Not an FDA product deviation" });
+    const b = req.body || {};
+    const isDay = (v: any) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+    const pick = (k: string) => (b[k] !== undefined ? b[k] : f[k]);
+    const infoDate = pick("fda_info_date") || null;
+    if (infoDate && !isDay(infoDate)) return res.status(400).json({ error: "fda_info_date must be YYYY-MM-DD" });
+    const submitted = pick("fda_submitted_date") || null;
+    if (submitted && !isDay(submitted)) return res.status(400).json({ error: "fda_submitted_date must be YYYY-MM-DD" });
+    if (submitted && infoDate && submitted < infoDate) return res.status(400).json({ error: "fda_submitted_date cannot be before the information date" });
+    const productType = pick("fda_product_type");
+    if (productType && !FDA_PRODUCT_TYPES.has(productType)) return res.status(400).json({ error: "fda_product_type is not a known product type" });
+    const kind = pick("fda_event_kind");
+    if (kind && !FDA_EVENT_KINDS.has(kind)) return res.status(400).json({ error: "fda_event_kind must be deviation or unexpected_event" });
+    const affects = b.fda_affects_product !== undefined ? fdaFlag(b.fda_affects_product) : f.fda_affects_product;
+    const inFac = b.fda_in_facility !== undefined ? fdaFlag(b.fda_in_facility) : f.fda_in_facility;
+    const dist = b.fda_distributed !== undefined ? fdaFlag(b.fda_distributed) : f.fda_distributed;
+    const due = fdaReportDue(infoDate, affects, inFac, dist);
+    const conf = pick("fda_confirmation_number");
+    sqlite.prepare(
+      `UPDATE findings SET fda_product_type = ?, fda_product_id = ?, fda_event_kind = ?, fda_affects_product = ?, fda_in_facility = ?,
+         fda_distributed = ?, fda_info_date = ?, fda_report_due = ?, due_date = ?, fda_submitted_date = ?, fda_confirmation_number = ?,
+         external_submission_ref = COALESCE(?, external_submission_ref), updated_at = datetime('now') WHERE id = ?`
+    ).run(productType || null, pick("fda_product_id") ? String(pick("fda_product_id")).slice(0, 80) : null, kind || null,
+      affects, inFac, dist, infoDate, due, due, submitted, conf ? String(conf).slice(0, 80) : null,
+      conf ? String(conf).slice(0, 80) : null, f.id);
+    try {
+      sqlite.prepare("INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)")
+        .run(f.id, "fda_fields_updated", req.user?.userId ?? null, JSON.stringify({ fda_report_due: due, fda_submitted_date: submitted }));
+    } catch {}
+    return res.json(sqlite.prepare("SELECT * FROM findings WHERE id = ?").get(f.id));
+  });
+
   app.post("/api/labs/:labId/findings/:id/signoff", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
     const sqlite = (db as any).$client;
     const finding = sqlite.prepare("SELECT * FROM findings WHERE id = ? AND lab_id = ?").get(Number(req.params.id), req.scope.labId) as any;
