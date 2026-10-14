@@ -3,10 +3,10 @@ import { Badge } from "@/components/ui/badge";
 import { ExternalLink, Award, BookOpen, Shield, Star, Newspaper, Handshake, PenLine } from "lucide-react";
 
 const publications = [
-  { title: "Co-Own Blood Administration Among Lab, Nursing and Providers", url: "https://www.medlabmag.com/article/2195", journal: "MedicalLab Management" },
-  { title: "Laboratory Leadership's View of Accreditation", url: "https://www.medlabmag.com/article/1766", journal: "MedicalLab Management" },
-  { title: "Forming a Blood Utilization and Management Program", url: "https://www.medlabmag.com/article/1732", journal: "MedicalLab Management" },
-  { title: "Capturing Productivity in the Laboratory", url: "https://www.medlabmag.com/article/1575", journal: "MedicalLab Management" },
+  { title: "Co-Own Blood Administration Among Lab, Nursing and Providers", url: "https://www.medlabmag.com/article/2195", journal: "Medical Lab Management" },
+  { title: "Laboratory Leadership's View of Accreditation", url: "https://www.medlabmag.com/article/1766", journal: "Medical Lab Management" },
+  { title: "Forming a Blood Utilization and Management Program", url: "https://www.medlabmag.com/article/1732", journal: "Medical Lab Management" },
+  { title: "Capturing Productivity in the Laboratory", url: "https://www.medlabmag.com/article/1575", journal: "Medical Lab Management" },
 ];
 
 const credentials = [
@@ -21,11 +21,12 @@ const credentials = [
   { icon: Star, text: "Founder, VeritaAssure™ compliance software suite" },
 ];
 
-// David McCormick (added 2026-10-14 at Michael's request). Every line is sourced: the MLM managing-editor role is
-// Michael's own statement (2026-10-01), the title is the one on David's signed partnership addendum, and the book
-// edit is David's 8/22 "The Book is Done" email. No photo on file yet, so his card keeps the initials tile.
+// David McCormick (added 2026-10-14 at Michael's request). His bio is his own blurb ("David McCormick_VLS_blurb.docx",
+// emailed to info@ 10/14), changed only for house rules: the em dash became a comma and VeritaAssure carries ™.
+// Title "Sales Partner" is Michael's pick (Q190 = 1), the title on David's signed partnership addendum. No photo on
+// file yet, so his card keeps the initials tile.
 const davidHighlights = [
-  { icon: Newspaper, text: "Former Managing Editor, MedicalLab Management magazine" },
+  { icon: Newspaper, text: "Co-founder, Medical Lab Management magazine (2012)" },
   { icon: Handshake, text: "Partnerships and client relationships, Veritas Lab Services" },
   { icon: PenLine, text: "Editor, Lab Management 101 (forthcoming)" },
 ];
@@ -105,17 +106,15 @@ return (
                 <h2 className="font-serif text-2xl font-bold">David McCormick</h2>
                 <p className="text-sm text-muted-foreground mt-0.5">Sales Partner</p>
               </div>
+              <a href="mailto:info@veritaslabservices.com" className="text-sm text-primary hover:underline">info@veritaslabservices.com</a>
             </div>
 
             <div className="sm:col-span-2 space-y-5">
               <p className="text-foreground leading-relaxed">
-                David McCormick is the former managing editor of MedicalLab Management magazine, where he edited the articles laboratory directors and leaders across the country write for their peers.
+                I co-founded Medical Lab Management magazine in 2012 after 5 years’ writing and editing for a trade magazine covering clinical pharmacy operations. The impetus to launch MLM was sparked by several eye-opening conversations held at what was then called the “ThinkLab” tradeshow (later, KnowledgeLab) hosted by the Clinical Laboratory Management Association (CLMA). I had the great fortune of meeting several luminaries at that show who helped me understand the knowledge gaps that existed in the practice of clinical and anatomic laboratorians. Additional encounters at AABB’s Annual Meeting, ASM Microbe, the AACC (now ADLM) Annual Meeting & Clinical Lab Expo, and the AMP Annual Meeting & Expo, among others, further fostered the need for a strictly peer-to-peer model of coverage focusing on improving the standing of laboratorians of all ranks in the healthcare continuum and amplifying their success stories.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                At Veritas Lab Services, David handles partnerships and client relationships. He follows up with laboratory leaders who want to learn more about VeritaAssure™ and our consulting work, and he joins Michael on product demonstrations.
-              </p>
-              <p className="text-muted-foreground leading-relaxed">
-                David also edited Michael's forthcoming book, Lab Management 101.
+                After meeting Michael Veri at one such show in 2015, he quickly became a trusted author and advisor for our publication, as well as a friend. When he approached me in early 2026 to potentially join his exciting new software platform endeavor (and to edit his excellent forthcoming book on laboratory management, Lab Management 101) I was both excited and honored. The breadth, power, and clarity of the VeritaAssure™ platform is nothing short of astonishing. I hope to use my many years of covering and editing articles in MLM to help spread this word. Please feel free to contact me with any questions.
               </p>
               <Highlights title="Background" items={davidHighlights} />
             </div>
@@ -124,7 +123,7 @@ return (
           {/* Publications */}
           <div className="mt-14">
             <h3 className="font-serif text-xl font-bold mb-1">Publications & Resources</h3>
-            <p className="text-sm text-muted-foreground mb-5">Articles by Michael Veri in MedicalLab Management.</p>
+            <p className="text-sm text-muted-foreground mb-5">Articles by Michael Veri in Medical Lab Management.</p>
             <div className="space-y-3">
               {publications.map(({ title, url, journal }) => (
                 <a key={url} href={url} target="_blank" rel="noopener noreferrer"
