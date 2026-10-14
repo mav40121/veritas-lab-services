@@ -208,12 +208,14 @@ return (
               }`}
             >
               {plan.badge && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 whitespace-nowrap">
+                  {/* Opaque fill (brand tint #E6F2F2 / dark #0A3A3D): the old 10% primary fill let the card's top border
+                      line show through the pill, so "Entry Suite" read as sitting behind the card (Michael 2026-10-14). */}
                   <span
                     className={`text-xs font-semibold px-3 py-1 rounded-full ${
                       plan.highlight
                         ? "bg-primary text-primary-foreground"
-                        : "bg-primary/10 text-primary border border-primary/20"
+                        : "bg-[#E6F2F2] dark:bg-[#0A3A3D] text-primary border border-primary/30 shadow-sm"
                     }`}
                   >
                     {plan.badge}
