@@ -17,7 +17,10 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const SERVER_FILES = ["server/routes.ts", "server/veritacheck_verification.ts", "server/schedule.ts"];
+// Every server module, not a hand-kept list: routes registered from their own files (temperatureLogs.ts,
+// stockRecalls.ts, veritabench.ts, ...) were invisible to the old three-file list and read as "no server
+// route" (2026-10-14, #1639 temperature logs). Indexing more files can only add known routes.
+const SERVER_FILES = readdirSync("server").filter((n) => n.endsWith(".ts")).map((n) => join("server", n));
 const CLIENT_DIR = "client/src";
 
 // Known false positives (path templates that are dynamic or intentionally
