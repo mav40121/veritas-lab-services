@@ -30,7 +30,7 @@ export interface MethodSignState {
 
 const ROLE_NAME: Record<string, string> = { LD: "Laboratory Director", TC: "Technical Consultant", TS: "Technical Supervisor", GS: "General Supervisor" };
 const RULE_TEXT: Record<string, string> = {
-  MODERATE: "Moderate complexity: a technical consultant or the laboratory director can sign (42 CFR 493.1413(b)(8), 493.1407(a)).",
+  MODERATE: "Moderate complexity: a technical consultant or technical supervisor for the specialty, or the laboratory director, can sign (42 CFR 493.1413(b)(8), 493.1407(a)).",
   HIGH: "High complexity: a technical supervisor, a general supervisor with a signed delegation for competency, or the laboratory director can sign (42 CFR 493.1451(b)(8), 493.1463(b)(4), 493.1445(a)).",
   WAIVED: "Waived: a general supervisor, technical consultant, technical supervisor or the laboratory director can sign.",
   UNSPECIFIED: "Complexity is not set for this instrument in VeritaMap™: a technical consultant, technical supervisor or the laboratory director can sign.",

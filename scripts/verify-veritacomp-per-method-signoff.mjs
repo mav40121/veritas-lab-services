@@ -3,7 +3,7 @@
 // Receipt for VeritaComp per-method sign-off (Michael 2026-10-13, Q156 talk-through, Q157 = 1, Q158 = 1): each method
 // (instrument) is signed off on its own for each person, by a VeritaStaff person whose role fits the method's
 // complexity. LOCAL server + scratch DB only; every person, instrument and competency below is a scratch-DB fixture.
-//   1. signer lists: moderate = TC for that specialty or the director; high = TS for that specialty, a GS with a signed
+//   1. signer lists: moderate = TC or TS for that specialty (Michael Q159: a TS meets the TC requirements) or the director; high = TS for that specialty, a GS with a signed
 //      delegation, or the director; waived = GS, TC, TS or director; ineligible people listed with the reason
 //   2. sign is refused while elements are open (409 + list), for an ineligible signer (403), for a waived method as
 //      "6-month" (400), for a future date (400), for an earlier date without documentation (400), and for a date
@@ -77,10 +77,10 @@ const names = (opts, eligible) => opts.filter((o) => o.eligible === eligible).ma
 let v = await view(pat);
 const sChem = tsOf(v, CHEM).signers || [], sXn = tsOf(v, XN).signers || [], sDiff = tsOf(v, DIFF).signers || [], sUa = tsOf(v, UA).signers || [];
 check("1a. chemistry (moderate): Jordan (chemistry TC) and Morgan (LD) eligible", names(sChem, true) === "Jordan Rivera, Morgan Chen", names(sChem, true));
-check("1b. chemistry: Taylor (TS, not a TC) and Sam (GS) greyed out with reasons",
-  names(sChem, false) === "Sam Ortiz, Taylor Brooks" && sChem.every((o) => o.eligible || !!o.reason), sChem.filter((o) => !o.eligible).map((o) => `${o.name}: ${o.reason}`).join(" | "));
-check("1c. XN-1000 (moderate hematology): Jordan's TC is chemistry only, so only Morgan is eligible",
-  names(sXn, true) === "Morgan Chen" && /Chemistry, not Hematology/.test(sXn.find((o) => o.name === "Jordan Rivera")?.reason || ""), sXn.map((o) => `${o.name}:${o.eligible}`).join(" "));
+check("1b. chemistry: Taylor (hematology TS) and Sam (GS) greyed out with reasons",
+  names(sChem, false) === "Sam Ortiz, Taylor Brooks" && /Hematology, not Chemistry/.test(sChem.find((o) => o.name === "Taylor Brooks")?.reason || "") && sChem.every((o) => o.eligible || !!o.reason), sChem.filter((o) => !o.eligible).map((o) => `${o.name}: ${o.reason}`).join(" | "));
+check("1c. XN-1000 (moderate hematology): Taylor (hematology TS, meets TC) and Morgan eligible; Jordan's TC is chemistry only",
+  names(sXn, true) === "Morgan Chen, Taylor Brooks" && sXn.find((o) => o.name === "Taylor Brooks")?.role === "TS" && /Chemistry, not Hematology/.test(sXn.find((o) => o.name === "Jordan Rivera")?.reason || ""), sXn.map((o) => `${o.name}:${o.eligible}`).join(" "));
 check("1d. manual diff (high hematology): Taylor (hematology TS) and Morgan eligible; Sam needs a delegation",
   names(sDiff, true) === "Morgan Chen, Taylor Brooks" && /delegation/.test(sDiff.find((o) => o.name === "Sam Ortiz")?.reason || ""), sDiff.map((o) => `${o.name}:${o.eligible}`).join(" "));
 check("1e. waived urinalysis: GS, TC, TS and LD all eligible", names(sUa, true) === "Jordan Rivera, Morgan Chen, Sam Ortiz, Taylor Brooks", names(sUa, true));
@@ -94,7 +94,7 @@ r = await sign(pat, CHEM, { signerStaffEmployeeId: jordan });
 check("2b. elements 5 and 6 open: 409 lists them", r.status === 409 && (r.body.incomplete || []).length === 2 && /element 5/.test(r.body.incomplete[0]), JSON.stringify(r.body.incomplete));
 await put(pat, CHEM, { elements: els("C") });
 r = await sign(pat, CHEM, { signerStaffEmployeeId: taylor });
-check("2c. ineligible signer (Taylor on chemistry): 403 with the reason", r.status === 403 && /not listed as a technical consultant/.test(r.body.error || ""), `${r.status} ${r.body.error}`);
+check("2c. ineligible signer (Taylor, hematology TS, on chemistry): 403 with the reason", r.status === 403 && /Hematology, not Chemistry/.test(r.body.error || ""), `${r.status} ${r.body.error}`);
 r = await sign(pat, CHEM, { signerStaffEmployeeId: jordan, signedDate: addMonths(today, 1) });
 check("2d. a future date: 400", r.status === 400 && /future/.test(r.body.error || ""), `${r.status} ${r.body.error}`);
 r = await sign(pat, CHEM, { signerStaffEmployeeId: jordan, signedDate: addMonths(today, -1) });
@@ -186,8 +186,8 @@ for (const [scheme, width] of [["light", 1400], ["dark", 1400], ["light", 390]])
     await page.getByTestId("test-system-tab").filter({ hasText: "Sysmex XN-1000" }).click(); await page.waitForTimeout(400);
     const opts = await page.getByTestId("signer-select").locator("option").evaluateAll((os) => os.map((o) => ({ t: o.textContent, d: o.disabled })));
     const selected = await page.getByTestId("signer-select").inputValue();
-    check(`8b. ${tag} XN-1000 (moderate) sign form: Morgan Chen (LD) preselected; Jordan greyed out with "not Hematology"`,
-      opts[0]?.t?.startsWith("Morgan Chen") && !opts[0]?.d && opts.some((o) => o.d && /Jordan Rivera.*not Hematology/.test(o.t)) && selected !== "", JSON.stringify(opts));
+    check(`8b. ${tag} XN-1000 (moderate) sign form: Taylor Brooks (hematology TS) preselected; Jordan greyed out with "not Hematology"`,
+      opts[0]?.t?.startsWith("Taylor Brooks, Technical Supervisor") && !opts[0]?.d && opts.some((o) => o.d && /Jordan Rivera.*not Hematology/.test(o.t)) && selected !== "", JSON.stringify(opts));
   } else {
     await page.getByTestId("test-system-tab").filter({ hasText: "Manual Differential" }).click(); await page.waitForTimeout(400);
     const opts = await page.getByTestId("signer-select").locator("option").evaluateAll((os) => os.map((o) => ({ t: o.textContent, d: o.disabled })));
@@ -201,8 +201,8 @@ for (const [scheme, width] of [["light", 1400], ["dark", 1400], ["light", 390]])
     await page.getByTestId("sign-method").click(); await page.waitForTimeout(1200);
     const banner = await page.getByTestId("method-signed").innerText().catch(() => "");
     const due = await page.getByTestId("method-next-due").innerText().catch(() => "");
-    check(`8c. ${tag} clicking Sign: banner reads "Initial signed ... by Morgan Chen, Laboratory Director" with the 6-month due`,
-      /Initial signed .* by Morgan Chen, Laboratory Director/.test(banner) && /6-month due/.test(due), `${banner.replace(/\s+/g, " ")} / ${due}`);
+    check(`8c. ${tag} clicking Sign: banner reads "Initial signed ... by Taylor Brooks, Technical Supervisor" with the 6-month due`,
+      /Initial signed .* by Taylor Brooks, Technical Supervisor/.test(banner) && /6-month due/.test(due), `${banner.replace(/\s+/g, " ")} / ${due}`);
     await page.screenshot({ path: `${OUT}/pms_person_signed_${scheme}_${width}.png`, fullPage: true });
     const after = await view(pat);
     check(`8d. ${tag} the browser sign is stored: XN-1000 signed, the manual diff still open`, !!tsOf(after, XN).lastSignoff && !tsOf(after, DIFF).lastSignoff);
@@ -215,7 +215,7 @@ for (const [scheme, width] of [["light", 1400], ["dark", 1400], ["light", 390]])
     const kimAfter = await view(kim);
     const summary = await page.getByTestId("instrument-summary").innerText();
     check(`8e. ${tag} instrument page: signing Kim stores her XN-1000 sign-off; summary reads 2 of 2 signed`,
-      tsOf(kimAfter, XN).lastSignoff?.signerName === "Morgan Chen" && /2 of 2 assigned people signed/.test(summary), summary);
+      tsOf(kimAfter, XN).lastSignoff?.signerName === "Taylor Brooks" && /2 of 2 assigned people signed/.test(summary), summary);
     await page.screenshot({ path: `${OUT}/pms_instrument_signed_${scheme}_${width}.png`, fullPage: true });
     check(`${tag} instrument page: no horizontal page scroll`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
   }

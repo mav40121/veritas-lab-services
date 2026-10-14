@@ -3,8 +3,9 @@
 // Per-method competency sign-off (Michael 2026-10-13, Q156 talk-through + Q158 = 1): each method (an instrument) is
 // signed off on its own for each person, so a new hire can be signed department by department. Pure rules shared by
 // the server (enforced on sign) and the client (the "Signed by" list): who may sign one method's competency.
-//   Moderate method: a technical consultant for that specialty, or the laboratory director (42 CFR 493.1413(b)(8),
-//     493.1407(a)).
+//   Moderate method: a technical consultant or a technical supervisor for that specialty, or the laboratory director
+//     (42 CFR 493.1413(b)(8), 493.1407(a)). A TS for a specialty meets the TC requirements for it (Michael, 2026-10-13,
+//     Q159).
 //   High method: a technical supervisor for that specialty (493.1451(b)(8)), a general supervisor the director or TS
 //     delegated it to in a signed Letter of Delegation (493.1463(b)(4)), or the laboratory director (493.1445(a)).
 //   Waived method: a general supervisor, technical consultant, technical supervisor or the laboratory director.
@@ -108,10 +109,11 @@ export function signerOptionFor(c: SignerCandidate, complexityIn: string | null 
   }
   if (complexity === "MODERATE") {
     if (holdsRoleFor(c.roles, "TC", specs)) return ok("TC");
+    if (holdsRoleFor(c.roles, "TS", specs)) return ok("TS"); // a TS for the specialty meets the TC requirements
     if (isLD) return ok("LD");
     if (has("TC")) return no("TC", `Technical consultant for ${specialtyList(c.roles, "TC") || "other specialties"}, not ${dept}`);
-    if (has("TS")) return no("TS", "Technical supervisor, not listed as a technical consultant");
-    return no("GS", "General supervisor: moderate complexity needs a technical consultant");
+    if (has("TS")) return no("TS", `Technical supervisor for ${specialtyList(c.roles, "TS") || "other specialties"}, not ${dept}`);
+    return no("GS", "General supervisor: moderate complexity needs a technical consultant or supervisor");
   }
   // Complexity not set on the map: a TC or TS for the specialty, or the director.
   if (holdsRoleFor(c.roles, "TS", specs)) return ok("TS");
