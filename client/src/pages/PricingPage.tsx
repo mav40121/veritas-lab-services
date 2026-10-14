@@ -295,7 +295,7 @@ return (
                       </Link>
                     </Button>
                     <p className="text-xs text-center text-muted-foreground">
-                      {SUITE_PLAN_NAMES.includes(plan.name) ? "Set up with our team on a short call" : "14-day free trial"} &middot; 30-day money-back guarantee
+                      {SUITE_PLAN_NAMES.includes(plan.name) ? <>Set up with our team on a short call &middot; 30-day money-back guarantee</> : "30-day money-back guarantee"}
                     </p>
                   </div>
                 ) : (
