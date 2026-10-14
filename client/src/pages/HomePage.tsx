@@ -248,7 +248,7 @@ return (
                 Founded by Michael Veri, a US Army veteran, former Joint Commission Surveyor, and published author. VLS was built on the recognition that administrative lab leaders lacked accessible avenues for growth and mentorship.
               </p>
               <Button asChild variant="outline" className="mt-6">
-                <Link href="/team">Meet Michael Veri <ChevronRight size={14} className="ml-1" /></Link>
+                <Link href="/team">Meet the team <ChevronRight size={14} className="ml-1" /></Link>
               </Button>
             </div>
             <div className="grid grid-cols-2 gap-3">
