@@ -38704,6 +38704,42 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   );
 
+  // PATCH /workflows/:id/steps/:stepId — "Allow the author to approve this step" (Michael 2026-10-14, Q187 = 2:
+  // "It will be very common for them to write and do the preliminary (TC/TS) approval"). Off by default; each lab
+  // decides per step. Takes effect at the next approval check, so documents already waiting on the step pick it up.
+  // Owner or admin only; recorded in the audit log.
+  app.patch(
+    "/api/labs/:labId/veritapolicy/workflows/:id/steps/:stepId",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
+      const workflowId = Number(req.params.id);
+      const stepId = Number(req.params.stepId);
+      if (!Number.isFinite(workflowId) || !Number.isFinite(stepId)) return res.status(400).json({ error: "Bad id" });
+      const { allowSelfApproval } = req.body || {};
+      if (typeof allowSelfApproval !== "boolean") return res.status(400).json({ error: "allowSelfApproval (true or false) required" });
+      const sqlite = (db as any).$client;
+      const step = sqlite.prepare(
+        `SELECT s.id, s.step_name, s.allow_self_approval, w.lab_id, w.name AS workflow_name
+           FROM policy_approval_steps s JOIN policy_approval_workflows w ON w.id = s.workflow_id
+          WHERE s.id = ? AND s.workflow_id = ?`
+      ).get(stepId, workflowId) as { id: number; step_name: string; allow_self_approval: number; lab_id: number; workflow_name: string } | undefined;
+      if (!step || step.lab_id !== req.scope.labId) return res.status(404).json({ error: "Step not found" });
+      sqlite.prepare("UPDATE policy_approval_steps SET allow_self_approval = ? WHERE id = ?").run(allowSelfApproval ? 1 : 0, stepId);
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        userId: req.userId,
+        action: "workflow_step_author_may_approve",
+        details: { workflowId, workflow: step.workflow_name, stepId, step: step.step_name, before: !!step.allow_self_approval, after: allowSelfApproval },
+        ipAddress: req.ip,
+      });
+      res.json({ ok: true, stepId, allowSelfApproval });
+    }
+  );
+
   // DELETE /workflows/:id/steps/:stepId — remove a step.
   app.delete(
     "/api/labs/:labId/veritapolicy/workflows/:id/steps/:stepId",

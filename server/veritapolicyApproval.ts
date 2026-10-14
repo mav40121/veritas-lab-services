@@ -313,6 +313,22 @@ export function manualApproverUserIds(
   return rows.length ? rows.map((r) => r.user_id) : null;
 }
 
+// Is this user blocked from approving a step because they uploaded the document? Blocked unless the step allows
+// the author to approve it (per-step switch, Q187 = 2), or the step is the Medical Director step and the user is the
+// lab's designated, active Medical Director (Michael 2026-10-14, Q188 = 1; CLIA 493.1251(d): the laboratory director
+// approves, signs and dates procedures). The director exception does not extend to owner/admin designees.
+export function authorBlockedFromStep(
+  sqlite: any,
+  labId: number,
+  userId: number,
+  documentOwnerId: number,
+  stepRow: { required_role: string; allow_self_approval: number }
+): boolean {
+  if (userId !== documentOwnerId || stepRow.allow_self_approval) return false;
+  if (stepRow.required_role === "medical_director" && resolveActiveMedicalDirectorUserId(sqlite, labId) === userId) return false;
+  return true;
+}
+
 export function canUserApproveStep(
   sqlite: any,
   args: {
@@ -335,7 +351,7 @@ export function canUserApproveStep(
   const { userId, labId, documentOwnerId, stepRow } = args;
   // Self-approval guard first: blocks regardless of role match unless
   // allow_self_approval is explicitly enabled on the step.
-  if (userId === documentOwnerId && !stepRow.allow_self_approval) {
+  if (authorBlockedFromStep(sqlite, labId, userId, documentOwnerId, stepRow)) {
     return {
       ok: false,
       reason: "Self-approval is blocked on this workflow step. Ask a different reviewer.",
@@ -498,7 +514,7 @@ export function canUserApproveStepDelegated(
   if (direct.ok) return { ok: true };
   // Guard 1: an owner blocked by the self-approval rule cannot be rescued by
   // being someone's delegate.
-  if (args.userId === args.documentOwnerId && !args.stepRow.allow_self_approval) {
+  if (authorBlockedFromStep(sqlite, args.labId, args.userId, args.documentOwnerId, args.stepRow)) {
     return direct;
   }
   const role = args.stepRow.required_role;
@@ -621,7 +637,7 @@ export function eligibleReviewerIdsForStep(
 ): Set<number> {
   const { labId, documentOwnerId, stepRow } = args;
   const eligible = new Set<number>();
-  const ownerBlocked = (uid: number) => uid === documentOwnerId && !stepRow.allow_self_approval;
+  const ownerBlocked = (uid: number) => authorBlockedFromStep(sqlite, labId, uid, documentOwnerId, stepRow);
   const isActiveMember = (uid: number) =>
     !!sqlite
       .prepare(`SELECT 1 FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1`)
@@ -713,7 +729,7 @@ export function countEligibleReviewersForStepDelegated(
   if (eligible.size === 0) return 0;
   const role = args.stepRow.required_role;
   const ownerBlocked = (uid: number) =>
-    uid === args.documentOwnerId && !args.stepRow.allow_self_approval;
+    authorBlockedFromStep(sqlite, args.labId, uid, args.documentOwnerId, args.stepRow);
   for (const fromId of [...eligible]) {
     const rows = sqlite
       .prepare(
