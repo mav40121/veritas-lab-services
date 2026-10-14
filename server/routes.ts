@@ -28032,7 +28032,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     let latestAssessmentId: number | null = null;
     if (compEmp) {
       const assessments = sqlite.prepare(
-        `SELECT a.id, a.locked, a.completion_date, a.signed_on_paper_date, a.evaluator_name, a.evaluator_title, a.evaluator_initials, p.is_implicit
+        `SELECT a.id, a.locked, a.assessment_type, a.completion_date, a.signed_on_paper_date, a.evaluator_name, a.evaluator_title, a.evaluator_initials, p.is_implicit
          FROM competency_assessments a JOIN competency_programs p ON p.id = a.program_id
          WHERE a.employee_id = ? AND p.lab_id = ? ORDER BY a.assessment_date DESC, a.id DESC`
       ).all(compEmp.id, labId) as any[];
@@ -28093,7 +28093,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!signoffs.length && legacy) {
         const legacyItems = (sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ? AND instrument_id = ?").all(legacy.id, inst.id) as any[]);
         signoffs.push({
-          id: null, legacy: true, milestone: null,
+          // BUG-049 (2026-10-14): carry the record's own type, so the next step and due date follow from it. With
+          // milestone null the view asked for the initial again and computed no due date (Lisa Thompson, Riverside).
+          id: null, legacy: true, milestone: ({ initial: "initial", "6month": "six_month", six_month: "six_month", first_annual: "first_annual", annual: "annual" } as Record<string, string>)[String(legacy.assessment_type || "")] || null,
           signedDate: String(legacy.signed_on_paper_date || "").slice(0, 10) || labLocalDate(legacy.completion_date) || null, // BUG-047: lab date
           signerName: legacy.evaluator_name || null, signerRole: legacy.evaluator_title || null, signerInitials: legacy.evaluator_initials || null,
           documentation: null,
