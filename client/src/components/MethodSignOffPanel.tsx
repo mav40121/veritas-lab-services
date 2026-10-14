@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
-import { MILESTONE_LABEL, initialsOf, milestonesForComplexity, type MethodMilestone, type SignerOption } from "@shared/competencySignoff";
+import { MILESTONE_LABEL, MONTH_NAMES, initialsOf, milestonesForComplexity, type MethodMilestone, type SignerOption } from "@shared/competencySignoff";
 
 export interface MethodSignoff {
   id: number | null; legacy: boolean; milestone: MethodMilestone | null; signedDate: string | null;
@@ -24,7 +24,7 @@ export interface MethodSignState {
   instrumentId: number; instrumentName: string; complexity: string;
   signable: boolean; complete: boolean; hasData: boolean; fromLegacyProgram?: boolean;
   signoffs: MethodSignoff[]; lastSignoff: MethodSignoff | null;
-  nextMilestone: MethodMilestone; nextDue: { targetDate: string | null; latest: string | null } | null;
+  nextMilestone: MethodMilestone; nextDue: { targetDate: string | null; latest: string | null; naturalTargetDate?: string | null; annualMonth?: number | null } | null;
   overdue: boolean; signedCurrent: boolean; signers: SignerOption[];
 }
 
@@ -125,6 +125,9 @@ export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts
               {ts.nextDue?.targetDate && (
                 <div className={`text-xs mt-0.5 ${ts.overdue ? "text-red-600 font-medium" : "text-muted-foreground"}`} data-testid="method-next-due">
                   {MILESTONE_LABEL[ts.nextMilestone]} due {fmt(ts.nextDue.targetDate)}{ts.overdue ? " (overdue)" : ""}
+                  {ts.nextDue.naturalTargetDate && ts.nextDue.annualMonth && (
+                    <span data-testid="method-annual-month-note"> (moved earlier into the lab's annual month, {MONTH_NAMES[ts.nextDue.annualMonth - 1]}; {fmt(ts.nextDue.naturalTargetDate)} without it)</span>
+                  )}
                 </div>
               )}
               {last.legacy && <div className="text-xs text-muted-foreground mt-0.5">Signed on the whole record before per-method sign-off.</div>}

@@ -27,6 +27,8 @@
 //     NYS calendar ceiling and the accreditor's day tolerance, and the minimum is the LATER.
 //   WAIVED (all bodies): Initial -> annual (+12mo) thereafter. [TJC WT.03.01.01 EP 5]
 
+import { alignAnnualToMonth } from "@shared/competencySignoff";
+
 export type CompetencyMilestone = "initial" | "six_month" | "first_annual" | "annual";
 
 export interface NextDueInput {
@@ -174,6 +176,7 @@ export interface CompetencyLabContext {
   nys?: boolean;                     // lab.includes_nys === 1
   highestComplexity?: string | null; // staff_employees.highest_complexity
   hireDate?: string | null;          // staff_employees.hire_date
+  annualMonth?: number | null;       // staff_labs.competency_annual_month: repeat annuals move EARLIER into this month
 }
 export interface CompetencyDueColumns {
   six_month_due_at: string | null;
@@ -213,6 +216,8 @@ export function competencyDueColumns(lab: CompetencyLabContext, comp: Competency
     const r = nextCompetencyDue({ recordedMilestone: "annual", recordedDate: comp.lastAnnualCompletedAt, ...base });
     out.annual_due_at = r.targetDate;
   }
+  // Lab annual month (Michael Q157 = 1): the repeat annual moves earlier into the lab's month, never later.
+  if (lab.annualMonth) out.annual_due_at = alignAnnualToMonth(out.annual_due_at, lab.annualMonth);
 
   // Legacy NYS six-month column (hire-anchored). The worklist reads
   // six_month_due_at, not this, but it is kept populated for back-compat on
@@ -238,7 +243,7 @@ export function competencySeedAtCreate(lab: CompetencyLabContext): CompetencyDue
   const base = { hireDate: lab.hireDate, highestComplexity: lab.highestComplexity ?? null, accreditor: lab.accreditor ?? null, regime: "NYS-CLEP" as const };
   out.six_month_due_at   = nextCompetencyDue({ recordedMilestone: "initial",      recordedDate: lab.hireDate, ...base }).targetDate; // hire+6
   out.first_annual_due_at = nextCompetencyDue({ recordedMilestone: "six_month",    recordedDate: lab.hireDate, ...base }).targetDate; // hire+12
-  out.annual_due_at      = nextCompetencyDue({ recordedMilestone: "first_annual", recordedDate: lab.hireDate, ...base }).targetDate; // hire+24
+  out.annual_due_at      = alignAnnualToMonth(nextCompetencyDue({ recordedMilestone: "first_annual", recordedDate: lab.hireDate, ...base }).targetDate, lab.annualMonth); // hire+24, in the lab's annual month when set
   out.nys_six_month_due_at = out.six_month_due_at;
   return out;
 }

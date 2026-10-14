@@ -72,6 +72,7 @@ import { DocumentLinkDialog, COMP_DOC_TYPES } from "@/components/DocumentLinkDia
 import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
 import { PriorYearComparisonDialog } from "@/components/PriorYearComparisonDialog";
 import { CompetencyRemindersCard } from "@/components/CompetencyRemindersCard";
+import { CompetencyAnnualMonthCard } from "@/components/CompetencyAnnualMonthCard";
 import { PTSamplePickerDialog, type PTSample } from "@/components/PTSamplePickerDialog";
 import { AuditTrailDialog } from "@/components/AuditTrailDialog";
 import { PermissionTooltip, PERMISSION_REASONS } from "@/components/PermissionTooltip";
@@ -918,6 +919,8 @@ function ProgramListView() {
       <CompetenciesOwedSection />
       {/* 2026-10-08: weekly supervisor digest, director escalation, monthly 90/60/30 report */}
       <CompetencyRemindersCard />
+      {/* 2026-10-13 (Michael Q157 = 1, Sampson REQ-057): optional month that every repeat annual moves into */}
+      <CompetencyAnnualMonthCard />
       {/* #48 Phase 3: required-vs-assessed coverage map, toggle by employee / by instrument */}
       <CompetencyCoverageMap />
       {/* Employee-centric entry point (Phase 1 of the coverage-derived IA). */}
