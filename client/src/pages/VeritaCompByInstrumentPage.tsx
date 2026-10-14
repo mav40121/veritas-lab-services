@@ -1,7 +1,7 @@
 // client/src/pages/VeritaCompByInstrumentPage.tsx
 //
 // "By instrument" index (2026-10-13, Michael Q154 = 2): every instrument on the lab's VeritaMap maps with how many
-// assigned people are complete for the cycle. Click through to VeritaCompInstrumentPage. Read-only; not linked from the
+// assigned people are signed off on it (per-method sign-off), ready to sign, or overdue. Click through to VeritaCompInstrumentPage. Read-only; not linked from the
 // VeritaComp landing until it is turned on.
 //   GET /api/labs/:labId/competency/by-instrument
 import { Link } from "wouter";
@@ -13,7 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-interface Row { instrumentId: number; instrumentName: string; department: string | null; complexity: string | null; people: number; complete: number; }
+interface Row { instrumentId: number; instrumentName: string; department: string | null; complexity: string | null; people: number; signed: number; ready: number; overdue: number; }
 
 export default function VeritaCompByInstrumentPage() {
   const activeLabId = useActiveLabId();
@@ -39,7 +39,7 @@ export default function VeritaCompByInstrumentPage() {
       <div>
         <h1 className="text-2xl font-bold">Competency by instrument</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Each instrument on your VeritaMap&trade;, with the people assigned to it in VeritaStaff&trade; and how many are complete this cycle.
+          Each instrument on your VeritaMap&trade;, with the people assigned to it in VeritaStaff&trade; and how many are signed off on it.
         </p>
       </div>
       {isLoading && <div className="text-sm text-muted-foreground py-8 text-center">Loading...</div>}
@@ -51,7 +51,7 @@ export default function VeritaCompByInstrumentPage() {
         <div key={dept} className="space-y-1.5">
           <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{dept}</div>
           {rows.filter((r) => (r.department || "Other") === dept).map((r) => {
-            const done = r.people > 0 && r.complete === r.people;
+            const done = r.people > 0 && r.signed === r.people;
             return (
               <Link key={r.instrumentId} href={labRoute(`/veritacomp-app/instrument/${r.instrumentId}`)} data-testid="instrument-row"
                 className="flex items-center justify-between gap-3 rounded-md border p-3 hover:border-primary/40 transition-colors">
@@ -63,9 +63,13 @@ export default function VeritaCompByInstrumentPage() {
                   {r.people === 0 ? (
                     <span className="text-xs text-muted-foreground">No one assigned</span>
                   ) : (
-                    <Badge className={`text-[10px] ${done ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"}`} data-testid="instrument-progress">
-                      {r.complete} of {r.people} complete
-                    </Badge>
+                    <>
+                      {r.overdue > 0 && <Badge className="text-[10px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">{r.overdue} overdue</Badge>}
+                      {r.ready > 0 && <Badge className="text-[10px] bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300" data-testid="instrument-ready">{r.ready} ready to sign</Badge>}
+                      <Badge className={`text-[10px] ${done ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"}`} data-testid="instrument-progress">
+                        {r.signed} of {r.people} signed
+                      </Badge>
+                    </>
                   )}
                   <ChevronRight size={16} className="text-muted-foreground" />
                 </div>
