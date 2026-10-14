@@ -86,7 +86,6 @@ const ALLOWED_FILES = new Set([
   "labAccessGuard.ts",
   "demoGuard.ts",       // dedupe checks during seed; demo-user scope
   "integrations.ts",    // webhook handlers with already-validated user_id
-  "backfillVeritapolicySeats.ts", // one-time migration runner
 ]);
 
 // Endpoint contexts (function/route names) that legitimately scope by
