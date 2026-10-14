@@ -2125,9 +2125,12 @@ if (!colNames.includes("lab_id")) {
 // For every user who has a populated clia_number or clia_lab_name on their user
 // row AND does not already have a lab_id, create a labs row and link it.
 // Then, for seat users whose owner now has a lab_id, inherit the same lab_id.
+// 2026-10-14 (Michael, Q195 = 1): labs are created only by Veritas staff. This one-time migration of legacy
+// user-level lab data now covers only accounts created before 2026-10-14 3:00 PM ET; without the cutoff, a new signup who
+// confirmed a CLIA (POST /api/clia/confirm writes users.clia_*) would get a lab on the next restart.
 {
   const usersWithLabData = sqlite.prepare(
-    "SELECT id, clia_number, clia_lab_name, preferred_standards FROM users WHERE (clia_number IS NOT NULL OR clia_lab_name IS NOT NULL) AND lab_id IS NULL"
+    "SELECT id, clia_number, clia_lab_name, preferred_standards FROM users WHERE (clia_number IS NOT NULL OR clia_lab_name IS NOT NULL) AND lab_id IS NULL AND created_at < '2026-10-14T19:00:00.000Z'"
   ).all() as any[];
 
   // Pre-compute which user ids are active seats. A user that is somebody else's

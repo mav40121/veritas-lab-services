@@ -123,9 +123,21 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
                 <Button onClick={handleExploreDemo} variant="outline" size="lg" className="w-full">
                   Explore the Demo Lab
                 </Button>
-                <Button onClick={() => setStep(2)} size="lg" className="w-full bg-primary hover:bg-primary/90 font-semibold">
-                  Build My Lab <ArrowRight size={16} className="ml-1" />
-                </Button>
+                {/* 2026-10-14 (Michael, Q195 = 1): labs are set up by the Veritas team after a short call, so a new
+                    account without a lab is sent to talk to the team instead of building one here. A lab the team
+                    set up (activeLabId present) still gets Build My Lab. */}
+                {activeLabId ? (
+                  <Button onClick={() => setStep(2)} size="lg" className="w-full bg-primary hover:bg-primary/90 font-semibold">
+                    Build My Lab <ArrowRight size={16} className="ml-1" />
+                  </Button>
+                ) : (
+                  <>
+                    <Button onClick={() => { completeOnboarding(); navigate("/contact"); }} size="lg" className="w-full bg-primary hover:bg-primary/90 font-semibold" data-testid="onboarding-talk-to-team">
+                      Talk to our team <ArrowRight size={16} className="ml-1" />
+                    </Button>
+                    <p className="text-xs text-muted-foreground">Your lab is set up with our team on a short call.</p>
+                  </>
+                )}
               </div>
             </div>
           )}

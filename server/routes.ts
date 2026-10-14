@@ -235,6 +235,8 @@ import { insertStudySchema, insertContactSchema, registerSchema, loginSchema, ty
 // Each study type has its own pass/fail rule derived from the raw dataPoints.
 import { isCensored, censorValueForMath, type CensoringPolicy } from "@shared/censoring";
 import { computePTCoagStatus } from "./ptCoagVerdict";
+// Shown wherever a self-serve path used to create a lab (2026-10-14, Michael Q195 = 1).
+export const LAB_SETUP_BY_STAFF_MESSAGE = "Your lab is set up by the Veritas Lab Services team after a short call. Reach us at www.veritaslabservices.com/contact or info@veritaslabservices.com.";
 
 // Set when computeStudyStatus hit an exception (its "fail" return is then a
 // fail-safe, not a verdict). The boot recompute reads this to SKIP such
@@ -7164,148 +7166,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ defaultLabId: labId });
   });
 
-  // POST /api/labs/me/add — add a new lab to the operator's account.
-  //
-  // Multi-Lab Tier 2 Phase 4.2 per docs/scoping-phase4-stripe-flip.md.
-  //
-  // Body: { labName, cliaNumber, accreditationBody?, priceType }
-  //
-  // Flow:
-  //   1. Validate body (labName, cliaNumber, priceType all required).
-  //   2. Reject if a lab with the same CLIA already exists (UNIQUE on
-  //      labs.clia_number).
-  //   3. Create a fresh Stripe customer for THIS lab (parking-lot #11:
-  //      each lab is its own subscription, do NOT reuse the operator's
-  //      existing Stripe customer for the new lab).
-  //   4. INSERT labs row with stripe_customer_id pre-stamped and the
-  //      operator as owner_user_id. is_primary_lab handled at membership
-  //      level (defaults to 0; this is a secondary lab per #12).
-  //   5. INSERT lab_members row (role='owner', is_primary_lab=0,
-  //      status='active').
-  //   6. Create Stripe Checkout session with metadata.labId = new lab id
-  //      so the Phase 4.1 webhook routes the resulting subscription to
-  //      this lab specifically (not the operator's primary lab).
-  //   7. Return { labId, checkoutUrl }.
-  //
-  // Failure modes:
-  //   - Stripe customer create fails: no DB writes, 502 returned.
-  //   - DB insert fails (e.g. CLIA unique violation): no Stripe customer
-  //     left orphaned because we already 4xx'd before customer create.
-  //   - Stripe checkout session create fails after labs INSERT: the lab
-  //     and membership exist; user can retry checkout via the existing
-  //     /api/stripe/checkout endpoint targeting the new lab. Logged.
-  app.post("/api/labs/me/add", authMiddleware, async (req: any, res) => {
-    if (!stripe) return res.status(503).json({ error: "Payments not configured" });
-    const { labName, cliaNumber, accreditationBody, priceType } = req.body || {};
-    if (!labName?.trim() || !cliaNumber?.trim() || !priceType) {
-      return res.status(400).json({ error: "labName, cliaNumber, and priceType are required" });
-    }
-    if (!PRICES[priceType as keyof typeof PRICES]) {
-      return res.status(400).json({ error: "Invalid priceType" });
-    }
-    // Reject duplicate CLIA early (UNIQUE constraint exists on labs.clia_number).
-    const existingLab = (db as any).$client.prepare(
-      "SELECT id, owner_user_id FROM labs WHERE clia_number = ? LIMIT 1"
-    ).get(cliaNumber.trim()) as any;
-    if (existingLab) {
-      return res.status(409).json({ error: "A lab with this CLIA number already exists" });
-    }
-
-    const user = storage.getUserById(req.userId);
-    if (!user) return res.status(404).json({ error: "User not found" });
-
-    let stripeCustomerId: string;
-    try {
-      const customer = await stripe.customers.create({
-        email: user.email,
-        name: `${labName.trim()} (${cliaNumber.trim()})`,
-        metadata: { ownerUserId: String(req.userId), labName: labName.trim(), cliaNumber: cliaNumber.trim() },
-      });
-      stripeCustomerId = customer.id;
-    } catch (err: any) {
-      console.error("[labs/me/add] Stripe customer create failed:", err.message);
-      return res.status(502).json({ error: "Failed to create Stripe customer" });
-    }
-
-    // Insert labs + lab_members in a single transaction so a partial
-    // failure does not leave an orphaned labs row without a membership.
-    const now = new Date().toISOString();
-    let newLabId: number;
-    try {
-      const labResult = (db as any).$client.prepare(
-        `INSERT INTO labs (
-          clia_number, lab_name, owner_user_id, stripe_customer_id,
-          accreditation_cap, accreditation_tjc, accreditation_cola, accreditation_aabb,
-          created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(
-        cliaNumber.trim(), labName.trim(), req.userId, stripeCustomerId,
-        accreditationBody === "CAP" ? 1 : 0,
-        accreditationBody === "TJC" ? 1 : 0,
-        accreditationBody === "COLA" ? 1 : 0,
-        accreditationBody === "AABB" ? 1 : 0,
-        now, now,
-      );
-      newLabId = Number(labResult.lastInsertRowid);
-      (db as any).$client.prepare(
-        `INSERT INTO lab_members (lab_id, user_id, role, status, is_primary_lab, accepted_at, created_at, updated_at)
-         VALUES (?, ?, 'owner', 'active', 0, ?, ?, ?)`
-      ).run(newLabId, req.userId, now, now, now);
-      // PR 2c: a new lab created by an owner whose existing labs already belong
-      // to an organization inherits that org, so a growing system stays linked.
-      // Standalone owners (no org) are unaffected. The just-inserted lab still
-      // has organization_id NULL, so resolveOwnerOrgId ignores it.
-      const inheritOrgId = resolveOwnerOrgId((db as any).$client, req.userId);
-      if (inheritOrgId != null) {
-        (db as any).$client.prepare("UPDATE labs SET organization_id = ?, updated_at = ? WHERE id = ?").run(inheritOrgId, now, newLabId);
-      }
-      const newOwnerMembership = (db as any).$client.prepare(
-        "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?"
-      ).get(newLabId, req.userId);
-      auditLabMembership("create", newOwnerMembership, req.userId, (req.headers["x-forwarded-for"] as string) || null, "labs/me/add");
-    } catch (err: any) {
-      console.error("[labs/me/add] DB insert failed:", err.message);
-      // Best-effort Stripe customer cleanup so we don't accumulate orphans.
-      try { await stripe.customers.del(stripeCustomerId); } catch {}
-      return res.status(500).json({ error: "Failed to create lab" });
-    }
-
-    // Build checkout session targeting the new lab.
-    const SUITE_PLANS = new Set(["clinic", "waived", "community", "hospital", "large_hospital"]);
-    const successPath = SUITE_PLANS.has(priceType) ? "/getting-started" : "/veritacheck";
-    try {
-      const isSubscription = priceType !== "perStudy";
-      const sessionParams: any = {
-        customer: stripeCustomerId,
-        mode: isSubscription ? "subscription" : "payment",
-        line_items: [{ price: PRICES[priceType as keyof typeof PRICES], quantity: 1 }],
-        success_url: `${FRONTEND_URL}${successPath}?payment=success&type=${priceType}&newLab=${newLabId}`,
-        cancel_url: `${FRONTEND_URL}/dashboard?payment=cancelled`,
-        metadata: {
-          userId: String(req.userId),
-          labId: String(newLabId),
-          priceType,
-          totalSeats: "1",
-        },
-      };
-      // VeritaCheck Unlimited gets no default trial (see /api/stripe/checkout);
-      // suite tiers added as extra labs keep the 14-day trial.
-      if (isSubscription && priceType !== "veritacheck_only") {
-        sessionParams.subscription_data = { trial_period_days: 14 };
-        sessionParams.payment_method_collection = "always";
-      }
-      const session = await stripe.checkout.sessions.create(sessionParams);
-      res.json({ labId: newLabId, checkoutUrl: session.url });
-    } catch (err: any) {
-      // Lab + membership already exist; user can retry checkout via the
-      // existing /api/stripe/checkout with labId targeting the new lab.
-      console.error("[labs/me/add] Stripe checkout session create failed:", err.message);
-      res.status(207).json({
-        labId: newLabId,
-        checkoutUrl: null,
-        warning: "Lab created but checkout session failed. Retry checkout from the lab switcher.",
-      });
-    }
+  // POST /api/labs/me/add: retired 2026-10-14 (Michael, Q195 = 1). Labs are created only by Veritas staff after a
+  // conversation with the lab (admin provision-owner-lab / provision-comp-lab / provision-system). This self-serve
+  // add-a-lab purchase (Multi-Lab Tier 2 Phase 4.2) had no screen calling it; it now refuses with LAB_SETUP_BY_STAFF.
+  app.post("/api/labs/me/add", authMiddleware, (_req: any, res) => {
+    res.status(403).json({ error: LAB_SETUP_BY_STAFF_MESSAGE, code: "LAB_SETUP_BY_STAFF" });
   });
 
   // labScopeMiddleware — resolves :labId from the URL, validates that the
@@ -32938,43 +32803,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!lab) {
         lab = resolveLabForUser(req.userId);
       }
+      // 2026-10-14 (Michael, Q195 = 1): labs are created only by Veritas staff after a conversation with the lab. This
+      // branch used to create one the first time a signed-up user with no lab saved their lab details (lab 20, 8/11,
+      // was made that way). Staff create labs with the admin provisioning routes.
       if (!lab) {
-        // Owner doesn't have a lab yet -- create one
-        const now = new Date().toISOString();
-        const result = (db as any).$client.prepare(
-          "INSERT INTO labs (clia_number, lab_name, owner_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
-        ).run(normalizedClia || null, clia_lab_name || null, req.userId, now, now);
-        const newLabId = Number(result.lastInsertRowid);
-        (db as any).$client.prepare("UPDATE users SET lab_id = ? WHERE id = ?").run(newLabId, req.userId);
-        // The owner must be an active member of the lab they just created.
-        // Every /api/labs/:labId route (labScopeMiddleware) admits only an
-        // active lab_members row, so without this row the owner is locked out
-        // of their own lab from the moment it exists. That happened to the
-        // St. Charles owner (lab 31, 2026-09-18) and lab 20: a first-time
-        // accreditation or CLIA save here created the lab and nothing else.
-        // Parking lot #83. Primary because this is the user's first lab
-        // (this branch only runs when they resolve to no lab at all).
-        (db as any).$client.prepare(
-          `INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
-           SELECT ?, ?, 'owner', '{}', 'active', 1, ?, ?, ?
-           WHERE NOT EXISTS (SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ?)`
-        ).run(newLabId, req.userId, now, now, now, newLabId, req.userId);
-        const ownerMembership = (db as any).$client.prepare(
-          "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?"
-        ).get(newLabId, req.userId);
-        auditLabMembership("create", ownerMembership, req.userId, (req.headers["x-forwarded-for"] as string) || null, "account/settings:first-lab");
-        // Also link existing seat users to this new lab
-        const seatUsers = (db as any).$client.prepare(
-          "SELECT seat_user_id FROM user_seats WHERE owner_user_id = ? AND status = 'active' AND seat_user_id IS NOT NULL"
-        ).all(req.userId) as any[];
-        for (const s of seatUsers) {
-          (db as any).$client.prepare("UPDATE users SET lab_id = ? WHERE id = ?").run(newLabId, s.seat_user_id);
-        }
-        lab = (db as any).$client.prepare("SELECT * FROM labs WHERE id = ?").get(newLabId);
-      }
-
-      if (!lab) {
-        return res.status(500).json({ error: "Failed to resolve lab record" });
+        return res.status(409).json({ error: LAB_SETUP_BY_STAFF_MESSAGE, code: "LAB_SETUP_BY_STAFF" });
       }
 
       // Check lock state for CLIA and lab name
