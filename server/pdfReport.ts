@@ -5415,6 +5415,8 @@ interface EmployeeCompetencyRecordInput {
     signoffs?: RecordSignoff[];
     nextMilestone?: string | null;
     nextDue?: { targetDate: string | null; latest: string | null } | null;
+    // Lab-chosen method group (2026-10-14, Michael Q168 = 1): the analyzers one competency covers.
+    groupMembers?: Array<{ id: number; name: string }> | null;
   }>;
 }
 
@@ -5471,13 +5473,15 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
       : ts.hasData ? `<span class="chip c-amber">In progress</span>`
       : `<span class="chip c-inc">Not started</span>`;
     const nextDue = last && ts.nextDue?.targetDate ? `${ms(ts.nextMilestone)}<br>${esc(ts.nextDue.targetDate)}` : "";
-    const meta = [ts.department ? esc(ts.department) : "", esc(ts.complexity), `${ts.analyteCount} analyte${ts.analyteCount === 1 ? "" : "s"}`].filter(Boolean).join(" &middot; ");
+    const members = (ts.groupMembers || []).map((m) => m.name);
+    const label = members.length ? `${esc(ts.instrumentName)} (group)` : esc(ts.instrumentName);
+    const meta = [members.length ? esc(members.join(", ")) : "", ts.department ? esc(ts.department) : "", esc(ts.complexity), `${ts.analyteCount} analyte${ts.analyteCount === 1 ? "" : "s"}`].filter(Boolean).join(" &middot; ");
     const cells = ts.waived
       ? `<td colspan="${anyElements ? elementCount : 1}" style="text-align:left;"><b>Waived testing: ${wPassed} of ${required} required methods passed.</b>${wMethods.filter((m) => m.status === "pass").length ? ` ${wMethods.filter((m) => m.status === "pass").map((m) => `${esc(m.name)}${m.date ? ` (${esc(String(m.date).slice(0, 10))})` : ""}`).join("; ")}` : ""}</td>`
       : Array.from({ length: elementCount }, (_, i) => `<td>${chip(statuses.find((x) => x.num === i + 1)?.status || "incomplete")}</td>`).join("");
-    signLines.push(`<tr><td>${esc(ts.instrumentName)}</td><td>${assessment}</td><td>${last ? esc(last.signerName || "") : ""}</td><td>${last ? esc(role(last.signerRole)) : ""}</td><td>${last ? esc(last.signerInitials || "") : ""}</td><td>${last ? esc(last.signedDate || "") : ""}</td></tr>`);
+    signLines.push(`<tr><td>${label}${members.length ? `: ${esc(members.join(", "))}` : ""}</td><td>${assessment}</td><td>${last ? esc(last.signerName || "") : ""}</td><td>${last ? esc(role(last.signerRole)) : ""}</td><td>${last ? esc(last.signerInitials || "") : ""}</td><td>${last ? esc(last.signedDate || "") : ""}</td></tr>`);
     return `<tr>
-      <td class="sys"><b>${esc(ts.instrumentName)}</b><span>${meta}</span></td>
+      <td class="sys"><b>${label}</b><span>${meta}</span></td>
       ${cells}
       <td>${assessment}</td><td>${result}</td>
       <td style="text-align:left;">${last ? `${esc(shortName(last.signerName))}${last.signerRole ? `, ${esc(abbr(last.signerRole))}` : ""}` : ""}</td>

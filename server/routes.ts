@@ -58,6 +58,7 @@ import { isValidIfuUrl } from "@shared/ifu";
 import { incompleteElementCells as compIncompleteCells, incompleteElementCellsByInstrument as compIncompleteCellsByInstrument, aggregateElementStatus as compAggregateElementStatus, itemElementStatus as compItemElementStatus, competencyCycleWindowDays, WAIVED_METHOD_NAMES, WAIVED_METHODS_REQUIRED, waivedMethodPassed, waivedPassedCount, methodGroupCoversInstrument } from "@shared/competencyStatus";
 import { competencyDueColumns, competencySeedAtCreate, nextCompetencyDue } from "./competencySchedule";
 import { methodSignerOptions, nextMilestoneAfter, milestonesForComplexity, MILESTONE_LABEL, alignAnnualToMonth, MONTH_NAMES, type SignerCandidate, type MethodMilestone } from "@shared/competencySignoff";
+import { isManualMethod, groupProblem, suggestGroups, groupKey } from "@shared/competencyGrouping";
 
 // Express already URL-decodes route params before the handler runs, so
 // req.params.analyte for a request to ".../IG%25" arrives as "IG%". Calling
@@ -27980,6 +27981,37 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return out;
   };
 
+  // Lab-chosen method groups (2026-10-14, Michael Q166/Q168 = 1): instrument id -> its group. The lead analyzer (lowest
+  // id) holds a group's working entries and its lead sign-off row, so every screen treats the group as one method.
+  type InstrumentGroup = { groupId: number; name: string; memberIds: number[]; leadId: number; members: Array<{ id: number; name: string; category: string | null }> };
+  const loadInstrumentGroups = (sqlite: any, labId: number): Map<number, InstrumentGroup> => {
+    const rows = sqlite.prepare(
+      `SELECT g.id AS group_id, g.name, gm.instrument_id, i.instrument_name, i.category FROM competency_instrument_groups g
+       JOIN competency_instrument_group_members gm ON gm.group_id = g.id AND gm.lab_id = g.lab_id
+       JOIN veritamap_instruments i ON i.id = gm.instrument_id
+       WHERE g.lab_id = ? ORDER BY gm.instrument_id`
+    ).all(labId) as any[];
+    const byGroup = new Map<number, InstrumentGroup>();
+    for (const r of rows) {
+      const g: InstrumentGroup = byGroup.get(r.group_id) || { groupId: r.group_id, name: r.name, memberIds: [], members: [], leadId: r.instrument_id };
+      g.memberIds.push(r.instrument_id);
+      g.members.push({ id: r.instrument_id, name: r.instrument_name, category: r.category || null });
+      byGroup.set(r.group_id, g);
+    }
+    const out = new Map<number, InstrumentGroup>();
+    for (const g of Array.from(byGroup.values())) {
+      if (g.memberIds.length < 2) continue;
+      g.leadId = Math.min(...g.memberIds);
+      for (const id of g.memberIds) out.set(id, g);
+    }
+    return out;
+  };
+  // The method an analyzer belongs to: its group's lead and members, or the analyzer alone.
+  const methodOf = (groups: Map<number, InstrumentGroup>, instrumentId: number) => {
+    const g = groups.get(instrumentId);
+    return g ? { leadId: g.leadId, memberIds: g.memberIds, group: g } : { leadId: instrumentId, memberIds: [instrumentId], group: null as InstrumentGroup | null };
+  };
+
   const assembleEmployeeCompetencyView = (sqlite: any, labId: number, empId: number): any | null => {
     const emp = sqlite.prepare(
       "SELECT id, first_name, last_name, middle_initial, title, highest_complexity FROM staff_employees WHERE id = ? AND tier2_lab_id = ? AND status = 'active'"
@@ -27996,6 +28028,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
        JOIN veritamap_maps m ON i.map_id = m.id
        WHERE j.employee_id = ? AND m.lab_id = ? ORDER BY i.category, i.instrument_name`
     ).all(empId, labId) as any[];
+    // Methods: each assigned analyzer, except that analyzers the lab grouped collapse into one method keyed by the
+    // group's lead analyzer (Michael Q168 = 1). The group counts if the person runs any analyzer in it.
+    const groupsByInst = loadInstrumentGroups(sqlite, labId);
+    const methods: any[] = [];
+    const seenGroups = new Set<number>();
+    for (const inst of instruments) {
+      const g = groupsByInst.get(inst.id);
+      if (!g) { methods.push({ ...inst, memberIds: [inst.id], group: null }); continue; }
+      if (seenGroups.has(g.groupId)) continue;
+      seenGroups.add(g.groupId);
+      const lead = g.members.find((m) => m.id === g.leadId);
+      methods.push({ id: g.leadId, instrument_name: g.name, category: lead?.category ?? inst.category, memberIds: g.memberIds, group: g });
+    }
 
     // Method groups across the lab's programs, for the instrument->coverage match.
     const methodGroups = sqlite.prepare(
@@ -28060,29 +28105,37 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }));
     const signerCandidates = loadCompetencySignerCandidates(sqlite, labId);
     const today = labLocalDate(new Date().toISOString());
+    // Passed waived methods on a set of rows, counted on the analyzer those rows were saved under.
+    const waivedPassedOf = (rows: any[]) => { const w = rows.find((f: any) => f.waived_method_number != null); return w ? waivedPassedCount(rows, w.instrument_id) : null; };
     const methodSignoffState = (inst: any, complexity: string) => {
-      const rows = signoffStmt.all(labId, empId, inst.id) as any[];
+      // A group sign-off is one row per analyzer; show it once, by its lead row (which holds the frozen items).
+      const seenKeys = new Set<number>();
+      const rows = (inst.memberIds as number[]).flatMap((id) => signoffStmt.all(labId, empId, id) as any[])
+        .filter((s: any) => { const k = s.group_signoff_id ?? s.id; if (seenKeys.has(k)) return false; seenKeys.add(k); return true; })
+        .sort((a: any, b: any) => String(b.signed_date).localeCompare(String(a.signed_date)) || (b.id - a.id));
       const signoffs: any[] = rows.map((s: any) => {
-        const frozen = frozenStmt.all(s.id) as any[];
+        const key = s.group_signoff_id ?? s.id;
+        const frozen = frozenStmt.all(key) as any[];
         return {
-          id: s.id, legacy: false, milestone: s.milestone, signedDate: s.signed_date,
+          id: key, legacy: false, milestone: s.milestone, signedDate: s.signed_date,
           signerName: s.signer_name, signerRole: s.signer_role, signerInitials: s.signer_initials || null,
           documentation: s.documentation || null,
           elements: Array.from({ length: elementCount }, (_, i) => ({ num: i + 1, status: compAggregateElementStatus(frozen, i + 1) })),
-          waivedPassed: frozen.some((f: any) => f.waived_method_number != null) ? waivedPassedCount(frozen, inst.id) : null,
+          waivedPassed: waivedPassedOf(frozen),
           waivedMethods: waivedSummary(frozen),
         };
       });
-      const legacy = legacyLockedByInstrument.get(inst.id);
+      const legacyInst = (inst.memberIds as number[]).find((id) => legacyLockedByInstrument.has(id));
+      const legacy = legacyInst != null ? legacyLockedByInstrument.get(legacyInst) : null;
       if (!signoffs.length && legacy) {
-        const legacyItems = (sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ? AND instrument_id = ?").all(legacy.id, inst.id) as any[]);
+        const legacyItems = (sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ? AND instrument_id = ?").all(legacy.id, legacyInst) as any[]);
         signoffs.push({
           id: null, legacy: true, milestone: null,
           signedDate: String(legacy.signed_on_paper_date || "").slice(0, 10) || labLocalDate(legacy.completion_date) || null, // BUG-047: lab date
           signerName: legacy.evaluator_name || null, signerRole: legacy.evaluator_title || null, signerInitials: legacy.evaluator_initials || null,
           documentation: null,
           elements: Array.from({ length: elementCount }, (_, i) => ({ num: i + 1, status: compAggregateElementStatus(legacyItems, i + 1) })),
-          waivedPassed: legacyItems.some((f: any) => f.waived_method_number != null) ? waivedPassedCount(legacyItems, inst.id) : null,
+          waivedPassed: waivedPassedOf(legacyItems),
           waivedMethods: waivedSummary(legacyItems),
         });
       }
@@ -28117,15 +28170,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       };
     };
 
-    const testSystems = instruments.map((inst: any) => {
-      const tests = testsStmt.all(inst.id) as any[];
+    const testSystems = methods.map((inst: any) => {
+      const tests = (inst.memberIds as number[]).flatMap((id) => testsStmt.all(id) as any[]);
       const maxRank = tests.reduce((m: number, t: any) => Math.max(m, rankC(t.complexity)), 0);
-      const instNameLC = String(inst.instrument_name || "").trim().toLowerCase();
-      const analytesLC = tests.map((t: any) => String(t.analyte || "").trim().toLowerCase()).filter(Boolean);
-      const coveringMg = mgParsed.filter((mg) => methodGroupCoversInstrument(mg, { nameLC: instNameLC }));
+      const memberNamesLC = inst.group ? inst.group.members.map((m: any) => String(m.name || "").trim().toLowerCase()) : [String(inst.instrument_name || "").trim().toLowerCase()];
+      const analytesLC = Array.from(new Set(tests.map((t: any) => String(t.analyte || "").trim().toLowerCase()).filter(Boolean)));
+      const coveringMg = mgParsed.filter((mg) => memberNamesLC.some((nameLC: string) => methodGroupCoversInstrument(mg, { nameLC })));
       // Prefer the employee-centric instrument-keyed items (Phase 2 entry); fall
-      // back to legacy method-group items so pre-migration data still shows.
-      const directItems = itemsByInstrument.get(inst.id) || [];
+      // back to legacy method-group items so pre-migration data still shows. A group's entries live on its lead
+      // analyzer; entries made on another member before the group existed still show.
+      const directItems = (inst.memberIds as number[]).map((id) => itemsByInstrument.get(id)).find((x) => x && x.length) || [];
+      const groupFields = { groupId: inst.group ? inst.group.groupId : null, groupMembers: inst.group ? inst.group.members.map((m: any) => ({ id: m.id, name: m.name })) : null };
       // #91: an all-waived test system is assessed by two of four waived methods,
       // not the six elements. Its rows carry waived_method_number (1-4).
       if (maxRank === 1) {
@@ -28139,7 +28194,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             status: !hasData ? "unused" : waivedMethodPassed(row) ? "pass" : row.passed ? "incomplete" : "fail",
           };
         });
-        const passedCount = waivedPassedCount(waivedRows, inst.id);
+        const passedCount = waivedPassedOf(waivedRows) ?? 0;
         const wComplete = passedCount >= WAIVED_METHODS_REQUIRED;
         return {
           instrumentId: inst.id,
@@ -28153,6 +28208,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           signable: wComplete && waivedRows.length > 0,
           fromLegacyProgram: false,
           ...methodSignoffState(inst, cLabel(maxRank)),
+          ...groupFields,
           waived: true,
           waivedRequired: WAIVED_METHODS_REQUIRED,
           waivedPassed: passedCount,
@@ -28204,6 +28260,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         signable: complete && !fromLegacyProgram,
         fromLegacyProgram,
         ...signState,
+        ...groupFields,
         elements,
       };
     });
@@ -28257,14 +28314,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const r = (cxStmt.all(instId) as any[]).reduce((m: number, t: any) => { const u = String(t.complexity || "").toUpperCase(); return Math.max(m, u.startsWith("H") ? 3 : u.startsWith("M") ? 2 : u.startsWith("W") ? 1 : 0); }, 0);
       return r >= 3 ? "HIGH" : r === 2 ? "MODERATE" : r === 1 ? "WAIVED" : null;
     };
-    const rows = instruments.map((inst: any) => {
-      const blocks = instrumentPeopleIds(sqlite, labId, inst.id)
-        .map((id) => viewOf(id)?.testSystems?.find((t: any) => t.instrumentId === inst.id))
+    // A lab-chosen group is one row, keyed by its lead analyzer (Michael Q168 = 1).
+    const groups = loadInstrumentGroups(sqlite, labId);
+    const seenG = new Set<number>();
+    const entries = instruments.filter((inst: any) => {
+      const g = groups.get(inst.id);
+      if (!g) return true;
+      if (seenG.has(g.groupId)) return false;
+      seenG.add(g.groupId);
+      return true;
+    });
+    const rows = entries.map((inst: any) => {
+      const m = methodOf(groups, inst.id);
+      const lead = m.group ? m.group.members.find((x) => x.id === m.leadId) : null;
+      const peopleIds = Array.from(new Set(m.memberIds.flatMap((id) => instrumentPeopleIds(sqlite, labId, id))));
+      const blocks = peopleIds
+        .map((id) => viewOf(id)?.testSystems?.find((t: any) => t.instrumentId === m.leadId))
         .filter(Boolean);
       // signed = current sign-off (not overdue); ready = elements complete and waiting for a signature.
       return {
-        instrumentId: inst.id, instrumentName: inst.instrument_name, department: inst.category || null,
-        complexity: cxOf(inst.id), people: blocks.length,
+        instrumentId: m.leadId, instrumentName: m.group ? m.group.name : inst.instrument_name,
+        department: (lead ? lead.category : inst.category) || null,
+        groupId: m.group ? m.group.groupId : null, groupMembers: m.group ? m.group.members.map((x) => ({ id: x.id, name: x.name })) : null,
+        complexity: cxOf(m.leadId), people: blocks.length,
         signed: blocks.filter((b: any) => b.signedCurrent).length,
         ready: blocks.filter((b: any) => b.signable).length,
         overdue: blocks.filter((b: any) => b.overdue).length,
@@ -28286,13 +28358,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(instrumentId, labId) as any;
     if (!inst) return res.status(404).json({ error: "Instrument not found" });
     const labRow = sqlite.prepare("SELECT primary_regime FROM labs WHERE id = ?").get(labId) as any;
-    const people = instrumentPeopleIds(sqlite, labId, instrumentId).map((empId) => {
+    // An analyzer in a lab-chosen group opens the group: everyone who runs any analyzer in it (Michael Q168 = 1).
+    const m = methodOf(loadInstrumentGroups(sqlite, labId), instrumentId);
+    const lead = m.group ? m.group.members.find((x) => x.id === m.leadId) : null;
+    const peopleIds = Array.from(new Set(m.memberIds.flatMap((id) => instrumentPeopleIds(sqlite, labId, id))));
+    const people = peopleIds.map((empId) => {
       const v = assembleEmployeeCompetencyView(sqlite, labId, empId);
-      const testSystem = v?.testSystems?.find((t: any) => t.instrumentId === instrumentId);
+      const testSystem = v?.testSystems?.find((t: any) => t.instrumentId === m.leadId);
       return v && testSystem ? { employee: v.employee, testSystem } : null;
     }).filter(Boolean);
     res.json({
-      instrument: { id: inst.id, name: inst.instrument_name, department: inst.category || null },
+      instrument: {
+        id: m.leadId, name: m.group ? m.group.name : inst.instrument_name, department: (lead ? lead.category : inst.category) || null,
+        groupId: m.group ? m.group.groupId : null, groupMembers: m.group ? m.group.members.map((x) => ({ id: x.id, name: x.name })) : null,
+      },
       elementCount: labRow?.primary_regime === "NYS-CLEP" ? 8 : 6,
       people,
     });
@@ -28320,14 +28399,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(empId, labId) as any;
     if (!emp) return res.status(404).json({ error: "Employee not found" });
 
-    // The instrument must be assigned to this employee and belong to the lab's VeritaMap.
+    // The instrument must be assigned to this employee and belong to the lab's VeritaMap. For a lab-chosen group
+    // (Michael Q168 = 1) the person runs any analyzer in it, and the entries are saved under the group's lead analyzer.
+    const method = methodOf(loadInstrumentGroups(sqlite, labId), instrumentId);
     const inst = sqlite.prepare(
       `SELECT i.id, i.instrument_name FROM staff_employee_instruments j
        JOIN veritamap_instruments i ON j.instrument_id = i.id
        JOIN veritamap_maps m ON i.map_id = m.id
-       WHERE j.employee_id = ? AND i.id = ? AND m.lab_id = ?`
-    ).get(empId, instrumentId, labId) as any;
+       WHERE j.employee_id = ? AND i.id IN (${method.memberIds.map(() => "?").join(",")}) AND m.lab_id = ? LIMIT 1`
+    ).get(empId, ...method.memberIds, labId) as any;
     if (!inst) return res.status(404).json({ error: "Instrument not assigned to this employee" });
+    if (method.group) inst.instrument_name = method.group.name;
+    const storeId = method.leadId;
 
     const labRow = sqlite.prepare("SELECT primary_regime, owner_user_id FROM labs WHERE id = ?").get(labId) as any;
     const elementCount = labRow?.primary_regime === "NYS-CLEP" ? 8 : 6;
@@ -28394,7 +28477,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         assessment = { id: Number(r.lastInsertRowid) };
       }
       // Replace this instrument's WORKING items only; items frozen by a sign-off are never touched.
-      sqlite.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ? AND instrument_id = ? AND signoff_id IS NULL").run(assessment.id, instrumentId);
+      sqlite.prepare(`DELETE FROM competency_assessment_items WHERE assessment_id = ? AND instrument_id IN (${method.memberIds.map(() => "?").join(",")}) AND signoff_id IS NULL`).run(assessment.id, ...method.memberIds);
       if (isWaivedSystem) {
         // Element and method numbers stay NULL so no element logic counts these rows.
         const wStmt = sqlite.prepare(
@@ -28403,7 +28486,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
            VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`
         );
         for (const w of waivedRows) {
-          wStmt.run(assessment.id, instrumentId, WAIVED_METHOD_NAMES[w.num - 1], inst.instrument_name, inst.instrument_name, w.num, w.evidence, w.date, w.initials, w.passed ? 1 : 0);
+          wStmt.run(assessment.id, storeId, WAIVED_METHOD_NAMES[w.num - 1], inst.instrument_name, inst.instrument_name, w.num, w.evidence, w.date, w.initials, w.passed ? 1 : 0);
         }
         return assessment.id;
       }
@@ -28428,7 +28511,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const na = d.na ? 1 : 0;
         const naJ = d.na ? (String(d.naJustification || "").trim() || null) : null;
         stmt.run(
-          assessment.id, instrumentId, n, n, inst.instrument_name, inst.instrument_name,
+          assessment.id, storeId, n, n, inst.instrument_name, inst.instrument_name,
           n === 1 ? (d.specimenId ?? null) : null, n === 1 ? (d.observerInitials ?? null) : null, n === 1 ? na : 0, n === 1 ? naJ : null,
           n === 2 ? (d.evidence ?? null) : null, n === 2 ? (d.date ?? null) : null, n === 2 ? na : 0, n === 2 ? naJ : null,
           n === 3 ? (d.qcDate ?? null) : null, n === 3 ? na : 0, n === 3 ? naJ : null,
@@ -28448,7 +28531,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
     const assessmentId: number = tx();
     logAudit({ userId: req.userId, ownerUserId, module: "veritacomp", action: "update", entityType: "employee_competency", entityId: String(empId), entityLabel: `${emp.first_name || ""} ${emp.last_name || ""}`.trim() + " / " + inst.instrument_name, ipAddress: req.ip });
-    res.json({ ok: true, assessmentId, instrumentId });
+    res.json({ ok: true, assessmentId, instrumentId: storeId });
   });
 
   // POST /api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/sign
@@ -28468,7 +28551,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!Number.isFinite(empId) || !Number.isFinite(instrumentId)) return res.status(400).json({ error: "Bad ids" });
     const view = assembleEmployeeCompetencyView(sqlite, labId, empId);
     if (!view) return res.status(404).json({ error: "Employee not found" });
-    const ts = view.testSystems.find((t: any) => t.instrumentId === instrumentId);
+    // A lab-chosen group signs as one method (Michael Q168 = 1); any analyzer in it names the group.
+    const method = methodOf(loadInstrumentGroups(sqlite, labId), instrumentId);
+    const ts = view.testSystems.find((t: any) => t.instrumentId === method.leadId);
     if (!ts) return res.status(404).json({ error: "Instrument not assigned to this employee" });
     if (ts.fromLegacyProgram) return res.status(409).json({ error: `${ts.instrumentName}: the data shown comes from an earlier program record. Save it on this screen, then sign.` });
     if (!ts.signable) {
@@ -28510,16 +28595,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const now = new Date().toISOString();
     const signoffId = sqlite.transaction(() => {
-      const r = sqlite.prepare(
+      // One row per analyzer: the lead row holds the frozen items; for a group, every other analyzer gets a row that
+      // points at it, so Competencies owed counts each analyzer and a later split keeps each one's history.
+      const ins = sqlite.prepare(
         `INSERT INTO competency_method_signoffs (lab_id, staff_employee_id, instrument_id, assessment_id, milestone, signed_date,
-           signer_staff_employee_id, signer_name, signer_role, signer_initials, complexity, documentation, signed_by_user_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(labId, empId, instrumentId, openIds[0], milestone, signedDate, signer.staffEmployeeId, signer.name, signer.role,
-        initials, ts.complexity, documentation || null, req.userId, now);
+           signer_staff_employee_id, signer_name, signer_role, signer_initials, complexity, documentation, signed_by_user_id, created_at,
+           group_id, group_signoff_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      const groupId = method.group ? method.group.groupId : null;
+      const r = ins.run(labId, empId, method.leadId, openIds[0], milestone, signedDate, signer.staffEmployeeId, signer.name, signer.role,
+        initials, ts.complexity, documentation || null, req.userId, now, groupId, null);
       const id = Number(r.lastInsertRowid);
+      for (const other of method.memberIds.filter((x) => x !== method.leadId)) {
+        ins.run(labId, empId, other, openIds[0], milestone, signedDate, signer.staffEmployeeId, signer.name, signer.role,
+          initials, ts.complexity, documentation || null, req.userId, now, groupId, id);
+      }
       const moved = sqlite.prepare(
-        `UPDATE competency_assessment_items SET signoff_id = ? WHERE assessment_id IN (${ph}) AND instrument_id = ? AND signoff_id IS NULL`
-      ).run(id, ...openIds, instrumentId);
+        `UPDATE competency_assessment_items SET signoff_id = ? WHERE assessment_id IN (${ph}) AND instrument_id IN (${method.memberIds.map(() => "?").join(",")}) AND signoff_id IS NULL`
+      ).run(id, ...openIds, ...method.memberIds);
       if (!moved.changes) throw new Error("No entered items to sign for this method.");
       return id;
     })();
@@ -28547,21 +28641,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const instrumentId = Number(req.params.instrumentId);
     const signoffId = Number(req.params.signoffId);
     if (![empId, instrumentId, signoffId].every(Number.isFinite)) return res.status(400).json({ error: "Bad ids" });
+    // A lab-chosen group unlocks as one: the lead row and every row that points at it (Michael Q168 = 1).
+    const method = methodOf(loadInstrumentGroups(sqlite, labId), instrumentId);
+    const mph = method.memberIds.map(() => "?").join(",");
     const latest = sqlite.prepare(
-      `SELECT * FROM competency_method_signoffs WHERE lab_id = ? AND staff_employee_id = ? AND instrument_id = ? AND revoked_at IS NULL
+      `SELECT * FROM competency_method_signoffs WHERE lab_id = ? AND staff_employee_id = ? AND instrument_id IN (${mph}) AND revoked_at IS NULL
        ORDER BY signed_date DESC, id DESC LIMIT 1`
-    ).get(labId, empId, instrumentId) as any;
-    if (!latest || latest.id !== signoffId) return res.status(409).json({ error: "Only the most recent sign-off for this method can be unlocked." });
+    ).get(labId, empId, ...method.memberIds) as any;
+    if (!latest || (latest.group_signoff_id ?? latest.id) !== signoffId) return res.status(409).json({ error: "Only the most recent sign-off for this method can be unlocked." });
     const working = sqlite.prepare(
       `SELECT COUNT(*) AS n FROM competency_assessment_items i JOIN competency_assessments a ON a.id = i.assessment_id
        JOIN competency_programs p ON p.id = a.program_id JOIN competency_employees ce ON ce.id = a.employee_id
-       WHERE p.lab_id = ? AND p.is_implicit = 1 AND ce.staff_employee_id = ? AND i.instrument_id = ? AND i.signoff_id IS NULL
+       WHERE p.lab_id = ? AND p.is_implicit = 1 AND ce.staff_employee_id = ? AND i.instrument_id IN (${mph}) AND i.signoff_id IS NULL
          AND (a.locked IS NULL OR a.locked = 0)`
-    ).get(labId, empId, instrumentId) as any;
+    ).get(labId, empId, ...method.memberIds) as any;
     if (working?.n > 0) return res.status(409).json({ error: "This method already has entries for its next competency. Clear them before unlocking the earlier sign-off." });
     const now = new Date().toISOString();
     sqlite.transaction(() => {
-      sqlite.prepare("UPDATE competency_method_signoffs SET revoked_at = ?, revoked_by_user_id = ? WHERE id = ?").run(now, req.userId, signoffId);
+      sqlite.prepare("UPDATE competency_method_signoffs SET revoked_at = ?, revoked_by_user_id = ? WHERE id = ? OR group_signoff_id = ?").run(now, req.userId, signoffId, signoffId);
       sqlite.prepare("UPDATE competency_assessment_items SET signoff_id = NULL WHERE signoff_id = ?").run(signoffId);
     })();
     logAudit({
@@ -28616,6 +28713,114 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       before: { competency_annual_month: before }, after: { competency_annual_month: month }, ipAddress: req.ip,
     });
     res.json({ month, updated });
+  });
+
+  // Method groups (2026-10-14, Michael Q166/Q168 = 1): the lab's one list of which analyzers share a competency. Every
+  // analyzer is its own method until the lab groups it; VeritaComp only suggests (same make and model family) and never
+  // groups on its own. Limits (shared/competencyGrouping.ts groupProblem): one complexity per group, no manual methods.
+  //   GET    /api/labs/:labId/competency/method-groups                 analyzers, groups, suggestions
+  //   POST   /api/labs/:labId/competency/method-groups                 { name, instrumentIds } create
+  //   PUT    /api/labs/:labId/competency/method-groups/:groupId        { name } rename
+  //   DELETE /api/labs/:labId/competency/method-groups/:groupId        split (sign-off history stays on each analyzer)
+  //   POST   /api/labs/:labId/competency/method-groups/keep-separate   { instrumentIds } stop suggesting this set
+  const labMethodInstruments = (sqlite: any, labId: number) => {
+    const insts = sqlite.prepare(
+      `SELECT i.id, i.instrument_name AS name, i.category FROM veritamap_instruments i JOIN veritamap_maps m ON m.id = i.map_id
+       WHERE m.lab_id = ? ORDER BY i.category, i.instrument_name`
+    ).all(labId) as any[];
+    const cxStmt = sqlite.prepare("SELECT DISTINCT complexity FROM veritamap_instrument_tests WHERE instrument_id = ? AND active = 1");
+    const pplStmt = sqlite.prepare(
+      "SELECT COUNT(DISTINCT j.employee_id) AS n FROM staff_employee_instruments j JOIN staff_employees e ON e.id = j.employee_id WHERE j.instrument_id = ? AND e.tier2_lab_id = ? AND e.status = 'active'"
+    );
+    return insts.map((i: any) => {
+      const r = (cxStmt.all(i.id) as any[]).reduce((m: number, t: any) => { const u = String(t.complexity || "").toUpperCase(); return Math.max(m, u.startsWith("H") ? 3 : u.startsWith("M") ? 2 : u.startsWith("W") ? 1 : 0); }, 0);
+      return { id: i.id, name: i.name, category: i.category || null, complexity: r >= 3 ? "HIGH" : r === 2 ? "MODERATE" : r === 1 ? "WAIVED" : "UNSPECIFIED", manual: isManualMethod(i.name, i.category), people: (pplStmt.get(i.id, labId) as any)?.n || 0 };
+    });
+  };
+  app.get("/api/labs/:labId/competency/method-groups", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const sqlite = (db as any).$client;
+    const instruments = labMethodInstruments(sqlite, labId);
+    const groupsByInst = loadInstrumentGroups(sqlite, labId);
+    const groupRows = sqlite.prepare("SELECT id, name, created_at, created_by_user_id FROM competency_instrument_groups WHERE lab_id = ? ORDER BY name").all(labId) as any[];
+    const byId = new Map(instruments.map((i: any) => [i.id, i]));
+    const groups = groupRows.map((g: any) => {
+      const members = Array.from(groupsByInst.values()).find((x) => x.groupId === g.id)?.memberIds.map((id) => byId.get(id)).filter(Boolean) || [];
+      const peopleIds = new Set<number>();
+      for (const m of members as any[]) for (const r of sqlite.prepare("SELECT j.employee_id FROM staff_employee_instruments j JOIN staff_employees e ON e.id = j.employee_id WHERE j.instrument_id = ? AND e.tier2_lab_id = ? AND e.status = 'active'").all(m.id, labId) as any[]) peopleIds.add(r.employee_id);
+      const creator = g.created_by_user_id ? sqlite.prepare("SELECT name, email FROM users WHERE id = ?").get(g.created_by_user_id) as any : null;
+      return { id: g.id, name: g.name, members, people: peopleIds.size, createdAt: g.created_at, createdBy: creator?.name || creator?.email || null };
+    });
+    const dismissed = new Set((sqlite.prepare("SELECT member_key FROM competency_group_dismissals WHERE lab_id = ?").all(labId) as any[]).map((r) => r.member_key));
+    const suggestions = suggestGroups(instruments, new Set(groupsByInst.keys()), dismissed).map((set) => ({
+      key: groupKey(set.map((m) => m.id)), members: set,
+      reason: "Same make and model family on your VeritaMap™",
+    }));
+    res.json({ instruments: instruments.map((i: any) => ({ ...i, groupId: groupsByInst.get(i.id)?.groupId ?? null })), groups, suggestions });
+  });
+  app.post("/api/labs/:labId/competency/method-groups", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const sqlite = (db as any).$client;
+    const ids: number[] = Array.from(new Set((Array.isArray(req.body?.instrumentIds) ? req.body.instrumentIds : []).map((x: any) => Number(x)).filter(Number.isFinite)));
+    const instruments = labMethodInstruments(sqlite, labId);
+    const members = ids.map((id) => instruments.find((i: any) => i.id === id));
+    if (members.some((m) => !m)) return res.status(404).json({ error: "Every analyzer in a group must be on this lab's VeritaMap™." });
+    const grouped = loadInstrumentGroups(sqlite, labId);
+    const taken = (members as any[]).find((m) => grouped.has(m.id));
+    if (taken) return res.status(409).json({ error: `${taken.name} is already in the "${grouped.get(taken.id)!.name}" group. Split that group first.` });
+    const problem = groupProblem(members as any[]);
+    if (problem) return res.status(400).json({ error: problem });
+    const name = String(req.body?.name || "").trim().slice(0, 120);
+    if (!name) return res.status(400).json({ error: "Name the group, for example the analyzer model." });
+    const now = new Date().toISOString();
+    const groupId = sqlite.transaction(() => {
+      const r = sqlite.prepare("INSERT INTO competency_instrument_groups (lab_id, name, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(labId, name, req.userId, now, now);
+      const gid = Number(r.lastInsertRowid);
+      const ins = sqlite.prepare("INSERT INTO competency_instrument_group_members (group_id, lab_id, instrument_id, created_at) VALUES (?, ?, ?, ?)");
+      for (const m of members as any[]) ins.run(gid, labId, m.id, now);
+      return gid;
+    })();
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "create", entityType: "competency_method_group", entityId: String(groupId), entityLabel: `Grouped "${name}": ${(members as any[]).map((m) => m.name).join(", ")}`, after: { name, instrumentIds: ids }, ipAddress: req.ip });
+    res.json({ ok: true, groupId });
+  });
+  app.put("/api/labs/:labId/competency/method-groups/:groupId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const sqlite = (db as any).$client;
+    const g = sqlite.prepare("SELECT * FROM competency_instrument_groups WHERE id = ? AND lab_id = ?").get(Number(req.params.groupId), labId) as any;
+    if (!g) return res.status(404).json({ error: "Group not found" });
+    const name = String(req.body?.name || "").trim().slice(0, 120);
+    if (!name) return res.status(400).json({ error: "Name the group." });
+    sqlite.prepare("UPDATE competency_instrument_groups SET name = ?, updated_at = ? WHERE id = ?").run(name, new Date().toISOString(), g.id);
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "update", entityType: "competency_method_group", entityId: String(g.id), entityLabel: `Renamed group "${g.name}" to "${name}"`, before: { name: g.name }, after: { name }, ipAddress: req.ip });
+    res.json({ ok: true });
+  });
+  app.delete("/api/labs/:labId/competency/method-groups/:groupId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const sqlite = (db as any).$client;
+    const g = sqlite.prepare("SELECT * FROM competency_instrument_groups WHERE id = ? AND lab_id = ?").get(Number(req.params.groupId), labId) as any;
+    if (!g) return res.status(404).json({ error: "Group not found" });
+    const members = (sqlite.prepare("SELECT instrument_id FROM competency_instrument_group_members WHERE group_id = ? AND lab_id = ?").all(g.id, labId) as any[]).map((r) => r.instrument_id);
+    sqlite.transaction(() => {
+      sqlite.prepare("DELETE FROM competency_instrument_group_members WHERE group_id = ? AND lab_id = ?").run(g.id, labId);
+      sqlite.prepare("DELETE FROM competency_instrument_groups WHERE id = ? AND lab_id = ?").run(g.id, labId);
+    })();
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "delete", entityType: "competency_method_group", entityId: String(g.id), entityLabel: `Split group "${g.name}" (sign-offs stay on each analyzer)`, before: { name: g.name, instrumentIds: members }, ipAddress: req.ip });
+    res.json({ ok: true });
+  });
+  app.post("/api/labs/:labId/competency/method-groups/keep-separate", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const sqlite = (db as any).$client;
+    const ids: number[] = (Array.isArray(req.body?.instrumentIds) ? req.body.instrumentIds : []).map((x: any) => Number(x)).filter(Number.isFinite);
+    if (ids.length < 2) return res.status(400).json({ error: "Name at least two analyzers." });
+    const key = groupKey(ids);
+    sqlite.prepare("INSERT OR IGNORE INTO competency_group_dismissals (lab_id, member_key, created_by_user_id, created_at) VALUES (?, ?, ?, ?)").run(labId, key, req.userId, new Date().toISOString());
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "update", entityType: "competency_method_group", entityId: key, entityLabel: `Kept analyzers ${key} separate (no longer suggested)`, ipAddress: req.ip });
+    res.json({ ok: true });
   });
 
   // The whole-record "Sign & Complete" (POST .../employee/:employeeId/sign, Phase 3a) was retired 2026-10-13 by

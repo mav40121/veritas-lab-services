@@ -1561,6 +1561,47 @@ sqlite.exec(`CREATE TABLE IF NOT EXISTS competency_method_signoffs (
   cmsGuard("revoked_by_user_id", "revoked_by_user_id INTEGER");
   try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_cms_lab_emp_inst ON competency_method_signoffs(lab_id, staff_employee_id, instrument_id)"); } catch {}
 }
+// Lab-chosen method grouping (2026-10-14, Michael Q166/Q168 = 1): analyzers the lab says need no new or unique skills
+// share one competency and one sign-off. An analyzer is in at most one group (UNIQUE lab_id, instrument_id). A group
+// sign-off writes one competency_method_signoffs row per analyzer: the lead row (lowest instrument id) holds the frozen
+// items, the others point at it through group_signoff_id, so splitting a group keeps every analyzer's history. Pairs the
+// lab chose to keep separate are remembered so they are not suggested again.
+sqlite.exec(`CREATE TABLE IF NOT EXISTS competency_instrument_groups (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  lab_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  created_by_user_id INTEGER,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)`);
+sqlite.exec(`CREATE TABLE IF NOT EXISTS competency_instrument_group_members (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  group_id INTEGER NOT NULL,
+  lab_id INTEGER NOT NULL,
+  instrument_id INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(lab_id, instrument_id)
+)`);
+sqlite.exec(`CREATE TABLE IF NOT EXISTS competency_group_dismissals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  lab_id INTEGER NOT NULL,
+  member_key TEXT NOT NULL,
+  created_by_user_id INTEGER,
+  created_at TEXT NOT NULL,
+  UNIQUE(lab_id, member_key)
+)`);
+{
+  const gCols = (sqlite.prepare("PRAGMA table_info(competency_instrument_groups)").all() as any[]).map((c: any) => c.name);
+  if (!gCols.includes("created_by_user_id")) { try { sqlite.exec("ALTER TABLE competency_instrument_groups ADD COLUMN created_by_user_id INTEGER"); } catch {} }
+  if (!gCols.includes("updated_at")) { try { sqlite.exec("ALTER TABLE competency_instrument_groups ADD COLUMN updated_at TEXT"); } catch {} }
+  const mCols = (sqlite.prepare("PRAGMA table_info(competency_instrument_group_members)").all() as any[]).map((c: any) => c.name);
+  if (!mCols.includes("created_at")) { try { sqlite.exec("ALTER TABLE competency_instrument_group_members ADD COLUMN created_at TEXT"); } catch {} }
+  const dCols = (sqlite.prepare("PRAGMA table_info(competency_group_dismissals)").all() as any[]).map((c: any) => c.name);
+  if (!dCols.includes("created_by_user_id")) { try { sqlite.exec("ALTER TABLE competency_group_dismissals ADD COLUMN created_by_user_id INTEGER"); } catch {} }
+  const sCols = (sqlite.prepare("PRAGMA table_info(competency_method_signoffs)").all() as any[]).map((c: any) => c.name);
+  if (!sCols.includes("group_id")) { try { sqlite.exec("ALTER TABLE competency_method_signoffs ADD COLUMN group_id INTEGER"); } catch {} }
+  if (!sCols.includes("group_signoff_id")) { try { sqlite.exec("ALTER TABLE competency_method_signoffs ADD COLUMN group_signoff_id INTEGER"); } catch {} }
+}
 // Lab annual competency month (2026-10-13, Michael Q157 = 1; Sampson REQ-057): 1-12, NULL = off. Repeat annuals move
 // earlier into this month (shared/competencySignoff.ts alignAnnualToMonth), never later.
 {

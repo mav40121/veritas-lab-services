@@ -72,7 +72,7 @@ import { DocumentLinkDialog, COMP_DOC_TYPES } from "@/components/DocumentLinkDia
 import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
 import { PriorYearComparisonDialog } from "@/components/PriorYearComparisonDialog";
 import { CompetencyRemindersCard } from "@/components/CompetencyRemindersCard";
-import { CompetencyAnnualMonthCard } from "@/components/CompetencyAnnualMonthCard";
+import { CompetencyAnnualMonthCard, CompetencyMethodGroupsLinkCard } from "@/components/CompetencyAnnualMonthCard";
 import { PTSamplePickerDialog, type PTSample } from "@/components/PTSamplePickerDialog";
 import { AuditTrailDialog } from "@/components/AuditTrailDialog";
 import { PermissionTooltip, PERMISSION_REASONS } from "@/components/PermissionTooltip";
@@ -921,6 +921,8 @@ function ProgramListView() {
       <CompetencyRemindersCard />
       {/* 2026-10-13 (Michael Q157 = 1, Sampson REQ-057): optional month that every repeat annual moves into */}
       <CompetencyAnnualMonthCard />
+      {/* 2026-10-14 (Michael Q168 = 1): which analyzers share one competency */}
+      <CompetencyMethodGroupsLinkCard />
       {/* #48 Phase 3: required-vs-assessed coverage map, toggle by employee / by instrument */}
       <CompetencyCoverageMap />
       {/* Employee-centric entry point (Phase 1 of the coverage-derived IA). */}
