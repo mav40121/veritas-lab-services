@@ -23693,7 +23693,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/labs/:labId/competency/programs", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
-    const { name, department, type, mapId, methodGroups } = req.body;
+    const { name, department, type, mapId, methodGroups, checklistItems } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Program name required" });
     if (!["technical", "waived", "nontechnical"].includes(type)) return res.status(400).json({ error: "Invalid type" });
     const now = new Date().toISOString();
@@ -23711,6 +23711,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       for (const g of methodGroups) {
         stmt.run(programId, g.name, JSON.stringify(g.instruments || []), JSON.stringify(g.analytes || []), g.notes || null);
       }
+    }
+    // BUG-050 (2026-10-14): save the non-technical checklist items sent with the new program, as the unscoped route
+    // always did. This lab-scoped port dropped them, so every non-technical program created in a lab had an empty
+    // checklist and its assessments had nothing to check off (Michael's "Plating Media", lab 3).
+    if (type === "nontechnical" && Array.isArray(checklistItems)) {
+      const stmt = (db as any).$client.prepare(
+        "INSERT INTO competency_checklist_items (program_id, label, description, sort_order) VALUES (?, ?, ?, ?)"
+      );
+      checklistItems.forEach((item: any, idx: number) => {
+        stmt.run(programId, item.label || String.fromCharCode(65 + idx), item.description, idx);
+      });
     }
     res.json({ id: programId, name: name.trim(), department: department || "Chemistry", type, map_id: mapId || null, created_at: now, updated_at: now });
   });
