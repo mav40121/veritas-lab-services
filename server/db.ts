@@ -4166,6 +4166,58 @@ sqlite.exec(`
   } catch {}
 }
 
+// 2026-10-14 VeritaMaintain temperature logs (St. Charles REQ-068; server/temperatureLogs.ts). Storage units
+// carry the lab's own acceptable range (never defaulted) and readings-per-day; readings carry initials, the
+// person signed in, and the corrective action required when a reading is out of range (42 CFR 493.1252(b)).
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS temp_log_units (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    unit_type TEXT NOT NULL DEFAULT 'refrigerator',
+    location TEXT,
+    min_value REAL,
+    max_value REAL,
+    scale TEXT NOT NULL DEFAULT 'C',
+    readings_per_day INTEGER NOT NULL DEFAULT 1,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS temp_log_readings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    unit_id INTEGER NOT NULL,
+    reading_date TEXT NOT NULL,
+    reading_time TEXT,
+    value REAL NOT NULL,
+    in_range INTEGER NOT NULL DEFAULT 1,
+    initials TEXT,
+    recorded_by_user_id INTEGER,
+    recorded_by_name TEXT,
+    corrective_action TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_temp_units_lab ON temp_log_units(lab_id, active);
+  CREATE INDEX IF NOT EXISTS idx_temp_readings_unit ON temp_log_readings(unit_id, reading_date);
+  CREATE INDEX IF NOT EXISTS idx_temp_readings_lab ON temp_log_readings(lab_id, reading_date);
+`);
+{
+  // NEW DB TABLE RULE: an older live copy gets any missing columns.
+  try {
+    const unitCols = (sqlite.prepare("PRAGMA table_info(temp_log_units)").all() as { name: string }[]).map((c) => c.name);
+    for (const [c, t] of [["lab_id", "INTEGER"], ["name", "TEXT"], ["unit_type", "TEXT"], ["location", "TEXT"], ["min_value", "REAL"], ["max_value", "REAL"],
+      ["scale", "TEXT"], ["readings_per_day", "INTEGER"], ["active", "INTEGER"], ["created_at", "TEXT"], ["updated_at", "TEXT"]] as Array<[string, string]>) {
+      if (!unitCols.includes(c)) { try { sqlite.exec(`ALTER TABLE temp_log_units ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+    const readingCols = (sqlite.prepare("PRAGMA table_info(temp_log_readings)").all() as { name: string }[]).map((c) => c.name);
+    for (const [c, t] of [["lab_id", "INTEGER"], ["unit_id", "INTEGER"], ["reading_date", "TEXT"], ["reading_time", "TEXT"], ["value", "REAL"], ["in_range", "INTEGER"],
+      ["initials", "TEXT"], ["recorded_by_user_id", "INTEGER"], ["recorded_by_name", "TEXT"], ["corrective_action", "TEXT"], ["created_at", "TEXT"]] as Array<[string, string]>) {
+      if (!readingCols.includes(c)) { try { sqlite.exec(`ALTER TABLE temp_log_readings ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+  } catch {}
+}
+
 // 2026-10-08 Competency reminders and escalation (St. Charles; Michael: weekly
 // supervisor digest, escalate to the director the day a competency goes
 // overdue then weekly, plus a monthly 90/60/30 report). Per-lab settings and a
