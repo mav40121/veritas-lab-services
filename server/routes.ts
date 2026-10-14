@@ -235,7 +235,6 @@ import { insertStudySchema, insertContactSchema, registerSchema, loginSchema, ty
 // Each study type has its own pass/fail rule derived from the raw dataPoints.
 import { isCensored, censorValueForMath, type CensoringPolicy } from "@shared/censoring";
 import { computePTCoagStatus } from "./ptCoagVerdict";
-import { blockFinalizeWithoutClia, CLIA_REQUIRED_MESSAGE } from "./cliaGate";
 
 // Set when computeStudyStatus hit an exception (its "fail" return is then a
 // fail-safe, not a verdict). The boot recompute reads this to SKIP such
@@ -2988,9 +2987,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/admin/provision-comp-lab", (req, res) => {
     const { secret, userId, labName, cliaNumber, plan, accreditationBody, expiresAt } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
-    if (!userId || !labName || !cliaNumber) {
-      return res.status(400).json({ error: "userId, labName, cliaNumber required" });
+    if (!userId || !labName) {
+      return res.status(400).json({ error: "userId and labName required (cliaNumber is optional)" });
     }
+    // 2026-10-14 (Michael): a lab can be created without a CLIA number; it is stored NULL (labs.clia_number is UNIQUE
+    // only when non-null) and its reports print "Not on file" until one is entered.
+    const cliaTrim = String(cliaNumber ?? "").trim() || null;
     const validPlans = ["clinic", "waived", "community", "hospital", "enterprise", "large_hospital"];
     const resolvedPlan = plan || "clinic";
     if (!validPlans.includes(resolvedPlan)) {
@@ -3023,7 +3025,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     // CLIA uniqueness check — labs.clia_number is UNIQUE when non-null.
-    const cliaConflict = sqlite.prepare("SELECT id, lab_name FROM labs WHERE clia_number = ?").get(cliaNumber.trim()) as any;
+    const cliaConflict = cliaTrim ? sqlite.prepare("SELECT id, lab_name FROM labs WHERE clia_number = ?").get(cliaTrim) as any : null;
     if (cliaConflict) {
       return res.status(409).json({ error: `CLIA ${cliaNumber} already in use by lab id=${cliaConflict.id} (${cliaConflict.lab_name})` });
     }
@@ -3042,7 +3044,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, 'active', ?, ?, NULL, NULL, ?, ?)`
       ).run(
-        cliaNumber.trim(), labName.trim(), Number(userId),
+        cliaTrim, labName.trim(), Number(userId),
         accreditationBody === "CAP" ? 1 : 0,
         accreditationBody === "TJC" ? 1 : 0,
         accreditationBody === "COLA" ? 1 : 0,
@@ -3088,9 +3090,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/admin/provision-owner-lab", async (req: any, res) => {
     const { secret, ownerEmail, ownerName, labName, cliaNumber, plan, accreditationBody, seatCount, expiresAt } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
-    if (!ownerEmail || !String(ownerEmail).includes("@") || !labName || !cliaNumber) {
-      return res.status(400).json({ error: "ownerEmail, labName, cliaNumber required" });
+    if (!ownerEmail || !String(ownerEmail).includes("@") || !labName) {
+      return res.status(400).json({ error: "ownerEmail and labName required (cliaNumber is optional)" });
     }
+    // 2026-10-14 (Michael): CLIA optional, stored NULL when absent (see provision-comp-lab).
+    const cliaTrim = String(cliaNumber ?? "").trim() || null;
     const validPlans = ["clinic", "waived", "community", "hospital", "enterprise", "large_hospital"];
     const resolvedPlan = plan || "hospital";
     if (!validPlans.includes(resolvedPlan)) {
@@ -3109,7 +3113,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (storage.getUserByEmail(normEmail)) {
       return res.status(409).json({ error: "A user with that email already exists; use provision-comp-lab instead." });
     }
-    const cliaConflict = sqlite.prepare("SELECT id, lab_name FROM labs WHERE clia_number = ?").get(String(cliaNumber).trim()) as any;
+    const cliaConflict = cliaTrim ? sqlite.prepare("SELECT id, lab_name FROM labs WHERE clia_number = ?").get(cliaTrim) as any : null;
     if (cliaConflict) {
       return res.status(409).json({ error: `CLIA ${cliaNumber} already in use by lab id=${cliaConflict.id} (${cliaConflict.lab_name})` });
     }
@@ -3139,7 +3143,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, 'active', ?, ?, NULL, NULL, ?, ?)`
       ).run(
-        String(cliaNumber).trim(), String(labName).trim(), newUserId,
+        cliaTrim, String(labName).trim(), newUserId,
         accreditationBody === "CAP" ? 1 : 0,
         accreditationBody === "TJC" ? 1 : 0,
         accreditationBody === "COLA" ? 1 : 0,
@@ -10944,7 +10948,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         staffLab = seedStaffLabFromAccount(sqlite, { tier2LabId: req.scope.labId, userId: labOwnerId, labName: lab.lab_name, cliaNumber: lab.clia_number });
       }
       if (!staffLab) {
-        return res.status(400).json({ error: "Add the lab's name and CLIA number before adding read-and-sign staff." });
+        return res.status(400).json({ error: "Add the lab's name before adding read-and-sign staff." });
       }
       const nowStamp = new Date().toISOString();
       // user_id carries the account OWNER id (NOT NULL; the staffer's own identity
@@ -12287,14 +12291,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       parsed = insertStudySchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     }
-    // Lab-identity gate: a finalized study is a compliance record whose PDF
-    // header needs the lab's CLIA. Block finalizing under a lab with no CLIA.
-    {
-      const _labClia = ((db as any).$client.prepare("SELECT clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any)?.clia_number;
-      if (blockFinalizeWithoutClia(isDraft, _labClia)) {
-        return res.status(400).json({ error: CLIA_REQUIRED_MESSAGE, code: "CLIA_REQUIRED" });
-      }
-    }
+    // 2026-10-14 (Michael): a lab no longer needs a CLIA number to finalize a study. The report header prints
+    // "CLIA: Not on file" until one is entered (CLAUDE.md section 5). The cliaGate block that stood here kept labs
+    // without a CLIA from working in demos.
     const verifiedStatus = isDraft ? 'draft' : computeStudyStatus(
       parsed.data.studyType,
       parsed.data.dataPoints,
@@ -12370,14 +12369,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     const isDraft = req.body?.status === 'draft';
-    // Lab-identity gate (see POST /api/labs/:labId/studies): block finalizing a
-    // study under a lab with no CLIA number on record.
-    {
-      const _labClia = ((db as any).$client.prepare("SELECT clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any)?.clia_number;
-      if (blockFinalizeWithoutClia(isDraft, _labClia)) {
-        return res.status(400).json({ error: CLIA_REQUIRED_MESSAGE, code: "CLIA_REQUIRED" });
-      }
-    }
+    // 2026-10-14 (Michael): no CLIA number needed to finalize (see POST /api/labs/:labId/studies).
     let payload: any;
     if (isDraft) {
       payload = {
@@ -25805,11 +25797,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // lab that has its info at the account level is not forced to re-enter it in a
   // Lab Setup dialog before the roster loads. Defaults match the POST upsert;
   // blank fields (address, accreditor, complexity) are refined later via Edit
-  // Lab. Returns the seeded row, or null when there is no name+CLIA to seed from.
+  // Lab. Returns the seeded row, or null when there is no lab name to seed from. The CLIA is optional (2026-10-14,
+  // Michael): a lab without one is stored with a blank CLIA and its reports print "Not on file".
   const seedStaffLabFromAccount = (sqlite: any, opts: { tier2LabId: number | null; userId: number; labName?: string | null; cliaNumber?: string | null }) => {
     const labName = (opts.labName || "").toString().trim();
     const cliaNumber = (opts.cliaNumber || "").toString().trim();
-    if (!labName || !cliaNumber) return null;
+    if (!labName) return null;
     const now = new Date().toISOString();
     try {
       const result = sqlite.prepare(
@@ -25848,7 +25841,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/staff/lab", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const { labName, cliaNumber, street, city, state, zip, phone, certificateType, accreditationBody, accreditationBodyOther, includesNys, complexity } = req.body;
-    if (!labName?.trim() || !cliaNumber?.trim()) return res.status(400).json({ error: "Lab name and CLIA number required" });
+    if (!labName?.trim()) return res.status(400).json({ error: "Lab name required" }); // CLIA optional (2026-10-14)
     const now = new Date().toISOString();
     const dataUserId = req.ownerUserId ?? req.user.userId;
 
@@ -25877,14 +25870,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (existing) {
       (db as any).$client.prepare(
         "UPDATE staff_labs SET lab_name=?, clia_number=?, lab_address_street=?, lab_address_city=?, lab_address_state=?, lab_address_zip=?, lab_phone=?, certificate_type=?, accreditation_body=?, accreditation_body_other=?, includes_nys=?, complexity=?, updated_at=? WHERE id=?"
-      ).run(labName.trim(), cliaNumber.trim(), street || '', city || '', state || '', zip || '', phone || '', certificateType || 'compliance', accreditationBody || 'CLIA_ONLY', accreditationBodyOther || '', includesNys ? 1 : 0, complexity || 'high', now, existing.id);
+      ).run(labName.trim(), String(cliaNumber ?? "").trim(), street || '', city || '', state || '', zip || '', phone || '', certificateType || 'compliance', accreditationBody || 'CLIA_ONLY', accreditationBodyOther || '', includesNys ? 1 : 0, complexity || 'high', now, existing.id);
       const updated = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE id = ?").get(existing.id);
       return res.json(updated);
     }
 
     const result = (db as any).$client.prepare(
       "INSERT INTO staff_labs (user_id, lab_name, clia_number, lab_address_street, lab_address_city, lab_address_state, lab_address_zip, lab_phone, certificate_type, accreditation_body, accreditation_body_other, includes_nys, complexity, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-    ).run(dataUserId, labName.trim(), cliaNumber.trim(), street || '', city || '', state || '', zip || '', phone || '', certificateType || 'compliance', accreditationBody || 'CLIA_ONLY', accreditationBodyOther || '', includesNys ? 1 : 0, complexity || 'high', now, now);
+    ).run(dataUserId, labName.trim(), String(cliaNumber ?? "").trim(), street || '', city || '', state || '', zip || '', phone || '', certificateType || 'compliance', accreditationBody || 'CLIA_ONLY', accreditationBodyOther || '', includesNys ? 1 : 0, complexity || 'high', now, now);
     // Stamp tier2_lab_id = the ACTIVE lab (not the owner's home lab), so a
     // multi-lab owner's new staff_labs row belongs to the lab they are in.
     const insertTier2 = (resolveActiveLabForRequest(req.userId, req) as any)?.id
@@ -26223,7 +26216,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/labs/:labId/staff/lab", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const { labName, cliaNumber, street, city, state, zip, phone, certificateType, accreditationBody, accreditationBodyOther, includesNys, complexity } = req.body;
-    if (!labName?.trim() || !cliaNumber?.trim()) return res.status(400).json({ error: "Lab name and CLIA number required" });
+    if (!labName?.trim()) return res.status(400).json({ error: "Lab name required" }); // CLIA optional (2026-10-14)
     const now = new Date().toISOString();
     const tier2LabId = req.scope.labId;
     const ownerUserId = req.scope.lab?.owner_user_id ?? req.userId;
@@ -26244,12 +26237,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (existing) {
       (db as any).$client.prepare(
         "UPDATE staff_labs SET lab_name=?, clia_number=?, lab_address_street=?, lab_address_city=?, lab_address_state=?, lab_address_zip=?, lab_phone=?, certificate_type=?, accreditation_body=?, accreditation_body_other=?, includes_nys=?, complexity=?, updated_at=? WHERE id=?"
-      ).run(labName.trim(), cliaNumber.trim(), street || '', city || '', state || '', zip || '', phone || '', certificateType || 'compliance', accreditationBody || 'CLIA_ONLY', accreditationBodyOther || '', includesNys ? 1 : 0, complexity || 'high', now, existing.id);
+      ).run(labName.trim(), String(cliaNumber ?? "").trim(), street || '', city || '', state || '', zip || '', phone || '', certificateType || 'compliance', accreditationBody || 'CLIA_ONLY', accreditationBodyOther || '', includesNys ? 1 : 0, complexity || 'high', now, existing.id);
       return res.json((db as any).$client.prepare("SELECT * FROM staff_labs WHERE id = ?").get(existing.id));
     }
     const result = (db as any).$client.prepare(
       "INSERT INTO staff_labs (user_id, tier2_lab_id, lab_name, clia_number, lab_address_street, lab_address_city, lab_address_state, lab_address_zip, lab_phone, certificate_type, accreditation_body, accreditation_body_other, includes_nys, complexity, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-    ).run(ownerUserId, tier2LabId, labName.trim(), cliaNumber.trim(), street || '', city || '', state || '', zip || '', phone || '', certificateType || 'compliance', accreditationBody || 'CLIA_ONLY', accreditationBodyOther || '', includesNys ? 1 : 0, complexity || 'high', now, now);
+    ).run(ownerUserId, tier2LabId, labName.trim(), String(cliaNumber ?? "").trim(), street || '', city || '', state || '', zip || '', phone || '', certificateType || 'compliance', accreditationBody || 'CLIA_ONLY', accreditationBodyOther || '', includesNys ? 1 : 0, complexity || 'high', now, now);
     res.json((db as any).$client.prepare("SELECT * FROM staff_labs WHERE id = ?").get(result.lastInsertRowid));
   });
 

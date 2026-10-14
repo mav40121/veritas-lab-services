@@ -231,10 +231,10 @@ export default function GettingStartedPage() {
         <div className="mb-6 bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 flex items-start gap-3">
           <Shield size={18} className="text-amber-500 mt-0.5 shrink-0" />
           <div>
-            <p className="text-sm text-amber-200">
-              Add your CLIA number to unlock official reports and seat management.
+            <p className="text-sm text-amber-800 dark:text-amber-200">
+              Add your CLIA number so it prints on every report. Everything works without it in the meantime.
             </p>
-            <Link href={labRoute("/account/settings")} className="text-xs text-amber-400 hover:underline mt-1 inline-block">
+            <Link href={labRoute("/account/settings")} className="text-xs text-amber-700 dark:text-amber-400 hover:underline mt-1 inline-block">
               Go to Account Settings
             </Link>
           </div>
