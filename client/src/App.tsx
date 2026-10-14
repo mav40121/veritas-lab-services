@@ -91,6 +91,7 @@ const VeritaCompAppPage = lazy(() => import("@/pages/VeritaCompAppPage"));
 const VeritaCompEmployeePage = lazy(() => import("@/pages/VeritaCompEmployeePage"));
 const VeritaCompInstrumentPage = lazy(() => import("@/pages/VeritaCompInstrumentPage"));
 const VeritaCompByInstrumentPage = lazy(() => import("@/pages/VeritaCompByInstrumentPage"));
+const VeritaCompMethodGroupsPage = lazy(() => import("@/pages/VeritaCompMethodGroupsPage"));
 const VeritaPTPage = lazy(() => import("@/pages/VeritaPTPage"));
 const VeritaPTAppPage = lazy(() => import("@/pages/VeritaPTAppPage"));
 const VeritaPTEnrollmentsPage = lazy(() => import("@/pages/VeritaPTEnrollmentsPage"));
@@ -562,6 +563,7 @@ function AppContent() {
           <Route path="/labs/:labId/veritacomp-app/employee/:employeeId" component={VeritaCompEmployeePage} />
           {/* "By instrument" (2026-10-13): read-only, not linked from the landing until turned on. */}
           <Route path="/labs/:labId/veritacomp-app/instruments" component={VeritaCompByInstrumentPage} />
+          <Route path="/labs/:labId/veritacomp-app/method-groups" component={VeritaCompMethodGroupsPage} />
           <Route path="/labs/:labId/veritacomp-app/instrument/:instrumentId" component={VeritaCompInstrumentPage} />
           <Route path="/labs/:labId/veritacomp-app/:programId" component={VeritaCompAppPage} />
           <Route path="/labs/:labId/veritapt/app" component={VeritaPTAppPage} />

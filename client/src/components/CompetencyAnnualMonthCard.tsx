@@ -14,7 +14,8 @@ import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { CalendarClock, Loader2 } from "lucide-react";
+import { CalendarClock, Loader2, Layers } from "lucide-react";
+import { Link } from "wouter";
 import { MONTH_NAMES } from "@shared/competencySignoff";
 
 export function CompetencyAnnualMonthCard() {
@@ -89,6 +90,24 @@ export function CompetencyAnnualMonthCard() {
         {data && !data.staffLabConfigured && (
           <p className="text-xs text-amber-700 dark:text-amber-400">Set up this lab in VeritaStaff&trade; first; the annual month is kept with its staff records.</p>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Link to the lab's method groups (2026-10-14, Michael Q168 = 1): which analyzers share one competency.
+export function CompetencyMethodGroupsLinkCard() {
+  const activeLabId = useActiveLabId();
+  const href = activeLabId ? `/labs/${activeLabId}/veritacomp-app/method-groups` : "/veritacomp-app/method-groups";
+  return (
+    <Card data-testid="method-groups-card">
+      <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Layers size={16} className="text-primary" />
+          <span className="font-semibold text-sm">Method groups</span>
+          <span className="text-xs text-muted-foreground">Group analyzers that need no new or unique skills, so one competency covers them.</span>
+        </div>
+        <Link href={href} className="text-xs text-primary hover:underline" data-testid="open-method-groups">Open method groups</Link>
       </CardContent>
     </Card>
   );

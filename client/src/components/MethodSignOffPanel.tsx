@@ -26,6 +26,7 @@ export interface MethodSignState {
   signoffs: MethodSignoff[]; lastSignoff: MethodSignoff | null;
   nextMilestone: MethodMilestone; nextDue: { targetDate: string | null; latest: string | null; naturalTargetDate?: string | null; annualMonth?: number | null } | null;
   overdue: boolean; signedCurrent: boolean; signers: SignerOption[];
+  groupId?: number | null; groupMembers?: Array<{ id: number; name: string }> | null;
 }
 
 const ROLE_NAME: Record<string, string> = { LD: "Laboratory Director", TC: "Technical Consultant", TS: "Technical Supervisor", GS: "General Supervisor" };
@@ -192,7 +193,7 @@ export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts
             <Button size="sm" onClick={() => sign.mutate()} disabled={sign.isPending || !signer?.eligible || (backdated && !documentation.trim())} data-testid="sign-method">
               {sign.isPending && <Loader2 className="animate-spin mr-1" size={12} />} Sign {ts.instrumentName} {MILESTONE_LABEL[milestone].toLowerCase()} for {firstName}
             </Button>
-            <span className="text-[11px] text-muted-foreground">Locks this method only. {firstName}'s other methods stay open.</span>
+            <span className="text-[11px] text-muted-foreground" data-testid="sign-covers">{ts.groupMembers?.length ? `Covers ${ts.groupMembers.map((m) => m.name).join(" and ")}. ` : ""}Locks this method only. {firstName}'s other methods stay open.</span>
           </div>
           <p className="text-[11px] text-muted-foreground bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded px-2 py-1.5">
             {RULE_TEXT[ts.complexity] || RULE_TEXT.UNSPECIFIED} The list comes from VeritaStaff&trade; roles; people who cannot sign this method are shown greyed out with the reason.
