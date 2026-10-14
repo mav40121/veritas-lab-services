@@ -57,7 +57,7 @@ import { validateClia } from "@shared/validateClia";
 import { isValidIfuUrl } from "@shared/ifu";
 import { incompleteElementCells as compIncompleteCells, incompleteElementCellsByInstrument as compIncompleteCellsByInstrument, aggregateElementStatus as compAggregateElementStatus, itemElementStatus as compItemElementStatus, competencyCycleWindowDays, WAIVED_METHOD_NAMES, WAIVED_METHODS_REQUIRED, waivedMethodPassed, waivedPassedCount, methodGroupCoversInstrument } from "@shared/competencyStatus";
 import { competencyDueColumns, competencySeedAtCreate, nextCompetencyDue } from "./competencySchedule";
-import { methodSignerOptions, nextMilestoneAfter, milestonesForComplexity, MILESTONE_LABEL, type SignerCandidate, type MethodMilestone } from "@shared/competencySignoff";
+import { methodSignerOptions, nextMilestoneAfter, milestonesForComplexity, MILESTONE_LABEL, alignAnnualToMonth, MONTH_NAMES, type SignerCandidate, type MethodMilestone } from "@shared/competencySignoff";
 
 // Express already URL-decodes route params before the handler runs, so
 // req.params.analyte for a request to ".../IG%25" arrives as "IG%". Calling
@@ -26029,7 +26029,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (performsTesting) {
       const seed = competencySeedAtCreate({
         accreditor: lab.accreditation_body, nys: lab.includes_nys === 1,
-        highestComplexity: highestComplexity || 'H', hireDate: hireDate || null,
+        highestComplexity: highestComplexity || 'H', hireDate: hireDate || null, annualMonth: lab.competency_annual_month ?? null,
       });
       (db as any).$client.prepare(
         "INSERT INTO staff_competency_schedules (employee_id, lab_id, six_month_due_at, first_annual_due_at, annual_due_at, nys_six_month_due_at) VALUES (?,?,?,?,?,?)"
@@ -26306,7 +26306,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         // which seeded a 6-month for everyone (over-applied it to waived-only staff).
         const seed = competencySeedAtCreate({
           accreditor: lab.accreditation_body, nys: lab.includes_nys === 1,
-          highestComplexity: highestComplexity || 'H', hireDate: hireDate || null,
+          highestComplexity: highestComplexity || 'H', hireDate: hireDate || null, annualMonth: lab.competency_annual_month ?? null,
         });
         sqlite.prepare(
           "INSERT INTO staff_competency_schedules (employee_id, lab_id, six_month_due_at, first_annual_due_at, annual_due_at, nys_six_month_due_at) VALUES (?,?,?,?,?,?)"
@@ -26370,9 +26370,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (effectivePerformsTesting) {
         const hasRow = sqlite.prepare("SELECT id FROM staff_competency_schedules WHERE employee_id = ?").get(req.params.id);
         if (!hasRow) {
-          const slab = sqlite.prepare("SELECT accreditation_body, includes_nys FROM staff_labs WHERE id = ?").get(emp.lab_id) as any;
+          const slab = sqlite.prepare("SELECT accreditation_body, includes_nys, competency_annual_month FROM staff_labs WHERE id = ?").get(emp.lab_id) as any;
           const seed = competencySeedAtCreate({
-            accreditor: slab?.accreditation_body, nys: slab?.includes_nys === 1,
+            accreditor: slab?.accreditation_body, nys: slab?.includes_nys === 1, annualMonth: slab?.competency_annual_month ?? null,
             highestComplexity: highestComplexity || emp.highest_complexity || 'H',
             hireDate: (hireDate !== undefined ? hireDate : emp.hire_date) || null,
           });
@@ -28062,7 +28062,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // who may sign it. Due dates come from the same engine VeritaStaff uses (server/competencySchedule.ts), run per
     // method from that method's own sign-offs.
     const schedCtx = sqlite.prepare(
-      "SELECT e.hire_date, sl.accreditation_body, sl.includes_nys FROM staff_employees e LEFT JOIN staff_labs sl ON sl.id = e.lab_id WHERE e.id = ?"
+      "SELECT e.hire_date, sl.accreditation_body, sl.includes_nys, sl.competency_annual_month FROM staff_employees e LEFT JOIN staff_labs sl ON sl.id = e.lab_id WHERE e.id = ?"
     ).get(empId) as any;
     const signoffStmt = sqlite.prepare(
       `SELECT * FROM competency_method_signoffs WHERE lab_id = ? AND staff_employee_id = ? AND instrument_id = ? AND revoked_at IS NULL
@@ -28105,7 +28105,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const last = signoffs[0] || null;
       const initial = signoffs.find((s: any) => s.milestone === "initial") || null;
       const nextMilestone = nextMilestoneAfter(last?.milestone || null, complexity);
-      let nextDue: { targetDate: string | null; latest: string | null } | null = null;
+      let nextDue: { targetDate: string | null; latest: string | null; naturalTargetDate?: string | null; annualMonth?: number | null } | null = null;
       if (last && last.milestone && last.signedDate) {
         const r = nextCompetencyDue({
           recordedMilestone: last.milestone, recordedDate: last.signedDate, initialDate: initial?.signedDate || null,
@@ -28113,6 +28113,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           accreditor: schedCtx?.accreditation_body || null, regime: schedCtx?.includes_nys === 1 ? "NYS-CLEP" : null,
         });
         nextDue = { targetDate: r.targetDate, latest: r.latest };
+        // Lab annual month (Michael Q157 = 1): a repeat annual moves earlier into the lab's month; the late ceiling
+        // moves with it by the same number of days. Initial, 6-month and first annual are never moved.
+        const month = Number(schedCtx?.competency_annual_month) || null;
+        if (month && nextMilestone === "annual" && r.targetDate) {
+          const aligned = alignAnnualToMonth(r.targetDate, month);
+          if (aligned && aligned !== r.targetDate) {
+            const shiftDays = Math.round((Date.parse(`${r.targetDate}T00:00:00Z`) - Date.parse(`${aligned}T00:00:00Z`)) / 86400000);
+            const latest = r.latest ? new Date(Date.parse(`${r.latest}T00:00:00Z`) - shiftDays * 86400000).toISOString().slice(0, 10) : null;
+            nextDue = { targetDate: aligned, latest, naturalTargetDate: r.targetDate, annualMonth: month };
+          }
+        }
       }
       const overdue = !!(nextDue?.latest && today > nextDue.latest);
       return {
@@ -28576,6 +28587,51 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       before: { signoff_id: signoffId, revoked_at: null }, after: { revoked_at: now }, ipAddress: req.ip,
     });
     res.json({ ok: true });
+  });
+
+  // GET/PUT /api/labs/:labId/competency/annual-month : the lab's annual competency month (Michael Q157 = 1, 2026-10-13;
+  // Sampson REQ-057). 1-12, or null for off. Stored on the lab's VeritaStaff record (staff_labs), so it moves both the
+  // per-method due dates and VeritaStaff's own annual due date. Saving it re-figures every stored annual due date in
+  // the lab from the recorded completions (only that column changes); rows with no recorded competency are left alone.
+  app.get("/api/labs/:labId/competency/annual-month", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const lab = (db as any).$client.prepare("SELECT id, competency_annual_month FROM staff_labs WHERE tier2_lab_id = ?").get(req.scope.labId) as any;
+    res.json({ month: lab?.competency_annual_month ?? null, staffLabConfigured: !!lab });
+  });
+  app.put("/api/labs/:labId/competency/annual-month", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const sqlite = (db as any).$client;
+    const raw = req.body?.month;
+    const month = raw === null || raw === "" || raw === undefined ? null : Number(raw);
+    if (month !== null && !(Number.isInteger(month) && month >= 1 && month <= 12)) return res.status(400).json({ error: "Month must be 1 to 12, or empty to turn it off." });
+    const lab = sqlite.prepare("SELECT * FROM staff_labs WHERE tier2_lab_id = ?").get(req.scope.labId) as any;
+    if (!lab) return res.status(409).json({ error: "Set up this lab in VeritaStaff™ first; the annual month is stored with its staff records." });
+    const before = lab.competency_annual_month ?? null;
+    const rows = sqlite.prepare(
+      `SELECT s.employee_id, s.annual_due_at, s.initial_completed_at, s.six_month_completed_at, s.first_annual_completed_at, s.last_annual_completed_at,
+              e.highest_complexity, e.hire_date
+       FROM staff_competency_schedules s JOIN staff_employees e ON e.id = s.employee_id WHERE e.lab_id = ?`
+    ).all(lab.id) as any[];
+    let updated = 0;
+    sqlite.transaction(() => {
+      sqlite.prepare("UPDATE staff_labs SET competency_annual_month = ? WHERE id = ?").run(month, lab.id);
+      const upd = sqlite.prepare("UPDATE staff_competency_schedules SET annual_due_at = ? WHERE employee_id = ?");
+      for (const r of rows) {
+        if (!r.initial_completed_at && !r.six_month_completed_at && !r.first_annual_completed_at && !r.last_annual_completed_at) continue;
+        const due = competencyDueColumns(
+          { accreditor: lab.accreditation_body, nys: lab.includes_nys === 1, highestComplexity: r.highest_complexity, hireDate: r.hire_date, annualMonth: month },
+          { initialCompletedAt: r.initial_completed_at, sixMonthCompletedAt: r.six_month_completed_at, firstAnnualCompletedAt: r.first_annual_completed_at, lastAnnualCompletedAt: r.last_annual_completed_at },
+        );
+        if ((due.annual_due_at ?? null) !== (r.annual_due_at ?? null)) { upd.run(due.annual_due_at, r.employee_id); updated++; }
+      }
+    })();
+    logAudit({
+      userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "update",
+      entityType: "competency_annual_month", entityId: String(req.scope.labId),
+      entityLabel: `Annual competency month: ${month ? MONTH_NAMES[month - 1] : "off"} (${updated} annual due date${updated === 1 ? "" : "s"} re-figured)`,
+      before: { competency_annual_month: before }, after: { competency_annual_month: month }, ipAddress: req.ip,
+    });
+    res.json({ month, updated });
   });
 
   // The whole-record "Sign & Complete" (POST .../employee/:employeeId/sign, Phase 3a) was retired 2026-10-13 by
@@ -29744,7 +29800,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const computeSchedule = (hireDate: string | null, highestComplexity: string | null) =>
           competencySeedAtCreate({
             accreditor: lab.accreditation_body, nys: lab.includes_nys === 1,
-            highestComplexity: highestComplexity || 'H', hireDate: hireDate || null,
+            highestComplexity: highestComplexity || 'H', hireDate: hireDate || null, annualMonth: lab.competency_annual_month ?? null,
           });
 
         // tier2_lab_id is REQUIRED: the lab-scoped roster reads WHERE tier2_lab_id,
@@ -29905,7 +29961,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // keyed off the recorded completion dates, the lab's accreditor + NYS regime, and the
     // employee's highest complexity.
     const due = competencyDueColumns(
-      { accreditor: lab.accreditation_body, nys: lab.includes_nys === 1, highestComplexity: emp.highest_complexity, hireDate: emp.hire_date },
+      { accreditor: lab.accreditation_body, nys: lab.includes_nys === 1, highestComplexity: emp.highest_complexity, hireDate: emp.hire_date, annualMonth: lab.competency_annual_month ?? null },
       { initialCompletedAt, sixMonthCompletedAt, firstAnnualCompletedAt, lastAnnualCompletedAt },
     );
     const vals = [

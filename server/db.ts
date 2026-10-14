@@ -1561,6 +1561,12 @@ sqlite.exec(`CREATE TABLE IF NOT EXISTS competency_method_signoffs (
   cmsGuard("revoked_by_user_id", "revoked_by_user_id INTEGER");
   try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_cms_lab_emp_inst ON competency_method_signoffs(lab_id, staff_employee_id, instrument_id)"); } catch {}
 }
+// Lab annual competency month (2026-10-13, Michael Q157 = 1; Sampson REQ-057): 1-12, NULL = off. Repeat annuals move
+// earlier into this month (shared/competencySignoff.ts alignAnnualToMonth), never later.
+{
+  const slCols = (sqlite.prepare("PRAGMA table_info(staff_labs)").all() as any[]).map((c: any) => c.name);
+  if (!slCols.includes("competency_annual_month")) { try { sqlite.exec("ALTER TABLE staff_labs ADD COLUMN competency_annual_month INTEGER"); } catch {} }
+}
 
 // VeritaComp Customer-Blockers Wave (2026-06-05): completion sign-off and
 // review-period columns on competency_assessments. Customer report from

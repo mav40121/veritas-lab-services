@@ -158,3 +158,20 @@ export function nextMilestoneAfter(last: MethodMilestone | null | undefined, com
 export function initialsOf(name: string): string {
   return String(name || "").replace(/^(dr|mr|mrs|ms)\.?\s+/i, "").split(/\s+/).filter(Boolean).map((w) => w[0].toUpperCase()).join("").slice(0, 4);
 }
+
+// Lab annual month (Michael Q157 = 1, 2026-10-13; Sampson REQ-057 "all my repeat annual competencies due the end of
+// October"). A repeat annual already due in the lab's month stays where it is. Any other moves EARLIER, to the last day
+// of that month before it: never later, so nothing goes overdue. Once it is done in that month, the next annual (12
+// months later) falls in the same month. Year one (initial, 6-month, first annual) is never moved by callers.
+export const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+export function alignAnnualToMonth(targetIso: string | null | undefined, month: number | null | undefined): string | null {
+  if (!targetIso) return targetIso ?? null;
+  const m = Number(month);
+  const target = String(targetIso).slice(0, 10);
+  if (!Number.isInteger(m) || m < 1 || m > 12 || !/^\d{4}-\d{2}-\d{2}$/.test(target)) return target;
+  const [y, mo] = target.split("-").map(Number);
+  if (mo === m) return target;
+  const endOf = (yy: number) => new Date(Date.UTC(yy, m, 0)).toISOString().slice(0, 10); // last day of month m
+  const sameYear = endOf(y);
+  return sameYear < target ? sameYear : endOf(y - 1);
+}
