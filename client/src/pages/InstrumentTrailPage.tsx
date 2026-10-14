@@ -83,6 +83,7 @@ const EVENT_LABEL: Record<string, string> = {
   service: "Service",
   repair: "Repair",
   function_check: "Function check",
+  troubleshooting: "Troubleshooting",
 };
 
 function Tile({ label, value, tone }: { label: string; value: number; tone?: "bad" | "good" | "warn" }) {

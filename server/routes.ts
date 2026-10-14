@@ -4189,7 +4189,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/labs/:labId/qc/lots", authMiddleware, labScopeMiddleware, (req: any, res) => {
     const sqlite = (db as any).$client;
     const lots = sqlite.prepare(
-      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, status, prior_lot_id, created_at, updated_at FROM qc_control_lots WHERE lab_id = ? ORDER BY (status = 'active') DESC, analyte ASC, lot_number ASC"
+      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, out_of_use_date, status, prior_lot_id, created_at, updated_at FROM qc_control_lots WHERE lab_id = ? ORDER BY (status = 'active') DESC, analyte ASC, lot_number ASC"
     ).all(req.scope.labId) as any[];
     // basis = the mean/SD that judges the lot's next run (server/qcBasis.ts);
     // the chart draws it so the chart and the Westgard flags always agree.
@@ -4294,7 +4294,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!Number.isFinite(id) || id <= 0) {
       return res.status(400).json({ error: "valid :id required" });
     }
-    const { status } = req.body || {};
+    const { status, out_of_use_date } = req.body || {};
     if (!status || typeof status !== "string") {
       return res.status(400).json({ error: "status required" });
     }
@@ -4305,16 +4305,37 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const sqlite = (db as any).$client;
     const lot = sqlite.prepare(
-      "SELECT id FROM qc_control_lots WHERE id = ? AND lab_id = ?"
+      "SELECT id, opened_date, out_of_use_date FROM qc_control_lots WHERE id = ? AND lab_id = ?"
     ).get(id, req.scope.labId) as any;
     if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
 
+    // Out-of-use date (St. Charles REQ-067): retiring stamps it (the date sent, else the lab's today);
+    // re-activating clears it; a hold leaves it as is.
+    const nowIso = new Date().toISOString();
+    let outOfUse: string | null = lot.out_of_use_date || null;
+    if (s === "retired") {
+      if (out_of_use_date != null && out_of_use_date !== "") {
+        if (typeof out_of_use_date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(out_of_use_date)) {
+          return res.status(400).json({ error: "out_of_use_date must be YYYY-MM-DD" });
+        }
+        if (out_of_use_date > labLocalDate(nowIso)) return res.status(400).json({ error: "out_of_use_date cannot be in the future" });
+        if (lot.opened_date && out_of_use_date < lot.opened_date) {
+          return res.status(400).json({ error: "out_of_use_date cannot be before the lot was opened" });
+        }
+        outOfUse = out_of_use_date;
+      } else {
+        outOfUse = labLocalDate(nowIso);
+      }
+    } else if (s === "active") {
+      outOfUse = null;
+    }
+
     sqlite.prepare(
-      "UPDATE qc_control_lots SET status = ?, updated_at = ? WHERE id = ?"
-    ).run(s, new Date().toISOString(), id);
+      "UPDATE qc_control_lots SET status = ?, out_of_use_date = ?, updated_at = ? WHERE id = ?"
+    ).run(s, outOfUse, nowIso, id);
 
     const updated = sqlite.prepare(
-      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, status, prior_lot_id, created_at, updated_at FROM qc_control_lots WHERE id = ?"
+      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, out_of_use_date, status, prior_lot_id, created_at, updated_at FROM qc_control_lots WHERE id = ?"
     ).get(id);
     return res.json({ ok: true, lot: updated });
   });
@@ -4455,12 +4476,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         );
         const newId = Number(ins.lastInsertRowid);
         if (retirePrior) {
-          sqlite.prepare("UPDATE qc_control_lots SET status = 'retired', updated_at = ? WHERE id = ?").run(now, priorId);
+          // The replaced lot goes out of use the day the new one is opened (else the lab's today).
+          sqlite.prepare("UPDATE qc_control_lots SET status = 'retired', out_of_use_date = COALESCE(out_of_use_date, ?), updated_at = ? WHERE id = ?")
+            .run(opened_date || labLocalDate(now), now, priorId);
         }
         return newId;
       });
       const newId = run();
-      const cols = "id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, status, prior_lot_id, created_at, updated_at";
+      const cols = "id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, out_of_use_date, status, prior_lot_id, created_at, updated_at";
       const newLot = sqlite.prepare(`SELECT ${cols} FROM qc_control_lots WHERE id = ?`).get(newId);
       const updatedPrior = sqlite.prepare(`SELECT ${cols} FROM qc_control_lots WHERE id = ?`).get(priorId);
       return res.json({ ok: true, lot: newLot, prior: updatedPrior });
@@ -4495,7 +4518,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // prior). opened_date is user-entered and may be null, so it is not the
     // ordering key.
     const lots = sqlite.prepare(
-      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, expiration_date, opened_date, status, prior_lot_id, created_at FROM qc_control_lots WHERE lab_id = ? AND analyte = ? AND level = ? ORDER BY created_at ASC, id ASC"
+      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, expiration_date, opened_date, out_of_use_date, status, prior_lot_id, created_at FROM qc_control_lots WHERE lab_id = ? AND analyte = ? AND level = ? ORDER BY created_at ASC, id ASC"
     ).all(req.scope.labId, analyte, level) as any[];
     if (lots.length === 0) return res.json({ analyte, level, lots: [], points: [] });
     const lotIds = lots.map(l => l.id);
@@ -8783,6 +8806,85 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
     },
   );
+
+  // Lot in-use / out-of-use log (St. Charles REQ-067, 2026-10-14). Recording work: any active member
+  // (staff included) may record it, so requireWriteAccess only. Dates are lab calendar dates (YYYY-MM-DD),
+  // never in the future; out of use cannot precede in use. One open record per item + lot.
+  const LOT_USE_REASONS = new Set(["finished", "expired", "recalled", "qc_failure", "damaged", "other"]);
+  const isIsoDay = (v: any) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  const lotUseUserName = (sqlite: any, userId: number): string | null => {
+    const u = sqlite.prepare("SELECT name, email FROM users WHERE id = ?").get(userId) as any;
+    return u ? (u.name || u.email || null) : null;
+  };
+  const lotUseItem = (sqlite: any, itemId: number, labId: number): { item?: any; error?: 403 | 404 } => {
+    const item = sqlite.prepare("SELECT id, lab_id, item_name FROM inventory_items WHERE id = ?").get(itemId) as any;
+    if (!item) return { error: 404 };
+    if (Number(item.lab_id) !== Number(labId)) return { error: 403 };
+    return { item };
+  };
+
+  app.get("/api/labs/:labId/veritastock/items/:itemId/lot-use", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const itemId = Number(req.params.itemId);
+    if (!Number.isFinite(itemId)) return res.status(400).json({ error: "Invalid item id" });
+    const r = lotUseItem(sqlite, itemId, req.scope.labId);
+    if (r.error === 404) return res.status(404).json({ error: "Item not found" });
+    if (r.error === 403) return res.status(403).json({ error: "Item is not in this location" });
+    const rows = sqlite.prepare(
+      `SELECT id, lot_number, expiration_date, in_use_date, in_use_by_name, out_of_use_date, out_of_use_by_name, out_of_use_reason
+         FROM inventory_lot_use WHERE item_id = ? AND lab_id = ?
+        ORDER BY in_use_date DESC, id DESC`
+    ).all(itemId, req.scope.labId);
+    return res.json({ item_id: itemId, records: rows });
+  });
+
+  app.post("/api/labs/:labId/veritastock/items/:itemId/lot-use", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const itemId = Number(req.params.itemId);
+    if (!Number.isFinite(itemId)) return res.status(400).json({ error: "Invalid item id" });
+    const r = lotUseItem(sqlite, itemId, req.scope.labId);
+    if (r.error === 404) return res.status(404).json({ error: "Item not found" });
+    if (r.error === 403) return res.status(403).json({ error: "Item is not in this location" });
+    const lotNumber = String(req.body?.lot_number ?? "").trim() || null;
+    const expiration = req.body?.expiration_date ? String(req.body.expiration_date) : null;
+    const nowIso = new Date().toISOString();
+    const today = labLocalDate(nowIso);
+    const inUse = req.body?.in_use_date ? String(req.body.in_use_date) : today;
+    if (!isIsoDay(inUse)) return res.status(400).json({ error: "in_use_date must be YYYY-MM-DD" });
+    if (inUse > today) return res.status(400).json({ error: "in_use_date cannot be in the future" });
+    if (expiration && !isIsoDay(expiration)) return res.status(400).json({ error: "expiration_date must be YYYY-MM-DD" });
+    const open = sqlite.prepare(
+      "SELECT id FROM inventory_lot_use WHERE item_id = ? AND lab_id = ? AND COALESCE(lot_number,'') = ? AND out_of_use_date IS NULL"
+    ).get(itemId, req.scope.labId, lotNumber ?? "") as any;
+    if (open) return res.status(409).json({ error: "This lot is already in use. Take it out of use first." });
+    const info = sqlite.prepare(
+      `INSERT INTO inventory_lot_use (lab_id, item_id, lot_number, expiration_date, in_use_date, in_use_by_user_id, in_use_by_name, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(req.scope.labId, itemId, lotNumber, expiration, inUse, req.userId, lotUseUserName(sqlite, req.userId), nowIso, nowIso);
+    const row = sqlite.prepare("SELECT * FROM inventory_lot_use WHERE id = ?").get(info.lastInsertRowid);
+    return res.json({ ok: true, record: row });
+  });
+
+  app.patch("/api/labs/:labId/veritastock/lot-use/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
+    const rec = sqlite.prepare("SELECT * FROM inventory_lot_use WHERE id = ? AND lab_id = ?").get(id, req.scope.labId) as any;
+    if (!rec) return res.status(404).json({ error: "Lot use record not found in this location" });
+    if (rec.out_of_use_date) return res.status(409).json({ error: "This lot is already out of use" });
+    const nowIso = new Date().toISOString();
+    const today = labLocalDate(nowIso);
+    const outOfUse = req.body?.out_of_use_date ? String(req.body.out_of_use_date) : today;
+    if (!isIsoDay(outOfUse)) return res.status(400).json({ error: "out_of_use_date must be YYYY-MM-DD" });
+    if (outOfUse > today) return res.status(400).json({ error: "out_of_use_date cannot be in the future" });
+    if (outOfUse < rec.in_use_date) return res.status(400).json({ error: "out_of_use_date cannot be before the in-use date" });
+    const reason = String(req.body?.out_of_use_reason || "finished").toLowerCase();
+    if (!LOT_USE_REASONS.has(reason)) return res.status(400).json({ error: "out_of_use_reason must be one of finished, expired, recalled, qc_failure, damaged, other" });
+    sqlite.prepare(
+      `UPDATE inventory_lot_use SET out_of_use_date = ?, out_of_use_by_user_id = ?, out_of_use_by_name = ?, out_of_use_reason = ?, updated_at = ? WHERE id = ?`
+    ).run(outOfUse, req.userId, lotUseUserName(sqlite, req.userId), reason, nowIso, id);
+    return res.json({ ok: true, record: sqlite.prepare("SELECT * FROM inventory_lot_use WHERE id = ?").get(id) });
+  });
 
   // POST /api/labs/:labId/veritastock/transfers/:batchId/accept — the
   // destination accepts a pending shipment. Stock lands at the destination
@@ -21583,7 +21685,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (days <= 30) return "due_soon";
     return "ok";
   }
-  const EQUIP_EVENT_TYPES = ["calibration", "preventive_maintenance", "service", "repair", "function_check"];
+  // "troubleshooting" (2026-10-14, St. Charles REQ-070): a problem / action / outcome record. It does not
+  // complete scheduled maintenance, so it never advances the PM next-due date.
+  const EQUIP_EVENT_TYPES = ["calibration", "preventive_maintenance", "service", "repair", "function_check", "troubleshooting"];
 
   app.get("/api/labs/:labId/equipment", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
@@ -21707,7 +21811,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const now = new Date().toISOString();
     // next_due: explicit value wins; else event_date + the instrument's PM interval.
     let nextDue: string | null = next_due_date || null;
-    if (!nextDue && ex.pm_interval_days) {
+    if (!nextDue && ex.pm_interval_days && event_type !== "troubleshooting") {
       const d = new Date(event_date + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + Number(ex.pm_interval_days));
       nextDue = d.toISOString().slice(0, 10);
     }
