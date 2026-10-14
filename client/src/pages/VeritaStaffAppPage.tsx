@@ -414,7 +414,7 @@ export default function VeritaStaffAppPage() {
           </h1>
           {lab && (
             <p className="text-muted-foreground mt-1">
-              {lab.lab_name} &middot; CLIA: {lab.clia_number}
+              {lab.lab_name} &middot; CLIA: {lab.clia_number?.trim() || "Not on file"}
               {!readOnly && <button onClick={() => setShowLabSetup(true)} className="ml-2 text-primary text-xs hover:underline">(Edit Lab)</button>}
             </p>
           )}
@@ -812,8 +812,9 @@ function LabSetupDialog({ open, onOpenChange, lab, isStaffAccreditorAllowed }: {
   }
 
   async function handleSave() {
-    if (!form.labName.trim() || !form.cliaNumber.trim()) {
-      toast({ title: "Error", description: "Lab name and CLIA number are required.", variant: "destructive" });
+    // 2026-10-14 (Michael): the CLIA number is optional; reports print "Not on file" until it is entered.
+    if (!form.labName.trim()) {
+      toast({ title: "Error", description: "Lab name is required.", variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -858,7 +859,7 @@ function LabSetupDialog({ open, onOpenChange, lab, isStaffAccreditorAllowed }: {
             <Input value={form.labName} onChange={(e) => setForm({ ...form, labName: e.target.value })} placeholder="e.g., Riverside Regional Medical Center" />
           </div>
           <div>
-            <label className="text-sm font-medium">CLIA Number *</label>
+            <label className="text-sm font-medium">CLIA Number (optional)</label>
             <Input value={form.cliaNumber} onChange={(e) => setForm({ ...form, cliaNumber: e.target.value })} placeholder="e.g., 05D2187634" />
           </div>
           <div className="grid grid-cols-2 gap-3">
