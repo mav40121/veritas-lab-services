@@ -72,7 +72,7 @@ import { DocumentLinkDialog, COMP_DOC_TYPES } from "@/components/DocumentLinkDia
 import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
 import { PriorYearComparisonDialog } from "@/components/PriorYearComparisonDialog";
 import { CompetencyRemindersCard } from "@/components/CompetencyRemindersCard";
-import { CompetencyAnnualMonthCard } from "@/components/CompetencyAnnualMonthCard";
+import { CompetencyAnnualMonthCard, CompetencyMethodGroupsLinkCard } from "@/components/CompetencyAnnualMonthCard";
 import { PTSamplePickerDialog, type PTSample } from "@/components/PTSamplePickerDialog";
 import { AuditTrailDialog } from "@/components/AuditTrailDialog";
 import { PermissionTooltip, PERMISSION_REASONS } from "@/components/PermissionTooltip";
@@ -521,6 +521,10 @@ function EmployeeRosterSection() {
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Employees</h3>
         <span className="text-xs text-muted-foreground">{"·"} {employees.length} with assigned test systems</span>
         <div className="flex-1 border-t border-border/60 ml-2" />
+        {/* 2026-10-14 (Michael Q182 = 1): the By instrument view, beside the people list */}
+        <Link href={labRoute("/veritacomp-app/instruments")} className="text-xs text-primary hover:underline whitespace-nowrap" data-testid="open-by-instrument">
+          By instrument
+        </Link>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {employees.map((e) => {
@@ -921,6 +925,8 @@ function ProgramListView() {
       <CompetencyRemindersCard />
       {/* 2026-10-13 (Michael Q157 = 1, Sampson REQ-057): optional month that every repeat annual moves into */}
       <CompetencyAnnualMonthCard />
+      {/* 2026-10-14 (Michael Q168 = 1): which analyzers share one competency */}
+      <CompetencyMethodGroupsLinkCard />
       {/* #48 Phase 3: required-vs-assessed coverage map, toggle by employee / by instrument */}
       <CompetencyCoverageMap />
       {/* Employee-centric entry point (Phase 1 of the coverage-derived IA). */}

@@ -229,7 +229,9 @@ export default function VeritaCompEmployeePage() {
                       <div className="flex items-center gap-2">
                         <span className={`h-2 w-2 rounded-full shrink-0 ${dot}`} />
                         <span className="text-sm font-medium leading-tight">{ts.instrumentName}</span>
+                        {ts.groupMembers?.length ? <Badge className="text-[9px] bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300" data-testid="group-badge">GROUP</Badge> : null}
                       </div>
+                      {ts.groupMembers?.length ? <div className="text-[11px] text-muted-foreground">{ts.groupMembers.map((m) => m.name).join(", ")}</div> : null}
                       <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
                         {ts.department && <span>{ts.department}</span>}
                         <span>{ts.complexity}</span>
@@ -254,6 +256,11 @@ export default function VeritaCompEmployeePage() {
                       <div className="mb-3">
                         <MethodSignOffPanel part="status" labId={activeLabId!} employeeId={employeeId} employeeName={data.employee.name} ts={current} readOnly={readOnly} onChanged={refresh} />
                       </div>
+                      {current.groupMembers?.length ? (
+                        <p className="text-[11px] mb-2 rounded px-2 py-1.5 bg-teal-50 dark:bg-teal-900/20 text-teal-900 dark:text-teal-200" data-testid="group-note">
+                          Grouped by the lab: {current.groupMembers.map((m) => m.name).join(" and ")} need no new or unique skills, so one competency covers {current.groupMembers.length === 2 ? "both" : "all of them"}.
+                        </p>
+                      ) : null}
                       <p className="text-xs font-medium mb-1" data-testid="working-milestone">{MILESTONE_LABEL[current.nextMilestone]} competency</p>
                       {current.waived ? (
                         <div data-testid="waived-panel">

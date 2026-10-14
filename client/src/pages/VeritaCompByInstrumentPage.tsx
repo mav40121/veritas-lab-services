@@ -13,7 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-interface Row { instrumentId: number; instrumentName: string; department: string | null; complexity: string | null; people: number; signed: number; ready: number; overdue: number; }
+interface Row { instrumentId: number; instrumentName: string; department: string | null; complexity: string | null; people: number; signed: number; ready: number; overdue: number; groupId?: number | null; groupMembers?: Array<{ id: number; name: string }> | null; }
 
 export default function VeritaCompByInstrumentPage() {
   const activeLabId = useActiveLabId();
@@ -56,8 +56,8 @@ export default function VeritaCompByInstrumentPage() {
               <Link key={r.instrumentId} href={labRoute(`/veritacomp-app/instrument/${r.instrumentId}`)} data-testid="instrument-row"
                 className="flex items-center justify-between gap-3 rounded-md border p-3 hover:border-primary/40 transition-colors">
                 <div>
-                  <div className="text-sm font-medium">{r.instrumentName}</div>
-                  <div className="text-[11px] text-muted-foreground">{r.complexity || "Complexity not set"}</div>
+                  <div className="text-sm font-medium flex items-center gap-2">{r.instrumentName}{r.groupMembers?.length ? <Badge className="text-[9px] bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300" data-testid="group-badge">GROUP</Badge> : null}</div>
+                  <div className="text-[11px] text-muted-foreground">{r.groupMembers?.length ? `${r.groupMembers.map((m) => m.name).join(", ")} \u00b7 ` : ""}{r.complexity || "Complexity not set"}</div>
                 </div>
                 <div className="flex items-center gap-2">
                   {r.people === 0 ? (

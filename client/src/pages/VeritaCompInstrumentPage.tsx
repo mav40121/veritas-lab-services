@@ -57,7 +57,7 @@ interface TestSystem extends MethodSignState {
   signoffs: SignedSet[]; lastSignoff: SignedSet | null;
 }
 interface Person { employee: { id: number; name: string; title: string | null }; testSystem: TestSystem; }
-interface InstrumentView { instrument: { id: number; name: string; department: string | null }; elementCount: number; people: Person[]; }
+interface InstrumentView { instrument: { id: number; name: string; department: string | null; groupId?: number | null; groupMembers?: Array<{ id: number; name: string }> | null }; elementCount: number; people: Person[]; }
 
 function statusBadge(status: string) {
   const cls = status === "pass" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
@@ -111,7 +111,9 @@ export default function VeritaCompInstrumentPage() {
               <h1 className="text-2xl font-bold" data-testid="instrument-name">{data.instrument.name}</h1>
               {data.instrument.department && <span className="text-sm text-muted-foreground">{data.instrument.department}</span>}
               {ts && <Badge variant="outline" className="text-[10px]">{ts.complexity}</Badge>}
+              {data.instrument.groupMembers?.length ? <Badge className="text-[10px] bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300" data-testid="group-badge">GROUP</Badge> : null}
             </div>
+            {data.instrument.groupMembers?.length ? <p className="text-xs text-muted-foreground" data-testid="group-members">{data.instrument.groupMembers.map((m) => m.name).join(", ")}: one competency covers {data.instrument.groupMembers.length === 2 ? "both" : "all of them"}.</p> : null}
             <p className="text-sm text-muted-foreground mt-1" data-testid="instrument-summary">
               {people.length === 0 ? "No one is assigned to this instrument yet."
                 : `${signedCount} of ${people.length} assigned ${people.length === 1 ? "person" : "people"} signed${readyCount ? `, ${readyCount} ready to sign` : ""}.`}
