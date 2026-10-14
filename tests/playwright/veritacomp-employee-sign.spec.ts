@@ -1,16 +1,15 @@
 // tests/playwright/veritacomp-employee-sign.spec.ts
 //
-// Gate 3 step 8 for the employee-centric Sign & Complete (Phase 3a). Fills every
-// assigned test system complete (via the API), then drives the REAL browser
-// Sign & Complete: opens the panel, enters the evaluator, confirms, and asserts
-// the record shows Signed and locked, and stays locked across reload. The
-// completeness gate is enforced server-side over every assigned instrument.
-// Cleans up after itself (unlock + clear) so the sandbox is left open.
+// Gate 3 step 8 for per-method sign-off (2026-10-13, Michael Q158 = 1; replaces the Phase 3a whole-record Sign &
+// Complete). Completes ONE non-waived test system via the API, then drives the REAL browser sign form on the employee
+// page: the first eligible signer is preselected, Sign stores the sign-off, the method shows "Initial signed" with its
+// next due date, and stays signed across reload while the person's other methods stay open. Cleans up after itself
+// (Unlock, then blank the entries) so the sandbox is left as it was.
 //
-// Env-gated: PW_TOKEN (writer/LD) + PW_LAB_ID + PW_EMPLOYEE_ID (an employee with
-// >=1 assigned instrument). Skips otherwise (so it is inert in CI).
+// Env-gated: PW_TOKEN (writer/LD) + PW_LAB_ID + PW_EMPLOYEE_ID (an employee with >=1 assigned non-waived instrument and
+// at least one eligible signer for it in VeritaStaff). Skips otherwise (so it is inert in CI).
 //
-//   PW_TOKEN=... PW_LAB_ID=3 PW_EMPLOYEE_ID=25 npx playwright test veritacomp-employee-sign
+//   PW_TOKEN=... PW_LAB_ID=35 PW_EMPLOYEE_ID=... npx playwright test veritacomp-employee-sign
 
 import { test, expect } from "@playwright/test";
 import { injectAuth } from "./_auth";
@@ -36,34 +35,23 @@ function elementData(num: number): any {
   }
 }
 
-test.describe("VeritaComp: employee-centric Sign & Complete", () => {
+test.describe("VeritaComp: per-method sign-off", () => {
   test.beforeEach(() => {
     test.skip(!TOKEN || !LAB || !EMP, "Set PW_TOKEN, PW_LAB_ID, PW_EMPLOYEE_ID to run the sign check.");
   });
 
-  test("completing every test system enables sign, and signing locks the record", async ({ browser, request }) => {
+  test("a complete method can be signed on its own, and stays signed across reload", async ({ browser, request }) => {
     const auth = { Authorization: `Bearer ${TOKEN}` };
     const empUrl = `${BASE}/api/labs/${LAB}/competency/employee/${EMP}`;
-
-    // Start from an open record: if the latest is locked, unlock it first.
-    let g = await (await request.get(empUrl, { headers: auth })).json();
-    if (g.record?.locked && g.record?.assessmentId) {
-      await request.post(`${BASE}/api/labs/${LAB}/competency/assessments/${g.record.assessmentId}/unlock`, { headers: auth });
-      g = await (await request.get(empUrl, { headers: auth })).json();
-    }
+    const g = await (await request.get(empUrl, { headers: auth })).json();
     const elementCount: number = g.elementCount || 6;
-    const systems: any[] = g.testSystems || [];
-    test.skip(systems.length === 0, "No assigned test systems for this employee.");
+    // An unsigned, non-waived method with an eligible signer.
+    const ts = (g.testSystems || []).find((t: any) => !t.waived && !t.lastSignoff && (t.signers || []).some((o: any) => o.eligible));
+    test.skip(!ts, "No unsigned non-waived method with an eligible signer for this employee.");
+    const elements = Array.from({ length: elementCount }, (_, i) => elementData(i + 1));
+    const put = await request.put(`${empUrl}/test-system/${ts.instrumentId}`, { headers: auth, data: { elements } });
+    expect(put.ok(), `PUT instrument ${ts.instrumentId} => ${put.status()}`).toBeTruthy();
 
-    // Complete every assigned test system via the API (the sign gate needs all).
-    for (const ts of systems) {
-      const elements = [];
-      for (let n = 1; n <= elementCount; n++) elements.push(elementData(n));
-      const r = await request.put(`${BASE}/api/labs/${LAB}/competency/employee/${EMP}/test-system/${ts.instrumentId}`, { headers: auth, data: { elements } });
-      expect(r.ok(), `PUT instrument ${ts.instrumentId} => ${r.status()}`).toBeTruthy();
-    }
-
-    // Browser: the real Sign & Complete flow.
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 1000 } });
     const page = await ctx.newPage();
     const errors: string[] = [];
@@ -71,35 +59,29 @@ test.describe("VeritaComp: employee-centric Sign & Complete", () => {
     await injectAuth(page, BASE, TOKEN!);
     await page.goto(`${BASE}/labs/${LAB}/veritacomp-app/employee/${EMP}`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(2500);
+    await page.getByTestId("test-system-tab").filter({ hasText: ts.instrumentName }).first().click();
+    await expect(page.getByTestId("method-sign-form")).toBeVisible({ timeout: 8000 });
+    await expect(page.getByTestId("signer-select")).not.toHaveValue("");
+    await page.getByTestId("sign-method").click();
+    await expect(page.getByTestId("method-signed")).toBeVisible({ timeout: 8000 });
+    await expect(page.getByTestId("method-signed")).toContainText(/Initial signed/);
+    await expect(page.getByTestId("method-next-due")).toContainText(/due/);
 
-    const signBtn = page.locator('[data-testid="open-sign"]');
-    await expect(signBtn).toBeVisible({ timeout: 8000 });
-    await expect(signBtn).toBeEnabled();
-    await signBtn.click();
-    await page.locator('[data-testid="eval-name"]').fill("Michael Veri");
-    await page.locator('[data-testid="eval-title"]').fill("Technical Supervisor");
-    await page.locator('[data-testid="eval-initials"]').fill("MV");
-    await page.locator('[data-testid="confirm-sign"]').click();
-    await expect(page.locator('[data-testid="signed-banner"]')).toBeVisible({ timeout: 8000 });
-    await expect(page.getByText(/Signed and complete/i).first()).toBeVisible();
-
-    // Locked state persists across reload.
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.waitForTimeout(2000);
-    await expect(page.locator('[data-testid="signed-banner"]')).toBeVisible({ timeout: 8000 });
+    await page.getByTestId("test-system-tab").filter({ hasText: ts.instrumentName }).first().click();
+    await expect(page.getByTestId("method-signed")).toBeVisible({ timeout: 8000 });
     expect(errors, `page errors: ${errors.join("; ")}`).toHaveLength(0);
     await ctx.close();
 
-    // Confirm server-side lock, then clean up: unlock + clear each instrument.
+    // Server-side: this method signed, the others not touched by it. Then clean up: Unlock, blank the entries.
     const after = await (await request.get(empUrl, { headers: auth })).json();
-    expect(after.record?.locked, "record locked server-side").toBeTruthy();
-    if (after.record?.assessmentId) {
-      await request.post(`${BASE}/api/labs/${LAB}/competency/assessments/${after.record.assessmentId}/unlock`, { headers: auth });
+    const signed = (after.testSystems || []).find((t: any) => t.instrumentId === ts.instrumentId);
+    expect(signed?.lastSignoff?.milestone, "method signed server-side").toBe("initial");
+    if (signed?.lastSignoff?.id) {
+      await request.post(`${empUrl}/test-system/${ts.instrumentId}/signoffs/${signed.lastSignoff.id}/revoke`, { headers: auth });
     }
-    for (const ts of systems) {
-      const blank = [];
-      for (let n = 1; n <= elementCount; n++) blank.push({ num: n });
-      await request.put(`${BASE}/api/labs/${LAB}/competency/employee/${EMP}/test-system/${ts.instrumentId}`, { headers: auth, data: { elements: blank } });
-    }
+    const blank = Array.from({ length: elementCount }, (_, i) => ({ num: i + 1 }));
+    await request.put(`${empUrl}/test-system/${ts.instrumentId}`, { headers: auth, data: { elements: blank } });
   });
 });

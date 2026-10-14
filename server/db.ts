@@ -1510,6 +1510,9 @@ const newCompItemCols: [string, string][] = [
   // key by the TEST SYSTEM = VeritaMap instrument, not a hand-built method group.
   // Nullable; legacy program-based items leave it null (they use method_group_id).
   ["instrument_id", "INTEGER"],
+  // Per-method sign-off (2026-10-13, Michael Q158 = 1): the items a method was signed on point at that sign-off and are
+  // frozen. NULL = the working set still being entered for the method's next competency.
+  ["signoff_id", "INTEGER"],
 ];
 for (const [col, colType] of newCompItemCols) {
   if (!compItemColNames.includes(col)) {
@@ -1521,6 +1524,43 @@ for (const [col, colType] of newCompItemCols) {
 // program holds employee-per-cycle records (auto-created, hidden from the program
 // list). Flag it so it is excluded from the program picker and can be resolved.
 try { sqlite.exec("ALTER TABLE competency_programs ADD COLUMN is_implicit INTEGER NOT NULL DEFAULT 0"); } catch {}
+
+// Per-method competency sign-off (2026-10-13, Michael Q156/Q158): one row per person, per method (instrument), per
+// competency (initial, 6-month, first annual, annual). Signing freezes that method's items (items.signoff_id); the
+// person's other methods stay open. revoked_at reopens the method (Unlock). The signer is a VeritaStaff person whose
+// role qualifies for the method's complexity (shared/competencySignoff.ts); name and role are kept as signed.
+sqlite.exec(`CREATE TABLE IF NOT EXISTS competency_method_signoffs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  lab_id INTEGER NOT NULL,
+  staff_employee_id INTEGER NOT NULL,
+  instrument_id INTEGER NOT NULL,
+  assessment_id INTEGER,
+  milestone TEXT NOT NULL,
+  signed_date TEXT NOT NULL,
+  signer_staff_employee_id INTEGER,
+  signer_name TEXT NOT NULL,
+  signer_role TEXT NOT NULL,
+  signer_initials TEXT,
+  complexity TEXT,
+  documentation TEXT,
+  signed_by_user_id INTEGER,
+  revoked_at TEXT,
+  revoked_by_user_id INTEGER,
+  created_at TEXT NOT NULL
+)`);
+{
+  const cmsCols = (sqlite.prepare("PRAGMA table_info(competency_method_signoffs)").all() as any[]).map((c: any) => c.name);
+  const cmsGuard = (name: string, decl: string) => { if (!cmsCols.includes(name)) { try { sqlite.exec(`ALTER TABLE competency_method_signoffs ADD COLUMN ${decl}`); } catch {} } };
+  cmsGuard("assessment_id", "assessment_id INTEGER");
+  cmsGuard("signer_staff_employee_id", "signer_staff_employee_id INTEGER");
+  cmsGuard("signer_initials", "signer_initials TEXT");
+  cmsGuard("complexity", "complexity TEXT");
+  cmsGuard("documentation", "documentation TEXT");
+  cmsGuard("signed_by_user_id", "signed_by_user_id INTEGER");
+  cmsGuard("revoked_at", "revoked_at TEXT");
+  cmsGuard("revoked_by_user_id", "revoked_by_user_id INTEGER");
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_cms_lab_emp_inst ON competency_method_signoffs(lab_id, staff_employee_id, instrument_id)"); } catch {}
+}
 
 // VeritaComp Customer-Blockers Wave (2026-06-05): completion sign-off and
 // review-period columns on competency_assessments. Customer report from

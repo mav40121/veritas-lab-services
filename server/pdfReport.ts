@@ -5387,28 +5387,34 @@ export async function generateCompetencyPDF(input: CompetencyPDFInput, licenseCt
   }
 }
 
-// ─── Employee-centric competency RECORD (Phase 3b, 2026-09-27) ───────────────
-// One document per employee per cycle: a test-system x element matrix plus the
-// single evaluator sign-off on page 1 (CLAUDE.md section 5). Distinct from the
-// per-assessment generateCompetencyPDF above; this renders the coverage-derived,
-// instrument-keyed record the employee-centric UI produces.
+// ─── Employee-centric competency RECORD (Phase 3b 2026-09-27; per-method sign-off 2026-10-13) ───
+// One document per employee: a method x element matrix with each method's own sign-off, and a sign-off line per
+// method on page 1 (CLAUDE.md section 5). Distinct from the per-assessment generateCompetencyPDF above; this renders
+// the coverage-derived, instrument-keyed record the employee-centric UI produces.
 
+interface RecordSignoff {
+  legacy?: boolean; milestone: string | null; signedDate: string | null;
+  signerName: string | null; signerRole: string | null; signerInitials: string | null;
+  elements?: Array<{ num: number; status: string }>;
+  waivedPassed?: number | null;
+  waivedMethods?: Array<{ num: number; name: string; date: string; status: string }>;
+}
 interface EmployeeCompetencyRecordInput {
   labName: string;
   cliaNumber?: string;
-  employee: { name: string; title: string | null; complexity: string };
+  employee: { name: string; title: string | null; complexity: string; hireDate?: string | null };
   elementCount: number;
-  record: {
-    locked: boolean; completionDate: string | null;
-    evaluatorName: string | null; evaluatorTitle: string | null; evaluatorInitials: string | null;
-    signedOnPaperDate: string | null;
-  } | null;
   testSystems: Array<{
     instrumentName: string; department: string | null; complexity: string; analyteCount: number;
     elements: Array<{ num: number; status: string }>;
+    hasData?: boolean; complete?: boolean; signable?: boolean;
     // #91: an all-waived test system carries two-of-four waived methods instead of elements.
     waived?: boolean; waivedRequired?: number; waivedPassed?: number;
     waivedMethods?: Array<{ num: number; name: string; date: string; status: string }>;
+    // Per-method sign-off (2026-10-13): newest first; the method's next competency and due date.
+    signoffs?: RecordSignoff[];
+    nextMilestone?: string | null;
+    nextDue?: { targetDate: string | null; latest: string | null } | null;
   }>;
 }
 
@@ -5422,17 +5428,16 @@ const EMP_REC_ELEMENT_NAMES: Record<number, string> = {
   7: "Safe work practices (NYS)",
   8: "Delegated supervisory functions (NYS)",
 };
+const EMP_REC_MILESTONE: Record<string, string> = { initial: "Initial", six_month: "6-month", first_annual: "First annual", annual: "Annual" };
+const EMP_REC_ROLE: Record<string, string> = { LD: "Laboratory Director", TC: "Technical Consultant", TS: "Technical Supervisor", GS: "General Supervisor" };
 
+// One document per employee: every assigned method with its latest sign-off (assessment, signer, date, next due), and
+// one evaluator sign-off line per method on page 1 (CLAUDE.md section 5). Methods are signed off separately (per-method
+// sign-off, 2026-10-13); an unsigned method keeps a blank line so the record can also be signed on paper.
 export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecordInput): string {
   const elementCount = input.elementCount === 8 ? 8 : 6;
   const cliaDisplay = input.cliaNumber ? esc(input.cliaNumber) : "Not on file - enter in account settings";
-  const signed = !!input.record?.locked;
-  const completionDate = input.record?.completionDate ? String(input.record.completionDate).slice(0, 10) : "";
-  const evalName = esc(input.record?.evaluatorName || "");
-  const evalTitle = esc(input.record?.evaluatorTitle || "");
-  const evalInitials = esc(input.record?.evaluatorInitials || "");
-  const signedOnPaper = input.record?.signedOnPaperDate ? String(input.record.signedOnPaperDate).slice(0, 10) : "";
-  const today = new Date().toISOString().slice(0, 10);
+  const today = labLocalDate(new Date().toISOString());
 
   const chip = (s: string): string => {
     if (s === "pass") return `<span class="chip c-pass">PASS</span>`;
@@ -5440,50 +5445,49 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
     if (s === "fail") return `<span class="chip c-fail">FAIL</span>`;
     return `<span class="chip c-inc">-</span>`;
   };
-
-  let anyIncompleteOverall = false;
   const anyWaived = input.testSystems.some((ts) => ts.waived);
   const anyElements = input.testSystems.some((ts) => !ts.waived);
+  const ms = (m: string | null | undefined) => (m ? EMP_REC_MILESTONE[m] || m : "");
+  const role = (r: string | null | undefined) => (r ? EMP_REC_ROLE[r] || r : "");
+  const abbr = (r: string | null | undefined) => (r && EMP_REC_ROLE[r] ? r : r || "");
+  const shortName = (n: string | null | undefined) => {
+    const parts = String(n || "").trim().split(/\s+/).filter(Boolean);
+    return parts.length > 1 ? `${parts[0][0]}. ${parts.slice(1).join(" ")}` : parts.join(" ");
+  };
+
+  let signedCount = 0;
+  const signLines: string[] = [];
   const rows = input.testSystems.map((ts) => {
-    if (ts.waived) {
-      // #91: one cell spanning the element columns lists the passed waived methods.
-      const required = ts.waivedRequired || 2;
-      const passedCount = ts.waivedPassed || 0;
-      const passedNames = (ts.waivedMethods || []).filter((m) => m.status === "pass").map((m) => `${esc(m.name)}${m.date ? ` (${esc(String(m.date).slice(0, 10))})` : ""}`);
-      const anyFailW = (ts.waivedMethods || []).some((m) => m.status === "fail");
-      const incW = passedCount < required;
-      if (incW) anyIncompleteOverall = true;
-      const resultW = incW ? "In progress" : anyFailW ? "Not competent" : "Competent";
-      const rClassW = incW ? "c-amber" : anyFailW ? "c-fail" : "c-pass";
-      const deptW = ts.department ? esc(ts.department) : "";
-      return `<tr>
-      <td class="sys"><b>${esc(ts.instrumentName)}</b><span>${[deptW, esc(ts.complexity), `${ts.analyteCount} analyte${ts.analyteCount === 1 ? "" : "s"}`].filter(Boolean).join(" &middot; ")}</span></td>
-      <td colspan="${anyElements ? elementCount : 1}" style="text-align:left;"><b>Waived testing: ${passedCount} of ${required} required methods passed.</b>${passedNames.length ? ` ${passedNames.join("; ")}` : ""}</td>
-      <td><span class="chip ${rClassW}">${resultW}</span></td>
-    </tr>`;
-    }
-    const cells: string[] = [];
-    for (let el = 1; el <= elementCount; el++) {
-      const e = ts.elements.find((x) => x.num === el);
-      cells.push(`<td>${chip(e?.status || "incomplete")}</td>`);
-    }
-    const anyInc = Array.from({ length: elementCount }, (_, i) => ts.elements.find((x) => x.num === i + 1)?.status || "incomplete").some((s) => s === "incomplete");
-    const anyFail = ts.elements.some((x) => x.status === "fail");
-    if (anyInc) anyIncompleteOverall = true;
-    const result = anyInc ? "In progress" : anyFail ? "Not competent" : "Competent";
-    const rClass = anyInc ? "c-amber" : anyFail ? "c-fail" : "c-pass";
-    const dept = ts.department ? esc(ts.department) : "";
+    const last = (ts.signoffs || [])[0] || null;
+    if (last) signedCount++;
+    // A signed method shows the set it was signed on; an unsigned one shows the entries so far.
+    const statuses = last ? (last.elements || []) : ts.elements;
+    const wPassed = last ? (last.waivedPassed ?? 0) : (ts.waivedPassed || 0);
+    const wMethods = last ? (last.waivedMethods || []) : (ts.waivedMethods || []);
+    const required = ts.waivedRequired || 2;
+    const assessment = last ? (last.legacy ? "Signed" : ms(last.milestone)) : ms(ts.nextMilestone || "initial");
+    const result = last ? `<span class="chip c-pass">Competent</span>`
+      : ts.signable ? `<span class="chip c-teal">Ready to sign</span>`
+      : ts.hasData ? `<span class="chip c-amber">In progress</span>`
+      : `<span class="chip c-inc">Not started</span>`;
+    const nextDue = last && ts.nextDue?.targetDate ? `${ms(ts.nextMilestone)}<br>${esc(ts.nextDue.targetDate)}` : "";
+    const meta = [ts.department ? esc(ts.department) : "", esc(ts.complexity), `${ts.analyteCount} analyte${ts.analyteCount === 1 ? "" : "s"}`].filter(Boolean).join(" &middot; ");
+    const cells = ts.waived
+      ? `<td colspan="${anyElements ? elementCount : 1}" style="text-align:left;"><b>Waived testing: ${wPassed} of ${required} required methods passed.</b>${wMethods.filter((m) => m.status === "pass").length ? ` ${wMethods.filter((m) => m.status === "pass").map((m) => `${esc(m.name)}${m.date ? ` (${esc(String(m.date).slice(0, 10))})` : ""}`).join("; ")}` : ""}</td>`
+      : Array.from({ length: elementCount }, (_, i) => `<td>${chip(statuses.find((x) => x.num === i + 1)?.status || "incomplete")}</td>`).join("");
+    signLines.push(`<tr><td>${esc(ts.instrumentName)}</td><td>${assessment}</td><td>${last ? esc(last.signerName || "") : ""}</td><td>${last ? esc(role(last.signerRole)) : ""}</td><td>${last ? esc(last.signerInitials || "") : ""}</td><td>${last ? esc(last.signedDate || "") : ""}</td></tr>`);
     return `<tr>
-      <td class="sys"><b>${esc(ts.instrumentName)}</b><span>${[dept, esc(ts.complexity), `${ts.analyteCount} analyte${ts.analyteCount === 1 ? "" : "s"}`].filter(Boolean).join(" &middot; ")}</span></td>
-      ${cells.join("")}
-      <td><span class="chip ${rClass}">${result}</span></td>
+      <td class="sys"><b>${esc(ts.instrumentName)}</b><span>${meta}</span></td>
+      ${cells}
+      <td>${assessment}</td><td>${result}</td>
+      <td style="text-align:left;">${last ? `${esc(shortName(last.signerName))}${last.signerRole ? `, ${esc(abbr(last.signerRole))}` : ""}` : ""}</td>
+      <td class="nw">${last ? esc(last.signedDate || "") : ""}</td><td class="nw">${nextDue}</td>
     </tr>`;
   }).join("");
 
-  // #91: an all-waived employee gets one "Waived methods" column instead of the element columns.
   const elHeaders = anyElements ? Array.from({ length: elementCount }, (_, i) => `<th>El ${i + 1}</th>`).join("") : `<th>Waived methods</th>`;
   const legend = anyElements ? Array.from({ length: elementCount }, (_, i) => `<div>El ${i + 1}: ${EMP_REC_ELEMENT_NAMES[i + 1]}</div>`).join("") : "";
-  const statusText = signed ? "Signed and complete" : anyIncompleteOverall ? "In progress" : "Complete, awaiting sign-off";
+  const colCount = (anyElements ? elementCount : 1) + 6;
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8" />
   <style>
@@ -5497,35 +5501,36 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
     .meta { border:1px solid #D0D0D0; border-top:none; padding:8px 12px; display:grid; grid-template-columns: repeat(4, 1fr); gap:6px 14px; }
     .meta div span { color:#6b6b6b; font-size:8.5px; display:block; text-transform:uppercase; letter-spacing:.4px; }
     .meta div b { font-size:10.5px; font-weight:600; }
-    .signedbar { margin-top:8px; border:1px solid #9fcdb0; background:#eef7f0; border-radius:4px; padding:7px 11px; font-size:9px; color:#2f6b45; }
     .reg { font-size:8.5px; color:#6b6b6b; margin:8px 2px 4px; }
     h2 { color:#01696F; font-size:11px; margin:12px 2px 5px; text-transform:uppercase; letter-spacing:.5px; }
-    table { width:100%; border-collapse:collapse; }
-    th, td { border:1px solid #D0D0D0; padding:5px 6px; text-align:center; vertical-align:middle; }
-    th { background:#E6F2F2; color:#01696F; font-size:8.5px; text-transform:uppercase; letter-spacing:.3px; }
-    td.sys { text-align:left; }
-    td.sys b { font-size:10px; }
-    td.sys span { color:#6b6b6b; font-size:8.5px; display:block; }
-    tr:nth-child(even) td { background:#F4F9F9; }
-    .chip { display:inline-block; padding:1px 7px; border-radius:9px; font-size:8.5px; font-weight:700; }
+    table.m { width:100%; border-collapse:collapse; font-size:9.5px; }
+    table.m th, table.m td { border:1px solid #D0D0D0; padding:4px 4px; text-align:center; vertical-align:middle; }
+    table.m th { background:#E6F2F2; color:#01696F; font-size:8px; text-transform:uppercase; letter-spacing:.2px; }
+    table.m td.sys { text-align:left; }
+    td.sys b { font-size:9.5px; }
+    td.sys span { color:#6b6b6b; font-size:8px; display:block; }
+    table.m tr:nth-child(even) td { background:#F4F9F9; }
+    .nw { white-space:nowrap; }
+    .chip { display:inline-block; padding:1px 6px; border-radius:9px; font-size:8px; font-weight:700; }
     .c-pass { background:#E4F0DA; color:#437A22; }
     .c-na { background:#EDEDEC; color:#7A7974; }
     .c-fail { background:#F7E1EE; color:#A12C7B; }
     .c-inc { background:#F3EAD9; color:#964219; }
     .c-amber { background:#F3EAD9; color:#964219; }
-    .legend { font-size:8.5px; color:#6b6b6b; margin:6px 2px; display:grid; grid-template-columns: 1fr 1fr; gap:1px 18px; }
-    .sign { border:1.5px solid #01696F; border-radius:4px; margin-top:12px; page-break-inside:avoid; }
+    .c-teal { background:#d8eeee; color:#01696F; }
+    .legend { font-size:8.3px; color:#6b6b6b; margin:6px 2px; display:grid; grid-template-columns: 1fr 1fr; gap:1px 18px; }
+    .sign { border:1.5px solid #01696F; border-radius:4px; margin-top:10px; page-break-inside:avoid; }
     .sign .h { background:#01696F; color:#fff; padding:5px 10px; font-size:10px; font-weight:700; letter-spacing:.5px; }
-    .sign .body { padding:9px 11px; }
-    .attest { font-size:8.5px; margin:0 0 10px; }
-    .sigrow { display:grid; grid-template-columns: 2fr 1.4fr 0.7fr 1fr; gap:14px; align-items:end; }
-    .sigrow .f span { color:#6b6b6b; font-size:8px; display:block; text-transform:uppercase; letter-spacing:.4px; margin-bottom:1px; }
-    .sigrow .f .val { border-bottom:1px solid #333; min-height:16px; font-size:10.5px; padding-bottom:1px; font-weight:600; }
+    .sign .body { padding:8px 10px; }
+    .attest { font-size:8.5px; margin:0 0 6px; }
+    .sign table { width:100%; border-collapse:collapse; font-size:9.5px; }
+    .sign th { text-align:left; font-size:8px; color:#6b6b6b; text-transform:uppercase; letter-spacing:.3px; padding:3px 4px; border-bottom:1px solid #D0D0D0; }
+    .sign td { padding:5px 4px; border-bottom:1px solid #999; font-weight:600; height:20px; }
   </style></head><body>
     <div class="band">
       <div>
         <h1>VeritaComp&trade; Employee Competency Record</h1>
-        <div class="sub">One record per employee per cycle, covering every assigned test system</div>
+        <div class="sub">Each method is signed off on its own; every assigned method is listed</div>
       </div>
       <div class="lab">
         <b>${esc(input.labName)}</b>
@@ -5535,31 +5540,26 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
     <div class="meta">
       <div><span>Employee</span><b>${esc(input.employee.name) || "&nbsp;"}</b></div>
       <div><span>Title</span><b>${esc(input.employee.title || "") || "&nbsp;"}</b></div>
-      <div><span>Highest complexity</span><b>${esc(input.employee.complexity || "") || "&nbsp;"}</b></div>
-      <div><span>Status</span><b>${statusText}</b></div>
-      <div><span>Test systems</span><b>${input.testSystems.length} assigned</b></div>
-      <div><span>Elements per system</span><b>${anyElements ? `${elementCount} (${elementCount === 8 ? "NYS CLEP" : "CLIA"})` : ""}${anyElements && anyWaived ? "; " : ""}${anyWaived ? "Waived: 2 of 4 methods" : ""}</b></div>
-      <div><span>Completion date</span><b>${completionDate || "&nbsp;"}</b></div>
-      <div><span>Signed on paper</span><b>${signedOnPaper || "&nbsp;"}</b></div>
+      <div><span>Highest complexity</span><b>${esc(({ H: "HIGH", M: "MODERATE", W: "WAIVED" } as Record<string, string>)[String(input.employee.complexity || "").toUpperCase()] || input.employee.complexity || "") || "&nbsp;"}</b></div>
+      <div><span>Status</span><b>${signedCount} of ${input.testSystems.length} methods signed</b></div>
+      <div><span>Methods</span><b>${input.testSystems.length} assigned</b></div>
+      <div><span>Elements per method</span><b>${anyElements ? `${elementCount} (${elementCount === 8 ? "NYS CLEP" : "CLIA"})` : ""}${anyElements && anyWaived ? "; " : ""}${anyWaived ? "Waived: 2 of 4 methods" : ""}</b></div>
+      <div><span>Hire date</span><b>${esc(input.employee.hireDate || "") || "&nbsp;"}</b></div>
+      <div><span>&nbsp;</span><b>&nbsp;</b></div>
     </div>
-    ${signed ? `<div class="signedbar"><b>Signed and complete for this cycle.</b> Evaluator: ${evalName || "(recorded)"}${evalTitle ? `, ${evalTitle}` : ""}${completionDate ? ` on ${completionDate}` : ""}.</div>` : ""}
-    <div class="reg">Technical competency assessed per 42 CFR 493.1235. The required procedures are shown per test system; N/A elements carry a recorded justification. Analytes run the same way on one instrument are covered by a single test-system competency.${anyWaived ? " Waived test systems are assessed by two of four methods (blind specimen testing, periodic observation by supervisor, monitoring of QC performance, written test) under the accreditor's waived-testing standard." : ""}</div>
-    <h2>Competency by test system</h2>
-    <table>
-      <thead><tr><th style="width:30%">Test system</th>${elHeaders}<th style="width:12%">Result</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="${elementCount + 2}" style="color:#6b6b6b;padding:10px;">No assigned test systems.</td></tr>`}</tbody>
+    <div class="reg">Technical competency assessed per 42 CFR 493.1235. Each method is evaluated and signed off separately; N/A elements carry a recorded justification. A method covers every analyte run the same way on the instrument it names.${anyWaived ? " Waived test systems are assessed by two of four methods (blind specimen testing, periodic observation by supervisor, monitoring of QC performance, written test) under the accreditor's waived-testing standard." : ""}</div>
+    <h2>Competency by method</h2>
+    <table class="m">
+      <thead><tr><th style="width:22%">Method</th>${elHeaders}<th>Assessment</th><th>Result</th><th style="width:13%">Signed by</th><th>Date</th><th>Next due</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="${colCount}" style="color:#6b6b6b;padding:10px;">No assigned methods.</td></tr>`}</tbody>
     </table>
     <div class="legend">${legend}</div>
     <div class="sign">
-      <div class="h">EVALUATOR SIGN-OFF</div>
+      <div class="h">EVALUATOR SIGN-OFF BY METHOD</div>
       <div class="body">
-        <p class="attest">I attest that the competency assessment shown above was completed for the elements and test systems listed. Final approval and clinical determination must be made by the laboratory director or designee.</p>
-        <div class="sigrow">
-          <div class="f"><span>Evaluator name (signature)</span><div class="val">${evalName || "&nbsp;"}</div></div>
-          <div class="f"><span>Title</span><div class="val">${evalTitle || "&nbsp;"}</div></div>
-          <div class="f"><span>Initials</span><div class="val">${evalInitials || "&nbsp;"}</div></div>
-          <div class="f"><span>Date signed</span><div class="val">${completionDate || "&nbsp;"}</div></div>
-        </div>
+        <p class="attest">Each evaluator attests that the competency assessment for the method on that line was completed for the elements shown. Final approval and clinical determination must be made by the laboratory director or designee.</p>
+        <table><thead><tr><th style="width:28%">Method</th><th style="width:11%">Assessment</th><th style="width:27%">Evaluator name (signature)</th><th>Role</th><th style="width:7%">Initials</th><th style="width:12%">Date signed</th></tr></thead>
+        <tbody>${signLines.join("") || `<tr><td colspan="6">&nbsp;</td></tr>`}</tbody></table>
       </div>
     </div>
   </body></html>`;

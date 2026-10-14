@@ -56,7 +56,8 @@ import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
 import { isValidIfuUrl } from "@shared/ifu";
 import { incompleteElementCells as compIncompleteCells, incompleteElementCellsByInstrument as compIncompleteCellsByInstrument, aggregateElementStatus as compAggregateElementStatus, itemElementStatus as compItemElementStatus, competencyCycleWindowDays, WAIVED_METHOD_NAMES, WAIVED_METHODS_REQUIRED, waivedMethodPassed, waivedPassedCount, methodGroupCoversInstrument } from "@shared/competencyStatus";
-import { competencyDueColumns, competencySeedAtCreate } from "./competencySchedule";
+import { competencyDueColumns, competencySeedAtCreate, nextCompetencyDue } from "./competencySchedule";
+import { methodSignerOptions, nextMilestoneAfter, milestonesForComplexity, MILESTONE_LABEL, type SignerCandidate, type MethodMilestone } from "@shared/competencySignoff";
 
 // Express already URL-decodes route params before the handler runs, so
 // req.params.analyte for a request to ".../IG%25" arrives as "IG%". Calling
@@ -24035,7 +24036,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (accountLabCount(dataUserId) > 1) return res.status(409).json({ error: "This account manages multiple labs. Open the lab first so this change is scoped to the correct one, then retry.", multiLab: true });
     if (assessment.locked === 1) return res.status(409).json({ error: "Assessment is already signed and locked" });
     const now = new Date().toISOString();
-    const todayDate = now.slice(0, 10);
+    // BUG-047: "today" in the lab's time zone, not UTC, so an evening sign dated today is not read as back-dated.
+    const todayDate = labLocalDate(now);
     // Prior approval: a competency that was signed on paper on an earlier date
     // and is being entered into the system now. The historical paper date goes
     // in signed_on_paper_date; completion_date stays the true in-system entry
@@ -24427,7 +24429,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
     }
     const now = new Date().toISOString();
-    const todayDate = now.slice(0, 10);
+    // BUG-047: "today" in the lab's time zone, not UTC, so an evening sign dated today is not read as back-dated.
+    const todayDate = labLocalDate(now);
     const signedOnPaperRaw = typeof req.body?.signed_on_paper_date === "string" ? req.body.signed_on_paper_date.trim() : "";
     const isBackDated = !!signedOnPaperRaw && signedOnPaperRaw.slice(0, 10) !== todayDate;
     const documentation = typeof req.body?.documentation === "string" ? req.body.documentation.trim() : "";
@@ -27829,6 +27832,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const d = new Date(first.adate); const dms = Number.isNaN(d.getTime()) ? 0 : d.getTime();
       noteAssessed(implicitByStaffId, first.staff_id, Number(first.instrument_id), dms);
     }
+    // Per-method sign-off (2026-10-13): each active sign-off counts the method assessed as of its signed date. A method
+    // can only be signed once its elements are complete, so every sign-off is a competent one.
+    for (const s of client.prepare(
+      "SELECT staff_employee_id, instrument_id, signed_date FROM competency_method_signoffs WHERE lab_id = ? AND revoked_at IS NULL AND signed_date >= ?"
+    ).all(labId, widestCycleStart) as any[]) {
+      const d = new Date(s.signed_date); const dms = Number.isNaN(d.getTime()) ? 0 : d.getTime();
+      noteAssessed(implicitByStaffId, Number(s.staff_employee_id), Number(s.instrument_id), dms);
+    }
     const implicitProgram = client.prepare("SELECT id, name FROM competency_programs WHERE lab_id = ? AND is_implicit = 1 LIMIT 1").get(labId) as any;
 
     const rankComplexity = (c: string): number => {
@@ -27948,6 +27959,43 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // record's lock/sign state. Used by the GET below AND the record PDF route so
   // the on-screen view and the printed record never drift. Returns null when the
   // employee is not found in this lab.
+  // Who may sign a method's competency (per-method sign-off, 2026-10-13): this lab's active VeritaStaff people holding
+  // LD/TC/TS/GS roles (the CMS-209 roles), whether an active Letter of Delegation gives a GS competency evaluation, and
+  // the designated medical director when they are not on the roster. shared/competencySignoff.ts applies the rules.
+  const loadCompetencySignerCandidates = (sqlite: any, labId: number): SignerCandidate[] => {
+    const rows = sqlite.prepare(
+      `SELECT e.id, e.first_name, e.last_name, r.role, r.specialty_number, r.all_specialties
+       FROM staff_roles r JOIN staff_employees e ON e.id = r.employee_id
+       WHERE e.tier2_lab_id = ? AND e.status = 'active' AND r.role IN ('LD','TC','TS','GS')`
+    ).all(labId) as any[];
+    const gsDelegated = new Set<number>();
+    for (const d of sqlite.prepare(
+      "SELECT delegate_staff_employee_id, responsibilities_json FROM director_delegations WHERE lab_id = ? AND status = 'active' AND position = 'general_supervisor' AND delegate_staff_employee_id IS NOT NULL"
+    ).all(labId) as any[]) {
+      let resp: any = {};
+      try { resp = JSON.parse(d.responsibilities_json || "{}"); } catch { /* ignore */ }
+      if (resp.gs_orientation_training === true) gsDelegated.add(Number(d.delegate_staff_employee_id));
+    }
+    const lab = sqlite.prepare("SELECT medical_director_name FROM labs WHERE id = ?").get(labId) as any;
+    const mdName = String(lab?.medical_director_name || "").trim();
+    const byId = new Map<number, SignerCandidate>();
+    for (const r of rows) {
+      let c = byId.get(r.id);
+      if (!c) {
+        c = { staffEmployeeId: r.id, name: `${r.first_name || ""} ${r.last_name || ""}`.trim(), roles: [], gsCompetencyDelegated: gsDelegated.has(r.id) };
+        byId.set(r.id, c);
+      }
+      c.roles.push({ role: r.role, specialty_number: r.specialty_number, all_specialties: r.all_specialties });
+    }
+    const out = Array.from(byId.values());
+    if (mdName) {
+      const match = out.find((c) => c.name.toLowerCase() === mdName.toLowerCase());
+      if (match) match.isMedicalDirector = true;
+      else out.push({ staffEmployeeId: null, name: mdName, roles: [], isMedicalDirector: true });
+    }
+    return out;
+  };
+
   const assembleEmployeeCompetencyView = (sqlite: any, labId: number, empId: number): any | null => {
     const emp = sqlite.prepare(
       "SELECT id, first_name, last_name, middle_initial, title, highest_complexity FROM staff_employees WHERE id = ? AND tier2_lab_id = ? AND status = 'active'"
@@ -27977,16 +28025,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // recent assessment that carries each group). Bridged via competency_employees.
     const compEmp = sqlite.prepare("SELECT id FROM competency_employees WHERE staff_employee_id = ? AND lab_id = ? LIMIT 1").get(empId, labId) as any;
     const itemsByMg = new Map<number, any[]>();
-    const itemsByInstrument = new Map<number, any[]>(); // employee-centric items key by test system
+    const itemsByInstrument = new Map<number, any[]>(); // employee-centric WORKING items (not yet signed) key by test system
+    // Items frozen by a per-method sign-off, and items on a whole-record signed (Phase 3a, locked) record: neither is
+    // the working set. The latter reads as a sign-off made before per-method sign-off existed.
+    const legacyLockedByInstrument = new Map<number, any>();
     let latestAssessmentId: number | null = null;
     if (compEmp) {
       const assessments = sqlite.prepare(
-        `SELECT a.id FROM competency_assessments a JOIN competency_programs p ON p.id = a.program_id
+        `SELECT a.id, a.locked, a.completion_date, a.signed_on_paper_date, a.evaluator_name, a.evaluator_title, a.evaluator_initials, p.is_implicit
+         FROM competency_assessments a JOIN competency_programs p ON p.id = a.program_id
          WHERE a.employee_id = ? AND p.lab_id = ? ORDER BY a.assessment_date DESC, a.id DESC`
       ).all(compEmp.id, labId) as any[];
       for (const a of assessments) {
-        const items = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(a.id) as any[];
-        if (latestAssessmentId == null && items.length) latestAssessmentId = a.id;
+        const allItems = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(a.id) as any[];
+        if (latestAssessmentId == null && allItems.length) latestAssessmentId = a.id;
+        const legacyLocked = a.is_implicit === 1 && a.locked === 1;
+        for (const it of allItems) {
+          if (legacyLocked && it.instrument_id != null && it.signoff_id == null && !legacyLockedByInstrument.has(it.instrument_id)) legacyLockedByInstrument.set(it.instrument_id, a);
+        }
+        const items = allItems.filter((x) => x.signoff_id == null && !(legacyLocked && x.instrument_id != null));
         for (const it of items) {
           if (it.instrument_id != null && !itemsByInstrument.has(it.instrument_id)) {
             itemsByInstrument.set(it.instrument_id, items.filter((x) => x.instrument_id === it.instrument_id));
@@ -28000,6 +28057,70 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const rankC = (c: string): number => { const u = String(c || "").toUpperCase(); return u.startsWith("H") ? 3 : u.startsWith("M") ? 2 : u.startsWith("W") ? 1 : 0; };
     const cLabel = (r: number): string => (r >= 3 ? "HIGH" : r === 2 ? "MODERATE" : r === 1 ? "WAIVED" : "UNSPECIFIED");
     const testsStmt = sqlite.prepare("SELECT DISTINCT analyte, complexity FROM veritamap_instrument_tests WHERE instrument_id = ? AND active = 1");
+
+    // Per-method sign-off (2026-10-13, Michael Q158 = 1): each method's sign-offs, its next competency and due date, and
+    // who may sign it. Due dates come from the same engine VeritaStaff uses (server/competencySchedule.ts), run per
+    // method from that method's own sign-offs.
+    const schedCtx = sqlite.prepare(
+      "SELECT e.hire_date, sl.accreditation_body, sl.includes_nys FROM staff_employees e LEFT JOIN staff_labs sl ON sl.id = e.lab_id WHERE e.id = ?"
+    ).get(empId) as any;
+    const signoffStmt = sqlite.prepare(
+      `SELECT * FROM competency_method_signoffs WHERE lab_id = ? AND staff_employee_id = ? AND instrument_id = ? AND revoked_at IS NULL
+       ORDER BY signed_date DESC, id DESC`
+    );
+    const frozenStmt = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE signoff_id = ?");
+    // The passed waived methods on a signed set, for the record ("Blind specimen testing (2026-10-05)").
+    const waivedSummary = (rows: any[]) => rows.filter((r: any) => r.waived_method_number != null).map((r: any) => ({
+      num: Number(r.waived_method_number), name: WAIVED_METHOD_NAMES[Number(r.waived_method_number) - 1] || "",
+      date: r.waived_date || "", status: waivedMethodPassed(r) ? "pass" : r.passed ? "incomplete" : "fail",
+    }));
+    const signerCandidates = loadCompetencySignerCandidates(sqlite, labId);
+    const today = labLocalDate(new Date().toISOString());
+    const methodSignoffState = (inst: any, complexity: string) => {
+      const rows = signoffStmt.all(labId, empId, inst.id) as any[];
+      const signoffs: any[] = rows.map((s: any) => {
+        const frozen = frozenStmt.all(s.id) as any[];
+        return {
+          id: s.id, legacy: false, milestone: s.milestone, signedDate: s.signed_date,
+          signerName: s.signer_name, signerRole: s.signer_role, signerInitials: s.signer_initials || null,
+          documentation: s.documentation || null,
+          elements: Array.from({ length: elementCount }, (_, i) => ({ num: i + 1, status: compAggregateElementStatus(frozen, i + 1) })),
+          waivedPassed: frozen.some((f: any) => f.waived_method_number != null) ? waivedPassedCount(frozen, inst.id) : null,
+          waivedMethods: waivedSummary(frozen),
+        };
+      });
+      const legacy = legacyLockedByInstrument.get(inst.id);
+      if (!signoffs.length && legacy) {
+        const legacyItems = (sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ? AND instrument_id = ?").all(legacy.id, inst.id) as any[]);
+        signoffs.push({
+          id: null, legacy: true, milestone: null,
+          signedDate: String(legacy.signed_on_paper_date || "").slice(0, 10) || labLocalDate(legacy.completion_date) || null, // BUG-047: lab date
+          signerName: legacy.evaluator_name || null, signerRole: legacy.evaluator_title || null, signerInitials: legacy.evaluator_initials || null,
+          documentation: null,
+          elements: Array.from({ length: elementCount }, (_, i) => ({ num: i + 1, status: compAggregateElementStatus(legacyItems, i + 1) })),
+          waivedPassed: legacyItems.some((f: any) => f.waived_method_number != null) ? waivedPassedCount(legacyItems, inst.id) : null,
+          waivedMethods: waivedSummary(legacyItems),
+        });
+      }
+      const last = signoffs[0] || null;
+      const initial = signoffs.find((s: any) => s.milestone === "initial") || null;
+      const nextMilestone = nextMilestoneAfter(last?.milestone || null, complexity);
+      let nextDue: { targetDate: string | null; latest: string | null } | null = null;
+      if (last && last.milestone && last.signedDate) {
+        const r = nextCompetencyDue({
+          recordedMilestone: last.milestone, recordedDate: last.signedDate, initialDate: initial?.signedDate || null,
+          hireDate: schedCtx?.hire_date || null, highestComplexity: complexity,
+          accreditor: schedCtx?.accreditation_body || null, regime: schedCtx?.includes_nys === 1 ? "NYS-CLEP" : null,
+        });
+        nextDue = { targetDate: r.targetDate, latest: r.latest };
+      }
+      const overdue = !!(nextDue?.latest && today > nextDue.latest);
+      return {
+        signoffs, lastSignoff: last, nextMilestone, nextDue, overdue,
+        signedCurrent: !!last && !overdue,
+        signers: methodSignerOptions(signerCandidates, complexity, inst.category || null, empId),
+      };
+    };
 
     const testSystems = instruments.map((inst: any) => {
       const tests = testsStmt.all(inst.id) as any[];
@@ -28024,6 +28145,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           };
         });
         const passedCount = waivedPassedCount(waivedRows, inst.id);
+        const wComplete = passedCount >= WAIVED_METHODS_REQUIRED;
         return {
           instrumentId: inst.id,
           instrumentName: inst.instrument_name,
@@ -28032,7 +28154,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           analyteCount: analytesLC.length,
           covered: true,
           hasData: waivedMethods.some((m) => m.status !== "unused"),
-          complete: passedCount >= WAIVED_METHODS_REQUIRED,
+          complete: wComplete,
+          signable: wComplete && waivedRows.length > 0,
+          fromLegacyProgram: false,
+          ...methodSignoffState(inst, cLabel(maxRank)),
           waived: true,
           waivedRequired: WAIVED_METHODS_REQUIRED,
           waivedPassed: passedCount,
@@ -28041,7 +28166,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         };
       }
       const instItems: any[] = directItems.length ? directItems : [];
-      if (!instItems.length) { for (const mg of coveringMg) { const its = itemsByMg.get(mg.id); if (its) instItems.push(...its); } }
+      const signState = methodSignoffState(inst, cLabel(maxRank));
+      // Legacy program items still show for a method nobody has entered or signed here yet. They cannot be signed as
+      // they are: the method's data has to be saved on this screen first.
+      let fromLegacyProgram = false;
+      if (!instItems.length && !signState.signoffs.length) {
+        for (const mg of coveringMg) { const its = itemsByMg.get(mg.id); if (its) instItems.push(...its); }
+        fromLegacyProgram = instItems.length > 0;
+      }
       const elements = [];
       for (let el = 1; el <= elementCount; el++) {
         const st = compAggregateElementStatus(instItems, el);
@@ -28064,45 +28196,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         elements.push({ num: el, status: st === "none" ? "incomplete" : st, ...data });
       }
       const incomplete = elements.some((e) => e.status === "incomplete");
+      const complete = !incomplete && instItems.length > 0;
       return {
         instrumentId: inst.id,
         instrumentName: inst.instrument_name,
         department: inst.category || null,
         complexity: cLabel(maxRank),
         analyteCount: analytesLC.length,
-        covered: coveringMg.length > 0 || directItems.length > 0,
+        covered: coveringMg.length > 0 || directItems.length > 0 || signState.signoffs.length > 0,
         hasData: instItems.length > 0,
-        complete: !incomplete && instItems.length > 0,
+        complete,
+        signable: complete && !fromLegacyProgram,
+        fromLegacyProgram,
+        ...signState,
         elements,
       };
     });
 
-    // The signable per-cycle record lives in the per-lab implicit "Competency"
-    // program (created lazily by the first per-test-system save). Surface its
-    // lock/sign state so the employee screen can render Signed vs open and the
-    // Sign & Complete control knows the target assessment.
-    const implicitProg = sqlite.prepare("SELECT id FROM competency_programs WHERE lab_id = ? AND is_implicit = 1 LIMIT 1").get(labId) as any;
-    let record: any = null;
-    if (implicitProg && compEmp) {
-      const a = sqlite.prepare(
-        "SELECT id, locked, completion_date, evaluator_name, evaluator_title, evaluator_initials, signed_on_paper_date FROM competency_assessments WHERE program_id = ? AND employee_id = ? ORDER BY id DESC LIMIT 1"
-      ).get(implicitProg.id, compEmp.id) as any;
-      if (a) record = {
-        assessmentId: a.id,
-        locked: a.locked === 1,
-        completionDate: a.completion_date || null,
-        evaluatorName: a.evaluator_name || null,
-        evaluatorTitle: a.evaluator_title || null,
-        evaluatorInitials: a.evaluator_initials || null,
-        signedOnPaperDate: a.signed_on_paper_date || null,
-      };
-    }
-
     return {
-      employee: { id: emp.id, name: `${emp.first_name || ""} ${emp.last_name || ""}`.trim(), title: emp.title || null, complexity: emp.highest_complexity || cLabel(0) },
+      employee: { id: emp.id, name: `${emp.first_name || ""} ${emp.last_name || ""}`.trim(), title: emp.title || null, complexity: emp.highest_complexity || cLabel(0), hireDate: schedCtx?.hire_date || null },
       elementCount,
       latestAssessmentId,
-      record,
       testSystems,
     };
   };
@@ -28152,9 +28266,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const blocks = instrumentPeopleIds(sqlite, labId, inst.id)
         .map((id) => viewOf(id)?.testSystems?.find((t: any) => t.instrumentId === inst.id))
         .filter(Boolean);
+      // signed = current sign-off (not overdue); ready = elements complete and waiting for a signature.
       return {
         instrumentId: inst.id, instrumentName: inst.instrument_name, department: inst.category || null,
-        complexity: cxOf(inst.id), people: blocks.length, complete: blocks.filter((b: any) => b.complete).length,
+        complexity: cxOf(inst.id), people: blocks.length,
+        signed: blocks.filter((b: any) => b.signedCurrent).length,
+        ready: blocks.filter((b: any) => b.signable).length,
+        overdue: blocks.filter((b: any) => b.overdue).length,
       };
     });
     res.json({ instruments: rows });
@@ -28176,7 +28294,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const people = instrumentPeopleIds(sqlite, labId, instrumentId).map((empId) => {
       const v = assembleEmployeeCompetencyView(sqlite, labId, empId);
       const testSystem = v?.testSystems?.find((t: any) => t.instrumentId === instrumentId);
-      return v && testSystem ? { employee: v.employee, record: v.record, testSystem } : null;
+      return v && testSystem ? { employee: v.employee, testSystem } : null;
     }).filter(Boolean);
     res.json({
       instrument: { id: inst.id, name: inst.instrument_name, department: inst.category || null },
@@ -28267,29 +28385,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ).run(ownerUserId, labId, compName, emp.hire_date || null, now, empId);
         compEmp = { id: Number(r.lastInsertRowid) };
       }
-      // Get-or-create the employee's OPEN (unlocked) current-cycle record.
+      // Get-or-create the employee's OPEN (unlocked) record. Per-method sign-off (2026-10-13) signs and freezes one
+      // method's items at a time and never locks this record, so it stays the open container for every method's next
+      // competency. A record locked by the earlier whole-record sign-off is left as signed; new entries go to a new one.
       let assessment = sqlite.prepare(
         "SELECT id FROM competency_assessments WHERE program_id = ? AND employee_id = ? AND (locked IS NULL OR locked = 0) ORDER BY id DESC LIMIT 1"
       ).get(implicit.id, compEmp.id) as any;
       if (!assessment) {
-        // One record per cycle: if the latest record is signed and locked, do NOT
-        // silently fork a new one on edit. Block until it is unlocked.
-        const lockedExisting = sqlite.prepare(
-          "SELECT id FROM competency_assessments WHERE program_id = ? AND employee_id = ? AND locked = 1 ORDER BY id DESC LIMIT 1"
-        ).get(implicit.id, compEmp.id) as any;
-        if (lockedExisting) {
-          const e: any = new Error("This competency record is signed and locked. Unlock it before making changes.");
-          e.code = "LOCKED_RECORD";
-          throw e;
-        }
-        const aDate = now.slice(0, 10);
+        const aDate = labLocalDate(now); // BUG-047: the lab's date, not UTC (an evening record was dated tomorrow)
         const r = sqlite.prepare(
           "INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, competency_type, status, created_at) VALUES (?, ?, 'initial', ?, 'technical', 'pass', ?)"
         ).run(implicit.id, compEmp.id, aDate, now);
         assessment = { id: Number(r.lastInsertRowid) };
       }
-      // Replace this instrument's items only.
-      sqlite.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ? AND instrument_id = ?").run(assessment.id, instrumentId);
+      // Replace this instrument's WORKING items only; items frozen by a sign-off are never touched.
+      sqlite.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ? AND instrument_id = ? AND signoff_id IS NULL").run(assessment.id, instrumentId);
       if (isWaivedSystem) {
         // Element and method numbers stay NULL so no element logic counts these rows.
         const wStmt = sqlite.prepare(
@@ -28341,103 +28451,135 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // that does not exist (it 500s the whole transaction and persists nothing).
       return assessment.id;
     });
-    let assessmentId: number;
-    try {
-      assessmentId = tx();
-    } catch (e: any) {
-      if (e?.code === "LOCKED_RECORD") return res.status(409).json({ error: e.message, locked: true });
-      throw e;
-    }
+    const assessmentId: number = tx();
     logAudit({ userId: req.userId, ownerUserId, module: "veritacomp", action: "update", entityType: "employee_competency", entityId: String(empId), entityLabel: `${emp.first_name || ""} ${emp.last_name || ""}`.trim() + " / " + inst.instrument_name, ipAddress: req.ip });
     res.json({ ok: true, assessmentId, instrumentId });
   });
 
-  // POST /api/labs/:labId/competency/employee/:employeeId/sign
+  // POST /api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/sign
   //
-  // Phase 3a (2026-09-27): single evaluator sign-off on the employee's one
-  // current-cycle record. Gated on completeness of EVERY assigned test system
-  // (instrument-keyed): each assigned instrument must carry all 6/8 elements as
-  // data-or-N/A, or the sign is refused (409) with the incomplete list. Locks
-  // the record (completion_date + final_signed_by_user_id + locked=1) and stamps
-  // the evaluator. Reopen via the existing lab-scoped .../assessments/:id/unlock.
-  app.post("/api/labs/:labId/competency/employee/:employeeId/sign", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+  // Per-method sign-off (2026-10-13, Michael Q156/Q158): signs ONE method's competency for one person, so a new hire can
+  // be signed department by department. Requires that method's working elements complete (data or N/A on each; two
+  // passed methods for waived) and a signer whose VeritaStaff role qualifies for the method's complexity
+  // (shared/competencySignoff.ts, re-checked here). Freezes the method's items under the sign-off; the person's other
+  // methods stay open. Body: { signerStaffEmployeeId | signerIsMedicalDirector, signerInitials?, signedDate?, milestone?,
+  // documentation? (required when the date is not today) }.
+  app.post("/api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/sign", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const labId = req.scope.labId;
     const sqlite = (db as any).$client;
     const empId = Number(req.params.employeeId);
-    if (!Number.isFinite(empId)) return res.status(400).json({ error: "Bad employeeId" });
+    const instrumentId = Number(req.params.instrumentId);
+    if (!Number.isFinite(empId) || !Number.isFinite(instrumentId)) return res.status(400).json({ error: "Bad ids" });
+    const view = assembleEmployeeCompetencyView(sqlite, labId, empId);
+    if (!view) return res.status(404).json({ error: "Employee not found" });
+    const ts = view.testSystems.find((t: any) => t.instrumentId === instrumentId);
+    if (!ts) return res.status(404).json({ error: "Instrument not assigned to this employee" });
+    if (ts.fromLegacyProgram) return res.status(409).json({ error: `${ts.instrumentName}: the data shown comes from an earlier program record. Save it on this screen, then sign.` });
+    if (!ts.signable) {
+      const incomplete = ts.waived
+        ? [`${ts.instrumentName}: ${ts.waivedPassed ?? 0} of ${ts.waivedRequired ?? 2} waived methods passed`]
+        : ts.elements.filter((e: any) => e.status === "incomplete").map((e: any) => `${ts.instrumentName}: element ${e.num}`);
+      return res.status(409).json({ error: "Every element needs data or N/A before this method can be signed.", incomplete });
+    }
 
-    const evaluatorName = String(req.body?.evaluatorName || "").trim();
-    const evaluatorTitle = String(req.body?.evaluatorTitle || "").trim();
-    const evaluatorInitials = String(req.body?.evaluatorInitials || "").trim();
-    if (!evaluatorName || !evaluatorTitle) return res.status(400).json({ error: "Evaluator name and title are required to sign." });
+    const b = req.body || {};
+    const signer = b.signerIsMedicalDirector
+      ? ts.signers.find((o: any) => o.staffEmployeeId == null && o.role === "LD")
+      : ts.signers.find((o: any) => o.staffEmployeeId != null && o.staffEmployeeId === Number(b.signerStaffEmployeeId));
+    if (!signer) return res.status(400).json({ error: "Choose who is signing from the list." });
+    if (!signer.eligible) return res.status(403).json({ error: `${signer.name} cannot sign ${ts.instrumentName}: ${signer.reason}.` });
 
-    const emp = sqlite.prepare(
-      "SELECT id, first_name, last_name FROM staff_employees WHERE id = ? AND tier2_lab_id = ? AND status = 'active'"
-    ).get(empId, labId) as any;
-    if (!emp) return res.status(404).json({ error: "Employee not found" });
+    const allowed = milestonesForComplexity(ts.complexity);
+    const milestone: MethodMilestone = (b.milestone || ts.nextMilestone) as MethodMilestone;
+    if (!allowed.includes(milestone)) return res.status(400).json({ error: `${ts.instrumentName} is ${ts.complexity.toLowerCase()} complexity: sign it as ${allowed.map((m) => MILESTONE_LABEL[m]).join(" or ")}.` });
 
-    const labRow = sqlite.prepare("SELECT primary_regime FROM labs WHERE id = ?").get(labId) as any;
-    const elementCount = labRow?.primary_regime === "NYS-CLEP" ? 8 : 6;
-
-    // Assigned test systems = the employee's assigned instruments on the lab map.
-    const instruments = sqlite.prepare(
-      `SELECT i.id AS id, i.instrument_name AS name FROM staff_employee_instruments j
-       JOIN veritamap_instruments i ON j.instrument_id = i.id
-       JOIN veritamap_maps m ON i.map_id = m.id
-       WHERE j.employee_id = ? AND m.lab_id = ?`
-    ).all(empId, labId) as any[];
-    if (!instruments.length) return res.status(400).json({ error: "This employee has no assigned test systems to sign off." });
+    const today = labLocalDate(new Date().toISOString());
+    const signedDate = String(b.signedDate || today).trim().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(signedDate) || Number.isNaN(new Date(`${signedDate}T00:00:00Z`).getTime())) return res.status(400).json({ error: "Enter the date signed as a valid date." });
+    if (signedDate > today) return res.status(400).json({ error: "The date signed cannot be in the future." });
+    const lastDated = ts.signoffs.find((s: any) => s.signedDate);
+    if (lastDated && signedDate < lastDated.signedDate) return res.status(400).json({ error: `${ts.instrumentName} was last signed on ${lastDated.signedDate}. A new sign-off cannot be dated earlier.` });
+    const documentation = String(b.documentation || "").trim();
+    if (signedDate !== today && !documentation) return res.status(400).json({ error: "Written documentation is required when the date signed is not today (for example, where the paper record is kept)." });
+    const initials = String(b.signerInitials || "").trim().slice(0, 6) || null;
 
     const compEmp = sqlite.prepare("SELECT id FROM competency_employees WHERE staff_employee_id = ? AND lab_id = ? LIMIT 1").get(empId, labId) as any;
     const implicit = sqlite.prepare("SELECT id FROM competency_programs WHERE lab_id = ? AND is_implicit = 1 LIMIT 1").get(labId) as any;
-    if (!compEmp || !implicit) return res.status(409).json({ error: "No competency data entered yet. Enter each test system's data before signing." });
+    if (!compEmp || !implicit) return res.status(409).json({ error: "No competency data entered yet for this method." });
+    const openIds = (sqlite.prepare(
+      "SELECT id FROM competency_assessments WHERE program_id = ? AND employee_id = ? AND (locked IS NULL OR locked = 0)"
+    ).all(implicit.id, compEmp.id) as any[]).map((r) => r.id);
+    if (!openIds.length) return res.status(409).json({ error: "No competency data entered yet for this method." });
+    const ph = openIds.map(() => "?").join(",");
 
-    const assessment = sqlite.prepare(
-      "SELECT id, locked FROM competency_assessments WHERE program_id = ? AND employee_id = ? ORDER BY id DESC LIMIT 1"
-    ).get(implicit.id, compEmp.id) as any;
-    if (!assessment) return res.status(409).json({ error: "No competency data entered yet. Enter each test system's data before signing." });
-    if (assessment.locked === 1) return res.status(409).json({ error: "This competency record is already signed and locked." });
-
-    const items = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(assessment.id) as any[];
-    // #91: an all-waived test system is complete with two passed waived methods.
-    const signTestsStmt = sqlite.prepare("SELECT DISTINCT complexity FROM veritamap_instrument_tests WHERE instrument_id = ? AND active = 1");
-    for (const inst of instruments) {
-      // Same rule as the view and the save: the highest complexity on the instrument is WAIVED.
-      const rank = (signTestsStmt.all(inst.id) as any[]).reduce((m: number, t: any) => { const u = String(t.complexity || "").toUpperCase(); return Math.max(m, u.startsWith("H") ? 3 : u.startsWith("M") ? 2 : u.startsWith("W") ? 1 : 0); }, 0);
-      inst.waived = rank === 1;
-    }
-    const incomplete = compIncompleteCellsByInstrument(items, instruments, elementCount);
-    if (incomplete.length) {
-      return res.status(409).json({ error: "Every assigned test system must be complete (data or N/A on all elements) before signing.", incomplete });
-    }
-
-    // Prior approval: signed on paper on an earlier date, entered into the system now.
     const now = new Date().toISOString();
-    const todayDate = now.slice(0, 10);
-    const signedOnPaperRaw = typeof req.body?.signed_on_paper_date === "string" ? req.body.signed_on_paper_date.trim() : "";
-    const isBackDated = !!signedOnPaperRaw && signedOnPaperRaw.slice(0, 10) !== todayDate;
-    const documentation = typeof req.body?.documentation === "string" ? req.body.documentation.trim() : "";
-    if (isBackDated && !documentation) {
-      return res.status(400).json({ error: "Written documentation is required when the signed date is not today." });
-    }
-    const signedOnPaper = isBackDated ? signedOnPaperRaw.slice(0, 10) : null;
-    const priorNote = isBackDated ? documentation : null;
-
-    sqlite.prepare(
-      "UPDATE competency_assessments SET completion_date = ?, final_signed_by_user_id = ?, locked = 1, evaluator_name = ?, evaluator_title = ?, evaluator_initials = ?, signed_on_paper_date = ?, prior_approval_note = ? WHERE id = ?"
-    ).run(now, req.userId, evaluatorName, evaluatorTitle, evaluatorInitials || null, signedOnPaper, priorNote, assessment.id);
+    const signoffId = sqlite.transaction(() => {
+      const r = sqlite.prepare(
+        `INSERT INTO competency_method_signoffs (lab_id, staff_employee_id, instrument_id, assessment_id, milestone, signed_date,
+           signer_staff_employee_id, signer_name, signer_role, signer_initials, complexity, documentation, signed_by_user_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(labId, empId, instrumentId, openIds[0], milestone, signedDate, signer.staffEmployeeId, signer.name, signer.role,
+        initials, ts.complexity, documentation || null, req.userId, now);
+      const id = Number(r.lastInsertRowid);
+      const moved = sqlite.prepare(
+        `UPDATE competency_assessment_items SET signoff_id = ? WHERE assessment_id IN (${ph}) AND instrument_id = ? AND signoff_id IS NULL`
+      ).run(id, ...openIds, instrumentId);
+      if (!moved.changes) throw new Error("No entered items to sign for this method.");
+      return id;
+    })();
 
     logAudit({
       userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "update",
       entityType: "employee_competency", entityId: String(empId),
-      entityLabel: `${emp.first_name || ""} ${emp.last_name || ""}`.trim() + " / Sign and Complete" + (signedOnPaper ? " (prior approval)" : ""),
-      before: { locked: 0 },
-      after: { locked: 1, evaluator_name: evaluatorName, evaluator_title: evaluatorTitle, completion_date: now, signed_on_paper_date: signedOnPaper },
+      entityLabel: `${view.employee.name} / ${ts.instrumentName} / ${MILESTONE_LABEL[milestone]} signed by ${signer.name}, ${signer.roleLabel}`,
+      after: { signoff_id: signoffId, milestone, signed_date: signedDate, signer: signer.name, role: signer.role },
       ipAddress: req.ip,
     });
-    res.json({ ok: true, locked: true, assessmentId: assessment.id, completion_date: now, signed_on_paper_date: signedOnPaper });
+    res.json({ ok: true, signoffId, milestone, signedDate });
   });
+
+  // POST /api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/signoffs/:signoffId/revoke
+  //
+  // Unlock one method (per-method sign-off): reopens the method's MOST RECENT sign-off so its elements can be corrected.
+  // The frozen items return to the working set; the sign-off row is kept with revoked_at for the audit trail. Refused
+  // while the method already has entries for its next competency, so two sets never mix.
+  app.post("/api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/signoffs/:signoffId/revoke", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const sqlite = (db as any).$client;
+    const empId = Number(req.params.employeeId);
+    const instrumentId = Number(req.params.instrumentId);
+    const signoffId = Number(req.params.signoffId);
+    if (![empId, instrumentId, signoffId].every(Number.isFinite)) return res.status(400).json({ error: "Bad ids" });
+    const latest = sqlite.prepare(
+      `SELECT * FROM competency_method_signoffs WHERE lab_id = ? AND staff_employee_id = ? AND instrument_id = ? AND revoked_at IS NULL
+       ORDER BY signed_date DESC, id DESC LIMIT 1`
+    ).get(labId, empId, instrumentId) as any;
+    if (!latest || latest.id !== signoffId) return res.status(409).json({ error: "Only the most recent sign-off for this method can be unlocked." });
+    const working = sqlite.prepare(
+      `SELECT COUNT(*) AS n FROM competency_assessment_items i JOIN competency_assessments a ON a.id = i.assessment_id
+       JOIN competency_programs p ON p.id = a.program_id JOIN competency_employees ce ON ce.id = a.employee_id
+       WHERE p.lab_id = ? AND p.is_implicit = 1 AND ce.staff_employee_id = ? AND i.instrument_id = ? AND i.signoff_id IS NULL
+         AND (a.locked IS NULL OR a.locked = 0)`
+    ).get(labId, empId, instrumentId) as any;
+    if (working?.n > 0) return res.status(409).json({ error: "This method already has entries for its next competency. Clear them before unlocking the earlier sign-off." });
+    const now = new Date().toISOString();
+    sqlite.transaction(() => {
+      sqlite.prepare("UPDATE competency_method_signoffs SET revoked_at = ?, revoked_by_user_id = ? WHERE id = ?").run(now, req.userId, signoffId);
+      sqlite.prepare("UPDATE competency_assessment_items SET signoff_id = NULL WHERE signoff_id = ?").run(signoffId);
+    })();
+    logAudit({
+      userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "update",
+      entityType: "employee_competency", entityId: String(empId),
+      entityLabel: `Unlocked ${MILESTONE_LABEL[latest.milestone as MethodMilestone] || latest.milestone} sign-off (instrument ${instrumentId}, signed ${latest.signed_date} by ${latest.signer_name})`,
+      before: { signoff_id: signoffId, revoked_at: null }, after: { revoked_at: now }, ipAddress: req.ip,
+    });
+    res.json({ ok: true });
+  });
+
+  // The whole-record "Sign & Complete" (POST .../employee/:employeeId/sign, Phase 3a) was retired 2026-10-13 by
+  // per-method sign-off (POST .../test-system/:instrumentId/sign above). Records it locked still read as signed.
 
   // GET /api/labs/:labId/competency/employee/:employeeId/record-pdf
   //
@@ -28461,7 +28603,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         cliaNumber: compLab?.clia_number || undefined,
         employee: view.employee,
         elementCount: view.elementCount,
-        record: view.record,
         testSystems: view.testSystems,
       }, licenseCtxFromReq(req));
       const safeName = String(view.employee?.name || "Employee").replace(/[^a-zA-Z0-9_\- ]/g, "").trim() || "Employee";

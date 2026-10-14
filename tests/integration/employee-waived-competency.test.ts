@@ -8,9 +8,10 @@
 // Boots the REAL routes on a scratch DB and proves:
 //   1. the view marks the meter waived with four methods and no elements; the moderate system keeps six elements
 //   2. the meter refuses an element body, and a passed method with no date
-//   3. one passed method leaves the meter incomplete and blocks Sign & Complete with a "1 of 2" message
+//   3. one passed method leaves the meter incomplete and blocks its sign-off with a "1 of 2" message
 //   4. two passed methods complete it; the rows carry no element or method number
-//   5. the signed record marks BOTH test systems assessed (and covered) on /competency/owed (BUG-040)
+//   5. signing both methods marks BOTH test systems assessed (and covered) on /competency/owed (BUG-040)
+//      (per-method sign-off, 2026-10-13: each method is signed on its own by an eligible VeritaStaff signer)
 //   6. the printed record and the Survey Bundle PDF show the waived methods; a waived-only record prints no
 //      empty element tables
 // Run (from bash): DB_PATH=.tmp-ewc.db JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy npx tsx tests/integration/employee-waived-competency.test.ts
@@ -59,6 +60,9 @@ async function main() {
   };
   const mixed = await mkEmp("Mixed", "Morgan", [NOVA, SED]);
   const meterOnly = await mkEmp("Meter", "Lee", [NOVA]);
+  // Signers (per-method sign-off): a general supervisor for the waived meter, a hematology TC for the moderate i-Sed.
+  const gs = (await call("POST", `${L}/staff/employees`, { lastName: "Ellis", firstName: "Jordan", highestComplexity: "H", roles: [{ role: "GS" }] }, tk)).j.id;
+  const tc = (await call("POST", `${L}/staff/employees`, { lastName: "Tate", firstName: "Casey", highestComplexity: "H", roles: [{ role: "TC", specialtyNumber: 8 }] }, tk)).j.id;
   check("fixture: one waived meter, one moderate system, two people", !!NOVA && !!SED && !!mixed && !!meterOnly);
 
   const view = async (emp: number) => (await call("GET", `${L}/competency/employee/${emp}`, undefined, tk)).j;
@@ -88,9 +92,9 @@ async function main() {
     { num: 6, quizId: "Q-1", score: 100, dateTaken: today, passed: true },
   ];
   const rSed = await put(mixed, SED, { elements: sedEls });
-  const sign = (emp: number) => call("POST", `${L}/competency/employee/${emp}/sign`, { evaluatorName: "Jordan Ellis", evaluatorTitle: "General Supervisor", evaluatorInitials: "JE" }, tk);
-  const r3b = await sign(mixed);
-  check("3b. Sign & Complete is blocked with the meter at 1 of 2", rSed.s === 200 && r3b.s === 409 && (r3b.j.incomplete || []).some((x: string) => /Nova.*1 of 2 waived methods passed/.test(x)), `${rSed.s} ${r3b.s} ${JSON.stringify(r3b.j.incomplete)}`);
+  const signMethod = (emp: number, inst: number, signer: number) => call("POST", `${L}/competency/employee/${emp}/test-system/${inst}/sign`, { signerStaffEmployeeId: signer, signerInitials: "JE" }, tk);
+  const r3b = await signMethod(mixed, NOVA, gs);
+  check("3b. the meter's sign-off is blocked at 1 of 2", rSed.s === 200 && r3b.s === 409 && (r3b.j.incomplete || []).some((x: string) => /Nova.*1 of 2 waived methods passed/.test(x)), `${rSed.s} ${r3b.s} ${JSON.stringify(r3b.j.incomplete)}`);
 
   const r4 = await put(mixed, NOVA, { waivedMethods: [
     { num: 1, evidence: "Blind sample BS-1 within limits", date: today, initials: "JE", passed: true },
@@ -109,16 +113,17 @@ async function main() {
   };
   let o = await owedFor(mixed);
   check("5a. before signing nothing reads assessed", Object.values(o).every((x: any) => x.assessed === false));
-  const r5 = await sign(mixed);
+  const r5a = await signMethod(mixed, NOVA, gs), r5b = await signMethod(mixed, SED, tc);
+  const r5 = { s: r5a.s === 200 && r5b.s === 200 ? 200 : Math.max(r5a.s, r5b.s) };
   o = await owedFor(mixed);
-  check("5b. the signed employee record marks BOTH test systems assessed and covered (BUG-040)",
+  check("5b. signing both methods marks BOTH test systems assessed and covered (BUG-040)",
     r5.s === 200 && o["Nova StatStrip Glucose Hospital Meter"]?.assessed === true && o["Mini i-Sed"]?.assessed === true && o["Nova StatStrip Glucose Hospital Meter"]?.covered === true && o["Mini i-Sed"]?.covered === true,
     `${r5.s} ${JSON.stringify(Object.fromEntries(Object.entries(o).map(([k, x]: any) => [k, [x.covered, x.assessed, x.coverage?.methodGroupName]])))}`);
   const oOther = await owedFor(meterOnly);
   check("5c. another person's meter is not marked by this record", oOther["Nova StatStrip Glucose Hospital Meter"]?.assessed === false);
 
   v = await view(mixed);
-  const recHtml = buildEmployeeCompetencyRecordHTML({ labName: "Waived Page Lab", cliaNumber: "11D7654371", employee: v.employee, elementCount: v.elementCount, record: v.record, testSystems: v.testSystems });
+  const recHtml = buildEmployeeCompetencyRecordHTML({ labName: "Waived Page Lab", cliaNumber: "11D7654371", employee: v.employee, elementCount: v.elementCount, testSystems: v.testSystems });
   check("6a. the printed record shows the waived methods for the meter and elements for the moderate system",
     /Waived testing: 2 of 2 required methods passed\./.test(recHtml) && /Blind specimen testing \(/.test(recHtml) && /Monitoring of QC performance \(/.test(recHtml) && /<th>El 6<\/th>/.test(recHtml));
 
@@ -138,13 +143,13 @@ async function main() {
     { num: 2, evidence: "Observed by supervisor", date: today, initials: "JE", passed: true },
     { num: 4, evidence: "Written test 10/10", date: today, initials: "JE", passed: true },
   ] });
-  const r6 = await sign(meterOnly);
+  const r6 = await signMethod(meterOnly, NOVA, gs);
   const meterPdf = buildCompetencyHTML(pdfInput(meterOnly));
   check("6c. Survey Bundle PDF (waived-only record): waived summary and detail, no empty element tables",
     r6.s === 200 && meterPdf.includes("Waived Test Systems - 2 of 4 Methods Required Per Test") && !meterPdf.includes("Element 1: Direct Observation") && /Periodic observation of routine work/.test(meterPdf),
     `${r6.s} waivedSection=${meterPdf.includes("Waived Test Systems - 2 of 4 Methods Required Per Test")} element1=${meterPdf.includes("Element 1: Direct Observation")} observation=${/Periodic observation of routine work/.test(meterPdf)}${meterPdf.includes("Element 1: Direct Observation") ? " ctx=" + meterPdf.slice(Math.max(0, meterPdf.indexOf("Element 1: Direct Observation") - 200), meterPdf.indexOf("Element 1: Direct Observation") + 40).replace(/\s+/g, " ") : ""}`);
   const vm = await view(meterOnly);
-  const meterRec = buildEmployeeCompetencyRecordHTML({ labName: "Waived Page Lab", employee: vm.employee, elementCount: vm.elementCount, record: vm.record, testSystems: vm.testSystems });
+  const meterRec = buildEmployeeCompetencyRecordHTML({ labName: "Waived Page Lab", employee: vm.employee, elementCount: vm.elementCount, testSystems: vm.testSystems });
   check("6d. the waived-only printed record uses one Waived methods column", meterRec.includes("<th>Waived methods</th>") && !meterRec.includes("<th>El 1</th>"));
 
   server.close();
