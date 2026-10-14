@@ -2,7 +2,7 @@
 //
 // Receipt for the read-only "By instrument" competency view (Michael Q154 = 2, 2026-10-13). LOCAL server + scratch DB
 // only; every person, instrument and competency below is a scratch-DB test fixture.
-//   1. by-instrument index: the assigned instrument shows 2 people / 1 complete; an unassigned instrument shows 0 people
+//   1. by-instrument index: the assigned instrument shows 2 people / 0 signed / 1 ready to sign; an unassigned one shows 0 people
 //   2. instrument detail: both assigned people listed; each person's block is IDENTICAL to the same instrument's block
 //      on that person's employee view (one record, two views)
 //   3. lab scoping: another lab's owner gets 404 for this lab's instrument; a bad id gets 404
@@ -57,7 +57,7 @@ check("0. fixture: Pat's AU5800 competency saved through the employee endpoint",
 
 const idx = (await call("GET", `${L}/competency/by-instrument`, undefined, T)).body.instruments || [];
 const rc = idx.find((r) => r.instrumentId === chem), rh = idx.find((r) => r.instrumentId === heme);
-check("1. index: AU5800 has 2 people, 1 complete", rc && rc.people === 2 && rc.complete === 1, JSON.stringify(rc));
+check("1. index: AU5800 has 2 people, none signed yet, 1 ready to sign (per-method sign-off)", rc && rc.people === 2 && rc.signed === 0 && rc.ready === 1, JSON.stringify(rc));
 check("1. index: unassigned XN-1000 has 0 people and still shows its complexity (MODERATE)", rh && rh.people === 0 && rh.complexity === "MODERATE", JSON.stringify(rh));
 
 const det = (await call("GET", `${L}/competency/instrument/${chem}`, undefined, T)).body;
