@@ -231,10 +231,10 @@ interface EligibilityPreview {
 }
 
 const STATUS_BADGE: Record<string, string> = {
-  draft: "bg-slate-100 text-slate-700 border-slate-300",
-  in_review: "bg-amber-100 text-amber-900 border-amber-300",
-  approved: "bg-emerald-100 text-emerald-900 border-emerald-300",
-  expired: "bg-red-100 text-red-900 border-red-300",
+  draft: "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-900/30 dark:text-slate-400 dark:border-slate-700",
+  in_review: "bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700",
+  approved: "bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-700",
+  expired: "bg-red-100 text-red-900 border-red-300 dark:bg-red-900/30 dark:text-red-200 dark:border-red-700",
   archived: "bg-zinc-100 text-zinc-600 border-zinc-300",
 };
 
@@ -721,8 +721,8 @@ export default function VeritaPolicyMyPoliciesPage() {
 
   const reviewStateLabel = (days: number | null) => {
     if (days == null) return null;
-    if (days < 0) return { label: `${Math.abs(days)}d overdue`, cls: "text-red-700 font-semibold" };
-    if (days <= 30) return { label: `due in ${days}d`, cls: "text-amber-800 font-medium" };
+    if (days < 0) return { label: `${Math.abs(days)}d overdue`, cls: "text-red-700 font-semibold dark:text-red-400" };
+    if (days <= 30) return { label: `due in ${days}d`, cls: "text-amber-800 font-medium dark:text-amber-300" };
     return { label: `due in ${days}d`, cls: "text-muted-foreground" };
   };
 
@@ -809,6 +809,22 @@ export default function VeritaPolicyMyPoliciesPage() {
     any_active_seat: "Any active (writer) seat",
   };
   const [approversOpen, setApproversOpen] = useState(false);
+  // "Allow the author to approve this step" per workflow step (Michael 2026-10-14, Q187 = 2). Off by default.
+  const [stepsOpen, setStepsOpen] = useState(false);
+  const [stepSaving, setStepSaving] = useState<number | null>(null);
+  const setAuthorMayApprove = async (workflowId: number, stepId: number, allow: boolean) => {
+    setStepSaving(stepId);
+    try {
+      await apiRequest("PATCH", `/api/labs/${activeLabId}/veritapolicy/workflows/${workflowId}/steps/${stepId}`, { allowSelfApproval: allow });
+      queryClient.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/veritapolicy/workflows`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/veritapolicy/pending-reviews`] });
+      toast({ title: allow ? "The author can now approve this step" : "The author can no longer approve this step" });
+    } catch (e: any) {
+      toast({ title: "Could not save", description: String(e?.message || e), variant: "destructive" });
+    } finally {
+      setStepSaving(null);
+    }
+  };
   const [approverManualId, setApproverManualId] = useState<string>("");
   const [addApproverRole, setAddApproverRole] = useState<string>("");
   const [addApproverUserId, setAddApproverUserId] = useState<string>("");
@@ -1430,6 +1446,15 @@ export default function VeritaPolicyMyPoliciesPage() {
           </Button>
           <Button hidden={isReadOnly}
             variant="outline"
+            disabled={workflows.length === 0}
+            onClick={() => setStepsOpen(true)}
+            title="Choose, for each review step, whether the policy's author may approve it"
+            data-testid="approval-steps-button"
+          >
+            <CheckCircle2 size={14} className="mr-1.5" /> Approval steps
+          </Button>
+          <Button hidden={isReadOnly}
+            variant="outline"
             onClick={() => setEmailTemplatesOpen(true)}
             title="Customize the automated policy review-reminder emails"
           >
@@ -1460,10 +1485,10 @@ export default function VeritaPolicyMyPoliciesPage() {
       )}
 
       {dueSoonDocs.length > 0 && (
-        <Card className="border-amber-300 bg-amber-50/30">
+        <Card className="border-amber-300 bg-amber-50/30 dark:border-amber-700">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <Clock size={16} className="text-amber-700" />
+              <Clock size={16} className="text-amber-700 dark:text-amber-400" />
               Policies due for review ({dueSoonDocs.length})
             </CardTitle>
           </CardHeader>
@@ -1503,10 +1528,10 @@ export default function VeritaPolicyMyPoliciesPage() {
       )}
 
       {pendingAttestations.length > 0 && (
-        <Card className="border-sky-300 bg-sky-50/40">
+        <Card className="border-sky-300 bg-sky-50/40 dark:border-sky-700">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <FileText size={16} className="text-sky-700" />
+              <FileText size={16} className="text-sky-700 dark:text-sky-400" />
               Pending my attestations ({pendingAttestations.length})
             </CardTitle>
           </CardHeader>
@@ -1528,7 +1553,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                       assigned {fmtDate(p.assigned_at)}
                       {p.due_date && <> · due {fmtDate(p.due_date)}</>}
                       {p.is_stale_version && (
-                        <span className="ml-2 text-amber-700">
+                        <span className="ml-2 text-amber-700 dark:text-amber-400">
                           (a newer version is now current; this attestation is stale)
                         </span>
                       )}
@@ -1555,10 +1580,10 @@ export default function VeritaPolicyMyPoliciesPage() {
       )}
 
       {pendingReviews.length > 0 && (
-        <Card className="border-amber-300 bg-amber-50/40">
+        <Card className="border-amber-300 bg-amber-50/40 dark:border-amber-700">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <ShieldCheck size={16} className="text-amber-700" />
+              <ShieldCheck size={16} className="text-amber-700 dark:text-amber-400" />
               Pending my review ({pendingReviews.length})
             </CardTitle>
           </CardHeader>
@@ -1595,7 +1620,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="text-red-600 hover:text-red-700"
+                          className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                           onClick={() => openSign(doc, "rejected")}
                         >
                           <XCircle size={12} className="mr-1" /> Reject
@@ -1674,7 +1699,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                         <td className="py-2 pr-3">
                           <StatusBadge status={doc.status} />
                           {doc.status === "in_review" && doc.pending_step_name && (
-                            <div className="text-[10px] text-amber-800 mt-1 leading-tight">
+                            <div className="text-[10px] text-amber-800 mt-1 leading-tight dark:text-amber-300">
                               Step {doc.pending_step_order} of {doc.pending_total_steps}:{" "}
                               <span className="font-medium">{doc.pending_step_name}</span>
                               <div className="text-[10px] text-muted-foreground">
@@ -1726,7 +1751,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                           <Button hidden={isReadOnly}
                             size="sm"
                             variant="ghost"
-                            className="text-amber-700 hover:text-amber-800"
+                            className="text-amber-700 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300"
                             title="Archive (retire from the active list)"
                             onClick={() => {
                               if (
@@ -1806,7 +1831,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="text-red-600 hover:text-red-700"
+                                  className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                                   onClick={() => openSign(doc, "rejected")}
                                 >
                                   <XCircle size={12} className="mr-1" /> Reject
@@ -2035,7 +2060,7 @@ export default function VeritaPolicyMyPoliciesPage() {
             <DialogTitle>{viewDoc?.title || "Policy"}</DialogTitle>
           </DialogHeader>
           {viewTampered && (
-            <div className="rounded border border-red-300 bg-red-50 text-red-900 p-2 text-xs space-y-1">
+            <div className="rounded border border-red-300 bg-red-50 text-red-900 p-2 text-xs space-y-1 dark:border-red-700 dark:bg-red-950/30 dark:text-red-200">
               <div className="font-medium flex items-center gap-1">
                 <XCircle size={14} /> Tamper warning
               </div>
@@ -2093,7 +2118,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                       >
                         References: {r.title}
                       </button>
-                      <Button hidden={isReadOnly} size="sm" variant="ghost" className="h-6 text-red-600 hover:text-red-700" onClick={() => removeLinkMutation.mutate(r.link_id)} disabled={removeLinkMutation.isPending} title="Remove link">
+                      <Button hidden={isReadOnly} size="sm" variant="ghost" className="h-6 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300" onClick={() => removeLinkMutation.mutate(r.link_id)} disabled={removeLinkMutation.isPending} title="Remove link">
                         <Trash2 size={12} />
                       </Button>
                     </div>
@@ -2162,8 +2187,8 @@ export default function VeritaPolicyMyPoliciesPage() {
                     <span
                       className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] uppercase border ${
                         s.action === "approved"
-                          ? "bg-emerald-100 text-emerald-900 border-emerald-300"
-                          : "bg-red-100 text-red-900 border-red-300"
+                          ? "bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-700"
+                          : "bg-red-100 text-red-900 border-red-300 dark:bg-red-900/30 dark:text-red-200 dark:border-red-700"
                       }`}
                     >
                       {s.action}
@@ -2230,7 +2255,7 @@ export default function VeritaPolicyMyPoliciesPage() {
               </div>
             )}
             {auditTrailErr && (
-              <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-2">
+              <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-2 dark:text-rose-400 dark:bg-rose-950/30 dark:border-rose-800">
                 {auditTrailErr}
               </div>
             )}
@@ -2245,11 +2270,11 @@ export default function VeritaPolicyMyPoliciesPage() {
                     className={`border rounded px-2 py-1.5 text-xs ${
                       ev.kind === "signoff"
                         ? ev.action === "approved"
-                          ? "bg-emerald-50 border-emerald-200"
+                          ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800"
                           : ev.action === "rejected"
-                          ? "bg-rose-50 border-rose-200"
-                          : "bg-amber-50 border-amber-200"
-                        : "bg-slate-50 border-slate-200"
+                          ? "bg-rose-50 border-rose-200 dark:bg-rose-950/30 dark:border-rose-800"
+                          : "bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800"
+                        : "bg-slate-50 border-slate-200 dark:bg-slate-950/30 dark:border-slate-800"
                     }`}
                     data-testid={`audit-trail-event-${idx}`}
                   >
@@ -2429,7 +2454,7 @@ export default function VeritaPolicyMyPoliciesPage() {
               </Select>
             </div>
             {eligibility && eligibility.minCount === 0 && (
-              <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2 space-y-1">
+              <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2 space-y-1 dark:text-red-400 dark:bg-red-950/30 dark:border-red-800">
                 <div className="font-medium">No eligible reviewer exists for at least one step.</div>
                 <div>
                   Submitting this workflow now will leave the document stuck in review until you
@@ -2868,11 +2893,11 @@ export default function VeritaPolicyMyPoliciesPage() {
                       Assigned:{" "}
                       <span className="font-semibold">{trackerData.summary.total}</span>
                     </span>
-                    <span className="rounded bg-green-100 text-green-800 px-2 py-1">
+                    <span className="rounded bg-green-100 text-green-800 px-2 py-1 dark:bg-green-900/30 dark:text-green-300">
                       Attested:{" "}
                       <span className="font-semibold">{trackerData.summary.completed}</span>
                     </span>
-                    <span className="rounded bg-amber-100 text-amber-800 px-2 py-1">
+                    <span className="rounded bg-amber-100 text-amber-800 px-2 py-1 dark:bg-amber-900/30 dark:text-amber-300">
                       Opened, not signed:{" "}
                       <span className="font-semibold">{trackerData.summary.opened}</span>
                     </span>
@@ -2881,7 +2906,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                       <span className="font-semibold">{trackerData.summary.outstanding}</span>
                     </span>
                     {trackerData.summary.overdue > 0 && (
-                      <span className="rounded bg-red-100 text-red-800 px-2 py-1">
+                      <span className="rounded bg-red-100 text-red-800 px-2 py-1 dark:bg-red-900/30 dark:text-red-300">
                         Overdue:{" "}
                         <span className="font-semibold">{trackerData.summary.overdue}</span>
                       </span>
@@ -2903,11 +2928,11 @@ export default function VeritaPolicyMyPoliciesPage() {
                         {trackerData.attestations.map((r) => {
                           const badge =
                             r.status === "attested"
-                              ? { t: "Attested", c: "bg-green-100 text-green-800" }
+                              ? { t: "Attested", c: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300" }
                               : r.status === "overdue"
-                                ? { t: "Overdue", c: "bg-red-100 text-red-800" }
+                                ? { t: "Overdue", c: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300" }
                                 : r.status === "opened"
-                                  ? { t: "Opened, not signed", c: "bg-amber-100 text-amber-800" }
+                                  ? { t: "Opened, not signed", c: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" }
                                   : { t: "Not opened", c: "bg-muted text-muted-foreground" };
                           return (
                             <tr key={r.id} className="border-b last:border-b-0">
@@ -2935,7 +2960,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                                   <span>
                                     {fmtDate(r.completed_at)}
                                     {r.is_stale_version && (
-                                      <span className="ml-1 text-amber-700">
+                                      <span className="ml-1 text-amber-700 dark:text-amber-400">
                                         (older version)
                                       </span>
                                     )}
@@ -3008,6 +3033,52 @@ export default function VeritaPolicyMyPoliciesPage() {
       </Dialog>
 
       {/* ── Per-manual approver mapping (#39) ──────────────────────────── */}
+      <Dialog open={stepsOpen} onOpenChange={(o) => { if (!o) setStepsOpen(false); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Approval steps</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              By default, the person who uploads a policy cannot approve it at any step. Turn this on for a step
+              when the author may also do that review, for example a technical consultant or supervisor who writes
+              a policy and does its preliminary review. Each step is set on its own.
+            </p>
+            {workflows.map((w) => (
+              <div key={w.id} className="rounded-md border p-3" data-testid="approval-steps-workflow">
+                <div className="text-sm font-medium">{w.name}</div>
+                {w.description && <div className="text-xs text-muted-foreground mb-2">{w.description}</div>}
+                <ul className="space-y-2 mt-1">
+                  {w.steps.map((s) => (
+                    <li key={s.id} className="flex items-start justify-between gap-3 text-sm">
+                      <span>
+                        {s.step_order}. {s.step_name}{" "}
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">({s.required_role.replace(/_/g, " ")})</span>
+                      </span>
+                      <label className="flex items-center gap-2 text-xs whitespace-nowrap cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="w-3.5 h-3.5"
+                          checked={!!s.allow_self_approval}
+                          disabled={stepSaving != null}
+                          onChange={(e) => setAuthorMayApprove(w.id, s.id, e.target.checked)}
+                          data-testid="author-may-approve"
+                        />
+                        Allow the author to approve this step
+                        {stepSaving === s.id && <Loader2 className="animate-spin" size={12} />}
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStepsOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={approversOpen} onOpenChange={(o) => { if (!o) setApproversOpen(false); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -3054,7 +3125,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-7 text-red-600 hover:text-red-700"
+                          className="h-7 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                           onClick={() => removeApproverMutation.mutate(a.id)}
                           disabled={removeApproverMutation.isPending}
                           title="Remove"
@@ -3125,8 +3196,8 @@ export default function VeritaPolicyMyPoliciesPage() {
                 <div className="p-3 text-xs text-muted-foreground">No delegations yet.</div>
               ) : (
                 (delegationsData?.delegations ?? []).map((d) => {
-                  const chip = d.status === "active" ? "bg-green-100 text-green-800"
-                    : d.status === "upcoming" ? "bg-blue-100 text-blue-800"
+                  const chip = d.status === "active" ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                    : d.status === "upcoming" ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
                     : d.status === "revoked" ? "bg-gray-200 text-gray-600"
                     : "bg-gray-100 text-gray-500";
                   const canRevoke = (d.status === "active" || d.status === "upcoming")
@@ -3150,7 +3221,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                         {d.note && <div className="text-xs text-muted-foreground italic mt-0.5">{d.note}</div>}
                       </div>
                       {canRevoke && (
-                        <Button size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 shrink-0"
+                        <Button size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700 shrink-0 dark:text-red-400 dark:hover:text-red-300"
                           onClick={() => revokeDelegationMutation.mutate(d.id)}
                           disabled={revokeDelegationMutation.isPending} title="Revoke">
                           Revoke

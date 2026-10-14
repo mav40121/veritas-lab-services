@@ -507,6 +507,13 @@ function complexityChipClass(c: string): string {
 // assigned test system, from the same /owed derivation the coverage maps use.
 // Clicking a name opens their competency view (tabs per test system). This is the
 // new primary way into competency; the program list below is being retired.
+// One row of GET /api/labs/:labId/competency/by-instrument (same shape VeritaCompByInstrumentPage reads).
+interface RosterInstrument {
+  instrumentId: number; instrumentName: string; department: string | null; complexity: string | null;
+  people: number; signed: number; ready: number; overdue: number;
+  groupId?: number | null; groupMembers?: Array<{ id: number; name: string }> | null;
+}
+
 function EmployeeRosterSection() {
   const activeLabId = useActiveLabId();
   const [, navigate] = useLocation();
@@ -514,17 +521,80 @@ function EmployeeRosterSection() {
   const { data } = useQuery<OwedResponse>({ queryKey: [url ?? "no-owed"], enabled: !!activeLabId });
   const employees = data?.employees || [];
   const labRoute = (p: string) => (activeLabId ? `/labs/${activeLabId}${p}` : p);
-  if (employees.length === 0) return null;
+  // 2026-10-14 (Michael, Redington call): "there should be a toggle where I can do the same thing by instrument
+  // instead of by person". Same cards, one per VeritaMap instrument, from the By instrument endpoint; the choice is
+  // remembered per browser.
+  const [view, setView] = useState<"person" | "instrument">(() => {
+    try { return localStorage.getItem("veritacomp.rosterView") === "instrument" ? "instrument" : "person"; } catch { return "person"; }
+  });
+  const pick = (v: "person" | "instrument") => { setView(v); try { localStorage.setItem("veritacomp.rosterView", v); } catch {} };
+  const instUrl = activeLabId ? `/api/labs/${activeLabId}/competency/by-instrument` : null;
+  const { data: instData } = useQuery<{ instruments: RosterInstrument[] }>({
+    queryKey: [instUrl ?? "no-by-instrument"],
+    enabled: !!instUrl,
+    queryFn: async () => { const r = await fetch(`${API_BASE}${instUrl}`, { headers: authHeaders() }); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); },
+  });
+  const instruments = instData?.instruments || [];
+  if (employees.length === 0 && instruments.length === 0) return null;
+  const toggle = (
+    <div className="inline-flex rounded-md border border-border overflow-hidden text-[11px] shrink-0" role="group" aria-label="View competency by person or by instrument">
+      {(["person", "instrument"] as const).map((v) => (
+        <button key={v} type="button" onClick={() => pick(v)} data-testid={`roster-view-${v}`} aria-pressed={view === v}
+          className={`px-2.5 py-1 ${view === v ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:text-foreground"}`}>
+          {v === "person" ? "By person" : "By instrument"}
+        </button>
+      ))}
+    </div>
+  );
+  if (view === "instrument") {
+    return (
+      <div>
+        <div className="flex items-center gap-2 mb-2 mt-1">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Instruments</h3>
+          <span className="text-xs text-muted-foreground">{"·"} {instruments.length} on your VeritaMap&trade;</span>
+          <div className="flex-1 border-t border-border/60 ml-2" />
+          {toggle}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {instruments.map((r) => {
+            const done = r.people > 0 && r.signed === r.people;
+            return (
+              <button key={r.instrumentId} onClick={() => navigate(labRoute(`/veritacomp-app/instrument/${r.instrumentId}`))} data-testid="instrument-roster-row"
+                className="text-left rounded-lg border border-border hover:border-primary/40 transition-colors p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-sm">{r.instrumentName}</span>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {r.groupMembers?.length ? `${r.groupMembers.map((m) => m.name).join(", ")} · ` : ""}{r.department || "Other"}
+                </div>
+                <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                  {r.complexity && <span className={`text-[10px] px-1.5 py-0.5 rounded border ${complexityChipClass(r.complexity)}`}>{r.complexity}</span>}
+                  {r.people === 0 ? (
+                    <span className="text-[11px] text-muted-foreground">No one assigned</span>
+                  ) : (
+                    <>
+                      <span className="text-[11px] text-muted-foreground">{r.people} {r.people === 1 ? "person" : "people"}</span>
+                      <span className={`text-[11px] ${done ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}>{r.signed} of {r.people} signed</span>
+                      {r.ready > 0 && <span className="text-[11px] text-teal-700 dark:text-teal-400">{r.ready} ready to sign</span>}
+                      {r.overdue > 0 && <span className="text-[11px] text-rose-700 dark:text-rose-400">{r.overdue} overdue</span>}
+                    </>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
   return (
     <div>
       <div className="flex items-center gap-2 mb-2 mt-1">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Employees</h3>
         <span className="text-xs text-muted-foreground">{"·"} {employees.length} with assigned test systems</span>
         <div className="flex-1 border-t border-border/60 ml-2" />
-        {/* 2026-10-14 (Michael Q182 = 1): the By instrument view, beside the people list */}
-        <Link href={labRoute("/veritacomp-app/instruments")} className="text-xs text-primary hover:underline whitespace-nowrap" data-testid="open-by-instrument">
-          By instrument
-        </Link>
+        {toggle}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {employees.map((e) => {
