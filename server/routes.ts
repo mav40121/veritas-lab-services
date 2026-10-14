@@ -27844,11 +27844,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const d = new Date(first.adate); const dms = Number.isNaN(d.getTime()) ? 0 : d.getTime();
       noteAssessed(implicitByStaffId, first.staff_id, Number(first.instrument_id), dms);
     }
-    // Per-method sign-off (2026-10-13): each active sign-off counts the method assessed as of its signed date. A method
-    // can only be signed once its elements are complete, so every sign-off is a competent one.
-    for (const s of client.prepare(
-      "SELECT staff_employee_id, instrument_id, signed_date FROM competency_method_signoffs WHERE lab_id = ? AND revoked_at IS NULL AND signed_date >= ?"
-    ).all(labId, widestCycleStart) as any[]) {
+    // Per-method sign-off (2026-10-13): each active PASS sign-off counts the method assessed as of its signed date.
+    // BUG-051 (2026-10-14): a Fail or Remediation Required sign-off is not a competent one, and while it is the latest
+    // sign-off for that person and method, the method stays owed (reassessment needed) even if an older pass exists.
+    const latestNotPass = new Set<string>();
+    {
+      const seen = new Set<string>();
+      for (const s of client.prepare(
+        "SELECT staff_employee_id, instrument_id, determination FROM competency_method_signoffs WHERE lab_id = ? AND revoked_at IS NULL ORDER BY signed_date DESC, id DESC"
+      ).all(labId) as any[]) {
+        const k = `${s.staff_employee_id}:${s.instrument_id}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        if (s.determination && s.determination !== "pass") latestNotPass.add(k);
+      }
+    }
+    for (const s of (client.prepare(
+      "SELECT staff_employee_id, instrument_id, signed_date, determination FROM competency_method_signoffs WHERE lab_id = ? AND revoked_at IS NULL AND signed_date >= ?"
+    ).all(labId, widestCycleStart) as any[]).filter((s: any) => (!s.determination || s.determination === "pass") && !latestNotPass.has(`${s.staff_employee_id}:${s.instrument_id}`))) {
       const d = new Date(s.signed_date); const dms = Number.isNaN(d.getTime()) ? 0 : d.getTime();
       noteAssessed(implicitByStaffId, Number(s.staff_employee_id), Number(s.instrument_id), dms);
     }
@@ -28088,7 +28101,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     let latestAssessmentId: number | null = null;
     if (compEmp) {
       const assessments = sqlite.prepare(
-        `SELECT a.id, a.locked, a.assessment_type, a.completion_date, a.signed_on_paper_date, a.evaluator_name, a.evaluator_title, a.evaluator_initials, p.is_implicit
+        `SELECT a.id, a.locked, a.assessment_type, a.status, a.remediation_plan, a.completion_date, a.signed_on_paper_date, a.evaluator_name, a.evaluator_title, a.evaluator_initials, p.is_implicit
          FROM competency_assessments a JOIN competency_programs p ON p.id = a.program_id
          WHERE a.employee_id = ? AND p.lab_id = ? ORDER BY a.assessment_date DESC, a.id DESC`
       ).all(compEmp.id, labId) as any[];
@@ -28147,6 +28160,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           id: key, legacy: false, milestone: s.milestone, signedDate: s.signed_date,
           signerName: s.signer_name, signerRole: s.signer_role, signerInitials: s.signer_initials || null,
           documentation: s.documentation || null,
+          // BUG-051: rows signed before the determination existed could only be signed complete, so they read as pass.
+          determination: s.determination || "pass",
+          remediationPlan: s.remediation_plan || null, remediationTargetDate: s.remediation_target_date || null,
           elements: Array.from({ length: elementCount }, (_, i) => ({ num: i + 1, status: compAggregateElementStatus(frozen, i + 1) })),
           waivedPassed: waivedPassedOf(frozen),
           waivedMethods: waivedSummary(frozen),
@@ -28163,18 +28179,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           signedDate: String(legacy.signed_on_paper_date || "").slice(0, 10) || labLocalDate(legacy.completion_date) || null, // BUG-047: lab date
           signerName: legacy.evaluator_name || null, signerRole: legacy.evaluator_title || null, signerInitials: legacy.evaluator_initials || null,
           documentation: null,
+          // BUG-051: the whole-record form's own Overall Determination.
+          determination: legacy.status === "fail" || legacy.status === "remediation" ? legacy.status : "pass",
+          remediationPlan: legacy.remediation_plan || null, remediationTargetDate: null,
           elements: Array.from({ length: elementCount }, (_, i) => ({ num: i + 1, status: compAggregateElementStatus(legacyItems, i + 1) })),
           waivedPassed: waivedPassedOf(legacyItems),
           waivedMethods: waivedSummary(legacyItems),
         });
       }
       const last = signoffs[0] || null;
-      const initial = signoffs.find((s: any) => s.milestone === "initial") || null;
-      const nextMilestone = nextMilestoneAfter(last?.milestone || null, complexity);
+      // BUG-051: a Fail or Remediation Required sign-off records the assessment but not competence. While it is the
+      // latest, the same competency is due again (reassessment after remediation) and the clock stays on the last PASS
+      // sign-off; with no pass at all (a failed initial) there is no due date and the method is not current.
+      const lastPass = signoffs.find((s: any) => s.determination === "pass") || null;
+      const needsRemediation = !!last && last.determination !== "pass";
+      const initial = signoffs.find((s: any) => s.milestone === "initial" && s.determination === "pass") || null;
+      const nextMilestone = needsRemediation
+        ? ((last.milestone as MethodMilestone | null) || nextMilestoneAfter(lastPass?.milestone || null, complexity))
+        : nextMilestoneAfter(last?.milestone || null, complexity);
       let nextDue: { targetDate: string | null; latest: string | null; naturalTargetDate?: string | null; annualMonth?: number | null } | null = null;
-      if (last && last.milestone && last.signedDate) {
+      if (lastPass && lastPass.milestone && lastPass.signedDate) {
         const r = nextCompetencyDue({
-          recordedMilestone: last.milestone, recordedDate: last.signedDate, initialDate: initial?.signedDate || null,
+          recordedMilestone: lastPass.milestone, recordedDate: lastPass.signedDate, initialDate: initial?.signedDate || null,
           hireDate: schedCtx?.hire_date || null, highestComplexity: complexity,
           accreditor: schedCtx?.accreditation_body || null, regime: schedCtx?.includes_nys === 1 ? "NYS-CLEP" : null,
         });
@@ -28193,8 +28219,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       const overdue = !!(nextDue?.latest && today > nextDue.latest);
       return {
-        signoffs, lastSignoff: last, nextMilestone, nextDue, overdue,
-        signedCurrent: !!last && !overdue,
+        signoffs, lastSignoff: last, nextMilestone, nextDue, overdue, needsRemediation,
+        signedCurrent: !!lastPass && !needsRemediation && !overdue,
         signers: methodSignerOptions(signerCandidates, complexity, inst.category || null, empId),
       };
     };
@@ -28612,6 +28638,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const documentation = String(b.documentation || "").trim();
     if (signedDate !== today && !documentation) return res.status(400).json({ error: "Written documentation is required when the date signed is not today (for example, where the paper record is kept)." });
     const initials = String(b.signerInitials || "").trim().slice(0, 6) || null;
+    // BUG-051 (2026-10-14): the Overall Determination (Pass / Fail / Remediation Required) the whole-record form had.
+    // Fail and Remediation Required need the action plan; the target completion date is optional.
+    const determination = String(b.determination || "pass");
+    if (!["pass", "fail", "remediation"].includes(determination)) return res.status(400).json({ error: "Overall determination must be Pass, Fail or Remediation Required." });
+    const remediationPlan = determination === "pass" ? null : (String(b.remediationPlan || "").trim().slice(0, 2000) || null);
+    if (determination !== "pass" && !remediationPlan) return res.status(400).json({ error: "Enter the remediation action plan for a Fail or Remediation Required determination." });
+    const remediationTargetDate = determination === "pass" ? null : (String(b.remediationTargetDate || "").trim().slice(0, 10) || null);
+    if (remediationTargetDate && !/^\d{4}-\d{2}-\d{2}$/.test(remediationTargetDate)) return res.status(400).json({ error: "Enter the target completion date as a valid date." });
 
     const compEmp = sqlite.prepare("SELECT id FROM competency_employees WHERE staff_employee_id = ? AND lab_id = ? LIMIT 1").get(empId, labId) as any;
     const implicit = sqlite.prepare("SELECT id FROM competency_programs WHERE lab_id = ? AND is_implicit = 1 LIMIT 1").get(labId) as any;
@@ -28629,16 +28663,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const ins = sqlite.prepare(
         `INSERT INTO competency_method_signoffs (lab_id, staff_employee_id, instrument_id, assessment_id, milestone, signed_date,
            signer_staff_employee_id, signer_name, signer_role, signer_initials, complexity, documentation, signed_by_user_id, created_at,
-           group_id, group_signoff_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           group_id, group_signoff_id, determination, remediation_plan, remediation_target_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       const groupId = method.group ? method.group.groupId : null;
       const r = ins.run(labId, empId, method.leadId, openIds[0], milestone, signedDate, signer.staffEmployeeId, signer.name, signer.role,
-        initials, ts.complexity, documentation || null, req.userId, now, groupId, null);
+        initials, ts.complexity, documentation || null, req.userId, now, groupId, null, determination, remediationPlan, remediationTargetDate);
       const id = Number(r.lastInsertRowid);
       for (const other of method.memberIds.filter((x) => x !== method.leadId)) {
         ins.run(labId, empId, other, openIds[0], milestone, signedDate, signer.staffEmployeeId, signer.name, signer.role,
-          initials, ts.complexity, documentation || null, req.userId, now, groupId, id);
+          initials, ts.complexity, documentation || null, req.userId, now, groupId, id, determination, remediationPlan, remediationTargetDate);
       }
       const moved = sqlite.prepare(
         `UPDATE competency_assessment_items SET signoff_id = ? WHERE assessment_id IN (${ph}) AND instrument_id IN (${method.memberIds.map(() => "?").join(",")}) AND signoff_id IS NULL`
@@ -28650,11 +28684,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     logAudit({
       userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "update",
       entityType: "employee_competency", entityId: String(empId),
-      entityLabel: `${view.employee.name} / ${ts.instrumentName} / ${MILESTONE_LABEL[milestone]} signed by ${signer.name}, ${signer.roleLabel}`,
-      after: { signoff_id: signoffId, milestone, signed_date: signedDate, signer: signer.name, role: signer.role },
+      entityLabel: `${view.employee.name} / ${ts.instrumentName} / ${MILESTONE_LABEL[milestone]} ${determination === "pass" ? "Pass" : determination === "fail" ? "Fail" : "Remediation Required"}, signed by ${signer.name}, ${signer.roleLabel}`,
+      after: { signoff_id: signoffId, milestone, signed_date: signedDate, signer: signer.name, role: signer.role, determination, remediation_plan: remediationPlan, remediation_target_date: remediationTargetDate },
       ipAddress: req.ip,
     });
-    res.json({ ok: true, signoffId, milestone, signedDate });
+    res.json({ ok: true, signoffId, milestone, signedDate, determination });
   });
 
   // POST /api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/signoffs/:signoffId/revoke
