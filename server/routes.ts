@@ -24036,7 +24036,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (accountLabCount(dataUserId) > 1) return res.status(409).json({ error: "This account manages multiple labs. Open the lab first so this change is scoped to the correct one, then retry.", multiLab: true });
     if (assessment.locked === 1) return res.status(409).json({ error: "Assessment is already signed and locked" });
     const now = new Date().toISOString();
-    const todayDate = now.slice(0, 10);
+    // BUG-047: "today" in the lab's time zone, not UTC, so an evening sign dated today is not read as back-dated.
+    const todayDate = labLocalDate(now);
     // Prior approval: a competency that was signed on paper on an earlier date
     // and is being entered into the system now. The historical paper date goes
     // in signed_on_paper_date; completion_date stays the true in-system entry
@@ -24428,7 +24429,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
     }
     const now = new Date().toISOString();
-    const todayDate = now.slice(0, 10);
+    // BUG-047: "today" in the lab's time zone, not UTC, so an evening sign dated today is not read as back-dated.
+    const todayDate = labLocalDate(now);
     const signedOnPaperRaw = typeof req.body?.signed_on_paper_date === "string" ? req.body.signed_on_paper_date.trim() : "";
     const isBackDated = !!signedOnPaperRaw && signedOnPaperRaw.slice(0, 10) !== todayDate;
     const documentation = typeof req.body?.documentation === "string" ? req.body.documentation.trim() : "";
@@ -28076,7 +28078,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const legacyItems = (sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ? AND instrument_id = ?").all(legacy.id, inst.id) as any[]);
         signoffs.push({
           id: null, legacy: true, milestone: null,
-          signedDate: String(legacy.signed_on_paper_date || legacy.completion_date || "").slice(0, 10) || null,
+          signedDate: String(legacy.signed_on_paper_date || "").slice(0, 10) || labLocalDate(legacy.completion_date) || null, // BUG-047: lab date
           signerName: legacy.evaluator_name || null, signerRole: legacy.evaluator_title || null, signerInitials: legacy.evaluator_initials || null,
           documentation: null,
           elements: Array.from({ length: elementCount }, (_, i) => ({ num: i + 1, status: compAggregateElementStatus(legacyItems, i + 1) })),
@@ -28374,7 +28376,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "SELECT id FROM competency_assessments WHERE program_id = ? AND employee_id = ? AND (locked IS NULL OR locked = 0) ORDER BY id DESC LIMIT 1"
       ).get(implicit.id, compEmp.id) as any;
       if (!assessment) {
-        const aDate = now.slice(0, 10);
+        const aDate = labLocalDate(now); // BUG-047: the lab's date, not UTC (an evening record was dated tomorrow)
         const r = sqlite.prepare(
           "INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, competency_type, status, created_at) VALUES (?, ?, 'initial', ?, 'technical', 'pass', ?)"
         ).run(implicit.id, compEmp.id, aDate, now);
