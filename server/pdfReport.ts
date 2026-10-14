@@ -5398,6 +5398,9 @@ interface RecordSignoff {
   elements?: Array<{ num: number; status: string }>;
   waivedPassed?: number | null;
   waivedMethods?: Array<{ num: number; name: string; date: string; status: string }>;
+  // BUG-051 (2026-10-14): Overall Determination; absent reads as pass (signed before the field existed).
+  determination?: "pass" | "fail" | "remediation";
+  remediationPlan?: string | null; remediationTargetDate?: string | null;
 }
 interface EmployeeCompetencyRecordInput {
   labName: string;
@@ -5459,16 +5462,22 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
 
   let signedCount = 0;
   const signLines: string[] = [];
+  const remediationLines: string[] = [];
   const rows = input.testSystems.map((ts) => {
     const last = (ts.signoffs || [])[0] || null;
     if (last) signedCount++;
+    const det = last?.determination || "pass";
+    if (last && det !== "pass") {
+      remediationLines.push(`<tr><td>${esc(ts.instrumentName)}</td><td>${det === "fail" ? "Fail" : "Remediation Required"}</td><td style="text-align:left;">${esc(last.remediationPlan || "")}</td><td class="nw">${esc(last.remediationTargetDate || "")}</td></tr>`);
+    }
     // A signed method shows the set it was signed on; an unsigned one shows the entries so far.
     const statuses = last ? (last.elements || []) : ts.elements;
     const wPassed = last ? (last.waivedPassed ?? 0) : (ts.waivedPassed || 0);
     const wMethods = last ? (last.waivedMethods || []) : (ts.waivedMethods || []);
     const required = ts.waivedRequired || 2;
     const assessment = last ? (last.legacy ? "Signed" : ms(last.milestone)) : ms(ts.nextMilestone || "initial");
-    const result = last ? `<span class="chip c-pass">Competent</span>`
+    const result = last
+      ? (det === "fail" ? `<span class="chip c-fail">Fail</span>` : det === "remediation" ? `<span class="chip c-amber">Remediation required</span>` : `<span class="chip c-pass">Competent</span>`)
       : ts.signable ? `<span class="chip c-teal">Ready to sign</span>`
       : ts.hasData ? `<span class="chip c-amber">In progress</span>`
       : `<span class="chip c-inc">Not started</span>`;
@@ -5566,6 +5575,10 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
         <tbody>${signLines.join("") || `<tr><td colspan="6">&nbsp;</td></tr>`}</tbody></table>
       </div>
     </div>
+    ${remediationLines.length ? `<h2>Remediation</h2>
+    <table class="m"><thead><tr><th style="width:22%">Method</th><th>Determination</th><th>Action plan</th><th>Target completion</th></tr></thead>
+      <tbody>${remediationLines.join("")}</tbody></table>
+    <div class="reg">The employee may not perform patient testing on these methods unsupervised until remediation is complete and the method is signed again with Pass.</div>` : ""}
   </body></html>`;
 }
 

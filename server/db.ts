@@ -1559,6 +1559,11 @@ sqlite.exec(`CREATE TABLE IF NOT EXISTS competency_method_signoffs (
   cmsGuard("signed_by_user_id", "signed_by_user_id INTEGER");
   cmsGuard("revoked_at", "revoked_at TEXT");
   cmsGuard("revoked_by_user_id", "revoked_by_user_id INTEGER");
+  // BUG-051 (2026-10-14): the Overall Determination the whole-record form had. NULL on rows signed before this
+  // reads as pass (they could only be signed with every element complete). Fail / remediation carry an action plan.
+  cmsGuard("determination", "determination TEXT");
+  cmsGuard("remediation_plan", "remediation_plan TEXT");
+  cmsGuard("remediation_target_date", "remediation_target_date TEXT");
   try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_cms_lab_emp_inst ON competency_method_signoffs(lab_id, staff_employee_id, instrument_id)"); } catch {}
 }
 // Lab-chosen method grouping (2026-10-14, Michael Q166/Q168 = 1): analyzers the lab says need no new or unique skills

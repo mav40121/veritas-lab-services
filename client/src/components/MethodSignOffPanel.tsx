@@ -13,17 +13,24 @@ import { authHeaders } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { MILESTONE_LABEL, MONTH_NAMES, initialsOf, milestonesForComplexity, type MethodMilestone, type SignerOption } from "@shared/competencySignoff";
+
+// BUG-051 (2026-10-14): the Overall Determination from the whole-record form, now on each method's sign-off.
+export type Determination = "pass" | "fail" | "remediation";
+export const DETERMINATION_LABEL: Record<Determination, string> = { pass: "Pass", fail: "Fail", remediation: "Remediation Required" };
 
 export interface MethodSignoff {
   id: number | null; legacy: boolean; milestone: MethodMilestone | null; signedDate: string | null;
   signerName: string | null; signerRole: string | null; signerInitials: string | null; documentation: string | null;
+  determination?: Determination; remediationPlan?: string | null; remediationTargetDate?: string | null;
 }
 export interface MethodSignState {
   instrumentId: number; instrumentName: string; complexity: string;
   signable: boolean; complete: boolean; hasData: boolean; fromLegacyProgram?: boolean;
-  signoffs: MethodSignoff[]; lastSignoff: MethodSignoff | null;
+  signoffs: MethodSignoff[]; lastSignoff: MethodSignoff | null; needsRemediation?: boolean;
+  elements?: Array<{ num: number; status: string }>;
   nextMilestone: MethodMilestone; nextDue: { targetDate: string | null; latest: string | null; naturalTargetDate?: string | null; annualMonth?: number | null } | null;
   overdue: boolean; signedCurrent: boolean; signers: SignerOption[];
   groupId?: number | null; groupMembers?: Array<{ id: number; name: string }> | null;
@@ -46,6 +53,10 @@ const optKey = (o: SignerOption) => (o.staffEmployeeId != null ? `e${o.staffEmpl
 
 export function signoffSummary(ts: MethodSignState): { label: string; tone: "green" | "teal" | "amber" | "red" | "muted" } {
   const last = ts.lastSignoff;
+  if (last && ts.needsRemediation && !ts.signable) {
+    const what = last.milestone ? MILESTONE_LABEL[last.milestone] : "Competency";
+    return last.determination === "fail" ? { label: `${what} failed`, tone: "red" } : { label: `${what}: remediation required`, tone: "amber" };
+  }
   if (last && ts.overdue) return { label: `${ts.nextMilestone ? MILESTONE_LABEL[ts.nextMilestone] : "Next"} overdue`, tone: "red" };
   if (ts.signable) return { label: `${MILESTONE_LABEL[ts.nextMilestone]} ready to sign`, tone: "teal" };
   if (last) return { label: last.legacy ? `Signed ${fmt(last.signedDate)}` : `${MILESTONE_LABEL[last.milestone as MethodMilestone]} signed ${fmt(last.signedDate)}`, tone: "green" };
@@ -68,6 +79,11 @@ export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts
   const [signedDate, setSignedDate] = useState(localToday());
   const [milestone, setMilestone] = useState<MethodMilestone>(ts.nextMilestone);
   const [documentation, setDocumentation] = useState("");
+  // An element entered as failed suggests Remediation Required (the old form opened its remediation box the same way).
+  const anyFail = !!ts.elements?.some((e) => e.status === "fail");
+  const [determination, setDetermination] = useState<Determination>(anyFail ? "remediation" : "pass");
+  const [remediationPlan, setRemediationPlan] = useState("");
+  const [remediationTargetDate, setRemediationTargetDate] = useState("");
   const allowed = milestonesForComplexity(ts.complexity);
 
   useEffect(() => {
@@ -77,10 +93,14 @@ export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts
     setSignedDate(localToday());
     setMilestone(ts.nextMilestone);
     setDocumentation("");
-  }, [ts.instrumentId, employeeId, ts.nextMilestone, eligible.length]); // eslint-disable-line react-hooks/exhaustive-deps
+    setDetermination(anyFail ? "remediation" : "pass");
+    setRemediationPlan("");
+    setRemediationTargetDate("");
+  }, [ts.instrumentId, employeeId, ts.nextMilestone, eligible.length, anyFail]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const signer = ts.signers.find((o) => optKey(o) === signerKey) || null;
   const backdated = signedDate !== localToday();
+  const notPass = determination !== "pass";
   const base = `${API_BASE}/api/labs/${labId}/competency/employee/${employeeId}/test-system/${ts.instrumentId}`;
 
   const sign = useMutation({
@@ -91,13 +111,14 @@ export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts
         body: JSON.stringify({
           signerStaffEmployeeId: signer.staffEmployeeId, signerIsMedicalDirector: signer.staffEmployeeId == null,
           signerInitials: initials, signedDate, milestone, documentation: backdated ? documentation : undefined,
+          determination, remediationPlan: notPass ? remediationPlan : undefined, remediationTargetDate: notPass ? (remediationTargetDate || undefined) : undefined,
         }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d?.incomplete?.length ? `${d.error} ${d.incomplete.join("; ")}` : (d.error || `HTTP ${r.status}`));
       return d;
     },
-    onSuccess: () => { toast({ title: "Signed", description: `${ts.instrumentName} ${MILESTONE_LABEL[milestone]} signed for ${firstName}.` }); onChanged(); },
+    onSuccess: () => { toast({ title: "Signed", description: `${ts.instrumentName} ${MILESTONE_LABEL[milestone]} signed for ${firstName}: ${DETERMINATION_LABEL[determination]}.` }); onChanged(); },
     onError: (e: any) => toast({ title: "Could not sign", description: String(e?.message || e), variant: "destructive" }),
   });
   const unlock = useMutation({
@@ -112,17 +133,27 @@ export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts
   });
 
   const last = ts.lastSignoff;
+  const lastNotPass = !!last && !!last.determination && last.determination !== "pass";
+  const warn = ts.overdue || lastNotPass;
   return (
     <div className="space-y-3" data-testid="method-signoff">
       {showStatus && last && (
-        <div className={`rounded-md border p-3 text-sm flex items-start justify-between gap-3 flex-wrap ${ts.overdue ? "border-red-300 dark:border-red-800" : "border-emerald-300 dark:border-emerald-800"}`} data-testid="method-signed">
+        <div className={`rounded-md border p-3 text-sm flex items-start justify-between gap-3 flex-wrap ${lastNotPass && last.determination === "remediation" && !ts.overdue ? "border-amber-300 dark:border-amber-800" : warn ? "border-red-300 dark:border-red-800" : "border-emerald-300 dark:border-emerald-800"}`} data-testid="method-signed">
           <div className="flex items-start gap-2">
-            {ts.overdue ? <AlertTriangle size={16} className="text-red-600 mt-0.5 shrink-0" /> : <CheckCircle2 size={16} className="text-emerald-600 mt-0.5 shrink-0" />}
+            {warn ? <AlertTriangle size={16} className={`${lastNotPass && last.determination === "remediation" && !ts.overdue ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"} mt-0.5 shrink-0`} /> : <CheckCircle2 size={16} className="text-emerald-600 mt-0.5 shrink-0" />}
             <div>
               <div className="font-semibold">
                 {last.legacy ? "Signed" : `${MILESTONE_LABEL[last.milestone as MethodMilestone]} signed`} {fmt(last.signedDate)}
                 {last.signerName ? ` by ${last.signerName}${last.signerRole ? `, ${ROLE_NAME[last.signerRole] || last.signerRole}` : ""}` : ""}
+                {last.determination && <span data-testid="method-determination">: {DETERMINATION_LABEL[last.determination]}</span>}
               </div>
+              {lastNotPass && (
+                <div className="text-xs mt-1 space-y-0.5" data-testid="method-remediation">
+                  <div className="text-amber-700 dark:text-amber-400 font-medium">{firstName} may not perform patient testing on this method unsupervised until remediation is complete and the {MILESTONE_LABEL[ts.nextMilestone].toLowerCase()} is signed again with Pass.</div>
+                  {last.remediationPlan && <div className="text-muted-foreground">Action plan: {last.remediationPlan}</div>}
+                  {last.remediationTargetDate && <div className="text-muted-foreground">Target completion: {fmt(last.remediationTargetDate)}</div>}
+                </div>
+              )}
               {ts.nextDue?.targetDate && (
                 <div className={`text-xs mt-0.5 ${ts.overdue ? "text-red-600 font-medium" : "text-muted-foreground"}`} data-testid="method-next-due">
                   {MILESTONE_LABEL[ts.nextMilestone]} due {fmt(ts.nextDue.targetDate)}{ts.overdue ? " (overdue)" : ""}
@@ -134,7 +165,7 @@ export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts
               {last.legacy && <div className="text-xs text-muted-foreground mt-0.5">Signed on the whole record before per-method sign-off.</div>}
               {ts.signoffs.length > 1 && (
                 <div className="text-[11px] text-muted-foreground mt-1">
-                  Earlier: {ts.signoffs.slice(1).map((s) => `${s.milestone ? MILESTONE_LABEL[s.milestone] : "Signed"} ${fmt(s.signedDate)}${s.signerName ? ` (${s.signerName})` : ""}`).join("; ")}
+                  Earlier: {ts.signoffs.slice(1).map((s) => `${s.milestone ? MILESTONE_LABEL[s.milestone] : "Signed"} ${fmt(s.signedDate)}${s.determination && s.determination !== "pass" ? ` ${DETERMINATION_LABEL[s.determination]}` : ""}${s.signerName ? ` (${s.signerName})` : ""}`).join("; ")}
                 </div>
               )}
             </div>
@@ -182,7 +213,29 @@ export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts
               <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Date signed</label>
               <Input type="date" className="h-8 text-xs" value={signedDate} max={localToday()} onChange={(e) => setSignedDate(e.target.value)} data-testid="signed-date" />
             </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Overall determination</label>
+              <select className={`w-full h-8 text-xs rounded-md border px-2 ${determination === "pass" ? "bg-background" : determination === "fail" ? "bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-800" : "bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800"}`}
+                value={determination} data-testid="determination-select" onChange={(e) => setDetermination(e.target.value as Determination)}>
+                {(["pass", "fail", "remediation"] as const).map((d) => <option key={d} value={d}>{DETERMINATION_LABEL[d]}</option>)}
+              </select>
+            </div>
           </div>
+          {notPass && (
+            <div className="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-2.5 space-y-2" data-testid="remediation-box">
+              <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
+                {firstName} requires additional training and may not perform patient testing on this method unsupervised until remediation is complete.
+              </p>
+              <div>
+                <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Action plan (required)</label>
+                <Textarea className="text-xs" rows={3} placeholder="Retraining, observation and reassessment planned..." value={remediationPlan} onChange={(e) => setRemediationPlan(e.target.value)} data-testid="remediation-plan" />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Target completion date</label>
+                <Input type="date" className="h-8 text-xs w-44" value={remediationTargetDate} onChange={(e) => setRemediationTargetDate(e.target.value)} data-testid="remediation-target-date" />
+              </div>
+            </div>
+          )}
           {backdated && (
             <div>
               <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Documentation (required for an earlier date)</label>
@@ -190,8 +243,8 @@ export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts
             </div>
           )}
           <div className="flex items-center gap-3 flex-wrap">
-            <Button size="sm" onClick={() => sign.mutate()} disabled={sign.isPending || !signer?.eligible || (backdated && !documentation.trim())} data-testid="sign-method">
-              {sign.isPending && <Loader2 className="animate-spin mr-1" size={12} />} Sign {ts.instrumentName} {MILESTONE_LABEL[milestone].toLowerCase()} for {firstName}
+            <Button size="sm" className="whitespace-normal h-auto min-h-8 py-1.5 text-left" onClick={() => sign.mutate()} disabled={sign.isPending || !signer?.eligible || (backdated && !documentation.trim()) || (notPass && !remediationPlan.trim())} data-testid="sign-method">
+              {sign.isPending && <Loader2 className="animate-spin mr-1" size={12} />} Sign {ts.instrumentName} {MILESTONE_LABEL[milestone].toLowerCase()} for {firstName}{notPass ? `: ${DETERMINATION_LABEL[determination]}` : ""}
             </Button>
             <span className="text-[11px] text-muted-foreground" data-testid="sign-covers">{ts.groupMembers?.length ? `Covers ${ts.groupMembers.map((m) => m.name).join(" and ")}. ` : ""}Locks this method only. {firstName}'s other methods stay open.</span>
           </div>
