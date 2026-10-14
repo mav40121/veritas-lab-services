@@ -816,12 +816,53 @@ export default function VeritaStockInventoryPage() {
   const [lotsTarget, setLotsTarget] = useState<InventoryItem | null>(null);
   const [lotsData, setLotsData] = useState<Array<{ id: number; lot_number: string | null; expiration_date: string | null; quantity: number }>>([]);
   const [lotsLoading, setLotsLoading] = useState(false);
+  // Lot in-use / out-of-use log (St. Charles REQ-067): when each lot was put in use and taken out of use.
+  // Kept apart from the lot rows (a lot row is removed when its stock reaches zero; the history stays).
+  type LotUse = { id: number; lot_number: string | null; expiration_date: string | null; in_use_date: string; in_use_by_name: string | null; out_of_use_date: string | null; out_of_use_by_name: string | null; out_of_use_reason: string | null };
+  const [lotUse, setLotUse] = useState<LotUse[]>([]);
+  const [lotUseDate, setLotUseDate] = useState<string>(new Date().toLocaleDateString("en-CA"));
+  const [lotUseReason, setLotUseReason] = useState<string>("finished");
+  const [lotUseBusy, setLotUseBusy] = useState(false);
+  const loadLotUse = async (itemId: number) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/veritastock/items/${itemId}/lot-use`, { headers: authHeaders() });
+      if (res.ok) { const d = await res.json(); setLotUse(Array.isArray(d.records) ? d.records : []); }
+    } catch { /* leave as is */ }
+  };
   const openLots = async (item: InventoryItem) => {
-    setLotsTarget(item); setLotsData([]); setLotsLoading(true);
+    setLotsTarget(item); setLotsData([]); setLotUse([]); setLotsLoading(true);
+    setLotUseDate(new Date().toLocaleDateString("en-CA")); setLotUseReason("finished");
     try {
       const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/veritastock/items/${item.id}/lots`, { headers: authHeaders() });
       if (res.ok) { const d = await res.json(); setLotsData(Array.isArray(d.lots) ? d.lots : []); }
+      await loadLotUse(item.id);
     } catch { /* leave empty */ } finally { setLotsLoading(false); }
+  };
+  const putLotInUse = async (lot: { lot_number: string | null; expiration_date: string | null }) => {
+    if (!lotsTarget) return;
+    setLotUseBusy(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/veritastock/items/${lotsTarget.id}/lot-use`, {
+        method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ lot_number: lot.lot_number, expiration_date: lot.expiration_date, in_use_date: lotUseDate }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); toast({ title: e.error || "Could not record the in-use date", variant: "destructive" }); return; }
+      toast({ title: `Lot ${lot.lot_number || "(no lot #)"} in use from ${lotUseDate}` });
+      await loadLotUse(lotsTarget.id);
+    } finally { setLotUseBusy(false); }
+  };
+  const takeLotOutOfUse = async (rec: LotUse) => {
+    if (!lotsTarget) return;
+    setLotUseBusy(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/veritastock/lot-use/${rec.id}`, {
+        method: "PATCH", headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ out_of_use_date: lotUseDate, out_of_use_reason: lotUseReason }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); toast({ title: e.error || "Could not record the out-of-use date", variant: "destructive" }); return; }
+      toast({ title: `Lot ${rec.lot_number || "(no lot #)"} out of use from ${lotUseDate}` });
+      await loadLotUse(lotsTarget.id);
+    } finally { setLotUseBusy(false); }
   };
 
   // Filters
@@ -2795,7 +2836,7 @@ export default function VeritaStockInventoryPage() {
       {/* Lots dialog: a product's child lots (lot # + expiration + qty), oldest-
           expiration first. Stock depletes oldest-first (FEFO). */}
       <Dialog open={!!lotsTarget} onOpenChange={(o) => { if (!o) setLotsTarget(null); }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Layers size={16} /> Lots{lotsTarget ? `: ${lotsTarget.item_name}` : ""}</DialogTitle>
           </DialogHeader>
@@ -2811,15 +2852,71 @@ export default function VeritaStockInventoryPage() {
                   <tr className="text-left text-xs uppercase text-muted-foreground border-b">
                     <th className="py-1.5 pr-3">Lot #</th>
                     <th className="py-1.5 pr-3">Expires</th>
-                    <th className="py-1.5 text-right">On hand</th>
+                    <th className="py-1.5 pr-3 text-right">On hand</th>
+                    <th className="py-1.5">In use</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {lotsData.map((l, i) => (
+                  {lotsData.map((l, i) => {
+                    const open = lotUse.find(r => !r.out_of_use_date && (r.lot_number || "") === (l.lot_number || ""));
+                    return (
                     <tr key={l.id} className="border-b last:border-0">
                       <td className="py-1.5 pr-3 font-mono text-xs">{l.lot_number || <span className="text-muted-foreground">(no lot #)</span>}</td>
                       <td className="py-1.5 pr-3">{l.expiration_date || <span className="text-muted-foreground">-</span>}{i === 0 && lotsData.length > 1 && <span className="ml-1.5 text-[10px] text-emerald-700">use first</span>}</td>
-                      <td className="py-1.5 text-right font-mono">{l.quantity.toLocaleString()} {unitLabel(lotsTarget?.usage_unit, l.quantity)}</td>
+                      <td className="py-1.5 pr-3 text-right font-mono">{l.quantity.toLocaleString()} {unitLabel(lotsTarget?.usage_unit, l.quantity)}</td>
+                      <td className="py-1.5 text-xs" data-testid={`lot-use-cell-${l.id}`}>
+                        {open ? (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-emerald-700 dark:text-emerald-400">Since {open.in_use_date}</span>
+                            <Button size="sm" variant="outline" className="h-7 px-2 text-xs" disabled={!canRecord || lotUseBusy} onClick={() => takeLotOutOfUse(open)} data-testid={`button-lot-out-of-use-${l.id}`}>Take out of use</Button>
+                          </div>
+                        ) : (
+                          <Button size="sm" variant="outline" className="h-7 px-2 text-xs" disabled={!canRecord || lotUseBusy} onClick={() => putLotInUse(l)} data-testid={`button-lot-in-use-${l.id}`}>Put in use</Button>
+                        )}
+                      </td>
+                    </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <div className="flex flex-wrap items-end gap-3 rounded-md border border-border bg-muted/30 p-2 text-xs">
+                <label className="flex flex-col gap-1" htmlFor="lot-use-date">
+                  <span className="text-muted-foreground">Date for in use / out of use</span>
+                  <Input id="lot-use-date" type="date" className="h-8 w-[9.5rem] text-xs" value={lotUseDate} max={new Date().toLocaleDateString("en-CA")} onChange={e => setLotUseDate(e.target.value)} data-testid="lot-use-date" />
+                </label>
+                <label className="flex flex-col gap-1" htmlFor="lot-use-reason">
+                  <span className="text-muted-foreground">Reason taken out of use</span>
+                  <select id="lot-use-reason" className="h-8 rounded-md border border-border bg-background px-2 text-xs" value={lotUseReason} onChange={e => setLotUseReason(e.target.value)} data-testid="lot-use-reason">
+                    <option value="finished">Finished (used up)</option>
+                    <option value="expired">Expired</option>
+                    <option value="recalled">Recalled</option>
+                    <option value="qc_failure">QC failure</option>
+                    <option value="damaged">Damaged</option>
+                    <option value="other">Other</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          )}
+          {!lotsLoading && lotUse.length > 0 && (
+            <div className="space-y-1.5" data-testid="lot-use-history">
+              <p className="text-xs font-medium text-foreground">In-use history</p>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left uppercase text-muted-foreground border-b">
+                    <th className="py-1 pr-2">Lot #</th>
+                    <th className="py-1 pr-2">In use</th>
+                    <th className="py-1 pr-2">Out of use</th>
+                    <th className="py-1">Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lotUse.map(r => (
+                    <tr key={r.id} className="border-b last:border-0">
+                      <td className="py-1 pr-2 font-mono">{r.lot_number || "(no lot #)"}</td>
+                      <td className="py-1 pr-2">{r.in_use_date}{r.in_use_by_name ? ` (${r.in_use_by_name})` : ""}</td>
+                      <td className="py-1 pr-2">{r.out_of_use_date ? `${r.out_of_use_date}${r.out_of_use_by_name ? ` (${r.out_of_use_by_name})` : ""}` : <span className="text-emerald-700 dark:text-emerald-400">still in use</span>}</td>
+                      <td className="py-1">{r.out_of_use_reason ? ({ finished: "Finished", expired: "Expired", recalled: "Recalled", qc_failure: "QC failure", damaged: "Damaged", other: "Other" } as Record<string, string>)[r.out_of_use_reason] || r.out_of_use_reason : "-"}</td>
                     </tr>
                   ))}
                 </tbody>
