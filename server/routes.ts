@@ -28100,7 +28100,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return {
         signoffs, lastSignoff: last, nextMilestone, nextDue, overdue,
         signedCurrent: !!last && !overdue,
-        signers: methodSignerOptions(signerCandidates, complexity, inst.category || null),
+        signers: methodSignerOptions(signerCandidates, complexity, inst.category || null, empId),
       };
     };
 

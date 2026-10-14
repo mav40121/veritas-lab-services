@@ -5,7 +5,8 @@
 // complexity. LOCAL server + scratch DB only; every person, instrument and competency below is a scratch-DB fixture.
 //   1. signer lists: moderate = TC or TS for that specialty (Michael Q159: a TS meets the TC requirements) or the director; high = TS for that specialty, a GS with a signed
 //      delegation, or the director; waived = GS, TC, TS or director; ineligible people listed with the reason
-//   2. sign is refused while elements are open (409 + list), for an ineligible signer (403), for a waived method as
+//   2. sign is refused while elements are open (409 + list), for an ineligible signer (403), for the person assessed
+//      signing their own competency (403, Michael Q163 = 1), for a waived method as
 //      "6-month" (400), for a future date (400), for an earlier date without documentation (400), and for a date
 //      before the method's last sign-off (400)
 //   3. signing one method freezes only that method's items; the person's other methods stay open; the next milestone
@@ -102,6 +103,16 @@ check("2e. an earlier date without documentation: 400", r.status === 400 && /doc
 await put(pat, UA, { waivedMethods: [{ num: 1, evidence: "Blind BS-1", date: today, initials: "SO", passed: true }, { num: 4, evidence: "Written test", date: today, initials: "SO", passed: true }] });
 r = await sign(pat, UA, { signerStaffEmployeeId: sam, milestone: "six_month" });
 check("2f. a waived method signed as 6-month: 400", r.status === 400 && /Initial or Annual/.test(r.body.error || ""), `${r.status} ${r.body.error}`);
+
+// Q163 = 1: nobody signs their own competency. Taylor (hematology TS) also runs the manual differential.
+await call("PUT", `${L}/staff/employees/${taylor}/instruments`, { instrumentIds: [DIFF] }, T);
+await put(taylor, DIFF, { elements: els("T") });
+const tSelf = (tsOf(await view(taylor), DIFF).signers || []).find((o) => o.name === "Taylor Brooks");
+r = await sign(taylor, DIFF, { signerStaffEmployeeId: taylor });
+check("2g. Taylor cannot sign Taylor's own manual diff: greyed out, and the server refuses it (403)",
+  tSelf && !tSelf.eligible && /own competency/.test(tSelf.reason || "") && r.status === 403 && /own competency/.test(r.body.error || ""), `${tSelf?.reason} / ${r.status} ${r.body.error}`);
+r = await sign(taylor, DIFF, { signerStaffEmployeeId: morgan });
+check("2h. the director can sign Taylor's manual diff", r.status === 200, `${r.status} ${r.body.error || ""}`);
 
 // ---------- 3. sign one method ----------
 await put(pat, XN, { elements: els("X") });

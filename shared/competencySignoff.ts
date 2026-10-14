@@ -125,9 +125,14 @@ export function signerOptionFor(c: SignerCandidate, complexityIn: string | null 
 const ROLE_ORDER: Record<string, number> = { TS: 0, TC: 0, GS: 1, LD: 2 };
 
 // The "Signed by" list for one method: eligible people first (the role the method calls for, then GS, then the
-// director), then the ineligible supervisors greyed out with the reason.
-export function methodSignerOptions(candidates: SignerCandidate[], complexity: string | null | undefined, department: string | null | undefined): SignerOption[] {
-  const opts = candidates.map((c) => signerOptionFor(c, complexity, department)).filter((o): o is SignerOption => !!o);
+// director), then the ineligible supervisors greyed out with the reason. The person being assessed never signs their
+// own competency (Michael Q163 = 1, 2026-10-13), whatever roles they hold.
+export function methodSignerOptions(candidates: SignerCandidate[], complexity: string | null | undefined, department: string | null | undefined, assessedStaffEmployeeId?: number | null): SignerOption[] {
+  const opts = candidates.map((c) => {
+    const o = signerOptionFor(c, complexity, department);
+    if (o && assessedStaffEmployeeId != null && c.staffEmployeeId === assessedStaffEmployeeId) return { ...o, eligible: false, reason: "Cannot sign their own competency" };
+    return o;
+  }).filter((o): o is SignerOption => !!o);
   return opts.sort((a, b) =>
     (a.eligible === b.eligible ? 0 : a.eligible ? -1 : 1)
     || (ROLE_ORDER[a.role || ""] ?? 3) - (ROLE_ORDER[b.role || ""] ?? 3)
