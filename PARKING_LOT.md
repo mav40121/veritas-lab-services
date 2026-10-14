@@ -695,6 +695,18 @@ Receipts: an integration test for the derivation (linked, unlinked fallback, una
 
 ---
 
+### 101. "Staff Portal" wording is still on the Plans page and in 11 other screens
+
+**Effort:** XS to S (copy sweep plus a check of each screen)
+**Importance:** Medium. Public pricing names a product that no longer exists; prospects and our own drafts repeat it.
+
+**What:** since 2026-10-09 (#1548, C93) staff sign in to the same VeritaAssure app with a staff login and setup locked; there is no separate Staff Portal. The phrase is still in client code on main (14fa0274): PricingPage.tsx (4, including the "Staff Portal Add-On" heading and the above-250 line), LabMembersPage.tsx (11), VeritaStaffAppPage.tsx (9), StaffPortalPage.tsx (4), VeritaPolicyCompliancePage.tsx (3), App.tsx (2), and one each in InventoryCountWorkflow, HospitalInventoryPage, VeritaCompAppPage, VeritaPolicyMyPoliciesPage, VeritaQCAppPage and VeritaStockPage. Rename to "staff seats" / "staff login" where it describes access, keep the flat-band pricing, and check whether StaffPortalPage is still routed or is dead code. Same sweep for faqContent, seo-metadata, static prerender text and generated PDFs/emails.
+
+**Source:** Michael 2026-10-14 ("there is no staff portal anymore, correct?") while reviewing the St. Charles reply; Claude had used the term in the draft email and SBAR (both corrected the same evening).
+**Status:** Open.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C96. Dead statement in db.ts: a roster "unique index" that can never be created (was #90)
