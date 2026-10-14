@@ -189,17 +189,12 @@ app.use((req, res, next) => {
     console.error("[backfill] Startup backfill import error:", err.message);
   }
 
-  // Re-key VeritaPolicy seat-user rows to owner. Required because the routes
-  // previously scoped data by req.userId (seat's own id) instead of
-  // req.ownerUserId (the owner's id). After the route fix, any rows still
-  // keyed by seat-user-id become unreachable. This backfill moves them to
-  // owner-keyed rows; owner wins on conflict.
-  try {
-    const { backfillVeritapolicySeatsOnStartup } = await import("./backfillVeritapolicySeats");
-    backfillVeritapolicySeatsOnStartup();
-  } catch (err: any) {
-    console.error("[backfill-veritapolicy] Startup backfill import error:", err.message);
-  }
+  // BUG-045 (2026-10-13): the startup "re-key VeritaPolicy seat-user rows to owner" backfill is removed. It was a
+  // one-time fix for rows written under req.userId before the routes moved to the owner, but VeritaPolicy data is
+  // now lab-scoped (UNIQUE(lab_id) settings; lab_id-keyed statuses), so on every boot it deleted LIVE rows by user_id:
+  // an owner holding a seat in their own pool ("seat 102 -> owner 102") lost the lab's settings row and every policy
+  // status they had set (Redington lab 34: 5 settings rows and 7 master-list statuses, 10/9-10/13), and a seat user
+  // who also owns a lab lost that lab's settings ("seat 17 -> owner 81", 10/8). Nothing reads by seat user_id now.
 
   // Recompute pass/fail status for all existing studies to fix any stale values
   try {

@@ -3327,7 +3327,7 @@ sqlite.exec(`
 // each rebuild is transaction- and catch-wrapped so it can never crash boot.
 // The three consolidation blocks above are stale-guarded no-ops post-consolidation
 // and catch-wrapped, so their legacy ON CONFLICT(user_id, policy_id) is never
-// reached; backfillVeritapolicySeatsOnStartup uses UPDATE/DELETE only. See the
+// reached; the startup seat backfill (removed 2026-10-13, BUG-045) used UPDATE/DELETE only. See the
 // project_site_module_audit memory (VeritaPolicy HIGH #1/#2).
 {
   const uniqueIndexOn = (table: string, cols: string[]): string | null => {
@@ -4199,25 +4199,44 @@ sqlite.exec(`
     try { sqlite.exec("ALTER TABLE competency_employees ADD COLUMN staff_employee_id INTEGER REFERENCES staff_employees(id)"); } catch {}
   }
   try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_competency_employees_staff_id ON competency_employees(staff_employee_id)"); } catch {}
-  const backfill = sqlite.prepare(`
-    UPDATE competency_employees
-    SET staff_employee_id = (
+  // BUG-048 (2026-10-14): this backfill runs on every boot and must never take the server down. On 10/13 a lab re-added
+  // 19 people as new, unlinked competency_employees rows while their earlier rows (already linked to the same VeritaStaff
+  // person) were set inactive. The old single UPDATE tried to link each new row to a person another row already held,
+  // hit idx_competency_employees_staff_lab_unique, and threw at boot. Now: link a row only when no other row in that lab
+  // holds the person, one row at a time; anything left unlinked falls back to live name matching, as before.
+  try {
+    const matchStaff = sqlite.prepare(`
       SELECT se.id
       FROM staff_employees se
-      WHERE se.tier2_lab_id = competency_employees.lab_id
+      WHERE se.tier2_lab_id = ?
         AND (
-          LOWER(TRIM(se.first_name || ' ' || se.last_name)) = LOWER(TRIM(competency_employees.name))
-          OR LOWER(TRIM(se.last_name || ', ' || se.first_name)) = LOWER(TRIM(competency_employees.name))
-          OR LOWER(TRIM(se.last_name || ' ' || se.first_name)) = LOWER(TRIM(competency_employees.name))
+          LOWER(TRIM(se.first_name || ' ' || se.last_name)) = LOWER(TRIM(?))
+          OR LOWER(TRIM(se.last_name || ', ' || se.first_name)) = LOWER(TRIM(?))
+          OR LOWER(TRIM(se.last_name || ' ' || se.first_name)) = LOWER(TRIM(?))
         )
       LIMIT 1
-    )
-    WHERE staff_employee_id IS NULL
-      AND lab_id IS NOT NULL
-      AND name IS NOT NULL
-  `).run();
-  if (backfill.changes > 0) {
-    console.log(`[migration] PR D+ competency_employees.staff_employee_id backfilled on ${backfill.changes} row(s)`);
+    `);
+    const heldInLab = sqlite.prepare("SELECT 1 FROM competency_employees WHERE lab_id = ? AND staff_employee_id = ? LIMIT 1");
+    const linkRow = sqlite.prepare("UPDATE competency_employees SET staff_employee_id = ? WHERE id = ? AND staff_employee_id IS NULL");
+    const unlinked = sqlite.prepare(`
+      SELECT id, lab_id, name FROM competency_employees
+      WHERE staff_employee_id IS NULL AND lab_id IS NOT NULL AND name IS NOT NULL
+    `).all() as Array<{ id: number; lab_id: number; name: string }>;
+    let linked = 0, alreadyHeld = 0;
+    for (const row of unlinked) {
+      const match = matchStaff.get(row.lab_id, row.name, row.name, row.name) as { id: number } | undefined;
+      if (!match) continue;
+      if (heldInLab.get(row.lab_id, match.id)) { alreadyHeld++; continue; }
+      try { linked += linkRow.run(match.id, row.id).changes; } catch { alreadyHeld++; }
+    }
+    if (linked > 0) {
+      console.log(`[migration] PR D+ competency_employees.staff_employee_id backfilled on ${linked} row(s)`);
+    }
+    if (alreadyHeld > 0) {
+      console.warn(`[migration] PR D+ backfill: ${alreadyHeld} competency_employees row(s) left unlinked because another row in the same lab already holds that VeritaStaff person`);
+    }
+  } catch (err: any) {
+    console.warn(`[migration] PR D+ competency_employees backfill error (boot continues): ${err?.message || err}`);
   }
 
   // Phase B2 of the unification (2026-06-06): partial UNIQUE index on
