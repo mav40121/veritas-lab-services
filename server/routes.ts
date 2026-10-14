@@ -27351,6 +27351,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     })));
   });
 
+  // BUG-046 (2026-10-13, Sampson lab 36): link a VeritaComp employee row to its VeritaStaff person without tripping
+  // UNIQUE(staff_employee_id, lab_id). Removing an employee only marks the row inactive and keeps its link, so a person
+  // removed and added again got a second row whose link UPDATE threw, and these GETs returned 500. If another row holds
+  // the link and is inactive, the link moves to this row; if that row is active (a true duplicate), nothing is written
+  // and the caller still reads with staffEmpId.
+  function linkCompetencyEmployeeToStaff(client: any, labId: number, compEmpId: number, staffEmpId: number): void {
+    const holder = client.prepare(
+      "SELECT id, status FROM competency_employees WHERE lab_id = ? AND staff_employee_id = ? AND id <> ?"
+    ).get(labId, staffEmpId, compEmpId) as { id: number; status: string } | undefined;
+    if (holder && holder.status === "active") return;
+    client.transaction(() => {
+      if (holder) client.prepare("UPDATE competency_employees SET staff_employee_id = NULL WHERE id = ?").run(holder.id);
+      client.prepare("UPDATE competency_employees SET staff_employee_id = ? WHERE id = ?").run(staffEmpId, compEmpId);
+    })();
+  }
+
   // GET /api/labs/:labId/competency/programs/:programId/employees/:employeeId/suggested-method-groups
   //
   // PR D+ of the customer-blockers wave (2026-06-05). Resolves the
@@ -27402,7 +27418,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (liveMatch) {
         staffEmpId = liveMatch.id;
         // Persist the resolved FK so the next call is one query shorter.
-        client.prepare("UPDATE competency_employees SET staff_employee_id = ? WHERE id = ?").run(staffEmpId, compEmp.id);
+        linkCompetencyEmployeeToStaff(client, labId, compEmp.id, staffEmpId);
       }
     }
 
@@ -27608,7 +27624,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       `).get(labId, compEmp.name, compEmp.name, compEmp.name) as { id: number } | undefined;
       if (liveMatch) {
         staffEmpId = liveMatch.id;
-        client.prepare("UPDATE competency_employees SET staff_employee_id = ? WHERE id = ?").run(staffEmpId, compEmp.id);
+        linkCompetencyEmployeeToStaff(client, labId, compEmp.id, staffEmpId);
       }
     }
     if (!staffEmpId) return res.json([]);
