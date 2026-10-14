@@ -353,6 +353,9 @@ export default function AccountSettingsPage() {
     queryKey: ["/api/account/settings"],
     enabled: isLoggedIn,
   });
+  // 2026-10-14 (Michael, Q195 = 1): labs are set up by the Veritas team after a short call. An account with no lab
+  // (and not a seat on someone else's) sees that instead of a lab form whose save used to create a lab.
+  const noLab = !!memberships && memberships.length === 0 && !settings?.is_seat;
 
   useEffect(() => {
     if (settings) {
@@ -445,12 +448,21 @@ export default function AccountSettingsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {noLab && (
+            <div className="rounded-md border border-primary/30 bg-primary/5 px-4 py-3 text-sm" data-testid="lab-setup-by-staff">
+              <p className="font-medium">Your lab is set up by our team.</p>
+              <p className="text-muted-foreground mt-1">
+                After a short call we create your lab and its owner account. Until then you can explore the Demo Lab.
+              </p>
+              <a href="/contact" className="inline-block mt-2 text-primary hover:underline font-medium">Talk to our team</a>
+            </div>
+          )}
           {settings?.is_seat && settings?.owner_name && (
             <p className="text-sm text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
               {onStock ? "Organization settings" : "Lab settings"} are managed by {settings.owner_name}.
             </p>
           )}
-          {!onStock && (<div className="space-y-2">
+          {!onStock && !noLab && (<div className="space-y-2">
             <Label htmlFor="clia_number">CLIA Number</Label>
             <Input
               id="clia_number"
@@ -469,7 +481,7 @@ export default function AccountSettingsPage() {
               </p>
             )}
           </div>)}
-          <div className="space-y-2">
+          {!noLab && (<div className="space-y-2">
             <Label htmlFor="lab_name">{onStock ? "Organization Name" : "Lab Name"}</Label>
             <Input
               id="lab_name"
@@ -483,8 +495,8 @@ export default function AccountSettingsPage() {
                 Locked - contact support to change
               </p>
             )}
-          </div>
-          {!settings?.is_seat && (
+          </div>)}
+          {!settings?.is_seat && !noLab && (
             <Button
               onClick={() => saveMutation.mutate()}
               disabled={

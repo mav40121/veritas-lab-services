@@ -1627,8 +1627,10 @@ export default function VeritaCheckPage() {
       // not, fail loudly so the bug is visible instead of silently writing
       // to whichever lab the server backfill picks.
       if (!activeLabId) {
+        // 2026-10-14 (Michael, Q195/Q197 = 1): an account without a lab cannot save studies; its lab (and its free
+        // studies) come from the team after a short call.
         throw new Error(
-          "Active lab not resolved — cannot save study. Pick a lab in the NavBar switcher and retry."
+          "Saving a study needs your lab. Your lab is set up by our team after a short call (www.veritaslabservices.com/contact). You can explore the Demo Lab now."
         );
       }
       const url = isEditing

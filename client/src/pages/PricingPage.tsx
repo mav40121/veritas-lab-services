@@ -56,6 +56,9 @@ function ColaBanner() {
 // (Clinic, Community, Hospital). No standalone System tile; that path is
 // discoverable through the center band.
 
+// Suite plans whose lab is set up by our team (2026-10-14, Michael Q195 = 1).
+const SUITE_PLAN_NAMES = ["Clinic", "Community", "Hospital"];
+
 const TOP_PLANS = [
   {
     name: "Per Study",
@@ -180,7 +183,7 @@ return (
             Simple annual pricing based on your lab type. No hidden fees. No long-term contracts.
           </p>
           <p className="text-muted-foreground text-base max-w-2xl mx-auto leading-relaxed">
-            Choose the plan that fits your lab's size and complexity. Multi-seat suite plans include a 14-day free trial.
+            Choose the plan that fits your lab's size and complexity. Suite plans are set up with our team on a short call.
           </p>
         </div>
       </section>
@@ -265,8 +268,11 @@ return (
                       variant="outline"
                       className="w-full font-semibold border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground"
                     >
+                      {/* 2026-10-14 (Michael, Q195 = 1): suite labs are set up by our team after a short call, so the
+                          suite cards send people to talk to the team instead of signing up to subscribe. */}
                       <Link
-                        href={plan.buttonHref}
+                        href={SUITE_PLAN_NAMES.includes(plan.name) ? `/contact?tier=${tierSlug[plan.name] || ""}` : plan.buttonHref}
+                        data-testid={SUITE_PLAN_NAMES.includes(plan.name) ? "plan-talk-to-team" : undefined}
                         onClick={() => {
                           // Funnel signal: user selected a plan and is heading to login/account
                           // to start checkout. The actual GA4 begin_checkout event is fired
@@ -285,11 +291,11 @@ return (
                           });
                         }}
                       >
-                        Subscribe <ChevronRight size={14} className="ml-1" />
+                        {SUITE_PLAN_NAMES.includes(plan.name) ? "Talk to our team" : "Subscribe"} <ChevronRight size={14} className="ml-1" />
                       </Link>
                     </Button>
                     <p className="text-xs text-center text-muted-foreground">
-                      14-day free trial &middot; 30-day money-back guarantee
+                      {SUITE_PLAN_NAMES.includes(plan.name) ? "Set up with our team on a short call" : "14-day free trial"} &middot; 30-day money-back guarantee
                     </p>
                   </div>
                 ) : (
