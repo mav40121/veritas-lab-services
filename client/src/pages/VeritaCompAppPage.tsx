@@ -521,6 +521,10 @@ function EmployeeRosterSection() {
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Employees</h3>
         <span className="text-xs text-muted-foreground">{"·"} {employees.length} with assigned test systems</span>
         <div className="flex-1 border-t border-border/60 ml-2" />
+        {/* 2026-10-14 (Michael Q182 = 1): the By instrument view, beside the people list */}
+        <Link href={labRoute("/veritacomp-app/instruments")} className="text-xs text-primary hover:underline whitespace-nowrap" data-testid="open-by-instrument">
+          By instrument
+        </Link>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {employees.map((e) => {
