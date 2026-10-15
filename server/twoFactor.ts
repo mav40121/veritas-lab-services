@@ -6,9 +6,11 @@
 // codes. "Remember this computer for 30 days" skips the step on a trusted browser unless one of
 // the person's labs switched that off (shared computers).
 //
-// Who must use it: anyone with users.vls_support = 1 (they reach more than one lab), and anyone
-// in a lab whose owner turned on labs.mfa_required. Anyone else may turn it on for themselves.
-// The public demo sign-in is never asked.
+// Who must use it: anyone with users.vls_support = 1 (they reach more than one lab), anyone in a
+// lab that turned on labs.mfa_required, and anyone in a lab covered by an owner's whole-system
+// switch (users.mfa_system_required: every lab that person owns, plus every lab in an organization
+// they are billing owner of). Anyone else may turn it on for themselves. The public demo sign-in is
+// never asked.
 //
 // Secrets: the authenticator key is sealed with AES-256-GCM (key derived from MFA_KEY, else
 // JWT_SECRET). Recovery codes, emailed codes and remembered-computer tokens are stored only as
@@ -70,10 +72,20 @@ export interface MfaRequirement {
   allowRemember: boolean;
 }
 
+/**
+ * The owners whose whole-system switch covers a lab: its owner, and the billing owner of its
+ * organization. Correlated scalar subquery over alias `l`; yields a comma list of user ids.
+ */
+const SYSTEM_OWNERS_SQL = `SELECT GROUP_CONCAT(so.id) FROM users so
+  WHERE COALESCE(so.mfa_system_required, 0) = 1 AND (
+        so.id = l.owner_user_id
+     OR so.id IN (SELECT o.billing_owner_user_id FROM organizations o WHERE o.id = l.organization_id))`;
+
 /** Labs the person works in: owner, active member, active seat, or an active member of the lab's organization. */
 function userLabRows(sqlite: any, userId: number): any[] {
   return sqlite.prepare(
-    `SELECT DISTINCT l.id, l.lab_name, COALESCE(l.mfa_required, 0) AS req, COALESCE(l.mfa_allow_remember, 1) AS rem
+    `SELECT DISTINCT l.id, l.lab_name, COALESCE(l.mfa_required, 0) AS req, COALESCE(l.mfa_allow_remember, 1) AS rem,
+            (${SYSTEM_OWNERS_SQL}) AS sys_owners
        FROM labs l
       WHERE l.retired_at IS NULL AND (
             l.owner_user_id = ?
@@ -83,17 +95,74 @@ function userLabRows(sqlite: any, userId: number): any[] {
   ).all(userId, userId, userId, userId) as any[];
 }
 
-export function mfaRequirement(sqlite: any, userId: number): MfaRequirement {
+/**
+ * What requires two-factor of this person. With ignoreOwnSystem, the person's own whole-system
+ * switch is left out: that answers "would anything else still require it if they turned it off?".
+ */
+export function mfaRequirement(sqlite: any, userId: number, opts: { ignoreOwnSystem?: boolean } = {}): MfaRequirement {
   const u = sqlite.prepare("SELECT COALESCE(vls_support, 0) AS vls FROM users WHERE id = ?").get(userId) as any;
   const vlsSupport = Number(u?.vls) === 1;
   const labs = userLabRows(sqlite, userId);
-  const requiredBy = labs.filter((l) => Number(l.req) === 1).map((l) => ({ id: Number(l.id), name: String(l.lab_name || "") }));
+  const requiredBy = labs
+    .filter((l) => {
+      if (Number(l.req) === 1) return true;
+      const owners = String(l.sys_owners || "").split(",").filter(Boolean).map(Number);
+      return owners.some((o) => !(opts.ignoreOwnSystem && o === userId));
+    })
+    .map((l) => ({ id: Number(l.id), name: String(l.lab_name || "") }));
   return {
     required: vlsSupport || requiredBy.length > 0,
     vlsSupport,
     requiredBy,
     allowRemember: labs.every((l) => Number(l.rem) === 1),
   };
+}
+
+/** Labs a person's whole-system switch covers: labs they own, and labs in organizations they are billing owner of. */
+export function systemLabs(sqlite: any, userId: number): { id: number; name: string }[] {
+  return (sqlite.prepare(
+    `SELECT l.id, l.lab_name FROM labs l
+      WHERE l.retired_at IS NULL AND (
+            l.owner_user_id = ?
+         OR l.organization_id IN (SELECT id FROM organizations WHERE billing_owner_user_id = ?))
+      ORDER BY l.lab_name COLLATE NOCASE`
+  ).all(userId, userId) as any[]).map((l) => ({ id: Number(l.id), name: String(l.lab_name || "") }));
+}
+
+/** How many other people (not Veritas support) work in those labs: the people the switch reaches. */
+export function systemPeopleCount(sqlite: any, userId: number): number {
+  const ids = systemLabs(sqlite, userId).map((l) => l.id);
+  if (!ids.length) return 0;
+  const marks = ids.map(() => "?").join(",");
+  const row = sqlite.prepare(
+    `SELECT COUNT(DISTINCT u.id) AS n FROM users u
+      WHERE u.id <> ? AND COALESCE(u.vls_support, 0) = 0 AND (
+            u.id IN (SELECT owner_user_id FROM labs WHERE id IN (${marks}))
+         OR u.id IN (SELECT user_id FROM lab_members WHERE status = 'active' AND lab_id IN (${marks}))
+         OR u.id IN (SELECT seat_user_id FROM user_seats WHERE status = 'active' AND lab_id IN (${marks})))`
+  ).get(userId, ...ids, ...ids, ...ids) as any;
+  return Number(row?.n || 0);
+}
+
+export function isSystemRequired(sqlite: any, userId: number): boolean {
+  return Number((sqlite.prepare("SELECT COALESCE(mfa_system_required, 0) AS v FROM users WHERE id = ?").get(userId) as any)?.v) === 1;
+}
+
+export function setSystemRequired(sqlite: any, userId: number, on: boolean): void {
+  sqlite.prepare("UPDATE users SET mfa_system_required = ?, mfa_system_required_at = ? WHERE id = ?")
+    .run(on ? 1 : 0, on ? new Date().toISOString() : null, userId);
+}
+
+/** The owner whose whole-system switch covers this lab, if any (for the lab's Members card). */
+export function labSystemOwner(sqlite: any, labId: number): { id: number; name: string } | null {
+  const row = sqlite.prepare(
+    `SELECT so.id, COALESCE(so.name, so.email) AS name FROM labs l, users so
+      WHERE l.id = ? AND COALESCE(so.mfa_system_required, 0) = 1 AND (
+            so.id = l.owner_user_id
+         OR so.id IN (SELECT o.billing_owner_user_id FROM organizations o WHERE o.id = l.organization_id))
+      LIMIT 1`
+  ).get(labId) as any;
+  return row ? { id: Number(row.id), name: String(row.name || "") } : null;
 }
 
 // ── Authenticator app ─────────────────────────────────────────────────────

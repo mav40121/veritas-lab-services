@@ -243,6 +243,92 @@ async function main() {
     const moveNoPw = await req("POST", "/api/auth/mfa/setup/start", {}, ff.body.token);
     const moveWithPw = await req("POST", "/api/auth/mfa/setup/start", { password: PW }, ff.body.token);
     check("14c. moving an existing two-factor to a new phone needs the password", moveNoPw.status === 401 && moveWithPw.status === 200, `${moveNoPw.status}/${moveWithPw.status}`);
+
+    // 15) The owner's whole-system switch (Michael 2026-10-15, recording 1: "if you turn it on as the lab
+    // owner, you are turning it on for your entire system. So all of your users will be required to have it.")
+    // G owns two labs and is billing owner of an organization that also holds H's lab.
+    const G = await register("g");
+    const H = await register("h");
+    const M = await register("m");
+    const N = await register("n");
+    const O = await register("o"); // outside G's system
+    const freshStatus = await req("GET", "/api/auth/mfa", undefined, G.token);
+    check("15a. an account that owns no lab has no system to cover", Array.isArray(freshStatus.body?.systemLabs) && freshStatus.body.systemLabs.length === 0 && freshStatus.body?.systemRequired === false, JSON.stringify(freshStatus.body?.systemLabs));
+    const g1 = Number((await req("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: G.email, labName: "IT System Lab One", plan: "hospital" })).body?.labId);
+    const g2 = Number((await req("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: G.email, labName: "IT System Lab Two", plan: "hospital" })).body?.labId);
+    const h1 = Number((await req("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: H.email, labName: "IT System Lab Three", plan: "hospital" })).body?.labId);
+    const orgId = Number(sqlite.prepare("INSERT INTO organizations (name, billing_owner_user_id) VALUES (?, ?)").run("IT Two-Factor System", G.id).lastInsertRowid);
+    sqlite.prepare("UPDATE labs SET organization_id = ? WHERE id IN (?, ?)").run(orgId, g1, h1);
+    await req("POST", "/api/admin/create-lab-invite", { secret: ADMIN, labId: g2, email: M.email, role: "staff" });
+    await req("POST", "/api/admin/create-lab-invite", { secret: ADMIN, labId: h1, email: N.email, role: "staff" });
+    check("15b. test labs provisioned", [g1, g2, h1].every((x) => Number.isInteger(x) && x > 0), JSON.stringify([g1, g2, h1]));
+
+    const gOff = await req("GET", "/api/auth/mfa", undefined, G.token);
+    const sysNames = (gOff.body?.systemLabs || []).map((l: any) => l.name).sort();
+    check("15c. the owner's system = labs owned + labs in the organization they bill", JSON.stringify(sysNames) === JSON.stringify(["IT System Lab One", "IT System Lab Three", "IT System Lab Two"]), JSON.stringify(sysNames));
+    check("15d. the people it reaches are counted (H, M, N; not the owner)", gOff.body?.systemPeople === 3, String(gOff.body?.systemPeople));
+    signOutAll(M.id);
+    check("15e. before the owner turns it on, a member signs in with a password alone", typeof (await login(M.email)).body?.token === "string");
+
+    // The owner turns it on from Account settings.
+    const gst = await req("POST", "/api/auth/mfa/setup/start", {}, G.token);
+    const gKey = keyOf(gst.body.key);
+    const gConf = await req("POST", "/api/auth/mfa/setup/confirm", { code: totpAt(gKey), require_system: true }, G.token);
+    const gOn = await req("GET", "/api/auth/mfa", undefined, G.token);
+    check("15f. turning it on as the owner switches on the whole-system requirement", gConf.status === 200 && gOn.body?.enabled === true && gOn.body?.systemRequired === true, JSON.stringify({ s: gConf.status, sys: gOn.body?.systemRequired }));
+    check("15g. the owner can still turn their own off (their switch is the only thing requiring it)", gOn.body?.required === false && gOn.body?.canTurnOff === true, JSON.stringify({ r: gOn.body?.required, c: gOn.body?.canTurnOff }));
+    const auditRow = sqlite.prepare("SELECT entity_label FROM audit_log WHERE user_id = ? AND entity_type = 'two_factor.system_required' ORDER BY id DESC LIMIT 1").get(G.id) as any;
+    check("15h. the audit trail records which labs", String(auditRow?.entity_label || "").includes("3 labs") && String(auditRow?.entity_label || "").includes("IT System Lab Three"), auditRow?.entity_label);
+
+    signOutAll(M.id);
+    const lm = await login(M.email);
+    check("15i. a member of an owned lab is sent to setup at next sign-in", lm.body?.mfa_setup_required === true && !lm.body?.token && String(lm.body?.required_by || "").includes("IT System Lab Two"), JSON.stringify(lm.body?.required_by));
+    signOutAll(N.id);
+    const ln = await login(N.email);
+    check("15j. a member of a lab in the owner's organization (owned by someone else) is sent to setup", ln.body?.mfa_setup_required === true && String(ln.body?.required_by || "").includes("IT System Lab Three"), JSON.stringify(ln.body?.required_by));
+    signOutAll(H.id);
+    check("15k. the other lab's own owner is covered too", (await login(H.email)).body?.mfa_setup_required === true);
+    signOutAll(O.id);
+    const lo = await login(O.email);
+    check("15l. someone outside the system is not asked", typeof lo.body?.token === "string");
+
+    const card = await req("GET", `/api/labs/${g2}/two-factor`, undefined, G.token);
+    check("15m. the lab's Members card shows it required for the whole system, by the owner", card.body?.required === true && card.body?.requiredBySystem === "IT g", JSON.stringify({ r: card.body?.required, s: card.body?.requiredBySystem }));
+    check("15n. the member shows as Set up at next sign-in", (card.body?.people || []).find((p: any) => p.userId === M.id)?.status === "setup_next");
+    const lift = await req("PUT", `/api/labs/${g2}/two-factor`, { required: false }, G.token);
+    check("15o. one lab cannot be lifted out of the system requirement from its Members card", lift.status === 409 && lift.body?.code === "SYSTEM_REQUIRED", `status=${lift.status}`);
+
+    // A lab added to the system later is covered without anyone touching it.
+    const g3 = Number((await req("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: G.email, labName: "IT System Lab Four", plan: "hospital" })).body?.labId);
+    const P = await register("p");
+    await req("POST", "/api/admin/create-lab-invite", { secret: ADMIN, labId: g3, email: P.email, role: "staff" });
+    signOutAll(P.id);
+    check("15p. a lab the owner adds later is covered automatically", (await login(P.email)).body?.mfa_setup_required === true);
+
+    // Turning the owner's own off lifts it for everyone.
+    const gOffWrong = await req("POST", "/api/auth/mfa/turn-off", { password: "not-it" }, G.token);
+    check("15q. turning it off needs the owner's password", gOffWrong.status === 401 && (await req("GET", "/api/auth/mfa", undefined, G.token)).body?.systemRequired === true);
+    const gOffOk = await req("POST", "/api/auth/mfa/turn-off", { password: PW }, G.token);
+    check("15r. the owner turns it off: their own two-factor and the system requirement both end", gOffOk.status === 200 && (await req("GET", "/api/auth/mfa", undefined, G.token)).body?.systemRequired === false && !sqlite.prepare("SELECT 1 FROM user_mfa WHERE user_id = ?").get(G.id));
+    signOutAll(M.id);
+    check("15s. members sign in with a password alone again", typeof (await login(M.email)).body?.token === "string");
+
+    // An owner who already has it on (set up before, or at a sign-in) turns the system on separately.
+    const gst2 = await req("POST", "/api/auth/mfa/setup/start", {}, G.token);
+    await req("POST", "/api/auth/mfa/setup/confirm", { code: totpAt(keyOf(gst2.body.key)) }, G.token);
+    check("15t. turning it on without require_system leaves the system alone", (await req("GET", "/api/auth/mfa", undefined, G.token)).body?.systemRequired === false);
+    const rsNo = await req("POST", "/api/auth/mfa/require-system", {}, lo.body.token);
+    check("15u. someone who owns no lab (and has no two-factor) cannot switch on a system", rsNo.status === 409, `status=${rsNo.status}`);
+    const rsOn = await req("POST", "/api/auth/mfa/require-system", {}, G.token);
+    check("15v. an enrolled owner switches the system requirement on", rsOn.status === 200 && rsOn.body?.labs === 4 && (await req("GET", "/api/auth/mfa", undefined, G.token)).body?.systemRequired === true, JSON.stringify(rsOn.body));
+
+    // A Veritas reset keeps the owner's requirement unless asked to lift it.
+    const r1 = await req("POST", "/api/admin/two-factor/reset", { secret: ADMIN, userId: G.id });
+    check("15w. a Veritas reset alone keeps the system requirement (the owner sets up again)", r1.status === 200 && r1.body?.systemRequired === true);
+    signOutAll(G.id);
+    check("15x. so the owner is asked to set it up at next sign-in", (await login(G.email)).body?.mfa_setup_required === true);
+    const r2 = await req("POST", "/api/admin/two-factor/reset", { secret: ADMIN, userId: G.id, clearSystem: true });
+    check("15y. a Veritas reset with clearSystem lifts it", r2.status === 200 && r2.body?.systemRequired === false);
   } finally {
     server.close();
   }

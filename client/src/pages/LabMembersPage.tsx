@@ -714,6 +714,7 @@ export default function LabMembersPage() {
 // and resets a person who is locked out. Server: server/twoFactorRoutes.ts.
 interface TwoFactorLabResponse {
   labName: string; required: boolean; requiredAt: string | null; requiredByName: string | null; allowRemember: boolean;
+  requiredBySystem: string | null; // the owner whose Account settings switch covers their whole system
   people: Array<{ userId: number; name: string; role: string; status: "on" | "on_email" | "setup_next" | "off"; lastSignIn: string | null; canReset: boolean }>;
 }
 const TF_STATUS: Record<string, { label: string; cls: string }> = {
@@ -739,9 +740,9 @@ function TwoFactorLabCard({ labId }: { labId: number }) {
     onError: (err: any) => toast({ title: "Could not reset", description: cleanErr(err), variant: "destructive" }),
   });
   if (!data) return null;
-  const toggle = (on: boolean, onClick: () => void, testId: string, label: string) => (
-    <button type="button" role="switch" aria-checked={on} aria-label={label} data-testid={testId} disabled={save.isPending} onClick={onClick}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${on ? "bg-primary" : "bg-muted-foreground/30"}`}>
+  const toggle = (on: boolean, onClick: () => void, testId: string, label: string, locked = false) => (
+    <button type="button" role="switch" aria-checked={on} aria-label={label} data-testid={testId} disabled={save.isPending || locked} onClick={onClick}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-60 ${on ? "bg-primary" : "bg-muted-foreground/30"}`}>
       <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${on ? "translate-x-5" : "translate-x-0.5"}`} />
     </button>
   );
@@ -755,13 +756,15 @@ function TwoFactorLabCard({ labId }: { labId: number }) {
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="font-semibold">Require two-factor sign-in for everyone in {data.labName}</p>
-              <p className="text-xs text-muted-foreground">
-                {data.required
+              <p className="text-xs text-muted-foreground" data-testid="two-factor-require-text">
+                {data.requiredBySystem
+                  ? `On for the whole system: ${data.requiredBySystem} turned it on as the lab owner, in Account settings. People without it set it up at their next sign-in.`
+                  : data.required
                   ? `On since ${data.requiredAt ? new Date(data.requiredAt).toLocaleDateString("en-US") : ""}${data.requiredByName ? ` by ${data.requiredByName}` : ""}. People without it set it up at their next sign-in.`
                   : "Off. Anyone can still turn it on for their own account."}
               </p>
             </div>
-            {toggle(data.required, () => save.mutate({ required: !data.required }), "two-factor-require-toggle", "Require two-factor sign-in")}
+            {toggle(data.required, () => save.mutate({ required: !data.required }), "two-factor-require-toggle", "Require two-factor sign-in", !!data.requiredBySystem)}
           </div>
           <div className="flex items-start justify-between gap-3">
             <p className="text-xs text-muted-foreground">Allow "Remember this computer for 30 days" (switch off for shared computers)</p>

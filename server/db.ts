@@ -8297,4 +8297,9 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
   addCol("labs", "mfa_required_at", "ALTER TABLE labs ADD COLUMN mfa_required_at TEXT");
   addCol("labs", "mfa_required_by", "ALTER TABLE labs ADD COLUMN mfa_required_by INTEGER");
   addCol("labs", "mfa_allow_remember", "ALTER TABLE labs ADD COLUMN mfa_allow_remember INTEGER NOT NULL DEFAULT 1");
+  // The owner's whole-system switch (Michael 2026-10-15, recording 1: "if you turn it on as the lab owner,
+  // you are turning it on for your entire system"). Covers every lab the person owns and every lab in an
+  // organization they are billing owner of, including labs added later.
+  addCol("users", "mfa_system_required", "ALTER TABLE users ADD COLUMN mfa_system_required INTEGER NOT NULL DEFAULT 0");
+  addCol("users", "mfa_system_required_at", "ALTER TABLE users ADD COLUMN mfa_system_required_at TEXT");
 }
