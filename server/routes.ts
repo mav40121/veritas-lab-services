@@ -59,6 +59,7 @@ import { incompleteElementCells as compIncompleteCells, incompleteElementCellsBy
 import { competencyDueColumns, competencySeedAtCreate, nextCompetencyDue } from "./competencySchedule";
 import { methodSignerOptions, nextMilestoneAfter, milestonesForComplexity, MILESTONE_LABEL, alignAnnualToMonth, MONTH_NAMES, type SignerCandidate, type MethodMilestone } from "@shared/competencySignoff";
 import { isManualMethod, groupProblem, suggestGroups, groupKey } from "@shared/competencyGrouping";
+import { quizImageProblem } from "@shared/quizImages";
 import { certificateExtras } from "./veritalabRegistry";
 
 // Express already URL-decodes route params before the handler runs, so
@@ -10112,7 +10113,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const parsed = JSON.parse(quiz.questions || "[]");
       let display = parsed.map((q: any) => ({
-        id: q.id, question: q.question, type: q.type, options: q.options,
+        id: q.id, question: q.question, type: q.type, options: q.options, image: q.image ?? null,
       }));
       if (quiz.randomize_questions === 1 || quiz.randomize_questions === true) {
         const arr = [...display];
@@ -10243,7 +10244,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const fullQs = questions.map((q: any) => {
         const ga = graded.find((a: any) => a.question_id === q.id);
         return {
-          id: q.id, question: q.question, options: q.options,
+          id: q.id, question: q.question, options: q.options, image: q.image ?? null,
           correct_answer: q.correct_answer, explanation: q.explanation,
           selected_answer: ga?.selected_answer, was_correct: ga?.correct,
         };
@@ -24685,6 +24686,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ error: "question.method_group_name must be a string when present" });
       }
     }
+    // One picture per question, an uploaded image only (shared/quizImages.ts; REQ-074).
+    const imageProblem = quizImageProblem(questions);
+    if (imageProblem) return res.status(400).json({ error: imageProblem, code: "QUIZ_IMAGE_INVALID" });
     const mgIdsJson = Array.isArray(methodGroupIds) && methodGroupIds.length
       ? JSON.stringify(methodGroupIds.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)))
       : null;
@@ -24789,6 +24793,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       question: q.question,
       type: q.type,
       options: q.options,
+      image: q.image ?? null,
     }));
     if (quiz.randomize_questions === 1 || quiz.randomize_questions === true) {
       // Fisher-Yates shuffle using crypto.getRandomValues / crypto.randomInt.
@@ -24838,7 +24843,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // post-hoc), only DELETE is blocked.
   app.put("/api/veritacomp/quizzes/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
-    const quiz = (db as any).$client.prepare("SELECT id, user_id FROM competency_quizzes WHERE id = ?").get(req.params.id) as any;
+    const quiz = (db as any).$client.prepare("SELECT id, user_id, randomize_questions, question_format FROM competency_quizzes WHERE id = ?").get(req.params.id) as any;
     if (!quiz) return res.status(404).json({ error: "Quiz not found" });
     if (quiz.user_id === 0) return res.status(403).json({ error: "Cannot edit a system-default quiz" });
     const owned = userCanAccessLabRow('competency_quizzes', req.params.id, req);
@@ -24863,11 +24868,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ error: "question.method_group_name must be a string when present" });
       }
     }
+    // One picture per question, an uploaded image only (shared/quizImages.ts; REQ-074).
+    const imageProblem = quizImageProblem(questions);
+    if (imageProblem) return res.status(400).json({ error: imageProblem, code: "QUIZ_IMAGE_INVALID" });
     const mgIdsJson = Array.isArray(methodGroupIds) && methodGroupIds.length
       ? JSON.stringify(methodGroupIds.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)))
       : null;
-    const randomizeFlag = randomizeQuestions === true || randomizeQuestions === 1 ? 1 : 0;
-    const qFormat = questionFormat === "html" ? "html" : "plain";
+    // A field left out of the body keeps the quiz's own setting. Edit Quiz never sent these two, so every
+    // edit turned randomization off and an HTML-format quiz (reaction tables) back to plain text (BUG-055).
+    const randomizeFlag = randomizeQuestions === undefined
+      ? (quiz.randomize_questions ? 1 : 0)
+      : (randomizeQuestions === true || randomizeQuestions === 1 ? 1 : 0);
+    const qFormat = questionFormat === undefined
+      ? (quiz.question_format === "html" ? "html" : "plain")
+      : (questionFormat === "html" ? "html" : "plain");
     (db as any).$client.prepare(
       "UPDATE competency_quizzes SET title = ?, method_group_id = ?, method_group_name = ?, method_group_ids = ?, questions = ?, randomize_questions = ?, question_format = ? WHERE id = ?"
     ).run(
@@ -35345,6 +35359,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ error: "question.method_group_name must be a string when present" });
       }
     }
+    // One picture per question, an uploaded image only (shared/quizImages.ts; REQ-074).
+    const imageProblem = quizImageProblem(questions);
+    if (imageProblem) return res.status(400).json({ error: imageProblem, code: "QUIZ_IMAGE_INVALID" });
     const program = (db as any).$client.prepare("SELECT id, user_id, lab_id FROM competency_programs WHERE id = ?").get(programId) as any;
     if (!program) return res.status(404).json({ error: "Program not found" });
     const mgIdsJson = Array.isArray(methodGroupIds) && methodGroupIds.length
@@ -35417,6 +35434,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ error: "question.method_group_name must be a string when present" });
       }
     }
+    // One picture per question, an uploaded image only (shared/quizImages.ts; REQ-074).
+    const imageProblem = quizImageProblem(questions);
+    if (imageProblem) return res.status(400).json({ error: imageProblem, code: "QUIZ_IMAGE_INVALID" });
     const mgIdsJson = Array.isArray(methodGroupIds) && methodGroupIds.length
       ? JSON.stringify(methodGroupIds.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)))
       : null;

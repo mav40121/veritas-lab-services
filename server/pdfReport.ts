@@ -11,6 +11,7 @@ import { itemsForPosition, positionLabel, complexityLabel, isDelegationPosition,
 import { stampPdfAuthor } from "./pdfMeta";
 import { labLocalDate } from "./dateLocal";
 import type { Study } from "@shared/schema";
+import { isQuizImage } from "@shared/quizImages";
 import { existsSync as _teaExistsSync, readFileSync as _teaReadFileSync } from "fs";
 import { resolve as _teaResolve } from "path";
 import {
@@ -5328,6 +5329,10 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
         const a = answers.find((ans: any) => ans.question_id === q.id);
         html += `<div style="margin-bottom:10px;border:1px solid #e0e4e8;border-radius:4px;padding:8px;">
           <div style="font-size:8pt;font-weight:600;margin-bottom:4px;">Q${qi + 1}: ${esc(q.question)}</div>`;
+        // The question's picture (REQ-074): a validated data URL, so it can go in the src as is.
+        if (isQuizImage(q.image)) {
+          html += `<div><img src="${q.image}" alt="" style="max-height:2in;max-width:100%;margin:2px 0 6px;border:1px solid #e0e4e8;"></div>`;
+        }
         for (const opt of (q.options || [])) {
           const optLetter = opt.charAt(0);
           const isSelected = a?.selected_answer === optLetter;

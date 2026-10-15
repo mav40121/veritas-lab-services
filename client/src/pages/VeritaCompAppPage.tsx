@@ -69,6 +69,8 @@ import {
   Pencil,
 } from "lucide-react";
 import { DocumentLinkDialog, COMP_DOC_TYPES } from "@/components/DocumentLinkDialog";
+import { QuizQuestionImage, QuizImagePicker } from "@/components/QuizQuestionImage";
+import { isQuizImage, quizImageProblem } from "@shared/quizImages";
 import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
 import { PriorYearComparisonDialog } from "@/components/PriorYearComparisonDialog";
 import { CompetencyRemindersCard } from "@/components/CompetencyRemindersCard";
@@ -165,6 +167,8 @@ interface QuizQuestion {
   // question is copied across labs (parked shared-library plan).
   method_group_id?: number | null;
   method_group_name?: string | null;
+  // One picture (graph, smear, screenshot) as an image data URL; shared/quizImages.ts (REQ-074).
+  image?: string | null;
 }
 
 interface QuizListItem {
@@ -3875,6 +3879,7 @@ function NewAssessmentDialog({
                               {quizResult.questions?.map((q: any, qi: number) => (
                                 <div key={qi} className="text-[10px] mb-2 border-t border-border pt-1">
                                   <div className="font-medium mb-1">Q{qi + 1}: {renderQuizPrompt(q.question, quizFormat)}</div>
+                                  <QuizQuestionImage src={q.image} className="my-1 max-h-48 max-w-full rounded border border-border bg-white object-contain" />
                                   {q.options?.map((opt: string) => {
                                     const letter = opt.charAt(0);
                                     const isSelected = q.selected_answer === letter;
@@ -3906,6 +3911,7 @@ function NewAssessmentDialog({
                           <div className="bg-muted/30 border border-border rounded-lg p-3">
                             <div className="text-xs text-muted-foreground mb-1">Question {quizCurrentQ + 1} of {quizQuestions.length}</div>
                             <div className="text-xs font-medium mb-2">{renderQuizPrompt(q.question, quizFormat)}</div>
+                            <QuizQuestionImage src={q.image} />
                             <div className="space-y-1.5">
                               {q.options?.map((opt: string) => {
                                 const letter = opt.charAt(0);
@@ -4769,6 +4775,7 @@ function NewQuizDialog({
         options: Array.isArray(q.options) ? q.options.map((o: any) => String(o)) : [],
         correct_answer: String(q.correct_answer || "A"),
         explanation: q.explanation ? String(q.explanation) : "",
+        image: typeof q.image === "string" ? q.image : null,
       }));
       // Inherit title from meta block if present and the title field is empty.
       if (!title && parsed.meta && typeof parsed.meta.title === "string") {
@@ -4798,7 +4805,7 @@ function NewQuizDialog({
       if (q.options.length < 2) return `Question ${i + 1} needs at least 2 options`;
       if (!q.correct_answer.trim()) return `Question ${i + 1} is missing a correct answer`;
     }
-    return null;
+    return quizImageProblem(questions);
   }
 
   async function submit() {
@@ -4947,6 +4954,12 @@ function NewQuizDialog({
                       value={q.question}
                       onChange={e => updateQuestion(qIdx, { question: e.target.value })}
                       className="text-xs min-h-[60px]"
+                    />
+                    <QuizImagePicker
+                      value={q.image}
+                      onChange={img => updateQuestion(qIdx, { image: img })}
+                      onError={m => toast({ title: "Picture not added", description: m, variant: "destructive" })}
+                      testId={`quiz-image-picker-${qIdx}`}
                     />
                     <select
                       aria-label="Method group this question tests"
@@ -5123,6 +5136,7 @@ function QuizPreviewDialog({
         ? `<span class="tag">(${esc(q.method_group_name)}) </span>` : "";
       return `<li class="q">
                 <div class="qtext">${tag}${renderPrompt(q.question)}</div>
+                ${isQuizImage(q.image) ? `<div class="qimg"><img src="${q.image}" alt=""></div>` : ""}
                 <ul class="opts">${options}</ul>
                 ${explanation}
               </li>`;
@@ -5142,6 +5156,7 @@ function QuizPreviewDialog({
         ul.opts li.correct { font-weight: 700; color: #15803d; }
         .mark { display: inline-block; width: 1em; }
         .exp { margin: 0.05in 0 0 1.2em; font-size: 10.5pt; color: #444; font-style: italic; }
+        .qimg img { display: block; max-height: 3.2in; max-width: 100%; border: 1px solid #ccc; margin: 0.04in 0 0.06in; }
         /* 2026-06-09 PR1: tables inside HTML question prompts (e.g. ABO/Rh
            forward/reverse reaction grids) print as compact bordered tables. */
         .qtext table { border-collapse: collapse; margin: 0.05in 0; font-weight: normal; font-size: 10.5pt; }
@@ -5225,6 +5240,7 @@ function QuizPreviewDialog({
                           ABO/Rh) display reaction tables inline. */}
                       {renderQuizPrompt(q.question, (quiz as any).question_format)}
                     </span>
+                    <QuizQuestionImage src={q.image} className="block my-2 ml-6 max-h-64 max-w-full rounded border border-border bg-white object-contain" />
                     <ul className="mt-1 ml-6 space-y-0.5 list-none">
                       {q.options.map((opt, oIdx) => {
                         const letter = String.fromCharCode(65 + oIdx);
@@ -5311,6 +5327,7 @@ function EditQuizDialog({
       explanation: q.explanation || "",
       method_group_id: q.method_group_id ?? null,
       method_group_name: q.method_group_name ?? null,
+      image: q.image ?? null,
     }))
   );
   // Per-question "include" flag, used only by the Save-as-New-Quiz path.
@@ -5381,7 +5398,7 @@ function EditQuizDialog({
       if (q.options.length < 2) return `Question ${i + 1} needs at least 2 options`;
       if (!q.correct_answer.trim()) return `Question ${i + 1} is missing a correct answer`;
     }
-    return null;
+    return quizImageProblem(questions);
   }
 
   async function save() {
@@ -5403,6 +5420,8 @@ function EditQuizDialog({
             : null,
           methodGroupId: selectedGroupIds.length === 1 ? selectedGroupIds[0] : null,
           questions,
+          randomizeQuestions: !!(quiz as any).randomize_questions,
+          questionFormat: (quiz as any).question_format === "html" ? "html" : "plain",
         }),
       });
       if (!res.ok) {
@@ -5474,6 +5493,8 @@ function EditQuizDialog({
             : null,
           methodGroupId: selectedGroupIds.length === 1 ? selectedGroupIds[0] : null,
           questions: renumbered,
+          randomizeQuestions: !!(quiz as any).randomize_questions,
+          questionFormat: (quiz as any).question_format === "html" ? "html" : "plain",
         }),
       });
       if (!res.ok) {
@@ -5555,6 +5576,12 @@ function EditQuizDialog({
                     value={q.question}
                     onChange={e => updateQuestion(qIdx, { question: e.target.value })}
                     className="text-xs min-h-[60px]"
+                  />
+                  <QuizImagePicker
+                    value={q.image}
+                    onChange={img => updateQuestion(qIdx, { image: img })}
+                    onError={m => toast({ title: "Picture not added", description: m, variant: "destructive" })}
+                    testId={`quiz-image-picker-${qIdx}`}
                   />
                   <select
                     aria-label="Method group this question tests"
