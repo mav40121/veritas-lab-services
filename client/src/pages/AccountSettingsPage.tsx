@@ -5,6 +5,7 @@ import { useAuth } from "@/components/AuthContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { authHeaders, getUser } from "@/lib/auth";
 import { passwordProblem, PASSWORD_RULE_TEXT } from "@shared/passwordRule";
+import { TwoFactorSetup, RecoveryCodesPanel } from "@/components/TwoFactorStep";
 import { trackEvent } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -515,6 +516,8 @@ export default function AccountSettingsPage() {
       </Card>
 
       <ChangePasswordCard />
+
+      <TwoFactorCard />
 
       <SignedInDevicesCard />
 
@@ -1169,6 +1172,105 @@ function ChangePasswordCard() {
             Update password
           </Button>
         </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+
+// Two-factor sign-in (Stage 2, mock Q171 = 1). Turn it on (authenticator app or email codes),
+// new recovery codes, move to a new phone, and turn it off when no lab requires it.
+interface TwoFactorStatus {
+  enabled: boolean; method: "totp" | "email" | null; enabledAt: string | null; recoveryCodesLeft: number;
+  email: string | null; required: boolean; requiredBy: string; canTurnOff: boolean; isDemo: boolean;
+}
+
+function TwoFactorCard() {
+  const { toast } = useToast();
+  const { data, isLoading } = useQuery<TwoFactorStatus>({ queryKey: ["/api/auth/mfa"], staleTime: 0 });
+  const [mode, setMode] = useState<"idle" | "setup" | "move" | "codes" | "off">("idle");
+  const [password, setPassword] = useState("");
+  const [passwordOk, setPasswordOk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [codes, setCodes] = useState<string[] | null>(null);
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["/api/auth/mfa"] });
+  const reset = () => { setMode("idle"); setPassword(""); setPasswordOk(false); setCodes(null); };
+
+  if (isLoading || !data || data.isDemo) return null;
+
+  async function withPassword(path: string, done: (body: any) => void) {
+    setBusy(true);
+    try {
+      const res = await fetch(`${API_BASE}${path}`, { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify({ password }) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { toast({ title: body?.error || "That didn't work", variant: "destructive" }); return; }
+      done(body);
+    } finally { setBusy(false); }
+  }
+
+  const methodText = data.method === "email" ? "Email codes" : "Authenticator app";
+  const on = data.enabled;
+  const needsPassword = (mode === "move" || mode === "codes" || mode === "off") && !passwordOk && !codes;
+
+  return (
+    <Card className="mt-6" data-testid="two-factor-card">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center justify-between">
+          Two-factor sign-in
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${on ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200" : "bg-muted text-muted-foreground"}`}>{on ? "ON" : "OFF"}</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {mode === "setup" || (mode === "move" && passwordOk) ? (
+          <TwoFactorSetup
+            password={mode === "move" ? password : undefined}
+            onDone={() => { toast({ title: "Two-factor sign-in is on" }); reset(); refresh(); }}
+            onCancel={reset}
+          />
+        ) : codes ? (
+          <RecoveryCodesPanel codes={codes} continueLabel="Done" onContinue={() => { reset(); refresh(); }} />
+        ) : needsPassword ? (
+          <div className="space-y-2">
+            <Label htmlFor="mfa-password">Enter your current password to continue</Label>
+            <Input id="mfa-password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <div className="flex gap-2">
+              <Button size="sm" disabled={!password || busy} onClick={() => {
+                if (mode === "move") { setPasswordOk(true); return; }
+                if (mode === "codes") void withPassword("/api/auth/mfa/recovery-codes", (b) => setCodes(b.recovery_codes || []));
+                if (mode === "off") void withPassword("/api/auth/mfa/turn-off", () => { toast({ title: "Two-factor sign-in is off" }); reset(); refresh(); });
+              }}>
+                {busy ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> : null}
+                {mode === "off" ? "Turn off" : "Continue"}
+              </Button>
+              <Button size="sm" variant="outline" onClick={reset}>Cancel</Button>
+            </div>
+          </div>
+        ) : on ? (
+          <>
+            <div className="text-sm space-y-0.5">
+              <p>{methodText}, turned on {data.enabledAt ? new Date(data.enabledAt).toLocaleDateString("en-US") : ""}</p>
+              <p>Recovery codes: {data.recoveryCodesLeft} of 10 left</p>
+              {data.email && <p>Backup: email codes to {data.email}</p>}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => setMode("codes")}>New recovery codes</Button>
+              <Button size="sm" variant="outline" onClick={() => setMode("move")}>{data.method === "email" ? "Use an authenticator app" : "Move to a new phone"}</Button>
+              {data.canTurnOff && <Button size="sm" variant="outline" onClick={() => setMode("off")}>Turn off</Button>}
+            </div>
+            {data.required && (
+              <p className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                {data.requiredBy === "Veritas Lab Services" ? "Veritas Lab Services accounts require two-factor sign-in" : "Your lab requires two-factor sign-in"}, so it cannot be turned off here.
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">
+              After your password, enter a 6-digit code from an app on your phone, or one we email you. {data.required ? `${data.requiredBy} requires it, so you'll set it up at your next sign-in, or now.` : "Anyone can turn it on for their own account."}
+            </p>
+            <Button size="sm" onClick={() => setMode("setup")}>Turn on</Button>
+          </>
+        )}
       </CardContent>
     </Card>
   );

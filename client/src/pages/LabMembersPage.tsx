@@ -642,6 +642,8 @@ export default function LabMembersPage() {
 
       {activeLabId && <VeritasSupportCard labId={activeLabId} />}
 
+      {canManage && activeLabId && <TwoFactorLabCard labId={activeLabId} />}
+
       {isOwner && (
         <Card>
           <CardHeader>
@@ -706,6 +708,101 @@ export default function LabMembersPage() {
 // uncheck an existing location), so it can never lock anyone out; to remove a
 // location, use the per-location Remove on that lab's Members page. Owner/admin
 // only, shown on the VeritaStock deployment when the enterprise has >1 location.
+
+// Two-factor sign-in for the lab (Stage 2, mock Q171 = 1). The owner or an admin requires it for
+// everyone, allows or switches off "Remember this computer" (shared computers), sees who has it on,
+// and resets a person who is locked out. Server: server/twoFactorRoutes.ts.
+interface TwoFactorLabResponse {
+  labName: string; required: boolean; requiredAt: string | null; requiredByName: string | null; allowRemember: boolean;
+  people: Array<{ userId: number; name: string; role: string; status: "on" | "on_email" | "setup_next" | "off"; lastSignIn: string | null; canReset: boolean }>;
+}
+const TF_STATUS: Record<string, { label: string; cls: string }> = {
+  on: { label: "On", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200" },
+  on_email: { label: "On (email codes)", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200" },
+  setup_next: { label: "Set up at next sign-in", cls: "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200" },
+  off: { label: "Off", cls: "bg-muted text-muted-foreground" },
+};
+const cleanErr = (err: any) => String(err?.message || err).replace(/^\d+:\s*/, "");
+function TwoFactorLabCard({ labId }: { labId: number }) {
+  const { toast } = useToast();
+  const key = `/api/labs/${labId}/two-factor`;
+  const { data } = useQuery<TwoFactorLabResponse>({ queryKey: [key], queryFn: getQueryFn({ on401: "throw" }), enabled: !!labId, retry: false });
+  const [confirmReset, setConfirmReset] = useState<number | null>(null);
+  const save = useMutation({
+    mutationFn: async (body: { required?: boolean; allowRemember?: boolean }) => (await apiRequest("PUT", key, body)).json(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [key] }),
+    onError: (err: any) => toast({ title: "Could not change two-factor settings", description: cleanErr(err), variant: "destructive" }),
+  });
+  const reset = useMutation({
+    mutationFn: async (userId: number) => (await apiRequest("POST", `${key}/reset/${userId}`, {})).json(),
+    onSuccess: () => { toast({ title: "Two-factor reset. They set it up again at their next sign-in." }); setConfirmReset(null); queryClient.invalidateQueries({ queryKey: [key] }); },
+    onError: (err: any) => toast({ title: "Could not reset", description: cleanErr(err), variant: "destructive" }),
+  });
+  if (!data) return null;
+  const toggle = (on: boolean, onClick: () => void, testId: string, label: string) => (
+    <button type="button" role="switch" aria-checked={on} aria-label={label} data-testid={testId} disabled={save.isPending} onClick={onClick}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${on ? "bg-primary" : "bg-muted-foreground/30"}`}>
+      <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${on ? "translate-x-5" : "translate-x-0.5"}`} />
+    </button>
+  );
+  return (
+    <Card data-testid="two-factor-lab-card">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2"><KeyRound size={16} /> Two-factor sign-in</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4 text-sm">
+        <div className="rounded-md border border-border p-3 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-semibold">Require two-factor sign-in for everyone in {data.labName}</p>
+              <p className="text-xs text-muted-foreground">
+                {data.required
+                  ? `On since ${data.requiredAt ? new Date(data.requiredAt).toLocaleDateString("en-US") : ""}${data.requiredByName ? ` by ${data.requiredByName}` : ""}. People without it set it up at their next sign-in.`
+                  : "Off. Anyone can still turn it on for their own account."}
+              </p>
+            </div>
+            {toggle(data.required, () => save.mutate({ required: !data.required }), "two-factor-require-toggle", "Require two-factor sign-in")}
+          </div>
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-xs text-muted-foreground">Allow "Remember this computer for 30 days" (switch off for shared computers)</p>
+            {toggle(data.allowRemember, () => save.mutate({ allowRemember: !data.allowRemember }), "two-factor-remember-toggle", "Allow remember this computer")}
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border border-border" data-testid="two-factor-people">
+            <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
+              <tr><th className="text-left p-2">Person</th><th className="text-left p-2">Role</th><th className="text-left p-2">Two-factor</th><th className="text-left p-2">Last sign-in</th><th className="p-2"></th></tr>
+            </thead>
+            <tbody>
+              {data.people.map((p) => (
+                <tr key={p.userId} className="border-t border-border">
+                  <td className="p-2">{p.name}</td>
+                  <td className="p-2">{p.role}</td>
+                  <td className="p-2"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${TF_STATUS[p.status]?.cls || ""}`}>{TF_STATUS[p.status]?.label || p.status}</span></td>
+                  <td className="p-2 whitespace-nowrap">{p.lastSignIn ? new Date(p.lastSignIn).toLocaleDateString("en-US") : ""}</td>
+                  <td className="p-2 text-right whitespace-nowrap">
+                    {p.canReset && (confirmReset === p.userId ? (
+                      <span className="inline-flex gap-1">
+                        <Button size="sm" variant="destructive" disabled={reset.isPending} onClick={() => reset.mutate(p.userId)}>Confirm reset</Button>
+                        <Button size="sm" variant="ghost" onClick={() => setConfirmReset(null)}>Cancel</Button>
+                      </span>
+                    ) : (
+                      <Button size="sm" variant="ghost" className="text-primary" onClick={() => setConfirmReset(p.userId)}>Reset</Button>
+                    ))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+          Reset clears the person's app and recovery codes and signs them out everywhere; they set it up again at their next sign-in. Recorded in the audit trail. Veritas Lab Services resets a lab owner's.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 // Veritas support access (docs/design/VLS_Support_Access_Design.docx). Every
 // member sees whether Veritas support can reach this lab, who that is, and what
 // Veritas changed here; only the owner can turn it off or on.

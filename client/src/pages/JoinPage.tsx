@@ -11,6 +11,7 @@ import { FlaskConical, AlertTriangle } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { passwordProblem, PASSWORD_RULE_TEXT } from "@shared/passwordRule";
+import { TwoFactorSetup } from "@/components/TwoFactorStep";
 
 interface InviteInfo {
   valid: boolean;
@@ -30,6 +31,8 @@ export default function JoinPage() {
   const [checking, setChecking] = useState(true);
   const [invite, setInvite] = useState<InviteInfo | null>(null);
   const [form, setForm] = useState({ name: "", email: "", password: "", confirmPassword: "" });
+  // A lab that requires two-factor sign-in: set it up before the first session.
+  const [mfaStep, setMfaStep] = useState<any>(null);
   const [hipaaAcknowledged, setHipaaAcknowledged] = useState(false);
   const [hipaaError, setHipaaError] = useState("");
 
@@ -87,10 +90,11 @@ export default function JoinPage() {
         toast({ title: data.error || "Registration failed", variant: "destructive" });
         return;
       }
+      trackEvent('sign_up', { method: 'email' });
+      if (data.mfa_setup_required) { setMfaStep(data); return; }
       if (data.session_token) {
         localStorage.setItem("veritas_session_token", data.session_token);
       }
-      trackEvent('sign_up', { method: 'email' });
       login(data.token, data.user);
       navigate(labRoute("/dashboard"));
     } catch {
@@ -127,6 +131,29 @@ export default function JoinPage() {
             <Button variant="outline" onClick={() => navigate("/login")}>
               Go to Login
             </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (mfaStep) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center px-4 py-12">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6 pb-6">
+            <TwoFactorSetup
+              mfaToken={mfaStep.mfa_token}
+              requiredBy={mfaStep.required_by}
+              emailHint={mfaStep.email_hint}
+              allowRemember={mfaStep.allow_remember}
+              onDone={(r) => {
+                if (r.session_token) localStorage.setItem("veritas_session_token", r.session_token);
+                if (r.token) { login(r.token, r.user || mfaStep.user); navigate(labRoute("/dashboard")); }
+                else navigate("/login");
+              }}
+              onCancel={() => navigate("/login")}
+            />
           </CardContent>
         </Card>
       </div>

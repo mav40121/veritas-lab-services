@@ -12,6 +12,7 @@ import { FlaskConical, Search, Building2, CheckCircle, AlertTriangle } from "luc
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { isStockHost } from "@/lib/host";
 import { passwordProblem, PASSWORD_RULE_TEXT } from "@shared/passwordRule";
+import { TwoFactorSignIn, TwoFactorSetup, rememberedDeviceToken } from "@/components/TwoFactorStep";
 
 // Hospital result from /api/lookup/hospital
 interface HospitalResult {
@@ -106,6 +107,9 @@ export default function LoginPage() {
   // Session conflict state
   const [sessionConflict, setSessionConflict] = useState(false);
   const [conflictData, setConflictData] = useState<any>(null);
+  // Two-factor sign-in: the code step or first-time setup, between the password and the session.
+  const [mfaStep, setMfaStep] = useState<any>(null);
+  const [mfaEmail, setMfaEmail] = useState("");
 
   // Debounced hospital search
   useEffect(() => {
@@ -170,23 +174,33 @@ export default function LoginPage() {
     setLoading(true);
     setSessionConflict(false);
     try {
-      const res = await apiRequest("POST", "/api/auth/login", loginForm);
+      const res = await apiRequest("POST", "/api/auth/login", { ...loginForm, device_token: rememberedDeviceToken(loginForm.email) });
       const data = await res.json();
       if (!res.ok) { toast({ title: data.error || "Login failed", variant: "destructive" }); return; }
-
-      if (data.session_conflict) {
-        setSessionConflict(true);
-        setConflictData(data);
-        return;
-      }
-
-      if (data.session_token) {
-        localStorage.setItem("veritas_session_token", data.session_token);
-      }
-      login(data.token, data.user);
-      navigate(labRoute(isStockHost() ? "/veritastock" : "/dashboard"));
+      finishSignIn(data, loginForm.email);
     } catch { toast({ title: "Login failed", variant: "destructive" }); }
     finally { setLoading(false); }
+  }
+
+  // After the password (and the two-factor step, when it applies): the two-factor step, the
+  // other-device prompt, or the signed-in session.
+  function finishSignIn(data: any, email: string) {
+    if (data.mfa_required || data.mfa_setup_required) {
+      setMfaEmail(email);
+      setMfaStep(data);
+      return;
+    }
+    setMfaStep(null);
+    if (data.session_conflict) {
+      setSessionConflict(true);
+      setConflictData(data);
+      return;
+    }
+    if (data.session_token) {
+      localStorage.setItem("veritas_session_token", data.session_token);
+    }
+    login(data.token, data.user);
+    navigate(labRoute(isStockHost() ? "/veritastock" : "/dashboard"));
   }
 
   // Public one-click demo: mint a sandbox session and drop straight into the
@@ -254,6 +268,7 @@ export default function LoginPage() {
       const res = await apiRequest("POST", "/api/auth/register", payload);
       const data = await res.json();
       if (!res.ok) { toast({ title: data.error || "Registration failed", variant: "destructive" }); return; }
+      if (data.mfa_setup_required) { finishSignIn(data, registerForm.email); return; }
 
       if (data.session_token) {
         localStorage.setItem("veritas_session_token", data.session_token);
@@ -300,6 +315,20 @@ export default function LoginPage() {
         </div>
         <Card>
           <CardContent className="pt-5">
+            {mfaStep ? (
+              mfaStep.mfa_setup_required ? (
+                <TwoFactorSetup
+                  mfaToken={mfaStep.mfa_token}
+                  requiredBy={mfaStep.required_by}
+                  emailHint={mfaStep.email_hint}
+                  allowRemember={mfaStep.allow_remember}
+                  onDone={(r) => finishSignIn(r, mfaEmail)}
+                  onCancel={() => setMfaStep(null)}
+                />
+              ) : (
+                <TwoFactorSignIn step={mfaStep} email={mfaEmail} onDone={(r) => finishSignIn(r, mfaEmail)} onCancel={() => setMfaStep(null)} />
+              )
+            ) : (
             <Tabs defaultValue={wantRegister ? "register" : "login"}>
               <TabsList className="grid grid-cols-2 w-full mb-5">
                 <TabsTrigger value="login">Sign In</TabsTrigger>
@@ -594,6 +623,7 @@ export default function LoginPage() {
 
               </TabsContent>
             </Tabs>
+            )}
           </CardContent>
         </Card>
         {!onStock && <p className="text-xs text-center text-muted-foreground mt-4">You can also run a study as a guest without an account.</p>}
