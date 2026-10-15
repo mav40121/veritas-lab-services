@@ -592,16 +592,6 @@ _(item #88 closed 2026-10-08; see C91 below)_
 
 ---
 
-### 90. Dead statement in db.ts: a roster "unique index" that can never be created
-
-**Effort:** XS (under an hour)
-**Importance:** Low. Dead code with no effect today; remove it so nobody builds on it.
-
-**What:** server/db.ts runs `CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_employees_user_id_unique ON staff_employees(user_id) WHERE user_id IS NOT NULL` inside a try/catch, written for the 2026-06-09 idea that user_id would hold the staffer's own login. staff_employees.user_id actually holds the account OWNER id on every row, and the boot seed inserts three roster rows under one owner before this line runs, so the CREATE always fails and the index exists nowhere (production, the dev database, or a database built from scratch). Proven 2026-10-08 with scripts/verify-90-roster-index.mjs on a fresh database: no index, and three Add Employee saves in one lab all succeed. Fix: delete the statement (dead-code rule). The roster-to-login link is staff_employees.login_user_id (#1553).
-
-**Source:** 2026-10-08, found reading db.ts while building the roster prompt (#1553). First written up as a disaster-recovery risk; a fresh-database test disproved that the same evening.
-**Status:** Open. Removal is built on branch roster-index-90 and waiting for a ship OK.
----
 ### 92. VeritaLab auto-adds a CLIA certificate keyed on the person, not the lab
 
 **Effort:** XS (under a day)
@@ -645,7 +635,109 @@ Receipts: an integration test for the derivation (linked, unlinked fallback, una
 
 ---
 
+### 96. FAQ promises data retention, exports and a deletion notice the product does not have
+
+**Effort:** XS (under a day for the copy fix; the features themselves would be M)
+**Importance:** High. Public promises the product does not keep; a buyer's legal or security review (Lifepoint is in one now) can hold us to the FAQ.
+
+**What:** the "Data Retention and Cancellation" answers in client/src/lib/faqContent.ts (lines 605-614 on main, 2026-10-14) say: data is kept 2 years after a subscription ends and can be reactivated; "every module that generates structured data has an Excel or PDF export function"; and after 2 years the account is deleted with an email notice first. In the product, cancelling drops the lab to the free plan, which blocks most exports; Equipment (VeritaMaintain) has no export and VeritaPT has no export button although its page promises a PDF (VeritaPTPage.tsx line 22); no 2-year deletion job or notice email exists. Fix the copy to say what the product does (or build the missing pieces, Michael's call), then check the FAQ page and its prerendered/static copy.
+
+**Source:** found 2026-10-09 during the Mike Hiltunen and Natalie Lamb replies; promised as "its own item" that day and never raised. Parked 2026-10-14 from the weekly review.
+**Status:** Open. Needs Michael's call: correct the copy, or build retention/export/notice to match it.
+
+---
+
+### 97. The other 76 UTC calendar dates in server/routes.ts
+
+**Effort:** S (1-3 days, mostly sorting which ones matter)
+**Importance:** Medium. Evening activity in Arizona or Eastern labs gets tomorrow's date on file names, reminder previews and readiness counts.
+
+**What:** BUG-047 found routes.ts takes "today" as new Date().toISOString().slice(0, 10) (the UTC day) in 76 places. The 3 that date or compare competency records were fixed in #1623 with labLocalDate(); the rest (download file names, reminder previews, readiness and due-date math) were left as a separate cleanup. Sweep each use: switch the ones that show or store a lab calendar date to labLocalDate(), leave true UTC timestamps alone, and pin the result with a verify script that fails on a new UTC calendar date.
+
+**Source:** BUG-047 class sweep, 2026-10-13. Parked 2026-10-14 from the weekly review.
+**Status:** Open.
+
+---
+
+### 98. VeritaComp employee form keeps saving an empty TC/TS placeholder row
+
+**Effort:** XS (under a day, UI change plus a browser test)
+**Importance:** Low. No visible effect since the BUG-044 server fix; the data just stays untidy.
+
+**What:** ticking TC or TS on the employee form saves an empty specialty placeholder row each time. The BUG-044 server fix makes those rows harmless everywhere they are read. Fix: drop the empty row once a real specialty is added, with a browser test.
+
+**Source:** BUG-044 follow-up, Q128 (2026-10-12, 9:36 PM ET; Claude recommended parking it until after the 10/14 demo). Q128 was never answered.
+**Status:** Open. Waiting on Michael's Q128 (park and build, or leave as is).
+
+---
+
+### 99. VeritaQC finding reminder emails do not name the assay or control level
+
+**Effort:** XS (under a day)
+**Importance:** Medium. A supervisor gets a reminder for an open finding and cannot tell which test or level it is without logging in.
+
+**What:** the reminder email for an open QC finding (the auto-created corrective-action finding) gives the due date but not the assay or level that triggered it. Add the analyte, control level, lot and run date to the subject or first line, and check the email text has no em dashes.
+
+**Source:** Mike Hiltunen's voided QC run 957 (REQ-063), 2026-10-14. Called "parked" in chat that day but never written here.
+**Status:** Open.
+
+---
+
+### 100. Voiding a QC run leaves its auto-created finding open
+
+**Effort:** XS to S
+**Importance:** Medium. The lab keeps getting reminders for a finding whose run was voided as entered in error.
+
+**What:** when a QC run that auto-created a finding is voided (e.g., run 957, voided 10/12 as "Entered incorrectly during training"), the finding stays open and its reminders continue. Options: close the finding automatically with the void reason as the closing note, or flag it "run voided, close?" for the supervisor. Michael picks which; either needs an audit-trail entry.
+
+**Source:** Mike Hiltunen, REQ-063, 2026-10-14. Called "parked" in chat that day but never written here.
+**Status:** Open.
+
+---
+
+### 101. "Staff Portal" wording is still on the Plans page and in 11 other screens
+
+**Effort:** XS to S (copy sweep plus a check of each screen)
+**Importance:** Medium. Public pricing names a product that no longer exists; prospects and our own drafts repeat it.
+
+**What:** since 2026-10-09 (#1548, C93) staff sign in to the same VeritaAssure app with a staff login and setup locked; there is no separate Staff Portal. The phrase is still in client code on main (14fa0274): PricingPage.tsx (4, including the "Staff Portal Add-On" heading and the above-250 line), LabMembersPage.tsx (11), VeritaStaffAppPage.tsx (9), StaffPortalPage.tsx (4), VeritaPolicyCompliancePage.tsx (3), App.tsx (2), and one each in InventoryCountWorkflow, HospitalInventoryPage, VeritaCompAppPage, VeritaPolicyMyPoliciesPage, VeritaQCAppPage and VeritaStockPage. Rename to "staff seats" / "staff login" where it describes access, keep the flat-band pricing, and check whether StaffPortalPage is still routed or is dead code. Same sweep for faqContent, seo-metadata, static prerender text and generated PDFs/emails.
+
+**Source:** Michael 2026-10-14 ("there is no staff portal anymore, correct?") while reviewing the St. Charles reply; Claude had used the term in the draft email and SBAR (both corrected the same evening).
+**Status:** Open.
+
+---
+
+### 102. Import MediaLab quizzes into VeritaComp
+
+**Effort:** S (1-3 days once a real export file is in hand)
+**Importance:** Medium. Labs switching from MediaLab bring years of competency quizzes; retyping them is a reason to stall the switch.
+
+**What:** Catherine Thornton (Redington-Fairview, REQ-074) is rebuilding her MediaLab competency quizzes in VeritaComp™ by hand. Pictures on quiz questions went live 2026-10-14 (#1642, c0dba999), so a converter now has somewhere to put graphs and images. The quiz JSON upload already exists (questions, options, correct answer, explanation, and now an image data URL). What is missing is MediaLab's export format: no sample file exists, so nothing can be built without guessing. The reply to Catherine asked her to send an export if MediaLab offers one. When it arrives, write a converter (script first, in-app upload later if more labs need it).
+
+**Source:** Catherine Thornton email 2026-10-14 7:27 PM ET; Claude, while building quiz pictures.
+**Status:** Waiting on a MediaLab export file from Catherine.
+
+---
+
+### 103. VeritaLab certificate Excel export leaves out the new link and CLIA type
+
+**Effort:** XS (under 1 day)
+**Importance:** Low. The on-screen cards and All Sites view show both; only the spreadsheet lags.
+
+**What:** the VeritaLab CLIA site registry (#1643, a54ea9da) added a certificate link and the CLIA certificate type (waiver, PPM, compliance, accreditation, registration) to each certificate. The Export Excel button on the Certificates tab still writes the older columns only. Add the two columns, and consider an All Sites sheet (one row per site with director, next fee, last menu change, contact and what needs attention) so a multi-site coordinator like Tracy Tuzzolino can hand leadership one file.
+
+**Source:** Claude, while building the registry 2026-10-14.
+**Status:** Open.
+
+---
+
 ## CLOSED (audit trail)
+
+### C96. Dead statement in db.ts: a roster "unique index" that can never be created (was #90)
+
+**Effort:** was XS / **Importance:** Low.
+
+**Closure evidence:** commit 9eebc0b2 (2026-10-09) removed the CREATE UNIQUE INDEX statement; server/db.ts on main (14fa0274, line 7889) keeps only `DROP INDEX IF EXISTS`. The roster-to-login link is staff_employees.login_user_id (#1553). The entry stayed marked "waiting for a ship OK" until the 2026-10-14 tracker review.
 
 ### C95. VeritaComp employee page showed the six CLIA elements for a waived instrument (was #91)
 
