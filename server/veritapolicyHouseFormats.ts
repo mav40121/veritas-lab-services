@@ -24,9 +24,9 @@ import {
   BorderStyle, WidthType, ShadingType, PageNumber, ImageRun, HeightRule,
 } from "docx";
 import type { PolicyTemplate, LabContext, AccreditorCrosswalk, PolicyDocxOptions } from "./veritapolicyDocx";
-import { REDINGTON_FAIRVIEW_LOGO_PNG_B64 } from "./veritapolicyHouseAssets";
+import { REDINGTON_FAIRVIEW_LOGO_PNG_B64, SAMPSON_REGIONAL_LOGO_PNG_B64 } from "./veritapolicyHouseAssets";
 
-export const HOUSE_FORMATS = ["veritadc", "umass_milford", "redington_fairview"] as const;
+export const HOUSE_FORMATS = ["veritadc", "umass_milford", "redington_fairview", "sampson_regional"] as const;
 export type HouseFormat = (typeof HOUSE_FORMATS)[number];
 
 export interface HouseFormatContext {
@@ -394,6 +394,190 @@ export function buildRedingtonFairviewDocument(
         default: new Header({ children: [...(house.watermark ? [house.watermark] : []), new Paragraph({ children: [] })] }),
       },
       footers: { first: rfFooter(opts, house), default: rfFooter(opts, house) },
+      children,
+    }],
+  });
+}
+
+// ─── Sampson Regional Medical Center (lab 36), REQ-019 ─────────────────────────────────────────────────────────
+// Natalie Lamb sent a PolicyStat printout on 2026-10-08 ("Instituting New Laboratory Test Methods and Ongoing QC
+// Assessment") and we told her we would put our stock policies in that format. Layout, from her printout and the
+// 10/10 mock (VLS Leads\Sampson Regional\house_format_mock): logo | Origination, Last Approved, Effective, Last
+// Revised, Next Review | Owner, Area; centered title over a rule; "Policy:" (purpose, then numbered statements),
+// "Scope:", "Procedure:" (Roman-numeral steps), "REFERENCES:" numbered, the "Printed copies are for reference only"
+// line, an "Approval Signatures" table; footer "<title>. Copyright (c) <year> <lab>" and "Page X of Y".
+// Owner and approvers are role titles from her printout, never a person's name; the approval dates stay blank for
+// their document system to fill. Definitions (not in her sample) follow Scope. No vendor line in the footer
+// (Michael's 2026-10-07 house-format call).
+const SR_FONT = "Arial";
+const SR_NAVY = "1B2A47";
+const SR_SZ = 21;        // 10.5 pt body
+const SR_SZ_SM = 18;     // 9 pt header block, table
+const SR_SZ_FOOT = 16;   // 8 pt footer
+const SR_ITEM_INDENT = 432; // 0.3 in
+
+function srRun(text: string, o: { bold?: boolean; size?: number; color?: string; italics?: boolean } = {}) {
+  return new TextRun({ text, font: SR_FONT, size: o.size ?? SR_SZ, bold: o.bold, italics: o.italics, color: o.color ?? BLACK });
+}
+function srPara(children: TextRun[], o: { indent?: number; numbering?: string; after?: number; before?: number; align?: (typeof AlignmentType)[keyof typeof AlignmentType] } = {}) {
+  return new Paragraph({
+    children,
+    alignment: o.align,
+    spacing: { after: o.after ?? 100, before: o.before ?? 0 },
+    ...(o.numbering ? { numbering: { reference: o.numbering, level: 0 } } : {}),
+    ...(o.indent != null && !o.numbering ? { indent: { left: o.indent } } : {}),
+  });
+}
+function srHeading(text: string) {
+  return srPara([srRun(text, { bold: true, size: 36, color: SR_NAVY })], { before: 200, after: 40 });
+}
+function srFmtDate(iso: string) {
+  const [y, m, d] = iso.split("-");
+  return y && m && d ? `${m}/${d}/${y}` : iso;
+}
+const SR_NO_BORDER = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
+function srNoBorders() {
+  return { top: SR_NO_BORDER, bottom: SR_NO_BORDER, left: SR_NO_BORDER, right: SR_NO_BORDER, insideHorizontal: SR_NO_BORDER, insideVertical: SR_NO_BORDER };
+}
+function srLabelValue(label: string, value: string) {
+  return new Paragraph({ spacing: { after: 20 }, children: [srRun(`${label}  `, { size: SR_SZ_SM, color: GRAY }), srRun(value || "________", { size: SR_SZ_SM })] });
+}
+
+export function buildSampsonRegionalDocument(
+  tmpl: PolicyTemplate,
+  lab: LabContext,
+  crosswalk: AccreditorCrosswalk | null,
+  opts: PolicyDocxOptions | undefined,
+  house: HouseFormatContext,
+): Document {
+  const subst = (s: string | undefined) => (s || "").replace(/<<LAB_NAME>>/g, lab.lab_name);
+  const draft = srFmtDate(house.draftDate);
+  const children: (Paragraph | Table)[] = [];
+
+  // Header block (page 1 body, as in the PolicyStat printout): logo | dates | owner and area.
+  const logo = new ImageRun({
+    type: "png",
+    data: Buffer.from(SAMPSON_REGIONAL_LOGO_PNG_B64, "base64"),
+    transformation: { width: 240, height: 120 }, // 2.5 x 1.25 in, as on her printout
+    altText: { title: lab.lab_name, description: `${lab.lab_name} logo`, name: "Logo" },
+  });
+  const cellOf = (paras: Paragraph[], width: number) => new TableCell({ children: paras, width: { size: width, type: WidthType.DXA }, borders: srNoBorders() });
+  children.push(new Table({
+    width: { size: 9936, type: WidthType.DXA },
+    columnWidths: [3888, 3024, 3024],
+    borders: srNoBorders(),
+    rows: [new TableRow({ children: [
+      cellOf([new Paragraph({ children: [logo] })], 3888),
+      cellOf([
+        srLabelValue("Origination", draft),
+        srLabelValue("Last Approved", ""),
+        srLabelValue("Effective", ""),
+        srLabelValue("Last Revised", house.revision ? house.revision : draft),
+        srLabelValue("Next Review", ""),
+      ], 3024),
+      cellOf([
+        srLabelValue("Owner", "Director of Laboratory Services"),
+        srLabelValue("Area", (house.department || "").trim() || "Laboratory"),
+        ...(house.houseNumber ? [srLabelValue("Document", house.houseNumber)] : []),
+      ], 3024),
+    ] })],
+  }));
+
+  children.push(new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 280, after: 120 },
+    border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: "BFBFBF", space: 8 } },
+    children: [srRun(tmpl.policy_name, { bold: true, size: 34 })],
+  }));
+
+  children.push(srHeading("Policy:"));
+  if (tmpl.purpose) children.push(srPara([srRun(subst(tmpl.purpose))]));
+  const statements = tmpl.policy_statements || [];
+  statements.forEach((s) => children.push(srPara([srRun(subst(s))], { numbering: "sr-policy" })));
+  if (!tmpl.purpose && !statements.length) children.push(srPara([srRun("[Enter the policy statements.]")]));
+
+  children.push(srHeading("Scope:"));
+  children.push(srPara([srRun(subst(tmpl.scope) || "[Enter the scope of this policy.]")]));
+
+  const defs = (tmpl.definitions || []).filter((d): d is [string, string] => Array.isArray(d) && d.length === 2);
+  if (defs.length) {
+    children.push(srHeading("Definitions:"));
+    defs.forEach(([term, def]) => children.push(srPara([srRun(`${term}: `, { bold: true }), srRun(subst(def))], { indent: SR_ITEM_INDENT })));
+  }
+
+  children.push(srHeading("Procedure:"));
+  const steps = tmpl.procedure_steps || [];
+  if (steps.length) steps.forEach((s) => children.push(srPara([srRun(subst(s))], { numbering: "sr-procedure" })));
+  else children.push(srPara([srRun("[Enter the procedure steps.]")]));
+
+  children.push(srPara([srRun("REFERENCES:", { bold: true })], { before: 200 }));
+  const refs: string[] = [];
+  for (const b of tmpl.cfr_text_blocks || []) refs.push(b.label ? `${b.citation}, ${b.label}` : b.citation);
+  if (crosswalk?.tjc) refs.push(`TJC: ${crosswalk.tjc}`);
+  if (crosswalk?.cap) refs.push(`CAP: ${crosswalk.cap}`);
+  if (crosswalk?.cola) refs.push(`COLA: ${crosswalk.cola}`);
+  if (crosswalk?.aabb) refs.push(`AABB: ${crosswalk.aabb}`);
+  if (refs.length) refs.forEach((r) => children.push(srPara([srRun(r)], { numbering: "sr-refs", after: 60 })));
+  else children.push(srPara([srRun("None cited.")]));
+  children.push(srPara([srRun("Printed copies are for reference only. Please refer to the electronic copy for the latest version.", { size: 19 })], { before: 160 }));
+
+  children.push(srHeading("Approval Signatures"));
+  const gridBorder = { style: BorderStyle.SINGLE, size: 4, color: "7F7F7F" };
+  const grid = { top: gridBorder, bottom: gridBorder, left: gridBorder, right: gridBorder };
+  const sigCell = (text: string, width: number, bold = false) => new TableCell({
+    width: { size: width, type: WidthType.DXA }, borders: grid,
+    margins: { top: 60, bottom: 60, left: 100, right: 100 },
+    children: [new Paragraph({ children: [srRun(text, { size: 19, bold })] })],
+  });
+  children.push(new Table({
+    width: { size: 9936, type: WidthType.DXA },
+    columnWidths: [3312, 4320, 2304],
+    rows: [
+      new TableRow({ children: [sigCell("Step Description", 3312, true), sigCell("Approver", 4320, true), sigCell("Date", 2304, true)] }),
+      new TableRow({ children: [sigCell("", 3312), sigCell("Medical Director or Designee", 4320), sigCell("", 2304)] }),
+      new TableRow({ children: [sigCell("", 3312), sigCell("Director of Laboratory Services", 4320), sigCell("", 2304)] }),
+    ],
+  }));
+
+  const year = house.draftDate.slice(0, 4);
+  const footer = new Footer({
+    children: [
+      new Paragraph({ children: [srRun(`${tmpl.policy_name}. Copyright \u00A9 ${year} ${lab.lab_name}`, { size: SR_SZ_FOOT })] }),
+      new Paragraph({
+        alignment: AlignmentType.RIGHT,
+        children: [
+          srRun("Page ", { size: SR_SZ_FOOT }),
+          new TextRun({ children: [PageNumber.CURRENT], font: SR_FONT, size: SR_SZ_FOOT }),
+          srRun(" of ", { size: SR_SZ_FOOT }),
+          new TextRun({ children: [PageNumber.TOTAL_PAGES], font: SR_FONT, size: SR_SZ_FOOT }),
+        ],
+      }),
+      ...(opts?.downloadedBy
+        ? [new Paragraph({ alignment: AlignmentType.CENTER, children: [srRun(`Downloaded by ${opts.downloadedBy} on ${opts.downloadedAt ?? house.draftDate}`, { size: SR_SZ_FOOT, italics: true, color: GRAY })] })]
+        : []),
+    ],
+  });
+  const list = (reference: string, format: (typeof LevelFormat)[keyof typeof LevelFormat], text: string, bold = false) =>
+    ({ reference, levels: [{ level: 0, format, text, alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: SR_ITEM_INDENT + 360, hanging: 360 } }, run: { font: SR_FONT, size: SR_SZ, bold } } }] });
+
+  return new Document({
+    creator: "Perplexity Computer",
+    title: tmpl.policy_name,
+    description: "Generated by VeritaPolicy (house format: Sampson Regional)",
+    styles: { default: { document: { run: { font: SR_FONT, size: SR_SZ } } } },
+    numbering: {
+      config: [
+        list("sr-policy", LevelFormat.DECIMAL, "%1."),
+        list("sr-procedure", LevelFormat.UPPER_ROMAN, "%1.", true),
+        list("sr-refs", LevelFormat.DECIMAL, "%1."),
+      ],
+    },
+    sections: [{
+      properties: {
+        page: { size: { width: 12240, height: 15840 }, margin: { top: 1008, right: 1152, bottom: 1152, left: 1152, header: 576, footer: 576 } },
+      },
+      headers: { default: new Header({ children: house.watermark ? [house.watermark] : [new Paragraph({ children: [] })] }) },
+      footers: { default: footer },
       children,
     }],
   });
