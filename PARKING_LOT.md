@@ -707,6 +707,30 @@ Receipts: an integration test for the derivation (linked, unlinked fallback, una
 
 ---
 
+### 102. Import MediaLab quizzes into VeritaComp
+
+**Effort:** S (1-3 days once a real export file is in hand)
+**Importance:** Medium. Labs switching from MediaLab bring years of competency quizzes; retyping them is a reason to stall the switch.
+
+**What:** Catherine Thornton (Redington-Fairview, REQ-074) is rebuilding her MediaLab competency quizzes in VeritaComp™ by hand. Pictures on quiz questions went live 2026-10-14 (#1642, c0dba999), so a converter now has somewhere to put graphs and images. The quiz JSON upload already exists (questions, options, correct answer, explanation, and now an image data URL). What is missing is MediaLab's export format: no sample file exists, so nothing can be built without guessing. The reply to Catherine asked her to send an export if MediaLab offers one. When it arrives, write a converter (script first, in-app upload later if more labs need it).
+
+**Source:** Catherine Thornton email 2026-10-14 7:27 PM ET; Claude, while building quiz pictures.
+**Status:** Waiting on a MediaLab export file from Catherine.
+
+---
+
+### 103. VeritaLab certificate Excel export leaves out the new link and CLIA type
+
+**Effort:** XS (under 1 day)
+**Importance:** Low. The on-screen cards and All Sites view show both; only the spreadsheet lags.
+
+**What:** the VeritaLab CLIA site registry (#1643, a54ea9da) added a certificate link and the CLIA certificate type (waiver, PPM, compliance, accreditation, registration) to each certificate. The Export Excel button on the Certificates tab still writes the older columns only. Add the two columns, and consider an All Sites sheet (one row per site with director, next fee, last menu change, contact and what needs attention) so a multi-site coordinator like Tracy Tuzzolino can hand leadership one file.
+
+**Source:** Claude, while building the registry 2026-10-14.
+**Status:** Open.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C96. Dead statement in db.ts: a roster "unique index" that can never be created (was #90)
