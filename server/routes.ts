@@ -2807,7 +2807,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (labName !== undefined && lab.lab_name_locked) {
       return res.status(409).json({ error: "lab_name is locked (first report has been generated); cannot update" });
     }
-    if (cliaNumber !== undefined && lab.clia_locked) {
+    // A locked lab with NO CLIA may still get its first one (its reports printed "Not on file").
+    if (cliaNumber !== undefined && lab.clia_locked && lab.clia_number) {
       return res.status(409).json({ error: "clia_number is locked (first report has been generated); cannot update" });
     }
 
@@ -33164,8 +33165,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         return res.status(409).json({ error: LAB_SETUP_BY_STAFF_MESSAGE, code: "LAB_SETUP_BY_STAFF" });
       }
 
-      // Check lock state for CLIA and lab name
-      if (lab.clia_locked && clia_number !== undefined && (normalizedClia || null) !== (lab.clia_number || null)) {
+      // Check lock state for CLIA and lab name. The CLIA lock freezes a number that reports already
+      // printed; a lab whose reports printed "CLIA: Not on file" can still have its first CLIA entered
+      // (the reports themselves say to enter it in account settings). 2026-10-15, LW Test Lab.
+      if (lab.clia_locked && lab.clia_number && clia_number !== undefined && (normalizedClia || null) !== (lab.clia_number || null)) {
         return res.status(403).json({ error: "CLIA number is locked once reports have been generated. Contact support to change." });
       }
       if (lab.lab_name_locked && clia_lab_name !== undefined && (clia_lab_name || null) !== (lab.lab_name || null)) {
@@ -33912,40 +33915,6 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json({ ok: true, updated, results });
   });
 
-  // POST /api/admin/organizations/:orgId/attach-lab — link ONE existing lab to an
-  // organization (Michael 2026-10-15: "add LW Test Lab to my demo system"). The
-  // other paths cannot do this safely: provision-system keys labs by CLIA (LW Test
-  // Lab has none), backfill links EVERY unlinked lab the owner has, and
-  // transfer-owner needs a different owner. Guards keep the single-owner system
-  // shape: the lab's owner must be the organization's billing owner, and a lab in
-  // another organization is refused. Idempotent; dryRun returns the plan without
-  // writing. ADMIN_SECRET-gated. Body: { secret, labId, dryRun? }.
-  app.post("/api/admin/organizations/:orgId/attach-lab", (req, res) => {
-    const { secret, labId, dryRun } = req.body || {};
-    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
-    const sqlite = (db as any).$client;
-    const orgId = Number(req.params.orgId);
-    const lid = Number(labId);
-    if (!Number.isInteger(orgId) || orgId <= 0 || !Number.isInteger(lid) || lid <= 0) return res.status(400).json({ error: "orgId and labId (integers) are required" });
-    const org = sqlite.prepare("SELECT id, name, billing_owner_user_id FROM organizations WHERE id = ?").get(orgId) as any;
-    if (!org) return res.status(404).json({ error: "organization not found" });
-    const lab = sqlite.prepare("SELECT id, lab_name, owner_user_id, organization_id FROM labs WHERE id = ?").get(lid) as any;
-    if (!lab) return res.status(404).json({ error: "lab not found" });
-    if (Number(lab.owner_user_id) !== Number(org.billing_owner_user_id)) {
-      return res.status(409).json({ error: "the lab's owner is not this organization's billing owner; transfer the lab first (admin/labs/transfer-owner with attachToOrgId)", labOwner: lab.owner_user_id, orgOwner: org.billing_owner_user_id });
-    }
-    if (lab.organization_id != null && Number(lab.organization_id) !== orgId) {
-      return res.status(409).json({ error: "lab already belongs to a different organization", currentOrgId: lab.organization_id });
-    }
-    const action = Number(lab.organization_id) === orgId ? "already_attached" : "attach";
-    const plan = { orgId, orgName: org.name, labId: lid, labName: lab.lab_name, action };
-    if (dryRun === true || action === "already_attached") return res.json({ dryRun: dryRun === true, ...plan });
-    sqlite.prepare("UPDATE labs SET organization_id = ?, updated_at = ? WHERE id = ?").run(orgId, new Date().toISOString(), lid);
-    logAudit({ userId: 0, module: "admin", action: "update", entityType: "lab.organization", entityId: lid, entityLabel: `Attached ${lab.lab_name} to organization ${org.name}`, ipAddress: req.ip });
-    console.log(`[admin/organizations/attach-lab] org=${orgId} lab=${lid} (${lab.lab_name})`);
-    res.json({ ok: true, ...plan, action: "attached" });
-  });
-
   // POST /api/admin/organizations/members — Phase 2b: designate (or revoke) an
   // organization member's role. This is the grant path that makes org-role
   // elevation usable: an org_admin added here can manage members and write
@@ -34539,6 +34508,49 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     purge();
     console.log(`[ADMIN] Orphan lab purged: id=${id} name=${lab.lab_name} owner=${lab.owner_user_id} seatsCleared=${seatsForLab} at=${new Date().toISOString()}`);
     res.json({ purged: true, labId: id, labName: lab.lab_name, ownerUserId: lab.owner_user_id, seatsCleared: seatsForLab });
+  });
+
+  // POST /api/admin/labs/reset-content — ADMIN: empty a lab IN PLACE (Michael 2026-10-15:
+  // "Reset the LW test lab as an empty lab"). Same content wipe as reset-and-reassign
+  // (transitive closure over the live FK graph, server/labReset.ts), but the owner,
+  // memberships, seats, billing and organization are left exactly as they are. With no
+  // reports left, the CLIA and lab-name locks are cleared too. Dry-run by default;
+  // confirm:true executes. Body: { secret, labIds:number[], confirm?, dryRun?, force? }
+  app.post("/api/admin/labs/reset-content", (req, res) => {
+    const { secret, labIds, confirm, dryRun, force } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    if (!Array.isArray(labIds) || labIds.length === 0 || !labIds.every((x: any) => Number.isInteger(x) && x > 0)) {
+      return res.status(400).json({ error: "labIds must be a non-empty array of positive integers" });
+    }
+    const sqlite = (db as any).$client;
+    const labRows = sqlite.prepare(
+      `SELECT id, lab_name, owner_user_id, organization_id FROM labs WHERE id IN (${labIds.map(() => "?").join(",")})`
+    ).all(...labIds) as any[];
+    if (labRows.length !== labIds.length) {
+      const found = new Set(labRows.map((l) => l.id));
+      return res.status(404).json({ error: "some labIds not found", missing: labIds.filter((x: number) => !found.has(x)) });
+    }
+    const { scope, seededUndeclared, warnings, meta } = computeDeletionScope(sqlite, labIds);
+    const man = manifest(scope);
+    const totalRows = man.reduce((s, r) => s + r.rows, 0);
+    const labs = labRows.map((l) => ({ id: l.id, labName: l.lab_name, ownerUserId: l.owner_user_id, organizationId: l.organization_id }));
+    if (confirm !== true || dryRun === true) {
+      return res.json({ dryRun: true, labs, manifest: man, totalRows, seededUndeclared, warnings, preserve: [...PRESERVE] });
+    }
+    if (warnings.length && force !== true) {
+      return res.status(409).json({ error: "refusing to execute: scope warnings present (pass force:true to override)", warnings });
+    }
+    let deleted = 0;
+    const tx = sqlite.transaction(() => {
+      deleted = applyDeletion(sqlite, scope, meta.pk);
+      const now = new Date().toISOString();
+      for (const id of labIds) sqlite.prepare("UPDATE labs SET clia_locked = 0, lab_name_locked = 0, updated_at = ? WHERE id = ?").run(now, id);
+    });
+    tx();
+    const orphansAfter = orphanScan(sqlite, meta.edges);
+    for (const l of labs) logAudit({ userId: 0, module: "admin", action: "delete", entityType: "lab.content_reset", entityId: l.id, entityLabel: `Emptied ${l.labName} in place (${totalRows} rows across ${man.length} tables)`, ipAddress: req.ip });
+    console.log(`[ADMIN] labs/reset-content labs=${JSON.stringify(labIds)} deleted=${deleted} at=${new Date().toISOString()}`);
+    res.json({ ok: true, labs, deleted, totalRows, manifest: man, orphansAfter });
   });
 
   // POST /api/admin/labs/reset-and-reassign — ADMIN: wipe all lab-scoped CONTENT for
