@@ -26,6 +26,7 @@ import {
   recoveryPlotSVG,
   blandAltmanSVG,
   blandAltmanSeriesSVG,
+  recoverySeriesSVG,
 } from "./pdfReport";
 // 2026-06-10 (overnight backlog): Censoring Level 2 renderer integration.
 // Honors the per-study censoring_policy when a data point is a censored
@@ -418,7 +419,10 @@ function renderStudyAppendix(slot: any, teal: string): string {
         }
         if (assignedVals.length >= 2) {
           const tea = Number(slot.studyTea ?? 0);
-          const rp = recoveryPlotSVG(assignedVals, recoveries, tea);
+          // BUG-059: an absolute TEa plots the difference from assigned in units (recoveryPlotSVG drew it as +/-400%).
+          const rp = teaIsPct
+            ? recoveryPlotSVG(assignedVals, recoveries, tea)
+            : recoverySeriesSVG([{ name: "Mean", x: assignedVals, y: measuredMeans }], tea, true, teaUnit);
           const sc = scatterSVG(assignedVals, measuredMeans, "Assigned", "Measured", "Assigned vs Measured", true);
           calVerGraphs = appendixGraphsRow(rp, sc);
         }
