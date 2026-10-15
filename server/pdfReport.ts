@@ -1426,12 +1426,12 @@ function narrativeHTML(
     const lines = calNames.map((n) => {
       const reg: any = (results.regression || {})[`${n} vs. Assigned`];
       const rows = (results.levelResults || []).filter((r: any) => r.instruments?.[n]);
-      if (rows.some((r: any) => r.instruments[n].passFail !== "Pass")) failing.push(abbreviateInstrumentName(n));
+      if (rows.some((r: any) => r.instruments[n].passFail !== "Pass")) failing.push(seriesNickname(n));
       const errs = rows.map((r: any) => isAbsolute ? Math.abs(r.instruments[n].value - r.assignedValue) : Math.abs((r.instruments[n].obsError ?? 0) * 100));
       const maxE = errs.length ? Math.max(...errs) : 0;
-      if (!isAbsolute && maxE > worstPct) { worstPct = maxE; worstName = abbreviateInstrumentName(n); }
+      if (!isAbsolute && maxE > worstPct) { worstPct = maxE; worstName = seriesNickname(n); }
       const maxStr = isAbsolute ? `${sf(maxE, 2)} ${unit}`.trim() : `${sf(maxE, 1)}%`;
-      return `${abbreviateInstrumentName(n)}: slope ${sf(reg?.slope ?? 1, 3)}, intercept ${sf(reg?.intercept ?? 0, 3)}, maximum observed error ${maxStr}`;
+      return `${seriesNickname(n)}: slope ${sf(reg?.slope ?? 1, 3)}, intercept ${sf(reg?.intercept ?? 0, 3)}, maximum observed error ${maxStr}`;
     });
     narrative = `${nLevels} calibration levels for ${analyteName} were run on ${calNames.length} analyzers against the ${calAdj} calibration verification acceptance criterion of ${teaStr} (${calSource}). ${lines.join("; ")}. `;
     // ADLM "half of CLIA TEa" goal is a percentage concept; omit it for absolute-TEa analytes.
@@ -1506,8 +1506,8 @@ function narrativeHTML(
         : `${(ba?.pctMeanDiff ?? 0) >= 0 ? "+" : ""}${sf(ba?.pctMeanDiff ?? 0, 1)}%`;
       const rows = (results.levelResults || []).filter((lr: any) => lr.instruments?.[n]);
       nPairs = Math.max(nPairs, rows.length);
-      if (rows.some((lr: any) => lr.instruments[n].passFail !== "Pass")) failing.push(abbreviateInstrumentName(n));
-      return `${abbreviateInstrumentName(n)}: R ${sf(r, 3)} (${interp}), Deming slope ${sf(dem?.slope ?? 1, 3)}, mean bias ${bias}`;
+      if (rows.some((lr: any) => lr.instruments[n].passFail !== "Pass")) failing.push(seriesNickname(n));
+      return `${seriesNickname(n)}: R ${sf(r, 3)} (${interp}), Deming slope ${sf(dem?.slope ?? 1, 3)}, mean bias ${bias}`;
     });
     const decisionRuleSentence = `Decision rule: with N=${nPairs} paired specimens per comparison, every specimen must fall within the acceptance criterion for that comparison to pass. Any single specimen exceeding the criterion fails the comparison and triggers investigation.`;
     narrative = `${comps.length} comparison analyzers were each compared with the primary for ${analyteName}. ${lines.join("; ")}. `;

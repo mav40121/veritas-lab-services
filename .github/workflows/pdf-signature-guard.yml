@@ -53,3 +53,7 @@ jobs:
 
       - name: Signature-on-page-1 guard
         run: npx tsx scripts/verify-methodcomp-signature-page1.ts
+
+      # Six analyzers on a Calibration Verification and on a Method Comparison (BUG-056/058 page 1 per analyzer).
+      - name: Multi-analyzer signature-on-page-1 guard
+        run: npx tsx scripts/verify-multi-analyzer-signature-page1.ts

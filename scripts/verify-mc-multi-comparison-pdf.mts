@@ -46,7 +46,7 @@ const slopeB = (a.results.regression as any)[`${BARNEY} vs. Primary (Deming)`].s
 check("2. page 1 key statistics have a row per comparison with its own Deming slope",
   keyStats.includes("Barney") && keyStats.includes("Wilma") && keyStats.includes(slopeB.toFixed(4)) && keyStats.includes(slopeW.toFixed(4)),
   `slopes ${slopeB.toFixed(4)} / ${slopeW.toFixed(4)}`);
-check("3. the narrative describes each comparison", /2 comparison analyzers were each compared/.test(a.page1) && /Barney\)[^;]*Deming slope/.test(a.page1) && /Wilma\)[^;]*Deming slope/.test(a.page1));
+check("3. the narrative describes each comparison", /2 comparison analyzers were each compared/.test(a.page1) && /Barney: R [^;]*Deming slope/.test(a.page1) && /Wilma: R [^;]*Deming slope/.test(a.page1));
 check("4. header lists all three analyzers; supporting page lists each serial",
   a.html.includes("Instruments: Roche cobas 8000 (c702 module) (Fred, Barney, Wilma)") && ["S/N: 1234", "S/N: 4321", "S/N: 789"].every((sn) => a.html.includes(sn)));
 check("5. absolute TEa Bland-Altman limits read ±4 mmol/L, never ±400%", a.html.includes("limits ±4 mmol/L") && !a.html.includes("400%"));
