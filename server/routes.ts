@@ -33912,6 +33912,40 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json({ ok: true, updated, results });
   });
 
+  // POST /api/admin/organizations/:orgId/attach-lab — link ONE existing lab to an
+  // organization (Michael 2026-10-15: "add LW Test Lab to my demo system"). The
+  // other paths cannot do this safely: provision-system keys labs by CLIA (LW Test
+  // Lab has none), backfill links EVERY unlinked lab the owner has, and
+  // transfer-owner needs a different owner. Guards keep the single-owner system
+  // shape: the lab's owner must be the organization's billing owner, and a lab in
+  // another organization is refused. Idempotent; dryRun returns the plan without
+  // writing. ADMIN_SECRET-gated. Body: { secret, labId, dryRun? }.
+  app.post("/api/admin/organizations/:orgId/attach-lab", (req, res) => {
+    const { secret, labId, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const orgId = Number(req.params.orgId);
+    const lid = Number(labId);
+    if (!Number.isInteger(orgId) || orgId <= 0 || !Number.isInteger(lid) || lid <= 0) return res.status(400).json({ error: "orgId and labId (integers) are required" });
+    const org = sqlite.prepare("SELECT id, name, billing_owner_user_id FROM organizations WHERE id = ?").get(orgId) as any;
+    if (!org) return res.status(404).json({ error: "organization not found" });
+    const lab = sqlite.prepare("SELECT id, lab_name, owner_user_id, organization_id FROM labs WHERE id = ?").get(lid) as any;
+    if (!lab) return res.status(404).json({ error: "lab not found" });
+    if (Number(lab.owner_user_id) !== Number(org.billing_owner_user_id)) {
+      return res.status(409).json({ error: "the lab's owner is not this organization's billing owner; transfer the lab first (admin/labs/transfer-owner with attachToOrgId)", labOwner: lab.owner_user_id, orgOwner: org.billing_owner_user_id });
+    }
+    if (lab.organization_id != null && Number(lab.organization_id) !== orgId) {
+      return res.status(409).json({ error: "lab already belongs to a different organization", currentOrgId: lab.organization_id });
+    }
+    const action = Number(lab.organization_id) === orgId ? "already_attached" : "attach";
+    const plan = { orgId, orgName: org.name, labId: lid, labName: lab.lab_name, action };
+    if (dryRun === true || action === "already_attached") return res.json({ dryRun: dryRun === true, ...plan });
+    sqlite.prepare("UPDATE labs SET organization_id = ?, updated_at = ? WHERE id = ?").run(orgId, new Date().toISOString(), lid);
+    logAudit({ userId: 0, module: "admin", action: "update", entityType: "lab.organization", entityId: lid, entityLabel: `Attached ${lab.lab_name} to organization ${org.name}`, ipAddress: req.ip });
+    console.log(`[admin/organizations/attach-lab] org=${orgId} lab=${lid} (${lab.lab_name})`);
+    res.json({ ok: true, ...plan, action: "attached" });
+  });
+
   // POST /api/admin/organizations/members — Phase 2b: designate (or revoke) an
   // organization member's role. This is the grant path that makes org-role
   // elevation usable: an org_admin added here can manage members and write
