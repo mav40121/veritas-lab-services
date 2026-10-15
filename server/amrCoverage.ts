@@ -158,7 +158,7 @@ export function extractValuesForCoverage(
     }
     return out;
   }
-  if (studyType === "cal_ver" || studyType === "reportable_range") {
+  if (studyType === "cal_ver" || studyType === "cal_ver_correlation" || studyType === "reportable_range") {
     // Use the MEAN of measured values per level as the tested point
     // for that level. expectedValue (the assigned value) is the
     // reference axis; the AMR is claimed on the measured axis.

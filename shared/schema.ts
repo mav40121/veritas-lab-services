@@ -67,6 +67,8 @@ export const studies = sqliteTable("studies", {
   reagentLot: text("reagent_lot"),
   comment: text("comment"),
   resultUnits: text("result_units"),
+  // Calibration Verification + Correlation: the known-value material named on the report (NULL = default wording).
+  material: text("material"),
   createdAt: text("created_at").notNull(),
 });
 

@@ -28,6 +28,7 @@ function parseInstruments(study: Study): string[] {
 export function defaultCsvFilename(study: Study): string {
   const typeMap: Record<string, string> = {
     cal_ver: "CalVer",
+    cal_ver_correlation: "CalVerCorrelation",
     precision: "Precision",
     method_comparison: "MethodComp",
     lot_to_lot: "LotToLot",

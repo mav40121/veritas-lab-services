@@ -1604,8 +1604,54 @@ export function calculateMultiAnalyteCoag(
   return { type: "multi_analyte_coag", specimens, analyteResults, ptINRValidation, overallPass, passCount, totalCount, summary };
 }
 
+// ─── Calibration Verification + Correlation (Michael 2026-10-15, Q12 = 2) ──────
+// Known-value samples run once on every analyzer. calVer judges each analyzer against the assigned values; correlation
+// judges each other analyzer against the primary (the first analyzer) with the same TEa. Both must pass.
+export interface CalVerCorrelationResults {
+  type: "cal_ver_correlation";
+  primary: string;
+  calVer: CalVerResults;
+  correlation: MethodCompResults | null;
+  overallPass: boolean;
+  passCount: number;
+  totalCount: number;
+  summary: string;
+}
+
+export function calculateCalVerCorrelation(
+  dataPoints: DataPoint[],
+  instrumentNames: string[],
+  cliaError: number,
+  teaIsPercentage: boolean = true,
+  cliaAbsoluteFloor: number | null = null
+): CalVerCorrelationResults {
+  const calVer = calculateCalVer(dataPoints, instrumentNames, cliaError, teaIsPercentage, cliaAbsoluteFloor);
+  const [primary, ...comps] = instrumentNames;
+  // Same remap the results page uses for a correlation: the primary's reading is the reference value. Excluded flags
+  // ride along so calculateMethodComparison drops the same points calculateCalVer dropped.
+  const mapped: DataPoint[] = dataPoints.map((dp: any) => ({
+    ...dp,
+    expectedValue: dp.instrumentValues?.[primary] ?? null,
+    instrumentValues: Object.fromEntries(comps.map((n) => [n, dp.instrumentValues?.[n] ?? null])),
+  }));
+  const correlation = comps.length ? calculateMethodComparison(mapped, comps, cliaError, teaIsPercentage, cliaAbsoluteFloor) : null;
+  return {
+    type: "cal_ver_correlation",
+    primary: primary ?? "",
+    calVer,
+    correlation,
+    overallPass: calVer.overallPass && (correlation ? correlation.overallPass : true),
+    passCount: calVer.passCount + (correlation?.passCount ?? 0),
+    totalCount: calVer.totalCount + (correlation?.totalCount ?? 0),
+    summary: `Calibration verification: ${calVer.overallPass ? "PASS" : "FAIL"} (${calVer.passCount}/${calVer.totalCount} results within TEa of the assigned values). `
+      + (correlation
+        ? `Correlation against ${primary}: ${correlation.overallPass ? "PASS" : "FAIL"} (${correlation.passCount}/${correlation.totalCount} results within TEa of the primary).`
+        : "Correlation: needs a second analyzer."),
+  };
+}
+
 // ─── Legacy shim — keep old callers working during migration ─────────────────
-export type StudyResults = CalVerResults | MethodCompResults | QualitativeResults | SemiQuantResults | PrecisionResults | LotToLotResults | PTCoagResults | QCRangeResults | MultiAnalyteResults | RefIntervalResults | SensitivityResults;
+export type StudyResults = CalVerResults | CalVerCorrelationResults | MethodCompResults | QualitativeResults | SemiQuantResults | PrecisionResults | LotToLotResults | PTCoagResults | QCRangeResults | MultiAnalyteResults | RefIntervalResults | SensitivityResults;
 
 export function calculateStudy(
   dataPoints: DataPoint[],
@@ -1626,6 +1672,7 @@ export { demingRegression };
 
 // ─── Type guards ──────────────────────────────────────────────────────────────
 export function isCalVer(r: StudyResults): r is CalVerResults { return r.type === "cal_ver"; }
+export function isCalVerCorrelation(r: StudyResults): r is CalVerCorrelationResults { return r.type === "cal_ver_correlation"; }
 export function isMethodComp(r: StudyResults): r is MethodCompResults { return r.type === "method_comparison"; }
 export function isPrecision(r: StudyResults): r is PrecisionResults { return r.type === "precision"; }
 export function isLotToLot(r: StudyResults): r is LotToLotResults { return r.type === "lot_to_lot"; }

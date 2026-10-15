@@ -94,7 +94,8 @@ export interface CoverageResult {
   unmappedStudies: UnmappedStudy[];
 }
 
-const LINEARITY_TYPES = new Set(["cal_ver", "linearity"]);
+// cal_ver_correlation (2026-10-15) answers both requirements: it is in this set and in MC_STUDY_TYPES.
+const LINEARITY_TYPES = new Set(["cal_ver", "linearity", "cal_ver_correlation"]);
 const STOP = new Set(["s", "n", "sn", "the", "method", "test", "manual", "system", "analyzer", "laboratory", "instrumentation"]);
 
 function instrTokens(s: string): Set<string> {
@@ -132,7 +133,7 @@ type Study = { id: number; test_name: string; instrument: string; study_type: st
 const MC_INTERVAL_MONTHS = 6;
 // Cal-ver / linearity recurs at least every 6 months (CLIA §493.1255).
 const LINEARITY_INTERVAL_MONTHS = 6;
-const MC_STUDY_TYPES = new Set(["method_comparison", "correlation"]);
+const MC_STUDY_TYPES = new Set(["method_comparison", "correlation", "cal_ver_correlation"]);
 function addMonthsIso(iso: string, months: number): string {
   const parts = String(iso).slice(0, 10).split("-").map((n) => parseInt(n, 10));
   if (parts.length < 3 || parts.some((n) => Number.isNaN(n))) return String(iso).slice(0, 10);
@@ -344,7 +345,7 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
   // The list is by study NAME not matching (a stable property), so an aligned
   // study stays visible here with its target shown, giving the director a handle
   // to change or clear the alignment. Unaligned rows sort first.
-  const COVERAGE_STUDY_TYPES = new Set(["method_comparison", "correlation", "cal_ver", "linearity"]);
+  const COVERAGE_STUDY_TYPES = new Set(["method_comparison", "correlation", "cal_ver", "linearity", "cal_ver_correlation"]);
   const mapAnalytes = combos.map((c) => c.analyte);
   const unmappedStudies: UnmappedStudy[] = studies
     .filter((s) => COVERAGE_STUDY_TYPES.has(s.study_type) && !mapAnalytes.some((a) => analyteMatch(s.test_name, a)))
@@ -453,11 +454,20 @@ export function stampMapDatesFromStudies(
     (want[analyte] ||= {});
     if (!want[analyte][field] || want[analyte][field] < d) want[analyte][field] = d;
   };
+  const studyById = new Map<number, Study>(studies.map((s) => [s.id, s]));
   for (const r of cov.rows) {
-    // Stamp last_cal_ver from a signed passing on-instrument study, whether it is
-    // still satisfied ("covered") or now recurrence-due ("missing"); the map date
-    // reflects when cal-ver was last performed regardless of the next-due status.
-    if (r.signed && r.status === "missing") for (const sid of r.studyIds) put(r.analyte, "last_cal_ver", dateById.get(sid));
+    // Stamp last_cal_ver from the signed passing on-instrument studies, whether the
+    // cycle is still satisfied or now recurrence-due; the map date reflects when
+    // cal-ver was last performed and signed. BUG-061 (2026-10-15): this used to need
+    // r.signed, which is true only when EVERY matched study is signed, so one
+    // abandoned unsigned draft for the same analyte and analyzer kept the map blank
+    // while the Coverage Report counted the signed study. Exempt rows and "review"
+    // rows (studies only on other analyzers) still stamp nothing.
+    if (r.status === "exempt" || r.status === "review") continue;
+    for (const sid of r.studyIds) {
+      const s = studyById.get(sid);
+      if (s && s.lifecycle_state === "finalized" && !isFailVerdict(s.status)) put(r.analyte, "last_cal_ver", dateById.get(sid));
+    }
   }
   for (const mc of cov.methodComparisons) {
     if (mc.hasStudy && mc.studyId != null) put(mc.analyte, "last_method_comp", dateById.get(mc.studyId));
@@ -555,7 +565,7 @@ export function presetCorroboratesName(presetLabel: string, testName: string): b
 // name matches no active map analyte. The client uses this to fire the Phase 2
 // soft challenge (pick the map point, or "not on our map yet"). Name-matched or
 // already-attributed studies, and non-coverage types, return false (no prompt).
-const ATTRIBUTABLE_TYPES = new Set(["method_comparison", "correlation", "cal_ver", "linearity"]);
+const ATTRIBUTABLE_TYPES = new Set(["method_comparison", "correlation", "cal_ver", "linearity", "cal_ver_correlation"]);
 export function studyNeedsAttribution(sqlite: any, labId: number, studyType: string, testName: string, coverageAnalyte: string | null): boolean {
   if (!labId) return false;
   if (!ATTRIBUTABLE_TYPES.has(studyType)) return false;

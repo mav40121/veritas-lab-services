@@ -16,6 +16,7 @@ import { db } from "./db";
 const STUDY_TYPE_KEYWORDS: Record<string, string[]> = {
   method_comparison: ["Correlation", "Method Comparison", "correlation"],
   cal_ver: ["Calibration Verification", "Calibration verification", "calibration verification"],
+  cal_ver_correlation: ["Calibration Verification", "Calibration verification", "calibration verification", "Correlation", "Method Comparison", "correlation"],
   precision: ["Accuracy", "Precision", "accuracy", "precision", "bias"],
   lot_to_lot: ["Lot", "Reagent", "lot", "reagent"],
   pt_coag: ["PT", "PTT", "coagulation", "Coagulation"],
@@ -135,6 +136,10 @@ function findMatchingScanItemIds(keywords: string[], analyte: string, studyType:
     case "cal_ver":
       // Items about calibration verification
       matchingIds.push(21, 22, 23, 24);
+      break;
+    case "cal_ver_correlation":
+      // Calibration Verification + Correlation answers both sets
+      matchingIds.push(21, 22, 23, 24, 26, 27, 28, 29);
       break;
     case "precision":
       // Items about accuracy/precision

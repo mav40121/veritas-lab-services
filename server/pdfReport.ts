@@ -493,11 +493,11 @@ function seriesNickname(n: string): string {
 }
 
 // Legend as one row under the chart title, so it never covers a data point.
-function legendSVG(series: CompSeries[], xLeft: number, y: number): string {
+function legendSVG(series: CompSeries[], xLeft: number, y: number, colorOffset = 0): string {
   let x = xLeft;
   return series.map((sr, i) => {
     const label = `\u25CF ${sr.name}`;
-    const out = `<text x="${x}" y="${y}" font-size="7.5" fill="${SERIES_COLORS[i % SERIES_COLORS.length]}" font-weight="600">${escapeHtml(label)}</text>`;
+    const out = `<text x="${x}" y="${y}" font-size="7.5" fill="${SERIES_COLORS[(i + colorOffset) % SERIES_COLORS.length]}" font-weight="600">${escapeHtml(label)}</text>`;
     x += label.length * 4.6 + 10;
     return out;
   }).join("");
@@ -542,7 +542,7 @@ export function scatterSeriesSVG(series: CompSeries[], xLabel: string, title: st
 </svg>`;
 }
 
-export function blandAltmanSeriesSVG(series: CompSeries[], tea: number, absolute: boolean, unit: string, w = 320, h = 220): string {
+export function blandAltmanSeriesSVG(series: CompSeries[], tea: number, absolute: boolean, unit: string, w = 320, h = 220, colorOffset = 0): string {
   const pts = series.map((sr) => {
     const n = Math.min(sr.x.length, sr.y.length);
     const avg: number[] = [], diff: number[] = [];
@@ -571,7 +571,7 @@ export function blandAltmanSeriesSVG(series: CompSeries[], tea: number, absolute
   const lower = `<line x1="${ml}" y1="${cy(-limit)}" x2="${ml + pw}" y2="${cy(-limit)}" stroke="#dc5050" stroke-width="1.2"/>`;
   let marks = "";
   pts.forEach((p, i) => {
-    const color = SERIES_COLORS[i % SERIES_COLORS.length];
+    const color = SERIES_COLORS[(i + colorOffset) % SERIES_COLORS.length];
     marks += `<line x1="${ml}" y1="${cy(p.bias)}" x2="${ml + pw}" y2="${cy(p.bias)}" stroke="${color}" stroke-width="1" stroke-dasharray="3,2"/>`;
     marks += p.avg.map((a, k) => `<circle cx="${cx(a)}" cy="${cy(p.diff[k])}" r="3.5" fill="${color}" opacity="0.85"/>`).join("");
   });
@@ -582,7 +582,7 @@ export function blandAltmanSeriesSVG(series: CompSeries[], tea: number, absolute
   <text x="${w / 2}" y="16" text-anchor="middle" font-size="10" font-weight="600" fill="#14141e">Bland-Altman (limits ${limitLabel})</text>
   <rect x="${ml}" y="${mt}" width="${pw}" height="${ph}" fill="white" stroke="#cdd1d6" stroke-width="0.5"/>
   <defs><clipPath id="${clipId}"><rect x="${ml}" y="${mt}" width="${pw}" height="${ph}"/></clipPath></defs>
-  ${grid}<g clip-path="url(#${clipId})">${zeroLine}${upper}${lower}${marks}</g>${legendSVG(series, ml, 29)}
+  ${grid}<g clip-path="url(#${clipId})">${zeroLine}${upper}${lower}${marks}</g>${legendSVG(series, ml, 29, colorOffset)}
   <text x="${ml + pw / 2}" y="${h - 4}" text-anchor="middle" font-size="9" fill="#646e78">Mean of Methods</text>
   <text x="10" y="${mt + ph / 2}" text-anchor="middle" font-size="9" fill="#646e78" transform="rotate(-90,10,${mt + ph / 2})">${yLabel}</text>
 </svg>`;
@@ -853,6 +853,7 @@ function instrumentDisplayMultiline(study: Study): string {
 function headerHTML(study: Study, cliaNumber?: string): string {
   const typeLabelMap: Record<string, string> = {
     cal_ver: "Calibration Verification (CLSI EP06)",
+    cal_ver_correlation: "Calibration Verification + Correlation (CLSI EP06, EP09)",
     precision: "Precision Verification (EP15)",
     method_comparison: "Correlation / Method Comparison",
     lot_to_lot: "Reagent Lot Verification (CLSI EP26)",
@@ -923,7 +924,7 @@ function supportingPageHTML(study: Study, instrumentNames: string[], agreement?:
   const presetLabel: string | null = (study as any).cliaPresetLabel ?? null;
   const teaStrWithPreset = presetLabel ? `${teaStr} (${presetLabel})` : teaStr;
   const specs: any[][] = [
-    ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification (CLSI EP06)" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (CLSI EP26)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (CLSI EP17-A2)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias: Single Instrument vs Target (CLSI EP15-A3)" : study.studyType === "linearity" ? "Linearity (CLSI EP06)" : study.studyType === "reportable_range" ? "Reportable Range (CLIA §493.1255)" : study.studyType === "manual_diff" ? "Manual Differential (Rümke 95% CI, CLSI H20)" : "Method Comparison: Multi-Instrument Correlation (CLSI EP09 + EP15-A3)"],
+    ["Study Type", study.studyType === "cal_ver_correlation" ? "Calibration Verification / Linearity + Correlation / Method Comparison (CLSI EP06 + EP09)" : study.studyType === "cal_ver" ? "Calibration Verification (CLSI EP06)" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (CLSI EP26)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (CLSI EP17-A2)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias: Single Instrument vs Target (CLSI EP15-A3)" : study.studyType === "linearity" ? "Linearity (CLSI EP06)" : study.studyType === "reportable_range" ? "Reportable Range (CLIA §493.1255)" : study.studyType === "manual_diff" ? "Manual Differential (Rümke 95% CI, CLSI H20)" : "Method Comparison: Multi-Instrument Correlation (CLSI EP09 + EP15-A3)"],
     ["Test Name", study.testName],
     [criterionRowLabel, teaStrWithPreset],
     [cfrReferenceLabel, cfrReferenceValue],
@@ -1149,7 +1150,7 @@ function directorReviewHTML(study?: any, appendExclusions = true): string {
 
 
 // ─── Regulatory Compliance References box ───────────────────────────────────
-type StudyTypeKey = "cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval" | "sensitivity" | "carryover" | "accuracy_bias" | "linearity" | "reportable_range";
+type StudyTypeKey = "cal_ver" | "cal_ver_correlation" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval" | "sensitivity" | "carryover" | "accuracy_bias" | "linearity" | "reportable_range";
 export type AccreditationBody = "CAP" | "TJC" | "COLA" | "AABB";
 
 interface RegulatoryRefs {
@@ -1162,6 +1163,16 @@ interface RegulatoryRefs {
 }
 
 const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
+  // Combined Calibration Verification / Linearity + Correlation / Method Comparison (Michael 2026-10-15, Q12 = 2):
+  // the union of the cal_ver and method_comparison references below.
+  cal_ver_correlation: {
+    cap:  ["CHM.13700", "CHM.13750", "CHM.13820", "GEN.40830"],
+    tjc:  ["QSA.02.02.01", "QSA.02.03.01", "QSA.02.08.01"],
+    cola: ["LAB.022", "LAB.023", "LAB.025"],
+    aabb: ["5.7.1", "5.7.2", "5.7.3"],
+    clsi: ["EP06-Ed3", "EP09-A3"],
+    cfr:  ["42 CFR §493.1255(b)(3)", "42 CFR §493.1271(b)", "42 CFR §493.1281"],
+  },
   cal_ver: {
     cap:  ["CHM.13700", "CHM.13750", "GEN.40830"],
     tjc:  ["QSA.02.02.01", "QSA.02.03.01"],
@@ -1763,6 +1774,192 @@ export function buildCalVerHTML(study: Study, results: CalVerData): string {
   </div>
 
   ${supportingPageHTML(study, instrumentNames)}
+  </body></html>`;
+}
+
+// ─── CAL VER + CORRELATION HTML report ───────────────────────────────────────
+// Michael 2026-10-15 (Q12 = 2): known-value samples run once on every analyzer answer both the calibration verification
+// (each analyzer against the assigned values, 42 CFR 493.1255(b)(3)) and the twice-yearly comparison between analyzers
+// (each analyzer against the primary, 42 CFR 493.1281(a)). Two verdicts: two analyzers can each pass cal ver at +TEa and
+// -TEa yet sit nearly 2 x TEa apart, so agreement is judged on its own. The report names the material; the director
+// accepts it by signing.
+interface CalVerCorrelationData {
+  type: "cal_ver_correlation";
+  primary: string;
+  calVer: CalVerData;
+  correlation: MethodCompData | null;
+  overallPass: boolean; passCount: number; totalCount: number;
+}
+
+export function buildCalVerCorrelationHTML(study: Study, results: CalVerCorrelationData): string {
+  const names: string[] = safeJsonParse(study.instruments) || [];
+  const primary = results.primary || names[0] || "";
+  const comps = names.filter((n) => n !== primary);
+  const cv = results.calVer;
+  const mc = results.correlation;
+  const absolute = isAbsoluteTea(study);
+  const unit = ((study as any).teaUnit || (study as any).tea_unit || "").trim();
+  const material = String((study as any).material || "").trim() || "calibration verification material with assigned values";
+  const levels = cv.levelResults || [];
+  const mcLevels = mc?.levelResults || [];
+  const colorOf = (n: string) => SERIES_COLORS[Math.max(0, names.indexOf(n)) % SERIES_COLORS.length];
+  const dot = (n: string) => `<span style="color:${colorOf(n)}">\u25CF</span>`;
+  const pNick = seriesNickname(primary);
+  const teaStr = teaDisplayStr(study);
+  const analyte = study.testName;
+
+  const cvSeries: CompSeries[] = names.map((n) => {
+    const rows = levels.filter((r) => r.instruments?.[n]);
+    return { name: seriesNickname(n), x: rows.map((r) => r.assignedValue), y: rows.map((r) => r.instruments[n].value) };
+  });
+  const mcSeries: CompSeries[] = comps.map((n) => {
+    const rows = mcLevels.filter((r) => r.instruments?.[n]);
+    return { name: seriesNickname(n), x: rows.map((r) => r.referenceValue), y: rows.map((r) => r.instruments[n].value) };
+  });
+  const charts = scatterSeriesSVG(cvSeries, "Assigned Value", "Accuracy: Measured vs. Assigned", 320, 140, "Measured")
+    + (comps.length ? blandAltmanSeriesSVG(mcSeries, study.cliaAllowableError, absolute, unit, 320, 140, 1) : "");
+
+  // Per-analyzer accuracy and agreement.
+  const maxErr = (n: string) => {
+    const rows = levels.filter((r) => r.instruments?.[n]);
+    const errs = rows.map((r) => absolute ? Math.abs(r.instruments[n].value - r.assignedValue) : Math.abs((r.instruments[n].obsError ?? 0) * 100));
+    return errs.length ? Math.max(...errs) : 0;
+  };
+  const errStr = (v: number) => absolute ? `${sf(v, 2)} ${escapeHtml(unit)}`.trim() : `${sf(v, 1)}%`;
+  const cvPassed = (n: string) => { const rows = levels.filter((r) => r.instruments?.[n]); return { pass: rows.filter((r) => r.instruments[n].passFail === "Pass").length, total: rows.length }; };
+  const mcPassed = (n: string) => { const rows = mcLevels.filter((r) => r.instruments?.[n]); return { pass: rows.filter((r) => r.instruments[n].passFail === "Pass").length, total: rows.length }; };
+  const cvFailing = names.filter((n) => { const p = cvPassed(n); return p.pass < p.total; });
+  const mcFailing = comps.filter((n) => { const p = mcPassed(n); return p.pass < p.total; });
+  const cvPass = cv.overallPass, mcPass = mc ? mc.overallPass : true;
+  const mcPassCount = mc?.passCount ?? 0, mcTotal = mc?.totalCount ?? 0;
+
+  const keyRows = names.map((n, i) => {
+    const reg: any = (cv.regression || {})[`${n} vs. Assigned`];
+    const c = cvPassed(n);
+    let corr = `<td colspan="3" class="text-right" style="color:${MUTED};font-style:italic">Primary for the correlation</td>`;
+    if (n !== primary) {
+      const dem: any = (mc?.regression || {})[`${n} vs. Primary (Deming)`];
+      const ba: any = (mc?.blandAltman || {})[n];
+      const m = mcPassed(n);
+      const bias = ba ? (absolute ? `${(ba.meanDiff ?? 0) >= 0 ? "+" : ""}${sf(ba.meanDiff ?? 0, 2)} ${escapeHtml(unit)}`.trim() : `${(ba.pctMeanDiff ?? 0) >= 0 ? "+" : ""}${sf(ba.pctMeanDiff ?? 0, 2)}%`) : "---";
+      corr = `<td class="text-right">${dem ? sf(dem.slope, 4) : "---"}</td><td class="text-right">${bias}</td><td class="text-right ${m.pass === m.total ? "pass" : "fail"}">${m.pass}/${m.total}</td>`;
+    }
+    return `<tr class="${i % 2 === 1 ? "stripe" : ""}"><td>${dot(n)} ${escapeHtml(abbreviateInstrumentName(n))}</td>
+      <td class="text-right">${reg ? sf(reg.slope, 4) : "---"}</td><td class="text-right">${errStr(maxErr(n))}</td><td class="text-right ${c.pass === c.total ? "pass" : "fail"}">${c.pass}/${c.total}</td>${corr}</tr>`;
+  }).join("");
+  const keyStats = `<table style="font-size:8pt;margin-bottom:6px">
+    <thead>
+      <tr><th>Analyzer</th><th class="text-right">Slope vs. Assigned</th><th class="text-right">Max Error</th><th class="text-right">Levels Passing</th><th class="text-right">Deming Slope vs. ${escapeHtml(pNick)}</th><th class="text-right">Mean Bias</th><th class="text-right">Samples Passing</th></tr>
+    </thead>
+    <tbody>${keyRows}
+      <tr><td style="color:${MUTED};font-weight:700">Overall</td><td colspan="3" class="text-right ${cvPass ? "pass" : "fail"}">${cvPass ? "PASS" : "FAIL"} (${cv.passCount}/${cv.totalCount})</td><td colspan="3" class="text-right ${mcPass ? "pass" : "fail"}">${comps.length ? `${mcPass ? "PASS" : "FAIL"} (${mcPassCount}/${mcTotal})` : "No comparison analyzer"}</td></tr>
+    </tbody></table>`;
+
+  // Narrative: accuracy per analyzer, agreement per comparison, two determinations, the material, final approval.
+  const cfrSection = (study as any)?.cfr || cfrSectionForTestName((study as any)?.testName);
+  const adj = criterionAdjective(analyte);
+  const label = criterionLabel(analyte);
+  const authority = criterionAuthorityPhrase(analyte, cfrSection);
+  let narrative = `${levels.length} known-value samples for ${analyte} were run on ${names.length} analyzers. `;
+  if (!absolute) {
+    // ADLM "half of CLIA TEa" goal is a percentage concept; omitted for absolute-TEa analytes.
+    const worst = names.map((n) => ({ n, e: maxErr(n) })).sort((p, q) => q.e - p.e)[0];
+    const adlmPct = (study.cliaAllowableError * 50).toFixed(1);
+    if (worst) narrative += worst.e <= study.cliaAllowableError * 50
+      ? `The largest error on any analyzer, ${sf(worst.e, 1)}% (${seriesNickname(worst.n)}), also meets the ADLM-recommended internal goal of \u00B1${adlmPct}%. `
+      : `The largest error on any analyzer was ${sf(worst.e, 1)}% (${seriesNickname(worst.n)}); the ADLM recommends an internal goal of \u00B1${adlmPct}%. `;
+  }
+  narrative += cvPass
+    ? `<b>Calibration verification: each level on each analyzer was individually evaluated against the ${adj} acceptance criterion (${label}) of ${teaStr} ${authority} (42 CFR §493.1255(b)(3)). All levels on every analyzer satisfied this criterion.</b> `
+    : `<b>Calibration verification: each level on each analyzer was individually evaluated against the ${adj} acceptance criterion (${label}) of ${teaStr} ${authority} (42 CFR §493.1255(b)(3)). ${cvFailing.length ? `One or more levels did not satisfy this criterion (${cvFailing.map(seriesNickname).join(", ")}).` : "No analyzer readings were entered."}</b> `;
+  if (comps.length) {
+    narrative += mcPass
+      ? `<b>Correlation: each sample on each comparison analyzer was individually evaluated against the same criterion relative to ${pNick} (42 CFR §493.1281(a)). All samples on every comparison analyzer satisfied this criterion.</b> `
+      : `<b>Correlation: each sample on each comparison analyzer was individually evaluated against the same criterion relative to ${pNick} (42 CFR §493.1281(a)). ${mcFailing.length ? `One or more samples did not satisfy this criterion (${mcFailing.map(seriesNickname).join(", ")}).` : "No comparison analyzer readings were entered."}</b> `;
+  }
+  narrative += `The comparison used ${escapeHtml(material)}, not patient specimens. Final approval and clinical determination must be made by the laboratory director or designee.`;
+  const narrativeBox = `
+  <div style="margin-top:6px;padding:8px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
+    <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:3px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
+    <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${narrative}</p>
+  </div>`;
+
+  // Page 2: regression and level-by-level tables for each half.
+  const linRows = names.map((n, i) => {
+    const reg: any = (cv.regression || {})[`${n} vs. Assigned`];
+    return reg ? `<tr class="${i % 2 === 1 ? "stripe" : ""}"><td>${dot(n)} ${escapeHtml(abbreviateInstrumentName(n))}</td><td class="text-right">${reg.n ?? 0}</td><td class="text-right">${sf(reg.slope, 4)}</td><td class="text-right">${sf(reg.intercept, 4)}</td><td class="text-right">${sf((reg.proportionalBias ?? 0) * 100, 2)}%</td><td class="text-right">${sf(Math.sqrt(reg.r2 ?? 0), 4)}</td></tr>` : "";
+  }).join("");
+  const cvRows = levels.map((r, ri) => `<tr class="${ri % 2 === 1 ? "stripe" : ""}"><td>${(r as any).customLabel ? escapeHtml(String((r as any).customLabel)) : `L${r.level}`}</td><td class="text-right">${sf(r.assignedValue, 3)}</td>${names.map((n) => {
+    const v = r.instruments[n];
+    if (!v) return `<td class="text-right">-</td>`;
+    const err = absolute ? `${v.value - r.assignedValue >= 0 ? "+" : ""}${sf(v.value - r.assignedValue, 2)}` : `${v.obsError >= 0 ? "+" : ""}${sf(v.obsError * 100, 1)}%`;
+    return `<td class="text-right ${v.passFail === "Pass" ? "pass" : "fail"}">${sf(v.value, 3)} (${err})</td>`;
+  }).join("")}</tr>`).join("");
+  const demRows = comps.map((n, i) => {
+    const dem: any = (mc?.regression || {})[`${n} vs. Primary (Deming)`];
+    const ba: any = (mc?.blandAltman || {})[n];
+    return `<tr class="${i % 2 === 1 ? "stripe" : ""}"><td>${dot(n)} ${escapeHtml(abbreviateInstrumentName(n))}</td><td class="text-right">${dem?.n ?? "---"}</td><td class="text-right">${dem ? sf(dem.slope, 4) : "---"}</td><td class="text-right">${dem ? sf(dem.intercept, 4) : "---"}</td><td class="text-right">${dem ? sf(Math.sqrt(dem.r2 ?? 0), 4) : "---"}</td><td class="text-right">${ba ? sf(ba.meanDiff, 3) : "---"}</td><td class="text-right">${ba ? sf(ba.pctMeanDiff, 2) + "%" : "---"}</td></tr>`;
+  }).join("");
+  const mcRows = mcLevels.map((r, ri) => `<tr class="${ri % 2 === 1 ? "stripe" : ""}"><td>L${r.level}</td><td class="text-right">${sf(r.referenceValue, 3)}</td>${comps.map((n) => {
+    const v = r.instruments?.[n];
+    if (!v) return `<td class="text-right">-</td>`;
+    const d = absolute ? `${v.difference >= 0 ? "+" : ""}${sf(v.difference, 2)}` : `${v.pctDifference >= 0 ? "+" : ""}${sf(v.pctDifference, 1)}%`;
+    return `<td class="text-right ${v.passFail === "Pass" ? "pass" : "fail"}">${sf(v.value, 3)} (${d})</td>`;
+  }).join("")}</tr>`).join("");
+  const errHead = absolute ? `difference from assigned, ${escapeHtml(unit || "units")}` : "% error from assigned";
+  const difHead = absolute ? `difference from ${escapeHtml(pNick)}, ${escapeHtml(unit || "units")}` : `% difference from ${escapeHtml(pNick)}`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Calibration Verification + Correlation - ${study.testName}</title><style>${CSS}
+  .page-num::after { content: "Page " counter(page); }
+  body { counter-reset: page; }
+  </style></head><body>
+  ${footerHTML()}
+  ${headerHTML(study, (study as any)._cliaNumber)}
+
+  <!-- material and primary are named in the narrative and the key statistics header -->
+
+  <div class="charts">${charts}</div>
+
+  <hr class="divider">
+  <div class="section-label">Key Statistics Summary</div>
+  ${keyStats}
+
+  ${narrativeBox}
+
+  ${regulatoryComplianceBoxHTML("cal_ver_correlation", (study as any)._preferredStandards)}
+
+  ${directorReviewHTML(study)}
+
+  <div class="stats-section">
+    <div class="section-label">Statistical Analysis and Experimental Results (Continued from page 1)</div>
+
+    <div class="section-label" style="margin-top:8px">Accuracy: Linearity Summary (each analyzer vs. assigned values)</div>
+    <table>
+      <thead><tr><th></th><th class="text-right">N</th><th class="text-right">Slope</th><th class="text-right">Intercept</th><th class="text-right">Prop. Bias</th><th class="text-right">R</th></tr></thead>
+      <tbody>${linRows}</tbody>
+    </table>
+
+    <div class="section-label" style="margin-top:8px">Accuracy: Level-by-Level Results (value, ${errHead})</div>
+    <table>
+      <thead><tr><th></th><th class="text-right">Assigned</th>${names.map((n) => `<th class="text-right">${dot(n)} ${escapeHtml(seriesNickname(n))}</th>`).join("")}</tr></thead>
+      <tbody>${cvRows}</tbody>
+    </table>
+
+    ${comps.length ? `<hr class="divider" style="margin-top:8px">
+    <div class="section-label">Correlation: Regression vs. ${escapeHtml(pNick)} (Deming)</div>
+    <table>
+      <thead><tr><th></th><th class="text-right">N</th><th class="text-right">Slope</th><th class="text-right">Intercept</th><th class="text-right">R</th><th class="text-right">Mean Bias</th><th class="text-right">Mean % Bias</th></tr></thead>
+      <tbody>${demRows}</tbody>
+    </table>
+
+    <div class="section-label" style="margin-top:8px">Correlation: Sample-by-Sample Results (value, ${difHead})</div>
+    <table>
+      <thead><tr><th></th><th class="text-right">${dot(primary)} ${escapeHtml(pNick)} (primary)</th>${comps.map((n) => `<th class="text-right">${dot(n)} ${escapeHtml(seriesNickname(n))}</th>`).join("")}</tr></thead>
+      <tbody>${mcRows}</tbody>
+    </table>` : ""}
+  </div>
+
+  ${supportingPageHTML(study, names)}
   </body></html>`;
 }
 
@@ -4469,6 +4666,8 @@ export async function generatePDFBuffer(study: Study, results: any, cliaNumber?:
 
   const html = study.studyType === "cal_ver"
     ? buildCalVerHTML(study, results)
+    : study.studyType === "cal_ver_correlation"
+    ? buildCalVerCorrelationHTML(study, results)
     : study.studyType === "precision"
     ? buildPrecisionHTML(study, results)
     : study.studyType === "lot_to_lot"
