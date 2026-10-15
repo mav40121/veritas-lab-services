@@ -58,6 +58,9 @@ const ALWAYS: Record<string, string> = {
   "PATCH /api/labs/:labId/members/:memberId/email": "change a member login email",
   "PATCH /api/labs/:labId/members/:memberId/permissions": "change member permissions",
   "DELETE /api/labs/:labId/members/:memberId": "remove a member",
+  // Two-factor sign-in: a lab's security rule and resets stay with the lab's own owner/admins.
+  "PUT /api/labs/:labId/two-factor": "change the lab's two-factor sign-in rule",
+  "POST /api/labs/:labId/two-factor/reset/:userId": "reset a person's two-factor sign-in",
   "POST /api/labs/:labId/seat-invites/:id/reissue": "reissue an invitation link",
   "POST /api/labs/:labId/seat-invites/:id/dismiss": "cancel an invitation",
   // VeritaQC
