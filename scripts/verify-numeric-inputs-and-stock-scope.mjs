@@ -25,7 +25,7 @@ const stamp = Date.now();
 
 // Setup: an owner whose saved VeritaStock scope is Chemistry, and one Core Lab item (Natalie's state).
 const email = `numfix-${stamp}@example.com`;
-const reg = await call("POST", "/api/auth/register", { email, password: "testpass123", name: "Scope Owner", hipaa_acknowledged: true });
+const reg = await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "Scope Owner", hipaa_acknowledged: true });
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Scope Lab", plan: "hospital" })).labId;
 const sdb = new Database(process.env.SCRATCH_DB);
 const uid = sdb.prepare("SELECT id FROM users WHERE email = ?").get(email).id;

@@ -56,7 +56,7 @@ if (!cases.length) { console.error("no legacy records in this backup; nothing to
 const NEXT = { WAIVED: { initial: "annual", annual: "annual" }, OTHER: { initial: "six_month", six_month: "first_annual", first_annual: "annual", annual: "annual" } };
 const TYPE = { initial: "initial", "6month": "six_month", six_month: "six_month", first_annual: "first_annual", annual: "annual" };
 for (const c of cases) {
-  const tok = jwt.sign({ userId: c.owner_user_id }, SECRET, { expiresIn: "5m" });
+  const tok = jwt.sign({ svc: true, userId: c.owner_user_id }, SECRET, { expiresIn: "5m" });
   const r = await fetch(`http://localhost:${PORT}/api/labs/${c.lab_id}/competency/employee/${c.staff_employee_id}`, { headers: { Authorization: `Bearer ${tok}`, "X-Active-Lab-Id": String(c.lab_id) } });
   const j = await r.json().catch(() => ({}));
   const ts = (j.testSystems || []).find((t) => t.instrumentId === c.instrument_id);

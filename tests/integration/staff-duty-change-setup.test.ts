@@ -42,7 +42,7 @@ async function main() {
   };
   const mkLab = async (tag: string) => {
     const email = `dcs-${tag}-${Date.now()}@example.com`;
-    const reg = (await call("POST", "/api/auth/register", { email, password: "testpass123", name: `DCS ${tag}`, hipaa_acknowledged: true })).j;
+    const reg = (await call("POST", "/api/auth/register", { email, password: "Testpass123", name: `DCS ${tag}`, hipaa_acknowledged: true })).j;
     const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: `DCS Lab ${tag}`, plan: "hospital" })).j.labId;
     return { token: reg.token as string, labId: labId as number, userId: Number(reg.user?.id ?? reg.userId ?? 0) };
   };

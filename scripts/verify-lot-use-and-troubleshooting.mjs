@@ -57,7 +57,7 @@ for (let i = 0; i < 90 && !up; i++) { await new Promise((r) => setTimeout(r, 100
 if (!up) { console.error("server did not start"); child.kill(); process.exit(2); }
 const done = async () => { child.kill(); await new Promise((r) => setTimeout(r, 1000)); fs.rmSync(dir, { recursive: true, force: true }); };
 
-const H = { "Content-Type": "application/json", Authorization: `Bearer ${jwt.sign({ userId: owner }, SECRET, { expiresIn: "10m" })}`, "X-Active-Lab-Id": String(LAB) };
+const H = { "Content-Type": "application/json", Authorization: `Bearer ${jwt.sign({ svc: true, userId: owner }, SECRET, { expiresIn: "10m" })}`, "X-Active-Lab-Id": String(LAB) };
 const B = `http://localhost:${PORT}/api/labs/${LAB}`;
 const j = async (r) => { try { return await r.json(); } catch { return {}; } };
 const post = (url, body, method = "POST") => fetch(url, { method, headers: H, body: JSON.stringify(body) });

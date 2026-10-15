@@ -57,7 +57,7 @@ if (process.env.PW_BASE) {
   };
   const stamp = Date.now();
   const email = `units-${stamp}@example.com`;
-  const token = (await call("POST", "/api/auth/register", { email, password: "testpass123", name: "Una Units", hipaa_acknowledged: true })).body.token;
+  const token = (await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "Una Units", hipaa_acknowledged: true })).body.token;
   const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Units Lab", plan: "hospital" })).body.labId;
   if (process.env.SCRATCH_DB) {
     // Skip the first-sign-in welcome so the screenshot shows the inventory table.

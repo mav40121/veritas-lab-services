@@ -48,7 +48,7 @@ async function main() {
   // Two labs: the one under test and a stranger.
   const mkLab = async (tag: string) => {
     const email = `elig-${tag}-${Date.now()}@example.com`;
-    const reg = await j(await call("POST", "/api/auth/register", { email, password: "testpass123", name: `Elig ${tag}`, hipaa_acknowledged: true }));
+    const reg = await j(await call("POST", "/api/auth/register", { email, password: "Testpass123", name: `Elig ${tag}`, hipaa_acknowledged: true }));
     const prov = await j(await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: `Elig Lab ${tag}`, plan: "hospital", isWarehouse: true }));
     return { token: reg.token as string, labId: prov.labId as number, userId: reg.user?.id ?? reg.userId };
   };

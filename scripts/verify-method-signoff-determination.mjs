@@ -44,7 +44,7 @@ const ro = new Database(dbPath, { readonly: true });
 const owner = ro.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(LAB).owner_user_id;
 const staff = ro.prepare("SELECT id FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active' ORDER BY id").all(LAB).map((r) => r.id);
 ro.close();
-const H = { "Content-Type": "application/json", Authorization: `Bearer ${jwt.sign({ userId: owner }, SECRET, { expiresIn: "10m" })}`, "X-Active-Lab-Id": String(LAB) };
+const H = { "Content-Type": "application/json", Authorization: `Bearer ${jwt.sign({ svc: true, userId: owner }, SECRET, { expiresIn: "10m" })}`, "X-Active-Lab-Id": String(LAB) };
 const B = `http://localhost:${PORT}/api/labs/${LAB}/competency`;
 const view = async (id) => (await fetch(`${B}/employee/${id}`, { headers: H })).json();
 const methodOf = async (id, instrumentId) => (await view(id)).testSystems.find((t) => t.instrumentId === instrumentId);

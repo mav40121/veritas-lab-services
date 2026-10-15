@@ -51,7 +51,7 @@ const p3 = await provision(3, taken);
 check("3. a CLIA already in use is still refused", p3.status === 409, `${p3.status} for ${taken}`);
 
 if (!lab1 || !lab2) { console.error("labs not created; stopping"); child.kill(); process.exit(1); }
-const H = (lab) => ({ Authorization: `Bearer ${jwt.sign({ userId: lab.owner_user_id }, SECRET, { expiresIn: "10m" })}`, "X-Active-Lab-Id": String(lab.id) });
+const H = (lab) => ({ Authorization: `Bearer ${jwt.sign({ svc: true, userId: lab.owner_user_id }, SECRET, { expiresIn: "10m" })}`, "X-Active-Lab-Id": String(lab.id) });
 
 // A finalized study: the inputs of an existing completed precision study in the backup, saved on the CLIA-less lab.
 const src = (() => { const d = db(); const r = d.prepare("SELECT * FROM studies WHERE status <> 'draft' AND study_type = 'precision' ORDER BY id DESC LIMIT 1").get(); d.close(); return r; })();

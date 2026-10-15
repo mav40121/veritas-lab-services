@@ -10,7 +10,7 @@ import jwt from "jsonwebtoken";
 import { calculateMethodComparison, type DataPoint } from "../client/src/lib/calculations";
 
 const [base, labId, studyId, userId, secret, out] = process.argv.slice(2);
-const token = jwt.sign({ userId: Number(userId) }, secret, { expiresIn: "10m" });
+const token = jwt.sign({ svc: true, userId: Number(userId) }, secret, { expiresIn: "10m" });
 const H = { Authorization: `Bearer ${token}`, "X-Active-Lab-Id": String(labId), "Content-Type": "application/json" };
 
 const r = await fetch(`${base}/api/labs/${labId}/studies/${studyId}`, { headers: H });

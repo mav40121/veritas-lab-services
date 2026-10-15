@@ -43,7 +43,7 @@ async function main() {
   const j = async (r: Response) => { try { return await r.json(); } catch { return {}; } };
   const mkLab = async (tag: string) => {
     const email = `gs-${tag}-${Date.now()}@example.com`;
-    const reg = await j(await call("POST", "/api/auth/register", { email, password: "testpass123", name: `GS ${tag}`, hipaa_acknowledged: true }));
+    const reg = await j(await call("POST", "/api/auth/register", { email, password: "Testpass123", name: `GS ${tag}`, hipaa_acknowledged: true }));
     const prov = await j(await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: `GS Lab ${tag}`, plan: "hospital", isWarehouse: true }));
     const owner = (sqlite.prepare("SELECT owner_user_id o FROM labs WHERE id = ?").get(prov.labId) as any)?.o;
     return { token: reg.token as string, labId: prov.labId as number, owner };

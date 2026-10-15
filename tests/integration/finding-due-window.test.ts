@@ -42,7 +42,7 @@ async function main() {
 
   const mkLab = async (tag: string) => {
     const email = `fdw-${tag}-${Date.now()}@example.com`;
-    const reg = await j(await call("POST", "/api/auth/register", { email, password: "testpass123", name: `FDW ${tag}`, hipaa_acknowledged: true }));
+    const reg = await j(await call("POST", "/api/auth/register", { email, password: "Testpass123", name: `FDW ${tag}`, hipaa_acknowledged: true }));
     const prov = await j(await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: `FDW Lab ${tag}`, plan: "hospital" }));
     await call("POST", "/api/admin/update-lab", { secret: ADMIN, labId: prov.labId, accTjc: true });
     return { token: reg.token as string, labId: prov.labId as number };

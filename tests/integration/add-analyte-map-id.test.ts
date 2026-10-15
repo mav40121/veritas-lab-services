@@ -39,7 +39,7 @@ async function main() {
   const stamp = Date.now();
   const now = new Date().toISOString();
   const lab = async (tag: string) => {
-    await post("/api/auth/register", { email: `aa-${tag}-${stamp}@example.com`, password: "testpass123", name: `AA ${tag}`, hipaa_acknowledged: true });
+    await post("/api/auth/register", { email: `aa-${tag}-${stamp}@example.com`, password: "Testpass123", name: `AA ${tag}`, hipaa_acknowledged: true });
     const labId = (await post("/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: `aa-${tag}-${stamp}@example.com`, labName: `AA ${tag} Lab`, plan: "hospital" })).j.labId;
     const owner = (sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any).owner_user_id;
     return { labId, owner };

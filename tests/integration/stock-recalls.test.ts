@@ -50,7 +50,7 @@ async function main() {
   const stamp = Date.now();
   const mkOwner = async (tag: string) => {
     const email = `rc-${tag}-${stamp}@example.com`;
-    const reg = await j(await call("POST", "/api/auth/register", { email, password: "testpass123", name: `RC ${tag}`, hipaa_acknowledged: true }));
+    const reg = await j(await call("POST", "/api/auth/register", { email, password: "Testpass123", name: `RC ${tag}`, hipaa_acknowledged: true }));
     return { email, token: reg.token as string };
   };
   const mkLab = async (ownerEmail: string, name: string) => {

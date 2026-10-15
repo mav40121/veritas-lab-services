@@ -26,7 +26,7 @@ const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAI
 const stamp = Date.now();
 const reg = async (tag, name) => {
   const email = `del-${tag}-${stamp}@example.com`;
-  const r = (await call("POST", "/api/auth/register", { email, password: "testpass123", name, hipaa_acknowledged: true })).body;
+  const r = (await call("POST", "/api/auth/register", { email, password: "Testpass123", name, hipaa_acknowledged: true })).body;
   return { email, token: r.token, name };
 };
 const owner = await reg("owner", "Ada Owner"), admin = await reg("admin", "Abe Admin"), md = await reg("md", "Dr. Mia Director"), staff = await reg("staff", "Sam Staff"), vls = await reg("vls", "Veritas Helper");

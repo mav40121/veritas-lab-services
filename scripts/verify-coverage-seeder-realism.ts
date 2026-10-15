@@ -39,7 +39,7 @@ async function main() {
   };
 
   const email = `seed-real-${Date.now()}@example.com`;
-  const reg = await call("POST", "/api/auth/register", { email, password: "testpass123", name: "Dana Whitfield", hipaa_acknowledged: true });
+  const reg = await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "Dana Whitfield", hipaa_acknowledged: true });
   const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Seed Realism Lab", plan: "hospital" })).labId;
   const map = await call("POST", `/api/labs/${labId}/veritamap/maps`, { name: "Core Lab" }, reg.token);
   const t = (analyte: string, specialty: string, complexity = "MODERATE") => ({ analyte, specialty, complexity, active: 1 });

@@ -19,7 +19,7 @@ const post = async (path, body, headers = {}) => { const r = await fetch(BASE + 
 
 // 4. admin record route on a scratch lab
 const email = `fl-${Date.now()}@example.com`;
-await post("/api/auth/register", { email, password: "testpass123", name: "Founder Owner", hipaa_acknowledged: true });
+await post("/api/auth/register", { email, password: "Testpass123", name: "Founder Owner", hipaa_acknowledged: true });
 const labId = (await post("/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Scratch Founding Lab", plan: "community" })).j.labId;
 const count = () => { const d = new Database(process.env.SCRATCH_DB, { readonly: true }); const n = d.prepare("SELECT COUNT(*) AS n FROM founding_lab_applications WHERE status = 'accepted'").get().n; d.close(); return n; };
 const n0 = count();

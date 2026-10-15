@@ -33,7 +33,7 @@ async function main() {
     return { s: r.status, j };
   };
   const stamp = Date.now();
-  const reg = async (tag: string) => (await call("POST", "/api/auth/register", { email: `lsra-${tag}-${stamp}@example.com`, password: "testpass123", name: `LSRA ${tag}`, hipaa_acknowledged: true })).j;
+  const reg = async (tag: string) => (await call("POST", "/api/auth/register", { email: `lsra-${tag}-${stamp}@example.com`, password: "Testpass123", name: `LSRA ${tag}`, hipaa_acknowledged: true })).j;
   const owner = await reg("owner"), member = await reg("member"), quiet = await reg("quiet");
   const prov = async (name: string) => (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: `lsra-owner-${stamp}@example.com`, labName: name, plan: "hospital" })).j.labId;
   const labA = await prov("Readiness Lab A"), labB = await prov("Readiness Lab B");

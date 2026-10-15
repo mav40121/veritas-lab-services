@@ -47,7 +47,7 @@ async function main() {
 
   const owner = storage.createUser("labwide-owner@qa.test", "$2a$10$abcdefghijklmnopqrstuv", "Lab Owner") as any;
   sqlite.prepare("UPDATE users SET plan = 'hospital', has_completed_onboarding = 1 WHERE id = ?").run(owner.id);
-  const tok = jwt.sign({ userId: owner.id }, SECRET, { expiresIn: "1h" });
+  const tok = jwt.sign({ svc: true, userId: owner.id }, SECRET, { expiresIn: "1h" });
   const get = async (p: string, labId?: number) => {
     const r = await fetch(base + p, { headers: { Authorization: `Bearer ${tok}`, ...(labId ? { "X-Active-Lab-Id": String(labId) } : {}) } });
     return { status: r.status, j: (await r.json()) as any };

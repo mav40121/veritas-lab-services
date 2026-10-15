@@ -16,7 +16,7 @@ const call = async (method, path, body) => {
   try { return await r.json(); } catch { return {}; }
 };
 const email = `p87-${Date.now()}@example.com`;
-const reg = await call("POST", "/api/auth/register", { email, password: "testpass123", name: "Free User", hipaa_acknowledged: true });
+const reg = await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "Free User", hipaa_acknowledged: true });
 
 const browser = await chromium.launch();
 for (const who of ["signed-out", "free"]) {

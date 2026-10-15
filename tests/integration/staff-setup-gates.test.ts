@@ -55,7 +55,7 @@ async function main() {
 
   const register = async (tag: string) => {
     const email = `ssg-${tag.toLowerCase()}-${stamp}@example.com`;
-    const reg = await j(await fetch(base + "/api/auth/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password: "testpass123", name: `SSG ${tag}`, hipaa_acknowledged: true }) }));
+    const reg = await j(await fetch(base + "/api/auth/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password: "Testpass123", name: `SSG ${tag}`, hipaa_acknowledged: true }) }));
     const id = Number((sqlite.prepare("SELECT id FROM users WHERE email = ?").get(email) as any)?.id);
     return { email, id, token: reg.token as string };
   };

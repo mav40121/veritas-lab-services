@@ -21,8 +21,8 @@ const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAI
 
 const stamp = Date.now();
 const ownerEmail = `md-owner-${stamp}@example.com`, adminEmail = `md-admin-${stamp}@example.com`;
-const owner = await call("POST", "/api/auth/register", { email: ownerEmail, password: "testpass123", name: "Lab Owner", hipaa_acknowledged: true });
-const admin = await call("POST", "/api/auth/register", { email: adminEmail, password: "testpass123", name: "Lab Admin", hipaa_acknowledged: true });
+const owner = await call("POST", "/api/auth/register", { email: ownerEmail, password: "Testpass123", name: "Lab Owner", hipaa_acknowledged: true });
+const admin = await call("POST", "/api/auth/register", { email: adminEmail, password: "Testpass123", name: "Lab Admin", hipaa_acknowledged: true });
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail, labName: "MD Owner-Only Lab", plan: "hospital" })).labId;
 const sdb = new Database(process.env.SCRATCH_DB);
 const adminId = sdb.prepare("SELECT id FROM users WHERE email = ?").get(adminEmail).id;

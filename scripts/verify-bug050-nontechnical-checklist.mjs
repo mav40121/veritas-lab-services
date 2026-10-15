@@ -28,7 +28,7 @@ const child = spawn(process.execPath, [DIST], { env: { ...process.env, DB_PATH: 
 let up = false;
 for (let i = 0; i < 90 && !up; i++) { await new Promise((r) => setTimeout(r, 1000)); try { up = (await fetch(`http://localhost:${PORT}/api/health`)).status === 200; } catch {} }
 if (!up) { console.error("server did not start"); child.kill(); process.exit(2); }
-const H = { "Content-Type": "application/json", Authorization: `Bearer ${jwt.sign({ userId: Number(ownerId) }, SECRET, { expiresIn: "5m" })}`, "X-Active-Lab-Id": String(labId) };
+const H = { "Content-Type": "application/json", Authorization: `Bearer ${jwt.sign({ svc: true, userId: Number(ownerId) }, SECRET, { expiresIn: "5m" })}`, "X-Active-Lab-Id": String(labId) };
 const B = `http://localhost:${PORT}/api/labs/${labId}/competency/programs`;
 const items = [{ label: "A", description: "Prepares plating media per procedure" }, { label: "B", description: "Checks media QC and expiration" }, { label: "C", description: "Documents lot numbers" }];
 const c1 = await fetch(B, { method: "POST", headers: H, body: JSON.stringify({ name: "BUG-050 Plating Media", department: "Microbiology", type: "nontechnical", checklistItems: items }) });

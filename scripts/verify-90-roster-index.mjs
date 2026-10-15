@@ -27,7 +27,7 @@ sdb.close();
 
 const stamp = Date.now();
 const email = `idx90-${stamp}@example.com`;
-const token = (await call("POST", "/api/auth/register", { email, password: "testpass123", name: "Ivy Index", hipaa_acknowledged: true })).body.token;
+const token = (await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "Ivy Index", hipaa_acknowledged: true })).body.token;
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Index Lab", plan: "hospital" })).body.labId;
 const lab = await call("POST", `/api/labs/${labId}/staff/lab`, { labName: "Index Lab", cliaNumber: `22D${String(stamp).slice(-7)}` }, token);
 check("VeritaStaff lab setup saves", lab.status === 200, `HTTP ${lab.status} ${lab.body.error || ""}`);

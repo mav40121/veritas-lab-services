@@ -22,7 +22,7 @@ const stamp = Date.now();
 
 // Owner with a two-person roster (Justin first, so the old bug binds to him).
 const ownerEmail = `spid-owner-${stamp}@example.com`;
-const owner = await call("POST", "/api/auth/register", { email: ownerEmail, password: "testpass123", name: "Mike Owner", hipaa_acknowledged: true });
+const owner = await call("POST", "/api/auth/register", { email: ownerEmail, password: "Testpass123", name: "Mike Owner", hipaa_acknowledged: true });
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail, labName: "Brighton Test Lab", plan: "hospital" })).labId;
 await call("POST", `/api/labs/${labId}/staff/lab`, { labName: "Brighton Test Lab", cliaNumber: "23D0000001" }, owner.token);
 const justin = await call("POST", `/api/labs/${labId}/staff/employees`, { firstName: "Justin", lastName: "Grinnell", title: "MA" }, owner.token);
@@ -32,7 +32,7 @@ check("setup: two roster rows created", !!justin.id && !!addison.id, `justin=${j
 // Addison accepts a real Staff Portal invite (the production path).
 const addisonEmail = `spid-addison-${stamp}@example.com`;
 const inv = await call("POST", `/api/labs/${labId}/staff-portal-invites`, { staff_employee_id: addison.id, email: addisonEmail, deliverEmail: false }, owner.token);
-const staff = await call("POST", "/api/auth/register", { email: addisonEmail, password: "testpass123", name: "Addison Timmins", hipaa_acknowledged: true, inviteToken: inv.inviteToken });
+const staff = await call("POST", "/api/auth/register", { email: addisonEmail, password: "Testpass123", name: "Addison Timmins", hipaa_acknowledged: true, inviteToken: inv.inviteToken });
 check("setup: Addison registered through the invite", !!staff.token && !!inv.inviteToken, `invite=${inv.status} register=${staff.status}`);
 
 // 1. Owner is NOT bound to a roster row anymore.

@@ -34,7 +34,7 @@ const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Phoenix", ye
 
 // ---------- fixture ----------
 const email = `pms-${Date.now()}@example.com`;
-const owner = (await call("POST", "/api/auth/register", { email, password: "testpass123", name: "Signoff Owner", hipaa_acknowledged: true })).body;
+const owner = (await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "Signoff Owner", hipaa_acknowledged: true })).body;
 const T = owner.token;
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Per-Method Lab", plan: "hospital" })).body.labId;
 { const db = new Database(process.env.SCRATCH_DB); db.prepare("UPDATE users SET has_completed_onboarding = 1, onboarding_seen = 1, plan = 'hospital' WHERE email = ?").run(email); db.prepare("UPDATE labs SET has_completed_onboarding = 1 WHERE id = ?").run(labId); db.close(); }

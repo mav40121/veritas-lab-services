@@ -20,7 +20,7 @@ const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAI
 const REASON = "Panels cover different organism groups";
 
 const email = `mcna-ui-${Date.now()}@example.com`;
-const token = (await call("POST", "/api/auth/register", { email, password: "testpass123", name: "MC NA", hipaa_acknowledged: true })).token;
+const token = (await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "MC NA", hipaa_acknowledged: true })).token;
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "MC NA Lab", plan: "hospital" })).labId;
 const micro = await call("POST", `/api/labs/${labId}/veritamap/maps`, { name: "Microbiology" }, token);
 const t = (analyte) => ({ analyte, specialty: "Microbiology", complexity: "HIGH", active: 1 });

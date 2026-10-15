@@ -44,7 +44,7 @@ const json = (method, url, body, headers = {}) => fetch(B + url, { method, heade
 
 const stamp = Date.now();
 const email = `lab-by-staff-${stamp}@example.invalid`;
-const reg = await json("POST", "/api/auth/register", { email, password: "testpass123", name: "Stranger", hipaa_acknowledged: true, plan: "clinic", hospital_name: "Stranger Lab", hospital_state: "MA", bed_count: 25 });
+const reg = await json("POST", "/api/auth/register", { email, password: "Testpass123", name: "Stranger", hipaa_acknowledged: true, plan: "clinic", hospital_name: "Stranger Lab", hospital_state: "MA", bed_count: 25 });
 const rj = await reg.json().catch(() => ({}));
 const uid = rj?.user?.id;
 check("1. a new signup still registers (free, no lab of its own)", reg.status === 200 && !!rj.token && rj?.user?.plan === "free" && !q("SELECT 1 FROM lab_members WHERE user_id = ?", uid), `${reg.status} ${JSON.stringify(rj).slice(0, 140)}`);
@@ -79,7 +79,7 @@ const p6 = await json("POST", "/api/admin/provision-owner-lab", { secret: SECRET
 check("6. the staff path still creates a lab (admin provision-owner-lab)", p6.status === 200 && !!q("SELECT 1 FROM labs WHERE clia_number = '22D9988772'"), `${p6.status} ${(await p6.text()).slice(0, 140)}`);
 
 const owner = q("SELECT l.id, l.owner_user_id, l.lab_name, l.clia_number FROM labs l WHERE l.id = 1");
-const s7 = await json("PUT", "/api/account/settings", { clia_lab_name: owner.lab_name, clia_number: owner.clia_number }, { Authorization: `Bearer ${jwt.sign({ userId: owner.owner_user_id }, SECRET, { expiresIn: "5m" })}`, "X-Active-Lab-Id": "1" });
+const s7 = await json("PUT", "/api/account/settings", { clia_lab_name: owner.lab_name, clia_number: owner.clia_number }, { Authorization: `Bearer ${jwt.sign({ svc: true, userId: owner.owner_user_id }, SECRET, { expiresIn: "5m" })}`, "X-Active-Lab-Id": "1" });
 check("7. an existing lab owner's Account Settings save still works", s7.status === 200, `${s7.status} ${(await s7.text()).slice(0, 140)}`);
 
 await stop(); fs.rmSync(dir, { recursive: true, force: true });

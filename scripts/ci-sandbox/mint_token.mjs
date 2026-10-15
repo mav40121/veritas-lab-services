@@ -2,7 +2,7 @@
 //
 // Mints the long-lived JWT the CI "Sandbox receipts" step uses as PW_TOKEN
 // (parking lot #74, 2026-10-07). Same claim shape and algorithm the server
-// issues at login (server/routes.ts: jwt.sign({ userId }, JWT_SECRET)), with a
+// issues at login (server/routes.ts: jwt.sign({ svc: true, userId }, JWT_SECRET)), with a
 // 365-day expiry instead of 30 so the secret does not lapse monthly.
 //
 // Usage (the secret never touches the console or a file):
@@ -19,4 +19,4 @@ if (!secret || !Number.isInteger(userId) || userId <= 0) {
   console.error("JWT_SECRET and SANDBOX_USER_ID are required");
   process.exit(1);
 }
-process.stdout.write(jwt.sign({ userId, ci_sandbox: true }, secret, { expiresIn: "365d" }));
+process.stdout.write(jwt.sign({ svc: true, userId, ci_sandbox: true }, secret, { expiresIn: "365d" }));

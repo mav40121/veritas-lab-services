@@ -22,7 +22,7 @@ let failures = 0;
 const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAIL"}  ${name}${detail ? "  :: " + detail : ""}`); if (!cond) failures++; };
 
 const email = `cdui-${Date.now()}@example.com`;
-const token = (await call("POST", "/api/auth/register", { email, password: "testpass123", name: "Comp Owner", hipaa_acknowledged: true })).token;
+const token = (await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "Comp Owner", hipaa_acknowledged: true })).token;
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Competency Lab", plan: "hospital" })).labId;
 const L = `/api/labs/${labId}`;
 { const d0 = new Database(process.env.SCRATCH_DB); d0.prepare("UPDATE labs SET accreditation_tjc = 1 WHERE id = ?").run(labId); d0.close(); } // TJC-accredited lab

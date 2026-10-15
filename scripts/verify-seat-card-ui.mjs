@@ -20,7 +20,7 @@ let failures = 0;
 const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAIL"}  ${name}${detail ? "  :: " + detail : ""}`); if (!cond) failures++; };
 
 const ownerEmail = `seats-owner-${Date.now()}@example.com`;
-const owner = await call("POST", "/api/auth/register", { email: ownerEmail, password: "testpass123", name: "Lab Owner", hipaa_acknowledged: true });
+const owner = await call("POST", "/api/auth/register", { email: ownerEmail, password: "Testpass123", name: "Lab Owner", hipaa_acknowledged: true });
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail, labName: "Seat Card Lab", plan: "community" })).labId;
 const sdb = new Database(process.env.SCRATCH_DB);
 const ownerId = sdb.prepare("SELECT id FROM users WHERE email = ?").get(ownerEmail).id;

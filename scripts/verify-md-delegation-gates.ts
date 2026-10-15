@@ -91,7 +91,7 @@ async function main() {
   seedRow("findings", { id: 888, lab_id: LAB, user_id: ownerId });
   sqlite.pragma("foreign_keys = ON");
 
-  const tok = (uid: number) => jwt.sign({ userId: uid }, SECRET, { expiresIn: "1h" });
+  const tok = (uid: number) => jwt.sign({ svc: true, userId: uid }, SECRET, { expiresIn: "1h" });
   const T: Record<string, string> = { owner: tok(ownerId), admin: tok(adminId), md: tok(mdId), ts: tok(tsId), tc: tok(tcId), plain: tok(plainId) };
   const call = (method: string, path: string, who: string, body?: any) =>
     fetch(base + path, { method, headers: { "Content-Type": "application/json", "X-Active-Lab-Id": String(LAB), Authorization: `Bearer ${T[who]}` }, body: body === undefined ? undefined : JSON.stringify(body) });

@@ -22,7 +22,7 @@ const call = async (method, path, body, token) => { const r = await fetch(BASE +
 const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Phoenix", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
 const email = `ann-${Date.now()}@example.com`;
-const T = (await call("POST", "/api/auth/register", { email, password: "testpass123", name: "Annual Owner", hipaa_acknowledged: true })).body.token;
+const T = (await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "Annual Owner", hipaa_acknowledged: true })).body.token;
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Annual Month Lab", plan: "hospital" })).body.labId;
 { const db = new Database(process.env.SCRATCH_DB); db.prepare("UPDATE users SET has_completed_onboarding = 1, onboarding_seen = 1, plan = 'hospital' WHERE email = ?").run(email); db.prepare("UPDATE labs SET has_completed_onboarding = 1 WHERE id = ?").run(labId); db.close(); }
 const L = `/api/labs/${labId}`;

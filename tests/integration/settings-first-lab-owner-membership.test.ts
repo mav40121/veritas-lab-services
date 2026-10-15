@@ -52,7 +52,7 @@ async function main() {
 
   // 1. fresh signup, no CLIA
   const email = `slom-${Date.now()}@example.com`;
-  const reg = await j(await call("POST", "/api/auth/register", { email, password: "testpass123", name: "SLOM Owner", hipaa_acknowledged: true }));
+  const reg = await j(await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "SLOM Owner", hipaa_acknowledged: true }));
   const token = reg.token as string;
   const userId = Number((sqlite.prepare("SELECT id FROM users WHERE email = ?").get(email) as any)?.id);
   const ownedBefore = (sqlite.prepare("SELECT COUNT(*) AS n FROM labs WHERE owner_user_id = ?").get(userId) as any).n;

@@ -43,7 +43,7 @@ async function main() {
     return { s: r.status, j };
   };
   const email = `cdoc-${Date.now()}@example.com`;
-  const reg = (await call("POST", "/api/auth/register", { email, password: "testpass123", name: "Comp Doc Owner", hipaa_acknowledged: true })).j;
+  const reg = (await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "Comp Doc Owner", hipaa_acknowledged: true })).j;
   const token = reg.token as string;
   const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Comp Doc Lab", plan: "hospital" })).j.labId as number;
   const L = `/api/labs/${labId}`;

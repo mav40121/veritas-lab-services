@@ -42,7 +42,7 @@ async function main() {
 
   const mkLab = async (tag: string) => {
     const email = `cve-${tag}-${Date.now()}@example.com`;
-    const reg = await j(await call("POST", "/api/auth/register", { email, password: "testpass123", name: `CVE ${tag}`, hipaa_acknowledged: true }));
+    const reg = await j(await call("POST", "/api/auth/register", { email, password: "Testpass123", name: `CVE ${tag}`, hipaa_acknowledged: true }));
     const prov = await j(await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: `CVE Lab ${tag}`, plan: "hospital" }));
     return { token: reg.token as string, labId: prov.labId as number };
   };

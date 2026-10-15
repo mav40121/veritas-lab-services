@@ -14,7 +14,7 @@ let failures = 0;
 const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAIL"}  ${name}${detail ? "  :: " + detail : ""}`); if (!cond) failures++; };
 
 const email = `roster-${Date.now()}@example.com`;
-const token = (await call("POST", "/api/auth/register", { email, password: "testpass123", name: "Roster Owner", hipaa_acknowledged: true })).token;
+const token = (await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "Roster Owner", hipaa_acknowledged: true })).token;
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Roster Lab", plan: "hospital" })).labId;
 const L = `/api/labs/${labId}`;
 await call("POST", `${L}/staff/lab`, { labName: "Roster Lab", cliaNumber: "11D7654331", accreditationBody: "CLIA_ONLY", complexity: "high" }, token);
