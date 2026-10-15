@@ -11,6 +11,7 @@
 // hire can be signed department by department (MethodSignOffPanel). The whole-record Sign & Complete is retired.
 // #91 (2026-10-12): an all-waived test system (glucose meter, urine dipstick reader)
 // shows the four waived methods (two required) instead of the six CLIA elements.
+import { NaReasonPresets } from "@/components/competency/NaReasonPresets";
 import { useState, useEffect } from "react";
 import { Link, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -334,8 +335,11 @@ export default function VeritaCompEmployeePage() {
                                 </div>
                               </div>
                               {f.na ? (
-                                <Input placeholder="Justification for N/A (required)" className="text-xs h-8 border-amber-400" disabled={readOnly}
-                                  value={f.naJustification || ""} onChange={(e) => setField(el.num, "naJustification", e.target.value)} data-testid={`element-${el.num}-na-just`} />
+                                <>
+                                  <Input placeholder="Justification for N/A (required)" className="text-xs h-8 border-amber-400" disabled={readOnly}
+                                    value={f.naJustification || ""} onChange={(e) => setField(el.num, "naJustification", e.target.value)} data-testid={`element-${el.num}-na-just`} />
+                                  <NaReasonPresets element={el.num} disabled={readOnly} onPick={(r) => setField(el.num, "naJustification", r)} />
+                                </>
                               ) : (
                                 <div className="flex flex-wrap gap-2">
                                   {fields.map((fld) => (

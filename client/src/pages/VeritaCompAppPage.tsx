@@ -1,3 +1,4 @@
+import { NaReasonPresets } from "@/components/competency/NaReasonPresets";
 import { useState, useEffect, useMemo, useRef, type ReactNode } from "react";
 import DOMPurify from "dompurify";
 import { Link, useLocation, useParams } from "wouter";
@@ -3939,6 +3940,7 @@ function NewAssessmentDialog({
                       <div>
                         <label className="text-[10px] text-muted-foreground">Justification (required)</label>
                         <Textarea className="text-xs min-h-[32px] border-amber-400" placeholder="Explain why this element is not applicable..." value={getTechDataForElement(3, mg.id).el3_na_justification} onChange={e => setTechField(3, mg.id, "el3_na_justification", e.target.value)} rows={2} />
+                        <NaReasonPresets element={3} onPick={(r) => setTechField(3, mg.id, "el3_na_justification", r)} />
                       </div>
                     ) : (
                       <div className="flex gap-2 items-end">
@@ -3968,6 +3970,7 @@ function NewAssessmentDialog({
                       <div>
                         <label className="text-[10px] text-muted-foreground">Justification (required)</label>
                         <Textarea className="text-xs min-h-[32px] border-amber-400" placeholder="Explain why this element is not applicable..." value={getTechDataForElement(4, mg.id).el4_na_justification} onChange={e => setTechField(4, mg.id, "el4_na_justification", e.target.value)} rows={2} />
+                        <NaReasonPresets element={4} onPick={(r) => setTechField(4, mg.id, "el4_na_justification", r)} />
                       </div>
                     ) : (
                       <div className="flex gap-2 items-end">
