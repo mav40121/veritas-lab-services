@@ -50,3 +50,10 @@ jobs:
         # The npm script sets DB_PATH to a throwaway file plus the test secrets the
         # server requires to boot, then runs the test via tsx. No prod, no network.
         run: npm run test:signup-gating
+
+      - name: Run session sign-out integration test
+        # Two-factor sign-in Stage 1 (server/sessionAuth.ts): after sign-out, a
+        # password change, force-logout or the admin kill switch, the old token
+        # must be refused; and no server file but sessionAuth.ts may call
+        # jwt.verify. Same throwaway DB and test secrets pattern as above.
+        run: npm run test:session-signout

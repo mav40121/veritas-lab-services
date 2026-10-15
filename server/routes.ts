@@ -50,6 +50,8 @@ import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewRe
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard";
 import { legacySeatForUser, seatForRequest } from "./seatContext";
+import { checkAuthToken, verifySessionJwt, issueSession, endSessions, touchSession, issuePurposeToken, verifyPurposeToken, describeDevice, clientIp } from "./sessionAuth";
+import { passwordProblem } from "@shared/passwordRule";
 import { labWideCorrelation, correlationPeerInstruments, describeCorrelationInstrument, rowComplexity, mapComplianceGaps } from "./labWideCorrelation";
 import { seedProfileFor, seedTeaFor, seedCalVerPoints, seedMethodCompQuant, seedMethodCompCategorical, seedStudyDate } from "./seedStudyProfiles";
 import type { LicenseContext } from "@shared/licenseText";
@@ -100,9 +102,9 @@ function licenseCtxFromReq(req: any, productName?: string): LicenseContext {
     const auth = req?.headers?.authorization;
     if (typeof auth === "string" && auth.startsWith("Bearer ")) {
       try {
-        const p = jwt.verify(auth.slice(7), JWT_SECRET) as { userId?: number };
+        const p = verifySessionJwt((db as any).$client, auth.slice(7)) as { userId?: number };
         if (p?.userId) callerUserId = Number(p.userId);
-      } catch { /* expired/invalid token -> stay anonymous */ }
+      } catch { /* expired/invalid token or ended session -> stay anonymous */ }
     }
   }
   const userRow = callerUserId ? storage.getUserById(callerUserId) as any : null;
@@ -774,10 +776,8 @@ const VERITASCAN_ITEM_BY_ID: Record<number, any> = Object.fromEntries(
 );
 
 const JWT_SECRET = process.env.JWT_SECRET!;
-
-function signToken(userId: number) {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: "30d" });
-}
+// Browser sign-in tokens come only from issueSession (server/sessionAuth.ts): each one is bound to a
+// user_sessions row and dies when that row ends (two-factor sign-in Stage 1, 2026-10-15).
 
 // Actions a public demo session may NOT perform. Reads always pass (the demo is
 // fully browsable); only sensitive writes are blocked. Credentials, account,
@@ -863,14 +863,16 @@ function requireWriteAccess(req: any, res: any, next: any) {
 export function staffPortalAuthMiddleware(req: any, res: any, next: any) {
   const auth = req.headers.authorization;
   if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
-  let payload: any;
-  try {
-    payload = jwt.verify(auth.slice(7), JWT_SECRET) as any;
-  } catch {
-    return res.status(401).json({ error: "Invalid or expired token" });
-  }
-  if (!payload || typeof payload.userId !== "number") return res.status(401).json({ error: "Not a staff portal session" });
   const sqlite = (db as any).$client;
+  const check = checkAuthToken(sqlite, auth.slice(7));
+  if (!check.ok) {
+    return check.code === "session_ended"
+      ? res.status(401).json({ error: "Your session has ended. Please sign in again.", code: "SESSION_ENDED" })
+      : res.status(401).json({ error: "Invalid or expired token" });
+  }
+  if (check.isDemo) return res.status(401).json({ error: "Not a staff portal session" });
+  touchSession(sqlite, check.sid);
+  const payload = { userId: check.userId };
   const seat = sqlite.prepare(
     "SELECT lab_id, staff_employee_id FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' AND status = 'active' AND staff_employee_id IS NOT NULL LIMIT 1"
   ).get(payload.userId) as any;
@@ -893,10 +895,21 @@ function authMiddleware(req: any, res: any, next: any) {
   const auth = req.headers.authorization;
   if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
   try {
-    const payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number; isDemo?: boolean };
+    // Every request checks its sign-in session (server/sessionAuth.ts): a signed-out,
+    // signed-in-elsewhere or password-changed session stops working at once.
+    const check = checkAuthToken((db as any).$client, auth.slice(7));
+    if (!check.ok) {
+      return check.code === "session_ended"
+        ? res.status(401).json({ error: "Your session has ended. Please sign in again.", code: "SESSION_ENDED" })
+        : res.status(401).json({ error: "Invalid token" });
+    }
+    const payload = { userId: check.userId, isDemo: check.isDemo };
     const user = storage.getUserById(payload.userId);
     if (!user) return res.status(401).json({ error: "User not found" });
     req.userId = user.id;
+    req.sessionSid = check.sid;
+    req.authKind = check.kind;
+    touchSession((db as any).$client, check.sid);
     // Public demo sessions carry isDemo so the demoGuard can block account-,
     // billing-, member-, and admin-destructive actions (the nightly reset only
     // restores inventory, not credentials, so those must be off-limits).
@@ -5836,17 +5849,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Self-serve: change password. Auth-required. Verifies current password,
-  // bcrypt-hashes new password (cost 10, matching /api/auth/register), kills
-  // all other active sessions defensively. New password must be at least 8
-  // characters and different from current.
+  // bcrypt-hashes new password (cost 10, matching /api/auth/register), and signs
+  // out every other device (two-factor sign-in Stage 1). The new password must
+  // meet the password rule (shared/passwordRule.ts) and differ from the current one.
+  // A caller on a pre-Stage-1 token (no session id) gets a fresh session back,
+  // since ending "the others" would otherwise end their own sign-in too.
   app.post("/api/auth/change-password", authMiddleware, async (req: any, res) => {
     const { currentPassword, newPassword } = req.body || {};
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ error: "currentPassword and newPassword are required" });
     }
-    if (String(newPassword).length < 8) {
-      return res.status(400).json({ error: "New password must be at least 8 characters" });
-    }
+    const pwProblem = passwordProblem(String(newPassword));
+    if (pwProblem) return res.status(400).json({ error: pwProblem, code: "PASSWORD_RULE" });
     if (currentPassword === newPassword) {
       return res.status(400).json({ error: "New password must be different from current password" });
     }
@@ -5864,7 +5878,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       entityType: "password",
       ipAddress: req.ip,
     });
-    res.json({ ok: true });
+    let fresh: { token: string; sessionToken: string } | null = null;
+    let ended: number;
+    if (req.sessionSid) {
+      ended = endSessions(sqlite, req.userId, { reason: "password_change", exceptSid: req.sessionSid });
+    } else {
+      ended = endSessions(sqlite, req.userId, { reason: "password_change" });
+      if (!req.isDemo) fresh = issueSession(sqlite, req.userId, req);
+    }
+    if (ended > 0) {
+      logAudit({ userId: req.userId, module: "account", action: "update", entityType: "session.end_others", entityLabel: `${ended} other sign-in(s) ended by a password change`, ipAddress: req.ip });
+    }
+    res.json({ ok: true, signedOutOthers: ended, ...(fresh ? { token: fresh.token, session_token: fresh.sessionToken } : {}) });
   });
 
   // Admin: kill all active sessions for a user. Used to clear a stuck
@@ -5881,9 +5906,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!u) return res.status(404).json({ error: "User not found" });
       uid = u.id;
     }
-    const before = sqlite.prepare("SELECT COUNT(*) AS n FROM user_sessions WHERE user_id = ? AND is_active = 1").get(uid) as any;
-    sqlite.prepare("UPDATE user_sessions SET is_active = 0 WHERE user_id = ? AND is_active = 1").run(uid);
-    res.json({ ok: true, userId: uid, sessionsKilled: Number(before?.n || 0) });
+    // Ends every sign-in at once: since two-factor Stage 1 each token is bound to its session row.
+    const killed = endSessions(sqlite, Number(uid), { reason: "admin" });
+    logAudit({ userId: 0, module: "admin", action: "update", entityType: "session.end_all", entityId: Number(uid), entityLabel: `${killed} sign-in(s) ended by Veritas admin`, ipAddress: req.ip });
+    res.json({ ok: true, userId: uid, sessionsKilled: killed });
   });
 
   // Admin: reset a user's password to a known value. ADMIN_SECRET-gated.
@@ -5896,9 +5922,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if ((!userId && !email) || !newPassword) {
       return res.status(400).json({ error: "userId-or-email and newPassword required" });
     }
-    if (String(newPassword).length < 8) {
-      return res.status(400).json({ error: "newPassword must be at least 8 characters" });
-    }
+    const pwProblem = passwordProblem(String(newPassword));
+    if (pwProblem) return res.status(400).json({ error: pwProblem, code: "PASSWORD_RULE" });
     const sqlite = (db as any).$client;
     let uid = Number(userId) || null;
     if (!uid && email) {
@@ -5908,8 +5933,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     const hash = await bcrypt.hash(String(newPassword), 10);
     sqlite.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hash, uid);
-    // Also kill any stuck sessions so the next login is clean.
-    sqlite.prepare("UPDATE user_sessions SET is_active = 0 WHERE user_id = ? AND is_active = 1").run(uid);
+    // A new password ends every sign-in, so the next login is clean.
+    endSessions(sqlite, Number(uid), { reason: "password_reset" });
     res.json({ ok: true, userId: uid });
   });
 
@@ -6484,6 +6509,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { email, password, name, hipaa_acknowledged } = parsed.data;
     if (!hipaa_acknowledged) return res.status(400).json({ error: "You must acknowledge the data use policy to create an account." });
     if (storage.getUserByEmail(email)) return res.status(409).json({ error: "Email already registered" });
+    const pwProblem = passwordProblem(password);
+    if (pwProblem) return res.status(400).json({ error: pwProblem, code: "PASSWORD_RULE" });
     const passwordHash = await bcrypt.hash(password, 10);
     const user = storage.createUser(email.toLowerCase(), passwordHash, name);
 
@@ -6636,14 +6663,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       } catch {}
     }
 
-    const token = signToken(user.id);
-
-    // Create session
-    const sessionToken = crypto.randomUUID();
-    const now = new Date().toISOString();
-    (db as any).$client.prepare(
-      "INSERT INTO user_sessions (user_id, session_token, device_info, created_at, last_active, is_active) VALUES (?, ?, ?, ?, ?, 1)"
-    ).run(user.id, sessionToken, req.headers["user-agent"] || "Unknown", now, now);
+    // Session-bound token (server/sessionAuth.ts).
+    const { token, sessionToken } = issueSession((db as any).$client, user.id, req);
 
     const responsePlan = isSeatUser ? ownerPlan : selectedPlan;
     // Resolve subscriptionStatus + accessLevel from the same source /api/auth/me
@@ -6876,11 +6897,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     if (activeSession) {
-      // Return session conflict - let frontend handle the force-logout choice
-      const token = signToken(user.id);
+      // Return session conflict - let frontend handle the force-logout choice.
+      // The token here opens ONLY /api/auth/force-logout (purpose "conflict",
+      // 10 minutes); the real session token comes back from that route.
+      const token = issuePurposeToken(user.id, "conflict");
       return res.json({
         session_conflict: true,
-        active_device: activeSession.device_info || "Unknown device",
+        active_device: describeDevice(activeSession.device_info),
         last_active: activeSession.last_active,
         message: "Another session is active on another device. Log out that device to continue.",
         token,
@@ -6902,14 +6925,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       });
     }
 
-    // No conflict - create new session
-    const sessionToken = crypto.randomUUID();
-    const now = new Date().toISOString();
-    (db as any).$client.prepare(
-      "INSERT INTO user_sessions (user_id, session_token, device_info, created_at, last_active, is_active) VALUES (?, ?, ?, ?, ?, 1)"
-    ).run(user.id, sessionToken, deviceInfo, now, now);
-
-    const token = signToken(user.id);
+    // No conflict - create new session (session-bound token, server/sessionAuth.ts)
+    const { token, sessionToken } = issueSession((db as any).$client, user.id, req);
     res.json({
       token, session_token: sessionToken,
       user: {
@@ -11361,7 +11378,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const auth = req.headers.authorization;
     if (auth?.startsWith("Bearer ")) {
       try {
-        const payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number };
+        const payload = verifySessionJwt((db as any).$client, auth.slice(7)) as { userId: number };
         // Resolve the active lab from the CALLER (X-Active-Lab-Id header /
         // body.lab_id), validated against the caller's OWN membership.
         // resolveActiveLabForRequest maps a seat caller to its owner
@@ -11416,7 +11433,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     let payload: { userId: number };
     try {
-      payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number };
+      payload = verifySessionJwt((db as any).$client, auth.slice(7)) as { userId: number };
     } catch {
       return res.status(401).json({ error: "Invalid or expired session" });
     }
@@ -11775,7 +11792,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(403).json({ error: "This study requires authentication" });
       }
       try {
-        const payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number };
+        const payload = verifySessionJwt((db as any).$client, auth.slice(7)) as { userId: number };
         // 2026-06-02 lab-scoped seat check (same pattern as PR #482 and
         // sibling fixes in this PR). For a multi-lab owner holding a seat
         // in someone else's lab, the unscoped seat lookup would map
@@ -11887,7 +11904,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const auth = req.headers.authorization;
     if (auth?.startsWith("Bearer ")) {
       try {
-        const payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number };
+        const payload = verifySessionJwt((db as any).$client, auth.slice(7)) as { userId: number };
         // 2026-06-01 lab-scoped seat check (same fix as requireModuleEdit
         // and PR #479's account-settings pattern). The legacy unscoped
         // POST has no labScopeMiddleware, so derive the active lab from
@@ -12965,7 +12982,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const auth = req.headers.authorization;
       if (auth?.startsWith("Bearer ")) {
         try {
-          const payload = jwt.verify(auth.slice(7), JWT_SECRET) as { userId: number };
+          const payload = verifySessionJwt((db as any).$client, auth.slice(7)) as { userId: number };
           // 2026-06-10 (Michael L feedback): prefer the lab the
           // user has currently selected in the NavBar. The client
           // sends it as X-Active-Lab-Id header. Falls back to the
@@ -19043,7 +19060,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/auth/reset-password", async (req, res) => {
     const { token, password } = req.body;
-    if (!token || !password || password.length < 6) return res.status(400).json({ error: "Token and password (min 6 chars) required" });
+    if (!token || !password) return res.status(400).json({ error: "Token and password required" });
+    const pwProblem = passwordProblem(String(password));
+    if (pwProblem) return res.status(400).json({ error: pwProblem, code: "PASSWORD_RULE" });
 
     const row = db.$client.prepare("SELECT * FROM reset_tokens WHERE token = ? AND used_at IS NULL").get(token) as any;
     if (!row) return res.status(400).json({ error: "Invalid or expired reset link" });
@@ -19063,13 +19082,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const user = storage.getUserById(row.user_id);
     if (!user) return res.status(404).json({ error: "User not found" });
-    const newToken = signToken(user.id);
+    // A reset password ends every existing sign-in (whoever held the old password is out),
+    // then signs this browser in on a fresh session.
+    endSessions((db as any).$client, user.id, { reason: "password_reset" });
+    const { token: newToken, sessionToken: resetSessionToken } = issueSession((db as any).$client, user.id, req);
     // #84 (2026-10-08): include the seat flags login returns, so a Staff login
     // that resets its password is not shown edit controls until the next login.
     const resetSeat = legacySeatForUser((db as any).$client, user.id, "permissions, owner_user_id") as any;
     let resetSeatPermissions: Record<string, any> | null = null;
     if (resetSeat) { try { resetSeatPermissions = JSON.parse(resetSeat.permissions || "{}"); } catch { resetSeatPermissions = {}; } }
-    res.json({ ok: true, token: newToken, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits, isSeatUser: !!resetSeat, seatPermissions: resetSeatPermissions, ownerUserId: resetSeat?.owner_user_id ?? null } });
+    res.json({ ok: true, token: newToken, session_token: resetSessionToken, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits, isSeatUser: !!resetSeat, seatPermissions: resetSeatPermissions, ownerUserId: resetSeat?.owner_user_id ?? null } });
   });
 
   app.post("/api/stripe/checkout", authMiddleware, async (req: any, res) => {
@@ -31038,21 +31060,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // ── SESSION MANAGEMENT ───────────────────────────────────────────────────
 
-  app.post("/api/auth/force-logout", authMiddleware, (req: any, res) => {
-    // Deactivate all sessions for this user
-    (db as any).$client.prepare(
-      "UPDATE user_sessions SET is_active = 0 WHERE user_id = ?"
-    ).run(req.userId);
-
-    // Create new session
-    const sessionToken = crypto.randomUUID();
-    const now = new Date().toISOString();
-    const deviceInfo = req.headers["user-agent"] || "Unknown";
-    (db as any).$client.prepare(
-      "INSERT INTO user_sessions (user_id, session_token, device_info, created_at, last_active, is_active) VALUES (?, ?, ?, ?, ?, 1)"
-    ).run(req.userId, sessionToken, deviceInfo, now, now);
-
-    res.json({ ok: true, session_token: sessionToken });
+  // "Log out the other device and continue" from the sign-in page. Takes the
+  // purpose "conflict" token login returned (issued only after the password
+  // checked out) or a live session token, ends every other sign-in for the
+  // person (which now really ends them), and returns the new session's token.
+  app.post("/api/auth/force-logout", (req: any, res) => {
+    const auth = String(req.headers.authorization || "");
+    if (!auth.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
+    const sqlite = (db as any).$client;
+    const raw = auth.slice(7);
+    const conflict = verifyPurposeToken(raw, "conflict");
+    let userId: number | null = conflict?.userId ?? null;
+    if (!userId) {
+      const c = checkAuthToken(sqlite, raw);
+      if (!c.ok || c.isDemo) return res.status(401).json({ error: "Invalid or expired token" });
+      userId = c.userId;
+    }
+    if (!storage.getUserById(userId)) return res.status(401).json({ error: "User not found" });
+    const ended = endSessions(sqlite, userId, { reason: "signed_in_elsewhere" });
+    const { token, sessionToken } = issueSession(sqlite, userId, req);
+    logAudit({ userId, module: "account", action: "update", entityType: "session.end_others", entityLabel: `${ended} other sign-in(s) ended from the sign-in page`, ipAddress: clientIp(req) ?? undefined });
+    res.json({ ok: true, token, session_token: sessionToken });
   });
 
   // Force logout a specific seat's sessions (for account owner)
@@ -31063,9 +31091,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(req.params.seatId, req.userId) as any;
     if (!seat || !seat.seat_user_id) return res.status(404).json({ error: "Seat not found or user not registered" });
 
-    (db as any).$client.prepare(
-      "UPDATE user_sessions SET is_active = 0 WHERE user_id = ?"
-    ).run(seat.seat_user_id);
+    const ended = endSessions((db as any).$client, seat.seat_user_id, { reason: "owner" });
+    logAudit({ userId: req.userId, module: "account", action: "update", entityType: "session.end_all", entityId: seat.seat_user_id, entityLabel: `${ended} sign-in(s) ended by the account owner`, ipAddress: req.ip });
 
     res.json({ ok: true });
   });
@@ -31118,27 +31145,63 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Logout (mark session inactive)
-  // Sign-out: invalidate active session rows so the next login does not
-  // hit the active-session conflict check around line 1853. Honors an
-  // optional session_token in the body for callers that still track it
-  // per-device; falls through to user-scoped invalidation when absent,
-  // marking every active session for the authenticated user inactive.
-  // The "logout anywhere logs out everywhere for this user" semantic is
-  // the right trade-off vs the more complex per-device model since the
-  // JWT does not carry device info.
+  // Sign-out ends THIS sign-in (two-factor Stage 1): the token names its session,
+  // so only that device is signed out, at once. A pre-Stage-1 token carries no
+  // session id; for it, an explicit body session_token (the person's own) is
+  // ended, else every sign-in for the person, as before.
   app.post("/api/auth/logout", authMiddleware, (req: any, res) => {
     const sqlite = (db as any).$client;
     const { session_token } = req.body || {};
-    if (session_token) {
-      sqlite.prepare(
-        "UPDATE user_sessions SET is_active = 0 WHERE session_token = ?"
-      ).run(session_token);
-    } else if (req.userId) {
-      sqlite.prepare(
-        "UPDATE user_sessions SET is_active = 0 WHERE user_id = ? AND is_active = 1"
-      ).run(req.userId);
+    if (req.sessionSid) {
+      endSessions(sqlite, req.userId, { reason: "sign_out", onlySid: req.sessionSid });
+    } else if (session_token) {
+      endSessions(sqlite, req.userId, { reason: "sign_out", onlySid: String(session_token) });
+    } else if (req.userId && !req.isDemo) {
+      endSessions(sqlite, req.userId, { reason: "sign_out" });
     }
     res.json({ ok: true });
+  });
+
+  // Signed-in devices (Account settings). Each active sign-in for the caller,
+  // newest activity first, with the one making this request marked current.
+  app.get("/api/auth/sessions", authMiddleware, (req: any, res) => {
+    if (req.isDemo) return res.json({ sessions: [], currentKnown: false });
+    const rows = (db as any).$client.prepare(
+      "SELECT id, session_token, device_info, created_at, last_active, ip_address FROM user_sessions WHERE user_id = ? AND is_active = 1 ORDER BY last_active DESC LIMIT 50"
+    ).all(req.userId) as any[];
+    res.json({
+      sessions: rows.map((r) => ({
+        id: r.id,
+        device: describeDevice(r.device_info),
+        signedInAt: r.created_at,
+        lastActive: r.last_active,
+        current: !!req.sessionSid && r.session_token === req.sessionSid,
+      })),
+      currentKnown: !!req.sessionSid,
+    });
+  });
+
+  // Sign out one of the caller's other devices.
+  app.post("/api/auth/sessions/:id/sign-out", authMiddleware, (req: any, res) => {
+    if (req.isDemo) return res.status(403).json({ error: "demo_restricted", message: "This action is disabled in the live demo." });
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: "Invalid session" });
+    const sqlite = (db as any).$client;
+    const row = sqlite.prepare("SELECT id, session_token, device_info FROM user_sessions WHERE id = ? AND user_id = ? AND is_active = 1").get(id, req.userId) as any;
+    if (!row) return res.status(404).json({ error: "That device is not signed in" });
+    if (req.sessionSid && row.session_token === req.sessionSid) return res.status(400).json({ error: "Use Sign out to end this device's sign-in." });
+    endSessions(sqlite, req.userId, { reason: "signed_out_from_other_device", onlyId: id });
+    logAudit({ userId: req.userId, module: "account", action: "update", entityType: "session.end", entityId: id, entityLabel: `Signed out ${describeDevice(row.device_info)} from another device`, ipAddress: req.ip });
+    res.json({ ok: true });
+  });
+
+  // Sign out every device except this one.
+  app.post("/api/auth/sessions/sign-out-others", authMiddleware, (req: any, res) => {
+    if (req.isDemo) return res.status(403).json({ error: "demo_restricted", message: "This action is disabled in the live demo." });
+    if (!req.sessionSid) return res.status(409).json({ error: "Sign out and sign in again first, then try this.", code: "NO_CURRENT_SESSION" });
+    const ended = endSessions((db as any).$client, req.userId, { reason: "signed_out_from_other_device", exceptSid: req.sessionSid });
+    if (ended > 0) logAudit({ userId: req.userId, module: "account", action: "update", entityType: "session.end_others", entityLabel: `${ended} other sign-in(s) ended from Account settings`, ipAddress: req.ip });
+    res.json({ ok: true, signedOut: ended });
   });
 
   // ── VERITALAB ──────────────────────────────────────────────────────────
