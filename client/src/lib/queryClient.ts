@@ -1,6 +1,7 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { authHeaders, clearAuth, isPublicMarketingPath } from "./auth";
 import { triggerSubscriptionError } from "@/components/SubscriptionModal";
+import { isStudyDerivedQuery } from "./studyDerivedQueries";
 
 // In production the "__PORT_5000__" placeholder is never substituted, so the app
 // calls its OWN origin (relative ""), letting the lab site and the SEPARATE
@@ -84,6 +85,8 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
+      // VeritaMap, VeritaCheck Coverage and VeritaTrack re-read on open (studyDerivedQueries.ts; BUG-053).
+      refetchOnMount: (query) => (isStudyDerivedQuery(query.queryKey) ? "always" : true),
       staleTime: Infinity,
       retry: false,
     },

@@ -478,6 +478,100 @@ export function blandAltmanSVG(avgs: number[], pctDiffs: number[], cliaError: nu
 </svg>`;
 }
 
+// ─── Method comparison charts, one series per comparison analyzer ─────────────
+// BUG-056 (2026-10-15, LW Test Lab Sodium, Fred vs Barney and Wilma): page 1 drew only the first comparison.
+// These draw every comparison against the primary on one chart, with a legend. The Bland-Altman difference is
+// plotted in the units the acceptance criterion is stated in: percent for a percentage TEa, analyte units for
+// an absolute TEa (Sodium ±4 mmol/L). blandAltmanSVG read an absolute 4 as 400% and put its limits off the scale.
+const SERIES_COLORS = ["#0e8a82", "#d97706", "#7c3aed", "#2563eb", "#db2777", "#4b5563"];
+export type CompSeries = { name: string; x: number[]; y: number[] }; // x = primary values, y = this comparison
+
+function legendSVG(series: CompSeries[], xRight: number, yTop: number): string {
+  return series.map((sr, i) =>
+    `<text x="${xRight}" y="${yTop + i * 10}" text-anchor="end" font-size="7.5" fill="${SERIES_COLORS[i % SERIES_COLORS.length]}" font-weight="600">\u25CF ${escapeHtml(sr.name)}</text>`
+  ).join("");
+}
+
+export function scatterSeriesSVG(series: CompSeries[], xLabel: string, title: string, w = 320, h = 220): string {
+  const allX = series.flatMap((sr) => sr.x), allY = series.flatMap((sr) => sr.y);
+  if (!allX.length || !allY.length) return `<svg width="${w}" height="${h}"></svg>`;
+  const ml = 48, mr = 16, mt = 28, mb = 36;
+  const pw = w - ml - mr, ph = h - mt - mb;
+  const lo = Math.min(...allX, ...allY), hi = Math.max(...allX, ...allY);
+  const pad = (hi - lo) * 0.1 || 1;
+  const vMin = lo - pad, vMax = hi + pad;
+  const cx = (v: number) => ml + ((v - vMin) / (vMax - vMin)) * pw;
+  const cy = (v: number) => mt + ph - ((v - vMin) / (vMax - vMin)) * ph;
+  let grid = "";
+  for (let i = 0; i <= 4; i++) {
+    const gx = ml + (i / 4) * pw, gy = mt + (i / 4) * ph;
+    grid += `<line x1="${gx}" y1="${mt}" x2="${gx}" y2="${mt + ph}" stroke="#dde1e6" stroke-width="0.6"/>`;
+    grid += `<line x1="${ml}" y1="${gy}" x2="${ml + pw}" y2="${gy}" stroke="#dde1e6" stroke-width="0.6"/>`;
+  }
+  const identity = `<line x1="${cx(vMin)}" y1="${cy(vMin)}" x2="${cx(vMax)}" y2="${cy(vMax)}" stroke="#a0a8b0" stroke-width="1.2"/>`;
+  let marks = "";
+  series.forEach((sr, i) => {
+    const color = SERIES_COLORS[i % SERIES_COLORS.length];
+    const n = Math.min(sr.x.length, sr.y.length);
+    if (n >= 2) {
+      const sl = slopeFn(sr.x.slice(0, n), sr.y.slice(0, n)), ic = interceptFn(sr.x.slice(0, n), sr.y.slice(0, n));
+      marks += `<line x1="${cx(vMin)}" y1="${cy(sl * vMin + ic)}" x2="${cx(vMax)}" y2="${cy(sl * vMax + ic)}" stroke="${color}" stroke-width="1.1" stroke-dasharray="4,2"/>`;
+    }
+    for (let k = 0; k < n; k++) marks += `<circle cx="${cx(sr.x[k])}" cy="${cy(sr.y[k])}" r="3.5" fill="${color}" opacity="0.85"/>`;
+  });
+  return `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg" style="background:#f8fafc;border:1px solid #cdd1d6;border-radius:4px">
+  <text x="${w / 2}" y="16" text-anchor="middle" font-size="10" font-weight="600" fill="#14141e">${escapeHtml(title)}</text>
+  <rect x="${ml}" y="${mt}" width="${pw}" height="${ph}" fill="white" stroke="#cdd1d6" stroke-width="0.5"/>
+  ${grid}${identity}${marks}${legendSVG(series, ml + pw - 4, mt + 10)}
+  <text x="${ml + pw / 2}" y="${h - 4}" text-anchor="middle" font-size="9" fill="#646e78">${escapeHtml(xLabel)}</text>
+  <text x="10" y="${mt + ph / 2}" text-anchor="middle" font-size="9" fill="#646e78" transform="rotate(-90,10,${mt + ph / 2})">Comparison analyzers</text>
+</svg>`;
+}
+
+export function blandAltmanSeriesSVG(series: CompSeries[], tea: number, absolute: boolean, unit: string, w = 320, h = 220): string {
+  const pts = series.map((sr) => {
+    const n = Math.min(sr.x.length, sr.y.length);
+    const avg: number[] = [], diff: number[] = [];
+    for (let k = 0; k < n; k++) {
+      avg.push((sr.x[k] + sr.y[k]) / 2);
+      diff.push(absolute ? sr.y[k] - sr.x[k] : (sr.x[k] === 0 ? 0 : ((sr.y[k] - sr.x[k]) / sr.x[k]) * 100));
+    }
+    return { avg, diff, bias: diff.length ? diff.reduce((a, b) => a + b, 0) / diff.length : 0 };
+  });
+  const allAvg = pts.flatMap((p) => p.avg), allDiff = pts.flatMap((p) => p.diff);
+  if (!allAvg.length) return `<svg width="${w}" height="${h}"></svg>`;
+  const limit = absolute ? tea : tea * 100;
+  const span = Math.max(limit, ...allDiff.map((d) => Math.abs(d))) * 1.25 || 1;
+  const minY = -span, maxY = span;
+  const minX = Math.min(...allAvg), maxX = Math.max(...allAvg);
+  const padX = (maxX - minX) * 0.1 || 1;
+  const ml = 48, mr = 16, mt = 28, mb = 36;
+  const pw = w - ml - mr, ph = h - mt - mb;
+  const cx = (v: number) => ml + ((v - minX + padX) / (maxX - minX + 2 * padX)) * pw;
+  const cy = (v: number) => mt + ph - ((v - minY) / (maxY - minY)) * ph;
+  let grid = "";
+  for (let i = 0; i <= 4; i++) grid += `<line x1="${ml}" y1="${mt + (i / 4) * ph}" x2="${ml + pw}" y2="${mt + (i / 4) * ph}" stroke="#dde1e6" stroke-width="0.6"/>`;
+  const zeroLine = `<line x1="${ml}" y1="${cy(0)}" x2="${ml + pw}" y2="${cy(0)}" stroke="#a0a8b0" stroke-width="0.8"/>`;
+  const upper = `<line x1="${ml}" y1="${cy(limit)}" x2="${ml + pw}" y2="${cy(limit)}" stroke="#dc5050" stroke-width="1.2"/>`;
+  const lower = `<line x1="${ml}" y1="${cy(-limit)}" x2="${ml + pw}" y2="${cy(-limit)}" stroke="#dc5050" stroke-width="1.2"/>`;
+  let marks = "";
+  pts.forEach((p, i) => {
+    const color = SERIES_COLORS[i % SERIES_COLORS.length];
+    marks += `<line x1="${ml}" y1="${cy(p.bias)}" x2="${ml + pw}" y2="${cy(p.bias)}" stroke="${color}" stroke-width="1" stroke-dasharray="3,2"/>`;
+    marks += p.avg.map((a, k) => `<circle cx="${cx(a)}" cy="${cy(p.diff[k])}" r="3.5" fill="${color}" opacity="0.85"/>`).join("");
+  });
+  const yLabel = absolute ? `Difference (${escapeHtml(unit || "units")})` : "% Diff";
+  const limitNum = String(Number(limit.toFixed(3))); // 4 -> "4", 7.5 -> "7.5"
+  const limitLabel = absolute ? `\u00B1${limitNum} ${escapeHtml(unit || "")}`.trim() : `\u00B1${limitNum}%`;
+  return `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg" style="background:#f8fafc;border:1px solid #cdd1d6;border-radius:4px">
+  <text x="${w / 2}" y="16" text-anchor="middle" font-size="10" font-weight="600" fill="#14141e">Bland-Altman (limits ${limitLabel})</text>
+  <rect x="${ml}" y="${mt}" width="${pw}" height="${ph}" fill="white" stroke="#cdd1d6" stroke-width="0.5"/>
+  ${grid}${zeroLine}${upper}${lower}${marks}${legendSVG(series, ml + pw - 4, mt + 10)}
+  <text x="${ml + pw / 2}" y="${h - 4}" text-anchor="middle" font-size="9" fill="#646e78">Mean of Methods</text>
+  <text x="10" y="${mt + ph / 2}" text-anchor="middle" font-size="9" fill="#646e78" transform="rotate(-90,10,${mt + ph / 2})">${yLabel}</text>
+</svg>`;
+}
+
 // ─── Color helpers ────────────────────────────────────────────────────────────
 const TEAL   = "#0e8a82";
 const PASS   = "#28a74f";
@@ -642,13 +736,27 @@ const CSS = `
 // ─── Instrument display helpers ──────────────────────────────────────────────
 // Builds the instrument string for reports using VeritaMap-linked data when available.
 // Compact format for page headers: "Model (Nickname)" -- omits S/N to save vertical space
-function instrumentDisplayInline(study: Study): string {
+// BUG-056: every analyzer on the study, not only the first (a three-analyzer correlation named only the primary).
+function instrumentDisplayEntries(study: Study): Array<{ model: string; nickname: string | null; serial_number: string | null }> {
   const display = (study as any)._instrumentDisplay as Record<string, { model: string; nickname: string | null; serial_number: string | null }> | undefined;
-  if (display && display["0"]) {
-    const d = display["0"];
+  if (!display) return [];
+  return Object.keys(display).sort((a, b) => Number(a) - Number(b)).map((k) => display[k]).filter(Boolean);
+}
+function instrumentDisplayInline(study: Study): string {
+  const entries = instrumentDisplayEntries(study);
+  if (entries.length === 0) return study.instrument;
+  if (entries.length === 1) {
+    const d = entries[0];
     return d.nickname ? `${d.model} (${d.nickname})` : d.model;
   }
-  return study.instrument;
+  // Same-model analyzers collapse to one model name with their nicknames: "Roche cobas 8000 (c702 module) (Fred, Barney, Wilma)".
+  const byModel = new Map<string, string[]>();
+  for (const d of entries) {
+    const list = byModel.get(d.model) || [];
+    if (d.nickname) list.push(d.nickname);
+    byModel.set(d.model, list);
+  }
+  return Array.from(byModel.entries()).map(([model, nicks]) => (nicks.length ? `${model} (${nicks.join(", ")})` : model)).join("; ");
 }
 
 // Abbreviate an instrument name from study.instruments for compact page-1 display.
@@ -669,14 +777,12 @@ function abbreviateInstrumentName(name: string): string {
 
 // Multi-line format for supporting data: "Model (Nickname)\nS/N: serial" or "Model\nS/N: serial"
 function instrumentDisplayMultiline(study: Study): string {
-  const display = (study as any)._instrumentDisplay as Record<string, { model: string; nickname: string | null; serial_number: string | null }> | undefined;
-  if (display && display["0"]) {
-    const d = display["0"];
-    let line1 = d.nickname ? `${d.model} (${d.nickname})` : d.model;
-    if (d.serial_number) return `${line1}<br/>S/N: ${d.serial_number}`;
-    return line1;
-  }
-  return study.instrument;
+  const entries = instrumentDisplayEntries(study);
+  if (entries.length === 0) return study.instrument;
+  return entries.map((d) => {
+    const line1 = d.nickname ? `${d.model} (${d.nickname})` : d.model;
+    return d.serial_number ? `${line1}<br/>S/N: ${d.serial_number}` : line1;
+  }).join("<br/>");
 }
 
 // ─── Shared header HTML ───────────────────────────────────────────────────────
@@ -719,7 +825,7 @@ function headerHTML(study: Study, cliaNumber?: string): string {
       ${labLine}
       ${cliaLine}
     </div>
-    <div class="header-right">Instrument: ${instrumentDisplayInline(study)}</div>
+    <div class="header-right">${instrumentDisplayEntries(study).length > 1 ? "Instruments" : "Instrument"}: ${instrumentDisplayInline(study)}</div>
   </div>
   <div class="report-title">${typeLabel} - ${study.testName}</div>
   <hr class="divider">`;
@@ -1282,7 +1388,36 @@ function narrativeHTML(
     }
   }
 
-  if (studyType === "method_comp") {
+  if (studyType === "method_comp" && Object.keys(results.levelResults?.[0]?.instruments || {}).length > 1) {
+    // BUG-056: two or more comparison analyzers. Describe each against the primary instead of only the first.
+    const comps = Object.keys(results.levelResults[0].instruments);
+    const unit = (study as any)?.teaUnit || (study as any)?.tea_unit || "";
+    const mcAdj = criterionAdjective(analyteName);
+    const mcSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(2)");
+    const mcAuthority = criterionAuthorityPhrase(analyteName, cfrSection);
+    const mcLabel = criterionLabel(analyteName);
+    const failing: string[] = [];
+    let nPairs = 0;
+    const lines = comps.map((n) => {
+      const dem: any = (results.regression || {})[`${n} vs. Primary (Deming)`];
+      const ba: any = (results.blandAltman || {})[n];
+      const r = Math.sqrt(dem?.r2 ?? 1);
+      const interp = r >= 0.99 ? "excellent" : r >= 0.975 ? "acceptable" : "borderline, review carefully";
+      const bias = isAbsolute
+        ? `${(ba?.meanDiff ?? 0) >= 0 ? "+" : ""}${sf(ba?.meanDiff ?? 0, 2)} ${unit}`.trim()
+        : `${(ba?.pctMeanDiff ?? 0) >= 0 ? "+" : ""}${sf(ba?.pctMeanDiff ?? 0, 1)}%`;
+      const rows = (results.levelResults || []).filter((lr: any) => lr.instruments?.[n]);
+      nPairs = Math.max(nPairs, rows.length);
+      if (rows.some((lr: any) => lr.instruments[n].passFail !== "Pass")) failing.push(abbreviateInstrumentName(n));
+      return `${abbreviateInstrumentName(n)}: R ${sf(r, 3)} (${interp}), Deming slope ${sf(dem?.slope ?? 1, 3)}, mean bias ${bias}`;
+    });
+    const decisionRuleSentence = `Decision rule: with N=${nPairs} paired specimens per comparison, every specimen must fall within the acceptance criterion for that comparison to pass. Any single specimen exceeding the criterion fails the comparison and triggers investigation.`;
+    narrative = `${comps.length} comparison analyzers were each compared with the primary for ${analyteName}. ${lines.join("; ")}. `;
+    narrative += `Mean bias is a supporting statistic, not the verdict criterion. ${decisionRuleSentence} `;
+    narrative += results.overallPass
+      ? `<b>Each paired specimen was individually evaluated against the ${mcAdj} acceptance criterion (${mcLabel}) of ${teaStr} ${mcAuthority} (${mcSource}). All paired specimens on every comparison analyzer satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+      : `<b>Each paired specimen was individually evaluated against the ${mcAdj} acceptance criterion (${mcLabel}) of ${teaStr} ${mcAuthority} (${mcSource}). One or more paired specimens did not satisfy this criterion (${failing.join(", ") || "see the per-sample table"}); see the per-sample table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+  } else if (studyType === "method_comp") {
     const regEntries = results.regression ? Object.values(results.regression as any) : [];
     const firstReg: any = regEntries.find((r: any) => (r as any).regressionType === "Deming") || regEntries[0];
     const slopeVal: number = firstReg?.slope ?? 1;
@@ -1754,9 +1889,8 @@ export function buildMethodCompHTML(study: Study, results: MethodCompData): stri
     const corrSvg = scatterSVG(xVals, yVals.length ? yVals : xVals, `${primaryName} (Primary)`, compName, `${compName} vs. ${primaryName}`, true);
 
     const baEntry = (results.blandAltman || {})[compName];
-    const avgs = levelResults.filter(r => r.instruments?.[compName]).map(r => (r.referenceValue + r.instruments[compName].value) / 2);
-    const pctDiffs = levelResults.filter(r => r.instruments?.[compName]).map(r => r.instruments[compName].pctDifference);
-    const baSvg = blandAltmanSVG(avgs, pctDiffs, study.cliaAllowableError, baEntry?.pctMeanDiff ?? 0, compName);
+    // Unit-aware Bland-Altman (an absolute TEa such as Sodium ±4 mmol/L was drawn as ±400%).
+    const baSvg = blandAltmanSeriesSVG([{ name: abbreviateInstrumentName(compName), x: levelResults.filter(r => r.instruments?.[compName]).map(r => r.referenceValue), y: levelResults.filter(r => r.instruments?.[compName]).map(r => r.instruments[compName].value) }], study.cliaAllowableError, isAbsoluteTea(study), ((study as any).teaUnit || (study as any).tea_unit || "").trim());
 
     // Supporting statistics
     const demKey = Object.keys(results.regression || {}).find(k => k.includes(compName) && k.includes("Deming"));
@@ -1944,6 +2078,29 @@ export function buildMethodCompHTML(study: Study, results: MethodCompData): stri
   const compactMeanPctBias = firstBAEntry ? sf(firstBAEntry.pctMeanDiff, 2) + "%" : "---";
   const compactMCPassCount = `${results.passCount}/${results.totalCount}`;
 
+  // BUG-056: with two or more comparison analyzers, page 1 charts and key statistics cover all of them.
+  const multiComp = comparisonNames.length > 1;
+  const compSeries: CompSeries[] = comparisonNames.map(n => {
+    const rows = levelResults.filter(r => r.instruments?.[n]);
+    const nick = n.indexOf(", ") > 0 && n.indexOf(", ") <= 20 ? n.substring(0, n.indexOf(", ")) : abbreviateInstrumentName(n);
+    return { name: nick, x: rows.map(r => r.referenceValue), y: rows.map(r => r.instruments[n].value) };
+  });
+  const teaUnitP1 = ((study as any).teaUnit || (study as any).tea_unit || "").trim();
+  const multiKeyStats = multiComp ? `<table style="font-size:8pt;margin-bottom:6px">
+    <thead><tr><th>Comparison vs. ${escapeHtml(abbreviateInstrumentName(primaryName))}</th><th class="text-right">R</th><th class="text-right">Deming Slope</th><th class="text-right">Mean Bias</th><th class="text-right">Mean % Bias</th><th class="text-right">Points Passing</th></tr></thead>
+    <tbody>${comparisonNames.map((n, i) => {
+      const dem: any = (results.regression || {})[`${n} vs. Primary (Deming)`];
+      const ba: any = (results.blandAltman || {})[n];
+      const rows = levelResults.filter(r => r.instruments?.[n]);
+      const passed = rows.filter(r => r.instruments[n].passFail === "Pass").length;
+      return `<tr class="${i % 2 === 1 ? "stripe" : ""}"><td><span style="color:${SERIES_COLORS[i % SERIES_COLORS.length]}">\u25CF</span> ${escapeHtml(abbreviateInstrumentName(n))}</td>
+        <td class="text-right">${dem ? sf(Math.sqrt(dem.r2 ?? 0), 4) : "---"}</td><td class="text-right">${dem ? sf(dem.slope, 4) : "---"}</td>
+        <td class="text-right">${ba ? sf(ba.meanDiff, 3) : "---"}</td><td class="text-right">${ba ? sf(ba.pctMeanDiff, 2) + "%" : "---"}</td>
+        <td class="text-right ${passed === rows.length ? "pass" : "fail"}">${passed}/${rows.length}</td></tr>`;
+    }).join("")}
+    <tr><td colspan="5" style="color:${MUTED};font-weight:700">Overall</td><td class="text-right ${results.overallPass ? "pass" : "fail"}">${results.overallPass ? "PASS" : "FAIL"} (${results.passCount}/${results.totalCount})</td></tr>
+    </tbody></table>` : "";
+
   // Build charts for just the first comparison for page 1
   const p1xVals = levelResults.map(r => r.referenceValue);
   const p1yVals = levelResults.filter(r => r.instruments?.[firstCompName]).map(r => r.instruments[firstCompName].value);
@@ -1951,9 +2108,7 @@ export function buildMethodCompHTML(study: Study, results: MethodCompData): stri
   // and the signed director-review block all fit on page 1 (signature-on-page-1
   // is non-negotiable). The full-height charts still render in the continuation.
   const p1CorrSvg = scatterSVG(p1xVals, p1yVals.length ? p1yVals : p1xVals, `${abbreviateInstrumentName(primaryName)} (Primary)`, abbreviateInstrumentName(firstCompName), `${abbreviateInstrumentName(firstCompName)} vs. ${abbreviateInstrumentName(primaryName)}`, true, 320, 160);
-  const p1avgs = levelResults.filter(r => r.instruments?.[firstCompName]).map(r => (r.referenceValue + r.instruments[firstCompName].value) / 2);
-  const p1pctDiffs = levelResults.filter(r => r.instruments?.[firstCompName]).map(r => r.instruments[firstCompName].pctDifference);
-  const p1BaSvg = blandAltmanSVG(p1avgs, p1pctDiffs, study.cliaAllowableError, firstBAEntry?.pctMeanDiff ?? 0, firstCompName, 320, 160);
+  const p1BaSvg = blandAltmanSeriesSVG(compSeries.slice(0, 1), study.cliaAllowableError, isAbsoluteTea(study), teaUnitP1, 320, 160);
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck\u2122 - Correlation / Method Comparison - ${study.testName}</title><style>${CSS}
   .page-num::after { content: "Page " counter(page); }
@@ -1963,11 +2118,15 @@ export function buildMethodCompHTML(study: Study, results: MethodCompData): stri
 
   <div class="report-title-sub">Primary: ${abbreviateInstrumentName(primaryName)} | Comparison: ${comparisonNames.map(abbreviateInstrumentName).join(", ")}</div>
 
-  <div class="charts">${p1CorrSvg}${p1BaSvg}</div>
+  <div class="charts">${multiComp
+    ? scatterSeriesSVG(compSeries, `${abbreviateInstrumentName(primaryName)} (Primary)`, `Comparison analyzers vs. ${abbreviateInstrumentName(primaryName)}`, 320, 160)
+      + blandAltmanSeriesSVG(compSeries, study.cliaAllowableError, isAbsoluteTea(study), teaUnitP1, 320, 160)
+    : p1CorrSvg + p1BaSvg}</div>
 
   <hr class="divider">
   <div class="section-label">Key Statistics Summary</div>
-  <table style="font-size:8pt;margin-bottom:6px">
+  ${multiKeyStats}
+  <table style="font-size:8pt;margin-bottom:6px;${multiComp ? "display:none" : ""}">
     <tbody>
       <tr><td style="color:${MUTED};font-weight:700;width:25%">Corr Coef (R)</td><td style="width:25%">${compactCorrCoef}</td>
           <td style="color:${MUTED};font-weight:700;width:25%">Deming Slope</td><td style="width:25%">${compactDemSlope}</td></tr>
