@@ -486,6 +486,12 @@ export function blandAltmanSVG(avgs: number[], pctDiffs: number[], cliaError: nu
 const SERIES_COLORS = ["#0e8a82", "#d97706", "#7c3aed", "#2563eb", "#db2777", "#4b5563"];
 export type CompSeries = { name: string; x: number[]; y: number[] }; // x = primary values, y = this comparison
 
+// Short legend name: the VeritaMap nickname before ", " when there is one ("Barney, Roche cobas 8000" -> "Barney").
+function seriesNickname(n: string): string {
+  const i = n.indexOf(", ");
+  return i > 0 && i <= 20 ? n.substring(0, i) : abbreviateInstrumentName(n);
+}
+
 // Legend as one row under the chart title, so it never covers a data point.
 function legendSVG(series: CompSeries[], xLeft: number, y: number): string {
   let x = xLeft;
@@ -498,7 +504,7 @@ function legendSVG(series: CompSeries[], xLeft: number, y: number): string {
 }
 let chartClipSeq = 0;
 
-export function scatterSeriesSVG(series: CompSeries[], xLabel: string, title: string, w = 320, h = 220): string {
+export function scatterSeriesSVG(series: CompSeries[], xLabel: string, title: string, w = 320, h = 220, yLabel = "Comparison analyzers"): string {
   const allX = series.flatMap((sr) => sr.x), allY = series.flatMap((sr) => sr.y);
   if (!allX.length || !allY.length) return `<svg width="${w}" height="${h}"></svg>`;
   const ml = 48, mr = 16, mt = 38, mb = 36;
@@ -532,7 +538,7 @@ export function scatterSeriesSVG(series: CompSeries[], xLabel: string, title: st
   <defs><clipPath id="${clipId}"><rect x="${ml}" y="${mt}" width="${pw}" height="${ph}"/></clipPath></defs>
   ${grid}<g clip-path="url(#${clipId})">${identity}${marks}</g>${legendSVG(series, ml, 29)}
   <text x="${ml + pw / 2}" y="${h - 4}" text-anchor="middle" font-size="9" fill="#646e78">${escapeHtml(xLabel)}</text>
-  <text x="10" y="${mt + ph / 2}" text-anchor="middle" font-size="9" fill="#646e78" transform="rotate(-90,10,${mt + ph / 2})">Comparison analyzers</text>
+  <text x="10" y="${mt + ph / 2}" text-anchor="middle" font-size="9" fill="#646e78" transform="rotate(-90,10,${mt + ph / 2})">${escapeHtml(yLabel)}</text>
 </svg>`;
 }
 
@@ -578,6 +584,54 @@ export function blandAltmanSeriesSVG(series: CompSeries[], tea: number, absolute
   <defs><clipPath id="${clipId}"><rect x="${ml}" y="${mt}" width="${pw}" height="${ph}"/></clipPath></defs>
   ${grid}<g clip-path="url(#${clipId})">${zeroLine}${upper}${lower}${marks}</g>${legendSVG(series, ml, 29)}
   <text x="${ml + pw / 2}" y="${h - 4}" text-anchor="middle" font-size="9" fill="#646e78">Mean of Methods</text>
+  <text x="10" y="${mt + ph / 2}" text-anchor="middle" font-size="9" fill="#646e78" transform="rotate(-90,10,${mt + ph / 2})">${yLabel}</text>
+</svg>`;
+}
+
+// Calibration verification recovery chart, one line per analyzer (BUG-058). Plots in the units the acceptance criterion
+// is stated in (BUG-059): percent recovery with 100 +/- TEa% for a percentage TEa; the difference from the assigned value
+// with +/- TEa for an absolute TEa (Sodium 4 mmol/L), which recoveryPlotSVG drew as +/-400%. x = assigned, y = measured.
+export function recoverySeriesSVG(series: CompSeries[], tea: number, absolute: boolean, unit: string, w = 320, h = 220): string {
+  const pts = series.map((sr) => {
+    const n = Math.min(sr.x.length, sr.y.length);
+    const idx = Array.from({ length: n }, (_, k) => k).sort((p, q) => sr.x[p] - sr.x[q]);
+    return idx.map((k) => ({ x: sr.x[k], v: absolute ? sr.y[k] - sr.x[k] : (sr.x[k] === 0 ? 100 : (sr.y[k] / sr.x[k]) * 100) }));
+  });
+  const all = pts.flat();
+  if (!all.length) return `<svg width="${w}" height="${h}"></svg>`;
+  const center = absolute ? 0 : 100;
+  const limit = absolute ? tea : tea * 100;
+  const span = Math.max(limit, ...all.map((p) => Math.abs(p.v - center))) * 1.25 || 1;
+  const minY = center - span, maxY = center + span;
+  const minX = Math.min(...all.map((p) => p.x)), maxX = Math.max(...all.map((p) => p.x));
+  const padX = (maxX - minX) * 0.1 || 1;
+  const legend = series.length > 1;
+  const ml = 48, mr = 16, mt = legend ? 38 : 28, mb = 36;
+  const clipId = `mcclip${++chartClipSeq}`;
+  const pw = w - ml - mr, ph = h - mt - mb;
+  const cx = (v: number) => ml + ((v - (minX - padX)) / (maxX - minX + 2 * padX)) * pw;
+  const cy = (v: number) => mt + ph - ((v - minY) / (maxY - minY)) * ph;
+  let grid = "";
+  for (let i = 0; i <= 4; i++) grid += `<line x1="${ml}" y1="${mt + (i / 4) * ph}" x2="${ml + pw}" y2="${mt + (i / 4) * ph}" stroke="#dde1e6" stroke-width="0.6"/>`;
+  const band = `<rect x="${ml}" y="${cy(center + limit)}" width="${pw}" height="${cy(center - limit) - cy(center + limit)}" fill="#e8f5e9" opacity="0.6"/>`;
+  const midLine = `<line x1="${ml}" y1="${cy(center)}" x2="${ml + pw}" y2="${cy(center)}" stroke="#a0a8b0" stroke-width="0.8"/>`;
+  const upperLine = `<line x1="${ml}" y1="${cy(center + limit)}" x2="${ml + pw}" y2="${cy(center + limit)}" stroke="#dc5050" stroke-width="1.2"/>`;
+  const lowerLine = `<line x1="${ml}" y1="${cy(center - limit)}" x2="${ml + pw}" y2="${cy(center - limit)}" stroke="#dc5050" stroke-width="1.2"/>`;
+  let marks = "";
+  pts.forEach((p, i) => {
+    const color = SERIES_COLORS[i % SERIES_COLORS.length];
+    for (let k = 1; k < p.length; k++) marks += `<line x1="${cx(p[k - 1].x)}" y1="${cy(p[k - 1].v)}" x2="${cx(p[k].x)}" y2="${cy(p[k].v)}" stroke="${color}" stroke-width="1.2"/>`;
+    marks += p.map((q) => `<circle cx="${cx(q.x)}" cy="${cy(q.v)}" r="4" fill="${color}" opacity="0.85"/>`).join("");
+  });
+  const limitNum = String(Number(limit.toFixed(3)));
+  const title = absolute ? `Difference from Assigned (limits \u00B1${limitNum} ${escapeHtml(unit || "")})`.replace(" )", ")") : "Percent Recovery";
+  const yLabel = absolute ? `Difference (${escapeHtml(unit || "units")})` : "% Rec";
+  return `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg" style="background:#f8fafc;border:1px solid #cdd1d6;border-radius:4px">
+  <text x="${w / 2}" y="16" text-anchor="middle" font-size="10" font-weight="600" fill="#14141e">${title}</text>
+  <rect x="${ml}" y="${mt}" width="${pw}" height="${ph}" fill="white" stroke="#cdd1d6" stroke-width="0.5"/>
+  <defs><clipPath id="${clipId}"><rect x="${ml}" y="${mt}" width="${pw}" height="${ph}"/></clipPath></defs>
+  ${grid}<g clip-path="url(#${clipId})">${band}${midLine}${upperLine}${lowerLine}${marks}</g>${legend ? legendSVG(series, ml, 29) : ""}
+  <text x="${ml + pw / 2}" y="${h - 4}" text-anchor="middle" font-size="9" fill="#646e78">Assigned Value</text>
   <text x="10" y="${mt + ph / 2}" text-anchor="middle" font-size="9" fill="#646e78" transform="rotate(-90,10,${mt + ph / 2})">${yLabel}</text>
 </svg>`;
 }
@@ -1355,7 +1409,41 @@ function narrativeHTML(
   const adlmPct = (cliaError * 50).toFixed(1); // ADLM = half of CLIA TEa
   let narrative = "";
 
-  if (studyType === "cal_ver") {
+  const calNames: string[] = studyType === "cal_ver"
+    ? Array.from(new Set<string>((results?.levelResults || []).flatMap((r: any) => Object.keys(r.instruments || {}))))
+    : [];
+  if (studyType === "cal_ver" && calNames.length > 1) {
+    // BUG-058: two or more analyzers. Count the levels once (totalCount is levels x analyzers) and describe each analyzer
+    // instead of the mean of all analyzers, which can hide one analyzer's error behind another's.
+    const unit = ((study as any)?.teaUnit || (study as any)?.tea_unit || "").trim();
+    const calAdj = criterionAdjective(analyteName);
+    const calSource = criterionSourcePhrase(analyteName, "42 CFR §493.1255(b)(3) and §493.1253(b)(2)");
+    const calAuthority = criterionAuthorityPhrase(analyteName, cfrSection);
+    const calLabel = criterionLabel(analyteName);
+    const nLevels = (results.levelResults || []).length;
+    const failing: string[] = [];
+    let worstPct = -1, worstName = "";
+    const lines = calNames.map((n) => {
+      const reg: any = (results.regression || {})[`${n} vs. Assigned`];
+      const rows = (results.levelResults || []).filter((r: any) => r.instruments?.[n]);
+      if (rows.some((r: any) => r.instruments[n].passFail !== "Pass")) failing.push(seriesNickname(n));
+      const errs = rows.map((r: any) => isAbsolute ? Math.abs(r.instruments[n].value - r.assignedValue) : Math.abs((r.instruments[n].obsError ?? 0) * 100));
+      const maxE = errs.length ? Math.max(...errs) : 0;
+      if (!isAbsolute && maxE > worstPct) { worstPct = maxE; worstName = seriesNickname(n); }
+      const maxStr = isAbsolute ? `${sf(maxE, 2)} ${unit}`.trim() : `${sf(maxE, 1)}%`;
+      return `${seriesNickname(n)}: slope ${sf(reg?.slope ?? 1, 3)}, intercept ${sf(reg?.intercept ?? 0, 3)}, maximum observed error ${maxStr}`;
+    });
+    narrative = `${nLevels} calibration levels for ${analyteName} were run on ${calNames.length} analyzers against the ${calAdj} calibration verification acceptance criterion of ${teaStr} (${calSource}). ${lines.join("; ")}. `;
+    // ADLM "half of CLIA TEa" goal is a percentage concept; omit it for absolute-TEa analytes.
+    if (!isAbsolute) {
+      narrative += worstPct <= cliaError * 50
+        ? `The largest observed error on any analyzer, ${sf(worstPct, 1)}% (${worstName}), also meets the ADLM-recommended internal goal of ±${adlmPct}%. `
+        : `The largest observed error on any analyzer was ${sf(worstPct, 1)}% (${worstName}); the ADLM recommends an internal goal of ±${adlmPct}% for enhanced quality assurance. `;
+    }
+    narrative += results.overallPass
+      ? `<b>Each calibration level on each analyzer was individually evaluated against the ${calAdj} acceptance criterion (${calLabel}) of ${teaStr} ${calAuthority}. All levels on every analyzer satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+      : `<b>Each calibration level on each analyzer was individually evaluated against the ${calAdj} acceptance criterion (${calLabel}) of ${teaStr} ${calAuthority}. One or more levels did not satisfy this criterion (${failing.join(", ") || "see the per-level table"}); see the per-level table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+  } else if (studyType === "cal_ver") {
     const calLevelResults = results.levelResults || [];
     const maxErr = calLevelResults.length > 0 ? Math.max(...calLevelResults.map((r: any) => Math.abs((r.obsError ?? 0) * 100))) : 0;
     const meetsAdlm = maxErr <= cliaError * 50;
@@ -1418,8 +1506,8 @@ function narrativeHTML(
         : `${(ba?.pctMeanDiff ?? 0) >= 0 ? "+" : ""}${sf(ba?.pctMeanDiff ?? 0, 1)}%`;
       const rows = (results.levelResults || []).filter((lr: any) => lr.instruments?.[n]);
       nPairs = Math.max(nPairs, rows.length);
-      if (rows.some((lr: any) => lr.instruments[n].passFail !== "Pass")) failing.push(abbreviateInstrumentName(n));
-      return `${abbreviateInstrumentName(n)}: R ${sf(r, 3)} (${interp}), Deming slope ${sf(dem?.slope ?? 1, 3)}, mean bias ${bias}`;
+      if (rows.some((lr: any) => lr.instruments[n].passFail !== "Pass")) failing.push(seriesNickname(n));
+      return `${seriesNickname(n)}: R ${sf(r, 3)} (${interp}), Deming slope ${sf(dem?.slope ?? 1, 3)}, mean bias ${bias}`;
     });
     const decisionRuleSentence = `Decision rule: with N=${nPairs} paired specimens per comparison, every specimen must fall within the acceptance criterion for that comparison to pass. Any single specimen exceeding the criterion fails the comparison and triggers investigation.`;
     narrative = `${comps.length} comparison analyzers were each compared with the primary for ${analyteName}. ${lines.join("; ")}. `;
@@ -1537,19 +1625,43 @@ interface CalVerData {
   overallPass: boolean; passCount: number; totalCount: number; summary: string;
 }
 
-function buildCalVerHTML(study: Study, results: CalVerData): string {
+export function buildCalVerHTML(study: Study, results: CalVerData): string {
   const instrumentNames: string[] = safeJsonParse(study.instruments) || [];
   const levelResults = results.levelResults || [];
   const assignedVals = levelResults.map(r => r.assignedValue);
   const recoveries   = levelResults.map(r => r.pctRecovery);
 
-  // Charts
+  // Charts. BUG-058: with two or more analyzers, page 1 plots and tabulates each analyzer (it showed only the first
+  // analyzer's scatter and the mean of all analyzers' slope). Page-1 charts run shorter then so the signature stays on page 1.
+  const multiInst = instrumentNames.length > 1;
+  const cvSeries: CompSeries[] = instrumentNames.map(n => {
+    const rows = levelResults.filter(r => r.instruments?.[n]);
+    return { name: seriesNickname(n), x: rows.map(r => r.assignedValue), y: rows.map(r => r.instruments[n].value) };
+  });
   const scatterPoints = levelResults.map(r => ({
     x: r.assignedValue,
     y: instrumentNames[0] && r.instruments[instrumentNames[0]] ? r.instruments[instrumentNames[0]].value : r.mean
   }));
-  const scatterSvg = scatterSVG(scatterPoints.map(p => p.x), scatterPoints.map(p => p.y), "Assigned Value", "Measured", "Scatter Plot", true);
-  const recoverySvg = recoveryPlotSVG(assignedVals, recoveries, study.cliaAllowableError);
+  const scatterSvg = multiInst
+    ? scatterSeriesSVG(cvSeries, "Assigned Value", "Measured vs. Assigned", 320, 150, "Measured")
+    : scatterSVG(scatterPoints.map(p => p.x), scatterPoints.map(p => p.y), "Assigned Value", "Measured", "Scatter Plot", true);
+  // BUG-059: recovery limits in the units of the criterion (an absolute TEa drew 100 +/- 400%).
+  const recSeries: CompSeries[] = multiInst ? cvSeries : [{ name: instrumentNames[0] || "Mean", x: assignedVals, y: levelResults.map(r => r.mean) }];
+  const recoverySvg = recoverySeriesSVG(recSeries, study.cliaAllowableError, isAbsoluteTea(study), ((study as any).teaUnit || (study as any).tea_unit || "").trim(), 320, multiInst ? 150 : 220);
+  const multiKeyStats = multiInst ? `<table style="font-size:8pt;margin-bottom:6px">
+    <thead><tr><th>Analyzer</th><th class="text-right">Slope</th><th class="text-right">R²</th><th class="text-right">Max % Recovery</th><th class="text-right">Min % Recovery</th><th class="text-right">Points Passing</th></tr></thead>
+    <tbody>${instrumentNames.map((n, i) => {
+      const reg: any = (results.regression || {})[`${n} vs. Assigned`];
+      const rows = levelResults.filter(r => r.instruments?.[n]);
+      const recs = rows.map(r => r.assignedValue !== 0 ? (r.instruments[n].value / r.assignedValue) * 100 : 100);
+      const passed = rows.filter(r => r.instruments[n].passFail === "Pass").length;
+      return `<tr class="${i % 2 === 1 ? "stripe" : ""}"><td><span style="color:${SERIES_COLORS[i % SERIES_COLORS.length]}">●</span> ${escapeHtml(abbreviateInstrumentName(n))}</td>
+        <td class="text-right">${reg ? sf(reg.slope, 4) : "---"}</td><td class="text-right">${reg ? sf(reg.r2, 4) : "---"}</td>
+        <td class="text-right">${recs.length ? sf(Math.max(...recs), 1) + "%" : "---"}</td><td class="text-right">${recs.length ? sf(Math.min(...recs), 1) + "%" : "---"}</td>
+        <td class="text-right ${passed === rows.length ? "pass" : "fail"}">${passed}/${rows.length}</td></tr>`;
+    }).join("")}
+    <tr><td colspan="5" style="color:${MUTED};font-weight:700">Overall</td><td class="text-right ${results.overallPass ? "pass" : "fail"}">${results.overallPass ? "PASS" : "FAIL"} (${results.passCount}/${results.totalCount})</td></tr>
+    </tbody></table>` : "";
 
   // Linearity summary table
   const linRows = Object.entries(results.regression || {}).map(([name, reg]) => {
@@ -1606,7 +1718,8 @@ function buildCalVerHTML(study: Study, results: CalVerData): string {
 
   <hr class="divider">
   <div class="section-label">Key Statistics Summary</div>
-  <table style="font-size:8pt;margin-bottom:6px">
+  ${multiKeyStats}
+  <table style="font-size:8pt;margin-bottom:6px;${multiInst ? "display:none" : ""}">
     <tbody>
       <tr><td style="color:${MUTED};font-weight:700;width:25%">Slope</td><td style="width:25%">${compactSlope}</td>
           <td style="color:${MUTED};font-weight:700;width:25%">R²</td><td style="width:25%">${compactR2}</td></tr>
@@ -2092,8 +2205,7 @@ export function buildMethodCompHTML(study: Study, results: MethodCompData): stri
   const multiComp = comparisonNames.length > 1;
   const compSeries: CompSeries[] = comparisonNames.map(n => {
     const rows = levelResults.filter(r => r.instruments?.[n]);
-    const nick = n.indexOf(", ") > 0 && n.indexOf(", ") <= 20 ? n.substring(0, n.indexOf(", ")) : abbreviateInstrumentName(n);
-    return { name: nick, x: rows.map(r => r.referenceValue), y: rows.map(r => r.instruments[n].value) };
+    return { name: seriesNickname(n), x: rows.map(r => r.referenceValue), y: rows.map(r => r.instruments[n].value) };
   });
   const teaUnitP1 = ((study as any).teaUnit || (study as any).tea_unit || "").trim();
   const multiKeyStats = multiComp ? `<table style="font-size:8pt;margin-bottom:6px">
@@ -2126,11 +2238,11 @@ export function buildMethodCompHTML(study: Study, results: MethodCompData): stri
   ${footerHTML()}
   ${headerHTML(study, (study as any)._cliaNumber)}
 
-  <div class="report-title-sub">Primary: ${abbreviateInstrumentName(primaryName)} | Comparison: ${comparisonNames.map(abbreviateInstrumentName).join(", ")}</div>
+  <div class="report-title-sub">Primary: ${abbreviateInstrumentName(primaryName)} | Comparison: ${comparisonNames.map(multiComp ? seriesNickname : abbreviateInstrumentName).join(", ")}</div>
 
   <div class="charts">${multiComp
-    ? scatterSeriesSVG(compSeries, `${abbreviateInstrumentName(primaryName)} (Primary)`, `Comparison analyzers vs. ${abbreviateInstrumentName(primaryName)}`, 320, 160)
-      + blandAltmanSeriesSVG(compSeries, study.cliaAllowableError, isAbsoluteTea(study), teaUnitP1, 320, 160)
+    ? scatterSeriesSVG(compSeries, `${abbreviateInstrumentName(primaryName)} (Primary)`, `Comparison analyzers vs. ${abbreviateInstrumentName(primaryName)}`, 320, 150)
+      + blandAltmanSeriesSVG(compSeries, study.cliaAllowableError, isAbsoluteTea(study), teaUnitP1, 320, 150)
     : p1CorrSvg + p1BaSvg}</div>
 
   <hr class="divider">
