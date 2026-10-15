@@ -67,7 +67,15 @@ import {
   ChevronDown,
   Link2,
   Pencil,
+  MoreHorizontal,
+  HelpCircle,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { DocumentLinkDialog, COMP_DOC_TYPES } from "@/components/DocumentLinkDialog";
 import { QuizQuestionImage, QuizImagePicker } from "@/components/QuizQuestionImage";
 import { isQuizImage, quizImageProblem } from "@shared/quizImages";
@@ -869,6 +877,10 @@ function ProgramListView() {
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   // Wave I PR I1 (2026-06-06): cohort sign-off (one program × N employees).
   const [cohortSignoffOpen, setCohortSignoffOpen] = useState(false);
+  // 2026-10-14 (Michael): waived, non-technical and quizzes straight from the header, without first
+  // building a program. QuickCompetencyDialog finds (or quietly sets up) the department's program.
+  const [quickType, setQuickType] = useState<"waived" | "nontechnical" | null>(null);
+  const [quizHubOpen, setQuizHubOpen] = useState(false);
 
   // Multi-Lab Tier 2 Phase 3.5b: list reads from the lab-scoped endpoint.
   // Inner endpoints (programs/:id DELETE, assessments, quizzes) stay on
@@ -918,6 +930,25 @@ function ProgramListView() {
             * Friendly toast if zero programs (the lab director needs to
             * make a program first).
             */}
+          {/* 2026-10-14 (Michael): "New Program" and "New Assessment" were the only way in to waived,
+              non-technical and quizzes. These three go straight there; the program-based entries move
+              under More. Technical competencies come from Competencies owed below. */}
+          <PermissionTooltip disabled={readOnly} reason={lockReason}>
+            <Button variant="outline" onClick={() => setQuickType("waived")} disabled={readOnly} data-testid="quick-waived">
+              <Plus className="h-4 w-4 mr-1.5" />
+              Waived competency
+            </Button>
+          </PermissionTooltip>
+          <PermissionTooltip disabled={readOnly} reason={lockReason}>
+            <Button variant="outline" onClick={() => setQuickType("nontechnical")} disabled={readOnly} data-testid="quick-nontechnical">
+              <Plus className="h-4 w-4 mr-1.5" />
+              Non-technical competency
+            </Button>
+          </PermissionTooltip>
+          <Button onClick={() => setQuizHubOpen(true)} data-testid="quick-quizzes">
+            <HelpCircle className="h-4 w-4 mr-1.5" />
+            Quizzes
+          </Button>
           <CompetencyRegisterButton size="default" />
           <Button
             variant="outline"
@@ -957,37 +988,36 @@ function ProgramListView() {
               Cohort Sign-off
             </Button>
           </PermissionTooltip>
-          {/* Wave J PR J2 (2026-06-06): permissions tooltips. The
-              PermissionTooltip wrapper renders a branded Radix tooltip
-              on hover when the wrapped button is disabled, replacing
-              the inconsistent native title-attribute behavior. */}
-          <PermissionTooltip disabled={readOnly} reason={lockReason}>
-            <Button
-              variant="outline"
-              onClick={() => {
-                const list = programs ?? [];
-                if (list.length === 0) {
-                  toast({ title: "Create a program first", description: "Add a competency program before recording assessments." });
-                  return;
-                }
-                if (list.length === 1) {
-                  navigate(labRoute(`/veritacomp-app/${list[0].id}?newAssessment=1`));
-                  return;
-                }
-                setPickerOpen(true);
-              }}
-              disabled={readOnly}
-            >
-              <Plus className="h-4 w-4 mr-1.5" />
-              New Assessment
-            </Button>
-          </PermissionTooltip>
-          <PermissionTooltip disabled={readOnly} reason={lockReason}>
-            <Button onClick={() => setWizardOpen(true)} disabled={readOnly}>
-              <Plus className="h-4 w-4 mr-1.5" />
-              New Program
-            </Button>
-          </PermissionTooltip>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" aria-label="More" data-testid="veritacomp-more">
+                <MoreHorizontal className="h-4 w-4 mr-1.5" />
+                More
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                disabled={readOnly}
+                onSelect={() => {
+                  const list = programs ?? [];
+                  if (list.length === 0) {
+                    toast({ title: "Create a program first", description: "Add a competency program before recording assessments." });
+                    return;
+                  }
+                  if (list.length === 1) {
+                    navigate(labRoute(`/veritacomp-app/${list[0].id}?newAssessment=1`));
+                    return;
+                  }
+                  setPickerOpen(true);
+                }}
+              >
+                <ClipboardCheck className="h-4 w-4 mr-2" /> Assessment in a program
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={readOnly} onSelect={() => setWizardOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" /> New program
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -1108,6 +1138,16 @@ function ProgramListView() {
             ))}
         </div>
       )}
+
+      {quickType && (
+        <QuickCompetencyDialog
+          type={quickType}
+          programs={programs ?? []}
+          onClose={() => setQuickType(null)}
+          onCreated={() => qc.invalidateQueries({ queryKey: [programsListUrl] })}
+        />
+      )}
+      {quizHubOpen && <QuizHubDialog programs={programs ?? []} onClose={() => setQuizHubOpen(false)} />}
 
       {wizardOpen && (
         <NewProgramWizard
@@ -1253,6 +1293,202 @@ function ProgramListView() {
         />
       )}
     </div>
+  );
+}
+
+// ── Header shortcuts (2026-10-14, Michael) ──────────────────────────────
+// Waived and non-technical competencies live in a program of that type per department. The shortcut
+// asks only for the department: it opens the New Assessment form in that department's program, and
+// sets the program up first when the department has none (name "<Department> waived testing
+// competency" / "<Department> non-technical competency"; non-technical starts from the department's
+// standard checklist, the same default as New Program).
+
+function QuickCompetencyDialog({
+  type,
+  programs,
+  onClose,
+  onCreated,
+}: {
+  type: "waived" | "nontechnical";
+  programs: Program[];
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [, navigate] = useLocation();
+  const labRoute = useLabRoute();
+  const activeLabId = useActiveLabId();
+  const { toast } = useToast();
+  const ofType = programs.filter(p => p.type === type);
+  const deptOf = (p: Program) => ((p.department || "").trim()) || "Other";
+  const [department, setDepartment] = useState<string>(ofType[0] ? deptOf(ofType[0]) : (type === "waived" ? "Point of Care" : DEPARTMENTS[0]));
+  const inDept = ofType.filter(p => deptOf(p) === department);
+  const [programId, setProgramId] = useState<number | null>(inDept[0]?.id ?? null);
+  useEffect(() => { setProgramId(inDept[0]?.id ?? null); }, [department]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [busy, setBusy] = useState(false);
+  const label = type === "waived" ? "Waived competency" : "Non-technical competency";
+  const newName = `${department} ${type === "waived" ? "waived testing" : "non-technical"} competency`;
+  // Departments that already have one of these come first.
+  const deptOptions = Array.from(new Set([...ofType.map(deptOf), ...DEPARTMENTS]));
+
+  async function go() {
+    if (programId) {
+      navigate(labRoute(`/veritacomp-app/${programId}?newAssessment=1`));
+      return;
+    }
+    setBusy(true);
+    try {
+      const url = activeLabId ? `${API_BASE}/api/labs/${activeLabId}/competency/programs` : `${API_BASE}/api/competency/programs`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({
+          name: newName,
+          department,
+          type,
+          mapId: null,
+          checklistItems: type === "nontechnical" ? (DEFAULT_CHECKLISTS[department] || DEFAULT_CHECKLISTS["Chemistry"] || []) : undefined,
+        }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.error || "Could not set it up");
+      }
+      const data = await res.json();
+      onCreated();
+      navigate(labRoute(`/veritacomp-app/${data.id}?newAssessment=1`));
+    } catch (e: any) {
+      toast({ title: "Could not start the competency", description: e.message, variant: "destructive" });
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{label}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 pt-1" data-testid={`quick-dialog-${type}`}>
+          <p className="text-sm text-muted-foreground">
+            {type === "waived"
+              ? "Pick the department. The waived competency form opens next: two of the four methods for each waived test."
+              : "Pick the department. The non-technical competency form opens next, with that department's checklist."}
+          </p>
+          <div>
+            <label className="text-sm font-medium mb-1 block">Department</label>
+            <Select value={department} onValueChange={setDepartment}>
+              <SelectTrigger data-testid="quick-department"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {deptOptions.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {inDept.length > 1 && (
+            <div>
+              <label className="text-sm font-medium mb-1 block">Which one?</label>
+              <Select value={programId ? String(programId) : ""} onValueChange={v => setProgramId(parseInt(v))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {inDept.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {inDept.length === 0 && (
+            <p className="text-xs text-muted-foreground" data-testid="quick-will-create">
+              {department} has no {type === "waived" ? "waived" : "non-technical"} competency yet. Continue sets up "{newName}" and opens the form.
+            </p>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button onClick={go} disabled={busy} data-testid="quick-continue">{busy ? "Setting up..." : "Continue"}</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Every quiz in the lab in one list. A quiz belongs to a competency program (its Element 6 picker
+// matches the program's method groups), so Open and New quiz land on that program's Quizzes tab.
+function QuizHubDialog({ programs, onClose }: { programs: Program[]; onClose: () => void }) {
+  const [, navigate] = useLocation();
+  const labRoute = useLabRoute();
+  const readOnly = useIsReadOnly("veritacomp");
+  const { data: rows, isLoading } = useQuery<Array<QuizListItem & { program: Program }>>({
+    queryKey: ["veritacomp-quiz-hub", programs.map(p => p.id).join(",")],
+    queryFn: async () => {
+      const out: Array<QuizListItem & { program: Program }> = [];
+      for (const p of programs) {
+        const r = await fetch(`${API_BASE}/api/veritacomp/programs/${p.id}/quizzes`, { headers: authHeaders() });
+        if (!r.ok) continue;
+        const qs: QuizListItem[] = await r.json();
+        // System-default quizzes (user_id 0) come back for every program; list only the lab's own.
+        for (const q of qs) if (q.program_id === p.id) out.push({ ...q, program: p });
+      }
+      return out;
+    },
+  });
+  const [newFor, setNewFor] = useState<number | null>(programs[0]?.id ?? null);
+  const progLabel = (p: Program) => `${((p.department || "").trim()) || "Other"} \u00B7 ${p.name}`;
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Quizzes</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4" data-testid="quiz-hub">
+          {programs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Quizzes belong to a competency. Start a waived or non-technical competency first, or a program under More.
+            </p>
+          ) : (
+            <div className="rounded-md border border-border p-3 space-y-2">
+              <div className="text-sm font-medium">New quiz</div>
+              {programs.length > 1 && (
+                <Select value={newFor ? String(newFor) : ""} onValueChange={v => setNewFor(parseInt(v))}>
+                  <SelectTrigger data-testid="quiz-hub-program"><SelectValue placeholder="Which competency is it for?" /></SelectTrigger>
+                  <SelectContent>
+                    {programs.map(p => <SelectItem key={p.id} value={String(p.id)}>{progLabel(p)}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+              <Button
+                size="sm"
+                disabled={!newFor || readOnly}
+                onClick={() => navigate(labRoute(`/veritacomp-app/${newFor}?tab=quizzes&newQuiz=1`))}
+                data-testid="quiz-hub-new"
+              >
+                <Plus className="h-4 w-4 mr-1.5" /> New quiz{programs.length === 1 ? ` for ${programs[0].name}` : ""}
+              </Button>
+            </div>
+          )}
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Your quizzes</div>
+            {isLoading ? (
+              <div className="h-16 rounded-md bg-muted/40 animate-pulse" />
+            ) : !rows || rows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No quizzes yet.</p>
+            ) : (
+              <div className="divide-y divide-border rounded-md border border-border">
+                {rows.map(q => (
+                  <div key={q.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">{q.title || q.method_group_name || `Quiz ${q.id}`}</div>
+                      <div className="text-xs text-muted-foreground truncate">{progLabel(q.program)}</div>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => navigate(labRoute(`/veritacomp-app/${q.program.id}?tab=quizzes`))}>
+                      Open <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1614,7 +1850,10 @@ function ProgramDetailView({ programId }: { programId: number }) {
   // tab to Assessments and auto-open the New Assessment dialog so the
   // user doesn't have to click through.
   const initialNewAssessment = typeof window !== "undefined" && window.location.search.includes("newAssessment=1");
-  const [activeTab, setActiveTab] = useState<"overview" | "assessments" | "employees" | "settings" | "quizzes">(initialNewAssessment ? "assessments" : "overview");
+  // ?tab=quizzes (+ &newQuiz=1) from the header Quizzes list (2026-10-14).
+  const initialQuizzes = typeof window !== "undefined" && window.location.search.includes("tab=quizzes");
+  const initialNewQuiz = initialQuizzes && window.location.search.includes("newQuiz=1");
+  const [activeTab, setActiveTab] = useState<"overview" | "assessments" | "employees" | "settings" | "quizzes">(initialNewAssessment ? "assessments" : initialQuizzes ? "quizzes" : "overview");
   const [newAssessmentOpen, setNewAssessmentOpen] = useState(initialNewAssessment && !isReadOnly);
   // Edit an existing UNSIGNED assessment: holds the assessment (with items) the
   // dialog opens against. Cleared on close.
@@ -1732,7 +1971,7 @@ function ProgramDetailView({ programId }: { programId: number }) {
       {activeTab === "overview" && <OverviewTab program={program} />}
       {activeTab === "assessments" && <AssessmentsTab program={program} onNewAssessment={() => setNewAssessmentOpen(true)} onEdit={(a) => setEditingAssessment(a)} />}
       {activeTab === "employees" && <EmployeesTab employees={program.employees || []} programId={program.id} />}
-      {activeTab === "quizzes" && <QuizzesTab program={program} />}
+      {activeTab === "quizzes" && <QuizzesTab program={program} autoOpenNew={initialNewQuiz && !isReadOnly} />}
       {activeTab === "settings" && <SettingsTab program={program} />}
 
       {(newAssessmentOpen || editingAssessment) && !isReadOnly && (
@@ -4223,11 +4462,11 @@ function NewAssessmentDialog({
 
 // ── Quizzes Tab ─────────────────────────────────────────────────────────
 
-function QuizzesTab({ program }: { program: Program }) {
+function QuizzesTab({ program, autoOpenNew }: { program: Program; autoOpenNew?: boolean }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const isReadOnly = useIsReadOnly("veritacomp");
-  const [newQuizOpen, setNewQuizOpen] = useState(false);
+  const [newQuizOpen, setNewQuizOpen] = useState(!!autoOpenNew);
   const [confirmDelete, setConfirmDelete] = useState<QuizListItem | null>(null);
   const [previewQuizId, setPreviewQuizId] = useState<number | null>(null);
   // 2026-06-09 PR2: Assign-to-employees dialog. Opens the bulk-assign
@@ -4797,7 +5036,8 @@ function NewQuizDialog({
 
   function validate(): string | null {
     if (!title.trim()) return "Title is required";
-    if (selectedGroupIds.length === 0) return "Select at least one method group";
+    // Waived and non-technical competencies have no method groups; a quiz there covers the whole competency.
+    if (groups.length > 0 && selectedGroupIds.length === 0) return "Select at least one method group";
     if (questions.length === 0) return "Add at least one question";
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
@@ -4874,7 +5114,7 @@ function NewQuizDialog({
             </p>
             {groups.length === 0 ? (
               <div className="text-xs text-muted-foreground italic">
-                This program has no method groups yet. Add them in Settings first.
+                This competency has no method groups, so the quiz covers the whole competency.
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto border border-border rounded-md p-2">
@@ -5390,7 +5630,8 @@ function EditQuizDialog({
 
   function validate(): string | null {
     if (!title.trim()) return "Title is required";
-    if (selectedGroupIds.length === 0) return "Select at least one method group";
+    // Waived and non-technical competencies have no method groups; a quiz there covers the whole competency.
+    if (groups.length > 0 && selectedGroupIds.length === 0) return "Select at least one method group";
     if (questions.length === 0) return "Add at least one question";
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
@@ -5451,7 +5692,7 @@ function EditQuizDialog({
       toast({ title: "New quiz title required", description: "Type a title for the new quiz first", variant: "destructive" });
       return;
     }
-    if (selectedGroupIds.length === 0) {
+    if (groups.length > 0 && selectedGroupIds.length === 0) {
       toast({ title: "Method groups required", description: "Select at least one method group", variant: "destructive" });
       return;
     }
@@ -5532,7 +5773,7 @@ function EditQuizDialog({
             <Label className="text-xs">Method Groups Covered ({selectedGroupIds.length} of {groups.length})</Label>
             {groups.length === 0 ? (
               <div className="text-xs text-muted-foreground italic">
-                This program has no method groups; cannot scope the quiz.
+                This competency has no method groups, so the quiz covers the whole competency.
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto border border-border rounded-md p-2">

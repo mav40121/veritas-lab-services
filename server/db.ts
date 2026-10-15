@@ -4218,6 +4218,100 @@ sqlite.exec(`
   } catch {}
 }
 
+// 2026-10-14 VeritaLab CLIA site registry (St. Charles REQ-072, Tracy Tuzzolino: 33 CLIAs on a spreadsheet;
+// server/veritalabRegistry.ts). Per site (lab): points of contact, a dated lab director history with the date
+// CMS was notified, CLIA fee payments, and a test menu change log with the date CMS was notified. Certificate
+// links and the CLIA certificate type live on lab_certificates (link_url, clia_certificate_type).
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS lab_site_contacts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    role TEXT,
+    phone TEXT,
+    email TEXT,
+    is_primary INTEGER NOT NULL DEFAULT 0,
+    notes TEXT,
+    created_by_user_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS lab_director_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    director_name TEXT NOT NULL,
+    credentials TEXT,
+    start_date TEXT NOT NULL,
+    end_date TEXT,
+    cms_notified_date TEXT,
+    notes TEXT,
+    created_by_user_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS clia_fee_payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    fee_type TEXT NOT NULL DEFAULT 'certificate',
+    reference TEXT,
+    amount REAL,
+    invoice_date TEXT,
+    due_date TEXT NOT NULL,
+    paid_date TEXT,
+    confirmation TEXT,
+    notes TEXT,
+    created_by_user_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS lab_test_menu_changes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    change_type TEXT NOT NULL DEFAULT 'test_added',
+    description TEXT NOT NULL,
+    change_date TEXT NOT NULL,
+    cms_notified_date TEXT,
+    notes TEXT,
+    created_by_user_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_site_contacts_lab ON lab_site_contacts(lab_id);
+  CREATE INDEX IF NOT EXISTS idx_director_history_lab ON lab_director_history(lab_id, start_date);
+  CREATE INDEX IF NOT EXISTS idx_clia_fees_lab ON clia_fee_payments(lab_id, due_date);
+  CREATE INDEX IF NOT EXISTS idx_menu_changes_lab ON lab_test_menu_changes(lab_id, change_date);
+`);
+{
+  // NEW DB TABLE RULE: an older live copy gets any missing columns.
+  try {
+    const contactCols = (sqlite.prepare("PRAGMA table_info(lab_site_contacts)").all() as { name: string }[]).map((c) => c.name);
+    for (const [c, t] of [["lab_id", "INTEGER"], ["name", "TEXT"], ["role", "TEXT"], ["phone", "TEXT"], ["email", "TEXT"], ["is_primary", "INTEGER"],
+      ["notes", "TEXT"], ["created_by_user_id", "INTEGER"], ["created_at", "TEXT"], ["updated_at", "TEXT"]] as Array<[string, string]>) {
+      if (!contactCols.includes(c)) { try { sqlite.exec(`ALTER TABLE lab_site_contacts ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+    const directorCols = (sqlite.prepare("PRAGMA table_info(lab_director_history)").all() as { name: string }[]).map((c) => c.name);
+    for (const [c, t] of [["lab_id", "INTEGER"], ["director_name", "TEXT"], ["credentials", "TEXT"], ["start_date", "TEXT"], ["end_date", "TEXT"],
+      ["cms_notified_date", "TEXT"], ["notes", "TEXT"], ["created_by_user_id", "INTEGER"], ["created_at", "TEXT"], ["updated_at", "TEXT"]] as Array<[string, string]>) {
+      if (!directorCols.includes(c)) { try { sqlite.exec(`ALTER TABLE lab_director_history ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+    const feeCols = (sqlite.prepare("PRAGMA table_info(clia_fee_payments)").all() as { name: string }[]).map((c) => c.name);
+    for (const [c, t] of [["lab_id", "INTEGER"], ["fee_type", "TEXT"], ["reference", "TEXT"], ["amount", "REAL"], ["invoice_date", "TEXT"], ["due_date", "TEXT"],
+      ["paid_date", "TEXT"], ["confirmation", "TEXT"], ["notes", "TEXT"], ["created_by_user_id", "INTEGER"], ["created_at", "TEXT"], ["updated_at", "TEXT"]] as Array<[string, string]>) {
+      if (!feeCols.includes(c)) { try { sqlite.exec(`ALTER TABLE clia_fee_payments ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+    const menuCols = (sqlite.prepare("PRAGMA table_info(lab_test_menu_changes)").all() as { name: string }[]).map((c) => c.name);
+    for (const [c, t] of [["lab_id", "INTEGER"], ["change_type", "TEXT"], ["description", "TEXT"], ["change_date", "TEXT"], ["cms_notified_date", "TEXT"],
+      ["notes", "TEXT"], ["created_by_user_id", "INTEGER"], ["created_at", "TEXT"], ["updated_at", "TEXT"]] as Array<[string, string]>) {
+      if (!menuCols.includes(c)) { try { sqlite.exec(`ALTER TABLE lab_test_menu_changes ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+    // Certificate link (where the lab keeps the certificate, e.g. a SharePoint or CMS page) and the CLIA
+    // certificate type (waiver / PPM / compliance / accreditation / registration) on lab_certificates.
+    const certCols = (sqlite.prepare("PRAGMA table_info(lab_certificates)").all() as { name: string }[]).map((c) => c.name);
+    if (certCols.length > 0 && !certCols.includes("link_url")) { try { sqlite.exec("ALTER TABLE lab_certificates ADD COLUMN link_url TEXT"); } catch {} }
+    if (certCols.length > 0 && !certCols.includes("clia_certificate_type")) { try { sqlite.exec("ALTER TABLE lab_certificates ADD COLUMN clia_certificate_type TEXT"); } catch {} }
+  } catch {}
+}
+
 // 2026-10-08 Competency reminders and escalation (St. Charles; Michael: weekly
 // supervisor digest, escalate to the director the day a competency goes
 // overdue then weekly, plus a monthly 90/60/30 report). Per-lab settings and a
