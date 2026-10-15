@@ -310,6 +310,19 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
       return evaluateManualDiff(input).overallPass ? "pass" : "fail";
     }
 
+    // Calibration Verification + Correlation (Michael 2026-10-15, Q12 = 2): known-value samples run once on every
+    // analyzer. PASS only when the cal ver rule passes (each analyzer against the assigned values) AND the
+    // correlation rule passes (each other analyzer against the first analyzer, which the method_comparison rule
+    // takes as the reference when every analyzer has a reading). Reuses both rules so they cannot drift.
+    if (studyType === "cal_ver_correlation") {
+      const cvStatus = computeStudyStatus("cal_ver", dataPointsJson, instrumentsJson, cliaAllowableError, teaIsPercentage, cliaAbsoluteFloor, censoringPolicy);
+      const cvError = lastComputeStudyStatusError;
+      if (instrumentNames.length < 2) { lastComputeStudyStatusError = cvError; return cvStatus; }
+      const mcStatus = computeStudyStatus("method_comparison", dataPointsJson, instrumentsJson, cliaAllowableError, teaIsPercentage, cliaAbsoluteFloor, censoringPolicy);
+      lastComputeStudyStatusError = cvError || lastComputeStudyStatusError;
+      return cvStatus === "pass" && mcStatus === "pass" ? "pass" : "fail";
+    }
+
     if (studyType === "cal_ver") {
       // Dual-criterion S493 rule: |observed - assigned| <= max(percent_allowance, absolute_floor)
       const dataPoints = (Array.isArray(rawData) ? rawData : []) as { level: number; expectedValue: number | null; instrumentValues: Record<string, number | null> }[];
@@ -11445,6 +11458,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const studyTypeLabel = (st: string): string => {
       switch (st) {
         case "cal_ver": return "Calibration Verification (CLSI EP06)";
+        case "cal_ver_correlation": return "Calibration Verification + Correlation (CLSI EP06, EP09)";
         case "method_comparison":
         case "correlation": return "Correlation / Method Comparison";
         case "precision": return "Precision (EP15)";
@@ -11860,6 +11874,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         reagentLot: req.body.reagentLot,
         comment: req.body.comment,
         resultUnits: req.body.resultUnits,
+        // Calibration Verification + Correlation: the known-value material the report names.
+        material: req.body.material,
       } };
     } else {
       parsed = insertStudySchema.safeParse(req.body);
@@ -12075,6 +12091,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       typeof payload.instruments === 'string' ? payload.instruments : JSON.stringify(payload.instruments),
       verifiedStatus, studyId,
     );
+    // The edit statement above names its columns; carry the Calibration Verification + Correlation material when sent.
+    if (typeof req.body?.material === "string") (db as any).$client.prepare("UPDATE studies SET material = ? WHERE id = ?").run(req.body.material.trim() || null, studyId);
     autoAttributeCoverageAnalyte(studyId, payload.cliaPresetLabel);
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId) as any;
     // Stamp the VeritaMap grid's date column from this study (advance-only); see
@@ -12152,6 +12170,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       reagentLot: row.reagent_lot,
       comment: row.comment,
       resultUnits: row.result_units,
+      material: row.material,
       // 2026-06-09 (Michael L feedback): optional per-study AMR.
       // Blank values disable the coverage analysis; renderer
       // short-circuits via shouldRenderAmrCoverage.
@@ -12249,6 +12268,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         reagentLot: req.body.reagentLot,
         comment: req.body.comment,
         resultUnits: req.body.resultUnits,
+        // Calibration Verification + Correlation: the known-value material the report names.
+        material: req.body.material,
         // 2026-06-01: createdAt is required NOT NULL in the studies table.
         // The non-draft path picks it up via insertStudySchema, but the
         // manual draft picker omitted it, causing every Save Draft POST to
@@ -12388,6 +12409,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       typeof payload.instruments === 'string' ? payload.instruments : JSON.stringify(payload.instruments),
       verifiedStatus, studyId,
     );
+    // The edit statement above names its columns; carry the Calibration Verification + Correlation material when sent.
+    if (typeof req.body?.material === "string") (db as any).$client.prepare("UPDATE studies SET material = ? WHERE id = ?").run(req.body.material.trim() || null, studyId);
     autoAttributeCoverageAnalyte(studyId, payload.cliaPresetLabel);
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId) as any;
     // Stamp the VeritaMap grid's date column from this study (advance-only); see
@@ -12505,6 +12528,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyRow.id);
+    restampMapForStudy(updated, "point exclusion");
     res.json(updated);
   }
 
@@ -12665,6 +12689,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         "UPDATE studies SET archived_at = ?, archived_by_user_id = ?, archive_reason = ? WHERE id = ? AND archived_at IS NULL"
       ).run(now, userId, `Superseded by amendment #${studyRow.id}`, studyRow.amends_study_id);
     }
+    // BUG-060: the map's cal ver date counts only signed studies, so signing must re-stamp it.
+    restampMapForStudy(studyRow, "finalize");
+  }
+
+  // Re-stamp the VeritaMap date columns for a study's lab after a change that alters what Coverage counts
+  // (signing, point exclusion, unarchive). Advance-only (stampMapDatesFromStudies) and never blocks the request.
+  function restampMapForStudy(studyRow: any, why: string) {
+    try { if (studyRow?.lab_id != null) stampMapDatesFromStudies((db as any).$client, Number(studyRow.lab_id)); }
+    catch (err: any) { console.warn(`[veritamap-stamp] ${why} failed:`, err?.message); }
   }
 
   function applyStudyFinalize(req: any, res: any, studyRow: any) {
@@ -12695,7 +12728,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         data_points, instruments, status, instrument_meta,
         created_by_user_id, vendor_sd, vendor_sd_concentration, target_mean, target_cv,
         control_lot, reagent_lot, comment, result_units,
-        amr_low, amr_high, amr_units,
+        amr_low, amr_high, amr_units, material,
         lifecycle_state, amends_study_id, created_at
       )
       SELECT
@@ -12705,7 +12738,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         data_points, instruments, 'draft', instrument_meta,
         ?, vendor_sd, vendor_sd_concentration, target_mean, target_cv,
         control_lot, reagent_lot, comment, result_units,
-        amr_low, amr_high, amr_units,
+        amr_low, amr_high, amr_units, material,
         'draft', id, ?
       FROM studies WHERE id = ?
     `).run(req.userId, now, studyRow.id);
@@ -12765,6 +12798,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     (db as any).$client.prepare(
       "UPDATE studies SET archived_at = NULL, archived_by_user_id = NULL, archive_reason = NULL WHERE id = ?"
     ).run(studyRow.id);
+    restampMapForStudy(studyRow, "unarchive");
     res.json((db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyRow.id));
   }
   app.post("/api/studies/:id/archive", authMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
@@ -13007,7 +13041,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
 
       const pdfBuffer = await generatePDFBuffer(study, results, cliaNumber, preferredStandards as any, licenseCtx ?? licenseCtxFromReq(req));
-      const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefRange", sensitivity: "Sensitivity", carryover: "Carryover" };
+      const typeMap: Record<string, string> = { cal_ver: "CalVer", cal_ver_correlation: "CalVerCorrelation", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefRange", sensitivity: "Sensitivity", carryover: "Carryover" };
       const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
       // Store in token cache so client can use a direct GET URL (bypasses Adobe interception)
       const pdfToken = storePdfToken(pdfBuffer, filename);

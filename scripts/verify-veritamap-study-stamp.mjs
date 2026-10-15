@@ -23,12 +23,12 @@ const assert = (name, cond) => { console.log((cond ? "PASS" : "FAIL") + ": " + n
 const src = readFileSync(join(HERE, "..", "server", "veritacheckCoverage.ts"), "utf8");
 assert('source: MAP_STUDY_DATE_FIELDS = last_cal_ver/method_comp/precision',
   /MAP_STUDY_DATE_FIELDS\s*=\s*\["last_cal_ver",\s*"last_method_comp",\s*"last_precision"\]/.test(src));
-assert('source: LINEARITY_TYPES = cal_ver + linearity', /LINEARITY_TYPES\s*=\s*new Set\(\["cal_ver",\s*"linearity"\]\)/.test(src));
+assert('source: LINEARITY_TYPES = cal_ver + linearity + cal_ver_correlation', /LINEARITY_TYPES\s*=\s*new Set\(\["cal_ver",\s*"linearity",\s*"cal_ver_correlation"\]\)/.test(src));
 assert('source: method_comparison -> last_method_comp', /put\(mc\.analyte,\s*"last_method_comp"/.test(src));
 assert('source: precision -> last_precision', /put\(a,\s*"last_precision"/.test(src));
 assert('source: advance-only guard in stamp UPDATE', /SET \$\{field\} = \?[\s\S]*?\$\{field\} < \?/.test(src));
 
-const LINEARITY = new Set(["cal_ver", "linearity"]);
+const LINEARITY = new Set(["cal_ver", "linearity", "cal_ver_correlation"]);
 const nameMatch = (a, b) => String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
 
 // Mirror of the stamp: per analyte, latest matching study date per field, advance-only.

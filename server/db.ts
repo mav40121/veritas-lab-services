@@ -1994,6 +1994,9 @@ try { sqlite.exec("ALTER TABLE studies ADD COLUMN result_units TEXT"); } catch {
 // credits the study to that analyte without renaming it (the study keeps its own
 // title on its report). NULL/'' = not aligned. Additive + idempotent.
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN coverage_analyte TEXT"); } catch {}
+// 2026-10-15: Calibration Verification + Correlation (cal_ver_correlation) names the known-value material it used
+// on the report ("not patient specimens"). Free text, NULL = the report's default wording. Additive + idempotent.
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN material TEXT"); } catch {}
 
 // 2026-06-15: VeritaCheck Phase 2 (close the orphan-creation hole). Excluding a
 // data point now recomputes and persists the verdict in place, so a documented

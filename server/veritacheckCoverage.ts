@@ -94,7 +94,8 @@ export interface CoverageResult {
   unmappedStudies: UnmappedStudy[];
 }
 
-const LINEARITY_TYPES = new Set(["cal_ver", "linearity"]);
+// cal_ver_correlation (2026-10-15) answers both requirements: it is in this set and in MC_STUDY_TYPES.
+const LINEARITY_TYPES = new Set(["cal_ver", "linearity", "cal_ver_correlation"]);
 const STOP = new Set(["s", "n", "sn", "the", "method", "test", "manual", "system", "analyzer", "laboratory", "instrumentation"]);
 
 function instrTokens(s: string): Set<string> {
@@ -132,7 +133,7 @@ type Study = { id: number; test_name: string; instrument: string; study_type: st
 const MC_INTERVAL_MONTHS = 6;
 // Cal-ver / linearity recurs at least every 6 months (CLIA §493.1255).
 const LINEARITY_INTERVAL_MONTHS = 6;
-const MC_STUDY_TYPES = new Set(["method_comparison", "correlation"]);
+const MC_STUDY_TYPES = new Set(["method_comparison", "correlation", "cal_ver_correlation"]);
 function addMonthsIso(iso: string, months: number): string {
   const parts = String(iso).slice(0, 10).split("-").map((n) => parseInt(n, 10));
   if (parts.length < 3 || parts.some((n) => Number.isNaN(n))) return String(iso).slice(0, 10);
@@ -344,7 +345,7 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
   // The list is by study NAME not matching (a stable property), so an aligned
   // study stays visible here with its target shown, giving the director a handle
   // to change or clear the alignment. Unaligned rows sort first.
-  const COVERAGE_STUDY_TYPES = new Set(["method_comparison", "correlation", "cal_ver", "linearity"]);
+  const COVERAGE_STUDY_TYPES = new Set(["method_comparison", "correlation", "cal_ver", "linearity", "cal_ver_correlation"]);
   const mapAnalytes = combos.map((c) => c.analyte);
   const unmappedStudies: UnmappedStudy[] = studies
     .filter((s) => COVERAGE_STUDY_TYPES.has(s.study_type) && !mapAnalytes.some((a) => analyteMatch(s.test_name, a)))
@@ -555,7 +556,7 @@ export function presetCorroboratesName(presetLabel: string, testName: string): b
 // name matches no active map analyte. The client uses this to fire the Phase 2
 // soft challenge (pick the map point, or "not on our map yet"). Name-matched or
 // already-attributed studies, and non-coverage types, return false (no prompt).
-const ATTRIBUTABLE_TYPES = new Set(["method_comparison", "correlation", "cal_ver", "linearity"]);
+const ATTRIBUTABLE_TYPES = new Set(["method_comparison", "correlation", "cal_ver", "linearity", "cal_ver_correlation"]);
 export function studyNeedsAttribution(sqlite: any, labId: number, studyType: string, testName: string, coverageAnalyte: string | null): boolean {
   if (!labId) return false;
   if (!ATTRIBUTABLE_TYPES.has(studyType)) return false;
