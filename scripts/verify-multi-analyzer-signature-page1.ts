@@ -6,8 +6,8 @@
 //
 // Run: npx tsx scripts/verify-multi-analyzer-signature-page1.ts   (exit 1 on FAIL)
 import puppeteer from "puppeteer";
-import { buildCalVerHTML, buildMethodCompHTML } from "../server/pdfReport";
-import { calculateCalVer, calculateMethodComparison, type DataPoint } from "../client/src/lib/calculations";
+import { buildCalVerHTML, buildCalVerCorrelationHTML, buildMethodCompHTML } from "../server/pdfReport";
+import { calculateCalVer, calculateCalVerCorrelation, calculateMethodComparison, type DataPoint } from "../client/src/lib/calculations";
 
 const NAMES = ["Fred", "Barney", "Wilma", "Betty", "Pebbles", "Bamm-Bamm"].map((n) => `${n}, Roche cobas 8000 (c702 module)`);
 const signed = {
@@ -32,6 +32,10 @@ const mcStudy: any = { id: 99125, userId: 1, testName: "Creatinine, enzymatic (s
   analyst: "RODRIGO GASPAR-TRILLO", date: "2026-10-14", studyType: "method_comparison",
   dataPoints: JSON.stringify(assigned.map((a, i) => ({ level: i + 1, instrumentValues: { [NAMES[0]]: a, ...mcDp[i].instrumentValues } }))), _instrumentDisplay: display, ...tea, ...signed };
 
+// Calibration Verification + Correlation (Q12 = 2): the same 7 known levels on 6 analyzers, both halves on page 1.
+const ccRes = calculateCalVerCorrelation(cvDp, NAMES, 0.1, true, 0.2);
+const ccStudy: any = { ...cvStudy, id: 99126, studyType: "cal_ver_correlation", material: "Bio-Rad Liquichek Linearity set, lot 12345" };
+
 const PX_PER_MM = 96 / 25.4, PAGE_H = 11 * 96, TOP_MM = 14, BOT_MM = 20;
 const PAGE1_BOTTOM = PAGE_H - BOT_MM * PX_PER_MM, HEADROOM = 24;
 const banner = `<div style="font-size:6pt;color:#8a8a8a;text-align:center;padding:2px 0;">© 2026 Veritas Lab Services, LLC · Licensed to San Carlos Apache Healthcare Corporation (verilabguy@gmail.com) · Issued 2026-10-15 · Single-facility internal use only · Do not redistribute</div>`;
@@ -39,7 +43,7 @@ const banner = `<div style="font-size:6pt;color:#8a8a8a;text-align:center;paddin
 let fails = 0;
 (async () => {
   const browser = await puppeteer.launch({ args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"], headless: true });
-  for (const [label, html] of [["cal ver, 6 analyzers", buildCalVerHTML(cvStudy, cvRes as any)], ["method comparison, 5 comparisons", buildMethodCompHTML(mcStudy, mcRes as any)]] as const) {
+  for (const [label, html] of [["cal ver, 6 analyzers", buildCalVerHTML(cvStudy, cvRes as any)], ["method comparison, 5 comparisons", buildMethodCompHTML(mcStudy, mcRes as any)], ["cal ver + correlation, 6 analyzers", buildCalVerCorrelationHTML(ccStudy, ccRes as any)]] as const) {
     const page = await browser.newPage();
     await page.emulateMediaType("print");
     await page.setViewport({ width: 816, height: 1056, deviceScaleFactor: 1 });

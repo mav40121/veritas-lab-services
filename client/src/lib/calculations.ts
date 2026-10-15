@@ -1604,6 +1604,47 @@ export function calculateMultiAnalyteCoag(
   return { type: "multi_analyte_coag", specimens, analyteResults, ptINRValidation, overallPass, passCount, totalCount, summary };
 }
 
+// ─── Calibration Verification + Correlation (Michael 2026-10-15, Q12 = 2) ──────
+// Known-value samples run once on every analyzer. calVer judges each analyzer against the assigned values; correlation
+// judges each other analyzer against the primary (the first analyzer) with the same TEa. Both must pass.
+export interface CalVerCorrelationResults {
+  type: "cal_ver_correlation";
+  primary: string;
+  calVer: CalVerResults;
+  correlation: MethodCompResults | null;
+  overallPass: boolean;
+  passCount: number;
+  totalCount: number;
+}
+
+export function calculateCalVerCorrelation(
+  dataPoints: DataPoint[],
+  instrumentNames: string[],
+  cliaError: number,
+  teaIsPercentage: boolean = true,
+  cliaAbsoluteFloor: number | null = null
+): CalVerCorrelationResults {
+  const calVer = calculateCalVer(dataPoints, instrumentNames, cliaError, teaIsPercentage, cliaAbsoluteFloor);
+  const [primary, ...comps] = instrumentNames;
+  // Same remap the results page uses for a correlation: the primary's reading is the reference value. Excluded flags
+  // ride along so calculateMethodComparison drops the same points calculateCalVer dropped.
+  const mapped: DataPoint[] = dataPoints.map((dp: any) => ({
+    ...dp,
+    expectedValue: dp.instrumentValues?.[primary] ?? null,
+    instrumentValues: Object.fromEntries(comps.map((n) => [n, dp.instrumentValues?.[n] ?? null])),
+  }));
+  const correlation = comps.length ? calculateMethodComparison(mapped, comps, cliaError, teaIsPercentage, cliaAbsoluteFloor) : null;
+  return {
+    type: "cal_ver_correlation",
+    primary: primary ?? "",
+    calVer,
+    correlation,
+    overallPass: calVer.overallPass && (correlation ? correlation.overallPass : true),
+    passCount: calVer.passCount + (correlation?.passCount ?? 0),
+    totalCount: calVer.totalCount + (correlation?.totalCount ?? 0),
+  };
+}
+
 // ─── Legacy shim — keep old callers working during migration ─────────────────
 export type StudyResults = CalVerResults | MethodCompResults | QualitativeResults | SemiQuantResults | PrecisionResults | LotToLotResults | PTCoagResults | QCRangeResults | MultiAnalyteResults | RefIntervalResults | SensitivityResults;
 
