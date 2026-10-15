@@ -8213,3 +8213,19 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
   addCol("vls_support_activity", "created_at", "ALTER TABLE vls_support_activity ADD COLUMN created_at TEXT NOT NULL DEFAULT (datetime('now'))");
   try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_vls_support_activity_lab ON vls_support_activity(lab_id, created_at DESC)`); } catch {}
 }
+
+// Sign-in sessions (two-factor sign-in Stage 1, Michael Q170 = 1, 2026-10-14; server/sessionAuth.ts).
+// Every request now checks its user_sessions row, so the row carries what the Signed-in devices list
+// and the audit trail need: where it signed in from, which second step it passed (Stage 2), and when
+// and why it ended (sign_out, signed_in_elsewhere, password_change, password_reset, ...).
+{
+  const addCol = (table: string, col: string, ddl: string) => {
+    const cols = (sqlite.prepare(`PRAGMA table_info(${table})`).all() as any[]).map((c: any) => c.name);
+    if (!cols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+  };
+  addCol("user_sessions", "ip_address", "ALTER TABLE user_sessions ADD COLUMN ip_address TEXT");
+  addCol("user_sessions", "mfa_method", "ALTER TABLE user_sessions ADD COLUMN mfa_method TEXT");
+  addCol("user_sessions", "ended_at", "ALTER TABLE user_sessions ADD COLUMN ended_at TEXT");
+  addCol("user_sessions", "ended_reason", "ALTER TABLE user_sessions ADD COLUMN ended_reason TEXT");
+  try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_user_sessions_user_active ON user_sessions(user_id, is_active)`); } catch {}
+}

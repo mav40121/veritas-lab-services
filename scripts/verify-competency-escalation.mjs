@@ -30,7 +30,7 @@ const plus = (days, from = T) => iso(new Date(Date.parse(from + "T00:00:00Z") + 
 
 // ── Setup ──
 const ownerEmail = `esc-owner-${stamp}@example.com`;
-const owner = (await call("POST", "/api/auth/register", { email: ownerEmail, password: "testpass123", name: "Esc Owner", hipaa_acknowledged: true })).body;
+const owner = (await call("POST", "/api/auth/register", { email: ownerEmail, password: "Testpass123", name: "Esc Owner", hipaa_acknowledged: true })).body;
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail, labName: "Escalation Lab", plan: "hospital" })).body.labId;
 await call("POST", "/api/admin/update-lab", { secret: ADMIN, labId, cliaNumber: `05D${String(stamp).slice(-7)}` }); // CLIA is unique across labs
 const sdb = new Database(process.env.SCRATCH_DB);

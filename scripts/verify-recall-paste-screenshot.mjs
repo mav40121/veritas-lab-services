@@ -18,7 +18,7 @@ const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAI
 const call = async (method, path, body, token) => { const r = await fetch(BASE + path, { method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) }); try { return await r.json(); } catch { return {}; } };
 
 const email = `recall-${Date.now()}@example.com`;
-const owner = await call("POST", "/api/auth/register", { email, password: "testpass123", name: "Recall Owner", hipaa_acknowledged: true });
+const owner = await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "Recall Owner", hipaa_acknowledged: true });
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Recall Paste Lab", plan: "hospital" })).labId;
 const sdb = new Database(process.env.SCRATCH_DB);
 sdb.prepare("UPDATE users SET has_completed_onboarding = 1, onboarding_seen = 1, plan = 'hospital' WHERE email = ?").run(email);

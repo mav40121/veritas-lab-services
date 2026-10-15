@@ -23,7 +23,7 @@ const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAI
 
 const stamp = Date.now();
 const ownerEmail = `names-owner-${stamp}@example.com`;
-const owner = await call("POST", "/api/auth/register", { email: ownerEmail, password: "testpass123", name: "Lab Owner", hipaa_acknowledged: true });
+const owner = await call("POST", "/api/auth/register", { email: ownerEmail, password: "Testpass123", name: "Lab Owner", hipaa_acknowledged: true });
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail, labName: "Invite Names Lab", plan: "hospital" })).labId;
 const sdb = new Database(process.env.SCRATCH_DB);
 sdb.prepare("UPDATE users SET has_completed_onboarding = 1, onboarding_seen = 1 WHERE email = ?").run(ownerEmail);

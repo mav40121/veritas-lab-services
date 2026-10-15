@@ -33,7 +33,7 @@ const PLANS = [["clinic", false], ["community", false], ["hospital", false], ["e
 const browser = await chromium.launch();
 for (const [plan, expectWall] of PLANS) {
   const email = `v88-${plan}-${Date.now()}@example.com`;
-  const reg = await call("POST", "/api/auth/register", { email, password: "testpass123", name: `V88 ${plan}`, hipaa_acknowledged: true });
+  const reg = await call("POST", "/api/auth/register", { email, password: "Testpass123", name: `V88 ${plan}`, hipaa_acknowledged: true });
   const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: `V88 ${plan}`, plan: "hospital" })).labId;
   const sdb = new Database(process.env.SCRATCH_DB);
   sdb.prepare("UPDATE users SET plan = ?, has_completed_onboarding = 1, onboarding_seen = 1 WHERE email = ?").run(plan, email);

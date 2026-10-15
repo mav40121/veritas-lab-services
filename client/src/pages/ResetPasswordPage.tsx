@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/AuthContext";
 import { useLabRoute } from "@/hooks/useLabRoute";
+import { passwordProblem, PASSWORD_RULE_TEXT } from "@shared/passwordRule";
 
 const API_BASE = ""; // same-origin: works on the lab site and the separate VeritaStock deployment
 
@@ -47,8 +48,9 @@ export default function ResetPasswordPage() {
   // Step 2: Set new password
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 6) {
-      toast({ title: "Password too short", description: "At least 6 characters required.", variant: "destructive" });
+    const pwProblem = passwordProblem(password);
+    if (pwProblem) {
+      toast({ title: "Pick a stronger password", description: pwProblem, variant: "destructive" });
       return;
     }
     if (password !== confirm) {
@@ -64,6 +66,7 @@ export default function ResetPasswordPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Reset failed");
+      if (data.session_token) { try { localStorage.setItem("veritas_session_token", data.session_token); } catch {} }
       login(data.token, data.user);
       setDone(true);
     } catch (err: any) {
@@ -120,8 +123,9 @@ export default function ResetPasswordPage() {
             <form onSubmit={handleReset} className="space-y-4">
               <div className="space-y-1.5">
                 <Label>New Password</Label>
-                <Input type="password" placeholder="At least 6 characters" value={password}
-                  onChange={e => setPassword(e.target.value)} required minLength={6} />
+                <Input type="password" placeholder="At least 8 characters" value={password}
+                  onChange={e => setPassword(e.target.value)} required minLength={8} />
+                <p className="text-xs text-muted-foreground">{PASSWORD_RULE_TEXT}</p>
               </div>
               <div className="space-y-1.5">
                 <Label>Confirm Password</Label>

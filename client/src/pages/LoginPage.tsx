@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { FlaskConical, Search, Building2, CheckCircle, AlertTriangle } from "lucide-react";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { isStockHost } from "@/lib/host";
+import { passwordProblem, PASSWORD_RULE_TEXT } from "@shared/passwordRule";
 
 // Hospital result from /api/lookup/hospital
 interface HospitalResult {
@@ -213,7 +214,8 @@ export default function LoginPage() {
       const data = await res.json();
       if (data.ok) {
         if (data.session_token) localStorage.setItem("veritas_session_token", data.session_token);
-        login(conflictData.token, conflictData.user);
+        // The conflict token only opens force-logout; the new session's token comes back here.
+        login(data.token || conflictData.token, conflictData.user);
         navigate(labRoute(isStockHost() ? "/veritastock" : "/dashboard"));
       }
     } catch {
@@ -228,6 +230,11 @@ export default function LoginPage() {
     e.preventDefault();
     if (!hipaaAcknowledged) {
       setHipaaError("You must agree to the data use policy to create an account.");
+      return;
+    }
+    const pwProblem = passwordProblem(registerForm.password);
+    if (pwProblem) {
+      toast({ title: "Pick a stronger password", description: pwProblem, variant: "destructive" });
       return;
     }
     setHipaaError("");
@@ -350,7 +357,7 @@ export default function LoginPage() {
                   <form onSubmit={handleRegister} className="space-y-4">
                     <div className="space-y-1.5"><Label>Full Name</Label><Input value={registerForm.name} onChange={e => setRegisterForm(f => ({ ...f, name: e.target.value }))} placeholder="Your name" required /></div>
                     <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={registerForm.email} onChange={e => setRegisterForm(f => ({ ...f, email: e.target.value }))} placeholder="you@lab.com" required /></div>
-                    <div className="space-y-1.5"><Label>Password</Label><Input type="password" value={registerForm.password} onChange={e => setRegisterForm(f => ({ ...f, password: e.target.value }))} placeholder="Min 6 characters" required /></div>
+                    <div className="space-y-1.5"><Label>Password</Label><Input type="password" value={registerForm.password} onChange={e => setRegisterForm(f => ({ ...f, password: e.target.value }))} placeholder="At least 8 characters" required /><p className="text-xs text-muted-foreground">{PASSWORD_RULE_TEXT}</p></div>
                     <div className="space-y-2">
                       <label className="flex items-start gap-3 cursor-pointer">
                         <input
@@ -543,7 +550,7 @@ export default function LoginPage() {
                     )}
                     <div className="space-y-1.5"><Label>Full Name</Label><Input value={registerForm.name} onChange={e => setRegisterForm(f => ({ ...f, name: e.target.value }))} placeholder="Your name" required /></div>
                     <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={registerForm.email} onChange={e => setRegisterForm(f => ({ ...f, email: e.target.value }))} placeholder="you@lab.com" required /></div>
-                    <div className="space-y-1.5"><Label>Password</Label><Input type="password" value={registerForm.password} onChange={e => setRegisterForm(f => ({ ...f, password: e.target.value }))} placeholder="Min 6 characters" required /></div>
+                    <div className="space-y-1.5"><Label>Password</Label><Input type="password" value={registerForm.password} onChange={e => setRegisterForm(f => ({ ...f, password: e.target.value }))} placeholder="At least 8 characters" required /><p className="text-xs text-muted-foreground">{PASSWORD_RULE_TEXT}</p></div>
                     <div className="space-y-2">
                       <label className="flex items-start gap-3 cursor-pointer">
                         <input

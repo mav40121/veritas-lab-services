@@ -51,7 +51,7 @@ const PD = [
   ["TP", "Testing Personnel", "Performs moderate and high-complexity testing per 42 CFR 493.1423 and 493.1487-1495."],
 ];
 
-const ownerJwt = jwt.sign({ userId: OWNER, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 3600 }, JWT_SECRET, { algorithm: "HS256" });
+const ownerJwt = jwt.sign({ svc: true, userId: OWNER, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 3600 }, JWT_SECRET, { algorithm: "HS256" });
 const post = (path, body, headers = {}) => fetch(`${BASE}${path}`, { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": UA, ...headers }, body: JSON.stringify(body) });
 const put = (path, body, headers = {}) => fetch(`${BASE}${path}`, { method: "PUT", headers: { "Content-Type": "application/json", "User-Agent": UA, ...headers }, body: JSON.stringify(body) });
 const owner = { Authorization: `Bearer ${ownerJwt}` };

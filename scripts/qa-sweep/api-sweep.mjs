@@ -231,7 +231,7 @@ async function hit(path, token, method = 'GET', body) {
 }
 
 const flagged = [];
-const token = (p) => jwt.sign({ userId: p.userId }, SECRET, { expiresIn: '1h' });
+const token = (p) => jwt.sign({ svc: true, userId: p.userId }, SECRET, { expiresIn: '1h' });
 for (const p of personas) {
   const t = token(p);
   console.log(`\n================ ${p.name} (user ${p.userId}) ================`);

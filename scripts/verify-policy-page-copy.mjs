@@ -23,7 +23,7 @@ const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAI
 const stamp = Date.now();
 const reg = async (tag, name) => {
   const email = `copy-${tag}-${stamp}@example.com`;
-  const r = (await call("POST", "/api/auth/register", { email, password: "testpass123", name, hipaa_acknowledged: true })).body;
+  const r = (await call("POST", "/api/auth/register", { email, password: "Testpass123", name, hipaa_acknowledged: true })).body;
   return { email, token: r.token };
 };
 const owner = await reg("owner", "Olive Owner"), prep = await reg("prep", "Pat Preparer");

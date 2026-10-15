@@ -78,7 +78,7 @@ async function main() {
     "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, accepted_at, status, permissions, lab_id, seat_type) VALUES (?,?,?,?,?,'active',?,?,'active')"
   ).run(ownerId, "md@qa.test", mdId, now, now, JSON.stringify({ mode: "edit_all" }), LAB_ID);
 
-  const tok = (uid: number) => jwt.sign({ userId: uid }, SECRET, { expiresIn: "1h" });
+  const tok = (uid: number) => jwt.sign({ svc: true, userId: uid }, SECRET, { expiresIn: "1h" });
   const T = { owner: tok(ownerId), admin: tok(adminId), staff: tok(staffId), md: tok(mdId) };
 
   const hit = async (method: string, path: string, who: keyof typeof T) => {

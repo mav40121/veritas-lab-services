@@ -19,8 +19,8 @@ const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAI
 const stamp = Date.now();
 
 const ownerEmail = `p1-owner-${stamp}@example.com`, staffEmail = `p1-staff-${stamp}@example.com`;
-const owner = await call("POST", "/api/auth/register", { email: ownerEmail, password: "testpass123", name: "P1 Owner", hipaa_acknowledged: true });
-const staff = await call("POST", "/api/auth/register", { email: staffEmail, password: "testpass123", name: "Elizabeth Staff", hipaa_acknowledged: true });
+const owner = await call("POST", "/api/auth/register", { email: ownerEmail, password: "Testpass123", name: "P1 Owner", hipaa_acknowledged: true });
+const staff = await call("POST", "/api/auth/register", { email: staffEmail, password: "Testpass123", name: "Elizabeth Staff", hipaa_acknowledged: true });
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail, labName: "P1 Lab", plan: "hospital" })).labId;
 await call("POST", `/api/labs/${labId}/qc/control-lots`, { analyte: "PSA (FREND B)", level: "Level 1", lot_number: "6361A26001", mfr_mean: 1.29, mfr_sd: 0.35, mfr_range_low: 0.59, mfr_range_high: 1.99 }, owner.token);
 await call("POST", `/api/labs/${labId}/equipment`, { instrument_name: "FREND B" }, owner.token);
@@ -38,7 +38,7 @@ sdb.close();
 
 async function signIn(browser, email) {
   const page = await browser.newPage({ viewport: { width: 1600, height: 950 } });
-  const login = await call("POST", "/api/auth/login", { email, password: "testpass123" });
+  const login = await call("POST", "/api/auth/login", { email, password: "Testpass123" });
   await page.goto(`${BASE}/`);
   await page.evaluate(([t, u]) => { localStorage.setItem("veritas_token", t); localStorage.setItem("veritas_user", JSON.stringify(u)); localStorage.setItem(`onboarding_dismissed_${u.id}`, "1"); }, [login.token, login.user]);
   return page;

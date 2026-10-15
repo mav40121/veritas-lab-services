@@ -56,7 +56,7 @@ async function main() {
 
   const register = async (tag: string) => {
     const email = `sctx-${tag.toLowerCase()}-${stamp}@example.com`;
-    const resp = await call("POST", "/api/auth/register", { email, password: "testpass123", name: `SCTX ${tag}`, hipaa_acknowledged: true });
+    const resp = await call("POST", "/api/auth/register", { email, password: "Testpass123", name: `SCTX ${tag}`, hipaa_acknowledged: true });
     const reg = await j(resp);
     const id = Number((sqlite.prepare("SELECT id FROM users WHERE email = ?").get(email) as any)?.id);
     if (!id) console.log(`register ${tag} failed: ${resp.status} ${JSON.stringify(reg).slice(0, 200)}`);

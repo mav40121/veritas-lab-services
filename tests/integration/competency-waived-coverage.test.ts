@@ -34,7 +34,7 @@ async function main() {
     return { s: r.status, j };
   };
   const email = `cwc-${Date.now()}@example.com`;
-  const owner = (await call("POST", "/api/auth/register", { email, password: "testpass123", name: "Waived Owner", hipaa_acknowledged: true })).j;
+  const owner = (await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "Waived Owner", hipaa_acknowledged: true })).j;
   const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Waived Coverage Lab", plan: "hospital" })).j.labId;
   const L = `/api/labs/${labId}`;
   await call("POST", `${L}/staff/lab`, { labName: "Waived Coverage Lab", cliaNumber: "11D7654370", accreditationBody: "CLIA_ONLY", complexity: "moderate" }, owner.token);

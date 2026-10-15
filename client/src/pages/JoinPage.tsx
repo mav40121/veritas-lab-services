@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { FlaskConical, AlertTriangle } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
 import { useLabRoute } from "@/hooks/useLabRoute";
+import { passwordProblem, PASSWORD_RULE_TEXT } from "@shared/passwordRule";
 
 interface InviteInfo {
   valid: boolean;
@@ -66,8 +67,9 @@ export default function JoinPage() {
       toast({ title: "Passwords do not match", variant: "destructive" });
       return;
     }
-    if (form.password.length < 6) {
-      toast({ title: "Password must be at least 6 characters", variant: "destructive" });
+    const pwProblem = passwordProblem(form.password);
+    if (pwProblem) {
+      toast({ title: "Pick a stronger password", description: pwProblem, variant: "destructive" });
       return;
     }
     setHipaaError("");
@@ -170,9 +172,10 @@ export default function JoinPage() {
                 type="password"
                 value={form.password}
                 onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                placeholder="Min 6 characters"
+                placeholder="At least 8 characters"
                 required
               />
+              <p className="text-xs text-muted-foreground">{PASSWORD_RULE_TEXT}</p>
             </div>
             <div className="space-y-1.5">
               <Label>Confirm Password</Label>

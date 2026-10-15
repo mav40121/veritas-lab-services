@@ -22,9 +22,9 @@ const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAI
 const stamp = Date.now();
 
 const ownerEmail = `vls-owner-${stamp}@example.com`, vlsEmail = `vls-staff-${stamp}@example.com`, otherEmail = `vls-other-${stamp}@example.com`;
-const owner = (await call("POST", "/api/auth/register", { email: ownerEmail, password: "testpass123", name: "Lindsay Owner", hipaa_acknowledged: true })).body;
-const vls = (await call("POST", "/api/auth/register", { email: vlsEmail, password: "testpass123", name: "Michael Veritas", hipaa_acknowledged: true })).body;
-const other = (await call("POST", "/api/auth/register", { email: otherEmail, password: "testpass123", name: "Not Veritas", hipaa_acknowledged: true })).body;
+const owner = (await call("POST", "/api/auth/register", { email: ownerEmail, password: "Testpass123", name: "Lindsay Owner", hipaa_acknowledged: true })).body;
+const vls = (await call("POST", "/api/auth/register", { email: vlsEmail, password: "Testpass123", name: "Michael Veritas", hipaa_acknowledged: true })).body;
+const other = (await call("POST", "/api/auth/register", { email: otherEmail, password: "Testpass123", name: "Not Veritas", hipaa_acknowledged: true })).body;
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail, labName: "Client Test Lab", plan: "hospital" })).body.labId;
 check("setup: owner, Veritas person, outsider and a client lab", !!owner.token && !!vls.token && !!other.token && !!labId, `lab=${labId}`);
 
@@ -46,7 +46,7 @@ check("lab list shows the client lab as Veritas support (admin role, no membersh
 {
   // A demo lab never appears in the Client labs list (Michael 2026-10-08).
   const demoOwner = `vls-demo-owner-${stamp}@example.com`;
-  await call("POST", "/api/auth/register", { email: demoOwner, password: "testpass123", name: "Demo Owner", hipaa_acknowledged: true });
+  await call("POST", "/api/auth/register", { email: demoOwner, password: "Testpass123", name: "Demo Owner", hipaa_acknowledged: true });
   const demoLabId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: demoOwner, labName: "Demo Lab", plan: "hospital" })).body.labId;
   const wdb = new Database(process.env.SCRATCH_DB);
   wdb.prepare("UPDATE labs SET is_demo = 1 WHERE id = ?").run(demoLabId);

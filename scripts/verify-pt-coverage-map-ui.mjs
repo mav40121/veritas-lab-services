@@ -34,7 +34,7 @@ const MENU = [
   ["Rh Type", "Immunohematology", "HIGH"], ["Selected cells", "Blood Bank", "MODERATE"], ["Weak D", "Blood Bank", "HIGH"],
 ];
 const email = `pt-map-${Date.now()}@example.com`;
-const token = (await call("POST", "/api/auth/register", { email, password: "testpass123", name: "PT Map", hipaa_acknowledged: true })).token;
+const token = (await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "PT Map", hipaa_acknowledged: true })).token;
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "PT Map Lab", plan: "hospital" })).labId;
 const sdb = new Database(process.env.SCRATCH_DB);
 sdb.prepare("UPDATE users SET has_completed_onboarding = 1, onboarding_seen = 1 WHERE email = ?").run(email);

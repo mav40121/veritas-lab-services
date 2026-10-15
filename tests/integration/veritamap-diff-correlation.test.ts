@@ -44,7 +44,7 @@ async function main() {
   const j = async (r: Response) => { try { return await r.json(); } catch { return {}; } };
 
   const email = `vdc-${Date.now()}@example.com`;
-  const reg = await j(await call("POST", "/api/auth/register", { email, password: "testpass123", name: "VDC Owner", hipaa_acknowledged: true }));
+  const reg = await j(await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "VDC Owner", hipaa_acknowledged: true }));
   const token = reg.token as string;
   const labId = Number((await j(await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "VDC Lab", plan: "hospital" }))).labId);
   const L = `/api/labs/${labId}/veritamap`;

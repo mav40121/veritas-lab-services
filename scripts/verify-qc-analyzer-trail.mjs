@@ -29,9 +29,9 @@ const today = new Date().toISOString().slice(0, 10);
 
 // ── Setup: an owner, a lab, one analyzer on the test menu, a lot, an equipment record ──
 const ownerEmail = `trail-owner-${stamp}@example.com`, staffEmail = `trail-staff-${stamp}@example.com`, vlsEmail = `trail-vls-${stamp}@example.com`;
-const owner = (await call("POST", "/api/auth/register", { email: ownerEmail, password: "testpass123", name: "Trail Owner", hipaa_acknowledged: true })).body;
-const staff = (await call("POST", "/api/auth/register", { email: staffEmail, password: "testpass123", name: "Trail Staff", hipaa_acknowledged: true })).body;
-const vls = (await call("POST", "/api/auth/register", { email: vlsEmail, password: "testpass123", name: "Veritas Helper", hipaa_acknowledged: true })).body;
+const owner = (await call("POST", "/api/auth/register", { email: ownerEmail, password: "Testpass123", name: "Trail Owner", hipaa_acknowledged: true })).body;
+const staff = (await call("POST", "/api/auth/register", { email: staffEmail, password: "Testpass123", name: "Trail Staff", hipaa_acknowledged: true })).body;
+const vls = (await call("POST", "/api/auth/register", { email: vlsEmail, password: "Testpass123", name: "Veritas Helper", hipaa_acknowledged: true })).body;
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail, labName: "Trail Lab", plan: "hospital" })).body.labId;
 const sdb = new Database(process.env.SCRATCH_DB);
 const uid = (e) => sdb.prepare("SELECT id FROM users WHERE email = ?").get(e).id;

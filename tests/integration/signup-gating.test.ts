@@ -56,7 +56,7 @@ async function main() {
     // 1) Register a fresh account PICKING community -- the exact input that leaked.
     const email = `it-signup-${Date.now()}@example.com`;
     const regRes = await post("/api/auth/register", {
-      email, password: "testpass123", name: "Signup Gating IT",
+      email, password: "Testpass123", name: "Signup Gating IT",
       hipaa_acknowledged: true, plan: "community",
       hospital_name: "IT Hospital", hospital_state: "AZ", bed_count: 100,
     });

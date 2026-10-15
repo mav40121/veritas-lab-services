@@ -14,7 +14,7 @@ const call = async (method, path, body, token) => {
   try { return await r.json(); } catch { return {}; }
 };
 const email = `vdc-ui-${Date.now()}@example.com`;
-const reg = await call("POST", "/api/auth/register", { email, password: "testpass123", name: "VDC UI", hipaa_acknowledged: true });
+const reg = await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "VDC UI", hipaa_acknowledged: true });
 const token = reg.token;
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "VDC UI Lab", plan: "hospital" })).labId;
 // Scratch DB only: mark onboarding done so the first-run overlay does not cover the map.

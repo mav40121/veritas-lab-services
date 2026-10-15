@@ -37,7 +37,7 @@ async function main() {
   const now = new Date().toISOString();
   const labB = Number(sqlite.prepare("INSERT INTO labs (clia_number, lab_name, owner_user_id, plan, subscription_status, created_at, updated_at) VALUES (?,?,?,?,'active',?,?)").run("22D0000B02", "Lab B", ownerId, "enterprise", now, now).lastInsertRowid);
   sqlite.prepare("INSERT INTO lab_members (lab_id, user_id, role, status, is_primary_lab, accepted_at, created_at, updated_at) VALUES (?,?,'owner','active',0,?,?,?)").run(labB, ownerId, now, now, now);
-  const token = jwt.sign({ userId: ownerId }, process.env.JWT_SECRET!, { expiresIn: "1h" });
+  const token = jwt.sign({ svc: true, userId: ownerId }, process.env.JWT_SECRET!, { expiresIn: "1h" });
   const patch = (labId: number, status: string) => fetch(base + `/api/veritapolicy/requirements/5`, { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "X-Active-Lab-Id": String(labId) }, body: JSON.stringify({ status }) });
   const readReq5 = (labId: number) => fetch(base + `/api/veritapolicy/requirements`, { headers: { Authorization: `Bearer ${token}`, "X-Active-Lab-Id": String(labId) } }).then((r) => r.json());
 

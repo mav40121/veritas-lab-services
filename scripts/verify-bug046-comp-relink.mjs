@@ -16,7 +16,7 @@ const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAI
 const call = async (method, path, body, token) => { const r = await fetch(BASE + path, { method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) }); let j = {}; try { j = await r.json(); } catch {} return { status: r.status, body: j }; };
 
 const email = `relink-${Date.now()}@example.com`;
-const owner = (await call("POST", "/api/auth/register", { email, password: "testpass123", name: "Relink Owner", hipaa_acknowledged: true })).body;
+const owner = (await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "Relink Owner", hipaa_acknowledged: true })).body;
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Relink Lab", plan: "hospital" })).body.labId;
 let db = new Database(process.env.SCRATCH_DB);
 db.prepare("UPDATE users SET has_completed_onboarding = 1, onboarding_seen = 1, plan = 'hospital' WHERE email = ?").run(email);

@@ -46,7 +46,7 @@ for (let i = 0; i < 90 && !up; i++) { await new Promise((r) => setTimeout(r, 100
 if (!up) { console.error("server did not start"); child.kill(); process.exit(2); }
 const done = async () => { child.kill(); await new Promise((r) => setTimeout(r, 1000)); fs.rmSync(dir, { recursive: true, force: true }); };
 
-const hdr = (userId, lab) => ({ "Content-Type": "application/json", Authorization: `Bearer ${jwt.sign({ userId }, SECRET, { expiresIn: "10m" })}`, "X-Active-Lab-Id": String(lab) });
+const hdr = (userId, lab) => ({ "Content-Type": "application/json", Authorization: `Bearer ${jwt.sign({ svc: true, userId }, SECRET, { expiresIn: "10m" })}`, "X-Active-Lab-Id": String(lab) });
 const H = hdr(owner, LAB);
 const B = `http://localhost:${PORT}/api/labs/${LAB}/temp-logs`;
 const j = async (r) => { try { return await r.json(); } catch { return {}; } };

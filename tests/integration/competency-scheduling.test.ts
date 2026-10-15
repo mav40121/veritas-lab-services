@@ -55,7 +55,7 @@ async function main() {
     // VeritaStaff subscription gate (hasStaffAccess) + requireWriteAccess both pass.
     const email = `it-comp-${Date.now()}@example.com`;
     const regRes = await post("/api/auth/register", {
-      email, password: "testpass123", name: "Competency IT",
+      email, password: "Testpass123", name: "Competency IT",
       hipaa_acknowledged: true, plan: "free",
       hospital_name: "IT Hospital", hospital_state: "MA", bed_count: 100,
     });

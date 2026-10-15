@@ -3,7 +3,8 @@ import { useIsStaffLogin } from "@/hooks/useStaffLogin";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { authHeaders } from "@/lib/auth";
+import { authHeaders, getUser } from "@/lib/auth";
+import { passwordProblem, PASSWORD_RULE_TEXT } from "@shared/passwordRule";
 import { trackEvent } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -514,6 +515,8 @@ export default function AccountSettingsPage() {
       </Card>
 
       <ChangePasswordCard />
+
+      <SignedInDevicesCard />
 
       {!onStock && (<>
       <Card className="mt-6">
@@ -1060,11 +1063,13 @@ export default function AccountSettingsPage() {
 }
 
 // Change Password card. Self-serve: verifies current password against the
-// server, then sets a new one. Server enforces >= 8 chars and that new !=
-// current. UI also enforces that the two new-password fields match before
+// server, then sets a new one. Server enforces the password rule
+// (shared/passwordRule.ts) and that new != current, and signs out every other
+// device. UI also enforces that the two new-password fields match before
 // submit, so users see the validation client-side too.
 function ChangePasswordCard() {
   const { toast } = useToast();
+  const { login } = useAuth();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -1072,8 +1077,9 @@ function ChangePasswordCard() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (newPassword.length < 8) {
-      toast({ title: "Password too short", description: "New password must be at least 8 characters.", variant: "destructive" });
+    const pwProblem = passwordProblem(newPassword);
+    if (pwProblem) {
+      toast({ title: "Pick a stronger password", description: pwProblem, variant: "destructive" });
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -1095,10 +1101,18 @@ function ChangePasswordCard() {
       if (!res.ok || !data.ok) {
         toast({ title: "Could not change password", description: data?.error || "Please try again.", variant: "destructive" });
       } else {
-        toast({ title: "Password updated", description: "Your password has been changed." });
+        // A sign-in from before session binding gets a fresh session back; keep this tab signed in on it.
+        const me = getUser();
+        if (data.token && me) {
+          login(data.token, me);
+          if (data.session_token) { try { localStorage.setItem("veritas_session_token", data.session_token); } catch {} }
+        }
+        const others = Number(data.signedOutOthers || 0);
+        toast({ title: "Password updated", description: others > 0 ? "Your password has been changed. Your other devices were signed out." : "Your password has been changed." });
         setCurrentPassword("");
         setNewPassword("");
         setConfirmPassword("");
+        queryClient.invalidateQueries({ queryKey: ["/api/auth/sessions"] });
       }
     } catch (err: any) {
       toast({ title: "Network error", description: String(err?.message || err), variant: "destructive" });
@@ -1136,7 +1150,7 @@ function ChangePasswordCard() {
               minLength={8}
               required
             />
-            <p className="text-xs text-muted-foreground">At least 8 characters.</p>
+            <p className="text-xs text-muted-foreground">{PASSWORD_RULE_TEXT} Changing it signs out your other devices.</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="confirm-password">Confirm new password</Label>
@@ -1155,6 +1169,87 @@ function ChangePasswordCard() {
             Update password
           </Button>
         </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Signed-in devices (two-factor sign-in Stage 1, mock Q171 = 1). Every active
+// sign-in for this person; "Sign out" on another device ends it at once, and
+// "Sign out all other devices" ends every one but this.
+interface SignedInSession { id: number; device: string; signedInAt: string; lastActive: string; current: boolean }
+
+function lastActiveText(iso: string): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "";
+  if (Date.now() - t < 5 * 60 * 1000) return "active now";
+  return `last active ${new Date(t).toLocaleDateString("en-US")}`;
+}
+
+function SignedInDevicesCard() {
+  const { toast } = useToast();
+  const { data, isLoading } = useQuery<{ sessions: SignedInSession[]; currentKnown: boolean }>({
+    queryKey: ["/api/auth/sessions"],
+    staleTime: 0,
+  });
+  const [busy, setBusy] = useState<string | null>(null);
+  const sessions = data?.sessions || [];
+  const others = sessions.filter((s) => !s.current);
+
+  async function post(url: string, key: string, done: string) {
+    setBusy(key);
+    try {
+      const res = await apiRequest("POST", url);
+      await res.json().catch(() => ({}));
+      toast({ title: done });
+    } catch (err: any) {
+      toast({ title: "Could not sign out", description: String(err?.message || err).replace(/^\d+:\s*/, ""), variant: "destructive" });
+    } finally {
+      setBusy(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/sessions"] });
+    }
+  }
+
+  return (
+    <Card className="mt-6" data-testid="signed-in-devices">
+      <CardHeader>
+        <CardTitle className="text-base">Signed-in devices</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        ) : sessions.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No signed-in devices to show.</p>
+        ) : (
+          <ul className="space-y-2">
+            {sessions.map((s) => (
+              <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2" data-testid={`session-${s.id}`}>
+                <div className="text-sm min-w-0">
+                  <span className={s.current ? "font-semibold" : ""}>{s.current ? "This computer" : s.device}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {s.current ? ` · ${s.device} · active now` : ` · ${lastActiveText(s.lastActive)}`}
+                  </span>
+                </div>
+                {s.current ? (
+                  <span className="text-xs text-muted-foreground">current</span>
+                ) : (
+                  <Button size="sm" variant="outline" disabled={!!busy} onClick={() => post(`/api/auth/sessions/${s.id}/sign-out`, `one-${s.id}`, `${s.device} signed out`)}>
+                    {busy === `one-${s.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Sign out"}
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {others.length > 0 && data?.currentKnown && (
+          <Button variant="outline" size="sm" disabled={!!busy} onClick={() => post("/api/auth/sessions/sign-out-others", "others", "Your other devices were signed out")}>
+            {busy === "others" ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> : null}
+            Sign out all other devices
+          </Button>
+        )}
+        {data && !data.currentKnown && (
+          <p className="text-xs text-muted-foreground">Sign out and sign in again to manage your other devices from here.</p>
+        )}
       </CardContent>
     </Card>
   );

@@ -21,7 +21,7 @@ let failures = 0;
 const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAIL"}  ${name}${detail ? "  :: " + detail : ""}`); if (!cond) failures++; };
 
 const email = `v8586-${Date.now()}@example.com`;
-const reg = await call("POST", "/api/auth/register", { email, password: "testpass123", name: "V8586", hipaa_acknowledged: true });
+const reg = await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "V8586", hipaa_acknowledged: true });
 const token = reg.token;
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "V8586 Lab", plan: "hospital" })).labId;
 const sdb = new Database(process.env.SCRATCH_DB);

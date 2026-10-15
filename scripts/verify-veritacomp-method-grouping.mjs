@@ -28,7 +28,7 @@ const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Phoenix", ye
 
 async function makeLab(tag, insts) {
   const email = `${tag}-${Date.now()}@example.com`;
-  const T = (await call("POST", "/api/auth/register", { email, password: "testpass123", name: `${tag} Owner`, hipaa_acknowledged: true })).body.token;
+  const T = (await call("POST", "/api/auth/register", { email, password: "Testpass123", name: `${tag} Owner`, hipaa_acknowledged: true })).body.token;
   const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: `${tag} Lab`, plan: "hospital" })).body.labId;
   { const db = new Database(process.env.SCRATCH_DB); db.prepare("UPDATE users SET has_completed_onboarding = 1, onboarding_seen = 1, plan = 'hospital' WHERE email = ?").run(email); db.prepare("UPDATE labs SET has_completed_onboarding = 1 WHERE id = ?").run(labId); db.close(); }
   const L = `/api/labs/${labId}`;

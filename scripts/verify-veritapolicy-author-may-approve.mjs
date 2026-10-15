@@ -40,7 +40,7 @@ const other = doc && ro.prepare(`SELECT user_id FROM lab_members WHERE lab_id = 
 ro.close();
 if (!doc) { console.error(`document ${DOC} is not in review in this backup`); child.kill(); process.exit(2); }
 console.log(`document ${doc.id} "${doc.title}" (lab ${doc.lab_id}, author user ${doc.owner_user_id})`);
-const H = (u) => ({ "Content-Type": "application/json", Authorization: `Bearer ${jwt.sign({ userId: u }, SECRET, { expiresIn: "5m" })}`, "X-Active-Lab-Id": String(doc.lab_id) });
+const H = (u) => ({ "Content-Type": "application/json", Authorization: `Bearer ${jwt.sign({ svc: true, userId: u }, SECRET, { expiresIn: "5m" })}`, "X-Active-Lab-Id": String(doc.lab_id) });
 const B = `http://localhost:${PORT}/api/labs/${doc.lab_id}/veritapolicy`;
 const pending = async (u) => ((await (await fetch(`${B}/pending-reviews`, { headers: H(u) })).json()).pending || []);
 const workflows = async () => ((await (await fetch(`${B}/workflows`, { headers: H(doc.owner_user_id) })).json()).workflows || []);

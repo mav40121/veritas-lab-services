@@ -50,7 +50,7 @@ async function main() {
   addMember(mdId, "staff");
   sqlite.prepare("UPDATE labs SET medical_director_email=? WHERE id=?").run("md@qa.test", LAB);
 
-  const tok = (uid: number) => jwt.sign({ userId: uid }, SECRET, { expiresIn: "1h" });
+  const tok = (uid: number) => jwt.sign({ svc: true, userId: uid }, SECRET, { expiresIn: "1h" });
   const T = { owner: tok(ownerId), admin: tok(adminId), md: tok(mdId) };
   const call = async (method: string, path: string, who: keyof typeof T, body?: any) => {
     const r = await fetch(base + path, { method, headers: { "Content-Type": "application/json", "X-Active-Lab-Id": String(LAB), Authorization: `Bearer ${T[who]}` }, body: body === undefined ? undefined : JSON.stringify(body) });

@@ -45,7 +45,7 @@ async function main() {
 
   try {
     const email = `attest-band-${Date.now()}@example.com`;
-    const reg = await j(await call("POST", "/api/auth/register", { email, password: "testpass123", name: "Attest Band IT", hipaa_acknowledged: true }));
+    const reg = await j(await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "Attest Band IT", hipaa_acknowledged: true }));
     const token = reg.token;
     check("registered", !!token);
     const prov = await j(await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Attest Band Lab", plan: "hospital", isWarehouse: true }));

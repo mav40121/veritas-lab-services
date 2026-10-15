@@ -44,7 +44,7 @@ async function main() {
   await new Promise<void>((r) => server.listen(0, r));
   const addr = server.address();
   const base = `http://127.0.0.1:${typeof addr === "object" && addr ? addr.port : 0}`;
-  const tok = (uid: number) => jwt.sign({ userId: uid }, SECRET, { expiresIn: "1h" });
+  const tok = (uid: number) => jwt.sign({ svc: true, userId: uid }, SECRET, { expiresIn: "1h" });
   const post = (p: string, b: any, t?: string, lab?: number) =>
     fetch(base + p, { method: "POST", headers: { "Content-Type": "application/json", ...(lab ? { "X-Active-Lab-Id": String(lab) } : {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) }, body: JSON.stringify(b) });
   const members = async (labId: number, t: string) =>

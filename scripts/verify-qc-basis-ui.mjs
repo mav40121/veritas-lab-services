@@ -23,7 +23,7 @@ const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAI
 
 async function makeLab(tag, nRuns) {
   const email = `vqb-ui-${tag}-${Date.now()}@example.com`;
-  const reg = await call("POST", "/api/auth/register", { email, password: "testpass123", name: `QC ${tag}`, hipaa_acknowledged: true });
+  const reg = await call("POST", "/api/auth/register", { email, password: "Testpass123", name: `QC ${tag}`, hipaa_acknowledged: true });
   const token = reg.token;
   const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: `QC Basis ${tag}`, plan: "hospital" })).labId;
   const sdb = new Database(process.env.SCRATCH_DB);

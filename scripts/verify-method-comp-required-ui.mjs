@@ -21,7 +21,7 @@ let failures = 0;
 const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAIL"}  ${name}${detail ? "  :: " + detail : ""}`); if (!cond) failures++; };
 
 const email = `mcreq-${Date.now()}@example.com`;
-const token = (await call("POST", "/api/auth/register", { email, password: "testpass123", name: "MC Required", hipaa_acknowledged: true })).token;
+const token = (await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "MC Required", hipaa_acknowledged: true })).token;
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "MC Required Lab", plan: "hospital" })).labId;
 const chem = await call("POST", `/api/labs/${labId}/veritamap/maps`, { name: "Chemistry" }, token);
 const bb = await call("POST", `/api/labs/${labId}/veritamap/maps`, { name: "Blood Bank" }, token);

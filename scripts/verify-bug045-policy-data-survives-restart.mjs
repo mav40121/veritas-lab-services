@@ -31,7 +31,7 @@ const stop = (p) => new Promise((r) => { p.on("exit", r); p.kill(); });
 for (const f of [SCRATCH_DB, `${SCRATCH_DB}-wal`, `${SCRATCH_DB}-shm`]) { try { fs.unlinkSync(f); } catch {} }
 
 let server = await boot("boot1");
-const reg = async (who) => { const email = `${who}-${Date.now()}@example.com`; const u = await call("POST", "/api/auth/register", { email, password: "testpass123", name: who, hipaa_acknowledged: true }); const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: `${who} Lab`, plan: "hospital" })).labId; return { email, token: u.token, id: u.user?.id ?? u.id, labId }; };
+const reg = async (who) => { const email = `${who}-${Date.now()}@example.com`; const u = await call("POST", "/api/auth/register", { email, password: "Testpass123", name: who, hipaa_acknowledged: true }); const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: `${who} Lab`, plan: "hospital" })).labId; return { email, token: u.token, id: u.user?.id ?? u.id, labId }; };
 const A = await reg("ownerA"), B = await reg("ownerB");
 let db = new Database(SCRATCH_DB);
 for (const u of [A, B]) {

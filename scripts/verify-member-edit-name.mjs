@@ -17,13 +17,13 @@ const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAI
 const stamp = Date.now();
 
 const ownerEmail = `en-owner-${stamp}@example.com`, staffEmail = `en-staff-${stamp}@example.com`;
-const owner = await call("POST", "/api/auth/register", { email: ownerEmail, password: "testpass123", name: "Mike Owner", hipaa_acknowledged: true });
+const owner = await call("POST", "/api/auth/register", { email: ownerEmail, password: "Testpass123", name: "Mike Owner", hipaa_acknowledged: true });
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail, labName: "Brighton Test Lab", plan: "hospital" })).labId;
 await call("POST", `/api/labs/${labId}/staff/lab`, { labName: "Brighton Test Lab", cliaNumber: "23D0000001" }, owner.token);
 const emp = await call("POST", `/api/labs/${labId}/staff/employees`, { firstName: "Addison", lastName: "Timmins", title: "MA" }, owner.token);
 const inv = await call("POST", `/api/labs/${labId}/staff-portal-invites`, { staff_employee_id: emp.id, email: staffEmail, deliverEmail: false }, owner.token);
 // She mistypes her own last name at signup, exactly as in the report.
-const staff = await call("POST", "/api/auth/register", { email: staffEmail, password: "testpass123", name: "Addison Timmind", hipaa_acknowledged: true, inviteToken: inv.inviteToken });
+const staff = await call("POST", "/api/auth/register", { email: staffEmail, password: "Testpass123", name: "Addison Timmind", hipaa_acknowledged: true, inviteToken: inv.inviteToken });
 check("setup: staff joined with the typo", !!staff.token, `register=${staff.status}`);
 
 const list = await call("GET", `/api/labs/${labId}/members`, undefined, owner.token);

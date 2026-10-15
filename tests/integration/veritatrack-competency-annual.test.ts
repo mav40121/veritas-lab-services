@@ -26,7 +26,7 @@ async function main() {
   const a = server.address(); const base = `http://127.0.0.1:${typeof a === "object" && a ? a.port : 0}`;
   const call = async (m: string, p: string, b?: unknown, t?: string) => { const r = await fetch(base + p, { method: m, headers: { "Content-Type": "application/json", ...(t ? { Authorization: `Bearer ${t}` } : {}) }, body: b === undefined ? undefined : JSON.stringify(b) }); let j: any = {}; try { j = await r.json(); } catch {} return { s: r.status, j }; };
   const email = `trk-${Date.now()}@example.com`;
-  const reg = (await call("POST", "/api/auth/register", { email, password: "testpass123", name: "Track Test", hipaa_acknowledged: true })).j;
+  const reg = (await call("POST", "/api/auth/register", { email, password: "Testpass123", name: "Track Test", hipaa_acknowledged: true })).j;
   const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: process.env.ADMIN_SECRET || "test-admin-secret", ownerEmail: email, labName: "Track Test Lab", plan: "hospital" })).j.labId;
   const L = `/api/labs/${labId}`;
   await call("POST", `${L}/staff/lab`, { labName: "Track Test Lab", cliaNumber: "11D7654326", accreditationBody: "CLIA_ONLY", complexity: "high" }, reg.token);

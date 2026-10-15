@@ -20,8 +20,8 @@ const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAI
 const stamp = Date.now();
 
 const ownerEmail = `p3-owner-${stamp}@example.com`, staffEmail = `p3-staff-${stamp}@example.com`;
-const owner = await call("POST", "/api/auth/register", { email: ownerEmail, password: "testpass123", name: "P3 Owner", hipaa_acknowledged: true });
-await call("POST", "/api/auth/register", { email: staffEmail, password: "testpass123", name: "Elizabeth Staff", hipaa_acknowledged: true });
+const owner = await call("POST", "/api/auth/register", { email: ownerEmail, password: "Testpass123", name: "P3 Owner", hipaa_acknowledged: true });
+await call("POST", "/api/auth/register", { email: staffEmail, password: "Testpass123", name: "Elizabeth Staff", hipaa_acknowledged: true });
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail, labName: "P3 Lab", plan: "hospital" })).labId;
 const map = await call("POST", `/api/labs/${labId}/veritamap/maps`, { name: "P3 Map" }, owner.token);
 const prog = await call("POST", `/api/labs/${labId}/competency/programs`, { name: "P3 Program", type: "technical" }, owner.token);
@@ -43,7 +43,7 @@ sdb.close();
 async function signIn(browser, email, mode) {
   const ctx = await browser.newContext({ viewport: { width: 1600, height: 950 }, colorScheme: mode });
   const page = await ctx.newPage();
-  const login = await call("POST", "/api/auth/login", { email, password: "testpass123" });
+  const login = await call("POST", "/api/auth/login", { email, password: "Testpass123" });
   await page.goto(`${BASE}/`);
   await page.evaluate(([t, u]) => { localStorage.setItem("veritas_token", t); localStorage.setItem("veritas_user", JSON.stringify(u)); localStorage.setItem(`onboarding_dismissed_${u.id}`, "1"); }, [login.token, login.user]);
   return page;
