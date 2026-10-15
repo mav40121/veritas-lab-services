@@ -1615,6 +1615,7 @@ export interface CalVerCorrelationResults {
   overallPass: boolean;
   passCount: number;
   totalCount: number;
+  summary: string;
 }
 
 export function calculateCalVerCorrelation(
@@ -1642,11 +1643,15 @@ export function calculateCalVerCorrelation(
     overallPass: calVer.overallPass && (correlation ? correlation.overallPass : true),
     passCount: calVer.passCount + (correlation?.passCount ?? 0),
     totalCount: calVer.totalCount + (correlation?.totalCount ?? 0),
+    summary: `Calibration verification: ${calVer.overallPass ? "PASS" : "FAIL"} (${calVer.passCount}/${calVer.totalCount} results within TEa of the assigned values). `
+      + (correlation
+        ? `Correlation against ${primary}: ${correlation.overallPass ? "PASS" : "FAIL"} (${correlation.passCount}/${correlation.totalCount} results within TEa of the primary).`
+        : "Correlation: needs a second analyzer."),
   };
 }
 
 // ─── Legacy shim — keep old callers working during migration ─────────────────
-export type StudyResults = CalVerResults | MethodCompResults | QualitativeResults | SemiQuantResults | PrecisionResults | LotToLotResults | PTCoagResults | QCRangeResults | MultiAnalyteResults | RefIntervalResults | SensitivityResults;
+export type StudyResults = CalVerResults | CalVerCorrelationResults | MethodCompResults | QualitativeResults | SemiQuantResults | PrecisionResults | LotToLotResults | PTCoagResults | QCRangeResults | MultiAnalyteResults | RefIntervalResults | SensitivityResults;
 
 export function calculateStudy(
   dataPoints: DataPoint[],
@@ -1667,6 +1672,7 @@ export { demingRegression };
 
 // ─── Type guards ──────────────────────────────────────────────────────────────
 export function isCalVer(r: StudyResults): r is CalVerResults { return r.type === "cal_ver"; }
+export function isCalVerCorrelation(r: StudyResults): r is CalVerCorrelationResults { return r.type === "cal_ver_correlation"; }
 export function isMethodComp(r: StudyResults): r is MethodCompResults { return r.type === "method_comparison"; }
 export function isPrecision(r: StudyResults): r is PrecisionResults { return r.type === "precision"; }
 export function isLotToLot(r: StudyResults): r is LotToLotResults { return r.type === "lot_to_lot"; }

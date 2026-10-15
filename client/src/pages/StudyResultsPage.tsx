@@ -17,6 +17,7 @@ import { useAuth } from "@/components/AuthContext";
 import { useLocation, useSearch } from "wouter";
 import {
   calculateStudy,
+  calculateCalVerCorrelation,
   calculateMethodComparison,
   calculatePrecision,
   calculateLotToLot,
@@ -26,6 +27,7 @@ import {
   calculateQualitative,
   calculateSemiQuant,
   isCalVer,
+  isCalVerCorrelation,
   isMethodComp,
   isPrecision,
   isLotToLot,
@@ -106,7 +108,7 @@ async function downloadPDF(study: Study, results: StudyResults) {
   });
   if (!res.ok) throw new Error(await res.text());
 
-  const typeMap: Record<string, string> = { cal_ver: "CalVer", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefInterval", sensitivity: "Sensitivity", carryover: "Carryover", accuracy_bias: "AccuracyBias", linearity: "Linearity", reportable_range: "ReportableRange" };
+  const typeMap: Record<string, string> = { cal_ver: "CalVer", cal_ver_correlation: "CalVerCorrelation", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefInterval", sensitivity: "Sensitivity", carryover: "Carryover", accuracy_bias: "AccuracyBias", linearity: "Linearity", reportable_range: "ReportableRange" };
   const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
 
   const { token } = await res.json();
@@ -148,7 +150,7 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
         <h1 className="text-xl font-bold">{study.testName}</h1>
         <div className="flex items-center gap-3 mt-1 flex-wrap">
           <Badge variant="outline" className="text-xs">
-            {study.studyType === "cal_ver" ? "Calibration Verification (CLSI EP06)" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : study.studyType === "carryover" ? "Carryover Verification (EP10-A3)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias: Single Instrument vs Target (EP15-A3)" : study.studyType === "linearity" ? "Linearity (EP06)" : study.studyType === "reportable_range" ? "Reportable Range (CLIA §493.1255)" : "Method Comparison: Multi-Instrument Correlation (EP09 + EP15-A3)"}
+            {study.studyType === "cal_ver" ? "Calibration Verification (CLSI EP06)" : study.studyType === "cal_ver_correlation" ? "Calibration Verification + Correlation (CLSI EP06 + EP09)" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : study.studyType === "carryover" ? "Carryover Verification (EP10-A3)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias: Single Instrument vs Target (EP15-A3)" : study.studyType === "linearity" ? "Linearity (EP06)" : study.studyType === "reportable_range" ? "Reportable Range (CLIA §493.1255)" : "Method Comparison: Multi-Instrument Correlation (EP09 + EP15-A3)"}
           </Badge>
           <span className="text-sm text-muted-foreground">{study.instrument}</span>
           <span className="text-sm text-muted-foreground">·</span>
@@ -207,6 +209,17 @@ function generateNarrative(results: StudyResults, study: Study): string {
   const cliaPct = (study.cliaAllowableError * 100).toFixed(1);
   const adlmPct = (study.cliaAllowableError * 50).toFixed(1);
   let narrative = "";
+
+  if (isCalVerCorrelation(results)) {
+    const cv = results.calVer, mc = results.correlation;
+    const nAnalyzers = new Set(cv.levelResults.flatMap((r) => Object.keys(r.instruments || {}))).size;
+    const material = String((study as any).material || "").trim() || "calibration verification material with assigned values";
+    narrative = `${cv.levelResults.length} known-value samples for ${study.testName} were run on ${nAnalyzers} analyzers. `
+      + `Calibration verification: ${cv.overallPass ? "all levels on every analyzer were within" : "one or more levels were outside"} the adopted acceptance criterion against the assigned values (${cv.passCount}/${cv.totalCount}). `
+      + (mc ? `Correlation against ${results.primary}: ${mc.overallPass ? "all samples on every comparison analyzer were within" : "one or more samples were outside"} the same criterion (${mc.passCount}/${mc.totalCount}). ` : "")
+      + `The comparison used ${material}, not patient specimens. Final approval and clinical determination must be made by the laboratory director or designee.`;
+    return narrative;
+  }
 
   if (isCalVer(results)) {
     const cv = results as CalVerResults;
@@ -646,7 +659,7 @@ function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: 
       <CardContent>
         <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 text-xs">
           {[
-            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification (CLSI EP06)" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : study.studyType === "carryover" ? "Carryover Verification (EP10-A3)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias: Single Instrument vs Target (EP15-A3)" : study.studyType === "linearity" ? "Linearity (EP06)" : study.studyType === "reportable_range" ? "Reportable Range (CLIA §493.1255)" : "Method Comparison: Multi-Instrument Correlation (EP09 + EP15-A3)"],
+            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification (CLSI EP06)" : study.studyType === "cal_ver_correlation" ? "Calibration Verification + Correlation (CLSI EP06 + EP09)" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : study.studyType === "carryover" ? "Carryover Verification (EP10-A3)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias: Single Instrument vs Target (EP15-A3)" : study.studyType === "linearity" ? "Linearity (EP06)" : study.studyType === "reportable_range" ? "Reportable Range (CLIA §493.1255)" : "Method Comparison: Multi-Instrument Correlation (EP09 + EP15-A3)"],
             [study.studyType === "precision" ? "Adopted Precision Acceptance Criterion (CV%)" : "Adopted Acceptance Criterion (TEa)", teaDisplayWithPreset],
             ["Analyst", study.analyst],
             ["Date", study.date],
@@ -3212,6 +3225,11 @@ export default function StudyResults() {
         results = calculateMethodComparison(dp, comparisonNames.length > 0 ? comparisonNames : instrumentNames, study.cliaAllowableError, isPercentage, absFloor);
       }
     }
+  } else if (study.studyType === "cal_ver_correlation") {
+    // Calibration Verification + Correlation: both halves from the one data entry (first analyzer = primary).
+    const isPercentage = (study as any).teaIsPercentage !== 0;
+    const absFloor = (study as any).cliaAbsoluteFloor ?? null;
+    results = calculateCalVerCorrelation(rawDataPoints as DataPoint[], instrumentNames, study.cliaAllowableError, isPercentage, absFloor);
   } else {
     const isPercentage = (study as any).teaIsPercentage !== 0;
     const absFloor = (study as any).cliaAbsoluteFloor ?? null;
@@ -3244,7 +3262,7 @@ export default function StudyResults() {
           data, so the exclusion endpoint rejects it; don't show a button that
           no-ops there. (cal_ver, method_comparison/correlation, precision.) */}
       {(study.studyType === "method_comparison" || study.studyType === "correlation" ||
-        study.studyType === "cal_ver" || study.studyType === "precision") && (
+        study.studyType === "cal_ver" || study.studyType === "cal_ver_correlation" || study.studyType === "precision") && (
         <div className="mt-3 flex items-center gap-3 flex-wrap" data-testid="point-exclusion-panel">
           <Button hidden={isReadOnly}
             variant="outline"
@@ -3426,7 +3444,7 @@ export default function StudyResults() {
           results. Mostly relevant on Method Comparison, Linearity,
           Ref Interval, Precision. */}
       {(study.studyType === "method_comparison" || study.studyType === "correlation" ||
-        study.studyType === "cal_ver" || study.studyType === "precision" ||
+        study.studyType === "cal_ver" || study.studyType === "cal_ver_correlation" || study.studyType === "precision" ||
         study.studyType === "reportable_range" || study.studyType === "ref_interval") && (
         <div className="mt-3 flex items-center gap-3 flex-wrap" data-testid="censoring-policy-panel">
           <Button hidden={isReadOnly}
@@ -3454,6 +3472,18 @@ export default function StudyResults() {
       />
 
       {isCalVer(results) && <CalVerReport study={study} results={results} />}
+      {isCalVerCorrelation(results) && (
+        <div data-testid="cal-ver-correlation-report">
+          <h2 className="text-base font-semibold mt-2 mb-2">Accuracy: each analyzer against the assigned values</h2>
+          <CalVerReport study={study} results={results.calVer} />
+          {results.correlation && (
+            <>
+              <h2 className="text-base font-semibold mt-6 mb-2">Correlation: each analyzer against {results.primary}</h2>
+              <MethodCompReport study={study} results={results.correlation} />
+            </>
+          )}
+        </div>
+      )}
       {isMethodComp(results) && <MethodCompReport study={study} results={results} />}
       {isQualitative(results) && <QualitativeReport study={study} results={results} />}
       {isSemiQuant(results) && <SemiQuantReport study={study} results={results} />}

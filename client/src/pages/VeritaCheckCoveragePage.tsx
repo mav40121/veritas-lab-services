@@ -61,6 +61,7 @@ const UNMAPPED_TYPE_LABEL: Record<string, string> = {
   correlation: "Correlation / Method Comparison",
   cal_ver: "Calibration Verification / Linearity",
   linearity: "Calibration Verification / Linearity",
+  cal_ver_correlation: "Calibration Verification + Correlation",
 };
 const unmappedTypeLabel = (t: string) => UNMAPPED_TYPE_LABEL[t] || t;
 

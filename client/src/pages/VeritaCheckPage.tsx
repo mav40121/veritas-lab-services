@@ -26,7 +26,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { calculateStudy, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, calculateRefInterval, calculateQualitative, calculateSemiQuant, calculateSensitivity, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type QCRangeDataPoint, type RefIntervalDataPoint, type SensitivityInput, calculateINR, formatTeaCriterion } from "@/lib/calculations";
+import { calculateStudy, calculateCalVerCorrelation, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, calculateRefInterval, calculateQualitative, calculateSemiQuant, calculateSensitivity, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type QCRangeDataPoint, type RefIntervalDataPoint, type SensitivityInput, calculateINR, formatTeaCriterion } from "@/lib/calculations";
 import { teaData } from "@/lib/cliaTeaData";
 import { useAuth } from "@/components/AuthContext";
 import { triggerStudyCreditsExhausted } from "@/components/StudyCreditsModal";
@@ -417,6 +417,8 @@ export default function VeritaCheckPage() {
 
   const [testName, setTestName] = useState(prePopAnalyte || "");
   const [analyst, setAnalyst] = useState("");
+  // Calibration Verification + Correlation: the known-value material named on the report (blank = default wording).
+  const [material, setMaterial] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
 
   const studyTypeMap: Record<string, any> = {
@@ -425,6 +427,8 @@ export default function VeritaCheckPage() {
     "correlation": "method_comparison",
     "cal_ver": "cal_ver",
     "calibration-verification": "cal_ver",
+    "cal_ver_correlation": "cal_ver_correlation",
+    "calibration-verification-correlation": "cal_ver_correlation",
     "precision": "precision",
     "lot_to_lot": "lot_to_lot",
     "lot-to-lot": "lot_to_lot",
@@ -442,7 +446,7 @@ export default function VeritaCheckPage() {
   const initialStudyType = rawInitialStudyType;
   const initialInstruments = prePopInst1 && prePopInst2 ? [prePopInst1, prePopInst2] : prePopInst1 ? [prePopInst1, "Instrument 2"] : ["Instrument 1", "Instrument 2"];
 
-  const [studyType, setStudyType] = useState<"cal_ver" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval" | "sensitivity" | "carryover" | "accuracy_bias" | "linearity" | "reportable_range" | "manual_diff">(initialStudyType);
+  const [studyType, setStudyType] = useState<"cal_ver" | "cal_ver_correlation" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval" | "sensitivity" | "carryover" | "accuracy_bias" | "linearity" | "reportable_range" | "manual_diff">(initialStudyType);
   const [instrumentNames, setInstrumentNames] = useState<string[]>(initialInstruments);
   interface LabInstrument { id: number; instrument_name: string; serial_number?: string | null; nickname?: string | null; role?: string; category?: string; map_id?: number; map_name?: string }
   const [veritaMapInstruments, setVeritaMapInstruments] = useState<LabInstrument[]>([]);
@@ -564,6 +568,7 @@ export default function VeritaCheckPage() {
     if (!editStudy || editHydratedRef.current) return;
     try {
       setTestName(editStudy.test_name ?? editStudy.testName ?? "");
+      setMaterial(editStudy.material ?? "");
       setAnalyst(editStudy.analyst ?? "");
       if (editStudy.date) setDate(String(editStudy.date).slice(0, 10));
       if (editStudy.study_type ?? editStudy.studyType) {
@@ -1613,6 +1618,7 @@ export default function VeritaCheckPage() {
         }
         study = { ...study, instrumentMeta: JSON.stringify(meta) };
       }
+      if (study.studyType === "cal_ver_correlation") study = { ...study, material: material.trim() || null } as InsertStudy;
       const headers: Record<string, string> = { "Content-Type": "application/json", ...authHeaders() };
       // PUT when editing an existing study (draft or completed) so we update
       // the row instead of creating a duplicate. POST when new.
@@ -2537,9 +2543,15 @@ export default function VeritaCheckPage() {
       return;
     }
 
+    if (studyType === "cal_ver_correlation" && instrumentNames.length < 2) {
+      toast({ title: "Add a second analyzer", description: "The correlation compares each analyzer to the first one listed, so it needs at least two.", variant: "destructive" });
+      return;
+    }
     // Censored cells normalize to null (exclude) for the client status
     // calc; JSON.stringify(dataPoints) below keeps the "<17" object.
-    const results = calculateStudy(toNumericDataPoints(dataPoints), instrumentNames, cliaValue, studyType as "cal_ver" | "method_comparison", teaIsPercentage);
+    const results = studyType === "cal_ver_correlation"
+      ? calculateCalVerCorrelation(toNumericDataPoints(dataPoints), instrumentNames, cliaValue, teaIsPercentage, cliaAbsoluteFloor ?? null)
+      : calculateStudy(toNumericDataPoints(dataPoints), instrumentNames, cliaValue, studyType as "cal_ver" | "method_comparison", teaIsPercentage);
     const study: InsertStudy = {
       testName: testName.trim(), instrument: instrumentNames.join(", "), analyst: analyst.trim() || "---",
       date, studyType, cliaAllowableError: cliaValue,
@@ -2736,12 +2748,16 @@ return (
                     <div className="space-y-1.5"><Label>Test Name *</Label><Input placeholder="e.g. GC1 CREAT" value={testName} onChange={e => setTestName(e.target.value)} data-testid="input-test-name" /></div>
                     <div className="space-y-1.5"><Label>Analyst</Label><Input placeholder="Name or initials" value={analyst} onChange={e => setAnalyst(e.target.value)} /></div>
                     <div className="space-y-1.5"><Label>Study Date</Label><Input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
+                    {studyType === "cal_ver_correlation" && (
+                      <div className="space-y-1.5 sm:col-span-2"><Label>Known-value material</Label><Input placeholder="e.g. Bio-Rad Liquichek Linearity, lot 12345" value={material} onChange={e => setMaterial(e.target.value)} data-testid="input-material" /><p className="text-xs text-muted-foreground">Printed on the report. Leave blank to print "calibration verification material with assigned values".</p></div>
+                    )}
                     <div className="space-y-1.5"><Label>Study Type</Label>
                       <Select value={studyType} onValueChange={v => setStudyType(v as any)}>
                         <SelectTrigger data-testid="select-study-type"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="cal_ver">Calibration Verification (CLSI EP06)</SelectItem>
                           <SelectItem value="method_comparison">Method Comparison: Multi-Instrument Correlation (CLSI EP09 + EP15-A3)</SelectItem>
+                          <SelectItem value="cal_ver_correlation">Calibration Verification + Correlation (CLSI EP06 + EP09)</SelectItem>
                           <SelectItem value="precision">Precision Verification (CLSI EP15-A3)</SelectItem>
                           <SelectItem value="lot_to_lot">Reagent Lot Verification (CLSI EP26)</SelectItem>
                           <SelectItem value="pt_coag">PT/INR Geometric Mean Calculator (CLSI H47)</SelectItem>
@@ -2760,6 +2776,12 @@ return (
                         <div className="flex items-start gap-2 mt-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed">
                           <Info size={13} className="text-primary shrink-0 mt-0.5" />
                           <span>Calibration verification is required by CLIA even when your analyzer uses manufacturer-assigned calibration. VeritaCheck documents the verification process, not the calibration itself, which is what 42 CFR {"\u00A7"}493.1255 actually requires.</span>
+                        </div>
+                      )}
+                      {studyType === "cal_ver_correlation" && (
+                        <div className="flex items-start gap-2 mt-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed" data-testid="help-cal-ver-correlation">
+                          <Info size={13} className="text-primary shrink-0 mt-0.5" />
+                          <span>Run the same known-value samples on every analyzer. One study gives two results: calibration verification (each analyzer against the assigned values, 42 CFR {"\u00A7"}493.1255) and correlation (every other analyzer against the first one listed, 42 CFR {"\u00A7"}493.1281). The report names the material; the laboratory director or designee accepts it by signing. A single run shows accuracy and agreement, not precision.</span>
                         </div>
                       )}
                       {studyType === "accuracy_bias" && (
@@ -2871,7 +2893,7 @@ return (
                     instrumentNames.map((name, idx) => (
                       <div key={idx} className="space-y-1.5">
                         <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="w-7 justify-center shrink-0 text-xs">{idx + 1}</Badge>
+                          <Badge variant={studyType === "cal_ver_correlation" && idx === 0 ? "default" : "outline"} className={`${studyType === "cal_ver_correlation" && idx === 0 ? "px-2" : "w-7 justify-center"} shrink-0 text-xs`}>{studyType === "cal_ver_correlation" && idx === 0 ? "Primary" : idx + 1}</Badge>
                           <div className="flex-1 space-y-1.5">
                             <Select
                               value={linkedInstruments[idx] ? `__lab_${linkedInstruments[idx]!.id}` : "__manual__"}
@@ -3190,7 +3212,7 @@ return (
               )}
               {/* CSV Import Button */}
               <div className="mb-4">
-                {(studyType === "method_comparison" || studyType === "cal_ver") ? (
+                {(studyType === "method_comparison" || studyType === "cal_ver" || studyType === "cal_ver_correlation") ? (
                   <Button variant="outline" size="sm" onClick={() => { resetCsvState(); setCsvModalOpen(true); }}>
                     <Upload size={14} className="mr-1.5" />Import from CSV / Excel
                   </Button>
@@ -4832,6 +4854,7 @@ return (
               : studyType === "method_comparison" ? "sample"
               : "level";
             const studyTypeLabel = studyType === "cal_ver" ? "Calibration Verification"
+              : studyType === "cal_ver_correlation" ? "Calibration Verification + Correlation"
               : studyType === "method_comparison" ? "Method Comparison"
               : studyType === "precision" ? "Precision Verification"
               : studyType === "lot_to_lot" ? "Reagent Lot Verification"
@@ -4847,6 +4870,7 @@ return (
               : "this study type";
             const reasons: string[] = [];
             if (!testName.trim()) reasons.push("Enter the Test Name on the Setup tab.");
+            if (studyType === "cal_ver_correlation" && instrumentNames.length < 2) reasons.push("Add a second analyzer on the Setup tab (the correlation compares each analyzer to the first one listed).");
             if (filledLevels < minLevels) {
               const need = minLevels - filledLevels;
               reasons.push(`Fill ${need} more ${unit}${need !== 1 ? "s" : ""} on the Data Entry tab (${minLevels} ${unit}s required for ${studyTypeLabel}).`);
@@ -4878,7 +4902,7 @@ return (
               >
                 {saveMutation.isPending ? "Saving…" : isEditing ? "Save Changes (Draft)" : "Save Draft"}
               </Button>
-              <Button onClick={handleSubmit} disabled={studyReadOnly || saveMutation.isPending || filledLevels < (studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : studyType === "carryover" ? 12 : studyType === "qc_range" ? 2 : studyType === "accuracy_bias" ? 2 : studyType === "linearity" ? 3 : studyType === "reportable_range" ? 2 : 3) || !testName.trim()} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
+              <Button onClick={handleSubmit} disabled={studyReadOnly || saveMutation.isPending || filledLevels < (studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : studyType === "carryover" ? 12 : studyType === "qc_range" ? 2 : studyType === "accuracy_bias" ? 2 : studyType === "linearity" ? 3 : studyType === "reportable_range" ? 2 : 3) || !testName.trim() || (studyType === "cal_ver_correlation" && instrumentNames.length < 2)} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
                 {saveMutation.isPending ? "Calculating…" : isEditing ? "Save & Generate Report" : "Run Study & Generate Report"}
               </Button>
             </div>
