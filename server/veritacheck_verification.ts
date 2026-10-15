@@ -25,6 +25,7 @@ import {
   histogramSVG,
   recoveryPlotSVG,
   blandAltmanSVG,
+  blandAltmanSeriesSVG,
 } from "./pdfReport";
 // 2026-06-10 (overnight backlog): Censoring Level 2 renderer integration.
 // Honors the per-study censoring_policy when a data point is a censored
@@ -594,7 +595,11 @@ function renderStudyAppendix(slot: any, teal: string): string {
           }
           const meanBias = pctDiffs.reduce((a, b) => a + b, 0) / pctDiffs.length;
           const sc = scatterSVG(xs, ys, "Reference", compName || "Comparison", "Method Comparison", true);
-          const ba = blandAltmanSVG(avgs, pctDiffs, tea, meanBias, compName || "");
+          // An absolute TEa (e.g. Sodium 4 mmol/L) is plotted as a difference in analyte units with ±TEa limits;
+          // blandAltmanSVG treats TEa as a fraction and drew those limits at ±400% (BUG-056 class sweep).
+          const ba = mcTeaIsPct
+            ? blandAltmanSVG(avgs, pctDiffs, tea, meanBias, compName || "")
+            : blandAltmanSeriesSVG([{ name: compName || "Comparison", x: xs.slice(0, n), y: ys.slice(0, n) }], tea, true, slot.studyTeaUnit || "");
           mcGraphs = appendixGraphsRow(sc, ba);
         }
       } catch (err) {
