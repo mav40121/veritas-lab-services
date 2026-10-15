@@ -64,3 +64,8 @@ jobs:
         # else; used codes fail; reset links, new accounts in a requiring lab and Veritas support
         # accounts all land on the second step; lab owner switch and resets.
         run: npm run test:two-factor
+      - name: Run stale lab-owner row integration test
+        # A leftover lab_members 'owner' row on someone who is not labs.owner_user_id gave a second
+        # owner (San Carlos lab 2, 2026-10-15). repair-lab-admins demotes it to admin and never touches
+        # the real owner; the Members PATCH lets the real owner fix one and still protects their own row.
+        run: npm run test:stale-owner-row

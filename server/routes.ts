@@ -2419,8 +2419,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Admin: repair lab admin access. Grants an ACTIVE 'admin' lab_members row to
   // each provided user email on each provided lab, inserting when missing and
-  // promoting an existing non-admin / inactive row. Idempotent; never demotes an
-  // owner. Built 2026-10-06 after Milford labs 4/5 left both the operator and the
+  // promoting an existing non-admin / inactive row. Idempotent; never demotes the
+  // lab's owner (labs.owner_user_id); a leftover 'owner' row on anyone else is set
+  // to admin (2026-10-15). Built 2026-10-06 after Milford labs 4/5 left both the operator and the
   // lab director view-only (requireModuleEdit 403 on every VeritaMap save) because
   // an old boot-backfill cleanup removed their admin rows and the labs were never
   // re-granted. Unlike add-lab-membership (which no-ops on an existing row and so
@@ -2453,8 +2454,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const existing = sqlite.prepare("SELECT id, role, status FROM lab_members WHERE lab_id = ? AND user_id = ?").get(labId, user.id) as any;
         const before = existing ? { role: existing.role, status: existing.status } : null;
         let result: string;
-        if (existing && existing.role === "owner") {
+        if (existing && existing.role === "owner" && user.id === lab.owner_user_id) {
           result = "owner_unchanged";
+        } else if (existing && existing.role === "owner") {
+          // A leftover 'owner' row on someone who is NOT labs.owner_user_id (Michael 2026-10-15: San Carlos
+          // lab 2 read Michael as owner from a 2026-07-22 row while Chineme owns it). Owner powers follow
+          // lab_members.role (isLabOwner), so the stale row gave a second owner. Demote it to admin.
+          if (dryRun) {
+            result = "would_demote_stale_owner_to_admin";
+          } else {
+            sqlite.prepare("UPDATE lab_members SET role = 'admin', status = 'active', updated_at = ? WHERE id = ?").run(now, existing.id);
+            const after = sqlite.prepare("SELECT * FROM lab_members WHERE id = ?").get(existing.id);
+            auditLabMembership("update_role", after, 0, ip, "admin/repair-lab-admins:stale-owner", existing);
+            result = "demoted_stale_owner_to_admin";
+          }
         } else if (existing && existing.role === "admin" && existing.status === "active") {
           result = "already_admin";
         } else if (dryRun) {
@@ -11130,7 +11143,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // PATCH /api/labs/:labId/members/:memberId — change a member's role between
   // 'staff' and 'admin'. Owner-only. Refuses target role 'owner' (must go
-  // through transfer-ownership). Refuses to change the current owner's role.
+  // through transfer-ownership). Refuses to change the current owner's role
+  // (labs.owner_user_id); a leftover 'owner' row on anyone else can be set to
+  // admin or staff here (2026-10-15).
   app.patch("/api/labs/:labId/members/:memberId", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!isLabOwner(req.scope)) return res.status(403).json({ error: "Owner required" });
     const memberId = Number(req.params.memberId);
@@ -11144,7 +11159,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       "SELECT id, lab_id, user_id, role FROM lab_members WHERE id = ? AND lab_id = ?"
     ).get(memberId, req.scope.labId) as any;
     if (!member) return res.status(404).json({ error: "Member not found in this lab" });
-    if (member.role === "owner") {
+    const labOwner = (sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any)?.owner_user_id;
+    if (member.role === "owner" && Number(member.user_id) === Number(labOwner)) {
       return res.status(409).json({ error: "Cannot change the owner's role here; use POST /transfer-ownership" });
     }
     const now = new Date().toISOString();
