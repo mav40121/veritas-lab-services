@@ -40082,7 +40082,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // by the QA test cleanup script to remove accumulated test docs without
   // hard-deleting the audit trail. Body: { secret, labId, titlePrefix }.
   // POST /api/admin/veritapolicy/set-house-format (parking lot #71, 2026-10-07)
-  //   {secret, labId, format: 'veritadc' | 'umass_milford', facilityPath?, safetyDefault?,
+  //   {secret, labId, format: 'veritadc' | 'umass_milford' | 'redington_fairview' | 'sampson_regional', facilityPath?, safetyDefault?,
   //    numbers?: [{policyId, houseNumber, revision}], dryRun?}
   //   The standing VLS courtesy (a client sends a draft policy or policy-on-policies and we
   //   move the stock policies onto their format) is switched on per lab HERE, by us, after
